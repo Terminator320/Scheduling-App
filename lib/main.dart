@@ -26,7 +26,11 @@ class Base extends StatefulWidget {
 class _BaseState extends State<Base> {
   @override
   Widget build(BuildContext context) {
-    return const Placeholder();
+    return Scaffold(
+      appBar: AppBar(
+
+      ),
+    );
   }
 }
 
