@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../screens/auth/auth_screens.dart';
 class AdminMenuDrawer extends StatelessWidget {
   const AdminMenuDrawer({super.key});
 
@@ -27,10 +27,16 @@ class AdminMenuDrawer extends StatelessWidget {
             ),
             Divider(height: 1),
             _DrawerMenuItem(
-              icon: Icons.person_outline,
-              title: 'Profile',
+              icon: Icons.logout,
+              title: 'Logout',
               onTap: () {
-                Navigator.pop(context);
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => LoginLightScreen(),
+                  ),
+                      (route) => false,
+                );
               },
             ),
             _DrawerMenuItem(
@@ -110,10 +116,16 @@ class AdminMenuDrawerDark extends StatelessWidget {
             ),
             Divider(height: 1, color: Color(0xFF2E2E2E)),
             _DrawerMenuItemDark(
-              icon: Icons.person_outline,
-              title: 'Profile',
+              icon: Icons.logout,
+              title: 'Logout',
               onTap: () {
-                Navigator.pop(context);
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => LoginDarkScreen(),
+                  ),
+                      (route) => false,
+                );
               },
             ),
             _DrawerMenuItemDark(

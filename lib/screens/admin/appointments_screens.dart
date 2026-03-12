@@ -222,6 +222,44 @@ class _AdminAppointmentsDarkPageState extends State<AdminAppointmentsDarkPage> {
   }
 }
 
+Color employeeColorForName(String? name) {
+  if (name == null || name.trim().isEmpty) {
+    return const Color(0xFFD2B7FF);
+  }
+
+  switch (name.trim().toLowerCase()) {
+    case 'alice brown':
+      return const Color(0xFFAEE9D1);
+    case 'ava brooks':
+      return const Color(0xFFD2B7FF);
+    case 'adam blake':
+      return const Color(0xFFAED8FF);
+    default:
+      return const Color(0xFFD2B7FF);
+  }
+}
+
+String employeeInitialsForName(String? name) {
+  if (name == null || name.trim().isEmpty) return '';
+
+  final parts = name
+      .trim()
+      .split(' ')
+      .where((part) => part.isNotEmpty)
+      .toList();
+
+  if (parts.isEmpty) return '';
+
+  if (parts.length == 1) {
+    final word = parts.first;
+    return word.length >= 2
+        ? word.substring(0, 2).toUpperCase()
+        : word.toUpperCase();
+  }
+
+  return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+}
+
 class _AppointmentCard extends StatelessWidget {
   const _AppointmentCard({
     required this.appointment,
@@ -233,8 +271,11 @@ class _AppointmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final employeeColor = employeeColorForName(appointment.assignedEmployee);
+    final employeeInitials = employeeInitialsForName(appointment.assignedEmployee);
+
     return Material(
-      color: Color(0xFFDCD4F8),
+      color: employeeColor.withValues(alpha: 0.45),
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         onTap: onTap,
@@ -244,6 +285,25 @@ class _AppointmentCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: employeeColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.black12),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  employeeInitials,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -261,6 +321,15 @@ class _AppointmentCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.black54,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      appointment.assignedEmployee,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.black54,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -293,6 +362,9 @@ class _AppointmentCardDark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final employeeColor = employeeColorForName(appointment.assignedEmployee);
+    final employeeInitials = employeeInitialsForName(appointment.assignedEmployee);
+
     return Material(
       color: Color(0xFF171717),
       borderRadius: BorderRadius.circular(10),
@@ -309,11 +381,21 @@ class _AppointmentCardDark extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 10,
-                height: 44,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: Color(0xFFDCD4F8),
-                  borderRadius: BorderRadius.circular(8),
+                  color: employeeColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white24),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  employeeInitials,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                  ),
                 ),
               ),
               SizedBox(width: 12),
@@ -335,6 +417,15 @@ class _AppointmentCardDark extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.white60,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      appointment.assignedEmployee,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.white60,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -485,8 +576,8 @@ Future<void> showAppointmentInfoPopup(
                       ),
                       SizedBox(height: 12),
                       _appointmentInfoField(
-                        value: appointment.jobType,
-                        hintText: 'Type of job',
+                        value: appointment.assignedEmployee,
+                        hintText: 'Assigned employee',
                       ),
                       SizedBox(height: 12),
                       _appointmentInfoField(
@@ -597,8 +688,8 @@ Future<void> showAppointmentInfoDarkPopup(
                       ),
                       SizedBox(height: 12),
                       _appointmentInfoFieldDark(
-                        value: appointment.jobType,
-                        hintText: 'Type of job',
+                        value: appointment.assignedEmployee,
+                        hintText: 'Assigned employee',
                       ),
                       SizedBox(height: 12),
                       _appointmentInfoFieldDark(

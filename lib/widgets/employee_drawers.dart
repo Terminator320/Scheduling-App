@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../screens/auth/auth_screens.dart';
+
 
 class EmployeeMenu extends StatelessWidget {
   final String employeeName;
@@ -31,6 +33,19 @@ class EmployeeMenu extends StatelessWidget {
               ),
             ),
             Divider(height: 1),
+            _DrawerMenuItem(
+              icon: Icons.logout,
+              title: 'Logout',
+              onTap: () {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => LoginLightScreen(),
+                  ),
+                      (route) => false,
+                );
+              },
+            ),
             _DrawerMenuItem(
               icon: Icons.calendar_today_outlined,
               title: 'Calendar',
@@ -88,6 +103,19 @@ class EmployeeMenuDark extends StatelessWidget {
               ),
             ),
             Divider(height: 1, color: Color(0xFF2E2E2E)),
+            _DrawerMenuItemDark(
+              icon: Icons.logout,
+              title: 'Logout',
+              onTap: () {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => LoginDarkScreen(),
+                  ),
+                      (route) => false,
+                );
+              },
+            ),
             _DrawerMenuItemDark(
               icon: Icons.calendar_today_outlined,
               title: 'Calendar',

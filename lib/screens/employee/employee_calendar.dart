@@ -99,7 +99,6 @@ class _EmployeeCalendarPageState extends State<EmployeeCalendarPage> {
         'time': '${appointment.startTime}-${appointment.endTime}',
         'client': '${appointment.clientName} (${appointment.clientPhone})',
         'address': appointment.address,
-        'jobType': appointment.jobType,
         'notes': appointment.notes,
         'subtitle': appointment.notes,
         'materials': appointment.materialsNeeded,
@@ -820,8 +819,6 @@ class _EmployeeCalendarDarkPageState extends State<EmployeeCalendarDarkPage> {
                 const SizedBox(height: 12),
                 _buildField(event.address, icon: null),
                 const SizedBox(height: 12),
-                _buildField(event.jobType, icon: null),
-                const SizedBox(height: 12),
                 _buildLargeField(
                   event.notes.isEmpty ? 'Notes' : event.notes,
                   icon: Icons.description_outlined,
@@ -1149,14 +1146,6 @@ class _EmployeeCalendarDarkPageState extends State<EmployeeCalendarDarkPage> {
                                 color: Colors.white,
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              event.notes.isEmpty ? event.jobType : event.notes,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
                               ),
                             ),
                           ],

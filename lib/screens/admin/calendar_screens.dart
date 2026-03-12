@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../models/employee_record.dart';
 import '../../utils/colors.dart';
 import '../../widgets/admin_drawers.dart';
+import '../../screens/admin/employees_screens.dart';
 
 class AdminCalendarPage extends StatefulWidget {
   const AdminCalendarPage({super.key});
@@ -15,6 +17,24 @@ class _AdminCalendarPageState extends State<AdminCalendarPage> {
   DateTime selectedDate = DateTime.now();
 
   final Map<String, List<Map<String, dynamic>>> events = {};
+
+  Color _eventEmployeeColor(Map<String, dynamic> event, {required bool isDark}) {
+    final eventColor = event['employeeColor'];
+
+    if (eventColor is Color) {
+      return eventColor;
+    }
+
+    final employeeName = (event['employeeName'] ?? '').toString().trim();
+
+    for (final employee in kEmployees) {
+      if (employee.name.trim().toLowerCase() == employeeName.toLowerCase()) {
+        return employee.color;
+      }
+    }
+
+    return isDark ? const Color(0xFFD2B7FF) : const Color(0xFFD2B7FF);
+  }
 
   String monthName(int month) {
     const months = [
@@ -58,8 +78,15 @@ class _AdminCalendarPageState extends State<AdminCalendarPage> {
     );
   }
 
-  void _openAddEventPopup() {
-    showAddEventPopup(context, selectedDate);
+  Future<void> _openAddEventPopup() async {
+    final createdEvent = await showAddEventPopup(context, selectedDate);
+    if (createdEvent != null) {
+      setState(() {
+        final key = dateKey(selectedDate);
+        events.putIfAbsent(key, () => []);
+        events[key]!.add(createdEvent);
+      });
+    }
   }
 
   @override
@@ -286,10 +313,13 @@ class _AdminCalendarPageState extends State<AdminCalendarPage> {
                   separatorBuilder: (_, _) => SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final event = selectedEvents[index];
+                    final employeeColor = _eventEmployeeColor(event, isDark: false);
+                    final employeeName = (event['employeeName'] ?? '').toString();
+                    final employeeInitials = (event['employeeInitials'] ?? '').toString();
                     return Container(
                       padding: EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Color(0xFFE7DDF9),
+                        color: employeeColor.withOpacity(0.45),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Column(
@@ -298,13 +328,50 @@ class _AdminCalendarPageState extends State<AdminCalendarPage> {
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                child: Text(
-                                  event['time'] ?? '',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.black54,
+                              if (employeeInitials.isNotEmpty) ...[
+                                Container(
+                                  width: 34,
+                                  height: 34,
+                                  decoration: BoxDecoration(
+                                    color: employeeColor,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.black12),
                                   ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    employeeInitials,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 10),
+                              ],
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      event['time'] ?? '',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.black54,
+                                      ),
+                                    ),
+                                    if (employeeName.isNotEmpty) ...[
+                                      SizedBox(height: 2),
+                                      Text(
+                                        employeeName,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.black54,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
                               InkWell(
@@ -404,6 +471,24 @@ class _AdminCalendarDarkPageState extends State<AdminCalendarDarkPage> {
 
   final Map<String, List<Map<String, dynamic>>> events = {};
 
+  Color _eventEmployeeColor(Map<String, dynamic> event, {required bool isDark}) {
+    final eventColor = event['employeeColor'];
+
+    if (eventColor is Color) {
+      return eventColor;
+    }
+
+    final employeeName = (event['employeeName'] ?? '').toString().trim();
+
+    for (final employee in kEmployees) {
+      if (employee.name.trim().toLowerCase() == employeeName.toLowerCase()) {
+        return employee.color;
+      }
+    }
+
+    return isDark ? const Color(0xFFD2B7FF) : const Color(0xFFD2B7FF);
+  }
+
   String monthName(int month) {
     const months = [
       'January',
@@ -446,8 +531,15 @@ class _AdminCalendarDarkPageState extends State<AdminCalendarDarkPage> {
     );
   }
 
-  void _openAddEventPopup() {
-    showAddEventDarkPopup(context, selectedDate);
+  Future<void> _openAddEventPopup() async {
+    final createdEvent = await showAddEventDarkPopup(context, selectedDate);
+    if (createdEvent != null) {
+      setState(() {
+        final key = dateKey(selectedDate);
+        events.putIfAbsent(key, () => []);
+        events[key]!.add(createdEvent);
+      });
+    }
   }
 
   @override
@@ -682,10 +774,13 @@ class _AdminCalendarDarkPageState extends State<AdminCalendarDarkPage> {
                   separatorBuilder: (_, _) => SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final event = selectedEvents[index];
+                    final employeeColor = _eventEmployeeColor(event, isDark: true);
+                    final employeeName = (event['employeeName'] ?? '').toString();
+                    final employeeInitials = (event['employeeInitials'] ?? '').toString();
                     return Container(
                       padding: EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: cardColor,
+                        color: employeeColor.withOpacity(0.80),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Column(
@@ -694,13 +789,50 @@ class _AdminCalendarDarkPageState extends State<AdminCalendarDarkPage> {
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                child: Text(
-                                  event['time'] ?? '',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Color(0xFFD8CFFF),
+                              if (employeeInitials.isNotEmpty) ...[
+                                Container(
+                                  width: 34,
+                                  height: 34,
+                                  decoration: BoxDecoration(
+                                    color: employeeColor,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white24),
                                   ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    employeeInitials,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 10),
+                              ],
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      event['time'] ?? '',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    if (employeeName.isNotEmpty) ...[
+                                      SizedBox(height: 2),
+                                      Text(
+                                        employeeName,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.white70,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
                               InkWell(
@@ -793,7 +925,14 @@ class _CalendarDarkArrowButton extends StatelessWidget {
 /* ---------------- RIGHT MENU LIGHT ---------------- */
 
 
-Future<void> showAddEventPopup(
+List<EmployeeChoice> _defaultEmployees() {
+  return kEmployees
+      .map((employee) => EmployeeChoice(name: employee.name, color: employee.color))
+      .toList();
+}
+
+
+Future<Map<String, dynamic>?> showAddEventPopup(
     BuildContext context,
     DateTime selectedDate,
     ) async {
@@ -808,9 +947,10 @@ Future<void> showAddEventPopup(
   final TextEditingController materialsController = TextEditingController();
   final TextEditingController picturesController = TextEditingController();
 
-  String? selectedJobType;
+  final employees = _defaultEmployees();
+  int selectedEmployeeIndex = 0;
 
-  await showModalBottomSheet(
+  return await showModalBottomSheet<Map<String, dynamic>>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
@@ -901,61 +1041,6 @@ Future<void> showAddEventPopup(
                             hintText: 'Client (search by name or phone number)',
                           ),
                           SizedBox(height: 14),
-                          DropdownButtonFormField<String>(
-                            initialValue: selectedJobType,
-                            decoration: InputDecoration(
-                              hintText: 'Type of job...',
-                              hintStyle: TextStyle(
-                                color: Color(0xFF7A7A7A),
-                                fontSize: 15,
-                              ),
-                              filled: true,
-                              fillColor: Colors.white,
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 16,
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(
-                                  color: Color(0xFFD8D8D8),
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: kPurple),
-                              ),
-                            ),
-                            icon: Icon(Icons.keyboard_arrow_down_rounded),
-                            items: [
-                              DropdownMenuItem(
-                                value: 'Item 1',
-                                child: Text('Item 1'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'Item 2',
-                                child: Text('Item 2'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'Item 3',
-                                child: Text('Item 3'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'Item 4',
-                                child: Text('Item 4'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'Item 5',
-                                child: Text('Item 5'),
-                              ),
-                            ],
-                            onChanged: (value) {
-                              setPopupState(() {
-                                selectedJobType = value;
-                              });
-                            },
-                          ),
-                          SizedBox(height: 14),
                           _popupTextField(
                             controller: noteController,
                             hintText: 'Type the note here...',
@@ -976,13 +1061,63 @@ Future<void> showAddEventPopup(
                             suffixIcon: Icons.image_outlined,
                             maxLines: 3,
                           ),
+                          SizedBox(height: 14),
+                          EmployeeSelector(
+                            employees: employees,
+                            selectedIndex: selectedEmployeeIndex,
+                            onSelected: (index) {
+                              setPopupState(() {
+                                selectedEmployeeIndex = index;
+                              });
+                            },
+                            onAddNew: () async {
+                              final result = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => CreateEmployeePage(),
+                                ),
+                              );
+
+                              if (result != null && result is EmployeeRecord) {
+                                setPopupState(() {
+                                  employees.add(
+                                    EmployeeChoice(
+                                      name: result.name,
+                                      color: result.color,
+                                    ),
+                                  );
+                                  selectedEmployeeIndex = employees.length - 1;
+                                });
+                              }
+                            },
+                            isDark: false,
+                          ),
                           SizedBox(height: 16),
                           SizedBox(
                             width: double.infinity,
                             height: 52,
                             child: ElevatedButton(
                               onPressed: () {
-                                Navigator.pop(context);
+                                final selectedEmployee = employees[selectedEmployeeIndex];
+                                final start = startTimeController.text.trim();
+                                final end = endTimeController.text.trim();
+                                Navigator.pop(context, {
+                                  'title': eventNameController.text.trim(),
+                                  'date': dateController.text.trim(),
+                                  'time': start.isEmpty && end.isEmpty
+                                      ? ''
+                                      : end.isEmpty
+                                          ? start
+                                          : '$start-$end',
+                                  'client': clientController.text.trim(),
+                                  'notes': noteController.text.trim(),
+                                  'materials': materialsController.text.trim(),
+                                  'pictures': picturesController.text.trim(),
+                                  'subtitle': noteController.text.trim(),
+                                  'employeeName': selectedEmployee.name,
+                                  'employeeInitials': selectedEmployee.initials,
+                                  'employeeColor': selectedEmployee.color,
+                                });
                               },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: kPurple,
@@ -1017,7 +1152,7 @@ Future<void> showAddEventPopup(
 }
 
 
-Future<void> showAddEventDarkPopup(
+Future<Map<String, dynamic>?> showAddEventDarkPopup(
     BuildContext context,
     DateTime selectedDate,
     ) async {
@@ -1033,9 +1168,10 @@ Future<void> showAddEventDarkPopup(
   final TextEditingController materialsController = TextEditingController();
   final TextEditingController picturesController = TextEditingController();
 
-  String? selectedJobType;
+  final employees = _defaultEmployees();
+  int selectedEmployeeIndex = 0;
 
-  await showModalBottomSheet(
+  return await showModalBottomSheet<Map<String, dynamic>>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
@@ -1131,66 +1267,6 @@ Future<void> showAddEventDarkPopup(
                             hintText: 'Address',
                           ),
                           SizedBox(height: 14),
-                          DropdownButtonFormField<String>(
-                            initialValue: selectedJobType,
-                            dropdownColor: Color(0xFF171717),
-                            style: TextStyle(color: Colors.white),
-                            decoration: InputDecoration(
-                              hintText: 'Type of job...',
-                              hintStyle: TextStyle(
-                                color: Colors.white38,
-                                fontSize: 15,
-                              ),
-                              filled: true,
-                              fillColor: Color(0xFF171717),
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 16,
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(
-                                  color: Color(0xFF2D2D2D),
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: kPurple),
-                              ),
-                            ),
-                            icon: Icon(
-                              Icons.keyboard_arrow_down_rounded,
-                              color: Colors.white70,
-                            ),
-                            items: [
-                              DropdownMenuItem(
-                                value: 'Item 1',
-                                child: Text('Item 1'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'Item 2',
-                                child: Text('Item 2'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'Item 3',
-                                child: Text('Item 3'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'Item 4',
-                                child: Text('Item 4'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'Item 5',
-                                child: Text('Item 5'),
-                              ),
-                            ],
-                            onChanged: (value) {
-                              setPopupState(() {
-                                selectedJobType = value;
-                              });
-                            },
-                          ),
-                          SizedBox(height: 14),
                           _popupTextFieldDark(
                             controller: noteController,
                             hintText: 'Type the note here...',
@@ -1211,13 +1287,64 @@ Future<void> showAddEventDarkPopup(
                             suffixIcon: Icons.image_outlined,
                             maxLines: 3,
                           ),
+                          SizedBox(height: 14),
+                          EmployeeSelector(
+                            employees: employees,
+                            selectedIndex: selectedEmployeeIndex,
+                            onSelected: (index) {
+                              setPopupState(() {
+                                selectedEmployeeIndex = index;
+                              });
+                            },
+                            onAddNew: () async {
+                              final result = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => CreateEmployeeDarkPage(),
+                                ),
+                              );
+
+                              if (result != null && result is EmployeeRecord) {
+                                setPopupState(() {
+                                  employees.add(
+                                    EmployeeChoice(
+                                      name: result.name,
+                                      color: result.color,
+                                    ),
+                                  );
+                                  selectedEmployeeIndex = employees.length - 1;
+                                });
+                              }
+                            },
+                            isDark: true,
+                          ),
                           SizedBox(height: 16),
                           SizedBox(
                             width: double.infinity,
                             height: 52,
                             child: ElevatedButton(
                               onPressed: () {
-                                Navigator.pop(context);
+                                final selectedEmployee = employees[selectedEmployeeIndex];
+                                final start = startTimeController.text.trim();
+                                final end = endTimeController.text.trim();
+                                Navigator.pop(context, {
+                                  'title': eventNameController.text.trim(),
+                                  'date': dateController.text.trim(),
+                                  'time': start.isEmpty && end.isEmpty
+                                      ? ''
+                                      : end.isEmpty
+                                          ? start
+                                          : '$start-$end',
+                                  'client': clientController.text.trim(),
+                                  'address': addressController.text.trim(),
+                                  'notes': noteController.text.trim(),
+                                  'materials': materialsController.text.trim(),
+                                  'pictures': picturesController.text.trim(),
+                                  'subtitle': noteController.text.trim(),
+                                  'employeeName': selectedEmployee.name,
+                                  'employeeInitials': selectedEmployee.initials,
+                                  'employeeColor': selectedEmployee.color,
+                                });
                               },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: kPurple,
@@ -1283,9 +1410,16 @@ Future<void> showEditCalendarEventPopup(
     text: (event['pictures'] ?? '').toString(),
   );
 
-  String? selectedJobType = (event['jobType'] ?? '').toString().isEmpty
-      ? null
-      : (event['jobType'] ?? '').toString();
+  final employees = _defaultEmployees();
+  int selectedEmployeeIndex = 0;
+
+  final savedEmployeeName = (event['employeeName'] ?? '').toString();
+  final existingEmployeeIndex = employees.indexWhere(
+    (employee) => employee.name == savedEmployeeName,
+  );
+  if (existingEmployeeIndex != -1) {
+    selectedEmployeeIndex = existingEmployeeIndex;
+  }
 
   await showModalBottomSheet(
     context: context,
@@ -1383,46 +1517,6 @@ Future<void> showEditCalendarEventPopup(
                             hintText: 'Address',
                           ),
                           SizedBox(height: 14),
-                          DropdownButtonFormField<String>(
-                            initialValue: selectedJobType,
-                            decoration: InputDecoration(
-                              hintText: 'Type of job...',
-                              hintStyle: TextStyle(
-                                color: Color(0xFF7A7A7A),
-                                fontSize: 15,
-                              ),
-                              filled: true,
-                              fillColor: Colors.white,
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 16,
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(
-                                  color: Color(0xFFD8D8D8),
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: kPurple),
-                              ),
-                            ),
-                            icon: Icon(Icons.keyboard_arrow_down_rounded),
-                            items: [
-                              DropdownMenuItem(value: 'Item 1', child: Text('Item 1')),
-                              DropdownMenuItem(value: 'Item 2', child: Text('Item 2')),
-                              DropdownMenuItem(value: 'Item 3', child: Text('Item 3')),
-                              DropdownMenuItem(value: 'Item 4', child: Text('Item 4')),
-                              DropdownMenuItem(value: 'Item 5', child: Text('Item 5')),
-                            ],
-                            onChanged: (value) {
-                              setPopupState(() {
-                                selectedJobType = value;
-                              });
-                            },
-                          ),
-                          SizedBox(height: 14),
                           _popupTextField(
                             controller: noteController,
                             hintText: 'Type the note here...',
@@ -1443,6 +1537,37 @@ Future<void> showEditCalendarEventPopup(
                             suffixIcon: Icons.image_outlined,
                             maxLines: 3,
                           ),
+                          SizedBox(height: 14),
+                          EmployeeSelector(
+                            employees: employees,
+                            selectedIndex: selectedEmployeeIndex,
+                            onSelected: (index) {
+                              setPopupState(() {
+                                selectedEmployeeIndex = index;
+                              });
+                            },
+                            onAddNew: () async {
+                              final result = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => CreateEmployeePage(),
+                                ),
+                              );
+
+                              if (result != null && result is EmployeeRecord) {
+                                setPopupState(() {
+                                  employees.add(
+                                    EmployeeChoice(
+                                      name: result.name,
+                                      color: result.color,
+                                    ),
+                                  );
+                                  selectedEmployeeIndex = employees.length - 1;
+                                });
+                              }
+                            },
+                            isDark: false,
+                          ),
                           SizedBox(height: 16),
                           SizedBox(
                             width: double.infinity,
@@ -1453,7 +1578,10 @@ Future<void> showEditCalendarEventPopup(
                                 event['date'] = dateController.text.trim();
                                 event['client'] = clientController.text.trim();
                                 event['address'] = addressController.text.trim();
-                                event['jobType'] = selectedJobType ?? '';
+                                event['employeeName'] =
+                                    employees[selectedEmployeeIndex].name;
+                                event['employeeInitials'] =
+                                    employees[selectedEmployeeIndex].initials;
                                 event['notes'] = noteController.text.trim();
                                 event['materials'] = materialsController.text.trim();
                                 event['pictures'] = picturesController.text.trim();
@@ -1532,9 +1660,16 @@ Future<void> showEditCalendarEventDarkPopup(
     text: (event['pictures'] ?? '').toString(),
   );
 
-  String? selectedJobType = (event['jobType'] ?? '').toString().isEmpty
-      ? null
-      : (event['jobType'] ?? '').toString();
+  final employees = _defaultEmployees();
+  int selectedEmployeeIndex = 0;
+
+  final savedEmployeeName = (event['employeeName'] ?? '').toString();
+  final existingEmployeeIndex = employees.indexWhere(
+    (employee) => employee.name == savedEmployeeName,
+  );
+  if (existingEmployeeIndex != -1) {
+    selectedEmployeeIndex = existingEmployeeIndex;
+  }
 
   await showModalBottomSheet(
     context: context,
@@ -1632,51 +1767,6 @@ Future<void> showEditCalendarEventDarkPopup(
                             hintText: 'Address',
                           ),
                           SizedBox(height: 14),
-                          DropdownButtonFormField<String>(
-                            initialValue: selectedJobType,
-                            dropdownColor: Color(0xFF171717),
-                            style: TextStyle(color: Colors.white),
-                            decoration: InputDecoration(
-                              hintText: 'Type of job...',
-                              hintStyle: TextStyle(
-                                color: Colors.white38,
-                                fontSize: 15,
-                              ),
-                              filled: true,
-                              fillColor: Color(0xFF171717),
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 16,
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(
-                                  color: Color(0xFF2D2D2D),
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: kPurple),
-                              ),
-                            ),
-                            icon: Icon(
-                              Icons.keyboard_arrow_down_rounded,
-                              color: Colors.white70,
-                            ),
-                            items: [
-                              DropdownMenuItem(value: 'Item 1', child: Text('Item 1')),
-                              DropdownMenuItem(value: 'Item 2', child: Text('Item 2')),
-                              DropdownMenuItem(value: 'Item 3', child: Text('Item 3')),
-                              DropdownMenuItem(value: 'Item 4', child: Text('Item 4')),
-                              DropdownMenuItem(value: 'Item 5', child: Text('Item 5')),
-                            ],
-                            onChanged: (value) {
-                              setPopupState(() {
-                                selectedJobType = value;
-                              });
-                            },
-                          ),
-                          SizedBox(height: 14),
                           _popupTextFieldDark(
                             controller: noteController,
                             hintText: 'Type the note here...',
@@ -1697,6 +1787,37 @@ Future<void> showEditCalendarEventDarkPopup(
                             suffixIcon: Icons.image_outlined,
                             maxLines: 3,
                           ),
+                          SizedBox(height: 14),
+                          EmployeeSelector(
+                            employees: employees,
+                            selectedIndex: selectedEmployeeIndex,
+                            onSelected: (index) {
+                              setPopupState(() {
+                                selectedEmployeeIndex = index;
+                              });
+                            },
+                            onAddNew: () async {
+                              final result = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => CreateEmployeeDarkPage(),
+                                ),
+                              );
+
+                              if (result != null && result is EmployeeRecord) {
+                                setPopupState(() {
+                                  employees.add(
+                                    EmployeeChoice(
+                                      name: result.name,
+                                      color: result.color,
+                                    ),
+                                  );
+                                  selectedEmployeeIndex = employees.length - 1;
+                                });
+                              }
+                            },
+                            isDark: true,
+                          ),
                           SizedBox(height: 16),
                           SizedBox(
                             width: double.infinity,
@@ -1707,7 +1828,10 @@ Future<void> showEditCalendarEventDarkPopup(
                                 event['date'] = dateController.text.trim();
                                 event['client'] = clientController.text.trim();
                                 event['address'] = addressController.text.trim();
-                                event['jobType'] = selectedJobType ?? '';
+                                event['employeeName'] =
+                                    employees[selectedEmployeeIndex].name;
+                                event['employeeInitials'] =
+                                    employees[selectedEmployeeIndex].initials;
                                 event['notes'] = noteController.text.trim();
                                 event['materials'] = materialsController.text.trim();
                                 event['pictures'] = picturesController.text.trim();
@@ -1827,5 +1951,129 @@ Widget _popupTextFieldDark({
       ),
     ),
   );
+}
+
+
+class EmployeeChoice {
+  final String name;
+  final Color color;
+
+  EmployeeChoice({
+    required this.name,
+    required this.color,
+  });
+
+  String get initials {
+    final parts = name.trim().split(' ').where((e) => e.isNotEmpty).toList();
+    if (parts.isEmpty) return '';
+    if (parts.length == 1) {
+      return parts.first.substring(0, parts.first.length >= 2 ? 2 : 1).toUpperCase();
+    }
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+}
+
+class EmployeeSelector extends StatelessWidget {
+  final List<EmployeeChoice> employees;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+  final VoidCallback onAddNew;
+  final bool isDark;
+
+  const EmployeeSelector({
+    super.key,
+    required this.employees,
+    required this.selectedIndex,
+    required this.onSelected,
+    required this.onAddNew,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF171717) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? const Color(0xFF2D2D2D) : const Color(0xFFD9D9D9),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Select Employee',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: isDark ? Colors.white : Colors.black,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 18,
+            runSpacing: 10,
+            children: List.generate(employees.length, (index) {
+              final employee = employees[index];
+              final isSelected = selectedIndex == index;
+
+              return GestureDetector(
+                onTap: () => onSelected(index),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: employee.color,
+                    border: Border.all(
+                      color: isSelected
+                          ? (isDark ? Colors.white : Colors.black87)
+                          : Colors.transparent,
+                      width: 3.2,
+                    ),
+                    boxShadow: isSelected
+                        ? [
+                      BoxShadow(
+                        color: (isDark ? Colors.white : Colors.black)
+                            .withValues(alpha: 0.12),
+                        blurRadius: 6,
+                      ),
+                    ]
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    employee.initials,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: onAddNew,
+            child: const Text(
+              '+Add New',
+              style: TextStyle(
+                fontSize: 13,
+                color: Color(0xFF7B3FF2),
+                decoration: TextDecoration.underline,
+                decorationColor: Color(0xFF7B3FF2),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 

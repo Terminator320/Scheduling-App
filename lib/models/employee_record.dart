@@ -49,3 +49,36 @@ final List<EmployeeRecord> kEmployees = [
   ),
 ];
 
+
+
+String employeeInitials(String name) {
+  final parts = name.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+  if (parts.isEmpty) return '';
+  if (parts.length == 1) {
+    final first = parts.first;
+    return first.substring(0, first.length >= 2 ? 2 : 1).toUpperCase();
+  }
+  return (parts.first[0] + parts[1][0]).toUpperCase();
+}
+
+extension EmployeeRecordX on EmployeeRecord {
+  String get initials => employeeInitials(name);
+}
+
+EmployeeRecord? employeeByName(String name) {
+  final normalized = name.trim().toLowerCase();
+  for (final employee in kEmployees) {
+    if (employee.name.trim().toLowerCase() == normalized) {
+      return employee;
+    }
+  }
+  return null;
+}
+
+Color employeeColorForName(String name, {Color fallback = const Color(0xFFDCD4F8)}) {
+  return employeeByName(name)?.color ?? fallback;
+}
+
+String employeeInitialsForName(String name) {
+  return employeeByName(name)?.initials ?? employeeInitials(name);
+}

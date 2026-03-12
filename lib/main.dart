@@ -79,4 +79,3 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-/* ---------------- LOGIN LIGHT ---------------- */

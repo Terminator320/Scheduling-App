@@ -352,23 +352,21 @@ class _CreateEmployeePageState extends State<CreateEmployeePage> {
                       height: 50,
                       child: ElevatedButton(
                         onPressed: () {
-                          setState(() {
-                            kEmployees.add(
-                              EmployeeRecord(
-                                name: _nameController.text.trim().isEmpty
-                                    ? 'Employee name'
-                                    : _nameController.text.trim(),
-                                email: _emailController.text.trim().isEmpty
-                                    ? 'employee@email.com'
-                                    : _emailController.text.trim(),
-                                phone: _phoneController.text.trim().isEmpty
-                                    ? '(000) 000-0000'
-                                    : _phoneController.text.trim(),
-                                color: _selectedColor,
-                              ),
-                            );
-                          });
-                          Navigator.pop(context);
+                          final newEmployee = EmployeeRecord(
+                            name: _nameController.text.trim().isEmpty
+                                ? 'Employee name'
+                                : _nameController.text.trim(),
+                            email: _emailController.text.trim().isEmpty
+                                ? 'employee@email.com'
+                                : _emailController.text.trim(),
+                            phone: _phoneController.text.trim().isEmpty
+                                ? '(000) 000-0000'
+                                : _phoneController.text.trim(),
+                            color: _selectedColor,
+                          );
+
+                          kEmployees.add(newEmployee);
+                          Navigator.pop(context, newEmployee);
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: kPurple,
@@ -492,23 +490,21 @@ class _CreateEmployeeDarkPageState extends State<CreateEmployeeDarkPage> {
                       height: 50,
                       child: ElevatedButton(
                         onPressed: () {
-                          setState(() {
-                            kEmployees.add(
-                              EmployeeRecord(
-                                name: _nameController.text.trim().isEmpty
-                                    ? 'Employee name'
-                                    : _nameController.text.trim(),
-                                email: _emailController.text.trim().isEmpty
-                                    ? 'employee@email.com'
-                                    : _emailController.text.trim(),
-                                phone: _phoneController.text.trim().isEmpty
-                                    ? '(000) 000-0000'
-                                    : _phoneController.text.trim(),
-                                color: _selectedColor,
-                              ),
-                            );
-                          });
-                          Navigator.pop(context);
+                          final newEmployee = EmployeeRecord(
+                            name: _nameController.text.trim().isEmpty
+                                ? 'Employee name'
+                                : _nameController.text.trim(),
+                            email: _emailController.text.trim().isEmpty
+                                ? 'employee@email.com'
+                                : _emailController.text.trim(),
+                            phone: _phoneController.text.trim().isEmpty
+                                ? '(000) 000-0000'
+                                : _phoneController.text.trim(),
+                            color: _selectedColor,
+                          );
+
+                          kEmployees.add(newEmployee);
+                          Navigator.pop(context, newEmployee);
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: kPurple,

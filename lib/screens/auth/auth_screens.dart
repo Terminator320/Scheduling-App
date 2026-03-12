@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../utils/colors.dart';
 import '../../screens/employee/employee_calendar.dart';
-import 'package:flutter/material.dart';
 
 /* ---------------- LOGIN LIGHT ---------------- */
 class LoginLightScreen extends StatelessWidget {
@@ -73,7 +72,10 @@ class LoginLightScreen extends StatelessWidget {
                   child: Text(
                     'Forgot password?',
                     style: TextStyle(
-                      decoration: TextDecoration.underline,
+                    color: Colors.black,
+                    decoration: TextDecoration.underline,
+                    decorationColor: Colors.black,
+                      decorationThickness: 1.5,
                     ),
                   ),
                 ),
@@ -94,7 +96,6 @@ class LoginLightScreen extends StatelessWidget {
                     'Create account',
                     style: TextStyle(
                       decoration: TextDecoration.underline,
-                      decorationThickness: 2,
                     ),
                   ),
                 ),
@@ -172,7 +173,6 @@ class CreateAccountLightScreen extends StatelessWidget {
                     style: TextStyle(
                       color: Colors.black,
                       decoration: TextDecoration.underline,
-                      decorationThickness: 2,
                     ),
                   ),
                 ),
@@ -252,15 +252,26 @@ class LoginDarkScreen extends StatelessWidget {
               SizedBox(height: 10),
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
-                  'Forgot password?',
-                  style: TextStyle(
-                    color: Colors.white,
-                    decoration: TextDecoration.underline,
-                    decorationThickness: 2,
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => EmployeeCalendarDarkPage(),
+                      ),
+                    );
+                  },
+                  child: Text(
+                    'Forgot password?',
+                    style: TextStyle(
+                      color: Colors.white,
+                      decoration: TextDecoration.underline,
+                      decorationThickness: 1.5,
+                      decorationColor: Colors.white,
+                    ),
+                  ),
                   ),
                 ),
-              ),
               SizedBox(height: 5),
               Align(
                 alignment: Alignment.centerLeft,
@@ -278,7 +289,7 @@ class LoginDarkScreen extends StatelessWidget {
                     style: TextStyle(
                       color: Colors.white,
                       decoration: TextDecoration.underline,
-                      decorationThickness: 2,
+                      decorationColor: Colors.white,
                     ),
                   ),
                 ),
@@ -378,5 +389,4 @@ class CreateAccountDarkScreen extends StatelessWidget {
   }
 }
 
-/* ---------------- ADMIN CALENDAR PAGE LIGHT ---------------- */
 
