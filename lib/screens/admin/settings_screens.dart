@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../widgets/admin_drawers.dart';
-import '../../widgets/employee_drawers.dart';
+import '../../main.dart';
 
 
 class AdminSettingsPage extends StatelessWidget {
@@ -46,7 +46,9 @@ class AdminSettingsPage extends StatelessWidget {
                     ListTile(
                       leading: Icon(Icons.description_outlined),
                       title: Text('Change Font Size'),
-                      onTap: () {},
+                      onTap: () {
+                        _showFontSizeDialog(context, isDark: false);
+                      },
                     ),
                     Divider(height: 1),
                     ListTile(
@@ -120,7 +122,9 @@ class AdminSettingsDarkPage extends StatelessWidget {
                     ListTile(
                       leading: Icon(Icons.description_outlined, color: Colors.white70),
                       title: Text('Change Font Size', style: TextStyle(color: Colors.white)),
-                      onTap: () {},
+                      onTap: () {
+                        _showFontSizeDialog(context, isDark: true);
+                      },
                     ),
                     Divider(height: 1, color: Color(0xFF2A2A2A)),
                     ListTile(
@@ -144,4 +148,72 @@ class AdminSettingsDarkPage extends StatelessWidget {
       ),
     );
   }
+}
+
+void _showFontSizeDialog(BuildContext context, {required bool isDark}) {
+  double tempScale = MyApp.of(context).fontScale;
+
+  showDialog(
+    context: context,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
+            title: Text(
+              'Change Font Size',
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black,
+              ),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Size: ${(tempScale * 100).round()}%',
+                  style: TextStyle(
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+                Slider(
+                  value: tempScale,
+                  min: 0.8,
+                  max: 1.4,
+                  divisions: 6,
+                  label: '${(tempScale * 100).round()}%',
+                  onChanged: (value) {
+                    setState(() {
+                      tempScale = value;
+                    });
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  MyApp.of(context).setFontScale(1.0);
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Reset'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  MyApp.of(context).setFontScale(tempScale);
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Apply'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
 }

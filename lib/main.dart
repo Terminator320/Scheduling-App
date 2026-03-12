@@ -10,11 +10,34 @@ import 'screens/employee/employee_calendar.dart';
 import 'screens/employee/settings_screens.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  static _MyAppState of(BuildContext context) {
+    final state = context.findAncestorStateOfType<_MyAppState>();
+    if (state == null) {
+      throw Exception('MyApp state not found');
+    }
+    return state;
+  }
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  double _fontScale = 1.0;
+
+  double get fontScale => _fontScale;
+
+  void setFontScale(double value) {
+    setState(() {
+      _fontScale = value.clamp(0.8, 1.4);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,6 +48,16 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Roboto',
       ),
+      builder: (context, child) {
+        final mediaQuery = MediaQuery.of(context);
+
+        return MediaQuery(
+          data: mediaQuery.copyWith(
+            textScaler: TextScaler.linear(_fontScale),
+          ),
+          child: child!,
+        );
+      },
       home: LoginLightScreen(),
       routes: {
         '/admin/calendar/light': (context) => AdminCalendarPage(),
