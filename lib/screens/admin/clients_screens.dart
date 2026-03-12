@@ -100,7 +100,7 @@ class _AdminClientsPageState extends State<AdminClientsPage> {
               Expanded(
                 child: ListView.separated(
                   itemCount: clients.length,
-                  separatorBuilder: (_, __) => SizedBox(height: 10),
+                  separatorBuilder: (_, _) => SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final client = clients[index];
                     return _ClientCard(
@@ -229,7 +229,7 @@ class _AdminClientsDarkPageState extends State<AdminClientsDarkPage> {
               Expanded(
                 child: ListView.separated(
                   itemCount: clients.length,
-                  separatorBuilder: (_, __) => SizedBox(height: 10),
+                  separatorBuilder: (_, _) => SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final client = clients[index];
                     return _ClientCardDark(
@@ -828,79 +828,6 @@ Future<void> showEditClientDarkPopup(
         ),
       );
     },
-  );
-}
-
-Widget _popupTextField({
-  required TextEditingController controller,
-  required String hintText,
-  IconData? suffixIcon,
-  int maxLines = 1,
-}) {
-  return TextField(
-    controller: controller,
-    maxLines: maxLines,
-    decoration: InputDecoration(
-      hintText: hintText,
-      hintStyle: TextStyle(
-        color: Color(0xFF7A7A7A),
-        fontSize: 15,
-      ),
-      suffixIcon: suffixIcon != null
-          ? Icon(suffixIcon, color: Color(0xFF7A7A7A))
-          : null,
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 16,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Color(0xFFD8D8D8)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: kPurple),
-      ),
-    ),
-  );
-}
-
-Widget _popupTextFieldDark({
-  required TextEditingController controller,
-  required String hintText,
-  IconData? suffixIcon,
-  int maxLines = 1,
-}) {
-  return TextField(
-    controller: controller,
-    maxLines: maxLines,
-    style: TextStyle(color: Colors.white),
-    decoration: InputDecoration(
-      hintText: hintText,
-      hintStyle: TextStyle(
-        color: Colors.white38,
-        fontSize: 15,
-      ),
-      suffixIcon: suffixIcon != null
-          ? Icon(suffixIcon, color: Colors.white54)
-          : null,
-      filled: true,
-      fillColor: Color(0xFF171717),
-      contentPadding: EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 16,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Color(0xFF2D2D2D)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: kPurple),
-      ),
-    ),
   );
 }
 

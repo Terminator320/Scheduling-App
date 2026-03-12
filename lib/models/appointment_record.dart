@@ -1,6 +1,3 @@
-import 'employee_record.dart';
-import 'client_record.dart';
-
 class AppointmentRecord {
   AppointmentRecord({
     required this.title,
@@ -14,6 +11,7 @@ class AppointmentRecord {
     required this.notes,
     required this.materialsNeeded,
     required this.pictures,
+    required this.assignedEmployee,
   });
 
   final String title;
@@ -27,6 +25,7 @@ class AppointmentRecord {
   final String notes;
   final String materialsNeeded;
   final String pictures;
+  final String assignedEmployee;
 }
 
 final List<AppointmentRecord> kAppointments = [
@@ -42,6 +41,7 @@ final List<AppointmentRecord> kAppointments = [
     notes: 'General appointment notes',
     materialsNeeded: 'Standard tools',
     pictures: 'No pictures added',
+    assignedEmployee: 'Emma Carter',
   ),
   AppointmentRecord(
     title: 'Job title',
@@ -55,6 +55,7 @@ final List<AppointmentRecord> kAppointments = [
     notes: 'Customer requested confirmation call',
     materialsNeeded: 'Replacement parts',
     pictures: '2 pictures attached',
+    assignedEmployee: 'Emma Carter',
   ),
   AppointmentRecord(
     title: 'Job title',
@@ -68,6 +69,7 @@ final List<AppointmentRecord> kAppointments = [
     notes: 'Access through side entrance',
     materialsNeeded: 'Inspection checklist',
     pictures: 'No pictures added',
+    assignedEmployee: 'Noah Smith',
   ),
   AppointmentRecord(
     title: 'Job title',
@@ -81,6 +83,7 @@ final List<AppointmentRecord> kAppointments = [
     notes: 'Call on arrival',
     materialsNeeded: 'Cleaning supplies',
     pictures: '1 picture attached',
+    assignedEmployee: 'Noah Smith',
   ),
   AppointmentRecord(
     title: 'Job title',
@@ -94,5 +97,6 @@ final List<AppointmentRecord> kAppointments = [
     notes: 'Bring extra materials',
     materialsNeeded: 'Extra fittings',
     pictures: '3 pictures attached',
+    assignedEmployee: 'Emma Carter',
   ),
 ];

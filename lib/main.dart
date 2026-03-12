@@ -5,6 +5,9 @@ import 'screens/admin/calendar_screens.dart';
 import 'screens/admin/employees_screens.dart';
 import 'screens/admin/clients_screens.dart';
 import 'screens/admin/appointments_screens.dart';
+import 'screens/admin/settings_screens.dart';
+import 'screens/employee/employee_calendar.dart';
+import 'screens/employee/settings_screens.dart';
 
 void main() {
   runApp(MyApp());
@@ -34,6 +37,10 @@ class MyApp extends StatelessWidget {
         '/admin/appointments/dark': (context) => AdminAppointmentsDarkPage(),
         '/admin/settings/light': (context) => AdminSettingsPage(),
         '/admin/settings/dark': (context) => AdminSettingsDarkPage(),
+        '/employee/calendar/light': (context) => EmployeeCalendarPage(),
+        '/employee/calendar/dark': (context) => EmployeeCalendarDarkPage(),
+        '/employee/settings/light': (context) => EmployeeSettingsPage(),
+        '/employee/settings/dark': (context) => EmployeeSettingsDarkPage(),
       },
     );
   }

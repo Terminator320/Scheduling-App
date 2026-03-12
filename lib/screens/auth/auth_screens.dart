@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../utils/colors.dart';
+import '../../screens/employee/employee_calendar.dart';
+import 'package:flutter/material.dart';
 
+/* ---------------- LOGIN LIGHT ---------------- */
 class LoginLightScreen extends StatelessWidget {
   const LoginLightScreen({super.key});
 
@@ -58,10 +61,20 @@ class LoginLightScreen extends StatelessWidget {
               SizedBox(height: 10),
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
-                  'Forgot password?',
-                  style: TextStyle(
-                    decoration: TextDecoration.underline,
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => EmployeeCalendarPage(),
+                      ),
+                    );
+                  },
+                  child: Text(
+                    'Forgot password?',
+                    style: TextStyle(
+                      decoration: TextDecoration.underline,
+                    ),
                   ),
                 ),
               ),

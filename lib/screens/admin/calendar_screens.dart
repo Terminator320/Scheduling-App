@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../models/appointment_record.dart';
-import '../../models/client_record.dart';
-import '../../models/employee_record.dart';
 import '../../utils/colors.dart';
 import '../../widgets/admin_drawers.dart';
 
@@ -286,7 +283,7 @@ class _AdminCalendarPageState extends State<AdminCalendarPage> {
                 )
                     : ListView.separated(
                   itemCount: selectedEvents.length,
-                  separatorBuilder: (_, __) => SizedBox(height: 12),
+                  separatorBuilder: (_, _) => SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final event = selectedEvents[index];
                     return Container(
@@ -682,7 +679,7 @@ class _AdminCalendarDarkPageState extends State<AdminCalendarDarkPage> {
                 )
                     : ListView.separated(
                   itemCount: selectedEvents.length,
-                  separatorBuilder: (_, __) => SizedBox(height: 12),
+                  separatorBuilder: (_, _) => SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final event = selectedEvents[index];
                     return Container(
@@ -905,7 +902,7 @@ Future<void> showAddEventPopup(
                           ),
                           SizedBox(height: 14),
                           DropdownButtonFormField<String>(
-                            value: selectedJobType,
+                            initialValue: selectedJobType,
                             decoration: InputDecoration(
                               hintText: 'Type of job...',
                               hintStyle: TextStyle(
@@ -1135,7 +1132,7 @@ Future<void> showAddEventDarkPopup(
                           ),
                           SizedBox(height: 14),
                           DropdownButtonFormField<String>(
-                            value: selectedJobType,
+                            initialValue: selectedJobType,
                             dropdownColor: Color(0xFF171717),
                             style: TextStyle(color: Colors.white),
                             decoration: InputDecoration(
@@ -1387,7 +1384,7 @@ Future<void> showEditCalendarEventPopup(
                           ),
                           SizedBox(height: 14),
                           DropdownButtonFormField<String>(
-                            value: selectedJobType,
+                            initialValue: selectedJobType,
                             decoration: InputDecoration(
                               hintText: 'Type of job...',
                               hintStyle: TextStyle(
@@ -1636,7 +1633,7 @@ Future<void> showEditCalendarEventDarkPopup(
                           ),
                           SizedBox(height: 14),
                           DropdownButtonFormField<String>(
-                            value: selectedJobType,
+                            initialValue: selectedJobType,
                             dropdownColor: Color(0xFF171717),
                             style: TextStyle(color: Colors.white),
                             decoration: InputDecoration(

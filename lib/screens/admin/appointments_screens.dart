@@ -90,7 +90,7 @@ class _AdminAppointmentsPageState extends State<AdminAppointmentsPage> {
               Expanded(
                 child: ListView.separated(
                   itemCount: appointments.length,
-                  separatorBuilder: (_, __) => SizedBox(height: 10),
+                  separatorBuilder: (_, _) => SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final appointment = appointments[index];
                     return _AppointmentCard(
@@ -201,7 +201,7 @@ class _AdminAppointmentsDarkPageState extends State<AdminAppointmentsDarkPage> {
               Expanded(
                 child: ListView.separated(
                   itemCount: appointments.length,
-                  separatorBuilder: (_, __) => SizedBox(height: 10),
+                  separatorBuilder: (_, _) => SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final appointment = appointments[index];
                     return _AppointmentCardDark(
