@@ -534,6 +534,11 @@ class _ClientCard extends StatelessWidget {
             onPressed: onEdit,
             icon: Icon(Icons.edit_outlined, size: 20),
           ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: onDelete,
+            icon: Icon(Icons.delete_outline, size: 20),
+          ),
         ],
       ),
     );
@@ -586,6 +591,11 @@ class _ClientCardDark extends StatelessWidget {
             visualDensity: VisualDensity.compact,
             onPressed: onEdit,
             icon: Icon(Icons.edit_outlined, size: 20, color: Colors.white70),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: onDelete,
+            icon: Icon(Icons.delete_outline, size: 20),
           ),
         ],
       ),
