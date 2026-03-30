@@ -27,7 +27,6 @@ Future<String> _loggedInEmployeeName(List<EmployeeRecord> employees) async {
   final authUid = user.uid.trim();
   final authEmail = (user.email ?? '').trim().toLowerCase();
 
-  // ✅ First: try employees list (fast)
   for (final employee in employees) {
     final employeeUid = employee.uid.trim();
     final employeeEmail = employee.email.trim().toLowerCase();
@@ -42,7 +41,7 @@ Future<String> _loggedInEmployeeName(List<EmployeeRecord> employees) async {
     }
   }
 
-  // 🔥 Second: fallback → search ALL users (for admin)
+
   final result = await FirebaseFirestore.instance
       .collection('users')
       .where('uid', isEqualTo: authUid)
@@ -505,9 +504,6 @@ class _CalendarArrowButton extends StatelessWidget {
     );
   }
 }
-
-/* ---------------- ADMIN CALENDAR PAGE DARK ---------------- */
-
 
 String _clientDisplayNameFromRecord(ClientRecord client) {
   final businessName = (client.businessName ?? '').trim();
@@ -1686,29 +1682,6 @@ Widget _detailDisplayBlockLight({
   );
 }
 
-Widget _detailDisplayBlockDark({
-  required BuildContext context,
-  required String label,
-  required String value,
-  IconData? suffixIcon,
-  Widget? prefix,
-  int maxLines = 1,
-}) {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _detailSectionLabel(label: label, color: Color(0xFFB0B0B0)),
-      _detailDisplayFieldDark(
-        context: context,
-        label: label,
-        value: value,
-        suffixIcon: suffixIcon,
-        prefix: prefix,
-        maxLines: maxLines,
-      ),
-    ],
-  );
-}
 
 const String _calendarHiddenAppointmentsCollection = 'calendarHiddenAppointments';
 
@@ -1920,203 +1893,7 @@ Future<void> showCalendarEventDetailsPopup(
   );
 }
 
-Future<void> showCalendarEventDetailsDarkPopup(
-    BuildContext context, {
-      required AppointmentRecord appointment,
-      required Color employeeColor,
-      required List<EmployeeRecord> employees,
-    }) async {
-  await showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (context) {
-      return DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.90,
-        minChildSize: 0.65,
-        maxChildSize: 0.95,
-        builder: (context, scrollController) {
-          return Container(
-            decoration: BoxDecoration(
-              color: Color(0xFF121212),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            ),
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: Column(
-                  children: [
-                    Center(
-                      child: SizedBox(
-                        width: 44,
-                        child: Divider(
-                          thickness: 4,
-                          color: Color(0xFF3A3A3A),
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Center(
-                      child: Text(
-                        tr(context, 'Event Details'),
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 18),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        controller: scrollController,
-                        child: Column(
-                          children: [
-                            _detailDisplayBlockDark(
-                              context: context,
-                              label: tr(context, 'Job Title'),
-                              value: appointment.title,
-                            ),
-                            SizedBox(height: 14),
-                            _detailDisplayBlockDark(
-                              context: context,
-                              label: tr(context, 'Date'),
-                              value: appointment.date,
-                              suffixIcon: Icons.calendar_today_outlined,
-                            ),
-                            SizedBox(height: 14),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _detailDisplayBlockDark(
-                                    context: context,
-                                    label: tr(context, 'Start Time'),
-                                    value: appointment.startTime,
-                                    suffixIcon: Icons.access_time_outlined,
-                                  ),
-                                ),
-                                SizedBox(width: 10),
-                                Expanded(
-                                  child: _detailDisplayBlockDark(
-                                    context: context,
-                                    label: tr(context, 'End Time'),
-                                    value: appointment.endTime,
-                                    suffixIcon: Icons.access_time_outlined,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 14),
-                            GestureDetector(
-                              onTap: () async {
-                                await _openClientDetailsFromAppointment(
-                                  context,
-                                  appointment: appointment,
-                                  isDark: true,
-                                );
-                              },
-                              child: _detailDisplayBlockDark(
-                                context: context,
-                                label: tr(context, 'Client name (phone number)'),
-                                value: _clientDisplay(appointment),
-                              ),
-                            ),
-                            SizedBox(height: 14),
-                            GestureDetector(
-                              onTap: () {
-                                final address = appointment.address.trim();
-                                if (address.isNotEmpty) {
-                                  openMapsOptions(context, address);
-                                }
-                              },
-                              child: _detailDisplayBlockDark(
-                                context: context,
-                                label: tr(context, 'Address'),
-                                value: appointment.address,
-                                suffixIcon: Icons.map,
-                              ),
-                            ),
-                            SizedBox(height: 14),
-                            _detailDisplayBlockDark(
-                              context: context,
-                              label: tr(context, 'Selected Employee'),
-                              value: appointment.employeeName,
-                              prefix: _employeeBadgesForNames(
-                                appointment.employeeName,
-                                employees: employees,
-                                isDark: true,
-                              ),
-                            ),
-                            SizedBox(height: 14),
-                            _detailDisplayBlockDark(
-                              context: context,
-                              label: tr(context, 'Notes'),
-                              value: appointment.notes,
-                              suffixIcon: Icons.note_alt_outlined,
-                              maxLines: 3,
-                            ),
-                            SizedBox(height: 14),
-                            _detailDisplayBlockDark(
-                              context: context,
-                              label: tr(context, 'Materials needed'),
-                              value: appointment.materialsNeeded,
-                              suffixIcon: Icons.build_outlined,
-                              maxLines: 3,
-                            ),
-                            SizedBox(height: 14),
-                            _detailDisplayBlockDark(
-                              context: context,
-                              label: tr(context, 'Pictures'),
-                              value: appointment.pictures,
-                              suffixIcon: Icons.image_outlined,
-                              maxLines: 3,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          if (_hasAppointmentStarted(appointment)) {
-                            await _markAppointmentDoneForCalendar(appointment);
-                          }
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: kPurple,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Text(
-                          tr(context, _hasAppointmentStarted(appointment) ? 'Event Done' : 'Close'),
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      );
-    },
-  );
-}
+
 
 String _appointmentClientLine(AppointmentRecord appointment) {
   final name = appointment.clientName.trim();
@@ -2228,28 +2005,6 @@ Widget _detailDisplayFieldLight({
   );
 }
 
-Widget _detailDisplayFieldDark({
-  required BuildContext context,
-  required String label,
-  required String value,
-  IconData? suffixIcon,
-  Widget? prefix,
-  int maxLines = 1,
-}) {
-  return _detailDisplayFieldBase(
-    context: context,
-    label: label,
-    value: value,
-    suffixIcon: suffixIcon,
-    prefix: prefix,
-    maxLines: maxLines,
-    fillColor: Color(0xFF171717),
-    borderColor: Color(0xFF2D2D2D),
-    textColor: Colors.white,
-    hintColor: Colors.white38,
-    iconColor: Colors.white54,
-  );
-}
 
 Widget _detailDisplayFieldBase({
   required BuildContext context,
@@ -2326,25 +2081,6 @@ Widget _employeeBadgeLight(String name, Color employeeColor) {
   );
 }
 
-Widget _employeeBadgeDark(String name, Color employeeColor) {
-  return Container(
-    width: 28,
-    height: 28,
-    decoration: BoxDecoration(
-      color: employeeColor,
-      shape: BoxShape.circle,
-    ),
-    alignment: Alignment.center,
-    child: Text(
-      _employeeInitials(name),
-      style: TextStyle(
-        fontSize: 10,
-        fontWeight: FontWeight.w600,
-        color: Colors.white,
-      ),
-    ),
-  );
-}
 
 Widget _employeeBadgesForNames(
     String rawNames, {
@@ -2763,106 +2499,6 @@ Widget _employeeSelectorLight({
   );
 }
 
-Widget _employeeSelectorDark({
-  required BuildContext context,
-  required List<EmployeeRecord> employees,
-  required Set<String> selectedEmployeeIds,
-  required ValueChanged<String> onSelected,
-}) {
-  return Container(
-    width: double.infinity,
-    padding: EdgeInsets.fromLTRB(12, 12, 12, 10),
-    decoration: BoxDecoration(
-      color: Color(0xFF171717),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: Color(0xFF2D2D2D)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          tr(context, 'Select Employees'),
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-        SizedBox(height: 12),
-        if (employees.isEmpty)
-          Text(
-            tr(context, 'No employees found'),
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.white54,
-            ),
-          )
-        else
-          Wrap(
-            spacing: 18,
-            runSpacing: 12,
-            children: employees.map((employee) {
-              final isSelected = selectedEmployeeIds.contains(employee.id);
-
-              return GestureDetector(
-                onTap: () => onSelected(employee.id),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _employeeBubbleColor(employee, true),
-                            border: Border.all(
-                              color: isSelected ? Colors.white : Colors.transparent,
-                              width: 2,
-                            ),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            _employeeInitials(employee.name),
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ),
-                        if (isSelected)
-                          Positioned(
-                            right: -2,
-                            top: -2,
-                            child: Container(
-                              width: 16,
-                              height: 16,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                              ),
-                              alignment: Alignment.center,
-                              child: Icon(
-                                Icons.check,
-                                size: 11,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-      ],
-    ),
-  );
-}
 
 Widget _popupTextField({
   required TextEditingController controller,
@@ -2936,95 +2572,6 @@ Widget _popupTextField({
   );
 }
 
-Widget _popupTextFieldDark({
-  required TextEditingController controller,
-  required String hintText,
-  IconData? suffixIcon,
-  int maxLines = 1,
-  bool enabled = true,
-  ValueChanged<String>? onChanged,
-}) {
-  final isMultiline = maxLines > 1;
-
-  return Container(
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(14),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.35),
-          blurRadius: 10,
-          offset: Offset(0, 4),
-        ),
-      ],
-    ),
-    child: TextField(
-      controller: controller,
-      maxLines: maxLines,
-      enabled: enabled,
-      onChanged: onChanged,
-      style: TextStyle(
-        color: Colors.white,
-        fontSize: 15,
-      ),
-      textAlignVertical:
-      isMultiline ? TextAlignVertical.top : TextAlignVertical.center,
-      decoration: InputDecoration(
-        labelText: hintText,
-        floatingLabelBehavior: FloatingLabelBehavior.auto,
-        labelStyle: TextStyle(
-          color: Colors.white38,
-          fontSize: 14,
-        ),
-        floatingLabelStyle: TextStyle(
-          color: kPurple,
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-        ),
-        suffixIcon: suffixIcon != null
-            ? Padding(
-          padding: EdgeInsets.only(right: 8),
-          child: Icon(
-            suffixIcon,
-            color: Colors.white54,
-            size: 20,
-          ),
-        )
-            : null,
-        suffixIconConstraints: BoxConstraints(
-          minWidth: 40,
-          minHeight: 40,
-        ),
-        filled: true,
-        fillColor: Color(0xFF171717),
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: isMultiline ? 16 : 15,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(
-            color: Color(0xFF2D2D2D),
-            width: 1.2,
-          ),
-        ),
-        disabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(
-            color: Color(0xFF2D2D2D),
-            width: 1.2,
-          ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(
-            color: kPurple,
-            width: 2,
-          ),
-        ),
-      ),
-    ),
-  );
-}
 bool _sameDateString(String a, String b) {
   return a.trim() == b.trim();
 }
@@ -3074,25 +2621,6 @@ Widget _popupInlineErrorLight(String message) {
   );
 }
 
-Widget _popupInlineErrorDark(String message) {
-  return Container(
-    width: double.infinity,
-    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    decoration: BoxDecoration(
-      color: Color(0xFF2A1212),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: Colors.redAccent),
-    ),
-    child: Text(
-      message,
-      style: TextStyle(
-        color: Colors.redAccent,
-        fontSize: 14,
-        fontWeight: FontWeight.w500,
-      ),
-    ),
-  );
-}
 
 Future<void> openMapsOptions(BuildContext context, String address) async {
   final encodedAddress = Uri.encodeComponent(address);

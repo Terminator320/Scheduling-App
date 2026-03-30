@@ -190,9 +190,6 @@ class _AdminEmployeesPageState extends State<AdminEmployeesPage> {
   }
 }
 
-/* ---------------- EMPLOYEES DARK ---------------- */
-
-
 /* ---------------- CREATE EMPLOYEE LIGHT ---------------- */
 
 class CreateEmployeePage extends StatefulWidget {
@@ -447,8 +444,6 @@ class _CreateEmployeePageState extends State<CreateEmployeePage> {
   }
 }
 
-/* ---------------- CREATE EMPLOYEE DARK ---------------- */
-
 Widget _employeeFormField({
   required BuildContext context,
   required TextEditingController controller,
@@ -588,9 +583,6 @@ class _EmployeeCard extends StatelessWidget {
   }
 }
 
-/* ---------------- EMPLOYEE CARDS DARK ---------------- */
-
-
 
 class _ColorDot extends StatelessWidget {
   final Color color;
@@ -728,8 +720,6 @@ Future<void> showEmployeeDetailsPopup(
     },
   );
 }
-
-/* ---------------- EMPLOYEE DETAILS POPUP DARK ---------------- */
 
 
 /* ---------------- EDIT POPUP LIGHT ---------------- */
@@ -922,200 +912,6 @@ Future<void> showEditEmployeePopup(
   );
 }
 
-/* ---------------- EDIT POPUP DARK ---------------- */
-
-Future<void> showEditEmployeeDarkPopup(
-    BuildContext context, {
-      required EmployeeRecord employee,
-      required bool canGrantAdmin,
-    }) async {
-  final nameController = TextEditingController(text: employee.name);
-  final phoneController = TextEditingController(text: employee.phone);
-  final emailController = TextEditingController(text: employee.email);
-  Color selectedColor = employee.color;
-  bool giveAdminAccess = employee.isAdmin;
-  bool isSaving = false;
-
-  await showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setModalState) {
-          Future<void> updateEmployee() async {
-            final updatedName = nameController.text.trim().isEmpty
-                ? employee.name
-                : nameController.text.trim();
-
-            final updatedPhone = phoneController.text.trim().isEmpty
-                ? employee.phone
-                : phoneController.text.trim();
-
-            final updatedEmail = emailController.text.trim().isEmpty
-                ? employee.email
-                : emailController.text.trim().toLowerCase();
-
-            setModalState(() {
-              isSaving = true;
-            });
-
-            try {
-              await UserService.updateEmployee(
-                docId: employee.id,
-                name: updatedName,
-                email: updatedEmail,
-                phone: updatedPhone,
-                colorValue: selectedColor.toARGB32().toString(),
-                isAdmin: canGrantAdmin ? giveAdminAccess : null,
-              );
-
-              if (!context.mounted) return;
-              Navigator.pop(context);
-            } catch (e) {
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(e.toString())),
-              );
-            } finally {
-              if (context.mounted) {
-                setModalState(() {
-                  isSaving = false;
-                });
-              }
-            }
-          }
-
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
-            ),
-            child: SingleChildScrollView(
-              child: Container(
-                padding: EdgeInsets.fromLTRB(18, 12, 18, 22),
-                decoration: BoxDecoration(
-                  color: Color(0xFF121212),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 44,
-                      child: Divider(
-                        thickness: 4,
-                        color: Color(0xFF3A3A3A),
-                      ),
-                    ),
-                    SizedBox(height: 12),
-                    Text(
-                      tr(context, 'Edit Employee'),
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(height: 18),
-                    _employeeFormFieldDark(
-                      context: context,
-                      controller: nameController,
-                      hintText: 'name',
-                    ),
-                    SizedBox(height: 12),
-                    _employeeFormFieldDark(
-                      context: context,
-                      controller: phoneController,
-                      hintText: 'Phone number',
-                    ),
-                    SizedBox(height: 12),
-                    _employeeFormFieldDark(
-                      context: context,
-                      controller: emailController,
-                      hintText: 'Email',
-                    ),
-                    SizedBox(height: 18),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        tr(context, 'Employee Color'),
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 10),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: kEmployeePickerColors.map((color) {
-                        return _ColorDot(
-                          color: color,
-                          isSelected: selectedColor == color,
-                          onTap: () {
-                            setModalState(() {
-                              selectedColor = color;
-                            });
-                          },
-                        );
-                      }).toList(),
-                    ),
-                    if (canGrantAdmin) ...[
-                      SizedBox(height: 16),
-                      CheckboxListTile(
-                        value: giveAdminAccess,
-                        onChanged: (value) {
-                          setModalState(() {
-                            giveAdminAccess = value ?? false;
-                          });
-                        },
-                        title: Text(
-                          tr(context, 'Give admin mode access'),
-                          style: TextStyle(color: Colors.white),
-                        ),
-                        checkColor: Colors.white,
-                        activeColor: kPurple,
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-                    ],
-                    SizedBox(height: 18),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: isSaving ? null : updateEmployee,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: kPurple,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        child: isSaving
-                            ? SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                            color: Colors.white,
-                          ),
-                        )
-                            : Text(tr(context, 'Update Employee')),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      );
-    },
-  );
-}
 
 Future<bool?> _showDeleteEmployeeDialog(BuildContext context) {
   return showDialog<bool>(
@@ -1124,33 +920,6 @@ Future<bool?> _showDeleteEmployeeDialog(BuildContext context) {
       title: Text(tr(context, 'Delete employee')),
       content: Text(
         tr(context, 'Are you sure you want to delete this employee?'),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: Text(tr(context, 'Cancel')),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: Text(tr(context, 'Delete')),
-        ),
-      ],
-    ),
-  );
-}
-
-Future<bool?> _showDeleteEmployeeDialogDark(BuildContext context) {
-  return showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      backgroundColor: Color(0xFF121212),
-      title: Text(
-        tr(context, 'Delete employee'),
-        style: TextStyle(color: Colors.white),
-      ),
-      content: Text(
-        tr(context, 'Are you sure you want to delete this employee?'),
-        style: TextStyle(color: Colors.white70),
       ),
       actions: [
         TextButton(

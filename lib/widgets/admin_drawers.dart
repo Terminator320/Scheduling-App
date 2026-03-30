@@ -16,14 +16,7 @@ class AdminMenuDrawer extends StatelessWidget {
   }
 }
 
-class AdminMenuDrawerDark extends StatelessWidget {
-  const AdminMenuDrawerDark({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return const _AdminDrawerLoader(isDark: true);
-  }
-}
 
 class _AdminDrawerLoader extends StatelessWidget {
   const _AdminDrawerLoader({
