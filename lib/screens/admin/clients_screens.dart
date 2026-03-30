@@ -185,7 +185,7 @@ class _AdminClientsPageState extends State<AdminClientsPage> {
   }
 }
 
-/* ---------------- CLIENTS DARK ---------------- */
+
 
 class _BusinessContactFormData {
   final TextEditingController nameController;
@@ -686,7 +686,6 @@ class _CreateClientPageState extends State<CreateClientPage> {
 }
 
 
-
 Widget _provinceDropdownField({
   required BuildContext context,
   required String value,
@@ -930,7 +929,6 @@ Widget _contactCardLight({
   );
 }
 
-
 class _ClientCard extends StatelessWidget {
   final ClientRecord client;
   final VoidCallback onTap;
@@ -1031,8 +1029,6 @@ Widget _clientDetailField({required String value, int maxLines = 1}) {
     ),
   );
 }
-
-
 
 Widget _clientDetailSectionLabel({
   required BuildContext context,
