@@ -77,7 +77,6 @@ class MyApp extends StatelessWidget {
                   '/admin/employees/light': (context) => AdminEmployeesPage(),
                   '/admin/employees/dark': (context) => AdminEmployeesDarkPage(),
                   '/admin/clients/light': (context) => AdminClientsPage(),
-                  '/admin/clients/dark': (context) => AdminClientsDarkPage(),
                   '/admin/appointments/light': (context) => AdminAppointmentsPage(),
                   '/admin/appointments/dark': (context) => AdminAppointmentsDarkPage(),
                   '/admin/settings/light': (context) => AdminSettingsPage(),

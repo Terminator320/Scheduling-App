@@ -4,7 +4,7 @@ import '../models/client_record.dart';
 
 class ClientService {
   static final CollectionReference<Map<String, dynamic>> _clients =
-  FirebaseFirestore.instance.collection('clients');
+      FirebaseFirestore.instance.collection('clients');
 
   static Future<void> addClient({
     required String businessName,
@@ -32,8 +32,8 @@ class ClientService {
         .snapshots()
         .map(
           (snapshot) =>
-          snapshot.docs.map((doc) => ClientRecord.fromDoc(doc)).toList(),
-    );
+              snapshot.docs.map((doc) => ClientRecord.fromDoc(doc)).toList(),
+        );
   }
 
   static Future<List<ClientRecord>> searchClients(String query) async {
@@ -49,17 +49,17 @@ class ClientService {
         .map((doc) => ClientRecord.fromDoc(doc))
         .where(
           (client) =>
-      client.businessName.toLowerCase().contains(q) ||
-          client.name.toLowerCase().contains(q) ||
-          client.phone.toLowerCase().contains(q) ||
-          client.email.toLowerCase().contains(q) ||
-          client.contacts.any(
+              client.businessName.toLowerCase().contains(q) ||
+              client.name.toLowerCase().contains(q) ||
+              client.phone.toLowerCase().contains(q) ||
+              client.email.toLowerCase().contains(q) ||
+              client.contacts.any(
                 (contact) =>
-            contact.name.toLowerCase().contains(q) ||
-                contact.phone.toLowerCase().contains(q) ||
-                contact.email.toLowerCase().contains(q),
-          ),
-    )
+                    contact.name.toLowerCase().contains(q) ||
+                    contact.phone.toLowerCase().contains(q) ||
+                    contact.email.toLowerCase().contains(q),
+              ),
+        )
         .toList();
   }
 
@@ -87,5 +87,3 @@ class ClientService {
     await _clients.doc(id).delete();
   }
 }
-
-
