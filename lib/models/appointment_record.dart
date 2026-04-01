@@ -38,7 +38,7 @@ class AppointmentRecord {
     required this.createdAt,
     required this.updatedAt,
   });
-
+  ///Build a new AppointmentRecord Object
   factory AppointmentRecord.fromDoc(
       DocumentSnapshot<Map<String, dynamic>> doc,
       ) {
@@ -64,7 +64,7 @@ class AppointmentRecord {
       updatedAt: data['updatedAt'] as Timestamp?,
     );
   }
-
+  ///Return an AppointmentRecord with a map format
   Map<String, dynamic> toMap() {
     return {
       'title': title,
