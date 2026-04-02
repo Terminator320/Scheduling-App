@@ -38,6 +38,7 @@ class AppointmentRecord {
     required this.createdAt,
     required this.updatedAt,
   });
+
   ///Build a new AppointmentRecord Object
   factory AppointmentRecord.fromDoc(
       DocumentSnapshot<Map<String, dynamic>> doc,
