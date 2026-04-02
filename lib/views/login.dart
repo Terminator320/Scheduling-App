@@ -103,7 +103,7 @@ class _LoginState extends State<Login> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: kPurple,
                     ),
-                    onPressed: _isLoading ? null : onPrimaryPressed,
+                    onPressed: _isLoading ? null : (){},
                     child: _isLoading
                         ? SizedBox(
                       width: 22,
@@ -127,35 +127,37 @@ class _LoginState extends State<Login> {
                     textAlign: TextAlign.center,
                   ),
                 ],
-                if (onForgotPassword != null) ...[
-                  SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: GestureDetector(
-                      onTap: () {
-                        onForgotPassword?.call();
-                      },
-                      child: Text(
-                        tr(context, 'Forgot password?'),
-                        style: TextStyle(
-                          color: secondaryTextColor,
-                          decoration: TextDecoration.underline,
-                          decorationColor: secondaryTextColor,
-                          decorationThickness: 2,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                // if (onForgotPassword != null) ...[
+                //   SizedBox(height: 10),
+                //   Align(
+                //     alignment: Alignment.centerLeft,
+                //     child: GestureDetector(
+                //       onTap: () {
+                //         // onForgotPassword?.call();
+                //
+                //       },
+                //       child: Text(
+                //         tr(context, 'Forgot password?'),
+                //         style: TextStyle(
+                //           color: secondaryTextColor,
+                //           decoration: TextDecoration.underline,
+                //           decorationColor: secondaryTextColor,
+                //           decorationThickness: 2,
+                //         ),
+                //       ),
+                //     ),
+                //   ),
+                // ],
                 SizedBox(height: 5),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: GestureDetector(
                     onTap: () {
-                      onSecondaryTap();
+                      (){}; //method needed
                     },
                     child: Text(
-                      secondaryText,
+                      // secondaryText,
+                      tr(context, 'Create account'),
                       style: TextStyle(
                         color: secondaryTextColor,
                         decoration: TextDecoration.underline,
