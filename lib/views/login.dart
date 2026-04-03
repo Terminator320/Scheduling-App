@@ -27,8 +27,7 @@ class _LoginState extends State<Login> {
   bool _isLoading = false;
   String _errorMessage = '';
 
-
-// Create account
+  // Create account
   Future<void> _createAccount() async {
     final email = _emailController.text.trim().toLowerCase();
     final password = _passwordController.text.trim();
@@ -54,7 +53,6 @@ class _LoginState extends State<Login> {
       setState(() {
         _errorMessage = 'Account created. You can now sign in.';
       });
-
     } on FirebaseAuthException catch (e) {
       setState(() {
         _errorMessage = e.message ?? 'Account creation failed';
@@ -69,7 +67,6 @@ class _LoginState extends State<Login> {
       });
     }
   }
-
 
   // Sign
   Future<void> _signIn() async {
@@ -125,14 +122,16 @@ class _LoginState extends State<Login> {
       final canAccessAdminMode = employee.isAdmin;
 
       if (canAccessAdminMode) {
-       Navigator.pushReplacement(
+        Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => CalendarView(
-            employeeId: employeeId,
-            employeeName: employeeName,
-          )));
-      }
-      else if (employee.role == 'employee') {
+          MaterialPageRoute(
+            builder: (context) => CalendarView(
+              employeeId: employeeId,
+              employeeName: employeeName,
+            ),
+          ),
+        );
+      } else if (employee.role == 'employee') {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -166,8 +165,7 @@ class _LoginState extends State<Login> {
     }
   }
 
-
-  //reset passsword
+  //reset password
   Future<void> _resetPassword() async {
     final email = _emailController.text.trim().toLowerCase();
 
@@ -191,18 +189,13 @@ class _LoginState extends State<Login> {
     }
   }
 
-
-
   @override
   Widget build(BuildContext context) {
-
     final colour = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
     String title = tr(context, 'Login');
     String confirmButton = tr(context, 'Sign In');
-
-
 
     return Scaffold(
       body: Center(
@@ -265,7 +258,8 @@ class _LoginState extends State<Login> {
                     controller: _passwordController,
                     obscureText: _isObscured,
                     style: textTheme.bodyMedium?.copyWith(
-                        color: colour.onSurface.withOpacity(0.7),),
+                      color: colour.onSurface.withOpacity(0.7),
+                    ),
                     decoration: InputDecoration(
                       hintText: 'Password',
                       labelStyle: textTheme.bodySmall,
@@ -298,9 +292,7 @@ class _LoginState extends State<Login> {
                                 color: colour.onPrimary,
                               ),
                             )
-                          : Text(
-                              confirmButton,
-                            ),
+                          : Text(confirmButton),
                     ),
                   ),
 
@@ -312,28 +304,22 @@ class _LoginState extends State<Login> {
                       textAlign: TextAlign.center,
                     ),
                   ],
-                  SizedBox(height: 5),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: GestureDetector(
-                      onTap: _isLoading ? null : _createAccount,
-                      child: Text(
-                        // secondaryText,
-                        tr(context, 'Create account'),
-                        style: textTheme.labelSmall,
-                        textAlign: TextAlign.left,
-                      ),
+                  SizedBox(height: 10 ),
+                  InkWell(
+                    onTap: _isLoading ? null : _createAccount,
+                    child: Text(
+                      tr(context, 'Create account'),
+                      style: textTheme.labelSmall,
+                      textAlign: TextAlign.left,
                     ),
                   ),
                   SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: GestureDetector(
-                      onTap: _resetPassword,
-                      child: Text(
-                        'Forgot password',
-                        style: textTheme.labelSmall
-                      ),
+                  InkWell(
+                    onTap: _resetPassword,
+                    child: Text(
+                      tr(context, 'Forgot Password'),
+                      style: textTheme.labelSmall,
+                      textAlign: TextAlign.left,
                     ),
                   ),
                 ],
