@@ -35,11 +35,7 @@ class Themes {
       labelLarge: TextStyle(fontWeight: FontWeight.w600),
       labelSmall: TextStyle(
         decoration: TextDecoration.underline,
-        decorationThickness: 2,
       ),
-    ).apply(
-      bodyColor: Colors.black,
-      displayColor: Colors.black,
     ),
 
     appBarTheme: AppBarTheme(
