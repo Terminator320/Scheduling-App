@@ -9,7 +9,6 @@ class EmployeeRecord {
     required this.color,
     required this.role,
     required this.status,
-    required this.isAdmin,
     required this.uid,
   });
 
@@ -20,7 +19,6 @@ class EmployeeRecord {
   final Color color;
   final String role;
   final String status;
-  final bool isAdmin;
   final String uid;
 
   factory EmployeeRecord.fromMap(
@@ -39,8 +37,12 @@ class EmployeeRecord {
       color: Color(colorValue),
       role: (data['role'] ?? 'employee').toString(),
       status: (data['status'] ?? '').toString(),
-      isAdmin: data['isAdmin'] == true,
       uid: (data['uid'] ?? '').toString(),
     );
   }
+
+
+
+  bool get isAdmin => role == 'admin';
+
 }

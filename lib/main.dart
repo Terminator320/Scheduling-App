@@ -46,6 +46,7 @@ class _PaulAppState extends State<PaulApp> {
       darkTheme: Themes().darkTheme,
       themeMode: _themeMode,
       home: Splash(toggleTheme: toggleTheme),
+
     );
   }
 }
@@ -64,19 +65,19 @@ class _SplashState extends State<Splash> {
   @override
   Widget build(BuildContext context) {
     return SplashScreen(
-      seconds: 10,
-      navigateAfterSeconds: Login(),
+      seconds: 5,
+      navigateAfterSeconds: Login(toggleTheme: widget.toggleTheme,),
       title: Text(
-        'Welcome to my Product',
+        'Welcome to Scheduling App',
         style: Theme.of(context).textTheme.headlineMedium,
       ),
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       styleTextUnderTheLoader: TextStyle(),
-      image: Image.asset('assets/george.JPG'),
-      photoSize: 150,
-      loaderColor: Theme.of(context).colorScheme.primary,
+      image: Image.asset('assets/logo1.png'),
+      photoSize: 170,
+      loaderColor: Theme.of(context).colorScheme.secondary,
       loadingText: Text(
-        'Hey Welcome ',
+        'Hope you are enjoying your day!',
         style: Theme.of(context).textTheme.bodyMedium,
       ),
       loadingTextPadding: EdgeInsets.zero,

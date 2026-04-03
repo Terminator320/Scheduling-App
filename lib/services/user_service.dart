@@ -7,7 +7,7 @@ class UserService {
   static final CollectionReference<Map<String, dynamic>> _users =
   FirebaseFirestore.instance.collection('users');
 
-  static Future<void> addEmployee({
+  Future<void> addEmployee({
     required String name,
     required String email,
     required String phone,
@@ -31,14 +31,15 @@ class UserService {
       'phone': phone.trim(),
       'role': 'employee',
       'status': 'invited',
-      'isAdmin': isAdmin,
       'uid': '',
       'colorValue': colorValue,
       'createdAt': FieldValue.serverTimestamp(),
     });
   }
 
-  static Stream<List<EmployeeRecord>> employeesStream() {
+
+
+  Stream<List<EmployeeRecord>> employeesStream() {
     return _users.where('role', isEqualTo: 'employee').snapshots().map(
           (snapshot) {
         return snapshot.docs
@@ -48,7 +49,9 @@ class UserService {
     );
   }
 
-  static Future<void> updateEmployee({
+
+
+  Future<void> updateEmployee({
     required String docId,
     required String name,
     required String email,
@@ -82,11 +85,11 @@ class UserService {
     await _users.doc(docId).update(updateData);
   }
 
-  static Future<void> deleteEmployee(String docId) async {
+  Future<void> deleteEmployee(String docId) async {
     await _users.doc(docId).delete();
   }
 
-  static Future<QueryDocumentSnapshot<Map<String, dynamic>>?>
+  Future<QueryDocumentSnapshot<Map<String, dynamic>>?>
   findInvitedEmployeeByEmail(String email) async {
     final normalizedEmail = email.trim().toLowerCase();
 
@@ -101,7 +104,7 @@ class UserService {
     return result.docs.first;
   }
 
-  static Future<QueryDocumentSnapshot<Map<String, dynamic>>?> findUserByUid(
+  Future<QueryDocumentSnapshot<Map<String, dynamic>>?> findUserByUid(
       String uid,
       ) async {
     final result = await _users.where('uid', isEqualTo: uid).limit(1).get();
@@ -110,7 +113,7 @@ class UserService {
     return result.docs.first;
   }
 
-  static Future<bool> canGrantAdminForUid(String uid) async {
+  Future<bool> canGrantAdminForUid(String uid) async {
     if (uid.isEmpty) return false;
 
     final userDoc = await findUserByUid(uid);
@@ -120,7 +123,7 @@ class UserService {
     return (data['role'] ?? '').toString() == 'admin';
   }
 
-  static Future<void> activateEmployee({
+  Future<void> activateEmployee({
     required String docId,
     required String uid,
   }) async {
@@ -130,7 +133,7 @@ class UserService {
     });
   }
 
-  static Stream<String> loggedInUserNameStream() {
+  Stream<String> loggedInUserNameStream() {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {

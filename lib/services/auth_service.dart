@@ -4,7 +4,7 @@ import 'user_service.dart';
 class AuthService {
   static final _auth = FirebaseAuth.instance;
 
-  static Future<UserCredential> signIn({
+  Future<UserCredential> signIn({
     required String email,
     required String password,
   }) {
@@ -14,18 +14,18 @@ class AuthService {
     );
   }
 
-  static Future<void> sendResetPassword(String email) {
+   Future<void> sendResetPassword(String email) {
     return _auth.sendPasswordResetEmail(
       email: email.trim().toLowerCase(),
     );
   }
 
-  static Future<UserCredential> createEmployeeAccount({
+   Future<UserCredential> createEmployeeAccount({
     required String email,
     required String password,
   }) async {
     final invitedEmployee =
-    await UserService.findInvitedEmployeeByEmail(email);
+    await UserService().findInvitedEmployeeByEmail(email);
 
     if (invitedEmployee == null) {
       throw FirebaseAuthException(
@@ -39,7 +39,7 @@ class AuthService {
       password: password.trim(),
     );
 
-    await UserService.activateEmployee(
+    await UserService().activateEmployee(
       docId: invitedEmployee.id,
       uid: credential.user!.uid,
     );
