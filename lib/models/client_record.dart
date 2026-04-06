@@ -1,9 +1,10 @@
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ClientContact {
-  String name;
-  String phone;
-  String email;
+  final String name;
+  final String phone;
+  final String email;
 
   ClientContact({
     required this.name,
@@ -18,6 +19,7 @@ class ClientContact {
       email: (map['email'] ?? '').toString(),
     );
   }
+
 
   Map<String, dynamic> toMap() {
     return {
@@ -74,26 +76,8 @@ class ClientRecord {
     );
   }
 
-  factory ClientRecord.fromDoc(
-      DocumentSnapshot<Map<String, dynamic>> doc,
-      ) {
-    final data = doc.data() ?? {};
-    final rawContacts = (data['contacts'] as List?) ?? [];
-
-    return ClientRecord(
-      id: doc.id,
-      businessName: data['businessName'] ?? '',
-      name: data['name'] ?? '',
-      address: data['address'] ?? '',
-      phone: data['phone'] ?? '',
-      email: data['email'] ?? '',
-      contacts: rawContacts
-          .whereType<Map>()
-          .map((contact) => ClientContact.fromMap(
-        Map<String, dynamic>.from(contact),
-      ))
-          .toList(),
-    );
+  factory ClientRecord.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    return ClientRecord.fromMap(doc.id, doc.data() ?? {});
   }
 
   String get displayName =>

@@ -3,38 +3,32 @@ import 'package:http/http.dart' as http;
 import '../models/address_suggestion.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-
-class ParsedAddress {
-  final String fullAddress;
-  final String street;
-  final String city;
-  final String province;
-  final String postalCode;
-
-  ParsedAddress({
-    required this.fullAddress,
-    required this.street,
-    required this.city,
-    required this.province,
-    required this.postalCode,
-  });
-}
+import '../models/pared_address.dart';
 
 class GooglePlacesService {
-  static final String apiKey = dotenv.env['GOOGLE_MAP_API_KEY'] ?? 'default_key';
+  final String _apiKey = dotenv.env['GOOGLE_MAP_API_KEY'] ?? '';
 
-  static Future<List<AddressSuggestion>> autocomplete(String input) async {
+
+  Future<List<AddressSuggestion>> autocomplete(String input) async {
     if (input.trim().isEmpty) return [];
+
+    if (_apiKey.isEmpty) throw Exception('Google Maps API key is missing');
 
     final response = await http.post(
       Uri.parse('https://places.googleapis.com/v1/places:autocomplete'),
       headers: {
         'Content-Type': 'application/json',
-        'X-Goog-Api-Key': apiKey,
+        'X-Goog-Api-Key': _apiKey,
       },
       body: jsonEncode({
         'input': input,
         'includedRegionCodes': ['ca'],
+        'locationBias': {
+          'circle': {
+            'center': {'latitude': 45.5017, 'longitude': -73.5673}, // Montreal
+            'radius': 50000.0,
+          }
+        }
       }),
     );
 
@@ -42,19 +36,28 @@ class GooglePlacesService {
       throw Exception('Autocomplete failed: ${response.body}');
     }
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final suggestions = (data['suggestions'] as List? ?? [])
-        .map((e) => AddressSuggestion.fromJson(e as Map<String, dynamic>))
-        .toList();
+    try {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final suggestions = (data['suggestions'] as List? ?? [])
+          .map((e) => AddressSuggestion.fromJson(e as Map<String, dynamic>))
+          .toList();
 
-    return suggestions;
+      return suggestions;
+    }
+    catch (e) {
+      throw Exception('Autocomplete failed: ${response.body}');
+    }
   }
 
-  static Future<ParsedAddress> getPlaceDetails(String placeId) async {
+
+
+  Future<ParsedAddress> getPlaceDetails(String placeId) async {
+    if (_apiKey.isEmpty) throw Exception('Google Maps API key is missing');
+
     final response = await http.get(
       Uri.parse('https://places.googleapis.com/v1/places/$placeId'),
       headers: {
-        'X-Goog-Api-Key': apiKey,
+        'X-Goog-Api-Key': _apiKey,
         'X-Goog-FieldMask': 'formattedAddress,addressComponents',
       },
     );
