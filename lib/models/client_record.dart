@@ -47,6 +47,33 @@ class ClientRecord {
     required this.contacts,
   });
 
+  Map<String, dynamic> toMap() {
+    return {
+      'businessName': businessName.trim(),
+      'name': name.trim(),
+      'address': address.trim(),
+      'phone': phone.trim(),
+      'email': email.trim(),
+      'contacts': contacts.map((c) => c.toMap()).toList(),
+    };
+  }
+
+  factory ClientRecord.fromMap(String id, Map<String, dynamic> data) {
+    final rawContacts = (data['contacts'] as List?) ?? [];
+    return ClientRecord(
+      id: id,
+      businessName: (data['businessName'] ?? '').toString(),
+      name: (data['name'] ?? '').toString(),
+      address: (data['address'] ?? '').toString(),
+      phone: (data['phone'] ?? '').toString(),
+      email: (data['email'] ?? '').toString(),
+      contacts: rawContacts
+          .whereType<Map>()
+          .map((c) => ClientContact.fromMap(Map<String, dynamic>.from(c)))
+          .toList(),
+    );
+  }
+
   factory ClientRecord.fromDoc(
       DocumentSnapshot<Map<String, dynamic>> doc,
       ) {
@@ -68,4 +95,8 @@ class ClientRecord {
           .toList(),
     );
   }
+
+  String get displayName =>
+      businessName.isNotEmpty ? businessName : name;
+
 }

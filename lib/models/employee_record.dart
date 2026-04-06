@@ -21,6 +21,19 @@ class EmployeeRecord {
   final String status;
   final String uid;
 
+
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'email': email,
+      'phone': phone,
+      'colorValue': color.toARGB32().toString(),
+      'role': role,
+      'status': status,
+      'uid': uid,
+    };
+  }
+
   factory EmployeeRecord.fromMap(
       String id,
       Map<String, dynamic> data,
@@ -40,6 +53,15 @@ class EmployeeRecord {
       uid: (data['uid'] ?? '').toString(),
     );
   }
+
+  String get initials {
+    final parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return name.isNotEmpty ? name[0].toUpperCase() : '?';
+  }
+
 
 
 
