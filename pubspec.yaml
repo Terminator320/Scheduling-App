@@ -36,8 +36,10 @@ dependencies:
   firebase_core: any
   cloud_firestore: any
   firebase_core_platform_interface: any
-
   path: any
+
+
+
   url_launcher: any
   flutter_dotenv: any
 

@@ -3,93 +3,48 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/appointment_record.dart';
 
 class AppointmentService {
-  static final CollectionReference<Map<String, dynamic>> _appointments =
-  FirebaseFirestore.instance.collection('appointments');
+  final CollectionReference<Map<String, dynamic>> _appointments =
+      FirebaseFirestore.instance.collection('appointments');
 
-  static Future<void> addAppointment({
-    required String title,
-    required String date,
-    required String startTime,
-    required String endTime,
-    required String clientId,
-    required String clientName,
-    required String clientPhone,
-    required String employeeId,
-    required String employeeName,
-    required String address,
-    required String notes,
-    required String materialsNeeded,
-    required String pictures,
-  }) async {
+  Future<void> addAppointment(AppointmentRecord appointment) async {
     await _appointments.add({
-      'title': title.trim(),
-      'date': date.trim(),
-      'startTime': startTime.trim(),
-      'endTime': endTime.trim(),
-      'clientId': clientId,
-      'clientName': clientName.trim(),
-      'clientPhone': clientPhone.trim(),
-      'employeeId': employeeId,
-      'employeeName': employeeName.trim(),
-      'address': address.trim(),
-      'notes': notes.trim(),
-      'materialsNeeded': materialsNeeded.trim(),
-      'pictures': pictures.trim(),
-      'status': 'booked',
+      ...appointment.toMap(),
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
 
-  static Stream<List<AppointmentRecord>> appointmentsStream() {
+  Stream<List<AppointmentRecord>> appointmentsStream() {
     return _appointments
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map(
-          (snapshot) =>
-          snapshot.docs.map((doc) => AppointmentRecord.fromDoc(doc)).toList(),
-    );
+          (snapshot) => snapshot.docs
+              .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
   }
 
-  static Future<AppointmentRecord?> getAppointmentById(String appointmentId) async {
+  Future<AppointmentRecord?> getAppointmentById(String appointmentId) async {
     final doc = await _appointments.doc(appointmentId).get();
 
     if (!doc.exists) {
       return null;
     }
 
-    return AppointmentRecord.fromDoc(doc);
+    return AppointmentRecord.fromMap(doc.id, doc.data()!);
   }
 
-  static Future<void> updateAppointment({
-    required String appointmentId,
-    required String title,
-    required String date,
-    required String startTime,
-    required String endTime,
-    required String employeeId,
-    required String employeeName,
-    required String address,
-    required String notes,
-    required String materialsNeeded,
-    required String pictures,
-  }) async {
-    await _appointments.doc(appointmentId).update({
-      'title': title.trim(),
-      'date': date.trim(),
-      'startTime': startTime.trim(),
-      'endTime': endTime.trim(),
-      'employeeId': employeeId,
-      'employeeName': employeeName.trim(),
-      'address': address.trim(),
-      'notes': notes.trim(),
-      'materialsNeeded': materialsNeeded.trim(),
-      'pictures': pictures.trim(),
+
+  Future<void> updateAppointment(AppointmentRecord appointment) async {
+    if (appointment.id == null) return;
+    await _appointments.doc(appointment.id).update({
+      ...appointment.toMap(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
 
-  static Future<void> updateAppointmentStatus({
+  Future<void> updateAppointmentStatus({
     required String appointmentId,
     required String status,
   }) async {
@@ -99,19 +54,17 @@ class AppointmentService {
     });
   }
 
-  static Future<void> deleteAppointment(String appointmentId) async {
+  Future<void> deleteAppointment(String appointmentId) async {
     await _appointments.doc(appointmentId).delete();
   }
 
-  static Stream<List<AppointmentRecord>> employeeAppointmentsStream(
-      String employeeId,
-      ) {
+  Stream<List<AppointmentRecord>> employeeAppointmentsStream(
+      String employeeId) {
     return _appointments
-        .where('employeeId', isEqualTo: employeeId)
+        .where('employeeIds', arrayContains: employeeId)
         .snapshots()
-        .map(
-          (snapshot) =>
-          snapshot.docs.map((doc) => AppointmentRecord.fromDoc(doc)).toList(),
-    );
+        .map((snapshot) => snapshot.docs
+        .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
+        .toList());
   }
 }
