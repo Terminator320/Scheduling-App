@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/address_suggestion.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-import '../models/pared_address.dart';
+import '../models/parsed_address.dart';
 
 class GooglePlacesService {
   final String _apiKey = dotenv.env['GOOGLE_MAP_API_KEY'] ?? '';

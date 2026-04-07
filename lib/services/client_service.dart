@@ -43,14 +43,13 @@ class ClientService {
 
     final isPhone = RegExp(r'^\d+$').hasMatch(q);
 
-    final field = isPhone ? 'phone' : 'name';
-    final searchValue = isPhone ? q : q; // no lowercase conversion
+    final field = isPhone ? 'phone' : 'name';// no lowercase conversion
 
-    final end = searchValue.substring(0, searchValue.length - 1) +
-        String.fromCharCode(searchValue.codeUnitAt(searchValue.length - 1) + 1);
+    final end = q.substring(0, q.length - 1) +
+        String.fromCharCode(q.codeUnitAt(q.length - 1) + 1);
 
     final snapshot = await _clients
-        .where(field, isGreaterThanOrEqualTo: searchValue)
+        .where(field, isGreaterThanOrEqualTo: q)
         .where(field, isLessThan: end)
         .limit(20)
         .get();

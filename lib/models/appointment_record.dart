@@ -41,20 +41,20 @@ class AppointmentRecord {
     return AppointmentRecord(
       id: id,
       title: (data['title'] ?? '').toString(),
-      startTime: (data['startTime'] as Timestamp).toDate(),
-      endTime: (data['endTime'] as Timestamp).toDate(),
+      startTime: _parseDateTime(data['startTime']),
+      endTime: _parseDateTime(data['endTime']),
       clientId: (data['clientId'] ?? '').toString(),
       clientName: (data['clientName'] ?? '').toString(),
       clientPhone: (data['clientPhone'] ?? '').toString(),
-      employeeIds: List<String>.from(data['employeeIds'] ?? []),
-      employeeNames: List<String>.from(data['employeeNames'] ?? []),
+      employeeIds: _pasrseStringList(data['employeeIds']),
+      employeeNames: _pasrseStringList(data['employeeNames']),
       address: (data['address'] ?? '').toString(),
       notes: (data['notes'] ?? '').toString(),
       materialsNeeded: (data['materialsNeeded'] ?? '').toString(),
       status: (data['status'] ?? 'pending').toString(),
       createdAt: data['createdAt'] as Timestamp?,
       updatedAt: data['updatedAt'] as Timestamp?,
-      pictures: List<String>.from(data['pictures'] ?? []),
+      pictures: _pasrseStringList(data['pictures']),
     );
   }
 
@@ -75,5 +75,17 @@ class AppointmentRecord {
       'status': status,
       'updatedAt': FieldValue.serverTimestamp(),
     };
+  }
+
+  static DateTime _parseDateTime(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
+    return DateTime.now();
+  }
+
+  static List<String> _pasrseStringList(dynamic value) {
+    if (value is List) return List<String>.from(value);
+    if (value is String && value.isNotEmpty) return [value];
+    return [];
   }
 }

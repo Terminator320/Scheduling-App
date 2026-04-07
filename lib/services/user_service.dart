@@ -56,6 +56,16 @@ class UserService {
     );
   }
 
+  // everyone who can be assigned to a job
+  Stream<List<EmployeeRecord>> assignableUsersStream() {
+    return _users
+        .where('status', isEqualTo: 'active')
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+        .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
+        .toList());
+  }
+
 
 
   Future<void> updateEmployee({
@@ -117,6 +127,11 @@ class UserService {
   }
 
 
+  Future<EmployeeRecord?> getEmployeeById(String docId) async {
+    final doc = await _users.doc(docId).get();
+    if (!doc.exists) return null;
+    return EmployeeRecord.fromMap(doc.id, doc.data()!);
+  }
 
   Future<QueryDocumentSnapshot<Map<String, dynamic>>?> findUserByUid(
       String uid,
@@ -147,6 +162,7 @@ class UserService {
       'status': 'active',
     });
   }
+
 
 
 
