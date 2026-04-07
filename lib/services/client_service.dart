@@ -3,30 +3,31 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/client_record.dart';
 
 class ClientService {
-  static final CollectionReference<Map<String, dynamic>> _clients =
-  FirebaseFirestore.instance.collection('clients');
+  final CollectionReference<Map<String, dynamic>> _clients = FirebaseFirestore.instance.collection('clients');
 
-  static Future<void> addClient({
-    required String businessName,
-    required String name,
-    required String address,
-    required String phone,
-    required String email,
-    required List<ClientContact> contacts,
-  }) async {
+  Future<void> addClient(ClientRecord client) async {
     await _clients.add({
-      'businessName': businessName.trim(),
-      'name': name.trim(),
-      'address': address.trim(),
-      'phone': phone.trim(),
-      'email': email.trim(),
-      'contacts': contacts.map((c) => c.toMap()).toList(),
+      ... client.toMap(), //spread operator merges the map fields
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
 
-  static Stream<List<ClientRecord>> clientsStream() {
+  Future<void> updateClient(ClientRecord client) async {
+    await _clients.doc(client.id).update({
+      ...client.toMap(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+
+  Future<void> deleteClient(String id) async {
+    await _clients.doc(id).delete();
+  }
+
+
+
+  Stream<List<ClientRecord>> clientsStream() {
     return _clients
         .orderBy('createdAt', descending: true)
         .snapshots()
@@ -36,56 +37,34 @@ class ClientService {
     );
   }
 
-  static Future<List<ClientRecord>> searchClients(String query) async {
-    final q = query.trim().toLowerCase();
+  Future<List<ClientRecord>> searchClients(String query) async {
+    final q = query.trim();
+    if (q.isEmpty) return [];
 
-    if (q.isEmpty) {
-      return [];
-    }
+    final isPhone = RegExp(r'^\d+$').hasMatch(q);
 
-    final snapshot = await _clients.get();
+    final field = isPhone ? 'phone' : 'name';// no lowercase conversion
 
-    return snapshot.docs
-        .map((doc) => ClientRecord.fromDoc(doc))
-        .where(
-          (client) =>
-      client.businessName.toLowerCase().contains(q) ||
-          client.name.toLowerCase().contains(q) ||
-          client.phone.toLowerCase().contains(q) ||
-          client.email.toLowerCase().contains(q) ||
-          client.contacts.any(
-                (contact) =>
-            contact.name.toLowerCase().contains(q) ||
-                contact.phone.toLowerCase().contains(q) ||
-                contact.email.toLowerCase().contains(q),
-          ),
-    )
-        .toList();
+    final end = q.substring(0, q.length - 1) +
+        String.fromCharCode(q.codeUnitAt(q.length - 1) + 1);
+
+    final snapshot = await _clients
+        .where(field, isGreaterThanOrEqualTo: q)
+        .where(field, isLessThan: end)
+        .limit(20)
+        .get();
+
+    return snapshot.docs.map((doc) => ClientRecord.fromDoc(doc)).toList();
   }
 
-  static Future<void> updateClient({
-    required String id,
-    required String businessName,
-    required String name,
-    required String address,
-    required String phone,
-    required String email,
-    required List<ClientContact> contacts,
-  }) async {
-    await _clients.doc(id).update({
-      'businessName': businessName.trim(),
-      'name': name.trim(),
-      'address': address.trim(),
-      'phone': phone.trim(),
-      'email': email.trim(),
-      'contacts': contacts.map((c) => c.toMap()).toList(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+
+
+  Future<ClientRecord?> getClientById(String id) async {
+    final doc = await _clients.doc(id).get();
+    if (!doc.exists) return null;
+    return ClientRecord.fromDoc(doc);
   }
 
-  static Future<void> deleteClient(String id) async {
-    await _clients.doc(id).delete();
-  }
 }
 
 
