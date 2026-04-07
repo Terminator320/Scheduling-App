@@ -36,15 +36,28 @@ dependencies:
   firebase_core: any
   cloud_firestore: any
   firebase_core_platform_interface: any
-
   path: any
+
+#calendar
+
+  table_calendar: any
+  intl: any
+
+
+  # for images
+  image_picker: any
+  path_provider: any
+  flutter_image_compress: any
+  firebase_storage: any
+  firebase_app_check: any
+
+
   url_launcher: any
   flutter_dotenv: any
 
 
   adaptive_theme: any
   device_preview: any
-  image_picker: any
   splashscreen: any
 
   # The following adds the Cupertino Icons font to your application.

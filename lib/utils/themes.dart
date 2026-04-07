@@ -8,7 +8,7 @@ class Themes {
     colorScheme: ColorScheme(
       brightness: Brightness.light,
 
-      primary: Color(0xFF82A7E8),
+      primary: Color(0xFF5A8FD8),
       onPrimary: Colors.white,
 
       secondary: Color(0xFF72E8BC),
@@ -24,7 +24,7 @@ class Themes {
       onError: Colors.white,
     ),
 
-    scaffoldBackgroundColor: Color(0xFF99B7E4),
+    // scaffoldBackgroundColor: Color(0xFFF4F4F4),
 
     textTheme: TextTheme(
       displayLarge: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
