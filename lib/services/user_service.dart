@@ -4,8 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/employee_record.dart';
 
 class UserService {
-  static final CollectionReference<Map<String, dynamic>> _users =
-  FirebaseFirestore.instance.collection('users');
+  final CollectionReference<Map<String, dynamic>> _users = FirebaseFirestore.instance.collection('users');
 
   Future<void> addEmployee({
     required String name,
@@ -38,6 +37,14 @@ class UserService {
   }
 
 
+// returns all users regardless of role
+  Stream<List<EmployeeRecord>> allUsersStream() {
+    return _users.snapshots().map((snapshot) =>
+        snapshot.docs
+            .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
+            .toList());
+  }
+
 
   Stream<List<EmployeeRecord>> employeesStream() {
     return _users.where('role', isEqualTo: 'employee').snapshots().map(
@@ -47,6 +54,16 @@ class UserService {
             .toList();
       },
     );
+  }
+
+  // everyone who can be assigned to a job
+  Stream<List<EmployeeRecord>> assignableUsersStream() {
+    return _users
+        .where('status', isEqualTo: 'active')
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+        .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
+        .toList());
   }
 
 
@@ -79,15 +96,20 @@ class UserService {
     };
 
     if (isAdmin != null) {
-      updateData['isAdmin'] = isAdmin;
+      updateData['role'] = isAdmin == true ? 'admin' : 'employee';
     }
 
     await _users.doc(docId).update(updateData);
   }
 
+
+
   Future<void> deleteEmployee(String docId) async {
     await _users.doc(docId).delete();
   }
+
+
+
 
   Future<QueryDocumentSnapshot<Map<String, dynamic>>?>
   findInvitedEmployeeByEmail(String email) async {
@@ -104,6 +126,13 @@ class UserService {
     return result.docs.first;
   }
 
+
+  Future<EmployeeRecord?> getEmployeeById(String docId) async {
+    final doc = await _users.doc(docId).get();
+    if (!doc.exists) return null;
+    return EmployeeRecord.fromMap(doc.id, doc.data()!);
+  }
+
   Future<QueryDocumentSnapshot<Map<String, dynamic>>?> findUserByUid(
       String uid,
       ) async {
@@ -113,15 +142,16 @@ class UserService {
     return result.docs.first;
   }
 
-  Future<bool> canGrantAdminForUid(String uid) async {
-    if (uid.isEmpty) return false;
 
+
+  Future<bool> isUserAdmin(String uid) async {
+    if (uid.isEmpty) return false;
     final userDoc = await findUserByUid(uid);
     if (userDoc == null) return false;
-
-    final data = userDoc.data();
-    return (data['role'] ?? '').toString() == 'admin';
+    return (userDoc.data()['role'] ?? '') == 'admin';
   }
+
+
 
   Future<void> activateEmployee({
     required String docId,
@@ -132,6 +162,9 @@ class UserService {
       'status': 'active',
     });
   }
+
+
+
 
   Stream<String> loggedInUserNameStream() {
     final user = FirebaseAuth.instance.currentUser;
