@@ -66,5 +66,6 @@ class EmployeeRecord {
 
 
   bool get isAdmin => role == 'admin';
+  bool get isActive => status == 'active';
 
 }

@@ -6,7 +6,7 @@ import '../../services/user_service.dart';
 import '../../utils/app_text.dart';
 import '../../utils/colors.dart';
 import '../models/employee_record.dart';
-import 'calendar_view.dart';
+import 'main_calendar.dart';
 
 class Login extends StatefulWidget {
   final VoidCallback toggleTheme;
@@ -113,7 +113,7 @@ class _LoginState extends State<Login> {
         return;
       }
 
-      final data = userDoc.data() as Map<String, dynamic>;
+      final data = userDoc.data();
       final employee = EmployeeRecord.fromMap(userDoc.id, data);
 
       final employeeName = employee.name;
@@ -125,9 +125,9 @@ class _LoginState extends State<Login> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => CalendarView(
-              employeeId: employeeId,
-              employeeName: employeeName,
+            builder: (context) => MainCalendar(
+              // employeeId: employeeId,
+              // employeeName: employeeName,
             ),
           ),
         );
@@ -135,9 +135,9 @@ class _LoginState extends State<Login> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => CalendarView(
-              employeeId: employeeId,
-              employeeName: employeeName,
+            builder: (context) => MainCalendar(
+              // employeeId: employeeId,
+              // employeeName: employeeName,
             ),
           ),
         );
