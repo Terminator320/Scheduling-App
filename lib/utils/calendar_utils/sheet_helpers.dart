@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../models/appointment_record.dart';
-import '../widgets/add_appointment_sheet.dart';
-import '../widgets/details_edit_sheet.dart';
+import '../../models/appointment_record.dart';
+import '../../widgets/popup_widgets/add_appointment_sheet.dart';
+import '../../widgets/popup_widgets/details_edit_sheet.dart';
 
 
 Future<AppointmentRecord?> showAddEventPopup(BuildContext context) {
