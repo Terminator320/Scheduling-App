@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/models/appointment_record.dart';
 import 'package:table_calendar/table_calendar.dart';
 
+import '../../models/employee_record.dart';
+import '../../utils/calendar_utils/appointment_colors.dart';
+
 
 class AppCalendar extends StatelessWidget {
   final DateTime focusedDay;
@@ -12,16 +15,20 @@ class AppCalendar extends StatelessWidget {
   final Function(DateTime)? onPageChanged;
   final double? rowHeight;
 
+  final List<EmployeeRecord> employees;
+
   const AppCalendar({
     super.key,
     required this.focusedDay,
     required this.selectedDay,
     required this.onDaySelected,
     required this.eventLoader,
+    required this.employees,
     this.onCalendarCreated,
     this.onPageChanged,
     this.rowHeight,
   });
+
 
   @override
   Widget build(BuildContext context) {
@@ -52,22 +59,23 @@ class AppCalendar extends StatelessWidget {
         markerBuilder: (context, day, events) {
           if (events.isEmpty) return const SizedBox();
 
+          final appointments = events.cast<AppointmentRecord>();
+
           return Positioned(
             bottom: 4,
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: List.generate(
-                events.length > 3 ? 3 : events.length,
-                    (_) => Container(
+              children: appointments.take(3).map((appt) {
+                return Container(
                   margin: const EdgeInsets.symmetric(horizontal: 1),
                   width: 6,
                   height: 6,
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
+                  decoration: BoxDecoration(
+                    color: colorForAppointment(appt, employees) ?? Colors.grey,
                     shape: BoxShape.circle,
                   ),
-                ),
-              ),
+                );
+              }).toList(),
             ),
           );
         },
