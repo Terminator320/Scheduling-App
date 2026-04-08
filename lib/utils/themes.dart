@@ -42,24 +42,10 @@ class Themes {
       inverseSurface: Color(0xFF1E1E1E),
       onInverseSurface: Colors.white,
       inversePrimary: Color(0xFFADC8FF),
-
     ),
 
     // scaffoldBackgroundColor: Color(0xFFF4F4F4),
-
-    textTheme: TextTheme(
-      displayLarge: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-      headlineMedium: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-      titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-      bodyMedium: TextStyle(fontSize: 14),
-      bodySmall: TextStyle(fontSize: 12),
-      labelLarge: TextStyle(fontWeight: FontWeight.w600),
-      labelSmall: TextStyle(decoration: TextDecoration.underline),
-    ).apply(
-      bodyColor: Colors.black,
-      displayColor: Colors.black,
-    ),
-
+    textTheme: _buildTextTheme(Colors.black),
 
     appBarTheme: AppBarTheme(
       elevation: 0,
@@ -72,26 +58,20 @@ class Themes {
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     ),
 
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     ),
 
     cardTheme: CardThemeData(
       elevation: 3,
       color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
 
     inputDecorationTheme: InputDecorationTheme(
@@ -113,18 +93,16 @@ class Themes {
         borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(color: Color(0xFFB00020)),
       ),
+      hintStyle: TextStyle(
+        fontSize: 14,
+        color: Color(0xFFBDBDBD),
+      ),
     ),
 
-
-    dividerTheme: DividerThemeData(
-      thickness: 1,
-      color: Color(0xFFE0E0E0),
-    ),
+    dividerTheme: DividerThemeData(thickness: 1, color: Color(0xFFE0E0E0)),
 
     chipTheme: ChipThemeData(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       side: BorderSide(color: Color(0xFFE0E0E0)),
     ),
 
@@ -135,28 +113,24 @@ class Themes {
       ),
     ),
 
-
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ),
-
 
     dialogTheme: DialogThemeData(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       backgroundColor: Colors.white,
     ),
-
   );
 
 
 
+
+
+
   // Dark Theme
-   final ThemeData darkTheme = ThemeData(
+  final ThemeData darkTheme = ThemeData(
     useMaterial3: true,
 
     colorScheme: ColorScheme(
@@ -199,20 +173,7 @@ class Themes {
     ),
 
     // scaffoldBackgroundColor: Color(0xFF121212),
-
-     textTheme: TextTheme(
-       displayLarge: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-       headlineMedium: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-       titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-       bodyMedium: TextStyle(fontSize: 14),
-       bodySmall: TextStyle(fontSize: 12),
-       labelLarge: TextStyle(fontWeight: FontWeight.w600),
-       labelSmall: TextStyle(decoration: TextDecoration.underline),
-     ).apply(
-       bodyColor: Colors.white,
-       displayColor: Colors.white,
-     ),
-
+    textTheme: _buildTextTheme(Colors.white),
 
     appBarTheme: AppBarTheme(
       elevation: 0,
@@ -225,17 +186,13 @@ class Themes {
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     ),
 
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     ),
 
@@ -243,68 +200,90 @@ class Themes {
       elevation: 3,
       color: Color(0xFF1E1E1E),
       surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ),
+
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: Color(0xFF2C2C2C),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Color(0xFF5A8FD8), width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.redAccent),
+      ),
+      hintStyle: TextStyle(fontSize: 14,
+          color: Color(0xFF555555)),
+    ),
+
+    dividerTheme: DividerThemeData(thickness: 1, color: Color(0xFF3A3A3A)),
+
+    chipTheme: ChipThemeData(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      side: BorderSide(color: Color(0xFF3A3A3A)),
+    ),
+
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: Color(0xFF1E1E1E),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
     ),
 
-     inputDecorationTheme: InputDecorationTheme(
-       filled: true,
-       fillColor: Color(0xFF2C2C2C),
-       border: OutlineInputBorder(
-         borderRadius: BorderRadius.circular(10),
-         borderSide: BorderSide.none,
-       ),
-       enabledBorder: OutlineInputBorder(
-         borderRadius: BorderRadius.circular(10),
-         borderSide: BorderSide.none,
-       ),
-       focusedBorder: OutlineInputBorder(
-         borderRadius: BorderRadius.circular(10),
-         borderSide: BorderSide(color: Color(0xFF5A8FD8), width: 1.5),
-       ),
-       errorBorder: OutlineInputBorder(
-         borderRadius: BorderRadius.circular(10),
-         borderSide: BorderSide(color: Colors.redAccent),
-       ),
-       hintStyle: TextStyle(color: Color(0xFF888888)),
-     ),
+    dialogTheme: DialogThemeData(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: Color(0xFF1E1E1E),
+    ),
 
-     dividerTheme: DividerThemeData(
-       thickness: 1,
-       color: Color(0xFF3A3A3A),
-     ),
-
-     chipTheme: ChipThemeData(
-       shape: RoundedRectangleBorder(
-         borderRadius: BorderRadius.circular(8),
-       ),
-       side: BorderSide(color: Color(0xFF3A3A3A)),
-     ),
-
-     bottomSheetTheme: BottomSheetThemeData(
-       backgroundColor: Color(0xFF1E1E1E),
-       shape: RoundedRectangleBorder(
-         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-       ),
-     ),
-
-     dialogTheme: DialogThemeData(
-       shape: RoundedRectangleBorder(
-         borderRadius: BorderRadius.circular(16),
-       ),
-       backgroundColor: Color(0xFF1E1E1E),
-     ),
-
-     snackBarTheme: SnackBarThemeData(
-       behavior: SnackBarBehavior.floating,
-       backgroundColor: Color(0xFF2C2C2C),
-       contentTextStyle: TextStyle(color: Colors.white),
-       shape: RoundedRectangleBorder(
-         borderRadius: BorderRadius.circular(10),
-       ),
-     ),
-
-
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: Color(0xFF2C2C2C),
+      contentTextStyle: TextStyle(color: Colors.white),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ),
   );
+}
+
+TextTheme _buildTextTheme(Color color) {
+  return TextTheme(
+    // sheet titles: "Add New Job", "Edit job"
+    headlineLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+
+    // section headers if needed
+    headlineMedium: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+
+    // card titles, prominent labels
+    titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+
+    // small titles, tab labels
+    titleSmall: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+
+    // body text, list tiles, view fields
+    bodyLarge: TextStyle(fontSize: 16),
+    bodyMedium: TextStyle(fontSize: 14),
+    bodySmall: TextStyle(fontSize: 13),
+
+    // form labels (_label helper)
+    labelLarge: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+
+    // section labels (_sectionLabel helper), optional text
+    labelMedium: TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w500,
+      letterSpacing: 0.5,
+    ),
+
+    // underlined links or fine print
+    labelSmall: TextStyle(fontSize: 10, decoration: TextDecoration.underline),
+  ).apply(bodyColor: color, displayColor: color);
 }
