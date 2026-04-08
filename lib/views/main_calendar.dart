@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/models/appointment_record.dart';
 import 'package:table_calendar/table_calendar.dart';
 
-import '../Widgets/month_year_picker.dart';
 
+
+import '../models/employee_record.dart';
 import '../services/appointment_service.dart';
 
-import '../utils/date_utils_helper.dart';
-import '../utils/sheet_helpers.dart';
-import '../widgets/app_calendar_view.dart';
-import '../widgets/calendar_header.dart';
-import '../widgets/event_list.dart';
+import '../services/user_service.dart';
+import '../utils/calendar_utils/sheet_helpers.dart';
+
+import '../widgets/calendar_widgets/month_year_picker.dart';
+import '../widgets/calendar_widgets/app_calendar_view.dart';
+import '../widgets/calendar_widgets/calendar_header.dart';
+import '../widgets/calendar_widgets/event_list.dart';
 
 class MainCalendar extends StatefulWidget {
   const MainCalendar({super.key});
@@ -21,7 +24,10 @@ class MainCalendar extends StatefulWidget {
 
 class _MainCalendar extends State<MainCalendar> {
   final service = AppointmentService();
+  final userService = UserService();
+
   PageController? _pageController;
+  List<EmployeeRecord> _allEmployees = [];
 
   final ValueNotifier<List<AppointmentRecord>> _selectedEvents = ValueNotifier(
     [],
@@ -36,6 +42,12 @@ class _MainCalendar extends State<MainCalendar> {
     super.initState();
 
     _selectedDay = _focusedDay;
+
+    userService.allUsersStream().listen((data) {
+      setState(() {
+        _allEmployees = data;
+      });
+    });
 
     service.getAllAppointments().listen((data) {
       setState(() {
@@ -130,6 +142,7 @@ class _MainCalendar extends State<MainCalendar> {
           eventLoader: _getEventsForDay,
           onCalendarCreated: (controller) => _pageController = controller,
           onPageChanged: (day) => setState(() => _focusedDay = day),
+          employees: _allEmployees,
         ),
 
         SizedBox(height: 10),
@@ -138,6 +151,7 @@ class _MainCalendar extends State<MainCalendar> {
 
         EventList(
           events: _selectedEvents,
+          employees: _allEmployees,
         ),
       ],
     );
