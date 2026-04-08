@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../services/user_service.dart';
 import '../../utils/app_text.dart';
-import '../../utils/colors.dart';
+import '../utils/calendar_utils/appointment_colors.dart';
 import '../models/employee_record.dart';
 import 'main_calendar.dart';
 
