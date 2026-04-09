@@ -30,6 +30,54 @@ class AppCalendar extends StatelessWidget {
   });
 
 
+  Widget _dayCell(
+    BuildContext context,
+    DateTime day, {
+    required List<AppointmentRecord> events,
+    required BoxDecoration decoration,
+    TextStyle? textStyle,
+  }) {
+    final appointments = events.cast<AppointmentRecord>();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxH = constraints.maxHeight;
+        final circleSize = (maxH - 9).clamp(20.0, 36.0);
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: circleSize,
+                height: circleSize,
+                decoration: decoration,
+                alignment: Alignment.center,
+                child: Text('${day.day}', style: textStyle),
+              ),
+              const SizedBox(height: 1),
+              if (appointments.isNotEmpty)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: appointments.take(3).map((appt) {
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 1),
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: colorForAppointment(appt, employees) ?? Colors.grey,
+                        shape: BoxShape.circle,
+                      ),
+                    );
+                  }).toList(),
+                )
+              else
+                const SizedBox(height: 5),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return TableCalendar(
@@ -37,7 +85,7 @@ class AppCalendar extends StatelessWidget {
       lastDay: DateTime(focusedDay.year + 10, 12, 31),
       focusedDay: focusedDay,
 
-      rowHeight: rowHeight ?? 48,
+      rowHeight: rowHeight ?? 56,
 
       selectedDayPredicate: (day) =>
           isSameDay(selectedDay, day),
@@ -56,20 +104,52 @@ class AppCalendar extends StatelessWidget {
       ),
 
       calendarBuilders: CalendarBuilders(
+        todayBuilder: (context, day, focusedDay) {
+          return _dayCell(
+            context,
+            day,
+            events: eventLoader(day),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Theme.of(context).colorScheme.onSurface,
+                width: 1.5,
+              ),
+            ),
+            textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          );
+        },
+        selectedBuilder: (context, day, focusedDay) {
+          return _dayCell(
+            context,
+            day,
+            events: eventLoader(day),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          );
+        },
         markerBuilder: (context, day, events) {
           if (events.isEmpty) return const SizedBox();
 
           final appointments = events.cast<AppointmentRecord>();
 
           return Positioned(
-            bottom: 4,
+            bottom: 2,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: appointments.take(3).map((appt) {
                 return Container(
                   margin: const EdgeInsets.symmetric(horizontal: 1),
-                  width: 6,
-                  height: 6,
+                  width: 5,
+                  height: 5,
                   decoration: BoxDecoration(
                     color: colorForAppointment(appt, employees) ?? Colors.grey,
                     shape: BoxShape.circle,
