@@ -14,6 +14,7 @@ import '../widgets/calendar_widgets/month_year_picker.dart';
 import '../widgets/calendar_widgets/app_calendar_view.dart';
 import '../widgets/calendar_widgets/calendar_header.dart';
 import '../widgets/calendar_widgets/event_list.dart';
+import '../widgets/settings_drawer.dart';
 
 class MainCalendar extends StatefulWidget {
   const MainCalendar({super.key});
@@ -23,10 +24,12 @@ class MainCalendar extends StatefulWidget {
 }
 
 class _MainCalendar extends State<MainCalendar> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>(); //access the Scaffold directly
   final service = AppointmentService();
   final userService = UserService();
 
   PageController? _pageController;
+  String _userName = '';
   List<EmployeeRecord> _allEmployees = [];
 
   final ValueNotifier<List<AppointmentRecord>> _selectedEvents = ValueNotifier(
@@ -42,6 +45,10 @@ class _MainCalendar extends State<MainCalendar> {
     super.initState();
 
     _selectedDay = _focusedDay;
+
+    userService.loggedInUserNameStream().listen((name) {
+      if (mounted) setState(() => _userName = name);
+    });
 
     userService.allUsersStream().listen((data) {
       setState(() {
@@ -84,6 +91,7 @@ class _MainCalendar extends State<MainCalendar> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           final newEvent = await showAddEventPopup(context);
@@ -94,6 +102,7 @@ class _MainCalendar extends State<MainCalendar> {
         },
         child: Icon(Icons.add),
       ),
+      endDrawer: const SettingsDrawer(),
       body: SafeArea(child: content()),
     );
   }
@@ -105,6 +114,23 @@ class _MainCalendar extends State<MainCalendar> {
 
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 16, right: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Hello, $_userName',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              IconButton(
+                icon: const Icon(Icons.menu),
+                visualDensity: VisualDensity.compact,
+                onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+              ),
+            ],
+          ),
+        ),
         CalendarHeader(
           focusedDay: _focusedDay,
           onLeft: () => _pageController?.previousPage(
@@ -138,7 +164,7 @@ class _MainCalendar extends State<MainCalendar> {
           focusedDay: _focusedDay,
           selectedDay: _selectedDay,
           onDaySelected: _onDaySelected,
-          rowHeight: isTablet ? screenHeight * 0.08 : screenHeight * 0.07,
+          rowHeight: isTablet ? screenHeight * 0.08 : screenHeight * 0.065,
           eventLoader: _getEventsForDay,
           onCalendarCreated: (controller) => _pageController = controller,
           onPageChanged: (day) => setState(() => _focusedDay = day),
