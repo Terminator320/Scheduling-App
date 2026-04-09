@@ -26,7 +26,7 @@ class AddEventSheet extends StatefulWidget {
 
 class _AddEventSheetState extends State<AddEventSheet> {
   final Map<String, String?> _errors = {};
-  final _formKey = GlobalKey<FormState>();
+
   final _titleController = TextEditingController();
   final _dateController = TextEditingController();
   final _startTimeController = TextEditingController();
@@ -139,9 +139,9 @@ class _AddEventSheetState extends State<AddEventSheet> {
   }
 
   Future<void> _pickStartTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _selectedStartTime ?? TimeOfDay.now(),
+    final picked = await showCupertinoTimePicker(
+      context,
+      initialTime: _selectedStartTime,
     );
     if (picked == null) return;
     setState(() {
@@ -152,9 +152,9 @@ class _AddEventSheetState extends State<AddEventSheet> {
   }
 
   Future<void> _pickEndTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _selectedEndTime ?? TimeOfDay.now(),
+    final picked = await showCupertinoTimePicker(
+      context,
+      initialTime: _selectedEndTime,
     );
     if (picked == null) return;
     setState(() {
@@ -245,7 +245,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
                 left: 20,
                 right: 20,
                 top: 16,
-                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 60,
               ),
               children: [
                 _buildHandle(),

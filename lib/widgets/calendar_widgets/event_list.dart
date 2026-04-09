@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../models/employee_record.dart';
-import '../../services/appointment_service.dart';
 
 import 'package:scheduling/models/appointment_record.dart';
 import '../../utils/calendar_utils/appointment_colors.dart';
 import '../../utils/date_utils_helper.dart';
 import '../../utils/calendar_utils/sheet_helpers.dart';
-import '../popup_widgets/add_appointment_sheet.dart';
-import '../popup_widgets/details_edit_sheet.dart';
 
 class EventList extends StatelessWidget {
   final ValueNotifier<List<AppointmentRecord>> events;
