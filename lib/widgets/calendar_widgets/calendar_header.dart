@@ -7,7 +7,6 @@ class CalendarHeader extends StatelessWidget {
   final VoidCallback onRight;
   final VoidCallback onToday;
   final VoidCallback onTapMonth;
-
   const CalendarHeader({
     super.key,
     required this.focusedDay,

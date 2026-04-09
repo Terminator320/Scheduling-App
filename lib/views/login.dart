@@ -9,9 +9,7 @@ import '../models/employee_record.dart';
 import 'main_calendar.dart';
 
 class Login extends StatefulWidget {
-  final VoidCallback toggleTheme;
-
-  const Login({super.key, required this.toggleTheme});
+  const Login({super.key});
 
   @override
   State<Login> createState() => _LoginState();

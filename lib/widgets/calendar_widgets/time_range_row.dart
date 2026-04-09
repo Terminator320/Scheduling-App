@@ -32,8 +32,9 @@ class TimeRangeRow extends StatelessWidget {
           child: TextFormField(
             controller: startController,
             readOnly: true,
-            decoration: formInputDecoration(context, "Start time").copyWith(
-              suffixIcon: const Icon(Icons.access_time_outlined, size: 18),
+            style: Theme.of(context).textTheme.bodyMedium,
+            decoration: formInputDecoration(context, "Start").copyWith(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
               errorText: startError,
             ),
             onTap: onTapStart,
@@ -44,8 +45,9 @@ class TimeRangeRow extends StatelessWidget {
           child: TextFormField(
             controller: endController,
             readOnly: true,
-            decoration: formInputDecoration(context, "End time").copyWith(
-              suffixIcon: const Icon(Icons.access_time_outlined, size: 18),
+            style: Theme.of(context).textTheme.bodyMedium,
+            decoration: formInputDecoration(context, "End").copyWith(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
               errorText: endError,
             ),
             onTap: onTapEnd,
