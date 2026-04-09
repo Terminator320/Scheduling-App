@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:scheduling/utils/themes.dart';
+import 'package:scheduling/utils/theme_notifier.dart';
 import 'package:splashscreen/splashscreen.dart';
 import 'firebase_options.dart';
 
@@ -40,22 +41,23 @@ class _PaulAppState extends State<PaulApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: Themes().lightTheme,
-      darkTheme: Themes().darkTheme,
+    return ThemeNotifier(
       themeMode: _themeMode,
-      home: Splash(toggleTheme: toggleTheme),
-
+      toggleTheme: toggleTheme,
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: Themes().lightTheme,
+        darkTheme: Themes().darkTheme,
+        themeMode: _themeMode,
+        home: const Splash(),
+      ),
     );
   }
 }
 
 
 class Splash extends StatefulWidget {
-  final VoidCallback toggleTheme;
-
-  const Splash({super.key, required this.toggleTheme});
+  const Splash({super.key});
 
   @override
   State<Splash> createState() => _SplashState();
@@ -66,7 +68,7 @@ class _SplashState extends State<Splash> {
   Widget build(BuildContext context) {
     return SplashScreen(
       seconds: 5,
-      navigateAfterSeconds: Login(toggleTheme: widget.toggleTheme,),
+      navigateAfterSeconds: const Login(),
       title: Text(
         'Welcome to Scheduling App',
         style: Theme.of(context).textTheme.headlineMedium,

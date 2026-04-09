@@ -8,11 +8,15 @@ class MonthYearPicker {
   static const int _yearCount = 30;
 
   static Future<DateTime?> show(
-      BuildContext context,
-      DateTime focusedDay,
-      ) async {
+    BuildContext context,
+    DateTime focusedDay,
+  ) async {
     return await showModalBottomSheet<DateTime>(
       context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (context) => _MonthYearPickerContent(focusedDay: focusedDay),
     );
   }
@@ -41,28 +45,43 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.35,
-      padding: EdgeInsets.all(16),
+    return SizedBox(
+      height: 300,
       child: Column(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text("Cancel"),
-              ),
-              Text("Select Date"),
-              TextButton(
-                onPressed: () => Navigator.pop(
-                  context,
-                  DateTime(selectedYear, selectedMonth),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  onPressed: () => Navigator.pop(context),
                 ),
-                child: Text("Done"),
-              ),
-            ],
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  child: Text(
+                    'Done',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  onPressed: () => Navigator.pop(
+                    context,
+                    DateTime(selectedYear, selectedMonth),
+                  ),
+                ),
+              ],
+            ),
           ),
+          const Divider(height: 1),
           Expanded(
             child: Row(
               children: [
@@ -72,24 +91,18 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                       initialItem: selectedMonth - 1,
                     ),
                     itemExtent: 40,
-
                     useMagnifier: true,
                     magnification: 1.2,
-                    selectionOverlay: Container(
-                      decoration: BoxDecoration(
-                        border: Border.symmetric(
-                          horizontal: BorderSide(
-                            color: Theme.of(context).colorScheme.primary,
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                    ),
+                    squeeze: 1.2,
+                    selectionOverlay: const CupertinoPickerDefaultSelectionOverlay(),
                     onSelectedItemChanged: (i) => selectedMonth = i + 1,
                     children: List.generate(
                       12,
-                          (i) => Center(
-                        child: Text(DateUtilsHelper.getMonthName(i + 1)),
+                      (i) => Center(
+                        child: Text(
+                          DateUtilsHelper.getMonthName(i + 1),
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
                       ),
                     ),
                   ),
@@ -100,12 +113,19 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                       initialItem: selectedYear - MonthYearPicker._startYear,
                     ),
                     itemExtent: 40,
+                    useMagnifier: true,
+                    magnification: 1.2,
+                    squeeze: 1.2,
+                    selectionOverlay: const CupertinoPickerDefaultSelectionOverlay(),
                     onSelectedItemChanged: (i) =>
-                    selectedYear = MonthYearPicker._startYear + i,
+                        selectedYear = MonthYearPicker._startYear + i,
                     children: List.generate(
                       MonthYearPicker._yearCount,
-                          (i) => Center(
-                        child: Text("${MonthYearPicker._startYear + i}"),
+                      (i) => Center(
+                        child: Text(
+                          "${MonthYearPicker._startYear + i}",
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
                       ),
                     ),
                   ),
