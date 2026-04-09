@@ -12,6 +12,7 @@ import '../../utils/images_utils/image_compress_service.dart';
 import '../../utils/images_utils/image_picker_service.dart';
 import '../../utils/images_utils/image_storage_service.dart';
 import '../calendar_widgets/photo_picker_section.dart';
+import '../calendar_widgets/time_range_row.dart';
 
 class EventDetailsSheet extends StatefulWidget {
   final AppointmentRecord appointment;
@@ -224,10 +225,10 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
             child: ListView(
               controller: scrollController,
               padding: EdgeInsets.only(
-                left: MediaQuery.of(sheetContext).size.width * 0.05,
-                right: MediaQuery.of(sheetContext).size.width * 0.05,
+                left: 20,
+                right: 20,
                 top: 16,
-                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 60,
               ),
               children: [
                 _buildHandle(),
@@ -443,54 +444,37 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       const SizedBox(height: 14),
 
       formLabel(context, "Time"),
-      Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _startTimeController,
-              readOnly: true,
-              decoration: formInputDecoration(context, "Start time").copyWith(
-                suffixIcon: const Icon(Icons.access_time_outlined, size: 18),
-                errorText: _errors['startTime'],
-              ),
-              onTap: () async {
-                final picked = await showTimePicker(
-                  context: context,
-                  initialTime: _selectedStartTime,
-                );
-                if (picked == null) return;
-                setState(() {
-                  _selectedStartTime = picked;
-                  _startTimeController.text = picked.format(context);
-                  _errors['startTime'] = null;
-                });
-              },
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextField(
-              controller: _endTimeController,
-              readOnly: true,
-              decoration: formInputDecoration(context, "End time").copyWith(
-                suffixIcon: const Icon(Icons.access_time_outlined, size: 18),
-                errorText: _errors['endTime'],
-              ),
-              onTap: () async {
-                final picked = await showTimePicker(
-                  context: context,
-                  initialTime: _selectedEndTime,
-                );
-                if (picked == null) return;
-                setState(() {
-                  _selectedEndTime = picked;
-                  _endTimeController.text = picked.format(context);
-                  _errors['endTime'] = null;
-                });
-              },
-            ),
-          ),
-        ],
+      TimeRangeRow(
+        startController: _startTimeController,
+        endController: _endTimeController,
+        selectedStart: _selectedStartTime,
+        selectedEnd: _selectedEndTime,
+        onTapStart: () async {
+          final picked = await showCupertinoTimePicker(
+            context,
+            initialTime: _selectedStartTime,
+          );
+          if (picked == null) return;
+          setState(() {
+            _selectedStartTime = picked;
+            _startTimeController.text = picked.format(context);
+            _errors['startTime'] = null;
+          });
+        },
+        onTapEnd: () async {
+          final picked = await showCupertinoTimePicker(
+            context,
+            initialTime: _selectedEndTime,
+          );
+          if (picked == null) return;
+          setState(() {
+            _selectedEndTime = picked;
+            _endTimeController.text = picked.format(context);
+            _errors['endTime'] = null;
+          });
+        },
+        startError: _errors['startTime'],
+        endError: _errors['endTime'],
       ),
       const SizedBox(height: 14),
 
