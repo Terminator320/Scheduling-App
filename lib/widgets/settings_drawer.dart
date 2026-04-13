@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../utils/theme_notifier.dart';
 
 class SettingsDrawer extends StatefulWidget {
-  const SettingsDrawer({super.key});
+  final bool isAdmin;
+
+  const SettingsDrawer({super.key, required this.isAdmin});
 
   @override
   State<SettingsDrawer> createState() => _SettingsDrawerState();
@@ -55,33 +57,35 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               // TODO: navigate to calendar page
             },
           ),
-          _DrawerItem(
-            icon: Icons.badge_outlined,
-            label: 'Employees',
-            textTheme: textTheme,
-            scheme: scheme,
-            onTap: () {
-              // TODO: navigate to employees page
-            },
-          ),
-          _DrawerItem(
-            icon: Icons.people_outline,
-            label: 'Clients',
-            textTheme: textTheme,
-            scheme: scheme,
-            onTap: () {
-              // TODO: navigate to clients page
-            },
-          ),
-          _DrawerItem(
-            icon: Icons.assignment_outlined,
-            label: 'Appointments',
-            textTheme: textTheme,
-            scheme: scheme,
-            onTap: () {
-              // TODO: navigate to appointments page
-            },
-          ),
+          if (widget.isAdmin) ...[
+            _DrawerItem(
+              icon: Icons.badge_outlined,
+              label: 'Employees',
+              textTheme: textTheme,
+              scheme: scheme,
+              onTap: () {
+                // TODO: navigate to employees page
+              },
+            ),
+            _DrawerItem(
+              icon: Icons.people_outline,
+              label: 'Clients',
+              textTheme: textTheme,
+              scheme: scheme,
+              onTap: () {
+                // TODO: navigate to clients page
+              },
+            ),
+            _DrawerItem(
+              icon: Icons.assignment_outlined,
+              label: 'Appointments',
+              textTheme: textTheme,
+              scheme: scheme,
+              onTap: () {
+                // TODO: navigate to appointments page
+              },
+            ),
+          ],
           _DrawerItem(
             icon: Icons.settings_outlined,
             label: 'Settings',
