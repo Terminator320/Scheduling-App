@@ -5,12 +5,16 @@ import '../models/client_record.dart';
 import '../services/client_service.dart';
 import '../services/appointment_service.dart';
 
+import '../utils/date_utils_helper.dart';
+
 import '../widgets/settings_drawer.dart';
+
+import '../widgets/popup_widgets/details_edit_sheet.dart';
 
 enum ListMode { clients, appointments }
 
 class ListInformation extends StatefulWidget {
-  final ListMode mode;
+  final String mode;
 
   const ListInformation({super.key, required this.mode});
 
@@ -22,7 +26,8 @@ class _ListInformationState extends State<ListInformation> {
   final ClientService _clientService = ClientService();
   final AppointmentService _appointmentService = AppointmentService();
 
-  bool get _isClients => widget.mode == ListMode.clients;
+  bool get _isClients => widget.mode == 'Clients';
+
 
   String get _title => _isClients ? 'Clients' : 'Appointments';
 
@@ -105,6 +110,7 @@ class _ListInformationState extends State<ListInformation> {
 class _ClientTile extends StatelessWidget {
   final ClientRecord client;
 
+
   const _ClientTile({required this.client});
 
   @override
@@ -113,6 +119,9 @@ class _ClientTile extends StatelessWidget {
 
     return Card(
       child: ListTile(
+        onTap: () {
+
+        },
         leading: CircleAvatar(
           backgroundColor: theme.colorScheme.primaryContainer,
           child: Text(
@@ -163,37 +172,14 @@ class _ClientTile extends StatelessWidget {
 class _AppointmentTile extends StatelessWidget {
   final AppointmentRecord appointment;
 
+
   const _AppointmentTile({required this.appointment});
 
-  // Status → colour mapping
-  Color _statusColor(BuildContext context, String status) {
-    switch (status.toLowerCase()) {
-      case 'confirmed':
-        return Colors.green;
-      case 'cancelled':
-        return Colors.red;
-      case 'completed':
-        return Colors.blue;
-      case 'pending':
-      default:
-        return Colors.orange;
-    }
-  }
-
-  String _formatDate(DateTime dt) {
-    return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-'
-        '${dt.day.toString().padLeft(2, '0')}';
-  }
-
-  String _formatTime(DateTime dt) {
-    return '${dt.hour.toString().padLeft(2, '0')}:'
-        '${dt.minute.toString().padLeft(2, '0')}';
-  }
+  EventDetailsSheet popupClient = EventDetailsSheet(appointment: appointment);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final statusColor = _statusColor(context, appointment.status);
 
     return Card(
       child: ListTile(
@@ -201,13 +187,7 @@ class _AppointmentTile extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              _formatDate(appointment.startTime),
-              style: theme.textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Text(
-              _formatTime(appointment.startTime),
+              DateUtilsHelper.formatPrettyDate(appointment.startTime),
               style: theme.textTheme.labelMedium,
             ),
           ],
@@ -244,22 +224,6 @@ class _AppointmentTile extends StatelessWidget {
           ],
         ),
         isThreeLine: appointment.employeeNames.isNotEmpty,
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: statusColor.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: statusColor, width: 1),
-          ),
-          child: Text(
-            appointment.status,
-            style: TextStyle(
-              color: statusColor,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
       ),
     );
   }
