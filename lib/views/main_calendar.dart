@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/models/appointment_record.dart';
 import 'package:table_calendar/table_calendar.dart';
 
-
-
 import '../models/employee_record.dart';
 import '../services/appointment_service.dart';
 
@@ -17,14 +15,21 @@ import '../widgets/calendar_widgets/event_list.dart';
 import '../widgets/settings_drawer.dart';
 
 class MainCalendar extends StatefulWidget {
-  const MainCalendar({super.key});
+  final bool isAdmin;
+  final String employeeId;
+
+  const MainCalendar({
+    super.key,
+    required this.isAdmin,
+    required this.employeeId,
+  });
 
   @override
   State<MainCalendar> createState() => _MainCalendar();
 }
 
 class _MainCalendar extends State<MainCalendar> {
-  final _scaffoldKey = GlobalKey<ScaffoldState>(); //access the Scaffold directly
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
   final service = AppointmentService();
   final userService = UserService();
 
@@ -58,7 +63,14 @@ class _MainCalendar extends State<MainCalendar> {
 
     service.getAllAppointments().listen((data) {
       setState(() {
-        _allAppointments = data;
+        // Employees only see appointments assigned to them
+        if (widget.isAdmin) {
+          _allAppointments = data;
+        } else {
+          _allAppointments = data
+              .where((a) => a.employeeIds.contains(widget.employeeId))
+              .toList();
+        }
       });
 
       _selectedEvents.value = _getEventsForDay(_selectedDay!);
@@ -92,17 +104,19 @@ class _MainCalendar extends State<MainCalendar> {
   Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final newEvent = await showAddEventPopup(context);
+      floatingActionButton: widget.isAdmin
+          ? FloatingActionButton(
+              onPressed: () async {
+                final newEvent = await showAddEventPopup(context);
 
-          if (newEvent != null) {
-            await service.addAppointment(newEvent);
-          }
-        },
-        child: Icon(Icons.add),
-      ),
-      endDrawer: const SettingsDrawer(),
+                if (newEvent != null) {
+                  await service.addAppointment(newEvent);
+                }
+              },
+              child: const Icon(Icons.add),
+            )
+          : null,
+      endDrawer: SettingsDrawer(isAdmin: widget.isAdmin),
       body: SafeArea(child: content()),
     );
   }
