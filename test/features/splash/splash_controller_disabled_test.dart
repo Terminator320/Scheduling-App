@@ -1,12 +1,12 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/splash/application/splash_controller.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class _MockFirebaseAuth extends Mock implements FirebaseAuth {}
 
@@ -23,7 +23,7 @@ void main() {
     late _MockRepo mockRepo;
 
     setUp(() {
-      SharedPreferences.setMockInitialValues({});
+      FlutterSecureStorage.setMockInitialValues({});
       mockAuth = _MockFirebaseAuth();
       mockUser = _MockUser();
       mockRepo = _MockRepo();
