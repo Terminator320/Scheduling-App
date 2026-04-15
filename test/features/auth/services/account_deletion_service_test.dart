@@ -2,11 +2,11 @@
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class _MockFirebaseAuth extends Mock implements FirebaseAuth {}
 
@@ -37,15 +37,12 @@ void main() {
   late AccountDeletionService service;
 
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
     auth = _MockFirebaseAuth();
     user = _MockUser();
     functions = _MockFirebaseFunctions();
     callable = _MockHttpsCallable();
-    service = AccountDeletionService(
-      firebaseAuth: auth,
-      functions: functions,
-    );
+    service = AccountDeletionService(firebaseAuth: auth, functions: functions);
     when(() => auth.currentUser).thenReturn(user);
     when(() => user.email).thenReturn('owner@example.com');
     when(() => functions.httpsCallable('deleteAccount')).thenReturn(callable);
@@ -60,26 +57,31 @@ void main() {
 
       await service.reauthenticateWithPassword(' pw ');
 
-      final captured = verify(
-        () => user.reauthenticateWithCredential(captureAny()),
-      ).captured.single as EmailAuthCredential;
+      final captured =
+          verify(
+                () => user.reauthenticateWithCredential(captureAny()),
+              ).captured.single
+              as EmailAuthCredential;
       expect(captured.email, 'owner@example.com');
       expect(captured.password, 'pw');
     });
 
-    test('throws AuthFailureRequiresRecentLogin when no current user', () async {
-      when(() => auth.currentUser).thenReturn(null);
+    test(
+      'throws AuthFailureRequiresRecentLogin when no current user',
+      () async {
+        when(() => auth.currentUser).thenReturn(null);
 
-      await expectLater(
-        service.reauthenticateWithPassword('pw'),
-        throwsA(isA<AuthFailureRequiresRecentLogin>()),
-      );
-    });
+        await expectLater(
+          service.reauthenticateWithPassword('pw'),
+          throwsA(isA<AuthFailureRequiresRecentLogin>()),
+        );
+      },
+    );
 
     test('maps FirebaseAuthException via AuthErrorMapper', () async {
-      when(() => user.reauthenticateWithCredential(any())).thenThrow(
-        FirebaseAuthException(code: 'wrong-password'),
-      );
+      when(
+        () => user.reauthenticateWithCredential(any()),
+      ).thenThrow(FirebaseAuthException(code: 'wrong-password'));
 
       await expectLater(
         service.reauthenticateWithPassword('pw'),
@@ -90,9 +92,9 @@ void main() {
 
   group('deleteAccount', () {
     test('signs out after the callable succeeds', () async {
-      when(() => callable.call<dynamic>()).thenAnswer(
-        (_) async => _MockHttpsCallableResult(),
-      );
+      when(
+        () => callable.call<dynamic>(),
+      ).thenAnswer((_) async => _MockHttpsCallableResult());
       when(() => auth.signOut()).thenAnswer((_) async {});
 
       await service.deleteAccount();
@@ -101,18 +103,23 @@ void main() {
       verify(() => auth.signOut()).called(1);
     });
 
-    test('maps unauthenticated callable error to requires-recent-login',
-        () async {
-      when(() => callable.call<dynamic>()).thenThrow(
-        FirebaseFunctionsException(message: 'no-auth', code: 'unauthenticated'),
-      );
+    test(
+      'maps unauthenticated callable error to requires-recent-login',
+      () async {
+        when(() => callable.call<dynamic>()).thenThrow(
+          FirebaseFunctionsException(
+            message: 'no-auth',
+            code: 'unauthenticated',
+          ),
+        );
 
-      await expectLater(
-        service.deleteAccount(),
-        throwsA(isA<AuthFailureRequiresRecentLogin>()),
-      );
-      verifyNever(() => auth.signOut());
-    });
+        await expectLater(
+          service.deleteAccount(),
+          throwsA(isA<AuthFailureRequiresRecentLogin>()),
+        );
+        verifyNever(() => auth.signOut());
+      },
+    );
 
     test('maps other callable errors to AuthFailureUnknown', () async {
       when(() => callable.call<dynamic>()).thenThrow(

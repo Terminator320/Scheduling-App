@@ -7,6 +7,7 @@ import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/storage/secure_storage_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
@@ -44,6 +45,25 @@ class _LoginState extends ConsumerState<Login> {
   String? _passwordError;
   String? _bannerError;
   String? _bannerSuccess;
+
+  @override
+  void initState() {
+    super.initState();
+    _prefillRememberedEmail();
+  }
+
+  Future<void> _prefillRememberedEmail() async {
+    try {
+      final email = await ref
+          .read(secureStorageServiceProvider)
+          .read(SecureStorageKeys.rememberedEmail);
+      if (!mounted || email == null || email.isEmpty) return;
+      if (_emailController.text.isNotEmpty) return;
+      _emailController.text = email;
+    } catch (e, st) {
+      if (mounted) ref.read(loggerProvider).warn('login.prefill_email', e, st);
+    }
+  }
 
   @override
   void dispose() {
@@ -144,6 +164,18 @@ class _LoginState extends ConsumerState<Login> {
         AuthCache().save(employee).catchError((Object e, StackTrace st) {
           ref.read(loggerProvider).warn('login.auth_cache_save', e, st);
         }),
+      );
+
+      unawaited(
+        ref
+            .read(secureStorageServiceProvider)
+            .write(
+              SecureStorageKeys.rememberedEmail,
+              _emailController.text.trim().toLowerCase(),
+            )
+            .catchError((Object e, StackTrace st) {
+              ref.read(loggerProvider).warn('login.remember_email', e, st);
+            }),
       );
 
       await Navigator.pushReplacementNamed(
