@@ -72,6 +72,7 @@ dependencies:
   # Native splash (preserve/remove API used in main.dart)
   flutter_native_splash: ^2.4.7
   flutter_secure_storage: ^10.3.1
+  infinite_scroll_pagination: ^5.1.1
 
 dev_dependencies:
   flutter_test:

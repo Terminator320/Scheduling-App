@@ -25,6 +25,25 @@ class FirebaseClientsRepository implements ClientsRepository {
   }
 
   @override
+  Future<List<ClientRecord>> fetchClientsPage({
+    required int limit,
+    ClientRecord? after,
+  }) async {
+    var query = _clients.orderBy('createdAt', descending: true);
+    if (after != null) {
+      // Re-fetch the cursor doc so startAfterDocument reads its orderBy fields.
+      // One extra read per page boundary — negligible and keeps the domain
+      // layer free of Firestore DocumentSnapshot types.
+      final afterDoc = await _clients.doc(after.id).get();
+      if (afterDoc.exists) query = query.startAfterDocument(afterDoc);
+    }
+    final snapshot = await query.limit(limit).get();
+    return snapshot.docs
+        .map((doc) => ClientRecord.fromMap(doc.id, doc.data()))
+        .toList();
+  }
+
+  @override
   Future<ClientRecord?> getClientById(String id) async {
     final doc = await _clients.doc(id).get();
     if (!doc.exists) return null;
