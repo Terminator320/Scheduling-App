@@ -46,7 +46,7 @@ class ClientRecord {
     required this.address,
     required this.phone,
     required this.email,
-    required this.contacts,
+    required this.contacts, //
   });
 
   Map<String, dynamic> toMap() {
@@ -83,4 +83,6 @@ class ClientRecord {
   String get displayName =>
       businessName.isNotEmpty ? businessName : name;
 
+  List<ClientContact> get displayContact =>
+      contacts;
 }
