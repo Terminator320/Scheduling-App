@@ -184,6 +184,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
 
     try {
       await ref.read(clientsRepositoryProvider).updateClient(updated);
+      ref.read(clientsRefreshProvider.notifier).state++;
       if (mounted) setState(() => _isEditing = false);
     } catch (e, st) {
       ref.read(loggerProvider).warn('updateClient failed', e, st);
@@ -233,6 +234,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
     final notices = ref.read(noticeServiceProvider);
     try {
       await ref.read(clientsRepositoryProvider).deleteClient(widget.client.id);
+      ref.read(clientsRefreshProvider.notifier).state++;
       if (!mounted) return;
       if (widget.scrollController != null) {
         Navigator.pop(context);

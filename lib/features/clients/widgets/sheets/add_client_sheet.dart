@@ -222,6 +222,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
 
     try {
       await ref.read(clientsRepositoryProvider).addClient(newClient);
+      ref.read(clientsRefreshProvider.notifier).state++;
       if (!mounted) return;
       ref.read(noticeServiceProvider).success(context.l10n.common_clientAdded);
       Navigator.pop(context);
