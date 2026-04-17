@@ -24,6 +24,7 @@ class _EventDetailsClientState extends State<EventDetailsClient> {
   late final TextEditingController _addressController;
   late final TextEditingController _emailController;
 
+
   List<ClientRecord> _allClients = [];
   List<ClientRecord> _selectedClients = [];
 
@@ -40,6 +41,7 @@ class _EventDetailsClientState extends State<EventDetailsClient> {
     _emailController = TextEditingController(text: c.email);
     _phoneController = TextEditingController(text: c.phone);
 
+
     _loadClients();
   }
 
@@ -51,6 +53,12 @@ class _EventDetailsClientState extends State<EventDetailsClient> {
     _emailController.dispose();
     _phoneController.dispose();
     super.dispose();
+  }
+
+  ClientContact toClientContact() {
+    return ClientContact(name: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        email: _emailController.text.trim());
   }
 
   Future<void> _loadClients() async {
@@ -75,7 +83,8 @@ class _EventDetailsClientState extends State<EventDetailsClient> {
       _emailController.text = c.email;
       _phoneController.text = c.phone;
       _selectedClients = _allClients
-          .where((c) => c.id.contains(c.id))
+          .where((c) => widget.client.contacts
+          .any((contact) => contact.name == c.name))
           .toList();
     });
   }
@@ -121,13 +130,17 @@ class _EventDetailsClientState extends State<EventDetailsClient> {
       return;
     }
 
-    final updated = ClientRecord(id: widget.client.id,
-        businessName: _businessNameController.text.trim(),
-        name: _nameController.text.trim(),
-        address: _addressController.text.trim(),
-        phone: _phoneController.text.trim(),
-        email: _emailController.text.trim(),
-        contacts: );
+    final updated = ClientRecord(
+      id: widget.client.id,
+      businessName: _businessNameController.text.trim(),
+      name: _nameController.text.trim(),
+      address: _addressController.text.trim(),
+      phone: _phoneController.text.trim(),
+      email: _emailController.text.trim(),
+      contacts: _selectedClients
+          .expand((c) => c.contacts)
+          .toList(),
+    );
 
     @override
     Widget build(BuildContext context) {
@@ -168,3 +181,10 @@ class _EventDetailsClientState extends State<EventDetailsClient> {
       );
     }
   }
+
+  @override
+  Widget build(BuildContext context) {
+    // TODO: implement build
+    throw UnimplementedError();
+  }
+}
