@@ -32,7 +32,7 @@ dependencies:
     sdk: flutter
 
   #firebase
-  firebase_auth: ^6.2.0
+  firebase_auth: any
   firebase_core: any
   cloud_firestore: any
   firebase_core_platform_interface: any

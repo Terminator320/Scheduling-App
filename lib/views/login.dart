@@ -19,9 +19,12 @@ class _LoginState extends State<Login> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
+  final Map<String, String?> _errors = {};
+
   bool _isObscured = true;
   bool _isLoading = false;
   String _errorMessage = '';
+  String _successMessage = '';
 
   Future<void> _createAccount() async {
     final email = _emailController.text.trim().toLowerCase();
@@ -46,7 +49,7 @@ class _LoginState extends State<Login> {
       );
 
       setState(() {
-        _errorMessage = 'Account created. You can now sign in.';
+        _successMessage = 'Account created. You can now sign in.';
       });
     } on FirebaseAuthException catch (e) {
       setState(() {
@@ -67,12 +70,12 @@ class _LoginState extends State<Login> {
     final email = _emailController.text.trim().toLowerCase();
     final password = _passwordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
-      setState(() {
-        _errorMessage = 'Email and password are required';
-      });
-      return;
-    }
+    // if (email.isEmpty || password.isEmpty) {
+    //   setState(() {
+    //     _errorMessage = 'Email and password are required';
+    //   });
+    //   return;
+    // }
 
     setState(() {
       _isLoading = true;
@@ -148,13 +151,20 @@ class _LoginState extends State<Login> {
       await AuthService().sendResetPassword(email);
 
       setState(() {
-        _errorMessage = 'Password reset email sent';
+        _successMessage = 'Password reset email sent';
       });
     } on FirebaseAuthException catch (e) {
       setState(() {
         _errorMessage = e.message ?? 'Failed to send reset email';
       });
     }
+  }
+
+  @override
+  void initState() {
+    _errors['email'] = _emailController.text.trim().isEmpty ? "Email is required" : null;
+    _errors['password'] = _passwordController.text.trim().isEmpty ? "Password is required" : null;
+    super.initState();
   }
 
   @override
@@ -199,18 +209,44 @@ class _LoginState extends State<Login> {
 
                       const SizedBox(height: 36),
 
+
+
+                      // setState(() {
+                      //   _errors['title'] = _titleController.text.trim().isEmpty ? "Title is required" : null;
+                      //   _errors['date'] = _selectedDate == null ? "Please select a date" : null;
+                      //   _errors['startTime'] = _selectedStartTime == null ? "Please select a start time" : null;
+                      //   _errors['endTime'] = _selectedEndTime == null
+                      //       ? "Please select an end time"
+                      //       : (_selectedStartTime != null &&
+                      //       (_selectedEndTime!.hour * 60 + _selectedEndTime!.minute) <=
+                      //           (_selectedStartTime!.hour * 60 + _selectedStartTime!.minute))
+                      //       ? "Must be after start time"
+                      //       : null;
+                      //   _errors['client'] = _selectedClient == null ? "Please select a client" : null;
+                      //   _errors['employees'] = _selectedEmployees.isEmpty ? "Please select at least one employee" : null;
+                      // });
+
+
+                      // TextField(
+                      //   controller: _titleController,
+                      //   decoration: formInputDecoration(sheetContext, "e.g. Plumbing repair").copyWith(
+                      //     errorText: _errors['title'],
+                      //   ),
+                      //   onChanged: (_) => setState(() => _errors['title'] = null),
+                      // ),
+
                       // Email field
                       TextField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
-                        style: textTheme.bodyMedium,
-                        decoration: formInputDecoration(context, 'Email')
-                            .copyWith(
+                        decoration: formInputDecoration(context, 'Email').copyWith(
+                          errorText: _errors['email'],
                               prefixIcon: const Icon(
                                 Icons.email_outlined,
                                 size: 20,
                               ),
                             ),
+                        onChanged: (_) => setState(() => _errors['email'] = null),
                       ),
 
                       const SizedBox(height: 14),
@@ -219,9 +255,9 @@ class _LoginState extends State<Login> {
                       TextField(
                         controller: _passwordController,
                         obscureText: _isObscured,
-                        style: textTheme.bodyMedium,
-                        decoration: formInputDecoration(context, 'Password')
-                            .copyWith(
+                        // style: textTheme.bodyMedium,
+                        decoration: formInputDecoration(context, 'Password').copyWith(
+                          errorText: _errors['password'],
                               prefixIcon: const Icon(
                                 Icons.lock_outlined,
                                 size: 20,
@@ -240,6 +276,7 @@ class _LoginState extends State<Login> {
                                 },
                               ),
                             ),
+                        onChanged: (_) => setState(() => _errors['password'] = null),
                       ),
 
                       const SizedBox(height: 4),
