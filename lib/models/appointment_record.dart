@@ -1,88 +1,91 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AppointmentRecord {
-  final String id;
+  final String? id;
   final String title;
-  final String date;
-  final String startTime;
-  final String endTime;
+  final DateTime startTime;
+  final DateTime endTime;
   final String clientId;
   final String clientName;
   final String clientPhone;
-  final String employeeId;
-  final String employeeName;
+  final List<String> employeeIds;
+  final List<String> employeeNames;
   final String address;
   final String notes;
   final String materialsNeeded;
-  final String pictures;
   final String status;
   final Timestamp? createdAt;
   final Timestamp? updatedAt;
+  final List<String> pictures;
 
   AppointmentRecord({
-    required this.id,
+    this.id,
     required this.title,
-    required this.date,
     required this.startTime,
     required this.endTime,
     required this.clientId,
     required this.clientName,
     required this.clientPhone,
-    required this.employeeId,
-    required this.employeeName,
+    required this.employeeIds,
+    required this.employeeNames,
     required this.address,
     required this.notes,
     required this.materialsNeeded,
-    required this.pictures,
     required this.status,
-    required this.createdAt,
-    required this.updatedAt,
+    this.createdAt,
+    this.updatedAt,
+    required this.pictures
   });
 
-  factory AppointmentRecord.fromDoc(
-      DocumentSnapshot<Map<String, dynamic>> doc,
-      ) {
-    final data = doc.data() ?? {};
-
+  factory AppointmentRecord.fromMap(String id, Map<String, dynamic> data) {
     return AppointmentRecord(
-      id: doc.id,
-      title: data['title'] ?? '',
-      date: data['date'] ?? '',
-      startTime: data['startTime'] ?? '',
-      endTime: data['endTime'] ?? '',
-      clientId: data['clientId'] ?? '',
-      clientName: data['clientName'] ?? '',
-      clientPhone: data['clientPhone'] ?? '',
-      employeeId: data['employeeId'] ?? '',
-      employeeName: data['employeeName'] ?? '',
-      address: data['address'] ?? '',
-      notes: data['notes'] ?? '',
-      materialsNeeded: data['materialsNeeded'] ?? '',
-      pictures: data['pictures'] ?? '',
-      status: data['status'] ?? 'booked',
+      id: id,
+      title: (data['title'] ?? '').toString(),
+      startTime: _parseDateTime(data['startTime']),
+      endTime: _parseDateTime(data['endTime']),
+      clientId: (data['clientId'] ?? '').toString(),
+      clientName: (data['clientName'] ?? '').toString(),
+      clientPhone: (data['clientPhone'] ?? '').toString(),
+      employeeIds: _pasrseStringList(data['employeeIds']),
+      employeeNames: _pasrseStringList(data['employeeNames']),
+      address: (data['address'] ?? '').toString(),
+      notes: (data['notes'] ?? '').toString(),
+      materialsNeeded: (data['materialsNeeded'] ?? '').toString(),
+      status: (data['status'] ?? 'pending').toString(),
       createdAt: data['createdAt'] as Timestamp?,
       updatedAt: data['updatedAt'] as Timestamp?,
+      pictures: _pasrseStringList(data['pictures']),
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
       'title': title,
-      'date': date,
-      'startTime': startTime,
-      'endTime': endTime,
+      'startTime': Timestamp.fromDate(startTime),
+      'endTime': Timestamp.fromDate(endTime),
       'clientId': clientId,
       'clientName': clientName,
       'clientPhone': clientPhone,
-      'employeeId': employeeId,
-      'employeeName': employeeName,
+      'employeeIds': employeeIds,
+      'employeeNames': employeeNames,
       'address': address,
       'notes': notes,
-      'materialsNeeded': materialsNeeded,
       'pictures': pictures,
+      'materialsNeeded': materialsNeeded,
       'status': status,
-      'createdAt': createdAt,
-      'updatedAt': updatedAt,
+      'updatedAt': FieldValue.serverTimestamp(),
     };
+  }
+
+  static DateTime _parseDateTime(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
+    return DateTime.now();
+  }
+
+  static List<String> _pasrseStringList(dynamic value) {
+    if (value is List) return List<String>.from(value);
+    if (value is String && value.isNotEmpty) return [value];
+    return [];
   }
 }
