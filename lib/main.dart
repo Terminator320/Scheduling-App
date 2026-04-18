@@ -2,22 +2,12 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:scheduling/utils/themes.dart';
+import 'package:scheduling/utils/theme_notifier.dart';
+import 'package:splashscreen/splashscreen.dart';
 import 'firebase_options.dart';
 
-import 'screens/auth/auth_screens.dart';
-import 'screens/admin/calendar_screens.dart';
-import 'screens/admin/employees_screens.dart';
-import 'screens/admin/clients_screens.dart';
-import 'screens/admin/appointments_screens.dart';
-import 'screens/admin/settings_screens.dart';
-import 'screens/employee/settings_screens.dart';
-import 'utils/app_font_scale.dart';
-import 'utils/app_language.dart';
-import 'utils/app_theme_mode.dart';
-import 'utils/app_text.dart';
-
-
-
+import 'views/login.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,69 +18,72 @@ void main() async {
     options: DefaultFirebaseOptions.android,
   );
 
-  runApp(MyApp());
+  runApp(PaulApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class PaulApp extends StatefulWidget {
+  const PaulApp({super.key});
+
+  @override
+  State<PaulApp> createState() => _PaulAppState();
+}
+
+class _PaulAppState extends State<PaulApp> {
+  ThemeMode _themeMode = ThemeMode.system;
+
+  void toggleTheme() {
+    setState(() {
+      _themeMode = _themeMode == ThemeMode.dark
+          ? ThemeMode.light
+          : ThemeMode.dark;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return AppLanguageScope(
-      controller: AppLanguageController.instance,
-      child: AppThemeModeScope(
-        controller: AppThemeModeController.instance,
-        child: AppFontScaleScope(
-          controller: AppFontScaleController.instance,
-          child: Builder(
-            builder: (context) {
-              final isDark = AppThemeModeScope.of(context).isDark;
-
-              return MaterialApp(
-                debugShowCheckedModeBanner: false,
-                title: tr(context, 'Scheduling App'),
-                theme: ThemeData(
-                  useMaterial3: true,
-                  fontFamily: 'Roboto',
-                  brightness: Brightness.light,
-                ),
-                darkTheme: ThemeData(
-                  useMaterial3: true,
-                  fontFamily: 'Roboto',
-                  brightness: Brightness.dark,
-                ),
-                themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-                builder: (context, child) {
-                  final mediaQuery = MediaQuery.of(context);
-                  final fontScale = AppFontScaleScope.of(context).value;
-                  return MediaQuery(
-                    data: mediaQuery.copyWith(
-                      textScaler: TextScaler.linear(fontScale),
-                    ),
-                    child: child ?? const SizedBox.shrink(),
-                  );
-                },
-                home: isDark ? LoginDarkScreen() : LoginLightScreen(),
-                routes: {
-                  '/admin/calendar/light': (context) => AdminCalendarPage(),
-                  '/admin/calendar/dark': (context) => AdminCalendarDarkPage(),
-                  '/admin/employees/light': (context) => AdminEmployeesPage(),
-                  '/admin/employees/dark': (context) => AdminEmployeesDarkPage(),
-                  '/admin/clients/light': (context) => AdminClientsPage(),
-                  '/admin/clients/dark': (context) => AdminClientsDarkPage(),
-                  '/admin/appointments/light': (context) => AdminAppointmentsPage(),
-                  '/admin/appointments/dark': (context) => AdminAppointmentsDarkPage(),
-                  '/admin/settings/light': (context) => AdminSettingsPage(),
-                  '/admin/settings/dark': (context) => AdminSettingsDarkPage(),
-
-                },
-              );
-            },
-          ),
-        ),
+    return ThemeNotifier(
+      themeMode: _themeMode,
+      toggleTheme: toggleTheme,
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: Themes().lightTheme,
+        darkTheme: Themes().darkTheme,
+        themeMode: _themeMode,
+        home: const Splash(),
       ),
     );
   }
 }
 
-/* ---------------- LOGIN LIGHT ---------------- */
+
+class Splash extends StatefulWidget {
+  const Splash({super.key});
+
+  @override
+  State<Splash> createState() => _SplashState();
+}
+
+class _SplashState extends State<Splash> {
+  @override
+  Widget build(BuildContext context) {
+    return SplashScreen(
+      seconds: 5,
+      navigateAfterSeconds: const Login(),
+      title: Text(
+        'Welcome to Scheduling App',
+        style: Theme.of(context).textTheme.headlineMedium,
+      ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      styleTextUnderTheLoader: TextStyle(),
+      image: Image.asset('assets/logo1.png'),
+      photoSize: 170,
+      loaderColor: Theme.of(context).colorScheme.secondary,
+      loadingText: Text(
+        'Hope you are enjoying your day!',
+        style: Theme.of(context).textTheme.bodyMedium,
+      ),
+      loadingTextPadding: EdgeInsets.zero,
+      useLoader: true,
+    );
+  }
+}
