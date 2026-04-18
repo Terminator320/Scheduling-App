@@ -2,9 +2,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'user_service.dart';
 
 class AuthService {
-  static final _auth = FirebaseAuth.instance;
+  final _auth = FirebaseAuth.instance;
 
-  static Future<UserCredential> signIn({
+  Future<UserCredential> signIn({
     required String email,
     required String password,
   }) {
@@ -14,18 +14,20 @@ class AuthService {
     );
   }
 
-  static Future<void> sendResetPassword(String email) {
+   Future<void> sendResetPassword(String email) {
     return _auth.sendPasswordResetEmail(
       email: email.trim().toLowerCase(),
     );
   }
 
-  static Future<UserCredential> createEmployeeAccount({
+   Future<UserCredential> createEmployeeAccount({
     required String email,
     required String password,
   }) async {
+    final userService = UserService();
+
     final invitedEmployee =
-    await UserService.findInvitedEmployeeByEmail(email);
+    await userService.findInvitedEmployeeByEmail(email);
 
     if (invitedEmployee == null) {
       throw FirebaseAuthException(
@@ -39,11 +41,19 @@ class AuthService {
       password: password.trim(),
     );
 
-    await UserService.activateEmployee(
+    await userService.activateEmployee(
       docId: invitedEmployee.id,
       uid: credential.user!.uid,
     );
 
     return credential;
   }
+
+  Future<void> signOut() async {
+    await _auth.signOut();
+  }
+
+  Stream<User?> get authStateChanges => _auth.authStateChanges();
+
+
 }

@@ -9,7 +9,6 @@ class EmployeeRecord {
     required this.color,
     required this.role,
     required this.status,
-    required this.isAdmin,
     required this.uid,
   });
 
@@ -20,8 +19,20 @@ class EmployeeRecord {
   final Color color;
   final String role;
   final String status;
-  final bool isAdmin;
   final String uid;
+
+
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'email': email,
+      'phone': phone,
+      'colorValue': color.toARGB32().toString(),
+      'role': role,
+      'status': status,
+      'uid': uid,
+    };
+  }
 
   factory EmployeeRecord.fromMap(
       String id,
@@ -39,8 +50,22 @@ class EmployeeRecord {
       color: Color(colorValue),
       role: (data['role'] ?? 'employee').toString(),
       status: (data['status'] ?? '').toString(),
-      isAdmin: data['isAdmin'] == true,
       uid: (data['uid'] ?? '').toString(),
     );
   }
+
+  String get initials {
+    final parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return name.isNotEmpty ? name[0].toUpperCase() : '?';
+  }
+
+
+
+
+  bool get isAdmin => role == 'admin';
+  bool get isActive => status == 'active';
+
 }
