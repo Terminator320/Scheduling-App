@@ -118,7 +118,7 @@ class _ClientTile extends StatelessWidget {
     return Card(
       child: ListTile(
         onTap: () {
-          showDialog(
+          showModalBottomSheet(
             context: context,
             builder: (_) => _ClientDetailSheet(client: client),
           );
@@ -259,67 +259,56 @@ class _ClientDetailSheetState extends State<_ClientDetailSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.5,
-      minChildSize: 0.35,
-      maxChildSize: 0.95,
-      builder: (sheetContext, scrollController) {
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => FocusScope.of(sheetContext).unfocus(),
-          child: Container(
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: ListView(
-              controller: scrollController,
-              padding: EdgeInsets.only(
-                left: 24,
-                right: 24,
-                top: 16,
-                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 60,
-              ),
-              children: [
-                // Drag handle
-                Center(
-                  child: Container(
-                    width: 36, height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.outlineVariant,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 16,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 32,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  width: 36, height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(4),
                   ),
                 ),
-
-                // Header
-                _isEditing
-                    ? Text("Edit client",
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleLarge)
-                    : _buildViewHeader(theme),
-
-                const SizedBox(height: 20),
-                const Divider(height: 1),
-                const SizedBox(height: 16),
-
-                // Contenu : vue ou édition
-                if (_isEditing)
-                  ..._buildEditFields(theme)
-                else
-                  ..._buildViewFields(theme),
-
-                const SizedBox(height: 16),
-                const Divider(height: 1),
-                const SizedBox(height: 16),
-
-                _buildActionButtons(),
-              ],
-            ),
+              ),
+              _isEditing
+                  ? Text("Edit client",
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleLarge)
+                  : _buildViewHeader(theme),
+              const SizedBox(height: 20),
+              const Divider(height: 1),
+              const SizedBox(height: 16),
+              if (_isEditing)
+                ..._buildEditFields(theme)
+              else
+                ..._buildViewFields(theme),
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 16),
+              _buildActionButtons(),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
