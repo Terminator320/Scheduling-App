@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/image_viewer.dart';
+import 'package:scheduling/features/calendar/widgets/views/appointment_image_carousel.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
@@ -40,6 +41,18 @@ class PhotoPickerSection extends StatelessWidget {
     ImageViewer.open(context, images: providers, initialIndex: tappedIndex);
   }
 
+  // Read-only display: a swipeable carousel with page dots. Returns an empty
+  // box when there are no real images (e.g. only upload failures), so the
+  // failure banner below stands alone.
+  Widget _readOnlyGallery() {
+    final providers = buildImageProviders(
+      urls: existingImages.map((i) => i.url).toList(),
+      files: newImages,
+    );
+    if (providers.isEmpty) return const SizedBox.shrink();
+    return AppointmentImageCarousel(images: providers);
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasPhotos =
@@ -49,7 +62,9 @@ class PhotoPickerSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (hasPhotos)
+        if (hasPhotos && !isEditing)
+          _readOnlyGallery()
+        else if (hasPhotos)
           SizedBox(
             height: 90,
             child: ListView(

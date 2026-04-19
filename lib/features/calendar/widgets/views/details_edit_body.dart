@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
@@ -12,6 +11,7 @@ import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/fields/appointment_status_picker.dart';
 import 'package:scheduling/features/calendar/widgets/fields/employee_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
+import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_search_field.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -473,8 +473,7 @@ class _EditPhotosSection extends ConsumerWidget {
       newImages: newImages,
       isEditing: true,
       onPickImages: () async {
-        final picker = ref.read(imagePickerProvider);
-        final picked = await picker.pickMultiImages();
+        final picked = await pickAppointmentImages(context, ref);
         if (picked.isNotEmpty) notifier.addImages(picked);
       },
       onRemoveExisting: notifier.removeExistingImage,

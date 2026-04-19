@@ -392,6 +392,14 @@
   "@calendar_addMore": {
     "description": "Add more"
   },
+  "calendar_takePhoto": "Take Photo",
+  "@calendar_takePhoto": {
+    "description": "Image-source option that opens the camera"
+  },
+  "calendar_chooseFromGallery": "Choose from Gallery",
+  "@calendar_chooseFromGallery": {
+    "description": "Image-source option that opens the photo gallery"
+  },
   "calendar_tapToAddPhotos": "Tap to add photos",
   "@calendar_tapToAddPhotos": {
     "description": "Tap to add photos"
@@ -583,6 +591,14 @@
   "error_somethingWentWrong": "Something went wrong",
   "@error_somethingWentWrong": {
     "description": "Something went wrong"
+  },
+  "error_cameraPermissionDenied": "Camera access is needed to take a photo.",
+  "@error_cameraPermissionDenied": {
+    "description": "Shown when the camera permission request is denied"
+  },
+  "error_cameraPermissionPermanentlyDenied": "Camera access is off. Enable it in Settings to take photos.",
+  "@error_cameraPermissionPermanentlyDenied": {
+    "description": "Shown when the camera permission is permanently denied and must be enabled in system settings"
   },
   "validation_pleaseEnterYourEmail": "Please enter your email",
   "@validation_pleaseEnterYourEmail": {
