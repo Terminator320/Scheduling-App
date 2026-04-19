@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
@@ -15,6 +14,7 @@ import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialo
 import 'package:scheduling/features/calendar/widgets/fields/appointment_address_field.dart';
 import 'package:scheduling/features/calendar/widgets/fields/employee_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
+import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_search_field.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
@@ -134,8 +134,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
   }
 
   Future<void> _pickImages() async {
-    final picker = ref.read(imagePickerProvider);
-    final picked = await picker.pickMultiImages();
+    final picked = await pickAppointmentImages(context, ref);
     if (picked.isNotEmpty) _notifier.addImages(picked);
   }
 
