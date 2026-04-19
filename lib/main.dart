@@ -50,7 +50,7 @@ class _PaulAppState extends State<PaulApp> {
         theme: Themes().lightTheme,
         darkTheme: Themes().darkTheme,
         themeMode: _themeMode,
-        home: const ListInformation(mode: 'Clients'),
+        home: const Login(),
       ),
     );
   }

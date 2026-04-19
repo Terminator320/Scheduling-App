@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/theme_notifier.dart';
+import '../views/informationList.dart';
 
 class SettingsDrawer extends StatefulWidget {
   const SettingsDrawer({super.key});
@@ -71,7 +72,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
             textTheme: textTheme,
             scheme: scheme,
             onTap: () {
-              // TODO: navigate to clients page
+              ListInformation(mode: 'Clients');
             },
           ),
           _DrawerItem(
