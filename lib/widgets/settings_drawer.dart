@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/views/login.dart';
 import '../utils/theme_notifier.dart';
 import '../views/employees.dart';
 import '../views/informationList.dart';
@@ -59,34 +60,43 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               // TODO: navigate to calendar page
             },
           ),
-          _DrawerItem(
-            icon: Icons.badge_outlined,
-            label: 'Employees',
-            textTheme: textTheme,
-            scheme: scheme,
-            onTap: () {
-              // TODO: navigate to employees page
-            },
-          ),
-          _DrawerItem(
-            icon: Icons.people_outline,
-            label: 'Clients',
-            textTheme: textTheme,
-            scheme: scheme,
-            onTap: () {
-              // TODO: navigate to clients page
-
-            },
-          ),
-          _DrawerItem(
-            icon: Icons.assignment_outlined,
-            label: 'Appointments',
-            textTheme: textTheme,
-            scheme: scheme,
-            onTap: () {
-              // TODO: navigate to appointments page
-            },
-          ),
+          if (widget.isAdmin) ...[
+            _DrawerItem(
+              icon: Icons.badge_outlined,
+              label: 'Employees',
+              textTheme: textTheme,
+              scheme: scheme,
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) =>
+                    AddEmployeePage(),
+                ));
+              },
+            ),
+            _DrawerItem(
+              icon: Icons.people_outline,
+              label: 'Clients',
+              textTheme: textTheme,
+              scheme: scheme,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        ListInformation(mode: 'Clients', isAdmin: true),
+                  ),
+                );
+              },
+            ),
+            _DrawerItem(
+              icon: Icons.assignment_outlined,
+              label: 'Appointments',
+              textTheme: textTheme,
+              scheme: scheme,
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => ListInformation(mode: 'Appointments', isAdmin: true)));
+              },
+            ),
+          ],
           _DrawerItem(
             icon: Icons.settings_outlined,
             label: 'Settings',
@@ -104,6 +114,10 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
             isDestructive: true,
             onTap: () {
               // TODO: handle logout
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => Login()),
+              );
             },
           ),
         ],
@@ -148,7 +162,9 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               final themeNotifier = ThemeNotifier.of(ctx);
               final isDark = themeNotifier.isDark;
               return _DrawerItem(
-                icon: isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                icon: isDark
+                    ? Icons.light_mode_outlined
+                    : Icons.dark_mode_outlined,
                 label: isDark ? 'Light Mode' : 'Dark Mode',
                 textTheme: textTheme,
                 scheme: scheme,
@@ -194,10 +210,7 @@ class _DrawerItem extends StatelessWidget {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 24),
       leading: Icon(icon, color: color, size: 22),
-      title: Text(
-        label,
-        style: textTheme.bodyLarge?.copyWith(color: color),
-      ),
+      title: Text(label, style: textTheme.bodyLarge?.copyWith(color: color)),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       onTap: onTap,
     );
