@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
 import '../utils/theme_notifier.dart';
 import '../views/employees.dart';
+import '../views/login.dart';
 
 class SettingsDrawer extends StatefulWidget {
   final bool isAdmin;
@@ -107,8 +109,15 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
             textTheme: textTheme,
             scheme: scheme,
             isDestructive: true,
-            onTap: () {
-              // TODO: handle logout
+            onTap: () async {
+              Navigator.pop(context);
+              await AuthService().signOut();
+              if (!context.mounted) return;
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const Login()),
+                (_) => false,
+              );
             },
           ),
         ],
