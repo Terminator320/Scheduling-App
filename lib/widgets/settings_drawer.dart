@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import '../utils/theme_notifier.dart';
+import '../views/employees.dart';
 import '../views/informationList.dart';
 
 class SettingsDrawer extends StatefulWidget {
-  const SettingsDrawer({super.key});
+  final bool isAdmin;
+
+  const SettingsDrawer({super.key, required this.isAdmin});
 
   @override
   State<SettingsDrawer> createState() => _SettingsDrawerState();
@@ -63,7 +66,6 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
             scheme: scheme,
             onTap: () {
               // TODO: navigate to employees page
-
             },
           ),
           _DrawerItem(
@@ -72,7 +74,8 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
             textTheme: textTheme,
             scheme: scheme,
             onTap: () {
-              ListInformation(mode: 'Clients');
+              // TODO: navigate to clients page
+
             },
           ),
           _DrawerItem(
