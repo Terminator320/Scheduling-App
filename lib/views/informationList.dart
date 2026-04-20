@@ -15,8 +15,9 @@ enum ListMode { clients, appointments }
 
 class ListInformation extends StatefulWidget {
   final String mode;
+  final bool isAdmin;
 
-  const ListInformation({super.key, required this.mode});
+  const ListInformation({super.key, required this.mode, required this.isAdmin});
 
   @override
   State<ListInformation> createState() => _ListInformationState();
@@ -34,7 +35,7 @@ class _ListInformationState extends State<ListInformation> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(_title), centerTitle: true),
-      endDrawer: const SettingsDrawer(),
+      endDrawer: SettingsDrawer(isAdmin: widget.isAdmin,),
       body: _isClients ? _buildClientList() : _buildAppointmentList(),
     );
   }
