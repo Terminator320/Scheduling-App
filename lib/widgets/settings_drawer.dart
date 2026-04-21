@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/views/login.dart';
+import '../utils/theme_notifier.dart';
+import '../views/employees.dart';
+import '../views/informationList.dart';
 import '../services/auth_service.dart';
 import '../utils/theme_notifier.dart';
 import '../views/employees.dart';
@@ -67,12 +71,9 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               textTheme: textTheme,
               scheme: scheme,
               onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => AddEmployeePage(),
-                    ),
-                  );
+                Navigator.push(context, MaterialPageRoute(builder: (context) =>
+                    AddEmployeePage(),
+                ));
               },
             ),
             _DrawerItem(
@@ -81,7 +82,13 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               textTheme: textTheme,
               scheme: scheme,
               onTap: () {
-                // TODO: navigate to clients page
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        ListInformation(mode: 'Clients', isAdmin: true),
+                  ),
+                );
               },
             ),
             _DrawerItem(
@@ -90,7 +97,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               textTheme: textTheme,
               scheme: scheme,
               onTap: () {
-                // TODO: navigate to appointments page
+                Navigator.push(context, MaterialPageRoute(builder: (context) => ListInformation(mode: 'Appointments', isAdmin: true)));
               },
             ),
           ],
@@ -109,6 +116,11 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
             textTheme: textTheme,
             scheme: scheme,
             isDestructive: true,
+            onTap: () {
+              // TODO: handle logout
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => Login()),
             onTap: () async {
               Navigator.pop(context);
               await AuthService().signOut();
@@ -162,7 +174,9 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               final themeNotifier = ThemeNotifier.of(ctx);
               final isDark = themeNotifier.isDark;
               return _DrawerItem(
-                icon: isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                icon: isDark
+                    ? Icons.light_mode_outlined
+                    : Icons.dark_mode_outlined,
                 label: isDark ? 'Light Mode' : 'Dark Mode',
                 textTheme: textTheme,
                 scheme: scheme,
@@ -208,10 +222,7 @@ class _DrawerItem extends StatelessWidget {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 24),
       leading: Icon(icon, color: color, size: 22),
-      title: Text(
-        label,
-        style: textTheme.bodyLarge?.copyWith(color: color),
-      ),
+      title: Text(label, style: textTheme.bodyLarge?.copyWith(color: color)),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       onTap: onTap,
     );
