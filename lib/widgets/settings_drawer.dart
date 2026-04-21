@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
 import '../utils/theme_notifier.dart';
+import '../views/employees.dart';
+import '../views/login.dart';
 
 class SettingsDrawer extends StatefulWidget {
-  const SettingsDrawer({super.key});
+  final bool isAdmin;
+
+  const SettingsDrawer({super.key, required this.isAdmin});
 
   @override
   State<SettingsDrawer> createState() => _SettingsDrawerState();
@@ -55,33 +60,40 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               // TODO: navigate to calendar page
             },
           ),
-          _DrawerItem(
-            icon: Icons.badge_outlined,
-            label: 'Employees',
-            textTheme: textTheme,
-            scheme: scheme,
-            onTap: () {
-              // TODO: navigate to employees page
-            },
-          ),
-          _DrawerItem(
-            icon: Icons.people_outline,
-            label: 'Clients',
-            textTheme: textTheme,
-            scheme: scheme,
-            onTap: () {
-              // TODO: navigate to clients page
-            },
-          ),
-          _DrawerItem(
-            icon: Icons.assignment_outlined,
-            label: 'Appointments',
-            textTheme: textTheme,
-            scheme: scheme,
-            onTap: () {
-              // TODO: navigate to appointments page
-            },
-          ),
+          if (widget.isAdmin) ...[
+            _DrawerItem(
+              icon: Icons.badge_outlined,
+              label: 'Employees',
+              textTheme: textTheme,
+              scheme: scheme,
+              onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AddEmployeePage(),
+                    ),
+                  );
+              },
+            ),
+            _DrawerItem(
+              icon: Icons.people_outline,
+              label: 'Clients',
+              textTheme: textTheme,
+              scheme: scheme,
+              onTap: () {
+                // TODO: navigate to clients page
+              },
+            ),
+            _DrawerItem(
+              icon: Icons.assignment_outlined,
+              label: 'Appointments',
+              textTheme: textTheme,
+              scheme: scheme,
+              onTap: () {
+                // TODO: navigate to appointments page
+              },
+            ),
+          ],
           _DrawerItem(
             icon: Icons.settings_outlined,
             label: 'Settings',
@@ -97,8 +109,15 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
             textTheme: textTheme,
             scheme: scheme,
             isDestructive: true,
-            onTap: () {
-              // TODO: handle logout
+            onTap: () async {
+              Navigator.pop(context);
+              await AuthService().signOut();
+              if (!context.mounted) return;
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const Login()),
+                (_) => false,
+              );
             },
           ),
         ],

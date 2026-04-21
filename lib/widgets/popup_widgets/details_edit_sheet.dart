@@ -18,13 +18,11 @@ import '../calendar_widgets/time_range_row.dart';
 class EventDetailsSheet extends StatefulWidget {
   final AppointmentRecord appointment;
   final bool showActions;
-  final VoidCallback? onDelete;
 
   const EventDetailsSheet({
     super.key,
     required this.appointment,
     this.showActions = true,
-    this.onDelete,
   });
 
   @override
@@ -129,6 +127,36 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
           .where((e) => a.employeeIds.contains(e.id))
           .toList();
     });
+  }
+
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete job'),
+        content: const Text('Are you sure you want to delete this job?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    final id = widget.appointment.id;
+    if (id == null) return;
+    await AppointmentService().deleteAppointment(id);
+    if (!mounted) return;
+    Navigator.pop(context, 'deleted');
   }
 
   Future<void> _save() async {
@@ -622,7 +650,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
-            onPressed: widget.onDelete,
+            onPressed: _confirmDelete,
             child: const Text("Delete"),
           ),
         ),
