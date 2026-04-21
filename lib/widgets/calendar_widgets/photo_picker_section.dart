@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../models/appointmentImage.dart';
 import '../../utils/calendar_utils/form_widgets.dart';
 
 class PhotoPickerSection extends StatelessWidget {
-  final List<String> existingUrls;
+  final List<AppointmentImage> existingImages;
   final List<File> newImages;
   final bool isEditing;
   final VoidCallback onPickImages;
@@ -12,7 +13,7 @@ class PhotoPickerSection extends StatelessWidget {
 
   const PhotoPickerSection({
     super.key,
-    required this.existingUrls,
+    required this.existingImages,
     required this.newImages,
     required this.isEditing,
     required this.onPickImages,
@@ -22,7 +23,7 @@ class PhotoPickerSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasPhotos = existingUrls.isNotEmpty || newImages.isNotEmpty;
+    final hasPhotos = existingImages.isNotEmpty || newImages.isNotEmpty;
     final scheme = Theme.of(context).colorScheme;
 
     return Column(
@@ -36,7 +37,7 @@ class PhotoPickerSection extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               children: [
                 // existing network images
-                ...existingUrls.asMap().entries.map((entry) {
+                ...existingImages.asMap().entries.map((entry) {
                   return Stack(
                     children: [
                       Padding(
@@ -44,7 +45,7 @@ class PhotoPickerSection extends StatelessWidget {
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: Image.network(
-                            entry.value,
+                            entry.value.thumbUrl ?? entry.value.url,
                             width: 90,
                             height: 90,
                             fit: BoxFit.cover,
