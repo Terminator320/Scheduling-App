@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import '../../models/appointment_record.dart';
+import '../../models/appointmentImage.dart';
 import '../../models/employee_record.dart';
 import '../../services/appointment_service.dart';
 import '../../services/user_service.dart';
@@ -49,8 +50,9 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
   List<EmployeeRecord> _allEmployees = [];
   List<EmployeeRecord> _selectedEmployees = [];
-  List<String> _existingPictureUrls = [];
+  List<AppointmentImage> _existingImages = [];
   List<File> _newImages = [];
+  bool _isSaving = false;
 
   final _formKey = GlobalKey<FormState>();
 
@@ -80,7 +82,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     _selectedDate = a.startTime;
     _selectedStartTime = TimeOfDay.fromDateTime(a.startTime);
     _selectedEndTime = TimeOfDay.fromDateTime(a.endTime);
-    _existingPictureUrls = List.from(a.pictures);
+    _existingImages = List.from(a.pictures);
 
     _loadEmployees();
   }
@@ -121,7 +123,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       _selectedDate = a.startTime;
       _selectedStartTime = TimeOfDay.fromDateTime(a.startTime);
       _selectedEndTime = TimeOfDay.fromDateTime(a.endTime);
-      _existingPictureUrls = List.from(a.pictures);
+      _existingImages = List.from(a.pictures);
       _newImages = [];
       _selectedEmployees = _allEmployees
           .where((e) => a.employeeIds.contains(e.id))
@@ -177,32 +179,44 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       _selectedEndTime.minute,
     );
 
-    // TODO: upload _newImages and combine with _existingPictureUrls
-    // final compressed = await _compressService.compressImages(_newImages);
-    // final newUrls = await _storageService.uploadImages(compressed);
-    // final allPictures = [..._existingPictureUrls, ...newUrls];
+    setState(() => _isSaving = true);
 
-    final updated = AppointmentRecord(
-      id: widget.appointment.id,
-      title: _titleController.text.trim(),
-      startTime: startTime,
-      endTime: endTime,
-      clientId: widget.appointment.clientId,
-      clientName: widget.appointment.clientName,
-      clientPhone: widget.appointment.clientPhone,
-      address: widget.appointment.address,
-      employeeIds: _selectedEmployees.map((e) => e.id).toList(),
-      employeeNames: _selectedEmployees.map((e) => e.name).toList(),
-      notes: _notesController.text.trim(),
-      materialsNeeded: _materialsController.text.trim(),
-      pictures: _existingPictureUrls,
-      // replace with allPictures when implemented
-      status: widget.appointment.status,
-    );
+    try {
+      List<AppointmentImage> uploadedImages = const [];
+      if (_newImages.isNotEmpty) {
+        final compressed = await _compressService.compressImages(_newImages);
+        uploadedImages = await _storageService.uploadImages(compressed);
+      }
+      final allPictures = [..._existingImages, ...uploadedImages];
 
-    await AppointmentService().updateAppointment(updated);
-    if (mounted) setState(() => _isEditing = false);
-    Navigator.pop(context, updated);
+      final updated = AppointmentRecord(
+        id: widget.appointment.id,
+        title: _titleController.text.trim(),
+        startTime: startTime,
+        endTime: endTime,
+        clientId: widget.appointment.clientId,
+        clientName: widget.appointment.clientName,
+        clientPhone: widget.appointment.clientPhone,
+        address: widget.appointment.address,
+        employeeIds: _selectedEmployees.map((e) => e.id).toList(),
+        employeeNames: _selectedEmployees.map((e) => e.name).toList(),
+        notes: _notesController.text.trim(),
+        materialsNeeded: _materialsController.text.trim(),
+        pictures: allPictures,
+        status: widget.appointment.status,
+      );
+
+      await AppointmentService().updateAppointment(updated);
+      if (mounted) setState(() => _isEditing = false);
+      if (mounted) Navigator.pop(context, updated);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Something went wrong saving changes")),
+        );
+      }
+    }
   }
 
   @override
@@ -506,7 +520,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         formSectionLabel(context, "Photos"),
         const SizedBox(height: 8),
         PhotoPickerSection(
-          existingUrls: _existingPictureUrls,
+          existingImages: _existingImages,
           newImages: _newImages,
           isEditing: _isEditing,
           onPickImages: () async {
@@ -514,7 +528,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
             if (images.isNotEmpty) setState(() => _newImages.addAll(images));
           },
           onRemoveExisting: (i) =>
-              setState(() => _existingPictureUrls.removeAt(i)),
+              setState(() => _existingImages.removeAt(i)),
           onRemoveNew: (i) => setState(() => _newImages.removeAt(i)),
         ),
       ],
@@ -569,7 +583,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              onPressed: _cancelEdit,
+              onPressed: _isSaving ? null : _cancelEdit,
               child: const Text("Cancel"),
             ),
           ),
@@ -582,8 +596,14 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              onPressed: _save,
-              child: const Text("Save changes"),
+              onPressed: _isSaving ? null : _save,
+              child: _isSaving
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text("Save changes"),
             ),
           ),
         ],
