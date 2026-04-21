@@ -28,7 +28,7 @@ class UserService {
       'name': name.trim(),
       'email': normalizedEmail,
       'phone': phone.trim(),
-      'role': 'employee',
+      'role': isAdmin ? 'admin' : 'employee',
       'status': 'invited',
       'uid': '',
       'colorValue': colorValue,
@@ -47,12 +47,13 @@ class UserService {
 
 
   Stream<List<EmployeeRecord>> employeesStream() {
-    return _users.where('role', isEqualTo: 'employee').snapshots().map(
-          (snapshot) {
-        return snapshot.docs
-            .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
-            .toList();
-      },
+    return _users
+        .where('role', whereIn: ['employee', 'admin'])
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+          .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
+          .toList(),
     );
   }
 
