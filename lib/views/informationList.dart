@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'dart:async';
 import '../models/appointment_record.dart';
 import '../models/client_record.dart';
 import '../services/client_service.dart';
@@ -10,6 +10,8 @@ import '../utils/date_utils_helper.dart';
 import '../widgets/settings_drawer.dart';
 
 import '../widgets/popup_widgets/details_edit_sheet.dart';
+
+import '../widgets/client_search_field.dart';
 
 enum ListMode { clients, appointments }
 
@@ -24,12 +26,30 @@ class ListInformation extends StatefulWidget {
 }
 
 class _ListInformationState extends State<ListInformation> {
+  final TextEditingController _searchController = TextEditingController();
+  List<ClientRecord> _allClients = [];
   final ClientService _clientService = ClientService();
   final AppointmentService _appointmentService = AppointmentService();
+  StreamSubscription? _clientsSubscription;
 
   bool get _isClients => widget.mode == 'Clients';
 
   String get _title => _isClients ? 'Clients' : 'Appointments';
+
+  @override
+  void initState() {
+    super.initState();
+    _clientsSubscription = _clientService.clientsStream().listen((clients) {
+      if (mounted) setState(() => _allClients = clients);
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _clientsSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,33 +61,54 @@ class _ListInformationState extends State<ListInformation> {
   }
 
   Widget _buildClientList() {
-    return StreamBuilder<List<ClientRecord>>(
-      stream: _clientService.clientsStream(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    final query = _searchController.text.trim().toLowerCase();
 
-        if (snapshot.hasError) {
-          return Center(child: Text('Error : ${snapshot.error}'));
-        }
+    final displayed = query.isEmpty
+        ? _allClients
+        : _allClients.where((c) {
+      return c.displayName.toLowerCase().contains(query) ||
+          c.phone.contains(query);
+    }).toList();
 
-        final clients = snapshot.data ?? [];
-
-        if (clients.isEmpty) {
-          return const Center(child: Text('Any clients founded.'));
-        }
-
-        return ListView.separated(
-          padding: const EdgeInsets.all(12),
-          itemCount: clients.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (context, index) {
-            final client = clients[index];
-            return _ClientTile(client: client);
-          },
-        );
-      },
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: 'Search by name or phone...',
+              prefixIcon: const Icon(Icons.search, size: 18),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: () => _searchController.clear(),
+              )
+                  : null,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: displayed.isEmpty
+              ? const Center(child: Text('Aucun client trouvé.'))
+              : ListView.separated(
+            padding: const EdgeInsets.all(12),
+            itemCount: displayed.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              return _ClientTile(client: displayed[index]);
+            },
+          ),
+        ),
+      ],
     );
   }
 
