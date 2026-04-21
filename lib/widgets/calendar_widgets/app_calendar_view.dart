@@ -33,45 +33,20 @@ class AppCalendar extends StatelessWidget {
   Widget _dayCell(
     BuildContext context,
     DateTime day, {
-    required List<AppointmentRecord> events,
     required BoxDecoration decoration,
     TextStyle? textStyle,
   }) {
-    final appointments = events.cast<AppointmentRecord>();
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxH = constraints.maxHeight;
         final circleSize = (maxH - 9).clamp(20.0, 36.0);
         return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: circleSize,
-                height: circleSize,
-                decoration: decoration,
-                alignment: Alignment.center,
-                child: Text('${day.day}', style: textStyle),
-              ),
-              const SizedBox(height: 1),
-              if (appointments.isNotEmpty)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: appointments.take(3).map((appt) {
-                    return Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 1),
-                      width: 5,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: colorForAppointment(appt, employees) ?? Colors.grey,
-                        shape: BoxShape.circle,
-                      ),
-                    );
-                  }).toList(),
-                )
-              else
-                const SizedBox(height: 5),
-            ],
+          child: Container(
+            width: circleSize,
+            height: circleSize,
+            decoration: decoration,
+            alignment: Alignment.center,
+            child: Text('${day.day}', style: textStyle),
           ),
         );
       },
@@ -108,7 +83,6 @@ class AppCalendar extends StatelessWidget {
           return _dayCell(
             context,
             day,
-            events: eventLoader(day),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
@@ -125,7 +99,6 @@ class AppCalendar extends StatelessWidget {
           return _dayCell(
             context,
             day,
-            events: eventLoader(day),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: Theme.of(context).colorScheme.primary,

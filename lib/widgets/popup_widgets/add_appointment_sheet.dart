@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/appointment_record.dart';
+import '../../models/appointmentImage.dart';
 
 import 'dart:io';
 
@@ -47,6 +48,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
   List<EmployeeRecord> _selectedEmployees = [];
 
   List<File> _selectedImages = [];
+  bool _isSubmitting = false;
   final _imageService = ImagePickerService();
   final _storageService = ImageStorageService();
   final _compressService = ImageCompressService();
@@ -189,10 +191,14 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
     if (_errors.values.any((e) => e != null)) return;
 
+    setState(() => _isSubmitting = true);
 
     try {
-      // final compressed = await _compressService.compressImages(_selectedImages);
-      // final imageUrls = await _storageService.uploadImages(compressed);
+      List<AppointmentImage> uploadedImages = const [];
+      if (_selectedImages.isNotEmpty) {
+        final compressed = await _compressService.compressImages(_selectedImages);
+        uploadedImages = await _storageService.uploadImages(compressed);
+      }
 
       final startTime = _combineDateAndTime(
         _selectedDate!,
@@ -212,14 +218,16 @@ class _AddEventSheetState extends State<AddEventSheet> {
         employeeNames: _selectedEmployees.map((e) => e.name).toList(),
         notes: _notesController.text.trim(),
         materialsNeeded: _materialsController.text.trim(),
-        pictures: const [],
-        // imageUrls when implemented
+        pictures: uploadedImages,
         status: 'booked',
       );
 
       if (ctx.mounted) Navigator.pop(ctx, newAppointment);
     } catch (_) {
-      if (ctx.mounted) _showSnack(ctx, "Something went wrong");
+      if (ctx.mounted) {
+        setState(() => _isSubmitting = false);
+        _showSnack(ctx, "Something went wrong uploading photos");
+      }
     }
   }
 
@@ -321,7 +329,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
                 formLabel(sheetContext, "Pictures", optional: true),
                 PhotoPickerSection(
-                  existingUrls: const [],
+                  existingImages: const [],
                   newImages: _selectedImages,
                   isEditing: true,
                   onPickImages: () async {
@@ -362,11 +370,17 @@ class _AddEventSheetState extends State<AddEventSheet> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    onPressed: () => _submit(sheetContext),
-                    child: Text(
-                      "Create event",
-                      style: Theme.of(sheetContext).textTheme.titleSmall,
-                    ),
+                    onPressed: _isSubmitting ? null : () => _submit(sheetContext),
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            "Create event",
+                            style: Theme.of(sheetContext).textTheme.titleSmall,
+                          ),
                   ),
                 ),
               ],

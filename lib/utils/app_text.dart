@@ -139,6 +139,67 @@ const Map<String, String> _fr = {
   'Are you sure you want to delete this employee?':
   'Êtes-vous sûr de vouloir supprimer cet employé ?',
 
+  // Forgot password flow
+  'Back': 'Retour',
+  'Reset Password': 'Réinitialiser le mot de passe',
+  'Forgot Password': 'Mot de passe oublié ?',
+  'Forgot your password?': 'Mot de passe oublié ?',
+  'Enter your account email and we\'ll send you a link to reset your password.':
+      'Entrez votre courriel et nous vous enverrons un lien pour réinitialiser votre mot de passe.',
+  'Send Reset Email': 'Envoyer le courriel de réinitialisation',
+  'Back to Sign In': 'Retour à la connexion',
+  'Check your email': 'Vérifiez votre courriel',
+  'We\'ve sent a password reset link to:':
+      'Nous avons envoyé un lien de réinitialisation à :',
+  'Please check your email, then come back to the app and sign in with your new password.':
+      'Veuillez vérifier votre courriel, puis revenez à l’application et connectez-vous avec votre nouveau mot de passe.',
+  'Didn\'t receive the email? Try again':
+      'Vous n’avez pas reçu le courriel ? Réessayez',
+  'Email is required': 'Le courriel est obligatoire',
+  'Enter a valid email address': 'Entrez une adresse courriel valide',
+  'No account found for this email address':
+      'Aucun compte trouvé pour cette adresse courriel',
+  'Too many attempts. Please try again later.':
+      'Trop de tentatives. Veuillez réessayer plus tard.',
+  'Network error. Check your connection and try again.':
+      'Erreur réseau. Vérifiez votre connexion et réessayez.',
+  'Could not send reset email':
+      'Impossible d’envoyer le courriel de réinitialisation',
+  'Password reset email sent. Please check your inbox.':
+      'Courriel de réinitialisation envoyé. Veuillez vérifier votre boîte de réception.',
+  'Check your inbox': 'Vérifiez votre boîte de réception',
+  'If an account exists for this email, a password reset link has been sent.':
+      'Si un compte existe pour ce courriel, un lien de réinitialisation a été envoyé.',
+  'The email may take a few minutes to arrive. Remember to check your spam folder.':
+      'Le courriel peut prendre quelques minutes à arriver. Pensez à vérifier votre dossier de courrier indésirable.',
+  'Use a different email': 'Utiliser un autre courriel',
+  'Something went wrong': 'Une erreur s’est produite',
+
+  // Login validation & error messages
+  'Please enter your email': 'Veuillez entrer votre courriel',
+  'Please enter your password': 'Veuillez entrer votre mot de passe',
+  'Please enter a valid email address':
+      'Veuillez entrer une adresse courriel valide',
+  'Invalid email or password': 'Courriel ou mot de passe invalide',
+  'No account found with this email':
+      'Aucun compte trouvé pour ce courriel',
+  'Too many attempts, please try again later':
+      'Trop de tentatives. Veuillez réessayer plus tard',
+  'Something went wrong, please try again':
+      'Une erreur s’est produite. Veuillez réessayer',
+  'This account has been disabled': 'Ce compte a été désactivé',
+  'An account with this email already exists':
+      'Un compte avec ce courriel existe déjà',
+  'Password is too weak. Use at least 6 characters':
+      'Mot de passe trop faible. Utilisez au moins 6 caractères',
+  'Sign-in is temporarily unavailable':
+      'La connexion est temporairement indisponible',
+  'This email is not authorized to sign up':
+      'Ce courriel n’est pas autorisé à créer un compte',
+  'Account created. You can now sign in.':
+      'Compte créé. Vous pouvez maintenant vous connecter.',
+  'No user profile found for this account':
+      'Aucun profil utilisateur trouvé pour ce compte',
 };
 
 String tr(BuildContext context, String text) {

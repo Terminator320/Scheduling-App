@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'appointmentImage.dart';
+
 class AppointmentRecord {
   final String? id;
   final String title;
@@ -16,7 +18,7 @@ class AppointmentRecord {
   final String status;
   final Timestamp? createdAt;
   final Timestamp? updatedAt;
-  final List<String> pictures;
+  final List<AppointmentImage> pictures;
 
   AppointmentRecord({
     this.id,
@@ -46,15 +48,15 @@ class AppointmentRecord {
       clientId: (data['clientId'] ?? '').toString(),
       clientName: (data['clientName'] ?? '').toString(),
       clientPhone: (data['clientPhone'] ?? '').toString(),
-      employeeIds: _pasrseStringList(data['employeeIds']),
-      employeeNames: _pasrseStringList(data['employeeNames']),
+      employeeIds: _parseStringList(data['employeeIds']),
+      employeeNames: _parseStringList(data['employeeNames']),
       address: (data['address'] ?? '').toString(),
       notes: (data['notes'] ?? '').toString(),
       materialsNeeded: (data['materialsNeeded'] ?? '').toString(),
       status: (data['status'] ?? 'pending').toString(),
       createdAt: data['createdAt'] as Timestamp?,
       updatedAt: data['updatedAt'] as Timestamp?,
-      pictures: _pasrseStringList(data['pictures']),
+      pictures: _parseImageList(data['pictures']),
     );
   }
 
@@ -70,7 +72,7 @@ class AppointmentRecord {
       'employeeNames': employeeNames,
       'address': address,
       'notes': notes,
-      'pictures': pictures,
+      'pictures': pictures.map((image) => image.toMap()).toList(),
       'materialsNeeded': materialsNeeded,
       'status': status,
       'updatedAt': FieldValue.serverTimestamp(),
@@ -83,9 +85,20 @@ class AppointmentRecord {
     return DateTime.now();
   }
 
-  static List<String> _pasrseStringList(dynamic value) {
+  static List<String> _parseStringList(dynamic value) {
     if (value is List) return List<String>.from(value);
     if (value is String && value.isNotEmpty) return [value];
+    return [];
+  }
+
+  static List<AppointmentImage> _parseImageList(dynamic value) {
+    if (value is List) {
+      return value
+          .map((item) => AppointmentImage.fromMap(
+        Map<String, dynamic>.from(item as Map),
+      ))
+          .toList();
+    }
     return [];
   }
 }
