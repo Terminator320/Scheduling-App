@@ -8,6 +8,7 @@ import 'package:splashscreen/splashscreen.dart';
 import 'firebase_options.dart';
 
 import 'views/login.dart';
+import 'views/informationList.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,7 +50,7 @@ class _PaulAppState extends State<PaulApp> {
         theme: Themes().lightTheme,
         darkTheme: Themes().darkTheme,
         themeMode: _themeMode,
-        home: const Splash(),
+        home: const Login(),
       ),
     );
   }

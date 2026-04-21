@@ -540,7 +540,6 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   }
 
   // Photos Section
-
   Widget _buildPhotosSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
