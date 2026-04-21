@@ -116,11 +116,6 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
             textTheme: textTheme,
             scheme: scheme,
             isDestructive: true,
-            onTap: () {
-              // TODO: handle logout
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => Login()),
             onTap: () async {
               Navigator.pop(context);
               await AuthService().signOut();
