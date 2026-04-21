@@ -48,7 +48,7 @@ dependencies:
   image_picker: any
   path_provider: any
   flutter_image_compress: any
-  firebase_storage: any
+  cloudinary_public: any
   firebase_app_check: any
 
 
