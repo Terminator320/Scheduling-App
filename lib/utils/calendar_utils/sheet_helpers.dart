@@ -20,7 +20,6 @@ Future<void> showEventDetails(
     BuildContext context,
     AppointmentRecord a, {
       bool showActions = true,
-      VoidCallback? onDelete,
     }) {
   return showModalBottomSheet(
     context: context,
@@ -32,7 +31,6 @@ Future<void> showEventDetails(
     builder: (_) => EventDetailsSheet(
       appointment: a,
       showActions: showActions,
-      onDelete: onDelete,
     ),
   );
 }
