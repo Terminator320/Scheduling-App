@@ -26,6 +26,10 @@ class ListInformation extends StatefulWidget {
 }
 
 class _ListInformationState extends State<ListInformation> {
+
+  int _displayLimit = 50;
+  final ScrollController _scrollController = ScrollController();
+
   final TextEditingController _searchController = TextEditingController();
   List<ClientRecord> _allClients = [];
   final ClientService _clientService = ClientService();
@@ -41,6 +45,14 @@ class _ListInformationState extends State<ListInformation> {
     super.initState();
     _clientsSubscription = _clientService.clientsStream().listen((clients) {
       if (mounted) setState(() => _allClients = clients);
+    });
+
+    //Limit at 50 client displayed
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 200) {
+        setState(() => _displayLimit += 50);
+      }
     });
   }
 
