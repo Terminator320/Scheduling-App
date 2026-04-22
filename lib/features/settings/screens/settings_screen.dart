@@ -6,12 +6,14 @@ import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
+import 'package:scheduling/core/security/biometric_auth_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/settings/application/app_info_provider.dart';
+import 'package:scheduling/features/settings/application/app_lock_provider.dart';
 import 'package:scheduling/features/settings/screens/text_size_screen.dart';
 import 'package:scheduling/features/settings/widgets/cards/settings_tiles.dart';
 import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dialog.dart';
@@ -63,6 +65,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   bool get _isAdmin => widget.role == 'admin';
+
+  Future<void> _toggleAppLock({required bool value}) async {
+    if (value) {
+      final available = await ref
+          .read(biometricAuthServiceProvider)
+          .isAvailable();
+      if (!mounted) return;
+      if (!available) {
+        ref
+            .read(noticeServiceProvider)
+            .error(context.l10n.settings_appLockUnavailable);
+        return;
+      }
+    }
+    await ref.read(appLockEnabledProvider.notifier).setEnabled(value: value);
+  }
 
   Future<void> _onTextSizeTap() async {
     if (context.isWide) {
@@ -175,6 +193,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 onTap: _confirmDeleteAccount,
               ),
             ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp24),
+        SettingsSectionHeader(
+          label: context.l10n.settings_security.toUpperCase(),
+        ),
+        SettingsSectionCard(
+          child: SettingsTile(
+            iconBg: scheme.primaryContainer,
+            icon: Icons.fingerprint_rounded,
+            iconColor: scheme.primary,
+            label: context.l10n.settings_appLock,
+            isLast: true,
+            trailing: Switch.adaptive(
+              value: ref.watch(appLockEnabledProvider),
+              onChanged: (value) => _toggleAppLock(value: value),
+              activeTrackColor: scheme.primary,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.sp24),

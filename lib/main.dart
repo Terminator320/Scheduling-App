@@ -15,6 +15,7 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
+import 'package:scheduling/core/security/app_lock.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/core/utils/app_language.dart';
@@ -242,9 +243,11 @@ class _PaulAppState extends ConsumerState<PaulApp> {
                   data: MediaQuery.of(
                     context,
                   ).copyWith(textScaler: TextScaler.linear(_textScale)),
-                  child: NoticeListener(
-                    navigatorKey: _navigatorKey,
-                    child: child ?? const SizedBox.shrink(),
+                  child: AppLock(
+                    child: NoticeListener(
+                      navigatorKey: _navigatorKey,
+                      child: child ?? const SizedBox.shrink(),
+                    ),
                   ),
                 );
               },

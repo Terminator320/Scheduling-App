@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
@@ -28,7 +29,8 @@ Widget _wrap({double textScale = 1.0, bool isDark = false}) => ProviderScope(
 );
 
 void main() {
-  // SettingsScreen now watches appInfoProvider (PackageInfo) during build.
+  // SettingsScreen now watches appInfoProvider (PackageInfo) and the
+  // app-lock flag (secure storage) during build.
   PackageInfo.setMockInitialValues(
     appName: 'Scheduling',
     packageName: 'net.vogas.scheduling',
@@ -36,6 +38,8 @@ void main() {
     buildNumber: '4',
     buildSignature: '',
   );
+
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
   testWidgets('shows Appearance section header', (tester) async {
     await tester.pumpWidget(_wrap());
