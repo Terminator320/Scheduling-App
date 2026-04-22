@@ -6,6 +6,7 @@ import '../../services/user_service.dart';
 import '../../utils/app_text.dart';
 import '../models/employee_record.dart';
 import '../utils/calendar_utils/form_widgets.dart';
+import 'forgot_password.dart';
 import 'main_calendar.dart';
 
 class Login extends StatefulWidget {
@@ -18,89 +19,137 @@ class Login extends StatefulWidget {
 class _LoginState extends State<Login> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final FocusNode _emailFocus = FocusNode();
+  final FocusNode _passwordFocus = FocusNode();
 
   bool _isObscured = true;
   bool _isLoading = false;
-  String _errorMessage = '';
+  bool _submitted = false;
 
-  Future<void> _createAccount() async {
-    final email = _emailController.text.trim().toLowerCase();
-    final password = _passwordController.text.trim();
+  String? _emailError;
+  String? _passwordError;
+  String? _bannerError;
+  String? _bannerSuccess;
 
-    if (email.isEmpty || password.isEmpty) {
-      setState(() {
-        _errorMessage = 'Email and password are required';
-      });
-      return;
+  static final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
+    super.dispose();
+  }
+
+  bool _validate() {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    String? emailErr;
+    String? passwordErr;
+
+    if (email.isEmpty) {
+      emailErr = tr(context, 'Enter your email');
+    } else if (!_emailPattern.hasMatch(email)) {
+      emailErr = tr(context, 'Please enter a valid email address');
+    }
+
+    if (password.trim().isEmpty) {
+      passwordErr = tr(context, 'Enter your password');
     }
 
     setState(() {
-      _isLoading = true;
-      _errorMessage = '';
+      _emailError = emailErr;
+      _passwordError = passwordErr;
     });
 
-    try {
-      await AuthService().createEmployeeAccount(
-        email: email,
-        password: password,
-      );
+    return emailErr == null && passwordErr == null;
+  }
 
+  void _onFieldChanged() {
+    if (_submitted) {
+      _validate();
+    }
+    if (_bannerError != null || _bannerSuccess != null) {
       setState(() {
-        _errorMessage = 'Account created. You can now sign in.';
-      });
-    } on FirebaseAuthException catch (e) {
-      setState(() {
-        _errorMessage = e.message ?? 'Account creation failed';
-      });
-    } catch (_) {
-      setState(() {
-        _errorMessage = 'Something went wrong';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
+        _bannerError = null;
+        _bannerSuccess = null;
       });
     }
   }
 
-  Future<void> _signIn() async {
-    final email = _emailController.text.trim().toLowerCase();
-    final password = _passwordController.text.trim();
-
-    if (email.isEmpty || password.isEmpty) {
-      setState(() {
-        _errorMessage = 'Email and password are required';
-      });
-      return;
+  String _friendlyAuthError(Object error) {
+    if (error is FirebaseAuthException) {
+      switch (error.code) {
+        case 'invalid-email':
+          return tr(context, 'Please enter a valid email address');
+        case 'user-disabled':
+          return tr(context, 'This account has been disabled');
+        case 'user-not-found':
+          return tr(context, 'No account found with this email');
+        case 'wrong-password':
+        case 'invalid-credential':
+        case 'INVALID_LOGIN_CREDENTIALS':
+          return tr(context, 'Invalid email or password');
+        case 'too-many-requests':
+          return tr(context, 'Too many attempts, please try again later');
+        case 'network-request-failed':
+          return tr(
+            context,
+            'Network error. Check your connection and try again',
+          );
+        case 'email-already-in-use':
+          return tr(context, 'An account with this email already exists');
+        case 'weak-password':
+          return tr(
+            context,
+            'Password is too weak. Use at least 6 characters',
+          );
+        case 'operation-not-allowed':
+          return tr(context, 'Sign-in is temporarily unavailable');
+        case 'not-authorized':
+          return tr(context, 'This email is not authorized to sign up');
+      }
     }
+    return tr(context, 'Something went wrong, please try again');
+  }
 
+  Future<void> _signIn() async {
+    FocusScope.of(context).unfocus();
     setState(() {
-      _isLoading = true;
-      _errorMessage = '';
+      _submitted = true;
+      _bannerError = null;
+      _bannerSuccess = null;
     });
+
+    if (!_validate()) return;
+
+    setState(() => _isLoading = true);
 
     try {
       final credential = await AuthService().signIn(
-        email: email,
-        password: password,
+        email: _emailController.text.trim().toLowerCase(),
+        password: _passwordController.text,
       );
 
       final user = credential.user;
       if (user == null) {
         if (!mounted) return;
         setState(() {
-          _errorMessage = 'Login failed';
+          _bannerError = tr(context, 'Invalid email or password');
+          _isLoading = false;
         });
         return;
       }
 
       final userDoc = await UserService().findUserByUid(user.uid);
-
       if (!mounted) return;
 
       if (userDoc == null || !userDoc.exists) {
         setState(() {
-          _errorMessage = 'No user profile found for this account.';
+          _bannerError = tr(context, 'No user profile found for this account');
+          _isLoading = false;
         });
         return;
       }
@@ -115,46 +164,63 @@ class _LoginState extends State<Login> {
               MainCalendar(isAdmin: employee.isAdmin, employeeId: employee.id),
         ),
       );
-    } on FirebaseAuthException catch (e) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = e.message ?? 'Login failed';
+        _bannerError = _friendlyAuthError(e);
+        _isLoading = false;
       });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = 'Something went wrong';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
     }
   }
 
-  Future<void> _resetPassword() async {
-    final email = _emailController.text.trim().toLowerCase();
+  Future<void> _createAccount() async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _submitted = true;
+      _bannerError = null;
+      _bannerSuccess = null;
+    });
 
-    if (email.isEmpty) {
-      setState(() {
-        _errorMessage = 'Enter your email first';
-      });
-      return;
-    }
+    if (!_validate()) return;
+
+    setState(() => _isLoading = true);
 
     try {
-      await AuthService().sendResetPassword(email);
-
+      await AuthService().createEmployeeAccount(
+        email: _emailController.text.trim().toLowerCase(),
+        password: _passwordController.text,
+      );
+      if (!mounted) return;
       setState(() {
-        _errorMessage = 'Password reset email sent';
+        _bannerSuccess = tr(context, 'Account created. You can now sign in.');
+        _isLoading = false;
       });
-    } on FirebaseAuthException catch (e) {
+    } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _errorMessage = e.message ?? 'Failed to send reset email';
+        _bannerError = _friendlyAuthError(e);
+        _isLoading = false;
       });
     }
+  }
+
+  Future<void> _openForgotPassword() async {
+    final prefill = _emailController.text.trim();
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ForgotPassword(
+          initialEmail: prefill.isEmpty ? null : prefill,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    setState(() {
+      _submitted = false;
+      _emailError = null;
+      _passwordError = null;
+      _bannerError = null;
+      _bannerSuccess = null;
+    });
   }
 
   @override
@@ -166,14 +232,18 @@ class _LoginState extends State<Login> {
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
         body: SafeArea(
-          child: Center(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => FocusScope.of(context).unfocus(),
+          child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360),
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  minHeight: MediaQuery.of(context).size.height -
+                      MediaQuery.of(context).padding.top -
+                      MediaQuery.of(context).padding.bottom,
+                ),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -202,15 +272,22 @@ class _LoginState extends State<Login> {
                       // Email field
                       TextField(
                         controller: _emailController,
+                        focusNode: _emailFocus,
                         keyboardType: TextInputType.emailAddress,
-                        style: textTheme.bodyMedium,
-                        decoration: formInputDecoration(context, 'Email')
-                            .copyWith(
-                              prefixIcon: const Icon(
-                                Icons.email_outlined,
-                                size: 20,
-                              ),
-                            ),
+                        textInputAction: TextInputAction.next,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        autofillHints: const [AutofillHints.email],
+                        enabled: !_isLoading,
+                        onSubmitted: (_) => _passwordFocus.requestFocus(),
+                        onChanged: (_) => _onFieldChanged(),
+                        decoration: formInputDecoration(context, 'Email').copyWith(
+                          errorText: _emailError,
+                          prefixIcon: const Icon(
+                            Icons.email_outlined,
+                            size: 20,
+                          ),
+                        ),
                       ),
 
                       const SizedBox(height: 14),
@@ -218,28 +295,33 @@ class _LoginState extends State<Login> {
                       // Password field
                       TextField(
                         controller: _passwordController,
+                        focusNode: _passwordFocus,
                         obscureText: _isObscured,
-                        style: textTheme.bodyMedium,
-                        decoration: formInputDecoration(context, 'Password')
-                            .copyWith(
-                              prefixIcon: const Icon(
-                                Icons.lock_outlined,
-                                size: 20,
-                              ),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _isObscured
-                                      ? Icons.visibility_off_outlined
-                                      : Icons.visibility_outlined,
-                                  size: 20,
-                                ),
-                                onPressed: () {
-                                  setState(() {
-                                    _isObscured = !_isObscured;
-                                  });
-                                },
-                              ),
+                        textInputAction: TextInputAction.done,
+                        autofillHints: const [AutofillHints.password],
+                        enabled: !_isLoading,
+                        onSubmitted: (_) => _signIn(),
+                        onChanged: (_) => _onFieldChanged(),
+                        decoration: formInputDecoration(context, 'Password').copyWith(
+                          errorText: _passwordError,
+                          prefixIcon: const Icon(
+                            Icons.lock_outlined,
+                            size: 20,
+                          ),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _isObscured
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              size: 20,
                             ),
+                            onPressed: () {
+                              setState(() {
+                                _isObscured = !_isObscured;
+                              });
+                            },
+                          ),
+                        ),
                       ),
 
                       const SizedBox(height: 4),
@@ -248,28 +330,34 @@ class _LoginState extends State<Login> {
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
-                          onPressed: _isLoading ? null : _resetPassword,
+                          onPressed: _isLoading ? null : _openForgotPassword,
                           child: Text(
                             tr(context, 'Forgot Password'),
                             style: textTheme.bodySmall?.copyWith(
                               color: colour.primary,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
                       ),
 
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
 
-                      // Error message
-                      if (_errorMessage.isNotEmpty)
+                      // Banners
+                      if (_bannerError != null)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 14),
-                          child: Text(
-                            _errorMessage,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colour.error,
-                            ),
-                            textAlign: TextAlign.center,
+                          child: AuthBanner(
+                            kind: AuthBannerKind.error,
+                            message: _bannerError!,
+                          ),
+                        ),
+                      if (_bannerSuccess != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
+                          child: AuthBanner(
+                            kind: AuthBannerKind.success,
+                            message: _bannerSuccess!,
                           ),
                         ),
 
@@ -337,9 +425,8 @@ class _LoginState extends State<Login> {
                           ),
                         ),
                       ),
-                      SizedBox(
-                        height: MediaQuery.of(context).viewInsets.bottom + 13,
-                      ),
+
+                      const SizedBox(height: 24),
                     ],
                   ),
                 ),
@@ -351,3 +438,4 @@ class _LoginState extends State<Login> {
     );
   }
 }
+
