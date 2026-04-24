@@ -116,7 +116,7 @@ class _MainCalendar extends State<MainCalendar> {
               child: const Icon(Icons.add),
             )
           : null,
-      endDrawer: SettingsDrawer(isAdmin: widget.isAdmin),
+      endDrawer: SettingsDrawer(isAdmin: widget.isAdmin, employeeId: widget.employeeId,),
       body: SafeArea(child: content()),
     );
   }
