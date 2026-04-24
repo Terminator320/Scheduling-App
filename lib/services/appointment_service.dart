@@ -56,8 +56,11 @@ class AppointmentService {
     });
   }
 
-  Future<void> deleteAppointment(String appointmentId) async {
-    await appointments.doc(appointmentId).delete();
+  static Future<void> deleteAppointment(String appointmentId) async {
+    await FirebaseFirestore.instance
+        .collection('appointments')
+        .doc(appointmentId)
+        .delete();
   }
 
   Stream<List<AppointmentRecord>> employeeAppointmentsStream(
