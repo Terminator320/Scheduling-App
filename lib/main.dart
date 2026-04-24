@@ -21,10 +21,10 @@ import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/onboarding/screens/onboarding_gate.dart';
 import 'package:scheduling/features/settings/application/settings_providers.dart';
 import 'package:scheduling/features/settings/data/shared_prefs_settings_repository.dart';
 import 'package:scheduling/features/settings/domain/models/app_settings.dart';
-import 'package:scheduling/features/splash/screens/splash_screen.dart';
 import 'package:scheduling/firebase_options.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
@@ -236,7 +236,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
               theme: lightTheme(),
               darkTheme: darkTheme(),
               themeMode: _themeMode,
-              home: const SplashScreen(),
+              home: const OnboardingGate(),
               onGenerateRoute: AppRoutes.onGenerateRoute,
               builder: (context, child) {
                 return MediaQuery(

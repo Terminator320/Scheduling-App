@@ -10,6 +10,9 @@ abstract final class SecureStorageKeys {
   /// Whether the user has opted into the biometric app-lock (sub-project D).
   static const biometricEnabled = 'biometric_enabled';
 
+  /// Whether the first-launch onboarding flow has been completed.
+  static const onboardingSeen = 'onboarding_seen';
+
   // Cached signed-in identity, migrated off SharedPreferences (see AuthCache).
   static const cacheUid = 'uc_uid';
   static const cacheDocId = 'uc_doc_id';
