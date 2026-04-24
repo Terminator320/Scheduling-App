@@ -7,11 +7,13 @@ import '../services/auth_service.dart';
 import '../utils/theme_notifier.dart';
 import '../views/employees.dart';
 import '../views/login.dart';
+import '../views/main_calendar.dart';
 
 class SettingsDrawer extends StatefulWidget {
   final bool isAdmin;
+  final String employeeId;
 
-  const SettingsDrawer({super.key, required this.isAdmin});
+  const SettingsDrawer({super.key, required this.isAdmin,required this.employeeId,});
 
   @override
   State<SettingsDrawer> createState() => _SettingsDrawerState();
@@ -61,7 +63,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
             textTheme: textTheme,
             scheme: scheme,
             onTap: () {
-              // TODO: navigate to calendar page
+              Navigator.pop(context, MaterialPageRoute(builder: (context) => MainCalendar(isAdmin: widget.isAdmin, employeeId: widget.employeeId,)));
             },
           ),
           if (widget.isAdmin) ...[
@@ -71,9 +73,10 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               textTheme: textTheme,
               scheme: scheme,
               onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) =>
-                    AddEmployeePage(),
-                ));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => AddEmployeePage()),
+                );
               },
             ),
             _DrawerItem(
@@ -86,7 +89,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                   context,
                   MaterialPageRoute(
                     builder: (context) =>
-                        ListInformation(mode: 'Clients', isAdmin: true),
+                        ListInformation(mode: 'Clients', isAdmin: true, employeeId: widget.employeeId,),
                   ),
                 );
               },
@@ -97,7 +100,13 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               textTheme: textTheme,
               scheme: scheme,
               onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => ListInformation(mode: 'Appointments', isAdmin: true)));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        ListInformation(mode: 'Appointments', isAdmin: true, employeeId: widget.employeeId,),
+                  ),
+                );
               },
             ),
           ],
@@ -116,11 +125,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
             textTheme: textTheme,
             scheme: scheme,
             isDestructive: true,
-            onTap: () {
-              // TODO: handle logout
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => Login()),
+
             onTap: () async {
               Navigator.pop(context);
               await AuthService().signOut();
