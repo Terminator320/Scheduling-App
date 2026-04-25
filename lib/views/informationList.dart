@@ -5,6 +5,7 @@ import '../models/client_record.dart';
 import '../services/client_service.dart';
 import '../services/appointment_service.dart';
 
+import '../utils/calendar_utils/sheet_helpers.dart';
 import '../utils/date_utils_helper.dart';
 
 import '../widgets/settings_drawer.dart';
@@ -65,11 +66,39 @@ class _ListInformationState extends State<ListInformation> {
     super.dispose();
   }
 
+  // ── FAB handlers ────────────────────────────────────────────────
+
+  /// Même logique que dans MainCalendar : ouvre le popup d'ajout
+  /// d'appointment et sauvegarde via AppointmentService.
+  Future<void> _onAddAppointment() async {
+    final newEvent = await showAddEventPopup(context);
+    if (newEvent != null) {
+      await _appointmentService.addAppointment(newEvent);
+    }
+  }
+
+  /// Ouvre le popup d'ajout de client.
+  /// Remplace le corps par ton propre widget d'ajout si disponible.
+  Future<void> _onAddClient() async {
+    // TODO: remplacer par showAddClientPopup(context) quand disponible
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const _AddClientSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(_title), centerTitle: true),
       endDrawer: SettingsDrawer(isAdmin: widget.isAdmin, employeeId: widget.employeeId,),
+      floatingActionButton: widget.isAdmin
+          ? FloatingActionButton(
+              onPressed: _isClients ? _onAddClient : _onAddAppointment,
+              child: const Icon(Icons.add),
+            )
+          : null,
       body: _isClients ? _buildClientList() : _buildAppointmentList(),
     );
   }
@@ -80,9 +109,9 @@ class _ListInformationState extends State<ListInformation> {
     final displayed = query.isEmpty
         ? _allClients
         : _allClients.where((c) {
-      return c.displayName.toLowerCase().contains(query) ||
-          c.phone.contains(query);
-    }).toList();
+            return c.displayName.toLowerCase().contains(query) ||
+                c.phone.contains(query);
+          }).toList();
 
     return Column(
       children: [
@@ -96,9 +125,9 @@ class _ListInformationState extends State<ListInformation> {
               prefixIcon: const Icon(Icons.search, size: 18),
               suffixIcon: _searchController.text.isNotEmpty
                   ? IconButton(
-                icon: const Icon(Icons.close, size: 18),
-                onPressed: () => _searchController.clear(),
-              )
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => _searchController.clear(),
+                    )
                   : null,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -114,13 +143,13 @@ class _ListInformationState extends State<ListInformation> {
           child: displayed.isEmpty
               ? const Center(child: Text('Aucun client trouvé.'))
               : ListView.separated(
-            padding: const EdgeInsets.all(12),
-            itemCount: displayed.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              return _ClientTile(client: displayed[index]);
-            },
-          ),
+                  padding: const EdgeInsets.all(12),
+                  itemCount: displayed.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    return _ClientTile(client: displayed[index]);
+                  },
+                ),
         ),
       ],
     );
@@ -158,6 +187,174 @@ class _ListInformationState extends State<ListInformation> {
           },
         );
       },
+    );
+  }
+}
+
+// ── Placeholder sheet d'ajout de client ─────────────────────────
+// À remplacer par ton vrai widget quand il sera prêt.
+class _AddClientSheet extends StatefulWidget {
+  const _AddClientSheet();
+
+  @override
+  State<_AddClientSheet> createState() => _AddClientSheetState();
+}
+
+class _AddClientSheetState extends State<_AddClientSheet> {
+  final _businessNameController = TextEditingController();
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _clientService = ClientService();
+  final Map<String, String?> _errors = {};
+
+  @override
+  void dispose() {
+    _businessNameController.dispose();
+    _nameController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    _addressController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _errors['businessName'] = _businessNameController.text.trim().isEmpty
+          ? "Business name is required"
+          : null;
+      _errors['name'] = _nameController.text.trim().isEmpty
+          ? "Name is required"
+          : null;
+      _errors['phone'] = _phoneController.text.trim().isEmpty
+          ? "Phone is required"
+          : null;
+    });
+
+    if (_errors.values.any((e) => e != null)) return;
+
+    final newClient = ClientRecord(
+      id: '',
+      businessName: _businessNameController.text.trim(),
+      name: _nameController.text.trim(),
+      phone: _phoneController.text.trim(),
+      email: _emailController.text.trim(),
+      address: _addressController.text.trim(),
+      contacts: [],
+    );
+
+    await _clientService.addClient(newClient);
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 32,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+            Text("New client", style: theme.textTheme.titleLarge),
+            const SizedBox(height: 20),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
+            _field(
+              "Business name",
+              _businessNameController,
+              error: _errors['businessName'],
+            ),
+            const SizedBox(height: 14),
+            _field("Contact name", _nameController, error: _errors['name']),
+            const SizedBox(height: 14),
+            _field(
+              "Phone",
+              _phoneController,
+              error: _errors['phone'],
+              keyboard: TextInputType.phone,
+            ),
+            const SizedBox(height: 14),
+            _field(
+              "Email",
+              _emailController,
+              keyboard: TextInputType.emailAddress,
+            ),
+            const SizedBox(height: 14),
+            _field("Address", _addressController),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Icon(Icons.close),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _save,
+                    child: const Text("Add"),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _field(
+    String label,
+    TextEditingController ctrl, {
+    String? error,
+    TextInputType keyboard = TextInputType.text,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(
+            context,
+          ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: ctrl,
+          keyboardType: keyboard,
+          onChanged: (_) => setState(() => _errors[label] = null),
+          decoration: InputDecoration(
+            errorText: error,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -252,10 +449,10 @@ class _ClientDetailSheetState extends State<_ClientDetailSheet> {
     super.initState();
     final c = widget.client;
     _businessNameController = TextEditingController(text: c.businessName);
-    _nameController        = TextEditingController(text: c.name);
-    _phoneController       = TextEditingController(text: c.phone);
-    _emailController       = TextEditingController(text: c.email);
-    _addressController     = TextEditingController(text: c.address);
+    _nameController = TextEditingController(text: c.name);
+    _phoneController = TextEditingController(text: c.phone);
+    _emailController = TextEditingController(text: c.email);
+    _addressController = TextEditingController(text: c.address);
   }
 
   @override
@@ -273,10 +470,10 @@ class _ClientDetailSheetState extends State<_ClientDetailSheet> {
     setState(() {
       _isEditing = false;
       _businessNameController.text = c.businessName;
-      _nameController.text         = c.name;
-      _phoneController.text        = c.phone;
-      _emailController.text        = c.email;
-      _addressController.text      = c.address;
+      _nameController.text = c.name;
+      _phoneController.text = c.phone;
+      _emailController.text = c.email;
+      _addressController.text = c.address;
       _errors.clear();
     });
   }
@@ -284,27 +481,32 @@ class _ClientDetailSheetState extends State<_ClientDetailSheet> {
   Future<void> _save() async {
     setState(() {
       _errors['businessName'] = _businessNameController.text.trim().isEmpty
-          ? "Business name is required" : null;
+          ? "Business name is required"
+          : null;
       _errors['name'] = _nameController.text.trim().isEmpty
-          ? "Name is required" : null;
+          ? "Name is required"
+          : null;
       _errors['phone'] = _phoneController.text.trim().isEmpty
-          ? "Phone is required" : null;
+          ? "Phone is required"
+          : null;
       _errors['email'] = _emailController.text.trim().isEmpty
-          ? "Email is required" : null;
+          ? "Email is required"
+          : null;
       _errors['address'] = _addressController.text.trim().isEmpty
-          ? "Address is required" : null;
+          ? "Address is required"
+          : null;
     });
 
     if (_errors.values.any((e) => e != null)) return;
 
     final updated = ClientRecord(
-      id:           widget.client.id,
+      id: widget.client.id,
       businessName: _businessNameController.text.trim(),
-      name:         _nameController.text.trim(),
-      phone:        _phoneController.text.trim(),
-      email:        _emailController.text.trim(),
-      address:      _addressController.text.trim(),
-      contacts:     widget.client.contacts,
+      name: _nameController.text.trim(),
+      phone: _phoneController.text.trim(),
+      email: _emailController.text.trim(),
+      address: _addressController.text.trim(),
+      contacts: widget.client.contacts,
     );
 
     await _clientService.updateClient(updated);
@@ -337,7 +539,8 @@ class _ClientDetailSheetState extends State<_ClientDetailSheet> {
               // Drag handle
               Center(
                 child: Container(
-                  width: 36, height: 4,
+                  width: 36,
+                  height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.outlineVariant,
@@ -346,9 +549,11 @@ class _ClientDetailSheetState extends State<_ClientDetailSheet> {
                 ),
               ),
               _isEditing
-                  ? Text("Edit client",
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleLarge)
+                  ? Text(
+                      "Edit client",
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleLarge,
+                    )
                   : _buildViewHeader(theme),
               const SizedBox(height: 20),
               const Divider(height: 1),
@@ -388,13 +593,19 @@ class _ClientDetailSheetState extends State<_ClientDetailSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(c.displayName,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold)),
+              Text(
+                c.displayName,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               if (c.name.isNotEmpty && c.name != c.displayName)
-                Text(c.name,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.6))),
+                Text(
+                  c.name,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                ),
             ],
           ),
         ),
@@ -406,31 +617,37 @@ class _ClientDetailSheetState extends State<_ClientDetailSheet> {
   List<Widget> _buildViewFields(ThemeData theme) {
     final c = widget.client;
     return [
-      if (c.phone.isNotEmpty)   _InfoRow(icon: Icons.phone,       text: c.phone),
-      if (c.email.isNotEmpty)   _InfoRow(icon: Icons.email,       text: c.email),
-      if (c.address.isNotEmpty) _InfoRow(icon: Icons.location_on, text: c.address),
+      if (c.phone.isNotEmpty) _InfoRow(icon: Icons.phone, text: c.phone),
+      if (c.email.isNotEmpty) _InfoRow(icon: Icons.email, text: c.email),
+      if (c.address.isNotEmpty)
+        _InfoRow(icon: Icons.location_on, text: c.address),
 
       if (c.contacts.isNotEmpty) ...[
         const SizedBox(height: 20),
-        Text('Contacts',
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w600)),
+        Text(
+          'Contacts',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         const SizedBox(height: 12),
-        ...c.contacts.map((contact) => Card(
-          margin: const EdgeInsets.only(bottom: 10),
-          color: theme.colorScheme.surfaceVariant,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _InfoRow(icon: Icons.person_outline,  text: contact.name),
-                _InfoRow(icon: Icons.phone_outlined,  text: contact.phone),
-                _InfoRow(icon: Icons.mail_outline,    text: contact.email),
-              ],
+        ...c.contacts.map(
+          (contact) => Card(
+            margin: const EdgeInsets.only(bottom: 10),
+            color: theme.colorScheme.surfaceVariant,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _InfoRow(icon: Icons.person_outline, text: contact.name),
+                  _InfoRow(icon: Icons.phone_outlined, text: contact.phone),
+                  _InfoRow(icon: Icons.mail_outline, text: contact.email),
+                ],
+              ),
             ),
           ),
-        )),
+        ),
       ],
     ];
   }
@@ -438,45 +655,61 @@ class _ClientDetailSheetState extends State<_ClientDetailSheet> {
   // ── Champs édition ───────────────────────────────────────────────
   List<Widget> _buildEditFields(ThemeData theme) {
     return [
-      _editField("Business name", _businessNameController,
-          error: _errors['businessName'],
-          onChanged: (_) => setState(() => _errors['businessName'] = null)),
+      _editField(
+        "Business name",
+        _businessNameController,
+        error: _errors['businessName'],
+        onChanged: (_) => setState(() => _errors['businessName'] = null),
+      ),
       const SizedBox(height: 14),
-      _editField("Contact name", _nameController,
-          error: _errors['name'],
-          onChanged: (_) => setState(() => _errors['name'] = null)),
+      _editField(
+        "Contact name",
+        _nameController,
+        error: _errors['name'],
+        onChanged: (_) => setState(() => _errors['name'] = null),
+      ),
       const SizedBox(height: 14),
-      _editField("Phone", _phoneController,
-          keyboard: TextInputType.phone,
-          error: _errors['phone'],
-          onChanged: (_) => setState(() => _errors['phone'] = null)),
+      _editField(
+        "Phone",
+        _phoneController,
+        keyboard: TextInputType.phone,
+        error: _errors['phone'],
+        onChanged: (_) => setState(() => _errors['phone'] = null),
+      ),
       const SizedBox(height: 14),
-      _editField("Email", _emailController,
-          keyboard: TextInputType.emailAddress,
-          error: _errors['email'],
-          onChanged: (_) => setState(() => _errors['email'] = null)),
+      _editField(
+        "Email",
+        _emailController,
+        keyboard: TextInputType.emailAddress,
+        error: _errors['email'],
+        onChanged: (_) => setState(() => _errors['email'] = null),
+      ),
       const SizedBox(height: 14),
-      _editField("Address", _addressController,
-          error: _errors['address'],
-          onChanged: (_) => setState(() => _errors['address'] = null)),
+      _editField(
+        "Address",
+        _addressController,
+        error: _errors['address'],
+        onChanged: (_) => setState(() => _errors['address'] = null),
+      ),
     ];
   }
 
   Widget _editField(
-      String label,
-      TextEditingController controller, {
-        String? error,
-        TextInputType keyboard = TextInputType.text,
-        void Function(String)? onChanged,
-      }) {
+    String label,
+    TextEditingController controller, {
+    String? error,
+    TextInputType keyboard = TextInputType.text,
+    void Function(String)? onChanged,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: Theme.of(context)
-                .textTheme
-                .labelMedium
-                ?.copyWith(fontWeight: FontWeight.w600)),
+        Text(
+          label,
+          style: Theme.of(
+            context,
+          ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+        ),
         const SizedBox(height: 6),
         TextField(
           controller: controller,
@@ -485,8 +718,10 @@ class _ClientDetailSheetState extends State<_ClientDetailSheet> {
           decoration: InputDecoration(
             errorText: error,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
           ),
         ),
       ],
@@ -503,7 +738,8 @@ class _ClientDetailSheetState extends State<_ClientDetailSheet> {
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               onPressed: _cancelEdit,
               child: const Text("Cancel"),
@@ -515,7 +751,8 @@ class _ClientDetailSheetState extends State<_ClientDetailSheet> {
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               onPressed: _save,
               child: const Text("Save changes"),
@@ -533,7 +770,8 @@ class _ClientDetailSheetState extends State<_ClientDetailSheet> {
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             onPressed: () => Navigator.pop(context),
             child: Icon(Icons.close),
@@ -545,7 +783,8 @@ class _ClientDetailSheetState extends State<_ClientDetailSheet> {
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             onPressed: () => setState(() => _isEditing = true),
             child: Icon(Icons.edit),
