@@ -156,7 +156,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     if (confirmed != true || !mounted) return;
     final id = widget.appointment.id;
     if (id == null) return;
-    await AppointmentService().deleteAppointment(id);
+    await AppointmentService.deleteAppointment(id);
     if (!mounted) return;
     Navigator.pop(context, 'deleted');
   }
