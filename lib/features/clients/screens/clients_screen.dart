@@ -35,6 +35,8 @@ class _ListInformationState extends State<ListInformation> {
   final ScrollController _scrollController = ScrollController();
 
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _appointmentSearchController =
+  TextEditingController();
   List<ClientRecord> _allClients = [];
   final ClientService _clientService = ClientService();
   final AppointmentService _appointmentService = AppointmentService();
@@ -62,6 +64,7 @@ class _ListInformationState extends State<ListInformation> {
   @override
   void dispose() {
     _searchController.dispose();
+    _appointmentSearchController.dispose();
     _scrollController.dispose();
     _clientsSubscription?.cancel();
     super.dispose();
@@ -86,9 +89,9 @@ class _ListInformationState extends State<ListInformation> {
       ),
       floatingActionButton: widget.isAdmin && _isClients
           ? FloatingActionButton(
-              onPressed: _onAddClient,
-              child: const Icon(Icons.add),
-            )
+        onPressed: _onAddClient,
+        child: const Icon(Icons.add),
+      )
           : null,
       body: _isClients ? _buildClientList() : _buildAppointmentList(),
     );
@@ -102,9 +105,9 @@ class _ListInformationState extends State<ListInformation> {
     final filtered = query.isEmpty
         ? _allClients
         : _allClients.where((c) {
-            return c.displayName.toLowerCase().contains(query) ||
-                c.phone.contains(query);
-          }).toList();
+      return c.displayName.toLowerCase().contains(query) ||
+          c.phone.contains(query);
+    }).toList();
 
     final displayed = filtered.length > _displayLimit
         ? filtered.sublist(0, _displayLimit)
@@ -129,15 +132,15 @@ class _ListInformationState extends State<ListInformation> {
               ),
               suffixIcon: _searchController.text.isNotEmpty
                   ? IconButton(
-                      icon: Icon(
-                        Icons.close,
-                        size: 18,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                      onPressed: () =>
-                          setState(() => _searchController.clear()),
-                      tooltip: 'Clear',
-                    )
+                icon: Icon(
+                  Icons.close,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
+                ),
+                onPressed: () =>
+                    setState(() => _searchController.clear()),
+                tooltip: 'Clear',
+              )
                   : null,
             ),
           ),
@@ -145,12 +148,108 @@ class _ListInformationState extends State<ListInformation> {
         Expanded(
           child: displayed.isEmpty
               ? Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  query.isEmpty
+                      ? Icons.groups_outlined
+                      : Icons.search_off_outlined,
+                  size: 40,
+                  color: scheme.onSurfaceVariant,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  query.isEmpty
+                      ? 'No clients yet'
+                      : 'No clients match "$query"',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          )
+              : ListView.builder(
+            controller: _scrollController,
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            itemCount: displayed.length,
+            itemBuilder: (context, index) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: ClientTile(client: displayed[index]),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAppointmentList() {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Column(                          // ← Column en dehors du StreamBuilder
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: TextField(
+            controller: _appointmentSearchController,
+            onChanged: (_) => setState(() {}),
+            textInputAction: TextInputAction.search,
+            decoration: formInputDecoration(
+              context,
+              'Search by client or employee...',
+            ).copyWith(
+              prefixIcon: Icon(
+                Icons.search,
+                size: 20,
+                color: scheme.onSurfaceVariant,
+              ),
+              suffixIcon: _appointmentSearchController.text.isNotEmpty
+                  ? IconButton(
+                icon: Icon(Icons.close, size: 18, color: scheme.onSurfaceVariant),
+                onPressed: () =>
+                    setState(() => _appointmentSearchController.clear()),
+                tooltip: 'Clear',
+              )
+                  : null,
+            ),
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<List<AppointmentRecord>>(    // ← StreamBuilder seulement pour la liste
+            stream: _appointmentService.getAllAppointments(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error : ${snapshot.error}'));
+              }
+
+              final appointments = snapshot.data ?? [];
+              final query = _appointmentSearchController.text.trim().toLowerCase();
+
+              final filtered = query.isEmpty
+                  ? appointments
+                  : appointments.where((a) {
+                final matchesClient =
+                a.clientName.toLowerCase().contains(query);
+                final matchesEmployee = a.employeeNames
+                    .any((e) => e.toLowerCase().contains(query));
+                return matchesClient || matchesEmployee;
+              }).toList();
+
+              final sorted = [...filtered]
+                ..sort((a, b) => a.startTime.compareTo(b.startTime));
+
+              if (sorted.isEmpty) {
+                return Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         query.isEmpty
-                            ? Icons.groups_outlined
+                            ? Icons.event_busy_outlined
                             : Icons.search_off_outlined,
                         size: 40,
                         color: scheme.onSurfaceVariant,
@@ -158,58 +257,30 @@ class _ListInformationState extends State<ListInformation> {
                       const SizedBox(height: 8),
                       Text(
                         query.isEmpty
-                            ? 'No clients yet'
-                            : 'No clients match "$query"',
-                        style: theme.textTheme.bodyMedium?.copyWith(
+                            ? 'No appointments found.'
+                            : 'No appointments match "$query"',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
                       ),
                     ],
                   ),
-                )
-              : ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                  itemCount: displayed.length,
-                  itemBuilder: (context, index) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: ClientTile(client: displayed[index]),
-                  ),
+                );
+              }
+
+              return ListView.separated(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                itemCount: sorted.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, index) => AppointmentTile(
+                  appointment: sorted[index],
+                  showActions: false,
                 ),
+              );
+            },
+          ),
         ),
       ],
-    );
-  }
-
-  Widget _buildAppointmentList() {
-    return StreamBuilder<List<AppointmentRecord>>(
-      stream: _appointmentService.getAllAppointments(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (snapshot.hasError) {
-          return Center(child: Text('Error : ${snapshot.error}'));
-        }
-
-        final appointments = snapshot.data ?? [];
-
-        if (appointments.isEmpty) {
-          return const Center(child: Text('No appointments found.'));
-        }
-
-        final sorted = [...appointments]
-          ..sort((a, b) => a.startTime.compareTo(b.startTime));
-
-        return ListView.separated(
-          padding: const EdgeInsets.all(12),
-          itemCount: sorted.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (context, index) =>
-              AppointmentTile(appointment: sorted[index], showActions: false),
-        );
-      },
     );
   }
 }
