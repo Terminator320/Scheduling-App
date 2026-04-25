@@ -49,9 +49,10 @@ class AppRoutes {
         );
 
       case employees:
+        final args = settings.arguments as MainCalendarArgs;
         return MaterialPageRoute(
           settings: settings,
-          builder: (_) => const AddEmployeePage(),
+          builder: (_) => AddEmployeePage(isAdmin: args.isAdmin, employeeId: args.employeeId),
         );
 
       case clients:

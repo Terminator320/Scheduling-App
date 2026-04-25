@@ -67,13 +67,6 @@ class _ListInformationState extends State<ListInformation> {
     super.dispose();
   }
 
-  Future<void> _onAddAppointment() async {
-    final newEvent = await showAddEventPopup(context);
-    if (newEvent != null) {
-      await _appointmentService.addAppointment(newEvent);
-    }
-  }
-
   void _onAddClient() {
     showModalBottomSheet(
       context: context,
@@ -91,9 +84,9 @@ class _ListInformationState extends State<ListInformation> {
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
       ),
-      floatingActionButton: widget.isAdmin
+      floatingActionButton: widget.isAdmin && _isClients
           ? FloatingActionButton(
-              onPressed: _isClients ? _onAddClient : _onAddAppointment,
+              onPressed: _onAddClient,
               child: const Icon(Icons.add),
             )
           : null,
@@ -214,7 +207,7 @@ class _ListInformationState extends State<ListInformation> {
           itemCount: sorted.length,
           separatorBuilder: (_, __) => const SizedBox(height: 8),
           itemBuilder: (context, index) =>
-              AppointmentTile(appointment: sorted[index]),
+              AppointmentTile(appointment: sorted[index], showActions: false),
         );
       },
     );
