@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../models/appointmentImage.dart';
-import '../../utils/calendar_utils/form_widgets.dart';
+import '../form_widgets/form_helpers.dart';
 import 'image_viewer.dart';
 
 class PhotoPickerSection extends StatelessWidget {

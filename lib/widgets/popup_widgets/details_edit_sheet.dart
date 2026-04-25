@@ -8,12 +8,15 @@ import '../../services/appointment_service.dart';
 import '../../services/user_service.dart';
 import '../../utils/date_utils_helper.dart';
 import '../calendar_widgets/employee_picker.dart';
-import '../../utils/calendar_utils/form_widgets.dart';
+import '../../utils/calendar_utils/cupertino_time_picker.dart';
+import '../form_widgets/form_helpers.dart';
 import '../../utils/images_utils/image_compress_service.dart';
 import '../../utils/images_utils/image_picker_service.dart';
 import '../../utils/images_utils/image_storage_service.dart';
 import '../calendar_widgets/photo_picker_section.dart';
 import '../calendar_widgets/time_range_row.dart';
+import '../form_widgets/labeled_text_field.dart';
+import '../sheet_widgets.dart';
 
 class EventDetailsSheet extends StatefulWidget {
   final AppointmentRecord appointment;
@@ -263,67 +266,53 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.75,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      builder: (sheetContext, scrollController) {
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => FocusScope.of(sheetContext).unfocus(),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Theme.of(sheetContext).colorScheme.surface,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
-              ),
+    final scheme = Theme.of(context).colorScheme;
+    final maxHeight = MediaQuery.of(context).size.height * 0.95;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: Container(
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(20),
             ),
-            child: ListView(
-              controller: scrollController,
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 16,
-                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 60,
-              ),
+          ),
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 12,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildHandle(),
+                const SheetHandle(),
+                const SizedBox(height: 16),
                 _isEditing ? _buildEditHeader() : _buildViewHeader(),
                 const SizedBox(height: 20),
                 const Divider(height: 1),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 if (_isEditing)
                   ..._buildEditFields()
                 else
                   ..._buildViewFields(),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 _buildPhotosSection(),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 _buildEmployeesSection(),
                 if (widget.showActions) ...[
-                  const SizedBox(height: 16),
-                  const Divider(height: 1),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
                   _buildActionButtons(),
                 ],
               ],
             ),
           ),
-        );
-      },
-    );
-  }
-
-  // -------------- drag handle --------------
-  Widget _buildHandle() {
-    return Center(
-      child: Container(
-        width: 36,
-        height: 4,
-        margin: const EdgeInsets.only(bottom: 16),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.outlineVariant,
-          borderRadius: BorderRadius.circular(4),
         ),
       ),
     );
@@ -333,15 +322,19 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
   Widget _buildViewHeader() {
     final a = widget.appointment;
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final secondaryStyle = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
     return Column(
       children: [
         Text(
           a.title,
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineSmall,
+          style: theme.textTheme.headlineLarge,
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -350,30 +343,18 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
               size: 13,
               color: scheme.onSurfaceVariant,
             ),
-            const SizedBox(width: 5),
-            Text(
-              DateUtilsHelper.formatDate(a.startTime),
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-          ],
-        ),
-        const SizedBox(height: 3),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
+            const SizedBox(width: 6),
+            Text(DateUtilsHelper.formatDate(a.startTime), style: secondaryStyle),
+            const SizedBox(width: 12),
             Icon(
               Icons.access_time_outlined,
               size: 13,
               color: scheme.onSurfaceVariant,
             ),
-            const SizedBox(width: 5),
+            const SizedBox(width: 6),
             Text(
               "${DateUtilsHelper.formatTime(a.startTime)} – ${DateUtilsHelper.formatTime(a.endTime)}",
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+              style: secondaryStyle,
             ),
           ],
         ),
@@ -385,39 +366,40 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     return Text(
       "Edit job",
       textAlign: TextAlign.center,
-      style: Theme.of(context).textTheme.titleLarge,
+      style: Theme.of(context).textTheme.headlineLarge,
     );
   }
 
   List<Widget> _buildViewFields() {
     final a = widget.appointment;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final muted = scheme.onSurfaceVariant;
     return [
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           formSectionLabel(context, "Client"),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             a.clientName,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(height: 1.5),
+            style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
           ),
           Text(
             a.clientPhone.isNotEmpty ? a.clientPhone : "No number",
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: a.clientPhone.isNotEmpty ? null : Colors.grey[500],
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: a.clientPhone.isNotEmpty ? null : muted,
             ),
           ),
         ],
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 16),
       _viewSection("Address", a.address.isNotEmpty ? a.address : "No address"),
-      const SizedBox(height: 14),
+      const SizedBox(height: 16),
       _viewSection("Notes", a.notes.isNotEmpty ? a.notes : "No notes"),
-      const SizedBox(height: 14),
+      const SizedBox(height: 16),
       formSectionLabel(context, "Materials needed"),
-      const SizedBox(height: 6),
+      const SizedBox(height: 8),
       a.materialsNeeded.isNotEmpty
           ? Wrap(
               spacing: 6,
@@ -428,10 +410,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
                   .where((m) => m.isNotEmpty)
                   .map(
                     (m) => Chip(
-                      label: Text(
-                        m,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
+                      label: Text(m, style: theme.textTheme.bodySmall),
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       visualDensity: VisualDensity.compact,
                     ),
@@ -440,9 +419,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
             )
           : Text(
               "No materials",
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: Colors.grey[400]),
+              style: theme.textTheme.bodyMedium?.copyWith(color: muted),
             ),
     ];
   }
@@ -452,7 +429,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         formSectionLabel(context, label),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         Text(
           value,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
@@ -463,25 +440,26 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
   List<Widget> _buildEditFields() {
     return [
-      formLabel(context, "Job title"),
-      TextField(
+      LabeledTextField(
+        label: "Job title",
+        hint: "e.g. Plumbing repair",
         controller: _titleController,
-        decoration: formInputDecoration(
-          context,
-          "e.g. Plumbing repair",
-        ).copyWith(errorText: _errors['title']),
-        onChanged: (_) => setState(() => _errors['title'] = null),
+        errorText: _errors['title'],
+        onChanged: (_) {
+          if (_errors['title'] != null) {
+            setState(() => _errors['title'] = null);
+          }
+        },
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 16),
 
-      formLabel(context, "Date"),
-      TextField(
+      LabeledTextField(
+        label: "Date",
+        hint: "Select date",
         controller: _dateController,
         readOnly: true,
-        decoration: formInputDecoration(context, "Select date").copyWith(
-          suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
-          errorText: _errors['date'],
-        ),
+        errorText: _errors['date'],
+        suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
         onTap: () async {
           final picked = await showDatePicker(
             context: context,
@@ -497,7 +475,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
           });
         },
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 16),
 
       formLabel(context, "Time"),
       TimeRangeRow(
@@ -532,23 +510,22 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         startError: _errors['startTime'],
         endError: _errors['endTime'],
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 16),
 
-      formLabel(context, "Notes", optional: true),
-      TextField(
+      LabeledTextField(
+        label: "Notes",
+        hint: "Type the note here...",
         controller: _notesController,
-        decoration: formInputDecoration(context, "Type the note here..."),
+        optional: true,
         maxLines: 3,
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 16),
 
-      formLabel(context, "Materials needed", optional: true),
-      TextField(
+      LabeledTextField(
+        label: "Materials needed",
+        hint: "e.g. Pipe wrench, tape (comma separated)",
         controller: _materialsController,
-        decoration: formInputDecoration(
-          context,
-          "e.g. Pipe wrench, tape (comma separated)",
-        ),
+        optional: true,
       ),
     ];
   }
@@ -615,36 +592,35 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
   // Button switching
   Widget _buildActionButtons() {
+    final scheme = Theme.of(context).colorScheme;
+
     if (_isEditing) {
       return Row(
         children: [
           Expanded(
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               onPressed: _isSaving ? null : _cancelEdit,
               child: const Text("Cancel"),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               onPressed: _isSaving ? null : _save,
               child: _isSaving
-                  ? const SizedBox(
+                  ? SizedBox(
                       height: 20,
                       width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: scheme.onPrimary,
+                      ),
                     )
                   : const Text("Save changes"),
             ),
@@ -653,34 +629,30 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       );
     }
 
-    return Row(
+    // View mode: primary action (Edit) is emphasized; destructive (Delete)
+    // is a subtle text button, spatially separated to avoid mistaps.
+    return Column(
       children: [
-        Expanded(
-          child: OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.red,
-              side: const BorderSide(color: Colors.red),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            onPressed: _confirmDelete,
-            child: const Text("Delete"),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
             ),
             onPressed: () => setState(() => _isEditing = true),
-            child: const Text("Edit"),
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text("Edit"),
           ),
+        ),
+        const SizedBox(height: 8),
+        TextButton.icon(
+          style: TextButton.styleFrom(
+            foregroundColor: scheme.error,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          ),
+          onPressed: _confirmDelete,
+          icon: const Icon(Icons.delete_outline, size: 18),
+          label: const Text("Delete job"),
         ),
       ],
     );
