@@ -2,15 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AppointmentImage {
   final String url;
-  final String publicId;
-  final String? thumbUrl;
+  final String storagePath;
   final String? fileName;
   final Timestamp? uploadedAt;
 
   AppointmentImage({
     required this.url,
-    required this.publicId,
-    this.thumbUrl,
+    required this.storagePath,
     this.fileName,
     this.uploadedAt,
   });
@@ -18,8 +16,7 @@ class AppointmentImage {
   factory AppointmentImage.fromMap(Map<String, dynamic> data) {
     return AppointmentImage(
       url: (data['url'] ?? '').toString(),
-      publicId: (data['publicId'] ?? '').toString(),
-      thumbUrl: data['thumbUrl']?.toString(),
+      storagePath: (data['storagePath'] ?? '').toString(),
       fileName: data['fileName']?.toString(),
       uploadedAt: data['uploadedAt'] as Timestamp?,
     );
@@ -28,8 +25,7 @@ class AppointmentImage {
   Map<String, dynamic> toMap() {
     return {
       'url': url,
-      'publicId': publicId,
-      'thumbUrl': thumbUrl,
+      'storagePath': storagePath,
       'fileName': fileName,
       'uploadedAt': uploadedAt,
     };

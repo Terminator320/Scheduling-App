@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../models/appointmentImage.dart';
 import '../../utils/calendar_utils/form_widgets.dart';
+import 'image_viewer.dart';
 
 class PhotoPickerSection extends StatelessWidget {
   final List<AppointmentImage> existingImages;
@@ -20,6 +21,19 @@ class PhotoPickerSection extends StatelessWidget {
     required this.onRemoveExisting,
     required this.onRemoveNew,
   });
+
+  void _openViewer(BuildContext context, int tappedIndex) {
+    final providers = buildImageProviders(
+      urls: existingImages.map((i) => i.url).toList(),
+      files: newImages,
+    );
+    if (providers.isEmpty) return;
+    ImageViewer.open(
+      context,
+      images: providers,
+      initialIndex: tappedIndex,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,13 +56,16 @@ class PhotoPickerSection extends StatelessWidget {
                     children: [
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            entry.value.thumbUrl ?? entry.value.url,
-                            width: 90,
-                            height: 90,
-                            fit: BoxFit.cover,
+                        child: GestureDetector(
+                          onTap: () => _openViewer(context, entry.key),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              entry.value.url,
+                              width: 90,
+                              height: 90,
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         ),
                       ),
@@ -66,17 +83,21 @@ class PhotoPickerSection extends StatelessWidget {
                 }),
                 // new local images
                 ...newImages.asMap().entries.map((entry) {
+                  final viewerIndex = existingImages.length + entry.key;
                   return Stack(
                     children: [
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.file(
-                            entry.value,
-                            width: 90,
-                            height: 90,
-                            fit: BoxFit.cover,
+                        child: GestureDetector(
+                          onTap: () => _openViewer(context, viewerIndex),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(
+                              entry.value,
+                              width: 90,
+                              height: 90,
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         ),
                       ),
