@@ -49,6 +49,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   List<EmployeeRecord> _allEmployees = [];
   List<EmployeeRecord> _selectedEmployees = [];
   List<AppointmentImage> _existingImages = [];
+  final List<AppointmentImage> _removedExistingImages = [];
   List<File> _newImages = [];
   bool _isSaving = false;
 
@@ -122,6 +123,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       _selectedStartTime = TimeOfDay.fromDateTime(a.startTime);
       _selectedEndTime = TimeOfDay.fromDateTime(a.endTime);
       _existingImages = List.from(a.pictures);
+      _removedExistingImages.clear();
       _newImages = [];
       _selectedEmployees = _allEmployees
           .where((e) => a.employeeIds.contains(e.id))
@@ -210,10 +212,16 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     setState(() => _isSaving = true);
 
     try {
+      final appointmentId = widget.appointment.id;
+      if (appointmentId == null) {
+        throw StateError('Cannot save an appointment without an id.');
+      }
+
       List<AppointmentImage> uploadedImages = const [];
       if (_newImages.isNotEmpty) {
         final compressed = await _compressService.compressImages(_newImages);
-        uploadedImages = await _storageService.uploadImages(compressed);
+        uploadedImages =
+            await _storageService.uploadImages(appointmentId, compressed);
       }
       final allPictures = [..._existingImages, ...uploadedImages];
 
@@ -235,6 +243,12 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       );
 
       await AppointmentService().updateAppointment(updated);
+
+      if (_removedExistingImages.isNotEmpty) {
+        await _storageService.deleteImages(List.of(_removedExistingImages));
+        _removedExistingImages.clear();
+      }
+
       if (mounted) setState(() => _isEditing = false);
       if (mounted) Navigator.pop(context, updated);
     } catch (_) {
@@ -554,8 +568,10 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
             final images = await _imageService.pickMultiImages();
             if (images.isNotEmpty) setState(() => _newImages.addAll(images));
           },
-          onRemoveExisting: (i) =>
-              setState(() => _existingImages.removeAt(i)),
+          onRemoveExisting: (i) => setState(() {
+            _removedExistingImages.add(_existingImages[i]);
+            _existingImages.removeAt(i);
+          }),
           onRemoveNew: (i) => setState(() => _newImages.removeAt(i)),
         ),
       ],

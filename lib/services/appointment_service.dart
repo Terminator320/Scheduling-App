@@ -6,8 +6,13 @@ class AppointmentService {
   final CollectionReference<Map<String, dynamic>> appointments =
       FirebaseFirestore.instance.collection('appointments');
 
+  DocumentReference<Map<String, dynamic>> newDocRef() => appointments.doc();
+
   Future<void> addAppointment(AppointmentRecord appointment) async {
-    await appointments.add({
+    final ref = appointment.id != null
+        ? appointments.doc(appointment.id)
+        : appointments.doc();
+    await ref.set({
       ...appointment.toMap(),
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
