@@ -20,6 +20,7 @@ class EventList extends StatelessWidget {
   });
 
   Future<void> _confirmDelete(BuildContext context, AppointmentRecord e) async {
+    final scheme = Theme.of(context).colorScheme;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -31,9 +32,7 @@ class EventList extends StatelessWidget {
             child: const Text('Cancel'),
           ),
           TextButton(
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(ctx).colorScheme.error,
-            ),
+            style: TextButton.styleFrom(foregroundColor: scheme.error),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete'),
           ),
@@ -60,6 +59,9 @@ class EventList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
     return Expanded(
       child: ValueListenableBuilder<List<AppointmentRecord>>(
         valueListenable: events,
@@ -67,89 +69,116 @@ class EventList extends StatelessWidget {
           value.sort((a, b) => a.startTime.compareTo(b.startTime));
 
           if (value.isEmpty) {
-            return const Center(child: Text("No events"));
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.event_busy_outlined,
+                    size: 40,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "No events",
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            );
           }
 
           return ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 4),
             itemCount: value.length,
             itemBuilder: (context, index) {
               final e = value[index];
-              final empColor = colorForAppointment(e, employees);
+              final accent = colorForAppointment(e, employees) ?? scheme.outline;
 
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                color: Theme.of(context).cardColor,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: () => showEventDetails(context, e),
-                  child: Row(
-                    children: [
-                      // Colored left bar
-                      Container(
-                        width: 5,
-                        height: 70,
-                        decoration: BoxDecoration(
-                          color: empColor ?? Colors.grey.shade300,
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(10),
-                            bottomLeft: Radius.circular(10),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      // Color dot
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: empColor ?? Colors.grey.shade400,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                e.title,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                ),
+              return Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
+                child: Card(
+                  margin: EdgeInsets.zero,
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => showEventDetails(context, e),
+                    child: IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Container(width: 5, color: accent),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                14,
+                                12,
+                                8,
+                                12,
                               ),
-                              const SizedBox(height: 3),
-                              Text(
-                                "${DateUtilsHelper.formatTime(e.startTime)} - ${DateUtilsHelper.formatTime(e.endTime)}",
-                                style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 13,
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    e.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.titleMedium,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.access_time_outlined,
+                                        size: 13,
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        "${DateUtilsHelper.formatTime(e.startTime)} – ${DateUtilsHelper.formatTime(e.endTime)}",
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: scheme.onSurfaceVariant,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
-                        ),
+                          if (isAdmin) ...[
+                            IconButton(
+                              onPressed: () => _openEditSheet(context, e),
+                              icon: const Icon(Icons.edit_outlined),
+                              color: scheme.onSurfaceVariant,
+                              tooltip: 'Edit',
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            IconButton(
+                              onPressed: () => _confirmDelete(context, e),
+                              icon: const Icon(Icons.delete_outline),
+                              color: scheme.error,
+                              tooltip: 'Delete',
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            const SizedBox(width: 4),
+                          ] else
+                            Padding(
+                              padding: const EdgeInsets.only(right: 12),
+                              child: Icon(
+                                Icons.chevron_right,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                        ],
                       ),
-                      // Boutons admin seulement
-                      if (isAdmin) ...[
-                        IconButton(
-                          onPressed: () => _confirmDelete(context, e),
-                          icon: const Icon(Icons.delete),
-                          color: Colors.red,
-                          tooltip: 'Delete',
-                        ),
-                        IconButton(
-                          onPressed: () => _openEditSheet(context, e),
-                          icon: const Icon(Icons.edit),
-                          tooltip: 'Edit',
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
                 ),
               );

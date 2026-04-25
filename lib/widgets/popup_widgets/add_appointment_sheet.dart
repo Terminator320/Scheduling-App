@@ -9,7 +9,8 @@ import '../../models/employee_record.dart';
 import '../../services/appointment_service.dart';
 import '../../services/client_service.dart';
 import '../../services/user_service.dart';
-import '../../utils/calendar_utils/form_widgets.dart';
+import '../../utils/calendar_utils/cupertino_time_picker.dart';
+import '../form_widgets/form_helpers.dart';
 import '../../utils/images_utils/image_picker_service.dart';
 import '../../utils/images_utils/image_storage_service.dart';
 import '../../utils/images_utils/image_compress_service.dart';
@@ -18,6 +19,8 @@ import '../calendar_widgets/employee_picker.dart';
 import '../calendar_widgets/photo_picker_section.dart';
 import '../calendar_widgets/time_range_row.dart';
 import '../client_search_field.dart';
+import '../form_widgets/labeled_text_field.dart';
+import '../sheet_widgets.dart';
 
 class AddEventSheet extends StatefulWidget {
   const AddEventSheet({super.key});
@@ -257,11 +260,12 @@ class _AddEventSheetState extends State<AddEventSheet> {
               padding: EdgeInsets.only(
                 left: 20,
                 right: 20,
-                top: 16,
-                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 60,
+                top: 12,
+                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
               ),
               children: [
-                _buildHandle(),
+                const SheetHandle(),
+                const SizedBox(height: 16),
                 Text(
                   "Add New Job",
                   textAlign: TextAlign.center,
@@ -269,24 +273,26 @@ class _AddEventSheetState extends State<AddEventSheet> {
                 ),
                 const SizedBox(height: 24),
 
-                formLabel(sheetContext, "Job Title"),
-                TextField(
+                LabeledTextField(
+                  label: "Job Title",
+                  hint: "e.g. Plumbing repair",
                   controller: _titleController,
-                  decoration: formInputDecoration(sheetContext, "e.g. Plumbing repair").copyWith(
-                    errorText: _errors['title'],
-                  ),
-                  onChanged: (_) => setState(() => _errors['title'] = null),
+                  errorText: _errors['title'],
+                  onChanged: (_) {
+                    if (_errors['title'] != null) {
+                      setState(() => _errors['title'] = null);
+                    }
+                  },
                 ),
                 const SizedBox(height: 16),
 
-                formLabel(sheetContext, "Date"),
-                TextField(
+                LabeledTextField(
+                  label: "Date",
+                  hint: "Select date",
                   controller: _dateController,
                   readOnly: true,
-                  decoration: formInputDecoration(sheetContext, "Select date").copyWith(
-                    suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
-                    errorText: _errors['date'],
-                  ),
+                  suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+                  errorText: _errors['date'],
                   onTap: _pickDate,
                 ),
                 const SizedBox(height: 16),
@@ -317,18 +323,20 @@ class _AddEventSheetState extends State<AddEventSheet> {
                 ),
                 const SizedBox(height: 16),
 
-                formLabel(sheetContext, "Notes", optional: true),
-                TextField(
+                LabeledTextField(
+                  label: "Notes",
+                  hint: "Type the note here...",
                   controller: _notesController,
-                  decoration: formInputDecoration(sheetContext, "Type the note here..."),
+                  optional: true,
                   maxLines: 3,
                 ),
                 const SizedBox(height: 16),
 
-                formLabel(sheetContext, "Materials needed", optional: true),
-                TextField(
+                LabeledTextField(
+                  label: "Materials needed",
+                  hint: "Type the materials here...",
                   controller: _materialsController,
-                  decoration: formInputDecoration(sheetContext, "Type the materials here..."),
+                  optional: true,
                 ),
                 const SizedBox(height: 16),
 
@@ -368,24 +376,21 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                     ),
                     onPressed: _isSubmitting ? null : () => _submit(sheetContext),
                     child: _isSubmitting
-                        ? const SizedBox(
+                        ? SizedBox(
                             height: 20,
                             width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Theme.of(sheetContext).colorScheme.onPrimary,
+                            ),
                           )
-                        : Text(
-                            "Create event",
-                            style: Theme.of(sheetContext).textTheme.titleSmall,
-                          ),
+                        : const Text("Create event"),
                   ),
                 ),
               ],
@@ -393,21 +398,6 @@ class _AddEventSheetState extends State<AddEventSheet> {
           ),
         );
       },
-    );
-  }
-
-  // --------------  drag handle  --------------
-  Widget _buildHandle() {
-    return Center(
-      child: Container(
-        width: 36,
-        height: 4,
-        margin: const EdgeInsets.only(bottom: 16),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.outlineVariant,
-          borderRadius: BorderRadius.circular(4),
-        ),
-      ),
     );
   }
 }
