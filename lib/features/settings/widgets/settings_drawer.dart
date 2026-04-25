@@ -76,7 +76,15 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               textTheme: textTheme,
               scheme: scheme,
               onTap: () {
-                Navigator.pushNamed(context, AppRoutes.employees);
+                Navigator.pop(context);
+                Navigator.pushNamed(
+                  context,
+                  AppRoutes.employees,
+                  arguments: MainCalendarArgs(
+                    isAdmin: widget.isAdmin,
+                    employeeId: widget.employeeId,
+                  ),
+                );
               },
             ),
             _DrawerItem(
@@ -85,6 +93,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               textTheme: textTheme,
               scheme: scheme,
               onTap: () {
+                Navigator.pop(context);
                 Navigator.pushNamed(
                   context,
                   AppRoutes.clients,
@@ -102,6 +111,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               textTheme: textTheme,
               scheme: scheme,
               onTap: () {
+                Navigator.pop(context);
                 Navigator.pushNamed(
                   context,
                   AppRoutes.clients,
