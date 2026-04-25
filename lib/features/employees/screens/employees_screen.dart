@@ -8,8 +8,17 @@ import 'package:scheduling/features/employees/widgets/employee_details_sheet.dar
 import 'package:scheduling/features/employees/widgets/employee_form_sheet.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
+import 'package:scheduling/features/settings/widgets/settings_drawer.dart';
+
 class AddEmployeePage extends StatefulWidget {
-  const AddEmployeePage({super.key});
+  final bool isAdmin;
+  final String employeeId;
+
+  const AddEmployeePage({
+    super.key,
+    required this.isAdmin,
+    required this.employeeId,
+  });
 
   @override
   State<AddEmployeePage> createState() => _AddEmployeePageState();
@@ -25,7 +34,7 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
     super.dispose();
   }
 
-// methods
+  // methods
   List<EmployeeRecord> _filterEmployees(List<EmployeeRecord> employees) {
     final query = _searchController.text.trim().toLowerCase();
     if (query.isEmpty) return employees;
@@ -48,16 +57,16 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
     if (!mounted) return;
 
     if (result == 'deleted') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr(context, 'Employee deleted'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(tr(context, 'Employee deleted'))));
     } else if (result == true) {
       final messageKey = employee == null
           ? 'Employee added successfully'
           : 'Employee updated successfully';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr(context, messageKey))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(tr(context, messageKey))));
     }
   }
 
@@ -70,9 +79,9 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
     );
 
     if (!mounted || result != 'deleted') return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(tr(context, 'Employee deleted'))),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(tr(context, 'Employee deleted'))));
   }
 
   Future<void> _confirmDelete(EmployeeRecord employee) async {
@@ -101,17 +110,21 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
     await _userService.deleteEmployee(employee.id);
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(tr(context, 'Employee deleted'))),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(tr(context, 'Employee deleted'))));
   }
-
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return Scaffold(
+      appBar: AppBar(title: Text('Employees'), centerTitle: true),
+      endDrawer: SettingsDrawer(
+        isAdmin: widget.isAdmin,
+        employeeId: widget.employeeId,
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _openEmployeeSheet,
         child: const Icon(Icons.add),
@@ -121,24 +134,24 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
           child: Column(
             children: [
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                  ),
-                  Expanded(
-                    child: Text(
-                      tr(context, 'Employees'),
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 48),
-                ],
-              ),
+              //Row(
+              //  children: [
+              //    IconButton(
+              //      onPressed: () => Navigator.of(context).maybePop(),
+              //      icon: const Icon(Icons.arrow_back_ios_new_rounded),
+              //    ),
+              //    Expanded(
+              //      child: Text(
+              //        tr(context, 'Employees'),
+              //        textAlign: TextAlign.center,
+              //        style: theme.textTheme.headlineSmall?.copyWith(
+              //          fontWeight: FontWeight.w700,
+              //        ),
+              //     ),
+              //    ),
+              //   const SizedBox(width: 48),
+              // ],
+              //),
               const SizedBox(height: 12),
               TextField(
                 controller: _searchController,

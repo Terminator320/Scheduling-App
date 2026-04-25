@@ -6,8 +6,9 @@ import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 
 class AppointmentTile extends StatelessWidget {
   final AppointmentRecord appointment;
+  final bool showActions;
 
-  const AppointmentTile({super.key, required this.appointment});
+  const AppointmentTile({super.key, required this.appointment, this.showActions = true,});
 
   @override
   Widget build(BuildContext context) {
@@ -15,7 +16,7 @@ class AppointmentTile extends StatelessWidget {
 
     return Card(
       child: ListTile(
-        onTap: () => showEventDetails(context, appointment),
+        onTap: () => showEventDetails(context, appointment, showActions: showActions),
         leading: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
