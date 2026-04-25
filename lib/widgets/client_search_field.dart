@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/client_record.dart';
-import '../../utils/calendar_utils/form_widgets.dart';
+import 'form_widgets/form_helpers.dart';
 
 class ClientSearchField extends StatelessWidget {
   final TextEditingController controller;
