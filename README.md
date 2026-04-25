@@ -3,5 +3,4 @@
 **_ToDo:_**
 
 In calendar:
-- remove duplicate dots when we click on a date
-- get the delete appointment to work
+- Make the search for client work when adding an appointment
