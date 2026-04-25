@@ -6,6 +6,7 @@ import 'dart:io';
 
 import '../../models/client_record.dart';
 import '../../models/employee_record.dart';
+import '../../services/appointment_service.dart';
 import '../../services/client_service.dart';
 import '../../services/user_service.dart';
 import '../../utils/calendar_utils/form_widgets.dart';
@@ -54,6 +55,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
   final _compressService = ImageCompressService();
   final _clientService = ClientService();
   final _userService = UserService();
+  final _appointmentService = AppointmentService();
 
   @override
   void initState() {
@@ -194,10 +196,12 @@ class _AddEventSheetState extends State<AddEventSheet> {
     setState(() => _isSubmitting = true);
 
     try {
+      final docRef = _appointmentService.newDocRef();
+
       List<AppointmentImage> uploadedImages = const [];
       if (_selectedImages.isNotEmpty) {
         final compressed = await _compressService.compressImages(_selectedImages);
-        uploadedImages = await _storageService.uploadImages(compressed);
+        uploadedImages = await _storageService.uploadImages(docRef.id, compressed);
       }
 
       final startTime = _combineDateAndTime(
@@ -207,6 +211,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
       final endTime = _combineDateAndTime(_selectedDate!, _selectedEndTime!);
 
       final newAppointment = AppointmentRecord(
+        id: docRef.id,
         title: _titleController.text.trim(),
         startTime: startTime,
         endTime: endTime,

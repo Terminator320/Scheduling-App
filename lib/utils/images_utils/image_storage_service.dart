@@ -1,48 +1,60 @@
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloudinary_public/cloudinary_public.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 import '../../models/appointmentImage.dart';
 
 class ImageStorageService {
-  final CloudinaryPublic _cloudinary = CloudinaryPublic(
-    dotenv.env['CLOUDINARY_CLOUD_NAME']!,
-    dotenv.env['CLOUDINARY_UPLOAD_PRESET']!,
-    cache: false,
-  );
+  final FirebaseStorage _storage = FirebaseStorage.instance;
 
-  Future<AppointmentImage> uploadImage(File file) async {
+  Future<AppointmentImage> uploadImage(String appointmentId, File file) async {
+    final originalName = file.uri.pathSegments.last;
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}_$originalName';
+    final path = 'appointments/$appointmentId/images/$fileName';
+
+    final ref = _storage.ref(path);
+    final metadata = SettableMetadata(
+      contentType: _contentTypeFor(originalName),
+      cacheControl: 'public, max-age=31536000',
+    );
+
+    final snapshot = await ref.putFile(file, metadata);
+    final url = await snapshot.ref.getDownloadURL();
+
+    return AppointmentImage(
+      url: url,
+      storagePath: path,
+      fileName: fileName,
+      uploadedAt: Timestamp.now(),
+    );
+  }
+
+  Future<List<AppointmentImage>> uploadImages(
+    String appointmentId,
+    List<File> files,
+  ) async {
+    return Future.wait(files.map((f) => uploadImage(appointmentId, f)));
+  }
+
+  Future<void> deleteImage(AppointmentImage image) async {
+    if (image.storagePath.isEmpty) return;
     try {
-      final response = await _cloudinary.uploadFile(
-        CloudinaryFile.fromFile(
-          file.path,
-          resourceType: CloudinaryResourceType.Image,
-          folder: 'events',
-        ),
-      );
-
-      return AppointmentImage(
-        url: response.secureUrl,
-        publicId: response.publicId,
-        thumbUrl: _buildThumbUrl(response.secureUrl),
-        fileName: file.uri.pathSegments.last,
-        uploadedAt: Timestamp.now(),
-      );
-    } catch (e) {
+      await _storage.ref(image.storagePath).delete();
+    } on FirebaseException catch (e) {
+      if (e.code == 'object-not-found') return;
       rethrow;
     }
   }
 
-  Future<List<AppointmentImage>> uploadImages(List<File> files) async {
-    final images = await Future.wait(files.map((f) => uploadImage(f)));
-    return images;
+  Future<void> deleteImages(List<AppointmentImage> images) async {
+    await Future.wait(images.map(deleteImage));
   }
 
-  String _buildThumbUrl(String secureUrl) {
-    const marker = '/upload/';
-    final i = secureUrl.indexOf(marker);
-    if (i == -1) return secureUrl;
-    return '${secureUrl.substring(0, i + marker.length)}w_200,h_200,c_fill,q_auto,f_auto/${secureUrl.substring(i + marker.length)}';
+  String _contentTypeFor(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.heic') || lower.endsWith('.heif')) return 'image/heic';
+    return 'image/jpeg';
   }
 }
