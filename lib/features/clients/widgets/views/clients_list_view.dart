@@ -35,6 +35,12 @@ class ClientsListView extends ConsumerStatefulWidget {
 class _ClientsListViewState extends ConsumerState<ClientsListView> {
   static const int _pageSize = 50;
 
+  static const _sheetAnimationStyle = AnimationStyle(
+    duration: Duration(milliseconds: 280),
+    reverseDuration: Duration(milliseconds: 220),
+    curve: Curves.easeOutCubic,
+  );
+
   late final PagingController<int, ClientRecord> _pagingController =
       PagingController<int, ClientRecord>(
         getNextPageKey: (state) {
@@ -73,11 +79,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      sheetAnimationStyle: const AnimationStyle(
-        duration: Duration(milliseconds: 280),
-        reverseDuration: Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-      ),
+      sheetAnimationStyle: _sheetAnimationStyle,
       builder: (_) => const AddClientSheet(),
     );
   }
@@ -95,11 +97,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      sheetAnimationStyle: const AnimationStyle(
-        duration: Duration(milliseconds: 280),
-        reverseDuration: Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-      ),
+      sheetAnimationStyle: _sheetAnimationStyle,
       builder: (_) => ClientDetailSheet(client: client),
     );
 

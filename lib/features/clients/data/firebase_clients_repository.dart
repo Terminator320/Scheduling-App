@@ -13,18 +13,6 @@ class FirebaseClientsRepository implements ClientsRepository {
   final Map<String, List<ClientRecord>> _searchCache = {};
 
   @override
-  Stream<List<ClientRecord>> watchClients({int? limit}) {
-    var query = _clients.orderBy('createdAt', descending: true);
-    if (limit != null) query = query.limit(limit);
-
-    return query.snapshots().map(
-      (snapshot) => snapshot.docs
-          .map((doc) => ClientRecord.fromMap(doc.id, doc.data()))
-          .toList(),
-    );
-  }
-
-  @override
   Future<List<ClientRecord>> fetchClientsPage({
     required int limit,
     ClientRecord? after,
