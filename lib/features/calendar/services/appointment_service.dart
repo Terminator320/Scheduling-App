@@ -19,9 +19,6 @@ class AppointmentService {
     });
   }
 
-
-
-
   Stream<List<AppointmentRecord>> getAllAppointments() {
     return appointments.snapshots().map((snapshot) {
       return snapshot.docs.map((doc) {
@@ -30,7 +27,16 @@ class AppointmentService {
     });
   }
 
-
+  Stream<List<AppointmentRecord>> getAppointmentDone() {
+    return appointments
+        .where('status', isEqualTo: 'done')
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
+  }
 
   Future<AppointmentRecord?> getAppointmentById(String appointmentId) async {
     final doc = await appointments.doc(appointmentId).get();
@@ -41,7 +47,6 @@ class AppointmentService {
 
     return AppointmentRecord.fromMap(doc.id, doc.data()!);
   }
-
 
   Future<void> updateAppointment(AppointmentRecord appointment) async {
     if (appointment.id == null) return;
@@ -69,12 +74,15 @@ class AppointmentService {
   }
 
   Stream<List<AppointmentRecord>> employeeAppointmentsStream(
-      String employeeId) {
+    String employeeId,
+  ) {
     return appointments
         .where('employeeIds', arrayContains: employeeId)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-        .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
-        .toList());
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
   }
 }

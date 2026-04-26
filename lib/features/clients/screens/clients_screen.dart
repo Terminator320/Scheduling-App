@@ -174,10 +174,11 @@ class _ListInformationState extends State<ListInformation> {
             controller: _scrollController,
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
             itemCount: displayed.length,
-            itemBuilder: (context, index) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: ClientTile(client: displayed[index]),
-            ),
+            itemBuilder: (context, index) =>
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: ClientTile(client: displayed[index]),
+                ),
           ),
         ),
       ],
@@ -185,9 +186,11 @@ class _ListInformationState extends State<ListInformation> {
   }
 
   Widget _buildAppointmentList() {
-    final scheme = Theme.of(context).colorScheme;
+    final scheme = Theme
+        .of(context)
+        .colorScheme;
 
-    return Column(                          // ← Column en dehors du StreamBuilder
+    return Column(
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -206,7 +209,8 @@ class _ListInformationState extends State<ListInformation> {
               ),
               suffixIcon: _appointmentSearchController.text.isNotEmpty
                   ? IconButton(
-                icon: Icon(Icons.close, size: 18, color: scheme.onSurfaceVariant),
+                icon: Icon(
+                    Icons.close, size: 18, color: scheme.onSurfaceVariant),
                 onPressed: () =>
                     setState(() => _appointmentSearchController.clear()),
                 tooltip: 'Clear',
@@ -216,8 +220,9 @@ class _ListInformationState extends State<ListInformation> {
           ),
         ),
         Expanded(
-          child: StreamBuilder<List<AppointmentRecord>>(    // ← StreamBuilder seulement pour la liste
-            stream: _appointmentService.getAllAppointments(),
+          child: StreamBuilder<List<AppointmentRecord>>(
+
+            stream: _appointmentService.getAppointmentDone(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
@@ -226,16 +231,19 @@ class _ListInformationState extends State<ListInformation> {
                 return Center(child: Text('Error : ${snapshot.error}'));
               }
 
+
               final appointments = snapshot.data ?? [];
-              final query = _appointmentSearchController.text.trim().toLowerCase();
+              final query = _appointmentSearchController.text
+                  .trim()
+                  .toLowerCase();
 
               final filtered = query.isEmpty
                   ? appointments
                   : appointments.where((a) {
                 final matchesClient =
                 a.clientName.toLowerCase().contains(query);
-                final matchesEmployee = a.employeeNames
-                    .any((e) => e.toLowerCase().contains(query));
+                final matchesEmployee =
+                a.employeeNames.any((e) => e.toLowerCase().contains(query));
                 return matchesClient || matchesEmployee;
               }).toList();
 
@@ -259,7 +267,11 @@ class _ListInformationState extends State<ListInformation> {
                         query.isEmpty
                             ? 'No appointments found.'
                             : 'No appointments match "$query"',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        style: Theme
+                            .of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
                       ),
@@ -272,10 +284,11 @@ class _ListInformationState extends State<ListInformation> {
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
                 itemCount: sorted.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (context, index) => AppointmentTile(
-                  appointment: sorted[index],
-                  showActions: false,
-                ),
+                itemBuilder: (context, index) =>
+                    AppointmentTile(
+                      appointment: sorted[index],
+                      showActions: false,
+                    ),
               );
             },
           ),
