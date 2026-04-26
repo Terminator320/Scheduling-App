@@ -46,7 +46,7 @@ class EmployeeCard extends StatelessWidget {
               ),
               IconButton(
                 onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline, size: 20),
+                icon: Icon(Icons.delete_outline, size: 20,  color: scheme.error),
               ),
             ],
           ),
