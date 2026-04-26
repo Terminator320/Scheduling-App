@@ -222,7 +222,7 @@ class _ListInformationState extends State<ListInformation> {
         Expanded(
           child: StreamBuilder<List<AppointmentRecord>>(
 
-            stream: _appointmentService.getAppointmentDone(),
+            stream: _appointmentService.getAppointmentStatus('done'), // Takes all appointments with status done
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
