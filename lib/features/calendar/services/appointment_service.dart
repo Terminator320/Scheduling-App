@@ -27,9 +27,9 @@ class AppointmentService {
     });
   }
 
-  Stream<List<AppointmentRecord>> getAppointmentDone() {
+  Stream<List<AppointmentRecord>> getAppointmentStatus(String status) {
     return appointments
-        .where('status', isEqualTo: 'done')
+        .where('status', isEqualTo: status)
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
