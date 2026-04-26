@@ -17,15 +17,6 @@ class AppointmentTile extends StatelessWidget {
     return Card(
       child: ListTile(
         onTap: () => showEventDetails(context, appointment, showActions: showActions),
-        leading: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              DateUtilsHelper.formatPrettyDate(appointment.startTime),
-              style: theme.textTheme.labelMedium,
-            ),
-          ],
-        ),
         title: Text(
           appointment.title,
           style: theme.textTheme.titleMedium?.copyWith(
@@ -55,6 +46,10 @@ class AppointmentTile extends StatelessWidget {
                   ),
                 ],
               ),
+            Text(
+              DateUtilsHelper.formatPrettyDate(appointment.startTime),
+              style: theme.textTheme.labelMedium,
+            ),
           ],
         ),
         isThreeLine: appointment.employeeNames.isNotEmpty,
