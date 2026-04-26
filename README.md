@@ -7,6 +7,7 @@
 - add all text boxes for address (Audréane)
 - connect the address to apple map/google maps/waze (Audréane)
 - change the ui of the cards in backlog (Victor)
-- implementing settings page for size and languages (Audréane)
+- implementing settings page for size, languages, dark & light mode (Audréane)
 - Make the search for client work when adding an appointment (ignore case) (Audréane)
 - Fix authentification to be permanent (George)
+- Save settings to the device (George)
