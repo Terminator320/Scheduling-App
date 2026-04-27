@@ -15,6 +15,9 @@ import 'package:scheduling/shared/widgets/form_helpers.dart';
 
 import 'package:scheduling/routes/app_routes.dart';
 
+import 'package:scheduling/features/employees/models/employee_record.dart';
+import 'package:scheduling/features/employees/services/user_service.dart';
+
 enum ListMode { clients, appointments }
 
 class ListInformation extends StatefulWidget {
@@ -44,6 +47,9 @@ class _ListInformationState extends State<ListInformation> {
   final ClientService _clientService = ClientService();
   final AppointmentService _appointmentService = AppointmentService();
   StreamSubscription? _clientsSubscription;
+  final UserService _userService = UserService();
+  List<EmployeeRecord> _allEmployees = [];
+  StreamSubscription? _employeesSubscription;
 
   bool get _isClients => widget.mode == 'Clients';
 
@@ -52,10 +58,15 @@ class _ListInformationState extends State<ListInformation> {
   @override
   void initState() {
     super.initState();
+    _userService.allUsersStream().listen((data) {
+      if (mounted) setState(() => _allEmployees = data);
+    });
     _clientsSubscription = _clientService.clientsStream().listen((clients) {
       if (mounted) setState(() => _allClients = clients);
     });
-
+    _employeesSubscription = _userService.allUsersStream().listen((data) {
+      if (mounted) setState(() => _allEmployees = data);
+    });
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >=
           _scrollController.position.maxScrollExtent - 200) {
@@ -70,6 +81,7 @@ class _ListInformationState extends State<ListInformation> {
     _appointmentSearchController.dispose();
     _scrollController.dispose();
     _clientsSubscription?.cancel();
+    _employeesSubscription?.cancel();
     super.dispose();
   }
 
@@ -289,6 +301,7 @@ class _ListInformationState extends State<ListInformation> {
                 separatorBuilder: (_, __) => const SizedBox(height: 8),
                 itemBuilder: (context, index) => AppointmentTile(
                   appointment: sorted[index],
+                  employees: _allEmployees,
                   showActions: false,
                 ),
               );
