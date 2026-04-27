@@ -56,6 +56,7 @@ dependencies:
   flutter_dotenv: any
 
 
+  animations: any
   adaptive_theme: any
   device_preview: any
   flex_color_picker: any

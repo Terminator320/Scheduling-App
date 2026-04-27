@@ -2,7 +2,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
 
 class AuthService {
-  final _auth = FirebaseAuth.instance;
+  // Optional injection allows tests to pass fakes without hitting Firebase.
+  AuthService({FirebaseAuth? firebaseAuth, UserService? userService})
+    : _auth = firebaseAuth ?? FirebaseAuth.instance,
+      _userService = userService ?? UserService();
+
+  final FirebaseAuth _auth;
+  final UserService _userService;
+
+  User? get currentUser => _auth.currentUser;
+
+  Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   Future<UserCredential> signIn({
     required String email,
@@ -14,21 +24,34 @@ class AuthService {
     );
   }
 
-   Future<void> sendResetPassword(String email) {
-    return _auth.sendPasswordResetEmail(
+  Future<UserCredential> register({
+    required String email,
+    required String password,
+  }) {
+    return _auth.createUserWithEmailAndPassword(
       email: email.trim().toLowerCase(),
+      password: password.trim(),
     );
   }
 
-   Future<UserCredential> createEmployeeAccount({
+  Future<void> sendPasswordResetEmail(String email) {
+    return _auth.sendPasswordResetEmail(email: email.trim().toLowerCase());
+  }
+
+  // Kept for backwards compatibility with existing call sites.
+  Future<void> sendResetPassword(String email) {
+    return sendPasswordResetEmail(email);
+  }
+
+  Future<UserCredential> createEmployeeAccount({
     required String email,
     required String password,
   }) async {
-    final userService = UserService();
+    final invitedEmployee = await _userService.findInvitedEmployeeByEmail(
+      email,
+    );
 
-    final invitedEmployee =
-    await userService.findInvitedEmployeeByEmail(email);
-
+    // Employees must be pre-invited by an admin; reject unknown emails up front.
     if (invitedEmployee == null) {
       throw FirebaseAuthException(
         code: 'not-authorized',
@@ -36,12 +59,12 @@ class AuthService {
       );
     }
 
-    final credential = await _auth.createUserWithEmailAndPassword(
+    final credential = await register(
       email: email.trim().toLowerCase(),
       password: password.trim(),
     );
 
-    await userService.activateEmployee(
+    await _userService.activateEmployee(
       docId: invitedEmployee.id,
       uid: credential.user!.uid,
     );
@@ -52,8 +75,4 @@ class AuthService {
   Future<void> signOut() async {
     await _auth.signOut();
   }
-
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
-
-
 }
