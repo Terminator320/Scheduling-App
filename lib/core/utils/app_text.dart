@@ -10,6 +10,7 @@ const Map<String, String> _fr = {
   'Password': 'Mot de passe',
   'Sign In': 'Se connecter',
   'Forgot password?': 'Mot de passe oublié ?',
+  'or': 'ou',
   'Create account': 'Créer un compte',
   'Create Account': 'Créer un compte',
   'Sign in': 'Se connecter',
@@ -34,7 +35,8 @@ const Map<String, String> _fr = {
   'Français': 'Français',
   'Edit Employees': 'Modifier les employés',
   'Search by name or phone number': 'Rechercher par nom ou numéro de téléphone',
-  'Search by name or phone number...': 'Rechercher par nom ou numéro de téléphone...',
+  'Search by name or phone number...':
+      'Rechercher par nom ou numéro de téléphone...',
   'Create Employee': 'Créer un employé',
   'Enter username and email': 'Entrez le nom d’utilisateur et le courriel',
   'Username': 'Nom d’utilisateur',
@@ -61,7 +63,8 @@ const Map<String, String> _fr = {
   'Date': 'Date',
   'Start Time': 'Heure de début',
   'End Time': 'Heure de fin',
-  'Client (search by name or phone number)': 'Client (recherche par nom ou téléphone)',
+  'Client (search by name or phone number)':
+      'Client (recherche par nom ou téléphone)',
   'Client name (phone number)': 'Nom du client (numéro de téléphone)',
   'Type of job': 'Type de travail',
   'Type of job...': 'Type de travail...',
@@ -85,7 +88,8 @@ const Map<String, String> _fr = {
   '2 pictures attached': '2 photos jointes',
   '3 pictures attached': '3 photos jointes',
   'Event Done': 'Événement terminé',
-  'Tap the + button to add one later.': 'Touchez le bouton + pour en ajouter un plus tard.',
+  'Tap the + button to add one later.':
+      'Touchez le bouton + pour en ajouter un plus tard.',
   '(Admin Name)': '(Nom de l’admin)',
   'January': 'Janvier',
   'February': 'Février',
@@ -109,7 +113,8 @@ const Map<String, String> _fr = {
   'Job title': 'Titre du travail',
   'General appointment notes': 'Notes générales du rendez-vous',
   'Standard tools': 'Outils standards',
-  'Customer requested confirmation call': 'Le client a demandé un appel de confirmation',
+  'Customer requested confirmation call':
+      'Le client a demandé un appel de confirmation',
   'Replacement parts': 'Pièces de remplacement',
   'Access through side entrance': 'Accès par l’entrée latérale',
   'Inspection checklist': 'Liste de vérification d’inspection',
@@ -121,9 +126,9 @@ const Map<String, String> _fr = {
   'Admin only': 'Admin seulement',
   'New email': 'Nouveau courriel',
   'Verification email sent. Please confirm the new email address.':
-  'Un courriel de vérification a été envoyé. Veuillez confirmer la nouvelle adresse courriel.',
+      'Un courriel de vérification a été envoyé. Veuillez confirmer la nouvelle adresse courriel.',
   'Please log in again before changing email':
-  'Veuillez vous reconnecter avant de changer le courriel',
+      'Veuillez vous reconnecter avant de changer le courriel',
   'Email already in use': 'Ce courriel est déjà utilisé',
   'Invalid email': 'Courriel invalide',
   'Error updating email': 'Erreur lors de la modification du courriel',
@@ -133,13 +138,11 @@ const Map<String, String> _fr = {
   'Name and email are required': 'Le nom et le courriel sont obligatoires',
   'Employee added successfully': 'Employé ajouté avec succès',
   'An employee with this email already exists':
-  'Un employé avec ce courriel existe déjà',
+      'Un employé avec ce courriel existe déjà',
   'Could not create employee': 'Impossible de créer l’employé',
   'Delete employee': 'Supprimer l’employé',
   'Are you sure you want to delete this employee?':
-  'Êtes-vous sûr de vouloir supprimer cet employé ?',
-
-  // Forgot password flow
+      'Êtes-vous sûr de vouloir supprimer cet employé ?',
   'Back': 'Retour',
   'Reset Password': 'Réinitialiser le mot de passe',
   'Forgot Password': 'Mot de passe oublié ?',
@@ -174,15 +177,12 @@ const Map<String, String> _fr = {
       'Le courriel peut prendre quelques minutes à arriver. Pensez à vérifier votre dossier de courrier indésirable.',
   'Use a different email': 'Utiliser un autre courriel',
   'Something went wrong': 'Une erreur s’est produite',
-
-  // Login validation & error messages
   'Please enter your email': 'Veuillez entrer votre courriel',
   'Please enter your password': 'Veuillez entrer votre mot de passe',
   'Please enter a valid email address':
       'Veuillez entrer une adresse courriel valide',
   'Invalid email or password': 'Courriel ou mot de passe invalide',
-  'No account found with this email':
-      'Aucun compte trouvé pour ce courriel',
+  'No account found with this email': 'Aucun compte trouvé pour ce courriel',
   'Too many attempts, please try again later':
       'Trop de tentatives. Veuillez réessayer plus tard',
   'Something went wrong, please try again':
@@ -200,6 +200,7 @@ const Map<String, String> _fr = {
       'Compte créé. Vous pouvez maintenant vous connecter.',
   'No user profile found for this account':
       'Aucun profil utilisateur trouvé pour ce compte',
+  'Please log in again and retry': 'Veuillez vous reconnecter et réessayer',
 };
 
 String tr(BuildContext context, String text) {
@@ -216,14 +217,14 @@ String trMaybe(BuildContext context, String? text) {
 }
 
 List<String> localizedWeekdayShort(BuildContext context) => [
-      tr(context, 'Sun'),
-      tr(context, 'Mon'),
-      tr(context, 'Tue'),
-      tr(context, 'Wed'),
-      tr(context, 'Thu'),
-      tr(context, 'Fri'),
-      tr(context, 'Sat'),
-    ];
+  tr(context, 'Sun'),
+  tr(context, 'Mon'),
+  tr(context, 'Tue'),
+  tr(context, 'Wed'),
+  tr(context, 'Thu'),
+  tr(context, 'Fri'),
+  tr(context, 'Sat'),
+];
 
 String localizedMonthName(BuildContext context, int month) {
   const months = [
@@ -243,7 +244,11 @@ String localizedMonthName(BuildContext context, int month) {
   return tr(context, months[month - 1]);
 }
 
-String noEventsForDate(BuildContext context, DateTime date, {bool monthFirst = false}) {
+String noEventsForDate(
+  BuildContext context,
+  DateTime date, {
+  bool monthFirst = false,
+}) {
   final language = AppLanguageScope.of(context).value;
   if (language == 'fr') {
     return 'Aucun événement pour le ${date.day}/${date.month}/${date.year}';
