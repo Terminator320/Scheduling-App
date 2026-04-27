@@ -2,57 +2,89 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
+import 'package:scheduling/features/calendar/services/appointment_service.dart';
+import 'package:scheduling/features/calendar/widgets/details_edit_sheet.dart';
+import 'package:scheduling/features/employees/models/employee_record.dart';
 
 class AppointmentTile extends StatelessWidget {
   final AppointmentRecord appointment;
   final bool showActions;
+  final List<EmployeeRecord> employees;
 
-  const AppointmentTile({super.key, required this.appointment, this.showActions = true,});
+  const AppointmentTile({
+    super.key,
+    required this.appointment,
+    required this.employees,
+    this.showActions = true,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final accent =
+        colorForAppointment(appointment, employees) ?? scheme.outline;
 
     return Card(
-      child: ListTile(
-        onTap: () => showEventDetails(context, appointment, showActions: showActions),
-        title: Text(
-          appointment.title,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () =>
+            showEventDetails(context, appointment, showActions: showActions),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+
+              Container(width: 5, color: accent),
+
+
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        appointment.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today_outlined,
+                            size: 13,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${DateUtilsHelper.formatPrettyDate(appointment.endTime)}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Icon(
+                  Icons.chevron_right,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ),
         ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.person, size: 13),
-                const SizedBox(width: 4),
-                Text(appointment.clientName),
-              ],
-            ),
-            if (appointment.employeeNames.isNotEmpty)
-              Row(
-                children: [
-                  const Icon(Icons.group, size: 13),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      appointment.employeeNames.join(', '),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            Text(
-              DateUtilsHelper.formatPrettyDate(appointment.startTime),
-              style: theme.textTheme.labelMedium,
-            ),
-          ],
-        ),
-        isThreeLine: appointment.employeeNames.isNotEmpty,
       ),
     );
   }

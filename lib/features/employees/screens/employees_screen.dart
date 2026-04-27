@@ -10,6 +10,8 @@ import 'package:scheduling/shared/widgets/form_helpers.dart';
 
 import 'package:scheduling/features/settings/widgets/settings_drawer.dart';
 
+import '../../../shared/widgets/appScaffoldBar.dart';
+
 class AddEmployeePage extends StatefulWidget {
   final bool isAdmin;
   final String employeeId;
@@ -120,7 +122,7 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text('Employees'), centerTitle: true),
+      appBar: appScaffoldBar(context, 'Employees', widget.employeeId, widget.isAdmin),
       endDrawer: SettingsDrawer(
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
@@ -134,24 +136,6 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
           child: Column(
             children: [
-              //Row(
-              //  children: [
-              //    IconButton(
-              //      onPressed: () => Navigator.of(context).maybePop(),
-              //      icon: const Icon(Icons.arrow_back_ios_new_rounded),
-              //    ),
-              //    Expanded(
-              //      child: Text(
-              //        tr(context, 'Employees'),
-              //        textAlign: TextAlign.center,
-              //        style: theme.textTheme.headlineSmall?.copyWith(
-              //          fontWeight: FontWeight.w700,
-              //        ),
-              //     ),
-              //    ),
-              //   const SizedBox(width: 48),
-              // ],
-              //),
               const SizedBox(height: 12),
               TextField(
                 controller: _searchController,
