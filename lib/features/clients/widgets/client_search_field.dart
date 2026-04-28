@@ -36,7 +36,7 @@ class ClientSearchField extends StatelessWidget {
           decoration:
               formInputDecoration(
                 context,
-                "Search by name or phone number",
+                "Search by name, business, phone, email, address...",
               ).copyWith(
                 errorText: errorText,
                 suffixIcon: selectedClient != null
@@ -77,8 +77,14 @@ class ClientSearchField extends StatelessWidget {
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       subtitle: Text(
-                        client.phone,
+                        client.phone.trim().isNotEmpty
+                            ? client.phone
+                            : client.email.trim().isNotEmpty
+                                ? client.email
+                                : client.address,
                         style: Theme.of(context).textTheme.labelLarge,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       onTap: () => onSelect(client),
                     ),

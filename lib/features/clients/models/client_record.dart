@@ -1,4 +1,3 @@
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ClientContact {
@@ -20,7 +19,6 @@ class ClientContact {
     );
   }
 
-
   Map<String, dynamic> toMap() {
     return {
       'name': name.trim(),
@@ -35,6 +33,11 @@ class ClientRecord {
   String businessName;
   String name;
   String address;
+  String apt;
+  String city;
+  String province;
+  String country;
+  String postalCode;
   String phone;
   String email;
   List<ClientContact> contacts;
@@ -46,7 +49,12 @@ class ClientRecord {
     required this.address,
     required this.phone,
     required this.email,
-    required this.contacts, //
+    required this.contacts,
+    this.apt = '',
+    this.city = '',
+    this.province = '',
+    this.country = '',
+    this.postalCode = '',
   });
 
   Map<String, dynamic> toMap() {
@@ -54,6 +62,11 @@ class ClientRecord {
       'businessName': businessName.trim(),
       'name': name.trim(),
       'address': address.trim(),
+      'apt': apt.trim(),
+      'city': city.trim(),
+      'province': province.trim(),
+      'country': country.trim(),
+      'postalCode': postalCode.trim(),
       'phone': phone.trim(),
       'email': email.trim(),
       'contacts': contacts.map((c) => c.toMap()).toList(),
@@ -67,6 +80,11 @@ class ClientRecord {
       businessName: (data['businessName'] ?? '').toString(),
       name: (data['name'] ?? '').toString(),
       address: (data['address'] ?? '').toString(),
+      apt: (data['apt'] ?? '').toString(),
+      city: (data['city'] ?? '').toString(),
+      province: (data['province'] ?? '').toString(),
+      country: (data['country'] ?? '').toString(),
+      postalCode: (data['postalCode'] ?? '').toString(),
       phone: (data['phone'] ?? '').toString(),
       email: (data['email'] ?? '').toString(),
       contacts: rawContacts
@@ -80,9 +98,7 @@ class ClientRecord {
     return ClientRecord.fromMap(doc.id, doc.data() ?? {});
   }
 
-  String get displayName =>
-      businessName.isNotEmpty ? businessName : name;
+  String get displayName => businessName.isNotEmpty ? businessName : name;
 
-  List<ClientContact> get displayContact =>
-      contacts;
+  List<ClientContact> get displayContact => contacts;
 }

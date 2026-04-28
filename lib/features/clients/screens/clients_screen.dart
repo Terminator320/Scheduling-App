@@ -51,6 +51,7 @@ class _ListInformationState extends State<ListInformation> {
   List<EmployeeRecord> _allEmployees = [];
   StreamSubscription? _employeesSubscription;
 
+
   bool get _isClients => widget.mode == 'Clients';
 
   String get _title => _isClients ? 'Clients' : 'Appointments';

@@ -41,20 +41,105 @@ class ClientService {
     final q = query.trim();
     if (q.isEmpty) return [];
 
-    final isPhone = RegExp(r'^\d+$').hasMatch(q);
+    String normalize(String value) {
+      return value
+          .toLowerCase()
+          .replaceAll(RegExp(r'[àáâãäå]'), 'a')
+          .replaceAll(RegExp(r'[èéêë]'), 'e')
+          .replaceAll(RegExp(r'[ìíîï]'), 'i')
+          .replaceAll(RegExp(r'[òóôõö]'), 'o')
+          .replaceAll(RegExp(r'[ùúûü]'), 'u')
+          .replaceAll(RegExp(r'[ç]'), 'c')
+          .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+          .trim();
+    }
 
-    final field = isPhone ? 'phone' : 'name';// no lowercase conversion
+    String digitsOnly(String value) => value.replaceAll(RegExp(r'\D'), '');
 
-    final end = q.substring(0, q.length - 1) +
-        String.fromCharCode(q.codeUnitAt(q.length - 1) + 1);
+    final normalizedQuery = normalize(q);
+    final queryDigits = digitsOnly(q);
 
     final snapshot = await _clients
-        .where(field, isGreaterThanOrEqualTo: q)
-        .where(field, isLessThan: end)
-        .limit(20)
+        .orderBy('createdAt', descending: true)
+        .limit(500)
         .get();
 
-    return snapshot.docs.map((doc) => ClientRecord.fromDoc(doc)).toList();
+    final scoredClients = <MapEntry<int, ClientRecord>>[];
+
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final client = ClientRecord.fromDoc(doc);
+
+      final contacts = (data['contacts'] as List?) ?? const [];
+      final contactSearchText = contacts
+          .whereType<Map>()
+          .map((contact) {
+            final map = Map<String, dynamic>.from(contact);
+            return [
+              map['name'],
+              map['phone'],
+              map['email'],
+            ].whereType<Object>().map((v) => v.toString()).join(' ');
+          })
+          .join(' ');
+
+      final searchableText = normalize([
+        data['businessName'],
+        data['name'],
+        data['phone'],
+        data['email'],
+        data['address'],
+        data['city'],
+        data['province'],
+        data['postalCode'],
+        data['country'],
+        contactSearchText,
+      ].whereType<Object>().map((v) => v.toString()).join(' '));
+
+      final displayName = normalize(client.displayName);
+      final name = normalize(data['name']?.toString() ?? '');
+      final businessName = normalize(data['businessName']?.toString() ?? '');
+      final phoneDigits = digitsOnly(data['phone']?.toString() ?? '');
+      final contactsDigits = digitsOnly(contactSearchText);
+
+      final matchesText = searchableText.contains(normalizedQuery);
+      final matchesPhone = queryDigits.isNotEmpty &&
+          (phoneDigits.contains(queryDigits) || contactsDigits.contains(queryDigits));
+
+      if (!matchesText && !matchesPhone) continue;
+
+      var score = 100;
+      if (displayName == normalizedQuery || phoneDigits == queryDigits) {
+        score = 0;
+      } else if (displayName.startsWith(normalizedQuery) ||
+          businessName.startsWith(normalizedQuery) ||
+          name.startsWith(normalizedQuery)) {
+        score = 1;
+      } else if (queryDigits.isNotEmpty && phoneDigits.startsWith(queryDigits)) {
+        score = 2;
+      } else if (displayName.contains(normalizedQuery) ||
+          businessName.contains(normalizedQuery) ||
+          name.contains(normalizedQuery)) {
+        score = 3;
+      } else if (queryDigits.isNotEmpty &&
+          (phoneDigits.contains(queryDigits) || contactsDigits.contains(queryDigits))) {
+        score = 4;
+      } else {
+        score = 5;
+      }
+
+      scoredClients.add(MapEntry(score, client));
+    }
+
+    scoredClients.sort((a, b) {
+      final scoreCompare = a.key.compareTo(b.key);
+      if (scoreCompare != 0) return scoreCompare;
+      return a.value.displayName
+          .toLowerCase()
+          .compareTo(b.value.displayName.toLowerCase());
+    });
+
+    return scoredClients.take(25).map((entry) => entry.value).toList();
   }
 
 
