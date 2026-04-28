@@ -22,11 +22,13 @@ import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 class EventDetailsSheet extends StatefulWidget {
   final AppointmentRecord appointment;
   final bool showActions;
+  final bool initialEditing;
 
   const EventDetailsSheet({
     super.key,
     required this.appointment,
     this.showActions = true,
+    this.initialEditing = false,
   });
 
   @override
@@ -64,9 +66,12 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   final _imageService = ImagePickerService();
   final _userService = UserService();
 
+
+
   @override
   void initState() {
     super.initState();
+    _isEditing = widget.initialEditing;
     final a = widget.appointment;
 
     _titleController = TextEditingController(text: a.title);
@@ -113,6 +118,27 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     });
   }
 
+  Future<void> _markAsDone() async {
+    final id = widget.appointment.id;
+    if (id == null) return;
+
+    setState(() => _isSaving = true);
+    try {
+      await AppointmentService().updateAppointmentStatus(
+        appointmentId: id,
+        status: 'done',
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Something went wrong")),
+        );
+      }
+    }
+  }
+
   void _cancelEdit() {
     final a = widget.appointment;
     setState(() {
@@ -133,36 +159,6 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
           .where((e) => a.employeeIds.contains(e.id))
           .toList();
     });
-  }
-
-  Future<void> _confirmDelete() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete job'),
-        content: const Text('Are you sure you want to delete this job?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-    final id = widget.appointment.id;
-    if (id == null) return;
-    await AppointmentService.deleteAppointment(id);
-    if (!mounted) return;
-    Navigator.pop(context, 'deleted');
   }
 
   Future<void> _save() async {
@@ -593,8 +589,14 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
   // Button switching
   Widget _buildActionButtons() {
+    final now = DateTime.now();
+    final isToday = widget.appointment.startTime.year == now.year &&
+        widget.appointment.startTime.month == now.month &&
+        widget.appointment.startTime.day == now.day;
     final scheme = Theme.of(context).colorScheme;
+    final isDone = widget.appointment.status == 'done';
 
+    // Mode édition — inchangé
     if (_isEditing) {
       return Row(
         children: [
@@ -616,13 +618,13 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
               onPressed: _isSaving ? null : _save,
               child: _isSaving
                   ? SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: scheme.onPrimary,
-                      ),
-                    )
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: scheme.onPrimary,
+                ),
+              )
                   : const Text("Save changes"),
             ),
           ),
@@ -630,31 +632,42 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       );
     }
 
-    // View mode: primary action (Edit) is emphasized; destructive (Delete)
-    // is a subtle text button, spatially separated to avoid mistaps.
+    // Mode lecture — boutons selon le contexte
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
+        // Bouton Done uniquement si c'est aujourd'hui et pas déjà "done"
+        if (isToday && !isDone)
+          FilledButton.icon(
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
-            onPressed: () => setState(() => _isEditing = true),
-            icon: const Icon(Icons.edit_outlined, size: 18),
-            label: const Text("Edit"),
+            onPressed: _isSaving ? null : _markAsDone,  // ← appel correct
+            icon: _isSaving
+                ? SizedBox(
+              height: 18,
+              width: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: scheme.onPrimary,
+              ),
+            )
+                : const Icon(Icons.check, size: 18),
+            label: const Text("Mark as done"),
           ),
-        ),
-        const SizedBox(height: 8),
-        TextButton.icon(
-          style: TextButton.styleFrom(
-            foregroundColor: scheme.error,
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+
+        // Déjà complété
+        if (isDone)
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              foregroundColor: Colors.green,
+              side: const BorderSide(color: Colors.green),
+            ),
+            onPressed: null, // désactivé
+            icon: const Icon(Icons.check_circle_outline, size: 18),
+            label: const Text("Completed"),
           ),
-          onPressed: _confirmDelete,
-          icon: const Icon(Icons.delete_outline, size: 18),
-          label: const Text("Delete job"),
-        ),
       ],
     );
   }
