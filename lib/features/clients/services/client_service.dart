@@ -57,14 +57,11 @@ class ClientService {
     return snapshot.docs.map((doc) => ClientRecord.fromDoc(doc)).toList();
   }
 
-
-
   Future<ClientRecord?> getClientById(String id) async {
     final doc = await _clients.doc(id).get();
     if (!doc.exists) return null;
     return ClientRecord.fromDoc(doc);
   }
-
 }
 
 
