@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:scheduling/features/calendar/models/appointment_record.dart';
-import 'package:scheduling/features/calendar/widgets/add_appointment_sheet.dart';
-import 'package:scheduling/features/calendar/widgets/details_edit_sheet.dart';
+import '../models/appointment_record.dart';
+import '../widgets/add_appointment_sheet.dart';
+import '../widgets/details_edit_sheet.dart';
 
 
 Future<AppointmentRecord?> showAddEventPopup(BuildContext context) {
@@ -12,7 +12,7 @@ Future<AppointmentRecord?> showAddEventPopup(BuildContext context) {
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (_) => AddEventSheet(),
+    builder: (_) => const AddEventSheet(),
   );
 }
 

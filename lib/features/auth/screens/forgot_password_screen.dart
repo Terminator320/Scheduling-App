@@ -21,6 +21,10 @@ class ForgotPassword extends StatefulWidget {
   State<ForgotPassword> createState() => _ForgotPasswordState();
 }
 
+class ForgotPasswordScreen extends ForgotPassword {
+  const ForgotPasswordScreen({super.key, super.initialEmail});
+}
+
 class _ForgotPasswordState extends State<ForgotPassword>
     with SingleTickerProviderStateMixin {
   static const int _itemCount = 6;
