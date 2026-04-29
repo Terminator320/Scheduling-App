@@ -16,6 +16,32 @@ class _ParsedAptAddress {
   });
 }
 
+
+class _ContactFields {
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController phoneController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
+
+  bool get isEmpty =>
+      nameController.text.trim().isEmpty &&
+      phoneController.text.trim().isEmpty &&
+      emailController.text.trim().isEmpty;
+
+  ClientContact toContact() {
+    return ClientContact(
+      name: nameController.text.trim(),
+      phone: phoneController.text.trim(),
+      email: emailController.text.trim(),
+    );
+  }
+
+  void dispose() {
+    nameController.dispose();
+    phoneController.dispose();
+    emailController.dispose();
+  }
+}
+
 class AddClientSheet extends StatefulWidget {
   const AddClientSheet({super.key});
 
@@ -34,11 +60,13 @@ class _AddClientSheetState extends State<AddClientSheet> {
   final _countryController = TextEditingController();
   final _postalCodeController = TextEditingController();
   final _aptController = TextEditingController();
-
+  final List<_ContactFields> _additionalContacts = [];
 
   final _clientService = ClientService();
   final Map<String, String?> _errors = {};
   bool _isSaving = false;
+
+  bool get _isBusiness => _businessNameController.text.trim().isNotEmpty;
 
   static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
@@ -54,6 +82,9 @@ class _AddClientSheetState extends State<AddClientSheet> {
     _countryController.dispose();
     _postalCodeController.dispose();
     _aptController.dispose();
+    for (final contact in _additionalContacts) {
+      contact.dispose();
+    }
     super.dispose();
   }
 
@@ -65,6 +96,44 @@ class _AddClientSheetState extends State<AddClientSheet> {
 
   void _clearError(String key) {
     if (_errors[key] != null) setState(() => _errors[key] = null);
+  }
+
+  void _addAdditionalContact() {
+    setState(() {
+      _additionalContacts.add(_ContactFields());
+    });
+  }
+
+  void _removeAdditionalContact(int index) {
+    setState(() {
+      final removed = _additionalContacts.removeAt(index);
+      removed.dispose();
+      _errors.remove('contact_${index}_name');
+      _errors.remove('contact_${index}_phone');
+      _errors.remove('contact_${index}_email');
+    });
+  }
+
+  List<ClientContact> _buildContacts() {
+    final contacts = <ClientContact>[];
+
+    if (_isBusiness) {
+      contacts.add(
+        ClientContact(
+          name: _nameController.text.trim(),
+          phone: _phoneController.text.trim(),
+          email: _emailController.text.trim(),
+        ),
+      );
+
+      for (final contact in _additionalContacts) {
+        if (!contact.isEmpty) {
+          contacts.add(contact.toContact());
+        }
+      }
+    }
+
+    return contacts;
   }
 
   _ParsedAptAddress? _splitAptFromAddress(String rawAddress) {
@@ -235,15 +304,53 @@ class _AddClientSheetState extends State<AddClientSheet> {
   }
 
   Future<void> _save() async {
+    final businessName = _businessNameController.text.trim();
+    final name = _nameController.text.trim();
+    final phone = _phoneController.text.trim();
     final email = _emailController.text.trim();
+    final address = _addressController.text.trim();
+    final hasContactMethod = phone.isNotEmpty || email.isNotEmpty;
+
+    final nextErrors = <String, String?>{};
+
+    final hasBusinessOrName = businessName.isNotEmpty || name.isNotEmpty;
+
+    nextErrors['businessName'] = !hasBusinessOrName
+        ? 'Business name or contact name is required'
+        : null;
+    nextErrors['name'] = !hasBusinessOrName
+        ? 'Business name or contact name is required'
+        : null;
+    nextErrors['phone'] = !hasContactMethod ? 'Phone or email is required' : null;
+    nextErrors['email'] = _validateEmail(email);
+    nextErrors['address'] = businessName.isEmpty && address.isEmpty
+        ? 'Address is required'
+        : null;
+
+    if (businessName.isNotEmpty) {
+      for (var i = 0; i < _additionalContacts.length; i++) {
+        final contact = _additionalContacts[i];
+        if (contact.isEmpty) continue;
+
+        final contactName = contact.nameController.text.trim();
+        final contactPhone = contact.phoneController.text.trim();
+        final contactEmail = contact.emailController.text.trim();
+        final hasAdditionalContactMethod =
+            contactPhone.isNotEmpty || contactEmail.isNotEmpty;
+
+        nextErrors['contact_${i}_name'] =
+            contactName.isEmpty ? 'Contact name is required' : null;
+        nextErrors['contact_${i}_phone'] = !hasAdditionalContactMethod
+            ? 'Phone or email is required'
+            : null;
+        nextErrors['contact_${i}_email'] = _validateEmail(contactEmail);
+      }
+    }
+
     setState(() {
-      _errors['name'] = _nameController.text.trim().isEmpty
-          ? "Contact name is required"
-          : null;
-      _errors['phone'] = _phoneController.text.trim().isEmpty
-          ? "Phone is required"
-          : null;
-      _errors['email'] = _validateEmail(email);
+      _errors
+        ..clear()
+        ..addAll(nextErrors);
     });
 
     if (_errors.values.any((e) => e != null)) return;
@@ -259,9 +366,9 @@ class _AddClientSheetState extends State<AddClientSheet> {
 
     final newClient = ClientRecord(
       id: '',
-      businessName: _businessNameController.text.trim(),
-      name: _nameController.text.trim(),
-      phone: _phoneController.text.trim(),
+      businessName: businessName,
+      name: name,
+      phone: phone,
       email: email,
       address: fullAddress,
       apt: apt,
@@ -269,7 +376,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
       province: _provinceController.text.trim(),
       country: _countryController.text.trim(),
       postalCode: _postalCodeController.text.trim(),
-      contacts: [],
+      contacts: _buildContacts(),
     );
 
     try {
@@ -324,25 +431,39 @@ class _AddClientSheetState extends State<AddClientSheet> {
                 controller: _businessNameController,
                 optional: true,
                 autofillHints: const [AutofillHints.organizationName],
+                errorText: _errors['businessName'],
+                onChanged: (_) {
+                  _clearError('businessName');
+                  _clearError('name');
+                  _clearError('address');
+                  setState(() {});
+                },
               ),
               const SizedBox(height: 16),
               LabeledTextField(
                 label: "Contact name",
                 controller: _nameController,
-                required: true,
+                required: !_isBusiness,
+                optional: _isBusiness,
                 autofillHints: const [AutofillHints.name],
                 errorText: _errors['name'],
-                onChanged: (_) => _clearError('name'),
+                onChanged: (_) {
+                  _clearError('name');
+                  _clearError('businessName');
+                  setState(() {});
+                },
               ),
               const SizedBox(height: 16),
               LabeledTextField(
                 label: "Phone",
                 controller: _phoneController,
-                required: true,
                 keyboard: TextInputType.phone,
                 autofillHints: const [AutofillHints.telephoneNumber],
                 errorText: _errors['phone'],
-                onChanged: (_) => _clearError('phone'),
+                onChanged: (_) {
+                  _clearError('phone');
+                  _clearError('email');
+                },
               ),
               const SizedBox(height: 16),
               LabeledTextField(
@@ -351,11 +472,25 @@ class _AddClientSheetState extends State<AddClientSheet> {
                 keyboard: TextInputType.emailAddress,
                 autofillHints: const [AutofillHints.email],
                 errorText: _errors['email'],
-                onChanged: (_) => _clearError('email'),
+                onChanged: (_) {
+                  _clearError('email');
+                  _clearError('phone');
+                },
               ),
+              if (_isBusiness) ...[
+                const SizedBox(height: 8),
+                _AdditionalContactsSection(
+                  contacts: _additionalContacts,
+                  errors: _errors,
+                  onAddContact: _addAdditionalContact,
+                  onRemoveContact: _removeAdditionalContact,
+                  onClearError: _clearError,
+                ),
+              ],
               const SizedBox(height: 16),
               AddressAutocompleteField(
                 controller: _addressController,
+                required: !_isBusiness,
                 errorText: _errors['address'],
                 onChanged: (value) {
                   _clearError('address');
@@ -447,6 +582,169 @@ class _AddClientSheetState extends State<AddClientSheet> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+
+class _AdditionalContactsSection extends StatelessWidget {
+  final List<_ContactFields> contacts;
+  final Map<String, String?> errors;
+  final VoidCallback onAddContact;
+  final ValueChanged<int> onRemoveContact;
+  final ValueChanged<String> onClearError;
+
+  const _AdditionalContactsSection({
+    required this.contacts,
+    required this.errors,
+    required this.onAddContact,
+    required this.onRemoveContact,
+    required this.onClearError,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Additional business contacts',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onAddContact,
+                icon: const Icon(Icons.add),
+                label: const Text('Add'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'The first contact is the main contact above. Add more contacts here if needed.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          if (contacts.isEmpty) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: onAddContact,
+              icon: const Icon(Icons.person_add_alt_1),
+              label: const Text('Add another contact'),
+            ),
+          ],
+          for (var i = 0; i < contacts.length; i++) ...[
+            const SizedBox(height: 16),
+            _AdditionalContactCard(
+              index: i,
+              contact: contacts[i],
+              errors: errors,
+              onRemove: () => onRemoveContact(i),
+              onClearError: onClearError,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AdditionalContactCard extends StatelessWidget {
+  final int index;
+  final _ContactFields contact;
+  final Map<String, String?> errors;
+  final VoidCallback onRemove;
+  final ValueChanged<String> onClearError;
+
+  const _AdditionalContactCard({
+    required this.index,
+    required this.contact,
+    required this.errors,
+    required this.onRemove,
+    required this.onClearError,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Contact ${index + 2}',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Remove contact',
+                onPressed: onRemove,
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          LabeledTextField(
+            label: 'Contact name',
+            controller: contact.nameController,
+            required: true,
+            autofillHints: const [AutofillHints.name],
+            errorText: errors['contact_${index}_name'],
+            onChanged: (_) => onClearError('contact_${index}_name'),
+          ),
+          const SizedBox(height: 12),
+          LabeledTextField(
+            label: 'Phone',
+            controller: contact.phoneController,
+            keyboard: TextInputType.phone,
+            autofillHints: const [AutofillHints.telephoneNumber],
+            errorText: errors['contact_${index}_phone'],
+            onChanged: (_) => onClearError('contact_${index}_phone'),
+          ),
+          const SizedBox(height: 12),
+          LabeledTextField(
+            label: 'Email',
+            controller: contact.emailController,
+            keyboard: TextInputType.emailAddress,
+            autofillHints: const [AutofillHints.email],
+            errorText: errors['contact_${index}_email'],
+            onChanged: (_) {
+              onClearError('contact_${index}_email');
+              onClearError('contact_${index}_phone');
+            },
+          ),
+        ],
       ),
     );
   }
