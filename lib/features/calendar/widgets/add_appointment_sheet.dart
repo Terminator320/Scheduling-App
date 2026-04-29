@@ -2,12 +2,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import 'package:scheduling/core/services/image_compress_service.dart';
 import 'package:scheduling/core/services/image_picker_service.dart';
-import 'package:scheduling/core/services/image_storage_service.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
-import 'package:scheduling/features/calendar/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/services/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/services/appointment_service.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/employee_picker.dart';
@@ -54,8 +52,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
   List<File> _selectedImages = [];
   bool _isSubmitting = false;
   final _imageService = ImagePickerService();
-  final _storageService = ImageStorageService();
-  final _compressService = ImageCompressService();
+  final _imageUploadService = AppointmentImageUploadService();
   final _clientService = ClientService();
   final _userService = UserService();
   final _appointmentService = AppointmentService();
@@ -200,17 +197,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
     try {
       final docRef = _appointmentService.newDocRef();
-
-      List<AppointmentImage> uploadedImages = const [];
-      if (_selectedImages.isNotEmpty) {
-        final compressed = await _compressService.compressImages(_selectedImages);
-        uploadedImages = await _storageService.uploadImages(docRef.id, compressed);
-      }
-
-      final startTime = _combineDateAndTime(
-        _selectedDate!,
-        _selectedStartTime!,
-      );
+      final startTime = _combineDateAndTime(_selectedDate!, _selectedStartTime!);
       final endTime = _combineDateAndTime(_selectedDate!, _selectedEndTime!);
 
       final newAppointment = AppointmentRecord(
@@ -226,15 +213,25 @@ class _AddEventSheetState extends State<AddEventSheet> {
         employeeNames: _selectedEmployees.map((e) => e.name).toList(),
         notes: _notesController.text.trim(),
         materialsNeeded: _materialsController.text.trim(),
-        pictures: uploadedImages,
+        pictures: const [],
         status: 'booked',
       );
 
+      // Save appointment immediately so the user can continue using the app.
+      await _appointmentService.addAppointment(newAppointment);
+
       if (ctx.mounted) Navigator.pop(ctx, newAppointment);
+
+      if (_selectedImages.isNotEmpty) {
+        _imageUploadService.uploadInBackground(
+          appointmentId: docRef.id,
+          newImages: _selectedImages,
+        );
+      }
     } catch (_) {
       if (ctx.mounted) {
         setState(() => _isSubmitting = false);
-        _showSnack(ctx, "Something went wrong uploading photos");
+        _showSnack(ctx, "Something went wrong creating the appointment");
       }
     }
   }
