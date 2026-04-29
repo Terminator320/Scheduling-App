@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'package:scheduling/features/calendar/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 
 class AppointmentService {
@@ -52,6 +53,16 @@ class AppointmentService {
     if (appointment.id == null) return;
     await appointments.doc(appointment.id).update({
       ...appointment.toMap(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> updateAppointmentPictures(
+    String appointmentId,
+    List<AppointmentImage> pictures,
+  ) async {
+    await appointments.doc(appointmentId).update({
+      'pictures': pictures.map((p) => p.toMap()).toList(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
