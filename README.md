@@ -3,17 +3,16 @@
 **_ToDo:_**
 
 - check employee are available for new appointments (Victor)
-- add option to add multiple clients to a business (Victor)
 - change the ui of the cards in backlog (Victor)
 - implementing settings page for languages (Audréane)
-- Fix authentification to be permanent (George)
-- Save settings to the device (George)
+- add appointment done when the appointment time has started (Victor)
+- add finished appointment to Appointments backlog (Victor)
+- remove finished appointment from calendar view (Victor)
+
 
 Unassigned tasks:
-- add appointment done when the appointment time has started
-- add finished appointment to Appointments backlog
-- remove finished appointment from calendar view
-
+- Add autofill when a date is selected when adding an appointment
+- Add automatic 1 hour appointment if no end time is added
 
 Done:
 - Make the search for client work when adding an appointment (ignore case) (Audréane)
@@ -22,5 +21,9 @@ Done:
 - connect the address to apple map/google maps/waze (Audréane)
 - Add link to launch maps when an address is clicked in a detail view (Audréane)
 - implementing settings page for text size (Audréane)
+- Save settings to the device (George)
+- Fix authentification to be permanent (George)
+- add option to add multiple clients to a business (Audréane)
+
 
 

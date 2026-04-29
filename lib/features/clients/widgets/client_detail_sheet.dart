@@ -276,18 +276,28 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
   }
 
   Future<void> _save() async {
+    final businessName = _businessNameController.text.trim();
+    final name = _nameController.text.trim();
+    final phone = _phoneController.text.trim();
     final email = _emailController.text.trim();
+    final address = _addressController.text.trim();
+    final hasBusinessOrName = businessName.isNotEmpty || name.isNotEmpty;
+    final hasContactMethod = phone.isNotEmpty || email.isNotEmpty;
+
     setState(() {
-      _errors['name'] = _nameController.text.trim().isEmpty
-          ? "Name is required"
+      _errors['businessName'] = !hasBusinessOrName
+          ? "Business name or contact name is required"
           : null;
-      _errors['phone'] = _phoneController.text.trim().isEmpty
-          ? "Phone is required"
+      _errors['name'] = !hasBusinessOrName
+          ? "Business name or contact name is required"
           : null;
-      _errors['email'] = email.isEmpty
-          ? "Email is required"
-          : (!_emailRegex.hasMatch(email) ? "Enter a valid email" : null);
-      _errors['address'] = _addressController.text.trim().isEmpty
+      _errors['phone'] = !hasContactMethod
+          ? "Phone or email is required"
+          : null;
+      _errors['email'] = email.isNotEmpty && !_emailRegex.hasMatch(email)
+          ? "Enter a valid email"
+          : null;
+      _errors['address'] = businessName.isEmpty && address.isEmpty
           ? "Address is required"
           : null;
     });
@@ -296,9 +306,9 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
 
     final updated = ClientRecord(
       id: widget.client.id,
-      businessName: _businessNameController.text.trim(),
-      name: _nameController.text.trim(),
-      phone: _phoneController.text.trim(),
+      businessName: businessName,
+      name: name,
+      phone: phone,
       email: email,
       address: _buildFullAddress(),
       apt: _aptController.text.trim(),
@@ -319,7 +329,6 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
       );
     }
   }
-
 
   Future<void> _confirmDelete() async {
     final clientName = widget.client.displayName.isNotEmpty
@@ -482,7 +491,15 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: InfoRow(icon: Icons.location_on_outlined, text: c.address),
+            child: InfoRow(
+              icon: Icons.location_on_outlined,
+              text: c.address,
+              iconColor: Theme.of(context).colorScheme.primary.withOpacity(0.9),
+              textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                height: 1.4,
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.9),
+              ),
+            ),
           ),
         ),
 
@@ -522,40 +539,56 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
         controller: _businessNameController,
         optional: true,
         autofillHints: const [AutofillHints.organizationName],
+        errorText: _errors['businessName'],
+        onChanged: (_) {
+          _clearError('businessName');
+          _clearError('name');
+          _clearError('address');
+          setState(() {});
+        },
       ),
       const SizedBox(height: 16),
       LabeledTextField(
         label: "Contact name",
         controller: _nameController,
-        required: true,
+        required: _businessNameController.text.trim().isEmpty,
+        optional: _businessNameController.text.trim().isNotEmpty,
         autofillHints: const [AutofillHints.name],
         errorText: _errors['name'],
-        onChanged: (_) => _clearError('name'),
+        onChanged: (_) {
+          _clearError('name');
+          _clearError('businessName');
+          setState(() {});
+        },
       ),
       const SizedBox(height: 16),
       LabeledTextField(
         label: "Phone",
         controller: _phoneController,
-        required: true,
         keyboard: TextInputType.phone,
         autofillHints: const [AutofillHints.telephoneNumber],
         errorText: _errors['phone'],
-        onChanged: (_) => _clearError('phone'),
+        onChanged: (_) {
+          _clearError('phone');
+          _clearError('email');
+        },
       ),
       const SizedBox(height: 16),
       LabeledTextField(
         label: "Email",
         controller: _emailController,
-        required: true,
         keyboard: TextInputType.emailAddress,
         autofillHints: const [AutofillHints.email],
         errorText: _errors['email'],
-        onChanged: (_) => _clearError('email'),
+        onChanged: (_) {
+          _clearError('email');
+          _clearError('phone');
+        },
       ),
       const SizedBox(height: 16),
       AddressAutocompleteField(
         controller: _addressController,
-        required: true,
+        required: _businessNameController.text.trim().isEmpty,
         errorText: _errors['address'],
         onChanged: (value) {
           _clearError('address');
