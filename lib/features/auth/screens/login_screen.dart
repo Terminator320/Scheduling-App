@@ -8,6 +8,7 @@ import 'package:scheduling/core/animations/staggered_entrance_controller.dart';
 import 'package:scheduling/core/errors/auth_error_handler.dart';
 import 'package:scheduling/core/utils/app_text.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
+import 'package:scheduling/features/auth/screens/create_account_screen.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/auth/widgets/auth_banner.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
@@ -149,38 +150,32 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
     }
   }
 
-  Future<void> _createAccount() async {
-    FocusScope.of(context).unfocus();
+  Future<void> _openCreateAccount() async {
+    final prefill = _emailController.text.trim();
+    final result = await Navigator.of(context).push<CreateAccountResult>(
+      MaterialPageRoute(
+        builder: (_) => CreateAccountScreen(
+          initialEmail: prefill.isEmpty ? null : prefill,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
     setState(() {
-      _submitted = true;
+      _submitted = false;
+      _emailError = null;
+      _passwordError = null;
       _bannerError = null;
-      _bannerSuccess = null;
+      _bannerSuccess = result?.created == true
+          ? tr(context, 'Account created. You can now sign in.')
+          : null;
     });
 
-    if (!_validate()) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      await _authService.createEmployeeAccount(
-        email: _emailController.text,
-        password: _passwordController.text,
-      );
-      if (!mounted) return;
-      setState(() {
-        _bannerSuccess = tr(context, 'Account created. You can now sign in.');
-        _isLoading = false;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _bannerError = AuthErrorHandler.getMessage(
-          context,
-          error,
-          authContext: AuthErrorContext.register,
-        );
-        _isLoading = false;
-      });
+    if (result?.email != null && result!.email!.trim().isNotEmpty) {
+      _emailController.text = result.email!.trim().toLowerCase();
+      _passwordController.clear();
+      _passwordFocus.requestFocus();
     }
   }
 
@@ -434,7 +429,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                             AnimatedLoadingButton(
                               label: tr(context, 'Create account'),
                               isLoading: false,
-                              onPressed: _isLoading ? null : _createAccount,
+                              onPressed: _isLoading ? null : _openCreateAccount,
                               variant: AnimatedLoadingButtonVariant.outlined,
                             ),
                             const SizedBox(height: 28),
