@@ -13,6 +13,8 @@ import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/employee_picker.dart';
 import 'package:scheduling/features/calendar/widgets/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/time_range_row.dart';
+import 'package:scheduling/features/clients/models/client_record.dart';
+import 'package:scheduling/features/clients/services/client_service.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
@@ -57,6 +59,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   final List<AppointmentImage> _removedExistingImages = [];
   List<File> _newImages = [];
   bool _isSaving = false;
+  ClientRecord? _client;
 
   final _formKey = GlobalKey<FormState>();
 
@@ -64,6 +67,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   final _storageService = ImageStorageService();
   final _imageService = ImagePickerService();
   final _userService = UserService();
+  final _clientService = ClientService();
 
   @override
   void initState() {
@@ -89,6 +93,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     _existingImages = List.from(a.pictures);
 
     _loadEmployees();
+    _loadClient();
   }
 
   @override
@@ -112,6 +117,20 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
             .toList();
       });
     });
+  }
+
+
+  Future<void> _loadClient() async {
+    final clientId = widget.appointment.clientId.trim();
+    if (clientId.isEmpty) return;
+
+    try {
+      final client = await _clientService.getClientById(clientId);
+      if (!mounted) return;
+      setState(() => _client = client);
+    } catch (_) {
+      // Keep the appointment details usable even if the client record cannot load.
+    }
   }
 
   void _cancelEdit() {
@@ -384,7 +403,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
           formSectionLabel(context, "Client"),
           const SizedBox(height: 6),
           Text(
-            a.clientName,
+            _client?.displayName ?? a.clientName,
             style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
           ),
           Text(
@@ -393,6 +412,12 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
               color: a.clientPhone.isNotEmpty ? null : muted,
             ),
           ),
+          if ((_client?.contacts ?? const <ClientContact>[]).isNotEmpty) ...[
+            const SizedBox(height: 14),
+            formSectionLabel(context, "Contacts"),
+            const SizedBox(height: 8),
+            ..._client!.contacts.map(_contactCard),
+          ],
         ],
       ),
       const SizedBox(height: 16),
@@ -435,10 +460,66 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     ];
   }
 
+
+  Widget _contactCard(ClientContact contact) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (contact.name.trim().isNotEmpty)
+            _contactLine(Icons.person_outline, contact.name.trim()),
+          if (contact.phone.trim().isNotEmpty)
+            _contactLine(Icons.phone_outlined, contact.phone.trim()),
+          if (contact.email.trim().isNotEmpty)
+            _contactLine(Icons.mail_outline, contact.email.trim()),
+        ],
+      ),
+    );
+  }
+
+  Widget _contactLine(IconData icon, String text) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: theme.textTheme.bodySmall?.copyWith(height: 1.35),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _viewSection(String label, String value, {VoidCallback? onTap}) {
+    final scheme = Theme.of(context).colorScheme;
+
     final text = Text(
       value,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+        height: 1.5,
+        color: onTap != null
+            ? Color.lerp(scheme.primary, const Color(0xFF4A8DFF), 0.5)
+            : null,
+      ),
     );
 
     return Column(
