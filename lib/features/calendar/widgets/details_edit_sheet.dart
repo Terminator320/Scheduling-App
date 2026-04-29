@@ -1,13 +1,13 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import 'package:scheduling/core/services/image_compress_service.dart';
 import 'package:scheduling/core/services/image_picker_service.dart';
-import 'package:scheduling/core/services/image_storage_service.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/services/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/services/appointment_service.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/employee_picker.dart';
@@ -59,9 +59,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
   final _formKey = GlobalKey<FormState>();
 
-  final _compressService = ImageCompressService();
-  final _storageService = ImageStorageService();
   final _imageService = ImagePickerService();
+  final _imageUploadService = AppointmentImageUploadService();
   final _userService = UserService();
 
   @override
@@ -221,14 +220,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         throw StateError('Cannot save an appointment without an id.');
       }
 
-      List<AppointmentImage> uploadedImages = const [];
-      if (_newImages.isNotEmpty) {
-        final compressed = await _compressService.compressImages(_newImages);
-        uploadedImages =
-            await _storageService.uploadImages(appointmentId, compressed);
-      }
-      final allPictures = [..._existingImages, ...uploadedImages];
-
+      // Save immediately with the current existing pictures so the user
+      // can continue using the app. New uploads are patched in the background.
       final updated = AppointmentRecord(
         id: widget.appointment.id,
         title: _titleController.text.trim(),
@@ -242,19 +235,24 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         employeeNames: _selectedEmployees.map((e) => e.name).toList(),
         notes: _notesController.text.trim(),
         materialsNeeded: _materialsController.text.trim(),
-        pictures: allPictures,
+        pictures: _existingImages,
         status: widget.appointment.status,
       );
 
       await AppointmentService().updateAppointment(updated);
 
-      if (_removedExistingImages.isNotEmpty) {
-        await _storageService.deleteImages(List.of(_removedExistingImages));
-        _removedExistingImages.clear();
-      }
-
       if (mounted) setState(() => _isEditing = false);
       if (mounted) Navigator.pop(context, updated);
+
+      // Fire-and-forget: upload new images and delete removed ones.
+      if (_newImages.isNotEmpty || _removedExistingImages.isNotEmpty) {
+        _imageUploadService.uploadInBackground(
+          appointmentId: appointmentId,
+          newImages: _newImages,
+          existingImages: _existingImages,
+          toDelete: List.of(_removedExistingImages),
+        );
+      }
     } catch (_) {
       if (mounted) {
         setState(() => _isSaving = false);
