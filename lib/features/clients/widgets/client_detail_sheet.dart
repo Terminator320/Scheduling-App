@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/features/clients/models/client_record.dart';
 import 'package:scheduling/features/clients/services/client_service.dart';
+import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/info_row.dart';
@@ -473,7 +474,17 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
         InfoRow(icon: Icons.email_outlined, text: c.email),
 
       if (c.address.isNotEmpty)
-        InfoRow(icon: Icons.location_on_outlined, text: c.address),
+        InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => AddressMapLauncher.showMapChoices(
+            context,
+            address: c.address,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: InfoRow(icon: Icons.location_on_outlined, text: c.address),
+          ),
+        ),
 
       if (c.contacts.isNotEmpty) ...[
         const SizedBox(height: 24),

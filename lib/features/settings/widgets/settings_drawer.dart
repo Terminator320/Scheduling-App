@@ -179,13 +179,59 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
           const SizedBox(height: 8),
           const Divider(height: 1),
           const SizedBox(height: 8),
-          _DrawerItem(
-            icon: Icons.text_fields_outlined,
-            label: 'Font Size',
-            textTheme: textTheme,
-            scheme: scheme,
-            onTap: () {
-              // TODO: font size settings
+          Builder(
+            builder: (ctx) {
+              final themeNotifier = ThemeNotifier.of(ctx);
+
+              return _DrawerItem(
+                icon: Icons.text_fields_outlined,
+                label: 'Text Size',
+                textTheme: textTheme,
+                scheme: scheme,
+                onTap: () {
+                  double tempScale = themeNotifier.textScale;
+
+                  showDialog(
+                    context: context,
+                    builder: (dialogContext) {
+                      return StatefulBuilder(
+                        builder: (context, setDialogState) {
+                          return AlertDialog(
+                            title: const Text('Text Size'),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('Preview text'),
+                                const SizedBox(height: 16),
+                                Slider(
+                                  value: tempScale,
+                                  min: 0.8,
+                                  max: 1.4,
+                                  divisions: 6,
+                                  label: tempScale.toStringAsFixed(1),
+                                  onChanged: (value) {
+                                    setDialogState(() {
+                                      tempScale = value;
+                                    });
+
+                                    themeNotifier.setTextScale(value);
+                                  },
+                                ),
+                              ],
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(dialogContext),
+                                child: const Text('Done'),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              );
             },
           ),
           Builder(

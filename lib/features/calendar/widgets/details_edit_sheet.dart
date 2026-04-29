@@ -15,6 +15,7 @@ import 'package:scheduling/features/calendar/widgets/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/time_range_row.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
+import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
@@ -395,7 +396,16 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         ],
       ),
       const SizedBox(height: 16),
-      _viewSection("Address", a.address.isNotEmpty ? a.address : "No address"),
+      _viewSection(
+        "Address",
+        a.address.isNotEmpty ? a.address : "No address",
+        onTap: a.address.isNotEmpty
+            ? () => AddressMapLauncher.showMapChoices(
+                  context,
+                  address: a.address,
+                )
+            : null,
+      ),
       const SizedBox(height: 16),
       _viewSection("Notes", a.notes.isNotEmpty ? a.notes : "No notes"),
       const SizedBox(height: 16),
@@ -425,16 +435,34 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     ];
   }
 
-  Widget _viewSection(String label, String value) {
+  Widget _viewSection(String label, String value, {VoidCallback? onTap}) {
+    final text = Text(
+      value,
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         formSectionLabel(context, label),
         const SizedBox(height: 6),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
-        ),
+        onTap == null
+            ? text
+            : InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: onTap,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: text),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.open_in_new, size: 16),
+                    ],
+                  ),
+                ),
+              ),
       ],
     );
   }

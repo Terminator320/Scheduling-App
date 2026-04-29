@@ -61,6 +61,7 @@ class AppCalendar extends StatelessWidget {
       focusedDay: focusedDay,
 
       rowHeight: rowHeight ?? 56,
+      daysOfWeekHeight: 36,
 
       selectedDayPredicate: (day) =>
           isSameDay(selectedDay, day),

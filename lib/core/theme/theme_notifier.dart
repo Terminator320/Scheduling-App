@@ -4,10 +4,15 @@ class ThemeNotifier extends InheritedWidget {
   final ThemeMode themeMode;
   final VoidCallback toggleTheme;
 
+  final double textScale;
+  final ValueChanged<double> setTextScale;
+
   const ThemeNotifier({
     super.key,
     required this.themeMode,
     required this.toggleTheme,
+    required this.textScale,
+    required this.setTextScale,
     required super.child,
   });
 
@@ -19,6 +24,7 @@ class ThemeNotifier extends InheritedWidget {
 
   @override
   bool updateShouldNotify(ThemeNotifier oldWidget) {
-    return themeMode != oldWidget.themeMode;
+    return themeMode != oldWidget.themeMode ||
+        textScale != oldWidget.textScale;
   }
 }
