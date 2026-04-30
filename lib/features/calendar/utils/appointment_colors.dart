@@ -18,7 +18,7 @@ Color? colorForAppointment(
   if (appt.employeeIds.length != 1 || employees.isEmpty) return null;
   try {
     return employees.firstWhere((e) => e.id == appt.employeeIds.first).color;
-  } catch (_) {
+  } on StateError {
     return null;
   }
 }
