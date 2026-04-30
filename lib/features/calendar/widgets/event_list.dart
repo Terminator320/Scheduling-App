@@ -68,8 +68,6 @@ class EventList extends StatelessWidget {
       child: ValueListenableBuilder<List<AppointmentRecord>>(
         valueListenable: events,
         builder: (context, value, _) {
-          value.sort((a, b) => a.startTime.compareTo(b.startTime));
-
           if (value.isEmpty) {
             return Center(
               child: Column(

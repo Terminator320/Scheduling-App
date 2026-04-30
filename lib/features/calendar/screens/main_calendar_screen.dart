@@ -98,9 +98,11 @@ class _MainCalendar extends State<MainCalendar> {
   Map<String, Color> get _employeeColorMap => buildEmployeeColorMap(_allEmployees);
 
   List<AppointmentRecord> _getEventsForDay(DateTime day) {
-    return _allAppointments.where((app) {
+    final events = _allAppointments.where((app) {
       return isSameDay(app.startTime, day);
     }).toList();
+    events.sort((a, b) => a.startTime.compareTo(b.startTime));
+    return events;
   }
 
   void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
