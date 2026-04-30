@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 
@@ -31,6 +33,10 @@ class _MainCalendar extends State<MainCalendar> {
   final service = AppointmentService();
   final userService = UserService();
 
+  StreamSubscription? _nameSub;
+  StreamSubscription? _employeesSub;
+  StreamSubscription? _appointmentsSub;
+
   PageController? _pageController;
   String _userName = '';
   List<EmployeeRecord> _allEmployees = [];
@@ -49,34 +55,41 @@ class _MainCalendar extends State<MainCalendar> {
 
     _selectedDay = _focusedDay;
 
-    userService.loggedInUserNameStream().listen((name) {
+    _nameSub = userService.loggedInUserNameStream().listen((name) {
       if (mounted) setState(() => _userName = name);
     });
 
-    userService.allUsersStream().listen((data) {
-      setState(() {
-        _allEmployees = data;
-      });
+    _employeesSub = userService.allUsersStream().listen((data) {
+      if (mounted) {
+        setState(() {
+          _allEmployees = data;
+        });
+      }
     });
 
-    service.getAllAppointments().listen((data) {
-      setState(() {
-        // Employees only see appointments assigned to them
-        if (widget.isAdmin) {
-          _allAppointments = data;
-        } else {
-          _allAppointments = data
-              .where((a) => a.employeeIds.contains(widget.employeeId))
-              .toList();
-        }
-      });
+    _appointmentsSub = service.getAllAppointments().listen((data) {
+      if (mounted) {
+        setState(() {
+          // Employees only see appointments assigned to them
+          if (widget.isAdmin) {
+            _allAppointments = data;
+          } else {
+            _allAppointments = data
+                .where((a) => a.employeeIds.contains(widget.employeeId))
+                .toList();
+          }
+        });
 
-      _selectedEvents.value = _getEventsForDay(_selectedDay!);
+        _selectedEvents.value = _getEventsForDay(_selectedDay!);
+      }
     });
   }
 
   @override
   void dispose() {
+    _nameSub?.cancel();
+    _employeesSub?.cancel();
+    _appointmentsSub?.cancel();
     _selectedEvents.dispose();
     super.dispose();
   }
