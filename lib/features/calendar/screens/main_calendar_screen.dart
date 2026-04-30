@@ -53,36 +53,27 @@ class _MainCalendar extends State<MainCalendar> {
   @override
   void initState() {
     super.initState();
-
     _selectedDay = _focusedDay;
+    _initStreams();
+  }
 
+  void _initStreams() {
     _nameSub = userService.loggedInUserNameStream().listen((name) {
       if (mounted) setState(() => _userName = name);
     });
 
     _employeesSub = userService.allUsersStream().listen((data) {
-      if (mounted) {
-        setState(() {
-          _allEmployees = data;
-        });
-      }
+      if (mounted) setState(() => _allEmployees = data);
     });
 
     _appointmentsSub = service.getAllAppointments().listen((data) {
-      if (mounted) {
-        setState(() {
-          // Employees only see appointments assigned to them
-          if (widget.isAdmin) {
-            _allAppointments = data;
-          } else {
-            _allAppointments = data
-                .where((a) => a.employeeIds.contains(widget.employeeId))
-                .toList();
-          }
-        });
-
-        _selectedEvents.value = _getEventsForDay(_selectedDay!);
-      }
+      if (!mounted) return;
+      setState(() {
+        _allAppointments = widget.isAdmin
+            ? data
+            : data.where((a) => a.employeeIds.contains(widget.employeeId)).toList();
+      });
+      _selectedEvents.value = _getEventsForDay(_selectedDay!);
     });
   }
 

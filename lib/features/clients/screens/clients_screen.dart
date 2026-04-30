@@ -60,6 +60,10 @@ class _ListInformationState extends State<ListInformation> {
   @override
   void initState() {
     super.initState();
+    _initStreams();
+  }
+
+  void _initStreams() {
     _clientsSubscription = _clientService.clientsStream().listen((clients) {
       if (mounted) setState(() => _allClients = clients);
     });
