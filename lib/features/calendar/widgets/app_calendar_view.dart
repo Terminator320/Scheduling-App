@@ -16,6 +16,7 @@ class AppCalendar extends StatelessWidget {
   final double? rowHeight;
 
   final List<EmployeeRecord> employees;
+  final Map<String, Color> employeeColorMap;
 
   const AppCalendar({
     super.key,
@@ -24,6 +25,7 @@ class AppCalendar extends StatelessWidget {
     required this.onDaySelected,
     required this.eventLoader,
     required this.employees,
+    required this.employeeColorMap,
     this.onCalendarCreated,
     this.onPageChanged,
     this.rowHeight,
@@ -125,7 +127,7 @@ class AppCalendar extends StatelessWidget {
                   width: 5,
                   height: 5,
                   decoration: BoxDecoration(
-                    color: colorForAppointment(appt, employees) ?? Colors.grey,
+                    color: colorFromMap(appt, employeeColorMap) ?? Colors.grey,
                     shape: BoxShape.circle,
                   ),
                 );

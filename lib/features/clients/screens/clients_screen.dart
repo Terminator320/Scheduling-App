@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/services/appointment_service.dart';
+import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/appointment_tile.dart';
 import 'package:scheduling/features/clients/models/client_record.dart';
@@ -293,13 +294,14 @@ class _ListInformationState extends State<ListInformation> {
                 );
               }
 
+              final colorMap = buildEmployeeColorMap(_allEmployees);
               return ListView.separated(
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
                 itemCount: sorted.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 8),
                 itemBuilder: (context, index) => AppointmentTile(
                   appointment: sorted[index],
-                  employees: _allEmployees,
+                  employeeColorMap: colorMap,
                   showActions: false,
                 ),
               );
