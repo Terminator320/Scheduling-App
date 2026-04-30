@@ -62,6 +62,7 @@ class EventList extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final colorMap = buildEmployeeColorMap(employees);
 
     return Expanded(
       child: ValueListenableBuilder<List<AppointmentRecord>>(
@@ -96,7 +97,7 @@ class EventList extends StatelessWidget {
             itemCount: value.length,
             itemBuilder: (context, index) {
               final e = value[index];
-              final accent = colorForAppointment(e, employees) ?? scheme.outline;
+              final accent = colorFromMap(e, colorMap) ?? scheme.outline;
 
               return Padding(
                 padding: const EdgeInsets.symmetric(

@@ -4,19 +4,16 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
-import 'package:scheduling/features/calendar/services/appointment_service.dart';
-import 'package:scheduling/features/calendar/widgets/details_edit_sheet.dart';
-import 'package:scheduling/features/employees/models/employee_record.dart';
 
 class AppointmentTile extends StatelessWidget {
   final AppointmentRecord appointment;
   final bool showActions;
-  final List<EmployeeRecord> employees;
+  final Map<String, Color> employeeColorMap;
 
   const AppointmentTile({
     super.key,
     required this.appointment,
-    required this.employees,
+    required this.employeeColorMap,
     this.showActions = true,
   });
 
@@ -25,7 +22,7 @@ class AppointmentTile extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final accent =
-        colorForAppointment(appointment, employees) ?? scheme.outline;
+        colorFromMap(appointment, employeeColorMap) ?? scheme.outline;
 
     return Card(
       margin: EdgeInsets.zero,
