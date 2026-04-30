@@ -54,6 +54,7 @@ dependencies:
 
   url_launcher: any
   flutter_dotenv: any
+  shared_preferences: any
 
 
   animations: any
