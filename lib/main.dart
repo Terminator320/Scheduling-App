@@ -79,8 +79,8 @@ class _PaulAppState extends State<PaulApp> {
         setLanguage: setLanguage,
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
-          theme: Themes().lightTheme,
-          darkTheme: Themes().darkTheme,
+          theme: Themes.light,
+          darkTheme: Themes.dark,
           themeMode: _themeMode,
           initialRoute: AppRoutes.splash,
           onGenerateRoute: AppRoutes.onGenerateRoute,
