@@ -142,14 +142,11 @@ class ClientService {
     return scoredClients.take(25).map((entry) => entry.value).toList();
   }
 
-
-
   Future<ClientRecord?> getClientById(String id) async {
     final doc = await _clients.doc(id).get();
     if (!doc.exists) return null;
     return ClientRecord.fromDoc(doc);
   }
-
 }
 
 
