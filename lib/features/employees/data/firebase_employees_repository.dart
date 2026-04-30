@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
@@ -9,14 +8,11 @@ import 'package:scheduling/features/employees/domain/models/employee_record.dart
 class FirebaseEmployeesRepository implements EmployeesRepository {
   FirebaseEmployeesRepository(
     FirebaseFirestore firestore, {
-    FirebaseAuth? auth,
     FirebaseFunctions? functions,
   }) : _users = firestore.collection('users'),
-       _auth = auth ?? FirebaseAuth.instance,
        _functions = functions ?? FirebaseFunctions.instance;
 
   final CollectionReference<Map<String, dynamic>> _users;
-  final FirebaseAuth _auth;
   final FirebaseFunctions _functions;
 
   @override
@@ -196,25 +192,13 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }
 
   @override
-  Stream<String> loggedInUserNameStream() {
-    final user = _auth.currentUser;
-    if (user == null) return Stream.value('');
-    return _watchUserField(user.uid, 'name');
-  }
-
-  @override
-  Stream<String> watchUserStatus(String uid) => _watchUserField(uid, 'status');
-
-  @override
-  Stream<String> watchUserRole(String uid) => _watchUserField(uid, 'role');
-
-  Stream<String> _watchUserField(String uid, String field) {
-    if (uid.isEmpty) return Stream.value('');
+  Stream<Map<String, dynamic>> watchUserDoc(String uid) {
+    if (uid.isEmpty) return Stream.value(const {});
     return _users.where('uid', isEqualTo: uid).limit(1).snapshots().map((
       snapshot,
     ) {
-      if (snapshot.docs.isEmpty) return '';
-      return (snapshot.docs.first.data()[field] ?? '').toString().trim();
+      if (snapshot.docs.isEmpty) return const <String, dynamic>{};
+      return snapshot.docs.first.data();
     });
   }
 }

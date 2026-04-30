@@ -58,6 +58,8 @@ class PhotoPickerSection extends StatelessWidget {
     final hasPhotos =
         existingImages.isNotEmpty || newImages.isNotEmpty || failedCount > 0;
     final scheme = Theme.of(context).colorScheme;
+    // Decode 90px thumbnails at device resolution, not the source's full size.
+    final thumbCache = (90 * MediaQuery.devicePixelRatioOf(context)).round();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -83,6 +85,8 @@ class PhotoPickerSection extends StatelessWidget {
                               imageUrl: entry.value.url,
                               width: 90,
                               height: 90,
+                              memCacheWidth: thumbCache,
+                              memCacheHeight: thumbCache,
                               fit: BoxFit.cover,
                               placeholder: (ctx, _) => _photoPlaceholder(ctx),
                               errorWidget: (ctx, _, _) => _photoErrorTile(ctx),
@@ -116,6 +120,8 @@ class PhotoPickerSection extends StatelessWidget {
                               entry.value,
                               width: 90,
                               height: 90,
+                              cacheWidth: thumbCache,
+                              cacheHeight: thumbCache,
                               fit: BoxFit.cover,
                             ),
                           ),

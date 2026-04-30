@@ -5,6 +5,7 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
+import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
@@ -41,6 +42,7 @@ Widget _wrap({
   return ProviderScope(
     overrides: [
       employeesRepositoryProvider.overrideWithValue(repo),
+      currentUserNameProvider.overrideWithValue('Jane'),
       allUsersStreamProvider.overrideWith((_) => allUsers),
       appointmentsInRangeProvider.overrideWith((_, __) => appointments),
       myAppointmentsProvider.overrideWith((_, __) => appointments),
@@ -66,7 +68,6 @@ void main() {
 
   setUp(() {
     repo = _MockEmployeesRepo();
-    when(repo.loggedInUserNameStream).thenAnswer((_) => Stream.value('Jane'));
   });
 
   // The calendar grid lays out at full phone width; the default 800×600

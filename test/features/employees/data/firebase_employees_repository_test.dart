@@ -2,7 +2,6 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -10,8 +9,6 @@ import 'package:scheduling/features/employees/data/firebase_employees_repository
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 
 class _MockFirestore extends Mock implements FirebaseFirestore {}
-
-class _MockFirebaseAuth extends Mock implements FirebaseAuth {}
 
 class _MockFirebaseFunctions extends Mock implements FirebaseFunctions {}
 
@@ -33,7 +30,6 @@ class _FakeFieldValue extends Fake implements FieldValue {}
 
 void main() {
   late _MockFirestore firestore;
-  late _MockFirebaseAuth auth;
   late _MockFirebaseFunctions functions;
   late _MockCollection collection;
   late _MockQuery query;
@@ -47,7 +43,6 @@ void main() {
 
   setUp(() {
     firestore = _MockFirestore();
-    auth = _MockFirebaseAuth();
     functions = _MockFirebaseFunctions();
     collection = _MockCollection();
     query = _MockQuery();
@@ -77,7 +72,7 @@ void main() {
   });
 
   FirebaseEmployeesRepository repo() =>
-      FirebaseEmployeesRepository(firestore, auth: auth, functions: functions);
+      FirebaseEmployeesRepository(firestore, functions: functions);
 
   group('addEmployee', () {
     test(

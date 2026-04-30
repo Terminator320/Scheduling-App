@@ -236,6 +236,7 @@ class EventDetailsController
       await ref
           .read(appointmentsRepositoryProvider)
           .updateAppointmentStatus(id: id, status: status);
+      state = state.copyWith(isSaving: false);
       return true;
     } catch (e, st) {
       ref
@@ -292,12 +293,6 @@ class EventDetailsController
     state = state.copyWith(isSaving: true);
 
     try {
-      if (state.removedExistingImages.isNotEmpty) {
-        await ref
-            .read(imageStorageProvider)
-            .deleteImages(state.removedExistingImages);
-      }
-
       final pickedClient = state.selectedClient;
       final updated = AppointmentRecord(
         id: id,
@@ -317,6 +312,22 @@ class EventDetailsController
       );
 
       await ref.read(appointmentsRepositoryProvider).updateAppointment(updated);
+
+      // Delete removed images only after the doc (which no longer references
+      // them) has committed. A failure here orphans bytes in Storage — harmless
+      // — rather than leaving the appointment pointing at deleted images, so it
+      // must not fail the save.
+      if (state.removedExistingImages.isNotEmpty) {
+        try {
+          await ref
+              .read(imageStorageProvider)
+              .deleteImages(state.removedExistingImages);
+        } catch (e, st) {
+          ref
+              .read(loggerProvider)
+              .warn('deleteImages after save failed (orphaned bytes)', e, st);
+        }
+      }
 
       if (state.newImages.isNotEmpty) {
         ref

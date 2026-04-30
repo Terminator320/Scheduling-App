@@ -40,11 +40,10 @@ abstract class EmployeesRepository {
 
   Future<void> reactivateEmployee(String docId);
 
-  Stream<String> loggedInUserNameStream();
-
-  Stream<String> watchUserStatus(String uid);
-
-  Stream<String> watchUserRole(String uid);
+  /// Streams the signed-in user's `users/{uid}` doc data (empty map when
+  /// none). One listener feeds name + status + role so the app doesn't open
+  /// three separate snapshot listeners on the same document.
+  Stream<Map<String, dynamic>> watchUserDoc(String uid);
 }
 
 class InvitedEmployeeMatch {

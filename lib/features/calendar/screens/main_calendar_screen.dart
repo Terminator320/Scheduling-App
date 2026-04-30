@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +7,7 @@ import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -22,6 +21,7 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/routes/app_routes.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 class MainCalendar extends ConsumerStatefulWidget {
@@ -40,9 +40,6 @@ class MainCalendar extends ConsumerStatefulWidget {
 
 class _MainCalendarState extends ConsumerState<MainCalendar> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
-
-  String _userName = '';
-  StreamSubscription<String>? _nameSub;
 
   final ValueNotifier<List<AppointmentRecord>> _selectedEvents = ValueNotifier(
     [],
@@ -63,11 +60,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   }
 
   void _initStreams() {
-    final repo = ref.read(employeesRepositoryProvider);
-    _nameSub = repo.loggedInUserNameStream().listen((name) {
-      if (mounted) setState(() => _userName = name);
-    });
-
     _uploadNotifier = ref.read(photoUploadNotifierProvider);
     _uploadNotifier?.latestFailure.addListener(_onUploadFailure);
   }
@@ -75,7 +67,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   @override
   void dispose() {
     _uploadNotifier?.latestFailure.removeListener(_onUploadFailure);
-    _nameSub?.cancel();
     _selectedEvents.dispose();
     super.dispose();
   }
@@ -179,6 +170,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     final appointmentsAsync = widget.isAdmin
         ? ref.watch(appointmentsInRangeProvider(_appointmentRange))
         : ref.watch(myAppointmentsProvider(myAppointmentsKey));
+    final userName = ref.watch(currentUserNameProvider);
 
     void onAsyncChange(
       AsyncValue<List<AppointmentRecord>>? previous,
@@ -195,6 +187,23 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       ref.listen(appointmentsInRangeProvider(_appointmentRange), onAsyncChange);
     } else {
       ref.listen(myAppointmentsProvider(myAppointmentsKey), onAsyncChange);
+    }
+
+    // Optimistic splash routing lands admins here in employee view first; once
+    // the live role stream confirms 'admin', upgrade to the admin calendar.
+    // (Demotion the other way is handled by main.dart's role-revocation.)
+    if (!widget.isAdmin) {
+      ref.listen<AsyncValue<String>>(userRoleProvider, (_, next) {
+        if (next.valueOrNull == 'admin' && mounted) {
+          Navigator.of(context).pushReplacementNamed(
+            AppRoutes.mainCalendar,
+            arguments: MainCalendarArgs(
+              isAdmin: true,
+              employeeId: widget.employeeId,
+            ),
+          );
+        }
+      });
     }
 
     final employees =
@@ -293,15 +302,12 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton(
               onPressed: () async {
-                final newEvent = await showAddEventPopup(
+                // AddEventController.submit() already persists the appointment;
+                // the in-range stream surfaces it. Don't write it again here.
+                await showAddEventPopup(
                   context,
                   initialDate: _selectedDay ?? _focusedDay,
                 );
-                if (newEvent != null) {
-                  await ref
-                      .read(appointmentsRepositoryProvider)
-                      .addAppointment(newEvent);
-                }
               },
               child: const Icon(Icons.add),
             )
@@ -309,13 +315,13 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       endDrawer: SettingsDrawer(
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
-        userName: _userName,
+        userName: userName,
       ),
       body: AdaptiveShell(
         currentDestination: AdaptiveDestination.calendar,
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
-        userName: _userName,
+        userName: userName,
         child: SafeArea(
           child: MasterDetailScaffold(
             master: _content(
@@ -403,6 +409,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         EventList(
           events: _selectedEvents,
           employees: employees,
+          colorMap: colorMap,
           isLoading: isLoading,
           isAdmin: widget.isAdmin,
           selectedAppointmentId: _selectedAppointment?.id,
