@@ -11,7 +11,9 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 
 class _MockFirebaseAuth extends Mock implements FirebaseAuth {}
+
 class _MockUser extends Mock implements User {}
+
 class _MockRepo extends Mock implements EmployeesRepository {}
 
 void main() {
@@ -36,21 +38,21 @@ void main() {
     /// Collects the first emitted value from [accountDisabledProvider].
     Future<bool> firstValue(ProviderContainer container) {
       final completer = Completer<bool>();
-      final sub = container.listen<AsyncValue<bool>>(
-        accountDisabledProvider,
-        (_, next) {
-          if (next.hasValue && !completer.isCompleted) {
-            completer.complete(next.value!);
-          }
-        },
-        fireImmediately: true,
-      );
+      final sub = container.listen<AsyncValue<bool>>(accountDisabledProvider, (
+        _,
+        next,
+      ) {
+        if (next.hasValue && !completer.isCompleted) {
+          completer.complete(next.value!);
+        }
+      }, fireImmediately: true);
       return completer.future.whenComplete(sub.close);
     }
 
     test('emits false when no user is logged in', () async {
-      when(() => mockAuth.authStateChanges())
-          .thenAnswer((_) => Stream.value(null));
+      when(
+        () => mockAuth.authStateChanges(),
+      ).thenAnswer((_) => Stream.value(null));
 
       final container = container0();
       addTearDown(container.dispose);
@@ -59,12 +61,14 @@ void main() {
       expect(result, isFalse);
     });
 
-    test('emits true when watchUserStatus returns disabled', () async {
+    test('emits true when watchUserDoc status is disabled', () async {
       when(() => mockUser.uid).thenReturn('uid1');
-      when(() => mockRepo.watchUserStatus('uid1'))
-          .thenAnswer((_) => Stream.value('disabled'));
-      when(() => mockAuth.authStateChanges())
-          .thenAnswer((_) => Stream.value(mockUser));
+      when(
+        () => mockRepo.watchUserDoc('uid1'),
+      ).thenAnswer((_) => Stream.value({'status': 'disabled'}));
+      when(
+        () => mockAuth.authStateChanges(),
+      ).thenAnswer((_) => Stream.value(mockUser));
 
       final container = container0();
       addTearDown(container.dispose);
@@ -73,12 +77,14 @@ void main() {
       expect(result, isTrue);
     });
 
-    test('emits false when watchUserStatus returns active', () async {
+    test('emits false when watchUserDoc status is active', () async {
       when(() => mockUser.uid).thenReturn('uid1');
-      when(() => mockRepo.watchUserStatus('uid1'))
-          .thenAnswer((_) => Stream.value('active'));
-      when(() => mockAuth.authStateChanges())
-          .thenAnswer((_) => Stream.value(mockUser));
+      when(
+        () => mockRepo.watchUserDoc('uid1'),
+      ).thenAnswer((_) => Stream.value({'status': 'active'}));
+      when(
+        () => mockAuth.authStateChanges(),
+      ).thenAnswer((_) => Stream.value(mockUser));
 
       final container = container0();
       addTearDown(container.dispose);
@@ -87,42 +93,50 @@ void main() {
       expect(result, isFalse);
     });
 
-    test('emits false then true when status changes from active to disabled', () async {
-      when(() => mockUser.uid).thenReturn('uid1');
+    test(
+      'emits false then true when status changes from active to disabled',
+      () async {
+        when(() => mockUser.uid).thenReturn('uid1');
 
-      // Use a StreamController to push multiple values
-      final statusController = StreamController<String>();
-      when(() => mockRepo.watchUserStatus('uid1'))
-          .thenAnswer((_) => statusController.stream);
+        // Use a StreamController to push multiple values
+        final statusController = StreamController<Map<String, dynamic>>();
+        when(
+          () => mockRepo.watchUserDoc('uid1'),
+        ).thenAnswer((_) => statusController.stream);
 
-      // Also stub authStateChanges to emit the user
-      when(() => mockAuth.authStateChanges())
-          .thenAnswer((_) => Stream.value(mockUser));
+        // Also stub authStateChanges to emit the user
+        when(
+          () => mockAuth.authStateChanges(),
+        ).thenAnswer((_) => Stream.value(mockUser));
 
-      final container = ProviderContainer(
-        overrides: [
-          firebaseAuthProvider.overrideWithValue(mockAuth),
-          employeesRepositoryProvider.overrideWithValue(mockRepo),
-        ],
-      );
-      addTearDown(container.dispose);
-      addTearDown(statusController.close);
+        final container = ProviderContainer(
+          overrides: [
+            firebaseAuthProvider.overrideWithValue(mockAuth),
+            employeesRepositoryProvider.overrideWithValue(mockRepo),
+          ],
+        );
+        addTearDown(container.dispose);
+        addTearDown(statusController.close);
 
-      // Attach a listener so the provider stays alive
-      final emissions = <bool>[];
-      final sub = container.listen(accountDisabledProvider, (_, next) {
-        if (next.hasValue) emissions.add(next.value!);
-      });
-      addTearDown(sub.close);
+        // Attach a listener so the provider stays alive
+        final emissions = <bool>[];
+        final sub = container.listen(accountDisabledProvider, (_, next) {
+          if (next.hasValue) emissions.add(next.value!);
+        });
+        addTearDown(sub.close);
 
-      statusController.add('active');
-      await Future<void>.delayed(Duration.zero);
-      statusController.add('disabled');
-      await Future<void>.delayed(Duration.zero);
+        // The doc value flows through currentUserDocProvider before
+        // accountDisabledProvider derives from it, so drain the event queue
+        // after each push rather than a single microtask.
+        statusController.add({'status': 'active'});
+        await pumpEventQueue();
+        statusController.add({'status': 'disabled'});
+        await pumpEventQueue();
 
-      expect(emissions, contains(false));
-      expect(emissions, contains(true));
-    });
+        expect(emissions, contains(false));
+        expect(emissions, contains(true));
+      },
+    );
   });
 
   group('userRoleProvider', () {
@@ -145,21 +159,21 @@ void main() {
 
     Future<String> firstRoleValue(ProviderContainer container) {
       final completer = Completer<String>();
-      final sub = container.listen<AsyncValue<String>>(
-        userRoleProvider,
-        (_, next) {
-          if (next.hasValue && !completer.isCompleted) {
-            completer.complete(next.value!);
-          }
-        },
-        fireImmediately: true,
-      );
+      final sub = container.listen<AsyncValue<String>>(userRoleProvider, (
+        _,
+        next,
+      ) {
+        if (next.hasValue && !completer.isCompleted) {
+          completer.complete(next.value!);
+        }
+      }, fireImmediately: true);
       return completer.future.whenComplete(sub.close);
     }
 
     test('emits empty string when no user is logged in', () async {
-      when(() => mockAuth.authStateChanges())
-          .thenAnswer((_) => Stream.value(null));
+      when(
+        () => mockAuth.authStateChanges(),
+      ).thenAnswer((_) => Stream.value(null));
 
       final container = container0();
       addTearDown(container.dispose);
@@ -168,12 +182,14 @@ void main() {
       expect(result, isEmpty);
     });
 
-    test('emits "admin" when watchUserRole returns admin', () async {
+    test('emits "admin" when watchUserDoc role is admin', () async {
       when(() => mockUser.uid).thenReturn('uid1');
-      when(() => mockRepo.watchUserRole('uid1'))
-          .thenAnswer((_) => Stream.value('admin'));
-      when(() => mockAuth.authStateChanges())
-          .thenAnswer((_) => Stream.value(mockUser));
+      when(
+        () => mockRepo.watchUserDoc('uid1'),
+      ).thenAnswer((_) => Stream.value({'role': 'admin'}));
+      when(
+        () => mockAuth.authStateChanges(),
+      ).thenAnswer((_) => Stream.value(mockUser));
 
       final container = container0();
       addTearDown(container.dispose);
@@ -185,11 +201,13 @@ void main() {
     test('emits "admin" then "employee" when role is demoted', () async {
       when(() => mockUser.uid).thenReturn('uid1');
 
-      final roleController = StreamController<String>();
-      when(() => mockRepo.watchUserRole('uid1'))
-          .thenAnswer((_) => roleController.stream);
-      when(() => mockAuth.authStateChanges())
-          .thenAnswer((_) => Stream.value(mockUser));
+      final roleController = StreamController<Map<String, dynamic>>();
+      when(
+        () => mockRepo.watchUserDoc('uid1'),
+      ).thenAnswer((_) => roleController.stream);
+      when(
+        () => mockAuth.authStateChanges(),
+      ).thenAnswer((_) => Stream.value(mockUser));
 
       final container = container0();
       addTearDown(container.dispose);
@@ -201,10 +219,10 @@ void main() {
       });
       addTearDown(sub.close);
 
-      roleController.add('admin');
-      await Future<void>.delayed(Duration.zero);
-      roleController.add('employee');
-      await Future<void>.delayed(Duration.zero);
+      roleController.add({'role': 'admin'});
+      await pumpEventQueue();
+      roleController.add({'role': 'employee'});
+      await pumpEventQueue();
 
       // Sequencing matters: admin must appear before employee, otherwise the
       // main.dart listener can't detect the admin → employee demotion.
