@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/theme_notifier.dart';
+import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/routes/app_routes.dart';
 
@@ -8,7 +9,11 @@ class SettingsDrawer extends StatefulWidget {
   final bool isAdmin;
   final String employeeId;
 
-  const SettingsDrawer({super.key, required this.isAdmin,required this.employeeId,});
+  const SettingsDrawer({
+    super.key,
+    required this.isAdmin,
+    required this.employeeId,
+  });
 
   @override
   State<SettingsDrawer> createState() => _SettingsDrawerState();
@@ -249,13 +254,60 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               );
             },
           ),
-          _DrawerItem(
-            icon: Icons.language_outlined,
-            label: 'Language',
-            textTheme: textTheme,
-            scheme: scheme,
-            onTap: () {
-              // TODO: language settings
+          Builder(
+            builder: (ctx) {
+              final themeNotifier = ThemeNotifier.of(ctx);
+              final langController = AppLanguageScope.of(ctx);
+              return _DrawerItem(
+                icon: Icons.language_outlined,
+                label: 'Language',
+                textTheme: textTheme,
+                scheme: scheme,
+                onTap: () {
+                  String selected = langController.value;
+                  showDialog(
+                    context: context,
+                    builder: (dialogContext) {
+                      return StatefulBuilder(
+                        builder: (context, setDialogState) {
+                          return AlertDialog(
+                            title: const Text('Language'),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                RadioListTile<String>(
+                                  title: const Text('English'),
+                                  value: 'en',
+                                  groupValue: selected,
+                                  onChanged: (value) {
+                                    setDialogState(() => selected = value!);
+                                    themeNotifier.setLanguage(value!);
+                                  },
+                                ),
+                                RadioListTile<String>(
+                                  title: const Text('Français'),
+                                  value: 'fr',
+                                  groupValue: selected,
+                                  onChanged: (value) {
+                                    setDialogState(() => selected = value!);
+                                    themeNotifier.setLanguage(value!);
+                                  },
+                                ),
+                              ],
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(dialogContext),
+                                child: const Text('Done'),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              );
             },
           ),
         ],
