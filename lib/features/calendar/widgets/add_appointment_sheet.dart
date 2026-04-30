@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -51,6 +52,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
   List<File> _selectedImages = [];
   bool _isSubmitting = false;
+  StreamSubscription? _employeesSub;
   final _imageService = ImagePickerService();
   final _imageUploadService = AppointmentImageUploadService();
   final _clientService = ClientService();
@@ -60,13 +62,18 @@ class _AddEventSheetState extends State<AddEventSheet> {
   @override
   void initState() {
     super.initState();
-    _userService.employeesStream().listen((employees) {
+    _initStreams();
+  }
+
+  void _initStreams() {
+    _employeesSub = _userService.employeesStream().listen((employees) {
       if (mounted) setState(() => _allEmployees = employees);
     });
   }
 
   @override
   void dispose() {
+    _employeesSub?.cancel();
     _titleController.dispose();
     _dateController.dispose();
     _startTimeController.dispose();
