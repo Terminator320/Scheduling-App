@@ -145,6 +145,10 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
   @override
   void initState() {
     super.initState();
+    _initControllers();
+  }
+
+  void _initControllers() {
     final c = widget.client;
     _businessNameController = TextEditingController(text: c.businessName);
     _nameController = TextEditingController(text: c.name);

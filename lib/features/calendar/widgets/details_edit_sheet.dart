@@ -60,6 +60,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   List<File> _newImages = [];
   bool _isSaving = false;
   ClientRecord? _client;
+  StreamSubscription? _employeesSub;
 
   final _formKey = GlobalKey<FormState>();
 
@@ -97,6 +98,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
   @override
   void dispose() {
+    _employeesSub?.cancel();
     _titleController.dispose();
     _dateController.dispose();
     _startTimeController.dispose();
@@ -107,7 +109,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   }
 
   Future<void> _loadEmployees() async {
-    _userService.employeesStream().listen((employees) {
+    _employeesSub = _userService.employeesStream().listen((employees) {
       if (!mounted) return;
       setState(() {
         _allEmployees = employees;

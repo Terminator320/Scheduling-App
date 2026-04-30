@@ -37,26 +37,23 @@ class AppCalendar extends StatelessWidget {
     DateTime day, {
     required BoxDecoration decoration,
     TextStyle? textStyle,
+    required double rowH,
   }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxH = constraints.maxHeight;
-        final circleSize = (maxH - 9).clamp(20.0, 36.0);
-        return Center(
-          child: Container(
-            width: circleSize,
-            height: circleSize,
-            decoration: decoration,
-            alignment: Alignment.center,
-            child: Text('${day.day}', style: textStyle),
-          ),
-        );
-      },
+    final circleSize = (rowH - 9).clamp(20.0, 36.0);
+    return Center(
+      child: Container(
+        width: circleSize,
+        height: circleSize,
+        decoration: decoration,
+        alignment: Alignment.center,
+        child: Text('${day.day}', style: textStyle),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final effectiveRowH = rowHeight ?? 56.0;
     return TableCalendar(
       firstDay: DateTime(focusedDay.year - 10, 1, 1),
       lastDay: DateTime(focusedDay.year + 10, 12, 31),
@@ -96,6 +93,7 @@ class AppCalendar extends StatelessWidget {
             textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
+            rowH: effectiveRowH,
           );
         },
         selectedBuilder: (context, day, focusedDay) {
@@ -110,6 +108,7 @@ class AppCalendar extends StatelessWidget {
               color: Theme.of(context).colorScheme.onPrimary,
               fontWeight: FontWeight.w600,
             ),
+            rowH: effectiveRowH,
           );
         },
         markerBuilder: (context, day, events) {
