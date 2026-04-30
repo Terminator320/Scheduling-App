@@ -5,6 +5,7 @@ import 'package:table_calendar/table_calendar.dart';
 
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/services/appointment_service.dart';
+import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/app_calendar_view.dart';
 import 'package:scheduling/features/calendar/widgets/calendar_header.dart';
@@ -93,6 +94,8 @@ class _MainCalendar extends State<MainCalendar> {
     _selectedEvents.dispose();
     super.dispose();
   }
+
+  Map<String, Color> get _employeeColorMap => buildEmployeeColorMap(_allEmployees);
 
   List<AppointmentRecord> _getEventsForDay(DateTime day) {
     return _allAppointments.where((app) {
@@ -194,6 +197,7 @@ class _MainCalendar extends State<MainCalendar> {
           onCalendarCreated: (controller) => _pageController = controller,
           onPageChanged: (day) => setState(() => _focusedDay = day),
           employees: _allEmployees,
+          employeeColorMap: _employeeColorMap,
         ),
 
         SizedBox(height: 10),
