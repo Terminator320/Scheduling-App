@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class Themes {
   // Light Theme
-  final ThemeData lightTheme = ThemeData(
+  static final ThemeData light = ThemeData(
     useMaterial3: true,
 
     colorScheme: ColorScheme(
@@ -130,7 +130,7 @@ class Themes {
 
 
   // Dark Theme
-  final ThemeData darkTheme = ThemeData(
+  static final ThemeData dark = ThemeData(
     useMaterial3: true,
 
     colorScheme: ColorScheme(
