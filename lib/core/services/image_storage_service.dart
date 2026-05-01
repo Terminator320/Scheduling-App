@@ -5,9 +5,17 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:scheduling/features/calendar/models/appointment_image.dart';
 
 class ImageStorageService {
+  // Guard against unexpectedly large files even after picker resizing/compression.
+  static const int maxUploadBytes = 8 * 1024 * 1024;
+
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
   Future<AppointmentImage> uploadImage(String appointmentId, File file) async {
+    final size = await file.length();
+    if (size > maxUploadBytes) {
+      throw StateError('Image is too large to upload after compression.');
+    }
+
     final originalName = file.uri.pathSegments.last;
     final fileName = '${DateTime.now().millisecondsSinceEpoch}_$originalName';
     final path = 'appointments/$appointmentId/images/$fileName';

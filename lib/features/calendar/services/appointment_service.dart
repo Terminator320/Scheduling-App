@@ -21,22 +21,49 @@ class AppointmentService {
   }
 
   Stream<List<AppointmentRecord>> getAllAppointments() {
-    return appointments.snapshots().map((snapshot) {
+    return appointments.orderBy('startTime', descending: true).snapshots().map((
+      snapshot,
+    ) {
       return snapshot.docs.map((doc) {
         return AppointmentRecord.fromMap(doc.id, doc.data());
       }).toList();
     });
   }
 
-  Stream<List<AppointmentRecord>> getAppointmentStatus(String status) {
+  Stream<List<AppointmentRecord>> appointmentsInRange(
+    AppointmentDateRange range,
+  ) {
+    // Firestore can filter by date range so the calendar does not stream every appointment.
     return appointments
-        .where('status', isEqualTo: status)
+        .where(
+          'startTime',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(range.start),
+        )
+        .where('startTime', isLessThan: Timestamp.fromDate(range.end))
+        .orderBy('startTime')
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
               .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
               .toList(),
         );
+  }
+
+  Stream<List<AppointmentRecord>> getAppointmentStatus(
+    String status, {
+    int? limit,
+  }) {
+    Query<Map<String, dynamic>> query = appointments.where(
+      'status',
+      isEqualTo: status,
+    );
+    if (limit != null) query = query.limit(limit);
+
+    return query.snapshots().map(
+      (snapshot) => snapshot.docs
+          .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
+          .toList(),
+    );
   }
 
   Future<AppointmentRecord?> getAppointmentById(String appointmentId) async {
@@ -95,5 +122,22 @@ class AppointmentService {
               .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
               .toList(),
         );
+  }
+}
+
+class AppointmentDateRange {
+  final DateTime start;
+  final DateTime end;
+
+  const AppointmentDateRange({required this.start, required this.end});
+
+  factory AppointmentDateRange.visibleMonth(DateTime focusedDay) {
+    // Include a one-week buffer for calendar rows that show days from nearby months.
+    final firstOfMonth = DateTime(focusedDay.year, focusedDay.month);
+    final firstOfNextMonth = DateTime(focusedDay.year, focusedDay.month + 1);
+    return AppointmentDateRange(
+      start: firstOfMonth.subtract(const Duration(days: 7)),
+      end: firstOfNextMonth.add(const Duration(days: 7)),
+    );
   }
 }

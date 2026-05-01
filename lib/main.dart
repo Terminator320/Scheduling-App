@@ -15,9 +15,7 @@ void main() async {
 
   await dotenv.load(fileName: "dev/.env");
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.android,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.android);
 
   final settings = await SettingsService().load();
 
@@ -34,6 +32,8 @@ class PaulApp extends StatefulWidget {
 }
 
 class _PaulAppState extends State<PaulApp> {
+  final SettingsService _settingsService = SettingsService();
+  final SettingsSaveDebouncer _settingsSaveDebouncer = SettingsSaveDebouncer();
   late ThemeMode _themeMode;
   late double _textScale;
   late AppLanguageController _languageController;
@@ -47,24 +47,31 @@ class _PaulAppState extends State<PaulApp> {
     _languageController.setLanguage(widget.settings.language);
   }
 
+  @override
+  void dispose() {
+    _settingsSaveDebouncer.dispose();
+    super.dispose();
+  }
+
   void toggleTheme() {
     setState(() {
-      _themeMode =
-          _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+      _themeMode = _themeMode == ThemeMode.dark
+          ? ThemeMode.light
+          : ThemeMode.dark;
     });
-    SettingsService().save(themeMode: _themeMode);
+    _settingsService.save(themeMode: _themeMode);
   }
 
   void setTextScale(double value) {
     setState(() {
       _textScale = value;
     });
-    SettingsService().save(textScale: value);
+    _settingsSaveDebouncer.run(() => _settingsService.save(textScale: value));
   }
 
   void setLanguage(String code) {
     _languageController.setLanguage(code);
-    SettingsService().save(language: code);
+    _settingsService.save(language: code);
   }
 
   @override
@@ -86,9 +93,9 @@ class _PaulAppState extends State<PaulApp> {
           onGenerateRoute: AppRoutes.onGenerateRoute,
           builder: (context, child) {
             return MediaQuery(
-              data: MediaQuery.of(context).copyWith(
-                textScaler: TextScaler.linear(_textScale),
-              ),
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(_textScale)),
               child: child ?? const SizedBox.shrink(),
             );
           },

@@ -53,6 +53,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
   List<File> _selectedImages = [];
   bool _isSubmitting = false;
   StreamSubscription? _employeesSub;
+  Timer? _clientSearchDebounce;
   final _imageService = ImagePickerService();
   final _imageUploadService = AppointmentImageUploadService();
   final _clientService = ClientService();
@@ -73,6 +74,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
   @override
   void dispose() {
+    _clientSearchDebounce?.cancel();
     _employeesSub?.cancel();
     _titleController.dispose();
     _dateController.dispose();
@@ -85,7 +87,9 @@ class _AddEventSheetState extends State<AddEventSheet> {
   }
 
   Future<void> _searchClients(String query) async {
-    if (query.trim().isEmpty) {
+    // Wait until typing pauses before searching to avoid extra Firestore reads.
+    _clientSearchDebounce?.cancel();
+    if (!ClientSearchPolicy.shouldSearch(query)) {
       setState(() {
         _clientResults = [];
         _isSearchingClient = false;
@@ -93,17 +97,19 @@ class _AddEventSheetState extends State<AddEventSheet> {
       return;
     }
     setState(() => _isSearchingClient = true);
-    try {
-      final results = await _clientService.searchClients(query);
-      if (mounted) {
-        setState(() {
-          _clientResults = results;
-          _isSearchingClient = false;
-        });
+    _clientSearchDebounce = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final results = await _clientService.searchClients(query);
+        if (mounted) {
+          setState(() {
+            _clientResults = results;
+            _isSearchingClient = false;
+          });
+        }
+      } catch (_) {
+        if (mounted) setState(() => _isSearchingClient = false);
       }
-    } catch (_) {
-      if (mounted) setState(() => _isSearchingClient = false);
-    }
+    });
   }
 
   void _selectClient(ClientRecord client) {
@@ -184,18 +190,27 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
   Future<void> _submit(BuildContext ctx) async {
     setState(() {
-      _errors['title'] = _titleController.text.trim().isEmpty ? "Title is required" : null;
+      _errors['title'] = _titleController.text.trim().isEmpty
+          ? "Title is required"
+          : null;
       _errors['date'] = _selectedDate == null ? "Please select a date" : null;
-      _errors['startTime'] = _selectedStartTime == null ? "Please select a start time" : null;
+      _errors['startTime'] = _selectedStartTime == null
+          ? "Please select a start time"
+          : null;
       _errors['endTime'] = _selectedEndTime == null
           ? "Please select an end time"
           : (_selectedStartTime != null &&
-          (_selectedEndTime!.hour * 60 + _selectedEndTime!.minute) <=
-              (_selectedStartTime!.hour * 60 + _selectedStartTime!.minute))
+                (_selectedEndTime!.hour * 60 + _selectedEndTime!.minute) <=
+                    (_selectedStartTime!.hour * 60 +
+                        _selectedStartTime!.minute))
           ? "Must be after start time"
           : null;
-      _errors['client'] = _selectedClient == null ? "Please select a client" : null;
-      _errors['employees'] = _selectedEmployees.isEmpty ? "Please select at least one employee" : null;
+      _errors['client'] = _selectedClient == null
+          ? "Please select a client"
+          : null;
+      _errors['employees'] = _selectedEmployees.isEmpty
+          ? "Please select at least one employee"
+          : null;
     });
 
     if (_errors.values.any((e) => e != null)) return;
@@ -204,7 +219,10 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
     try {
       final docRef = _appointmentService.newDocRef();
-      final startTime = _combineDateAndTime(_selectedDate!, _selectedStartTime!);
+      final startTime = _combineDateAndTime(
+        _selectedDate!,
+        _selectedStartTime!,
+      );
       final endTime = _combineDateAndTime(_selectedDate!, _selectedEndTime!);
 
       final newAppointment = AppointmentRecord(
@@ -257,7 +275,9 @@ class _AddEventSheetState extends State<AddEventSheet> {
           child: Container(
             decoration: BoxDecoration(
               color: Theme.of(sheetContext).colorScheme.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
             ),
             child: ListView(
               controller: scrollController,
@@ -295,7 +315,10 @@ class _AddEventSheetState extends State<AddEventSheet> {
                   hint: "Select date",
                   controller: _dateController,
                   readOnly: true,
-                  suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+                  suffixIcon: const Icon(
+                    Icons.calendar_today_outlined,
+                    size: 18,
+                  ),
                   errorText: _errors['date'],
                   onTap: _pickDate,
                 ),
@@ -351,10 +374,12 @@ class _AddEventSheetState extends State<AddEventSheet> {
                   isEditing: true,
                   onPickImages: () async {
                     final images = await _imageService.pickMultiImages();
-                    if (images.isNotEmpty) setState(() => _selectedImages.addAll(images));
+                    if (images.isNotEmpty)
+                      setState(() => _selectedImages.addAll(images));
                   },
                   onRemoveExisting: (_) {},
-                  onRemoveNew: (i) => setState(() => _selectedImages.removeAt(i)),
+                  onRemoveNew: (i) =>
+                      setState(() => _selectedImages.removeAt(i)),
                 ),
                 const SizedBox(height: 16),
 
@@ -384,14 +409,18 @@ class _AddEventSheetState extends State<AddEventSheet> {
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    onPressed: _isSubmitting ? null : () => _submit(sheetContext),
+                    onPressed: _isSubmitting
+                        ? null
+                        : () => _submit(sheetContext),
                     child: _isSubmitting
                         ? SizedBox(
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Theme.of(sheetContext).colorScheme.onPrimary,
+                              color: Theme.of(
+                                sheetContext,
+                              ).colorScheme.onPrimary,
                             ),
                           )
                         : const Text("Create event"),
