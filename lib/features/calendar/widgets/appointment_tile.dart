@@ -9,12 +9,14 @@ class AppointmentTile extends StatelessWidget {
   final AppointmentRecord appointment;
   final bool showActions;
   final Map<String, Color> employeeColorMap;
+  final Future<void> Function()? onOpen;
 
   const AppointmentTile({
     super.key,
     required this.appointment,
     required this.employeeColorMap,
     this.showActions = true,
+    this.onOpen,
   });
 
   @override
@@ -28,8 +30,18 @@ class AppointmentTile extends StatelessWidget {
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () =>
-            showEventDetails(context, appointment, showActions: showActions),
+        onTap: () async {
+          if (onOpen != null) {
+            await onOpen!();
+            return;
+          }
+
+          await showEventDetails(
+            context,
+            appointment,
+            showActions: showActions,
+          );
+        },
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -47,12 +59,13 @@ class AppointmentTile extends StatelessWidget {
                     children: [
                       Text(
                         appointment.title,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleMedium,
                       ),
                       const SizedBox(height: 4),
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Icon(
                             Icons.calendar_today_outlined,
@@ -60,10 +73,16 @@ class AppointmentTile extends StatelessWidget {
                             color: scheme.onSurfaceVariant,
                           ),
                           const SizedBox(width: 4),
-                          Text(
-                            '${DateUtilsHelper.formatPrettyDate(appointment.endTime)}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
+                          Expanded(
+                            child: Text(
+                              DateUtilsHelper.formatPrettyDate(
+                                appointment.endTime,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
                             ),
                           ),
                         ],
@@ -74,9 +93,11 @@ class AppointmentTile extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.only(right: 12),
-                child: Icon(
-                  Icons.chevron_right,
-                  color: scheme.onSurfaceVariant,
+                child: Center(
+                  child: Icon(
+                    Icons.chevron_right,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ],
