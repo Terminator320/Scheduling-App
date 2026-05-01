@@ -13,10 +13,7 @@ class _ParsedAptAddress {
   final String apt;
   final String street;
 
-  const _ParsedAptAddress({
-    required this.apt,
-    required this.street,
-  });
+  const _ParsedAptAddress({required this.apt, required this.street});
 }
 
 class ClientDetailSheet extends StatefulWidget {
@@ -116,7 +113,6 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
     return _splitAptFromAddress(address)?.street ?? address;
   }
 
-
   String _addressWithVisualApt(String street, String apt) {
     final cleanStreet = street.trim();
     final cleanApt = apt.trim().replaceAll(RegExp(r'^#+'), '');
@@ -154,8 +150,12 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
     _nameController = TextEditingController(text: c.name);
     _phoneController = TextEditingController(text: c.phone);
     _emailController = TextEditingController(text: c.email);
-    _addressController = TextEditingController(text: _stripAptFromAddress(c.address));
-    _aptController = TextEditingController(text: c.apt.isNotEmpty ? c.apt : _extractAptFromAddress(c.address));
+    _addressController = TextEditingController(
+      text: _stripAptFromAddress(c.address),
+    );
+    _aptController = TextEditingController(
+      text: c.apt.isNotEmpty ? c.apt : _extractAptFromAddress(c.address),
+    );
     _cityController = TextEditingController(text: c.city);
     _provinceController = TextEditingController(text: c.province);
     _countryController = TextEditingController(text: c.country);
@@ -270,7 +270,9 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
       _phoneController.text = c.phone;
       _emailController.text = c.email;
       _addressController.text = _stripAptFromAddress(c.address);
-      _aptController.text = c.apt.isNotEmpty ? c.apt : _extractAptFromAddress(c.address);
+      _aptController.text = c.apt.isNotEmpty
+          ? c.apt
+          : _extractAptFromAddress(c.address);
       _cityController.text = c.city;
       _provinceController.text = c.province;
       _countryController.text = c.country;
@@ -389,49 +391,37 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      expand: false,
+    return DraggableSheetFrame(
       builder: (sheetContext, scrollController) {
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => FocusScope.of(sheetContext).unfocus(),
-          child: Container(
-            decoration: BoxDecoration(
-              color: scheme.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: ListView(
-              controller: scrollController,
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 12,
-                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
-              ),
-              children: [
-                const SheetHandle(),
-                const SizedBox(height: 16),
-                _isEditing
-                    ? Text(
-                        "Edit client",
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.headlineLarge,
-                      )
-                    : _buildViewHeader(theme),
-                const SizedBox(height: 20),
-                const Divider(height: 1),
-                const SizedBox(height: 20),
-                if (_isEditing) ..._buildEditFields() else ..._buildViewFields(theme),
-                const SizedBox(height: 24),
-                _buildActionButtons(),
-              ],
-            ),
+        return ListView(
+          controller: scrollController,
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 12,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
           ),
+          children: [
+            const SheetHandle(),
+            const SizedBox(height: 16),
+            _isEditing
+                ? Text(
+                    "Edit client",
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.headlineLarge,
+                  )
+                : _buildViewHeader(theme),
+            const SizedBox(height: 20),
+            const Divider(height: 1),
+            const SizedBox(height: 20),
+            if (_isEditing)
+              ..._buildEditFields()
+            else
+              ..._buildViewFields(theme),
+            const SizedBox(height: 24),
+            _buildActionButtons(),
+          ],
         );
       },
     );
@@ -441,6 +431,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
     final c = widget.client;
     final scheme = theme.colorScheme;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         CircleAvatar(
           radius: 28,
@@ -489,10 +480,8 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
       if (c.address.isNotEmpty)
         InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () => AddressMapLauncher.showMapChoices(
-            context,
-            address: c.address,
-          ),
+          onTap: () =>
+              AddressMapLauncher.showMapChoices(context, address: c.address),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: InfoRow(
@@ -512,7 +501,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
         formSectionLabel(context, "Contacts"),
         const SizedBox(height: 8),
         ...c.contacts.map(
-              (contact) => Container(
+          (contact) => Container(
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -538,90 +527,106 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
 
   List<Widget> _buildEditFields() {
     return [
-      LabeledTextField(
-        label: "Business name",
-        controller: _businessNameController,
-        optional: true,
-        autofillHints: const [AutofillHints.organizationName],
-        errorText: _errors['businessName'],
-        onChanged: (_) {
-          _clearError('businessName');
-          _clearError('name');
-          _clearError('address');
-          setState(() {});
-        },
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: "Business name",
+          controller: _businessNameController,
+          optional: true,
+          autofillHints: const [AutofillHints.organizationName],
+          errorText: _errors['businessName'],
+          onChanged: (_) {
+            _clearError('businessName');
+            _clearError('name');
+            _clearError('address');
+            setState(() {});
+          },
+        ),
       ),
       const SizedBox(height: 16),
-      LabeledTextField(
-        label: "Contact name",
-        controller: _nameController,
-        required: _businessNameController.text.trim().isEmpty,
-        optional: _businessNameController.text.trim().isNotEmpty,
-        autofillHints: const [AutofillHints.name],
-        errorText: _errors['name'],
-        onChanged: (_) {
-          _clearError('name');
-          _clearError('businessName');
-          setState(() {});
-        },
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: "Contact name",
+          controller: _nameController,
+          required: _businessNameController.text.trim().isEmpty,
+          optional: _businessNameController.text.trim().isNotEmpty,
+          autofillHints: const [AutofillHints.name],
+          errorText: _errors['name'],
+          onChanged: (_) {
+            _clearError('name');
+            _clearError('businessName');
+            setState(() {});
+          },
+        ),
       ),
       const SizedBox(height: 16),
-      LabeledTextField(
-        label: "Phone",
-        controller: _phoneController,
-        keyboard: TextInputType.phone,
-        autofillHints: const [AutofillHints.telephoneNumber],
-        errorText: _errors['phone'],
-        onChanged: (_) {
-          _clearError('phone');
-          _clearError('email');
-        },
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: "Phone",
+          controller: _phoneController,
+          keyboard: TextInputType.phone,
+          autofillHints: const [AutofillHints.telephoneNumber],
+          errorText: _errors['phone'],
+          onChanged: (_) {
+            _clearError('phone');
+            _clearError('email');
+          },
+        ),
       ),
       const SizedBox(height: 16),
-      LabeledTextField(
-        label: "Email",
-        controller: _emailController,
-        keyboard: TextInputType.emailAddress,
-        autofillHints: const [AutofillHints.email],
-        errorText: _errors['email'],
-        onChanged: (_) {
-          _clearError('email');
-          _clearError('phone');
-        },
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: "Email",
+          controller: _emailController,
+          keyboard: TextInputType.emailAddress,
+          autofillHints: const [AutofillHints.email],
+          errorText: _errors['email'],
+          onChanged: (_) {
+            _clearError('email');
+            _clearError('phone');
+          },
+        ),
       ),
       const SizedBox(height: 16),
-      AddressAutocompleteField(
-        controller: _addressController,
-        required: _businessNameController.text.trim().isEmpty,
-        errorText: _errors['address'],
-        onChanged: (value) {
-          _clearError('address');
-          _fillAddressPartsFromText(value);
-        },
-        onAddressSelected: (_) => _handleAddressSelected(),
+      SheetFocusScroll(
+        child: AddressAutocompleteField(
+          controller: _addressController,
+          required: _businessNameController.text.trim().isEmpty,
+          errorText: _errors['address'],
+          onChanged: (value) {
+            _clearError('address');
+            _fillAddressPartsFromText(value);
+          },
+          onAddressSelected: (_) => _handleAddressSelected(),
+        ),
       ),
       const SizedBox(height: 16),
-      LabeledTextField(
-        label: "Apt / Unit",
-        controller: _aptController,
-        optional: true,
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: "Apt / Unit",
+          controller: _aptController,
+          optional: true,
+        ),
       ),
       const SizedBox(height: 16),
       Row(
         children: [
           Expanded(
-            child: LabeledTextField(
-              label: "City",
-              controller: _cityController,
-              autofillHints: const [AutofillHints.addressCity],
+            child: SheetFocusScroll(
+              child: LabeledTextField(
+                label: "City",
+                controller: _cityController,
+                autofillHints: const [AutofillHints.addressCity],
+              ),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: LabeledTextField(
-              label: "Province",
-              controller: _provinceController,
-              autofillHints: const [AutofillHints.addressState],
+            child: SheetFocusScroll(
+              child: LabeledTextField(
+                label: "Province",
+                controller: _provinceController,
+                autofillHints: const [AutofillHints.addressState],
+              ),
             ),
           ),
         ],
@@ -630,18 +635,22 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
       Row(
         children: [
           Expanded(
-            child: LabeledTextField(
-              label: "Postal code",
-              controller: _postalCodeController,
-              autofillHints: const [AutofillHints.postalCode],
+            child: SheetFocusScroll(
+              child: LabeledTextField(
+                label: "Postal code",
+                controller: _postalCodeController,
+                autofillHints: const [AutofillHints.postalCode],
+              ),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: LabeledTextField(
-              label: "Country",
-              controller: _countryController,
-              autofillHints: const [AutofillHints.countryName],
+            child: SheetFocusScroll(
+              child: LabeledTextField(
+                label: "Country",
+                controller: _countryController,
+                autofillHints: const [AutofillHints.countryName],
+              ),
             ),
           ),
         ],
@@ -651,61 +660,57 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
 
   Widget _buildActionButtons() {
     if (_isEditing) {
-      return Row(
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              onPressed: _cancelEdit,
-              child: const Text("Cancel"),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
             ),
+            onPressed: _cancelEdit,
+            child: const Text("Cancel"),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              onPressed: _save,
-              child: const Text("Save changes"),
+          const SizedBox(height: 12),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
             ),
+            onPressed: _save,
+            child: const Text("Save changes"),
           ),
         ],
       );
     }
 
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              foregroundColor: Theme.of(context).colorScheme.error,
-              side: BorderSide(color: Theme.of(context).colorScheme.error),
-            ),
-            onPressed: _isDeleting ? null : _confirmDelete,
-            icon: _isDeleting
-                ? const SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.delete_outline, size: 18),
-            label: Text(_isDeleting ? "Deleting..." : "Delete"),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            foregroundColor: Theme.of(context).colorScheme.error,
+            side: BorderSide(color: Theme.of(context).colorScheme.error),
           ),
+          onPressed: _isDeleting ? null : _confirmDelete,
+          icon: _isDeleting
+              ? const SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.delete_outline, size: 18),
+          label: Text(_isDeleting ? "Deleting..." : "Delete"),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: FilledButton.icon(
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-            onPressed: _isDeleting ? null : () => setState(() => _isEditing = true),
-            icon: const Icon(Icons.edit_outlined, size: 18),
-            label: const Text("Edit"),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 14),
           ),
+          onPressed: _isDeleting
+              ? null
+              : () => setState(() => _isEditing = true),
+          icon: const Icon(Icons.edit_outlined, size: 18),
+          label: const Text("Edit"),
         ),
       ],
     );

@@ -3,8 +3,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import 'package:scheduling/core/services/image_picker_service.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/core/services/image_picker_service.dart';
 import 'package:scheduling/features/calendar/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/services/appointment_image_upload_service.dart';
@@ -22,14 +22,18 @@ import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
+
+
 class EventDetailsSheet extends StatefulWidget {
   final AppointmentRecord appointment;
   final bool showActions;
+  final bool initialEditing;
 
   const EventDetailsSheet({
     super.key,
     required this.appointment,
     this.showActions = true,
+    this.initialEditing = false,
   });
 
   @override
@@ -62,16 +66,15 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   ClientRecord? _client;
   StreamSubscription? _employeesSub;
 
-  final _formKey = GlobalKey<FormState>();
-
-  final _imageService = ImagePickerService();
   final _imageUploadService = AppointmentImageUploadService();
+  final _imageService = ImagePickerService();
   final _userService = UserService();
   final _clientService = ClientService();
 
   @override
   void initState() {
     super.initState();
+    _isEditing = widget.initialEditing;
     final a = widget.appointment;
 
     _titleController = TextEditingController(text: a.title);
@@ -120,7 +123,6 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     });
   }
 
-
   Future<void> _loadClient() async {
     final clientId = widget.appointment.clientId.trim();
     if (clientId.isEmpty) return;
@@ -131,6 +133,27 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       setState(() => _client = client);
     } catch (_) {
       // Keep the appointment details usable even if the client record cannot load.
+    }
+  }
+
+  Future<void> _markAsDone() async {
+    final id = widget.appointment.id;
+    if (id == null) return;
+
+    setState(() => _isSaving = true);
+    try {
+      await AppointmentService().updateAppointmentStatus(
+        appointmentId: id,
+        status: 'done',
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Something went wrong")));
+      }
     }
   }
 
@@ -154,36 +177,6 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
           .where((e) => a.employeeIds.contains(e.id))
           .toList();
     });
-  }
-
-  Future<void> _confirmDelete() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete job'),
-        content: const Text('Are you sure you want to delete this job?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-    final id = widget.appointment.id;
-    if (id == null) return;
-    await AppointmentService.deleteAppointment(id);
-    if (!mounted) return;
-    Navigator.pop(context, 'deleted');
   }
 
   Future<void> _save() async {
@@ -287,55 +280,35 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final maxHeight = MediaQuery.of(context).size.height * 0.95;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => FocusScope.of(context).unfocus(),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxHeight),
-        child: Container(
-          decoration: BoxDecoration(
-            color: scheme.surface,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(20),
-            ),
+    return DraggableSheetFrame(
+      builder: (sheetContext, scrollController) {
+        return ListView(
+          controller: scrollController,
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 12,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
           ),
-          child: SingleChildScrollView(
-            padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 12,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SheetHandle(),
-                const SizedBox(height: 16),
-                _isEditing ? _buildEditHeader() : _buildViewHeader(),
-                const SizedBox(height: 20),
-                const Divider(height: 1),
-                const SizedBox(height: 20),
-                if (_isEditing)
-                  ..._buildEditFields()
-                else
-                  ..._buildViewFields(),
-                const SizedBox(height: 20),
-                _buildPhotosSection(),
-                const SizedBox(height: 20),
-                _buildEmployeesSection(),
-                if (widget.showActions) ...[
-                  const SizedBox(height: 24),
-                  _buildActionButtons(),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
+          children: [
+            const SheetHandle(),
+            const SizedBox(height: 16),
+            _isEditing ? _buildEditHeader() : _buildViewHeader(),
+            const SizedBox(height: 20),
+            const Divider(height: 1),
+            const SizedBox(height: 20),
+            if (_isEditing) ..._buildEditFields() else ..._buildViewFields(),
+            const SizedBox(height: 20),
+            _buildPhotosSection(),
+            const SizedBox(height: 20),
+            _buildEmployeesSection(),
+            if (widget.showActions) ...[
+              const SizedBox(height: 24),
+              _buildActionButtons(),
+            ],
+          ],
+        );
+      },
     );
   }
 
@@ -356,23 +329,28 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
           style: theme.textTheme.headlineLarge,
         ),
         const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        Wrap(
+          alignment: WrapAlignment.center,
+          runAlignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          runSpacing: 6,
           children: [
             Icon(
               Icons.calendar_today_outlined,
               size: 13,
               color: scheme.onSurfaceVariant,
             ),
-            const SizedBox(width: 6),
-            Text(DateUtilsHelper.formatDate(a.startTime), style: secondaryStyle),
-            const SizedBox(width: 12),
+            Text(
+              DateUtilsHelper.formatDate(a.startTime),
+              textAlign: TextAlign.center,
+              style: secondaryStyle,
+            ),
             Icon(
               Icons.access_time_outlined,
               size: 13,
               color: scheme.onSurfaceVariant,
             ),
-            const SizedBox(width: 6),
             Text(
               "${DateUtilsHelper.formatTime(a.startTime)} – ${DateUtilsHelper.formatTime(a.endTime)}",
               style: secondaryStyle,
@@ -425,10 +403,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         "Address",
         a.address.isNotEmpty ? a.address : "No address",
         onTap: a.address.isNotEmpty
-            ? () => AddressMapLauncher.showMapChoices(
-                  context,
-                  address: a.address,
-                )
+            ? () =>
+                  AddressMapLauncher.showMapChoices(context, address: a.address)
             : null,
       ),
       const SizedBox(height: 16),
@@ -459,7 +435,6 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
             ),
     ];
   }
-
 
   Widget _contactCard(ClientContact contact) {
     final theme = Theme.of(context);
@@ -550,40 +525,44 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
   List<Widget> _buildEditFields() {
     return [
-      LabeledTextField(
-        label: "Job title",
-        hint: "e.g. Plumbing repair",
-        controller: _titleController,
-        errorText: _errors['title'],
-        onChanged: (_) {
-          if (_errors['title'] != null) {
-            setState(() => _errors['title'] = null);
-          }
-        },
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: "Job title",
+          hint: "e.g. Plumbing repair",
+          controller: _titleController,
+          errorText: _errors['title'],
+          onChanged: (_) {
+            if (_errors['title'] != null) {
+              setState(() => _errors['title'] = null);
+            }
+          },
+        ),
       ),
       const SizedBox(height: 16),
 
-      LabeledTextField(
-        label: "Date",
-        hint: "Select date",
-        controller: _dateController,
-        readOnly: true,
-        errorText: _errors['date'],
-        suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
-        onTap: () async {
-          final picked = await showDatePicker(
-            context: context,
-            initialDate: _selectedDate,
-            firstDate: DateTime(2020),
-            lastDate: DateTime(2100),
-          );
-          if (picked == null) return;
-          setState(() {
-            _selectedDate = picked;
-            _dateController.text = DateUtilsHelper.formatDate(picked);
-            _errors['date'] = null;
-          });
-        },
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: "Date",
+          hint: "Select date",
+          controller: _dateController,
+          readOnly: true,
+          errorText: _errors['date'],
+          suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: _selectedDate,
+              firstDate: DateTime(2020),
+              lastDate: DateTime(2100),
+            );
+            if (picked == null) return;
+            setState(() {
+              _selectedDate = picked;
+              _dateController.text = DateUtilsHelper.formatDate(picked);
+              _errors['date'] = null;
+            });
+          },
+        ),
       ),
       const SizedBox(height: 16),
 
@@ -622,20 +601,24 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       ),
       const SizedBox(height: 16),
 
-      LabeledTextField(
-        label: "Notes",
-        hint: "Type the note here...",
-        controller: _notesController,
-        optional: true,
-        maxLines: 3,
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: "Notes",
+          hint: "Type the note here...",
+          controller: _notesController,
+          optional: true,
+          maxLines: 3,
+        ),
       ),
       const SizedBox(height: 16),
 
-      LabeledTextField(
-        label: "Materials needed",
-        hint: "e.g. Pipe wrench, tape (comma separated)",
-        controller: _materialsController,
-        optional: true,
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: "Materials needed",
+          hint: "e.g. Pipe wrench, tape (comma separated)",
+          controller: _materialsController,
+          optional: true,
+        ),
       ),
     ];
   }
@@ -702,68 +685,83 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
   // Button switching
   Widget _buildActionButtons() {
+    final now = DateTime.now();
+    final isToday =
+        widget.appointment.startTime.year == now.year &&
+        widget.appointment.startTime.month == now.month &&
+        widget.appointment.startTime.day == now.day;
     final scheme = Theme.of(context).colorScheme;
+    final isDone = widget.appointment.status == 'done';
 
+    // Mode édition — inchangé
     if (_isEditing) {
-      return Row(
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              onPressed: _isSaving ? null : _cancelEdit,
-              child: const Text("Cancel"),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
             ),
+            onPressed: _isSaving ? null : _cancelEdit,
+            child: const Text("Cancel"),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              onPressed: _isSaving ? null : _save,
-              child: _isSaving
-                  ? SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: scheme.onPrimary,
-                      ),
-                    )
-                  : const Text("Save changes"),
+          const SizedBox(height: 12),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
             ),
+            onPressed: _isSaving ? null : _save,
+            child: _isSaving
+                ? SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: scheme.onPrimary,
+                    )
+                  )
+                : const Text("Save changes"),
           ),
         ],
       );
     }
 
-    // View mode: primary action (Edit) is emphasized; destructive (Delete)
-    // is a subtle text button, spatially separated to avoid mistaps.
+    // Mode lecture — boutons selon le contexte
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
+        // Bouton Done uniquement si c'est aujourd'hui et pas déjà "done"
+        if (isToday && !isDone)
+          FilledButton.icon(
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
-            onPressed: () => setState(() => _isEditing = true),
-            icon: const Icon(Icons.edit_outlined, size: 18),
-            label: const Text("Edit"),
+            onPressed: _isSaving ? null : _markAsDone, // ← appel correct
+            icon: _isSaving
+                ? SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: scheme.onPrimary,
+                    ),
+                  )
+                : const Icon(Icons.check, size: 18),
+            label: const Text("Mark as done"),
           ),
-        ),
-        const SizedBox(height: 8),
-        TextButton.icon(
-          style: TextButton.styleFrom(
-            foregroundColor: scheme.error,
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+
+        // Déjà complété
+        if (isDone)
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              foregroundColor: Colors.green,
+              side: const BorderSide(color: Colors.green),
+            ),
+            onPressed: null, // désactivé
+            icon: const Icon(Icons.check_circle_outline, size: 18),
+            label: const Text("Completed"),
           ),
-          onPressed: _confirmDelete,
-          icon: const Icon(Icons.delete_outline, size: 18),
-          label: const Text("Delete job"),
-        ),
       ],
     );
   }

@@ -51,36 +51,6 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
   }
 
 
-  Future<void> _delete() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(tr(ctx, 'Delete employee')),
-        content: Text(
-          tr(ctx, 'Are you sure you want to delete this employee?'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(tr(ctx, 'Cancel')),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(tr(ctx, 'Delete')),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-    await _service.deleteEmployee(widget.employee!.id);
-    if (!mounted) return;
-    Navigator.pop(context, 'deleted');
-  }
-
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -140,13 +110,22 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
         ? tr(context, 'Update Employee')
         : tr(context, 'Create Employee');
 
-    return SheetFrame(
-      child: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return DraggableSheetFrame(
+      builder: (sheetContext, scrollController) {
+        return ListView(
+          controller: scrollController,
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 12,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+          ),
+          children: [
+            Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SheetHandle(),
               const SizedBox(height: 16),
@@ -159,25 +138,34 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
                 ),
               ),
               const SizedBox(height: 18),
-              TextFormField(
-                controller: _nameController,
-                decoration: formInputDecoration(context, tr(context, 'Name')),
-                validator: _requiredValidator,
+              SheetFocusScroll(
+                child: TextFormField(
+                  controller: _nameController,
+                  decoration: formInputDecoration(context, tr(context, 'Name')),
+                  validator: _requiredValidator,
+                ),
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: formInputDecoration(context, tr(context, 'Email')),
-                validator: _requiredValidator,
+              SheetFocusScroll(
+                child: TextFormField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: formInputDecoration(
+                    context,
+                    tr(context, 'Email'),
+                  ),
+                  validator: _requiredValidator,
+                ),
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: formInputDecoration(
-                  context,
-                  tr(context, 'Phone number'),
+              SheetFocusScroll(
+                child: TextFormField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: formInputDecoration(
+                    context,
+                    tr(context, 'Phone number'),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -213,10 +201,12 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
                       : Text(submitLabel),
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

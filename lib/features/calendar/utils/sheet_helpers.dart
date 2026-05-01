@@ -3,8 +3,10 @@ import '../models/appointment_record.dart';
 import '../widgets/add_appointment_sheet.dart';
 import '../widgets/details_edit_sheet.dart';
 
-
-Future<AppointmentRecord?> showAddEventPopup(BuildContext context) {
+Future<AppointmentRecord?> showAddEventPopup(
+  BuildContext context, {
+  DateTime? initialDate,
+}) {
   return showModalBottomSheet<AppointmentRecord>(
     context: context,
     isScrollControlled: true,
@@ -12,15 +14,15 @@ Future<AppointmentRecord?> showAddEventPopup(BuildContext context) {
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (_) => const AddEventSheet(),
+    builder: (_) => AddEventSheet(initialDate: initialDate),
   );
 }
 
 Future<void> showEventDetails(
-    BuildContext context,
-    AppointmentRecord a, {
-      bool showActions = true,
-    }) {
+  BuildContext context,
+  AppointmentRecord a, {
+  bool showActions = true,
+}) {
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -28,9 +30,6 @@ Future<void> showEventDetails(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (_) => EventDetailsSheet(
-      appointment: a,
-      showActions: showActions,
-    ),
+    builder: (_) => EventDetailsSheet(appointment: a, showActions: showActions),
   );
 }

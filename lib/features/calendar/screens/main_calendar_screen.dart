@@ -142,7 +142,10 @@ class _MainCalendar extends State<MainCalendar> {
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton(
               onPressed: () async {
-                final newEvent = await showAddEventPopup(context);
+                final newEvent = await showAddEventPopup(
+                  context,
+                  initialDate: _selectedDay ?? _focusedDay,
+                );
 
                 if (newEvent != null) {
                   await service.addAppointment(newEvent);

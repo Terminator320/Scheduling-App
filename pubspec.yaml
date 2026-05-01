@@ -53,6 +53,7 @@ dependencies:
 
 
   url_launcher: any
+  http: any
   flutter_dotenv: any
   shared_preferences: any
 
