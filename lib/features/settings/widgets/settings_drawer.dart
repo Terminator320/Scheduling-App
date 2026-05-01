@@ -206,7 +206,13 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                             content: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text('Preview text'),
+                                MediaQuery(
+                                  // Preview the new scale inside the dialog before applying it globally.
+                                  data: MediaQuery.of(context).copyWith(
+                                    textScaler: TextScaler.linear(tempScale),
+                                  ),
+                                  child: const Text('Preview text'),
+                                ),
                                 const SizedBox(height: 16),
                                 Slider(
                                   value: tempScale,
@@ -218,15 +224,17 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                                     setDialogState(() {
                                       tempScale = value;
                                     });
-
-                                    themeNotifier.setTextScale(value);
                                   },
                                 ),
                               ],
                             ),
                             actions: [
                               TextButton(
-                                onPressed: () => Navigator.pop(dialogContext),
+                                onPressed: () {
+                                  // Apply text scale once when the user confirms the preview.
+                                  themeNotifier.setTextScale(tempScale);
+                                  Navigator.pop(dialogContext);
+                                },
                                 child: const Text('Done'),
                               ),
                             ],
@@ -281,7 +289,6 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                                   groupValue: selected,
                                   onChanged: (value) {
                                     setDialogState(() => selected = value!);
-                                    themeNotifier.setLanguage(value!);
                                   },
                                 ),
                                 RadioListTile<String>(
@@ -290,14 +297,17 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                                   groupValue: selected,
                                   onChanged: (value) {
                                     setDialogState(() => selected = value!);
-                                    themeNotifier.setLanguage(value!);
                                   },
                                 ),
                               ],
                             ),
                             actions: [
                               TextButton(
-                                onPressed: () => Navigator.pop(dialogContext),
+                                onPressed: () {
+                                  // Apply language once when the user confirms the selection.
+                                  themeNotifier.setLanguage(selected);
+                                  Navigator.pop(dialogContext);
+                                },
                                 child: const Text('Done'),
                               ),
                             ],

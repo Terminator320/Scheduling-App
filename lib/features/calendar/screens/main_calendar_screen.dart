@@ -49,6 +49,7 @@ class _MainCalendar extends State<MainCalendar> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   List<AppointmentRecord> _allAppointments = [];
+  late AppointmentDateRange _appointmentRange;
 
   @override
   void initState() {
@@ -66,15 +67,36 @@ class _MainCalendar extends State<MainCalendar> {
       if (mounted) setState(() => _allEmployees = data);
     });
 
-    _appointmentsSub = service.getAllAppointments().listen((data) {
+    _subscribeAppointmentsForFocusedMonth();
+  }
+
+  void _subscribeAppointmentsForFocusedMonth() {
+    // Listen only to appointments near the visible month instead of the whole collection.
+    _appointmentRange = AppointmentDateRange.visibleMonth(_focusedDay);
+    _appointmentsSub?.cancel();
+    _appointmentsSub = service.appointmentsInRange(_appointmentRange).listen((
+      data,
+    ) {
       if (!mounted) return;
       setState(() {
         _allAppointments = widget.isAdmin
             ? data
-            : data.where((a) => a.employeeIds.contains(widget.employeeId)).toList();
+            : data
+                  .where((a) => a.employeeIds.contains(widget.employeeId))
+                  .toList();
       });
       _selectedEvents.value = _getEventsForDay(_selectedDay!);
     });
+  }
+
+  void _setFocusedDay(DateTime day) {
+    final oldRange = _appointmentRange;
+    setState(() => _focusedDay = day);
+    final newRange = AppointmentDateRange.visibleMonth(day);
+    // Resubscribe only when paging moves outside the currently loaded range.
+    if (newRange.start != oldRange.start || newRange.end != oldRange.end) {
+      _subscribeAppointmentsForFocusedMonth();
+    }
   }
 
   @override
@@ -86,7 +108,8 @@ class _MainCalendar extends State<MainCalendar> {
     super.dispose();
   }
 
-  Map<String, Color> get _employeeColorMap => buildEmployeeColorMap(_allEmployees);
+  Map<String, Color> get _employeeColorMap =>
+      buildEmployeeColorMap(_allEmployees);
 
   List<AppointmentRecord> _getEventsForDay(DateTime day) {
     final events = _allAppointments.where((app) {
@@ -98,11 +121,16 @@ class _MainCalendar extends State<MainCalendar> {
 
   void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
     if (!isSameDay(_selectedDay, selectedDay)) {
+      final oldRange = _appointmentRange;
       setState(() {
         _selectedDay = selectedDay;
         _focusedDay = focusedDay;
       });
 
+      final newRange = AppointmentDateRange.visibleMonth(focusedDay);
+      if (newRange.start != oldRange.start || newRange.end != oldRange.end) {
+        _subscribeAppointmentsForFocusedMonth();
+      }
       _selectedEvents.value = _getEventsForDay(selectedDay);
     }
   }
@@ -123,7 +151,10 @@ class _MainCalendar extends State<MainCalendar> {
               child: const Icon(Icons.add),
             )
           : null,
-      endDrawer: SettingsDrawer(isAdmin: widget.isAdmin, employeeId: widget.employeeId,),
+      endDrawer: SettingsDrawer(
+        isAdmin: widget.isAdmin,
+        employeeId: widget.employeeId,
+      ),
       body: SafeArea(child: content()),
     );
   }
@@ -169,14 +200,13 @@ class _MainCalendar extends State<MainCalendar> {
               _selectedDay = now;
               _selectedEvents.value = _getEventsForDay(now);
             });
+            _subscribeAppointmentsForFocusedMonth();
           },
           onTapMonth: () async {
             final picked = await MonthYearPicker.show(context, _focusedDay);
 
             if (picked != null) {
-              setState(() {
-                _focusedDay = picked;
-              });
+              _setFocusedDay(picked);
             }
           },
         ),
@@ -188,7 +218,7 @@ class _MainCalendar extends State<MainCalendar> {
           rowHeight: isTablet ? screenHeight * 0.08 : screenHeight * 0.065,
           eventLoader: _getEventsForDay,
           onCalendarCreated: (controller) => _pageController = controller,
-          onPageChanged: (day) => setState(() => _focusedDay = day),
+          onPageChanged: _setFocusedDay,
           employees: _allEmployees,
           employeeColorMap: _employeeColorMap,
         ),
@@ -197,10 +227,7 @@ class _MainCalendar extends State<MainCalendar> {
 
         Divider(),
 
-        EventList(
-          events: _selectedEvents,
-          employees: _allEmployees,
-        ),
+        EventList(events: _selectedEvents, employees: _allEmployees),
       ],
     );
   }

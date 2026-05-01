@@ -4,7 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 
 class UserService {
-  final CollectionReference<Map<String, dynamic>> _users = FirebaseFirestore.instance.collection('users');
+  final CollectionReference<Map<String, dynamic>> _users = FirebaseFirestore
+      .instance
+      .collection('users');
 
   Future<void> addEmployee({
     required String name,
@@ -36,15 +38,16 @@ class UserService {
     });
   }
 
-
-// returns all users regardless of role
+  // returns all users regardless of role
   Stream<List<EmployeeRecord>> allUsersStream() {
-    return _users.snapshots().map((snapshot) =>
-        snapshot.docs
-            .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
-            .toList());
+    return _users
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
   }
-
 
   Stream<List<EmployeeRecord>> employeesStream() {
     return _users
@@ -52,9 +55,9 @@ class UserService {
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
-          .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
-          .toList(),
-    );
+              .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
   }
 
   // everyone who can be assigned to a job
@@ -62,12 +65,12 @@ class UserService {
     return _users
         .where('status', isEqualTo: 'active')
         .snapshots()
-        .map((snapshot) => snapshot.docs
-        .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
-        .toList());
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
   }
-
-
 
   Future<void> updateEmployee({
     required String docId,
@@ -79,11 +82,13 @@ class UserService {
   }) async {
     final normalizedEmail = email.trim().toLowerCase();
 
-    final existing =
-    await _users.where('email', isEqualTo: normalizedEmail).get();
+    final existing = await _users
+        .where('email', isEqualTo: normalizedEmail)
+        .get();
 
-    final emailUsedByAnotherEmployee =
-    existing.docs.any((doc) => doc.id != docId);
+    final emailUsedByAnotherEmployee = existing.docs.any(
+      (doc) => doc.id != docId,
+    );
 
     if (emailUsedByAnotherEmployee) {
       throw Exception('Employee email already exists');
@@ -103,14 +108,9 @@ class UserService {
     await _users.doc(docId).update(updateData);
   }
 
-
-
   Future<void> deleteEmployee(String docId) async {
     await _users.doc(docId).delete();
   }
-
-
-
 
   Future<QueryDocumentSnapshot<Map<String, dynamic>>?>
   findInvitedEmployeeByEmail(String email) async {
@@ -127,7 +127,6 @@ class UserService {
     return result.docs.first;
   }
 
-
   Future<EmployeeRecord?> getEmployeeById(String docId) async {
     final doc = await _users.doc(docId).get();
     if (!doc.exists) return null;
@@ -135,15 +134,13 @@ class UserService {
   }
 
   Future<QueryDocumentSnapshot<Map<String, dynamic>>?> findUserByUid(
-      String uid,
-      ) async {
+    String uid,
+  ) async {
     final result = await _users.where('uid', isEqualTo: uid).limit(1).get();
 
     if (result.docs.isEmpty) return null;
     return result.docs.first;
   }
-
-
 
   Future<bool> isUserAdmin(String uid) async {
     if (uid.isEmpty) return false;
@@ -152,20 +149,12 @@ class UserService {
     return (userDoc.data()['role'] ?? '') == 'admin';
   }
 
-
-
   Future<void> activateEmployee({
     required String docId,
     required String uid,
   }) async {
-    await _users.doc(docId).update({
-      'uid': uid,
-      'status': 'active',
-    });
+    await _users.doc(docId).update({'uid': uid, 'status': 'active'});
   }
-
-
-
 
   Stream<String> loggedInUserNameStream() {
     final user = FirebaseAuth.instance.currentUser;
@@ -174,15 +163,15 @@ class UserService {
       return Stream.value('User');
     }
 
-    return _users.where('uid', isEqualTo: user.uid).limit(1).snapshots().map(
-          (snapshot) {
-        if (snapshot.docs.isEmpty) return 'User';
+    return _users.where('uid', isEqualTo: user.uid).limit(1).snapshots().map((
+      snapshot,
+    ) {
+      if (snapshot.docs.isEmpty) return 'User';
 
-        final data = snapshot.docs.first.data();
-        final name = (data['name'] ?? '').toString().trim();
+      final data = snapshot.docs.first.data();
+      final name = (data['name'] ?? '').toString().trim();
 
-        return name.isNotEmpty ? name : 'User';
-      },
-    );
+      return name.isNotEmpty ? name : 'User';
+    });
   }
 }
