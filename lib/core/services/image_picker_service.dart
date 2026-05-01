@@ -2,6 +2,9 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 
 class ImagePickerService {
+  static const maxImageDimension = 1600.0;
+  static const imageQuality = 85;
+
   final ImagePicker _picker = ImagePicker();
 
   // single image
@@ -14,9 +17,13 @@ class ImagePickerService {
 
   // multiple images
   Future<List<File>> pickMultiImages() async {
-    final List<XFile>? images = await _picker.pickMultiImage();
+    final images = await _picker.pickMultiImage(
+      maxWidth: maxImageDimension,
+      maxHeight: maxImageDimension,
+      imageQuality: imageQuality,
+    );
 
-    if (images == null || images.isEmpty) return [];
+    if (images.isEmpty) return [];
 
     return images.map((x) => File(x.path)).toList();
   }

@@ -10,20 +10,8 @@
 - remove finished appointment from calendar view (Victor)
 
 
-Unassigned tasks:
-- Add autofill when a date is selected when adding an appointment
-- Add automatic 1 hour appointment if no end time is added
+
 
 Done:
-- Make the search for client work when adding an appointment (ignore case) (Audréane)
-- create account pages (Audréane)
-- add all text boxes for address (Audréane)
-- connect the address to apple map/google maps/waze (Audréane)
-- Add link to launch maps when an address is clicked in a detail view (Audréane)
-- implementing settings page for text size (Audréane)
-- Save settings to the device (George)
-- Fix authentification to be permanent (George)
-- add option to add multiple clients to a business (Audréane)
-
 
 

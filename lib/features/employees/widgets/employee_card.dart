@@ -36,17 +36,27 @@ class EmployeeCard extends StatelessWidget {
             border: Border.all(color: scheme.outlineVariant),
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _EmployeeAvatar(employee: employee),
               const SizedBox(width: 12),
               Expanded(child: _EmployeeSummary(employee: employee)),
-              IconButton(
-                onPressed: onEdit,
-                icon: const Icon(Icons.edit_outlined, size: 20),
-              ),
-              IconButton(
-                onPressed: onDelete,
-                icon: Icon(Icons.delete_outline, size: 20,  color: scheme.error),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined, size: 20),
+                  ),
+                  IconButton(
+                    onPressed: onDelete,
+                    icon: Icon(
+                      Icons.delete_outline,
+                      size: 20,
+                      color: scheme.error,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -79,26 +89,39 @@ class _EmployeeSummary extends StatelessWidget {
           employee.name.isEmpty
               ? tr(context, 'Employee name')
               : employee.name,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 4),
         if (employee.email.isNotEmpty)
-          Text(employee.email, style: theme.textTheme.bodyMedium),
+          Text(
+            employee.email,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium,
+          ),
         if (employee.phone.isNotEmpty) ...[
           const SizedBox(height: 2),
-          Text(employee.phone, style: theme.textTheme.bodySmall),
+          Text(
+            employee.phone,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall,
+          ),
         ],
         const SizedBox(height: 6),
-        Row(
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
           children: [
             _StatusChip(
               label: statusLabel,
               color: employee.isActive ? Colors.green : scheme.primary,
             ),
             if (employee.isAdmin) ...[
-              const SizedBox(width: 8),
               _StatusChip(
                 label: tr(context, 'Admin'),
                 color: scheme.tertiary,
