@@ -2,6 +2,23 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:scheduling/features/clients/models/client_record.dart';
 
+class ClientSearchPolicy {
+  static const serverReadLimit = 1000;
+
+  static bool shouldSearch(String query) {
+    final trimmed = query.trim();
+    final digits = trimmed.replaceAll(RegExp(r'\D'), '');
+    return trimmed.length >= 2 || digits.length >= 3;
+  }
+
+  static String cacheKey(String query) {
+    return query
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), ' ');
+  }
+}
+
 class ClientService {
   final CollectionReference<Map<String, dynamic>> _clients = FirebaseFirestore.instance.collection('clients');
 
@@ -61,7 +78,7 @@ class ClientService {
 
     final snapshot = await _clients
         .orderBy('createdAt', descending: true)
-        .limit(500)
+        .limit(ClientSearchPolicy.serverReadLimit)
         .get();
 
     final scoredClients = <MapEntry<int, ClientRecord>>[];

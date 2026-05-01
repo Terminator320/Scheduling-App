@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/utils/app_text.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
-import 'package:scheduling/features/employees/services/user_service.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
-
 
 class EmployeeDetailsSheet extends StatelessWidget {
   const EmployeeDetailsSheet({super.key, required this.employee});
@@ -15,52 +13,57 @@ class EmployeeDetailsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return SheetFrame(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SheetHandle(),
-          const SizedBox(height: 18),
-          Center(
-            child: Text(
-              tr(context, 'Employee details'),
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w700,
+    return DraggableSheetFrame(
+      builder: (sheetContext, scrollController) {
+        return ListView(
+          controller: scrollController,
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 12,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+          ),
+          children: [
+            const SheetHandle(),
+            const SizedBox(height: 18),
+            Center(
+              child: Text(
+                tr(context, 'Employee details'),
+                style: theme.textTheme.headlineSmall
               ),
             ),
-          ),
-          const SizedBox(height: 18),
-          _DetailField(label: tr(context, 'Name'), value: employee.name),
-          const SizedBox(height: 12),
-          _DetailField(label: tr(context, 'Email'), value: employee.email),
-          const SizedBox(height: 12),
-          _DetailField(
-            label: tr(context, 'Phone number'),
-            value: employee.phone.isEmpty ? '-' : employee.phone,
-          ),
-          const SizedBox(height: 12),
-          _DetailField(label: tr(context, 'Role'), value: employee.role),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Container(
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  color: employee.color,
-                  shape: BoxShape.circle,
+            const SizedBox(height: 18),
+            _DetailField(label: tr(context, 'Name'), value: employee.name),
+            const SizedBox(height: 12),
+            _DetailField(label: tr(context, 'Email'), value: employee.email),
+            const SizedBox(height: 12),
+            _DetailField(
+              label: tr(context, 'Phone number'),
+              value: employee.phone.isEmpty ? '-' : employee.phone,
+            ),
+            const SizedBox(height: 12),
+            _DetailField(label: tr(context, 'Role'), value: employee.role),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: employee.color,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Text(tr(context, 'Employee color')),
-            ],
-          ),
-        ],
-      ),
+                const SizedBox(width: 10),
+                Expanded(child: Text(tr(context, 'Employee color'))),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
-
 }
 
 class _DetailField extends StatelessWidget {
@@ -94,6 +97,7 @@ class _DetailField extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             value.isEmpty ? '-' : value,
+            softWrap: true,
             style: theme.textTheme.bodyLarge?.copyWith(
               fontWeight: FontWeight.w600,
             ),

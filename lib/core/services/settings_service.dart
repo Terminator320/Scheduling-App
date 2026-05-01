@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AppSettings {
@@ -38,5 +39,23 @@ class SettingsService {
     if (themeMode != null) await prefs.setInt(_keyThemeMode, themeMode.index);
     if (textScale != null) await prefs.setDouble(_keyTextScale, textScale);
     if (language != null) await prefs.setString(_keyLanguage, language);
+  }
+}
+
+class SettingsSaveDebouncer {
+  final Duration delay;
+  Timer? _timer;
+
+  SettingsSaveDebouncer({required this.delay});
+
+  void run(Future<void> Function() save) {
+    _timer?.cancel();
+    _timer = Timer(delay, () {
+      save();
+    });
+  }
+
+  void dispose() {
+    _timer?.cancel();
   }
 }
