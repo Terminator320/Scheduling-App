@@ -46,16 +46,25 @@ class EventList extends StatelessWidget {
     await AppointmentService.deleteAppointment(e.id!);
   }
 
-  void _openEditSheet(BuildContext context, AppointmentRecord e) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => EventDetailsSheet(
-        appointment: e,
-        showActions: isAdmin,
-      ),
+  void _openEditSheet(BuildContext context, AppointmentRecord e) async {
+    final updated = await showModalBottomSheet<AppointmentRecord>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => EventDetailsSheet(
+          appointment: e,
+          showActions: isAdmin,
+          initialEditing: true,
+        ),
     );
+
+    if (updated != null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Appointment updated')),
+        );
+      }
+    }
   }
 
   @override
@@ -126,12 +135,14 @@ class EventList extends StatelessWidget {
                                 children: [
                                   Text(
                                     e.title,
-                                    maxLines: 1,
+                                    maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: theme.textTheme.titleMedium,
                                   ),
                                   const SizedBox(height: 4),
                                   Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Icon(
                                         Icons.access_time_outlined,
@@ -139,12 +150,16 @@ class EventList extends StatelessWidget {
                                         color: scheme.onSurfaceVariant,
                                       ),
                                       const SizedBox(width: 4),
-                                      Text(
+                                      Expanded(
+                                        child: Text(
                                         "${DateUtilsHelper.formatTime(e.startTime)} – ${DateUtilsHelper.formatTime(e.endTime)}",
-                                        style: theme.textTheme.bodySmall
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.bodySmall
                                             ?.copyWith(
                                               color: scheme.onSurfaceVariant,
                                             ),
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -171,9 +186,11 @@ class EventList extends StatelessWidget {
                           ] else
                             Padding(
                               padding: const EdgeInsets.only(right: 12),
-                              child: Icon(
-                                Icons.chevron_right,
-                                color: scheme.onSurfaceVariant,
+                              child: Center(
+                                child: Icon(
+                                  Icons.chevron_right,
+                                  color: scheme.onSurfaceVariant,
+                                ),
                               ),
                             ),
                         ],

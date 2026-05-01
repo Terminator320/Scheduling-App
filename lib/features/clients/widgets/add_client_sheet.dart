@@ -200,7 +200,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
   String _addressWithVisualApt(String street, String apt) {
     var cleanStreet = street.trim();
 
-    // 🔥 REMOVE any existing unit (#, Apt, Unit, etc.)
+
     cleanStreet = cleanStreet.replaceAll(
       RegExp(r'\s+(#|apt\.?|apartment|unit|suite|ste\.?)\s*[-#: ]*\s*[A-Za-z0-9 /]+', caseSensitive: false),
       '',
@@ -211,12 +211,12 @@ class _AddClientSheetState extends State<AddClientSheet> {
 
     final commaIndex = cleanStreet.indexOf(',');
 
-    // 👇 If no city part yet
+
     if (commaIndex == -1) {
       return '$cleanStreet #$cleanApt';
     }
 
-    // 👇 Insert before city
+
     final firstLine = cleanStreet.substring(0, commaIndex).trim();
     final rest = cleanStreet.substring(commaIndex);
 
@@ -396,25 +396,17 @@ class _AddClientSheetState extends State<AddClientSheet> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => FocusScope.of(context).unfocus(),
-      child: Container(
-        decoration: BoxDecoration(
-          color: scheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 12,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+    return DraggableSheetFrame(
+      builder: (sheetContext, scrollController) {
+        return ListView(
+          controller: scrollController,
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 12,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+          ),
+          children: [
               const SheetHandle(),
               const SizedBox(height: 16),
               Center(
@@ -426,56 +418,64 @@ class _AddClientSheetState extends State<AddClientSheet> {
               const SizedBox(height: 20),
               const Divider(height: 1),
               const SizedBox(height: 20),
-              LabeledTextField(
-                label: "Business name",
-                controller: _businessNameController,
-                optional: true,
-                autofillHints: const [AutofillHints.organizationName],
-                errorText: _errors['businessName'],
-                onChanged: (_) {
-                  _clearError('businessName');
-                  _clearError('name');
-                  _clearError('address');
-                  setState(() {});
-                },
+              SheetFocusScroll(
+                child: LabeledTextField(
+                  label: "Business name",
+                  controller: _businessNameController,
+                  optional: true,
+                  autofillHints: const [AutofillHints.organizationName],
+                  errorText: _errors['businessName'],
+                  onChanged: (_) {
+                    _clearError('businessName');
+                    _clearError('name');
+                    _clearError('address');
+                    setState(() {});
+                  },
+                ),
               ),
               const SizedBox(height: 16),
-              LabeledTextField(
-                label: "Contact name",
-                controller: _nameController,
-                required: !_isBusiness,
-                optional: _isBusiness,
-                autofillHints: const [AutofillHints.name],
-                errorText: _errors['name'],
-                onChanged: (_) {
-                  _clearError('name');
-                  _clearError('businessName');
-                  setState(() {});
-                },
+              SheetFocusScroll(
+                child: LabeledTextField(
+                  label: "Contact name",
+                  controller: _nameController,
+                  required: !_isBusiness,
+                  optional: _isBusiness,
+                  autofillHints: const [AutofillHints.name],
+                  errorText: _errors['name'],
+                  onChanged: (_) {
+                    _clearError('name');
+                    _clearError('businessName');
+                    setState(() {});
+                  },
+                ),
               ),
               const SizedBox(height: 16),
-              LabeledTextField(
-                label: "Phone",
-                controller: _phoneController,
-                keyboard: TextInputType.phone,
-                autofillHints: const [AutofillHints.telephoneNumber],
-                errorText: _errors['phone'],
-                onChanged: (_) {
-                  _clearError('phone');
-                  _clearError('email');
-                },
+              SheetFocusScroll(
+                child: LabeledTextField(
+                  label: "Phone",
+                  controller: _phoneController,
+                  keyboard: TextInputType.phone,
+                  autofillHints: const [AutofillHints.telephoneNumber],
+                  errorText: _errors['phone'],
+                  onChanged: (_) {
+                    _clearError('phone');
+                    _clearError('email');
+                  },
+                ),
               ),
               const SizedBox(height: 16),
-              LabeledTextField(
-                label: "Email",
-                controller: _emailController,
-                keyboard: TextInputType.emailAddress,
-                autofillHints: const [AutofillHints.email],
-                errorText: _errors['email'],
-                onChanged: (_) {
-                  _clearError('email');
-                  _clearError('phone');
-                },
+              SheetFocusScroll(
+                child: LabeledTextField(
+                  label: "Email",
+                  controller: _emailController,
+                  keyboard: TextInputType.emailAddress,
+                  autofillHints: const [AutofillHints.email],
+                  errorText: _errors['email'],
+                  onChanged: (_) {
+                    _clearError('email');
+                    _clearError('phone');
+                  },
+                ),
               ),
               if (_isBusiness) ...[
                 const SizedBox(height: 8),
@@ -488,38 +488,46 @@ class _AddClientSheetState extends State<AddClientSheet> {
                 ),
               ],
               const SizedBox(height: 16),
-              AddressAutocompleteField(
-                controller: _addressController,
-                required: !_isBusiness,
-                errorText: _errors['address'],
-                onChanged: (value) {
-                  _clearError('address');
-                  _fillAddressPartsFromText(value);
-                },
-                onAddressSelected: (_) => _handleAddressSelected(),
+              SheetFocusScroll(
+                child: AddressAutocompleteField(
+                  controller: _addressController,
+                  required: !_isBusiness,
+                  errorText: _errors['address'],
+                  onChanged: (value) {
+                    _clearError('address');
+                    _fillAddressPartsFromText(value);
+                  },
+                  onAddressSelected: (_) => _handleAddressSelected(),
+                ),
               ),
               const SizedBox(height: 16),
-              LabeledTextField(
-                label: "Apt / Unit",
-                controller: _aptController,
-                optional: true,
+              SheetFocusScroll(
+                child: LabeledTextField(
+                  label: "Apt / Unit",
+                  controller: _aptController,
+                  optional: true,
+                ),
               ),
               const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
-                    child: LabeledTextField(
-                      label: "City",
-                      controller: _cityController,
-                      autofillHints: const [AutofillHints.addressCity],
+                    child: SheetFocusScroll(
+                      child: LabeledTextField(
+                        label: "City",
+                        controller: _cityController,
+                        autofillHints: const [AutofillHints.addressCity],
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: LabeledTextField(
-                      label: "Province",
-                      controller: _provinceController,
-                      autofillHints: const [AutofillHints.addressState],
+                    child: SheetFocusScroll(
+                      child: LabeledTextField(
+                        label: "Province",
+                        controller: _provinceController,
+                        autofillHints: const [AutofillHints.addressState],
+                      ),
                     ),
                   ),
                 ],
@@ -528,18 +536,22 @@ class _AddClientSheetState extends State<AddClientSheet> {
               Row(
                 children: [
                   Expanded(
-                    child: LabeledTextField(
-                      label: "Postal code",
-                      controller: _postalCodeController,
-                      autofillHints: const [AutofillHints.postalCode],
+                    child: SheetFocusScroll(
+                      child: LabeledTextField(
+                        label: "Postal code",
+                        controller: _postalCodeController,
+                        autofillHints: const [AutofillHints.postalCode],
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: LabeledTextField(
-                      label: "Country",
-                      controller: _countryController,
-                      autofillHints: const [AutofillHints.countryName],
+                    child: SheetFocusScroll(
+                      child: LabeledTextField(
+                        label: "Country",
+                        controller: _countryController,
+                        autofillHints: const [AutofillHints.countryName],
+                      ),
                     ),
                   ),
                 ],
@@ -579,10 +591,9 @@ class _AddClientSheetState extends State<AddClientSheet> {
                   ),
                 ],
               ),
-            ],
-          ),
-        ),
-      ),
+          ],
+        );
+      },
     );
   }
 }
@@ -715,34 +726,40 @@ class _AdditionalContactCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          LabeledTextField(
-            label: 'Contact name',
-            controller: contact.nameController,
-            required: true,
-            autofillHints: const [AutofillHints.name],
-            errorText: errors['contact_${index}_name'],
-            onChanged: (_) => onClearError('contact_${index}_name'),
+          SheetFocusScroll(
+            child: LabeledTextField(
+              label: 'Contact name',
+              controller: contact.nameController,
+              required: true,
+              autofillHints: const [AutofillHints.name],
+              errorText: errors['contact_${index}_name'],
+              onChanged: (_) => onClearError('contact_${index}_name'),
+            ),
           ),
           const SizedBox(height: 12),
-          LabeledTextField(
-            label: 'Phone',
-            controller: contact.phoneController,
-            keyboard: TextInputType.phone,
-            autofillHints: const [AutofillHints.telephoneNumber],
-            errorText: errors['contact_${index}_phone'],
-            onChanged: (_) => onClearError('contact_${index}_phone'),
+          SheetFocusScroll(
+            child: LabeledTextField(
+              label: 'Phone',
+              controller: contact.phoneController,
+              keyboard: TextInputType.phone,
+              autofillHints: const [AutofillHints.telephoneNumber],
+              errorText: errors['contact_${index}_phone'],
+              onChanged: (_) => onClearError('contact_${index}_phone'),
+            ),
           ),
           const SizedBox(height: 12),
-          LabeledTextField(
-            label: 'Email',
-            controller: contact.emailController,
-            keyboard: TextInputType.emailAddress,
-            autofillHints: const [AutofillHints.email],
-            errorText: errors['contact_${index}_email'],
-            onChanged: (_) {
-              onClearError('contact_${index}_email');
-              onClearError('contact_${index}_phone');
-            },
+          SheetFocusScroll(
+            child: LabeledTextField(
+              label: 'Email',
+              controller: contact.emailController,
+              keyboard: TextInputType.emailAddress,
+              autofillHints: const [AutofillHints.email],
+              errorText: errors['contact_${index}_email'],
+              onChanged: (_) {
+                onClearError('contact_${index}_email');
+                onClearError('contact_${index}_phone');
+              },
+            ),
           ),
         ],
       ),
