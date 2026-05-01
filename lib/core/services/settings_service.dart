@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,6 +15,25 @@ class AppSettings {
   });
 }
 
+class SettingsSaveDebouncer {
+  SettingsSaveDebouncer({this.delay = const Duration(milliseconds: 250)});
+
+  final Duration delay;
+  Timer? _timer;
+
+  void run(Future<void> Function() save) {
+    // Save only after settings changes settle, such as a slider drag ending.
+    _timer?.cancel();
+    _timer = Timer(delay, () {
+      save();
+    });
+  }
+
+  void dispose() {
+    _timer?.cancel();
+  }
+}
+
 class SettingsService {
   static const _keyThemeMode = 'theme_mode';
   static const _keyTextScale = 'text_scale';
@@ -21,7 +42,8 @@ class SettingsService {
   Future<AppSettings> load() async {
     final prefs = await SharedPreferences.getInstance();
 
-    final themeModeIndex = prefs.getInt(_keyThemeMode) ?? ThemeMode.system.index;
+    final themeModeIndex =
+        prefs.getInt(_keyThemeMode) ?? ThemeMode.system.index;
     final textScale = prefs.getDouble(_keyTextScale) ?? 1.0;
     final language = prefs.getString(_keyLanguage) ?? 'en';
 
@@ -32,7 +54,11 @@ class SettingsService {
     );
   }
 
-  Future<void> save({ThemeMode? themeMode, double? textScale, String? language}) async {
+  Future<void> save({
+    ThemeMode? themeMode,
+    double? textScale,
+    String? language,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
 
     if (themeMode != null) await prefs.setInt(_keyThemeMode, themeMode.index);

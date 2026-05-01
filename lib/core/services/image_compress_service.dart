@@ -4,6 +4,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 
 class ImageCompressService {
+  // Keep uploaded appointment images large enough for viewing, but not full camera size.
+  static const int maxCompressedDimension = 1600;
+
   Future<File> compressImage(File file) async {
     final dir = await getTemporaryDirectory();
 
@@ -16,6 +19,8 @@ class ImageCompressService {
       file.absolute.path,
       targetPath,
       quality: 70,
+      minWidth: maxCompressedDimension,
+      minHeight: maxCompressedDimension,
     );
 
     //fall back to original if compression fails
