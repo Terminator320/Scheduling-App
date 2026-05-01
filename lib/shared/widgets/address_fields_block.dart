@@ -128,6 +128,9 @@ class _AddressFieldsBlockState extends State<AddressFieldsBlock> {
         TextField(
           controller: _searchController,
           onChanged: _onSearchChanged,
+          textInputAction: TextInputAction.search,
+          // Close the keyboard after the user submits an address search.
+          onSubmitted: (_) => FocusScope.of(context).unfocus(),
           decoration: formInputDecoration(
             context,
             "Type to search an address",

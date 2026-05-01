@@ -8,12 +8,11 @@ import 'package:scheduling/features/calendar/widgets/appointment_tile.dart';
 import 'package:scheduling/features/clients/models/client_record.dart';
 import 'package:scheduling/features/clients/services/client_service.dart';
 import 'package:scheduling/features/clients/widgets/add_client_sheet.dart';
+import 'package:scheduling/features/clients/widgets/client_detail_sheet.dart';
 import 'package:scheduling/features/clients/widgets/client_tile.dart';
 import 'package:scheduling/features/settings/widgets/settings_drawer.dart';
 import 'package:scheduling/shared/widgets/appScaffoldBar.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
-
-import 'package:scheduling/routes/app_routes.dart';
 
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
@@ -95,6 +94,56 @@ class _ListInformationState extends State<ListInformation> {
     );
   }
 
+  void _clearClientSearch() {
+    // Cancel search before opening a result so the list returns cleanly.
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (_searchController.text.isEmpty) return;
+    setState(() => _searchController.clear());
+  }
+
+  void _clearAppointmentSearch() {
+    // Cancel search before opening a result so the list returns cleanly.
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (_appointmentSearchController.text.isEmpty) return;
+    setState(() => _appointmentSearchController.clear());
+  }
+
+  Future<void> _settleSearchBeforeSheet() async {
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+  }
+
+  Future<void> _unfocusAfterSheetClose() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!mounted) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
+  Future<void> _openClientFromSearch(ClientRecord client) async {
+    _clearClientSearch();
+    await _settleSearchBeforeSheet();
+    if (!mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ClientDetailSheet(client: client),
+    );
+
+    if (mounted) await _unfocusAfterSheetClose();
+  }
+
+  Future<void> _openAppointmentFromSearch(AppointmentRecord appointment) async {
+    _clearAppointmentSearch();
+    await _settleSearchBeforeSheet();
+    if (!mounted) return;
+
+    await showEventDetails(context, appointment, showActions: false);
+
+    if (mounted) await _unfocusAfterSheetClose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -137,6 +186,8 @@ class _ListInformationState extends State<ListInformation> {
             controller: _searchController,
             onChanged: (_) => setState(() {}),
             textInputAction: TextInputAction.search,
+            // Close the keyboard after the user submits a search.
+            onSubmitted: (_) => FocusScope.of(context).unfocus(),
             decoration:
                 formInputDecoration(
                   context,
@@ -193,7 +244,10 @@ class _ListInformationState extends State<ListInformation> {
                   itemCount: displayed.length,
                   itemBuilder: (context, index) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: ClientTile(client: displayed[index]),
+                    child: ClientTile(
+                      client: displayed[index],
+                      onOpen: () => _openClientFromSearch(displayed[index]),
+                    ),
                   ),
                 ),
         ),
@@ -212,6 +266,8 @@ class _ListInformationState extends State<ListInformation> {
             controller: _appointmentSearchController,
             onChanged: (_) => setState(() {}),
             textInputAction: TextInputAction.search,
+            // Close the keyboard after the user submits a search.
+            onSubmitted: (_) => FocusScope.of(context).unfocus(),
             decoration:
                 formInputDecoration(
                   context,
@@ -304,6 +360,7 @@ class _ListInformationState extends State<ListInformation> {
                   appointment: sorted[index],
                   employees: _allEmployees,
                   showActions: false,
+                  onOpen: () => _openAppointmentFromSearch(sorted[index]),
                 ),
               );
             },

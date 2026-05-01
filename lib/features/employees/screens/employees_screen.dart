@@ -57,6 +57,11 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
     );
 
     if (!mounted) return;
+    // Keep search from regaining focus after the edit sheet closes.
+    FocusManager.instance.primaryFocus?.unfocus();
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!mounted) return;
+    FocusManager.instance.primaryFocus?.unfocus();
 
     if (result == 'deleted') {
       ScaffoldMessenger.of(
@@ -80,10 +85,24 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
       builder: (_) => EmployeeDetailsSheet(employee: employee),
     );
 
-    if (!mounted || result != 'deleted') return;
+    if (!mounted) return;
+    // Keep search from regaining focus after the details sheet closes.
+    FocusManager.instance.primaryFocus?.unfocus();
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!mounted) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (result != 'deleted') return;
+
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(tr(context, 'Employee deleted'))));
+  }
+
+  void _clearSearch() {
+    // Cancel search before opening a result so the list returns cleanly.
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (_searchController.text.isEmpty) return;
+    setState(() => _searchController.clear());
   }
 
   Future<void> _confirmDelete(EmployeeRecord employee) async {
@@ -119,8 +138,6 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: appScaffoldBar(context, 'Employees', widget.employeeId, widget.isAdmin),
       endDrawer: SettingsDrawer(
@@ -140,6 +157,9 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
               TextField(
                 controller: _searchController,
                 onChanged: (_) => setState(() {}),
+                textInputAction: TextInputAction.search,
+                // Close the keyboard after the user submits a search.
+                onSubmitted: (_) => FocusScope.of(context).unfocus(),
                 decoration: formInputDecoration(
                   context,
                   tr(context, 'Search by name or phone number...'),
@@ -173,8 +193,22 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
                         final employee = employees[index];
                         return EmployeeCard(
                           employee: employee,
-                          onTap: () => _showEmployeeDetails(employee),
-                          onEdit: () => _openEmployeeSheet(employee: employee),
+                          onTap: () async {
+                            _clearSearch();
+                            // Let the search clear/unfocus before pushing the sheet.
+                            await Future<void>.delayed(
+                              const Duration(milliseconds: 80),
+                            );
+                            await _showEmployeeDetails(employee);
+                          },
+                          onEdit: () async {
+                            _clearSearch();
+                            // Let the search clear/unfocus before pushing the sheet.
+                            await Future<void>.delayed(
+                              const Duration(milliseconds: 80),
+                            );
+                            await _openEmployeeSheet(employee: employee);
+                          },
                           onDelete: () => _confirmDelete(employee),
                         );
                       },

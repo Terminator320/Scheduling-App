@@ -5,8 +5,9 @@ import 'package:scheduling/features/clients/widgets/client_detail_sheet.dart';
 
 class ClientTile extends StatelessWidget {
   final ClientRecord client;
+  final Future<void> Function()? onOpen;
 
-  const ClientTile({super.key, required this.client});
+  const ClientTile({super.key, required this.client, this.onOpen});
 
   @override
   Widget build(BuildContext context) {
@@ -20,8 +21,13 @@ class ClientTile extends StatelessWidget {
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () {
-          showModalBottomSheet(
+        onTap: () async {
+          if (onOpen != null) {
+            await onOpen!();
+            return;
+          }
+
+          await showModalBottomSheet(
             context: context,
             isScrollControlled: true,
             backgroundColor: Colors.transparent,
@@ -54,7 +60,7 @@ class ClientTile extends StatelessWidget {
                   children: [
                     Text(
                       client.displayName,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleMedium,
                     ),
@@ -71,7 +77,7 @@ class ClientTile extends StatelessWidget {
                           Flexible(
                             child: Text(
                               client.phone,
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: mutedStyle,
                             ),
@@ -92,7 +98,7 @@ class ClientTile extends StatelessWidget {
                           Expanded(
                             child: Text(
                               client.address,
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: mutedStyle,
                             ),
@@ -105,9 +111,11 @@ class ClientTile extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.only(left: 4, right: 4),
-                child: Icon(
-                  Icons.chevron_right,
-                  color: scheme.onSurfaceVariant,
+                child: Center(
+                  child: Icon(
+                    Icons.chevron_right,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ],

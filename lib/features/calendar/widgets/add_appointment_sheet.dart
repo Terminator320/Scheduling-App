@@ -25,7 +25,7 @@ class AddEventSheet extends StatefulWidget {
   const AddEventSheet({
     super.key,
     this.initialDate,
-    @visibleForTesting this.employeesStream,
+    this.employeesStream,
   });
 
   final DateTime? initialDate;
@@ -288,174 +288,162 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      expand: false,
+    return DraggableSheetFrame(
       builder: (sheetContext, scrollController) {
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => FocusScope.of(sheetContext).unfocus(),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Theme.of(sheetContext).colorScheme.surface,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
-              ),
-            ),
-            child: ListView(
-              controller: scrollController,
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 12,
-                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
-              ),
-              children: [
-                const SheetHandle(),
-                const SizedBox(height: 16),
-                Text(
-                  "Add New Job",
-                  textAlign: TextAlign.center,
-                  style: Theme.of(sheetContext).textTheme.headlineLarge,
-                ),
-                const SizedBox(height: 24),
-
-                LabeledTextField(
-                  label: "Job Title",
-                  hint: "e.g. Plumbing repair",
-                  controller: _titleController,
-                  errorText: _errors['title'],
-                  onChanged: (_) {
-                    if (_errors['title'] != null) {
-                      setState(() => _errors['title'] = null);
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                LabeledTextField(
-                  label: "Date",
-                  hint: "Select date",
-                  controller: _dateController,
-                  readOnly: true,
-                  suffixIcon: const Icon(
-                    Icons.calendar_today_outlined,
-                    size: 18,
-                  ),
-                  errorText: _errors['date'],
-                  onTap: _pickDate,
-                ),
-                const SizedBox(height: 16),
-
-                formLabel(sheetContext, "Time"),
-                TimeRangeRow(
-                  startController: _startTimeController,
-                  endController: _endTimeController,
-                  selectedStart: _selectedStartTime,
-                  selectedEnd: _selectedEndTime,
-                  onTapStart: _pickStartTime,
-                  onTapEnd: _pickEndTime,
-                  startError: _errors['startTime'],
-                  endError: _errors['endTime'],
-                ),
-                const SizedBox(height: 16),
-
-                formLabel(sheetContext, "Client"),
-                ClientSearchField(
-                  controller: _clientSearchController,
-                  selectedClient: _selectedClient,
-                  results: _clientResults,
-                  isSearching: _isSearchingClient,
-                  onChanged: _searchClients,
-                  onSelect: _selectClient,
-                  onClear: _clearClient,
-                  errorText: _errors['client'],
-                ),
-                const SizedBox(height: 16),
-
-                LabeledTextField(
-                  label: "Notes",
-                  hint: "Type the note here...",
-                  controller: _notesController,
-                  optional: true,
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 16),
-
-                LabeledTextField(
-                  label: "Materials needed",
-                  hint: "Type the materials here...",
-                  controller: _materialsController,
-                  optional: true,
-                ),
-                const SizedBox(height: 16),
-
-                formLabel(sheetContext, "Pictures", optional: true),
-                PhotoPickerSection(
-                  existingImages: const [],
-                  newImages: _selectedImages,
-                  isEditing: true,
-                  onPickImages: () async {
-                    final images = await _imageService.pickMultiImages();
-                    if (images.isNotEmpty)
-                      setState(() => _selectedImages.addAll(images));
-                  },
-                  onRemoveExisting: (_) {},
-                  onRemoveNew: (i) =>
-                      setState(() => _selectedImages.removeAt(i)),
-                ),
-                const SizedBox(height: 16),
-
-                formLabel(sheetContext, "Select employees"),
-                EmployeePicker(
-                  allEmployees: _allEmployees,
-                  selectedEmployees: _selectedEmployees,
-                  onToggle: _toggleEmployee,
-                  hasError: _errors['employees'] != null,
-                ),
-                if (_errors['employees'] != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6, left: 12),
-                    child: Text(
-                      _errors['employees']!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(sheetContext).colorScheme.error,
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 24),
-
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    onPressed: _isSubmitting
-                        ? null
-                        : () => _submit(sheetContext),
-                    child: _isSubmitting
-                        ? SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Theme.of(
-                                sheetContext,
-                              ).colorScheme.onPrimary,
-                            ),
-                          )
-                        : const Text("Create event"),
-                  ),
-                ),
-              ],
-            ),
+        return ListView(
+          controller: scrollController,
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 12,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
           ),
+          children: [
+            const SheetHandle(),
+            const SizedBox(height: 16),
+            Text(
+              "Add New Job",
+              textAlign: TextAlign.center,
+              style: Theme.of(sheetContext).textTheme.headlineLarge,
+            ),
+            const SizedBox(height: 24),
+
+            SheetFocusScroll(
+              child: LabeledTextField(
+                label: "Job Title",
+                hint: "e.g. Plumbing repair",
+                controller: _titleController,
+                errorText: _errors['title'],
+                onChanged: (_) {
+                  if (_errors['title'] != null) {
+                    setState(() => _errors['title'] = null);
+                  }
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            SheetFocusScroll(
+              child: LabeledTextField(
+                label: "Date",
+                hint: "Select date",
+                controller: _dateController,
+                readOnly: true,
+                suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+                errorText: _errors['date'],
+                onTap: _pickDate,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            formLabel(sheetContext, "Time"),
+            TimeRangeRow(
+              startController: _startTimeController,
+              endController: _endTimeController,
+              selectedStart: _selectedStartTime,
+              selectedEnd: _selectedEndTime,
+              onTapStart: _pickStartTime,
+              onTapEnd: _pickEndTime,
+              startError: _errors['startTime'],
+              endError: _errors['endTime'],
+            ),
+            const SizedBox(height: 16),
+
+            formLabel(sheetContext, "Client"),
+            SheetFocusScroll(
+              child: ClientSearchField(
+                controller: _clientSearchController,
+                selectedClient: _selectedClient,
+                results: _clientResults,
+                isSearching: _isSearchingClient,
+                onChanged: _searchClients,
+                onSelect: _selectClient,
+                onClear: _clearClient,
+                errorText: _errors['client'],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            SheetFocusScroll(
+              child: LabeledTextField(
+                label: "Notes",
+                hint: "Type the note here...",
+                controller: _notesController,
+                optional: true,
+                maxLines: 3,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            SheetFocusScroll(
+              child: LabeledTextField(
+                label: "Materials needed",
+                hint: "Type the materials here...",
+                controller: _materialsController,
+                optional: true,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            formLabel(sheetContext, "Pictures", optional: true),
+            PhotoPickerSection(
+              existingImages: const [],
+              newImages: _selectedImages,
+              isEditing: true,
+              onPickImages: () async {
+                final images = await _imageService.pickMultiImages();
+                if (images.isNotEmpty) {
+                  setState(() => _selectedImages.addAll(images));
+                }
+              },
+              onRemoveExisting: (_) {},
+              onRemoveNew: (i) => setState(() => _selectedImages.removeAt(i)),
+            ),
+            const SizedBox(height: 16),
+
+            formLabel(sheetContext, "Select employees"),
+            EmployeePicker(
+              allEmployees: _allEmployees,
+              selectedEmployees: _selectedEmployees,
+              onToggle: _toggleEmployee,
+              hasError: _errors['employees'] != null,
+            ),
+            if (_errors['employees'] != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6, left: 12),
+                child: Text(
+                  _errors['employees']!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(sheetContext).colorScheme.error,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 24),
+
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: _isSubmitting ? null : () => _submit(sheetContext),
+                child: _isSubmitting
+                    ? SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Theme.of(sheetContext).colorScheme.onPrimary,
+                        ),
+                      )
+                    : const Text("Create event"),
+              ),
+            ),
+          ],
         );
       },
     );
   }
 }
+
