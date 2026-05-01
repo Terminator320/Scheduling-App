@@ -105,7 +105,10 @@ class _MainCalendar extends State<MainCalendar> {
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton(
               onPressed: () async {
-                final newEvent = await showAddEventPopup(context);
+                final newEvent = await showAddEventPopup(
+                  context,
+                  initialDate: _selectedDay ?? _focusedDay,
+                );
 
                 if (newEvent != null) {
                   await service.addAppointment(newEvent);
@@ -114,7 +117,10 @@ class _MainCalendar extends State<MainCalendar> {
               child: const Icon(Icons.add),
             )
           : null,
-      endDrawer: SettingsDrawer(isAdmin: widget.isAdmin, employeeId: widget.employeeId,),
+      endDrawer: SettingsDrawer(
+        isAdmin: widget.isAdmin,
+        employeeId: widget.employeeId,
+      ),
       body: SafeArea(child: content()),
     );
   }
@@ -187,10 +193,7 @@ class _MainCalendar extends State<MainCalendar> {
 
         Divider(),
 
-        EventList(
-          events: _selectedEvents,
-          employees: _allEmployees,
-        ),
+        EventList(events: _selectedEvents, employees: _allEmployees),
       ],
     );
   }

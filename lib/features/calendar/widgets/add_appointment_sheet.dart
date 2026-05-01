@@ -7,6 +7,7 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/services/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/services/appointment_service.dart';
+import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/employee_picker.dart';
 import 'package:scheduling/features/calendar/widgets/photo_picker_section.dart';
@@ -21,7 +22,14 @@ import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
 class AddEventSheet extends StatefulWidget {
-  const AddEventSheet({super.key});
+  const AddEventSheet({
+    super.key,
+    this.initialDate,
+    @visibleForTesting this.employeesStream,
+  });
+
+  final DateTime? initialDate;
+  final Stream<List<EmployeeRecord>>? employeesStream;
 
   @override
   State<AddEventSheet> createState() => _AddEventSheetState();
@@ -41,6 +49,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
   DateTime? _selectedDate;
   TimeOfDay? _selectedStartTime;
   TimeOfDay? _selectedEndTime;
+  bool _endTimeWasPickedManually = false;
 
   ClientRecord? _selectedClient;
   List<ClientRecord> _clientResults = [];
@@ -60,7 +69,14 @@ class _AddEventSheetState extends State<AddEventSheet> {
   @override
   void initState() {
     super.initState();
-    _userService.employeesStream().listen((employees) {
+    final initialDate = widget.initialDate;
+    if (initialDate != null) {
+      _selectedDate = initialDate;
+      _dateController.text = DateUtilsHelper.formatDate(initialDate);
+    }
+    (widget.employeesStream ?? _userService.employeesStream()).listen((
+      employees,
+    ) {
       if (mounted) setState(() => _allEmployees = employees);
     });
   }
@@ -152,6 +168,12 @@ class _AddEventSheetState extends State<AddEventSheet> {
       _selectedStartTime = picked;
       _startTimeController.text = picked.format(context);
       _errors['startTime'] = null;
+      if (!_endTimeWasPickedManually) {
+        final defaultEndTime = AppointmentDraftDefaults.defaultEndTime(picked);
+        _selectedEndTime = defaultEndTime;
+        _endTimeController.text = defaultEndTime.format(context);
+        _errors['endTime'] = null;
+      }
     });
   }
 
@@ -162,6 +184,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
     );
     if (picked == null) return;
     setState(() {
+      _endTimeWasPickedManually = true;
       _selectedEndTime = picked;
       _endTimeController.text = picked.format(context);
       _errors['endTime'] = null;
@@ -172,23 +195,47 @@ class _AddEventSheetState extends State<AddEventSheet> {
     return DateTime(date.year, date.month, date.day, time.hour, time.minute);
   }
 
+  DateTime _combineEndDateAndTime(DateTime date, TimeOfDay time) {
+    final endTime = _combineDateAndTime(date, time);
+    if (_selectedStartTime == null) return endTime;
+
+    final startTime = _combineDateAndTime(date, _selectedStartTime!);
+    return endTime.isAfter(startTime)
+        ? endTime
+        : endTime.add(const Duration(days: 1));
+  }
+
   void _showSnack(BuildContext ctx, String message) =>
       ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(message)));
 
   Future<void> _submit(BuildContext ctx) async {
     setState(() {
-      _errors['title'] = _titleController.text.trim().isEmpty ? "Title is required" : null;
+      final hasValidTimeRange =
+          _selectedDate == null ||
+          _selectedStartTime == null ||
+          _selectedEndTime == null ||
+          _combineEndDateAndTime(
+            _selectedDate!,
+            _selectedEndTime!,
+          ).isAfter(_combineDateAndTime(_selectedDate!, _selectedStartTime!));
+      _errors['title'] = _titleController.text.trim().isEmpty
+          ? "Title is required"
+          : null;
       _errors['date'] = _selectedDate == null ? "Please select a date" : null;
-      _errors['startTime'] = _selectedStartTime == null ? "Please select a start time" : null;
+      _errors['startTime'] = _selectedStartTime == null
+          ? "Please select a start time"
+          : null;
       _errors['endTime'] = _selectedEndTime == null
           ? "Please select an end time"
-          : (_selectedStartTime != null &&
-          (_selectedEndTime!.hour * 60 + _selectedEndTime!.minute) <=
-              (_selectedStartTime!.hour * 60 + _selectedStartTime!.minute))
+          : !hasValidTimeRange
           ? "Must be after start time"
           : null;
-      _errors['client'] = _selectedClient == null ? "Please select a client" : null;
-      _errors['employees'] = _selectedEmployees.isEmpty ? "Please select at least one employee" : null;
+      _errors['client'] = _selectedClient == null
+          ? "Please select a client"
+          : null;
+      _errors['employees'] = _selectedEmployees.isEmpty
+          ? "Please select at least one employee"
+          : null;
     });
 
     if (_errors.values.any((e) => e != null)) return;
@@ -197,8 +244,11 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
     try {
       final docRef = _appointmentService.newDocRef();
-      final startTime = _combineDateAndTime(_selectedDate!, _selectedStartTime!);
-      final endTime = _combineDateAndTime(_selectedDate!, _selectedEndTime!);
+      final startTime = _combineDateAndTime(
+        _selectedDate!,
+        _selectedStartTime!,
+      );
+      final endTime = _combineEndDateAndTime(_selectedDate!, _selectedEndTime!);
 
       final newAppointment = AppointmentRecord(
         id: docRef.id,
@@ -250,7 +300,9 @@ class _AddEventSheetState extends State<AddEventSheet> {
           child: Container(
             decoration: BoxDecoration(
               color: Theme.of(sheetContext).colorScheme.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
             ),
             child: ListView(
               controller: scrollController,
@@ -288,7 +340,10 @@ class _AddEventSheetState extends State<AddEventSheet> {
                   hint: "Select date",
                   controller: _dateController,
                   readOnly: true,
-                  suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+                  suffixIcon: const Icon(
+                    Icons.calendar_today_outlined,
+                    size: 18,
+                  ),
                   errorText: _errors['date'],
                   onTap: _pickDate,
                 ),
@@ -344,10 +399,12 @@ class _AddEventSheetState extends State<AddEventSheet> {
                   isEditing: true,
                   onPickImages: () async {
                     final images = await _imageService.pickMultiImages();
-                    if (images.isNotEmpty) setState(() => _selectedImages.addAll(images));
+                    if (images.isNotEmpty)
+                      setState(() => _selectedImages.addAll(images));
                   },
                   onRemoveExisting: (_) {},
-                  onRemoveNew: (i) => setState(() => _selectedImages.removeAt(i)),
+                  onRemoveNew: (i) =>
+                      setState(() => _selectedImages.removeAt(i)),
                 ),
                 const SizedBox(height: 16),
 
@@ -377,14 +434,18 @@ class _AddEventSheetState extends State<AddEventSheet> {
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    onPressed: _isSubmitting ? null : () => _submit(sheetContext),
+                    onPressed: _isSubmitting
+                        ? null
+                        : () => _submit(sheetContext),
                     child: _isSubmitting
                         ? SizedBox(
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Theme.of(sheetContext).colorScheme.onPrimary,
+                              color: Theme.of(
+                                sheetContext,
+                              ).colorScheme.onPrimary,
                             ),
                           )
                         : const Text("Create event"),
