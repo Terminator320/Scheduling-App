@@ -46,16 +46,25 @@ class EventList extends StatelessWidget {
     await AppointmentService.deleteAppointment(e.id!);
   }
 
-  void _openEditSheet(BuildContext context, AppointmentRecord e) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => EventDetailsSheet(
-        appointment: e,
-        showActions: isAdmin,
-      ),
+  void _openEditSheet(BuildContext context, AppointmentRecord e) async {
+    final updated = await showModalBottomSheet<AppointmentRecord>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => EventDetailsSheet(
+          appointment: e,
+          showActions: isAdmin,
+          initialEditing: true,
+        ),
     );
+
+    if (updated != null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Appointment updated')),
+        );
+      }
+    }
   }
 
   @override
