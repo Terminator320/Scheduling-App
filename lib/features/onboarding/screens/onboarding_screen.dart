@@ -26,9 +26,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.initState();
     // Onboarding is the first visible screen on a fresh install, so it owns
     // the handoff from the OS native splash.
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => FlutterNativeSplash.remove(),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FlutterNativeSplash.remove();
+      // NOTE: remove() re-enables the first frame (allowFirstFrame) but only
+      // schedules a warm-up frame, which is a no-op once startup has consumed
+      // it. A static onboarding screen never dirties the tree again, so the
+      // first frame would never composite and Android would keep showing the
+      // launch splash. Force one frame so the splash actually hands off.
+      WidgetsBinding.instance.scheduleForcedFrame();
+    });
   }
 
   @override

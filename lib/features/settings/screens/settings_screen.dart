@@ -9,6 +9,7 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/security/biometric_auth_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
+import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
@@ -49,9 +50,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   _SettingsDetail? _selectedDetail;
 
-  String get _displayName => widget.name.isNotEmpty
-      ? widget.name
-      : FirebaseAuth.instance.currentUser?.displayName ?? '';
+  String get _displayName {
+    if (widget.name.isNotEmpty) return widget.name;
+    // The name lives in the Firestore users doc, not Auth's displayName, so
+    // fall back to the live doc when the screen is reached via the nav rail
+    // (which doesn't thread the name through the constructor).
+    final docName = ref.watch(currentUserNameProvider);
+    if (docName.isNotEmpty) return docName;
+    return FirebaseAuth.instance.currentUser?.displayName ?? '';
+  }
 
   String get _email => widget.email.isNotEmpty
       ? widget.email
