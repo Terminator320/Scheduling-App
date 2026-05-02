@@ -148,6 +148,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
                 label: "Email",
                 controller: _emailController,
                 keyboard: TextInputType.emailAddress,
+                required: true,
                 autofillHints: const [AutofillHints.email],
                 errorText: _errors['email'],
                 onChanged: (_) => _clearError('email'),
@@ -156,6 +157,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
               AddressAutocompleteField(
                 controller: _addressController,
                 errorText: _errors['address'],
+                required: true,
                 onChanged: (_) => _clearError('address'),
               ),
               const SizedBox(height: 24),
