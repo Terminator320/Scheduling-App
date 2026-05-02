@@ -180,21 +180,47 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
   Future<void> _submit(BuildContext ctx) async {
     setState(() {
-      _errors['title'] = _titleController.text.trim().isEmpty ? "Title is required" : null;
+      _errors['title'] = _titleController.text.trim().isEmpty
+          ? "Title is required"
+          : null;
       _errors['date'] = _selectedDate == null ? "Please select a date" : null;
-      _errors['startTime'] = _selectedStartTime == null ? "Please select a start time" : null;
+      _errors['startTime'] = _selectedStartTime == null
+          ? "Please select a start time"
+          : null;
       _errors['endTime'] = _selectedEndTime == null
           ? "Please select an end time"
           : (_selectedStartTime != null &&
-          (_selectedEndTime!.hour * 60 + _selectedEndTime!.minute) <=
-              (_selectedStartTime!.hour * 60 + _selectedStartTime!.minute))
+                (_selectedEndTime!.hour * 60 + _selectedEndTime!.minute) <=
+                    (_selectedStartTime!.hour * 60 +
+                        _selectedStartTime!.minute))
           ? "Must be after start time"
           : null;
-      _errors['client'] = _selectedClient == null ? "Please select a client" : null;
-      _errors['employees'] = _selectedEmployees.isEmpty ? "Please select at least one employee" : null;
+      _errors['client'] = _selectedClient == null
+          ? "Please select a client"
+          : null;
+      _errors['employees'] = _selectedEmployees.isEmpty
+          ? "Please select at least one employee"
+          : null;
     });
 
     if (_errors.values.any((e) => e != null)) return;
+
+    final startTime = _combineDateAndTime(_selectedDate!, _selectedStartTime!);
+    final endTime = _combineDateAndTime(_selectedDate!, _selectedEndTime!);
+
+    final busyEmployees = await _appointmentService.checkAvailableEmployee(
+      employeeId: _selectedEmployees,
+      start: startTime,
+      end: endTime,
+    );
+
+    if (busyEmployees.isNotEmpty) {
+      setState(
+        () => _errors['employees'] =
+            "Busy: ${busyEmployees.map((e) => e.name).join(', ')}",
+      );
+      return;
+    }
 
     setState(() => _isSubmitting = true);
 
@@ -203,8 +229,13 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
       List<AppointmentImage> uploadedImages = const [];
       if (_selectedImages.isNotEmpty) {
-        final compressed = await _compressService.compressImages(_selectedImages);
-        uploadedImages = await _storageService.uploadImages(docRef.id, compressed);
+        final compressed = await _compressService.compressImages(
+          _selectedImages,
+        );
+        uploadedImages = await _storageService.uploadImages(
+          docRef.id,
+          compressed,
+        );
       }
 
       final startTime = _combineDateAndTime(
@@ -253,7 +284,9 @@ class _AddEventSheetState extends State<AddEventSheet> {
           child: Container(
             decoration: BoxDecoration(
               color: Theme.of(sheetContext).colorScheme.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
             ),
             child: ListView(
               controller: scrollController,
@@ -291,7 +324,10 @@ class _AddEventSheetState extends State<AddEventSheet> {
                   hint: "Select date",
                   controller: _dateController,
                   readOnly: true,
-                  suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+                  suffixIcon: const Icon(
+                    Icons.calendar_today_outlined,
+                    size: 18,
+                  ),
                   errorText: _errors['date'],
                   onTap: _pickDate,
                 ),
@@ -347,10 +383,12 @@ class _AddEventSheetState extends State<AddEventSheet> {
                   isEditing: true,
                   onPickImages: () async {
                     final images = await _imageService.pickMultiImages();
-                    if (images.isNotEmpty) setState(() => _selectedImages.addAll(images));
+                    if (images.isNotEmpty)
+                      setState(() => _selectedImages.addAll(images));
                   },
                   onRemoveExisting: (_) {},
-                  onRemoveNew: (i) => setState(() => _selectedImages.removeAt(i)),
+                  onRemoveNew: (i) =>
+                      setState(() => _selectedImages.removeAt(i)),
                 ),
                 const SizedBox(height: 16),
 
@@ -380,14 +418,18 @@ class _AddEventSheetState extends State<AddEventSheet> {
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    onPressed: _isSubmitting ? null : () => _submit(sheetContext),
+                    onPressed: _isSubmitting
+                        ? null
+                        : () => _submit(sheetContext),
                     child: _isSubmitting
                         ? SizedBox(
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Theme.of(sheetContext).colorScheme.onPrimary,
+                              color: Theme.of(
+                                sheetContext,
+                              ).colorScheme.onPrimary,
                             ),
                           )
                         : const Text("Create event"),

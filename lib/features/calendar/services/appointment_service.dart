@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 
+import '../../employees/models/employee_record.dart';
+
 class AppointmentService {
   final CollectionReference<Map<String, dynamic>> appointments =
       FirebaseFirestore.instance.collection('appointments');
@@ -73,26 +75,28 @@ class AppointmentService {
         .delete();
   }
 
-  Future<void> checkAvailableEmployee({
-    required String employeeId,
-    required Timestamp start,
-    required Timestamp end,
+  Future<List<EmployeeRecord>> checkAvailableEmployee({
+    required List<EmployeeRecord> employeeId,
+    required DateTime start,
+    required DateTime end,
   }) async {
-    await FirebaseFirestore.instance
-        .collection('appointments')
-        .where('employeeIds', arrayContains: employeeId)
-        .where(
-          Filter.or(
-            Filter.and(
-              Filter('startTime', isLessThanOrEqualTo: start),
-              Filter('endTime', isGreaterThanOrEqualTo: end),
-            ),
-            Filter.and(
-              Filter('startTime', isGreaterThanOrEqualTo: start),
-              Filter('endTime', isLessThanOrEqualTo: end),
-            ),
-          ),
-        );
+    List<EmployeeRecord> busyEmployees = [];
+
+
+    for (final employee in employeeId) {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('appointments')
+          .where('employeeIds', arrayContains: employee.id)
+          .where('startTime', isLessThan: Timestamp.fromDate(end))
+          .where('endTime', isGreaterThan: Timestamp.fromDate(start))
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        busyEmployees.add(employee);
+      }
+    }
+
+    return busyEmployees;
   }
 
   Stream<List<AppointmentRecord>> employeeAppointmentsStream(
