@@ -194,11 +194,21 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   @override
   Stream<Map<String, dynamic>> watchUserDoc(String uid) {
     if (uid.isEmpty) return Stream.value(const {});
-    return _users.where('uid', isEqualTo: uid).limit(1).snapshots().map((
-      snapshot,
-    ) {
-      if (snapshot.docs.isEmpty) return const <String, dynamic>{};
-      return snapshot.docs.first.data();
-    });
+    return _users
+        .where('uid', isEqualTo: uid)
+        .limit(1)
+        .snapshots()
+        .where((snapshot) {
+          // Skip the transient empty from-cache snapshot that precedes the
+          // server result on a cold cache. Reporting it as an empty (deleted)
+          // doc would falsely sign the user out and stop the role from
+          // upgrading past the cached employee guess. An authoritative empty
+          // (from the server) still passes through to flag a real deletion.
+          return snapshot.docs.isNotEmpty || !snapshot.metadata.isFromCache;
+        })
+        .map((snapshot) {
+          if (snapshot.docs.isEmpty) return const <String, dynamic>{};
+          return snapshot.docs.first.data();
+        });
   }
 }

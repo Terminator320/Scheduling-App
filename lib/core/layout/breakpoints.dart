@@ -3,8 +3,14 @@ import 'package:flutter/widgets.dart';
 class Breakpoints {
   Breakpoints._();
 
-  static const double tablet = 600;
-  static const double expanded = 840;
+  /// Two-pane (master-detail + nav rail) threshold. Set at the Material 3
+  /// "expanded" width so phone-portrait and tablet-portrait stay single
+  /// column; only genuinely large screens (landscape, large tablets) split.
+  static const double tablet = 840;
+
+  /// Extended (labelled) nav-rail threshold — only on large screens, so the
+  /// rail doesn't expand the moment two-pane appears.
+  static const double expanded = 1200;
 }
 
 extension ResponsiveContext on BuildContext {

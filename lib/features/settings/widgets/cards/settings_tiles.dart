@@ -136,6 +136,8 @@ class SettingsTile extends StatelessWidget {
               // between bodyMedium (14) and bodyLarge — let the role drive size.
               child: Text(
                 label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.w500,
                   color: labelColor,
@@ -206,7 +208,7 @@ class _LangBtn extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: AppDuration.fast,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: isActive ? scheme.surface : Colors.transparent,
           borderRadius: BorderRadius.circular(6),

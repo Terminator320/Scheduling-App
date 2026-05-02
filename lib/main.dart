@@ -155,11 +155,16 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   }
 
   Future<void> _handleAccountDisabled(
-    BuildContext context,
-    String message,
+    String Function(AppLocalizations) selectMessage,
   ) async {
     if (FirebaseAuth.instance.currentUser == null) return;
-    final scheme = Theme.of(context).colorScheme;
+    // Resolve l10n/theme from the navigator context (below MaterialApp). The
+    // _PaulAppState build context sits above MaterialApp and has no
+    // Localizations, so context.l10n there throws a null-check error.
+    final navContext = _navigatorKey.currentContext;
+    if (navContext == null) return;
+    final scheme = Theme.of(navContext).colorScheme;
+    final message = selectMessage(AppLocalizations.of(navContext));
     await AuthService().signOut();
     final nav = _navigatorKey.currentState;
     if (nav != null) {
@@ -184,28 +189,22 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     );
   }
 
-  void _listenForAccountDisabled(BuildContext context) {
+  void _listenForAccountDisabled() {
     ref.listen<AsyncValue<bool>>(accountDisabledProvider, (prev, next) {
       final wasDisabled = prev?.valueOrNull ?? false;
       final isDisabled = next.valueOrNull ?? false;
       if (!wasDisabled && isDisabled) {
-        _handleAccountDisabled(
-          context,
-          context.l10n.error_thisAccountHasBeenDisabled,
-        );
+        _handleAccountDisabled((l10n) => l10n.error_thisAccountHasBeenDisabled);
       }
     });
   }
 
-  void _listenForRoleRevocation(BuildContext context) {
+  void _listenForRoleRevocation() {
     ref.listen<AsyncValue<String>>(userRoleProvider, (prev, next) {
       final prevRole = prev?.valueOrNull;
       final nextRole = next.valueOrNull;
       if (prevRole == 'admin' && nextRole != null && nextRole != 'admin') {
-        _handleAccountDisabled(
-          context,
-          context.l10n.error_yourAdminAccessWasRevoked,
-        );
+        _handleAccountDisabled((l10n) => l10n.error_yourAdminAccessWasRevoked);
       }
     });
   }
@@ -214,7 +213,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   // to sign out a user whose `users` doc no longer exists (e.g. an employee
   // deleted while their Auth session is still valid). The shared doc stream
   // resolving to an empty map reproduces that guard.
-  void _listenForDeletedAccount(BuildContext context) {
+  void _listenForDeletedAccount() {
     ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
       prev,
       next,
@@ -222,19 +221,16 @@ class _PaulAppState extends ConsumerState<PaulApp> {
       if (FirebaseAuth.instance.currentUser == null) return;
       final doc = next.valueOrNull;
       if (doc != null && doc.isEmpty) {
-        _handleAccountDisabled(
-          context,
-          context.l10n.error_thisAccountHasBeenDisabled,
-        );
+        _handleAccountDisabled((l10n) => l10n.error_thisAccountHasBeenDisabled);
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    _listenForAccountDisabled(context);
-    _listenForRoleRevocation(context);
-    _listenForDeletedAccount(context);
+    _listenForAccountDisabled();
+    _listenForRoleRevocation();
+    _listenForDeletedAccount();
     return AppLanguageScope(
       controller: _languageController,
       child: ThemeNotifier(
