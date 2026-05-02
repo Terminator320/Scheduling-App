@@ -73,6 +73,28 @@ class AppointmentService {
         .delete();
   }
 
+  Future<void> checkAvailableEmployee({
+    required String employeeId,
+    required Timestamp start,
+    required Timestamp end,
+  }) async {
+    await FirebaseFirestore.instance
+        .collection('appointments')
+        .where('employeeIds', arrayContains: employeeId)
+        .where(
+          Filter.or(
+            Filter.and(
+              Filter('startTime', isLessThanOrEqualTo: start),
+              Filter('endTime', isGreaterThanOrEqualTo: end),
+            ),
+            Filter.and(
+              Filter('startTime', isGreaterThanOrEqualTo: start),
+              Filter('endTime', isLessThanOrEqualTo: end),
+            ),
+          ),
+        );
+  }
+
   Stream<List<AppointmentRecord>> employeeAppointmentsStream(
     String employeeId,
   ) {
