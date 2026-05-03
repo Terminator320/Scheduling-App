@@ -7,6 +7,11 @@
 .buildlog/
 .history
 
+*.env
+*google-services.json
+
+# IntelliJ / Android Studio local project files
+.idea/
 
 
 # Flutter repo-specific
@@ -118,5 +123,3 @@ app.*.symbols
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 !/dev/ci/**/Gemfile.lock
 
-*.env
-*google-services.json
