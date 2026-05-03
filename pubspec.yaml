@@ -53,9 +53,12 @@ dependencies:
 
 
   url_launcher: any
+  http: any
   flutter_dotenv: any
+  shared_preferences: any
 
 
+  animations: any
   adaptive_theme: any
   device_preview: any
   flex_color_picker: any

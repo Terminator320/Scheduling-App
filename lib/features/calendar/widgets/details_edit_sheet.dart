@@ -1,23 +1,28 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import 'package:scheduling/core/services/image_compress_service.dart';
-import 'package:scheduling/core/services/image_picker_service.dart';
-import 'package:scheduling/core/services/image_storage_service.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/core/services/image_picker_service.dart';
 import 'package:scheduling/features/calendar/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/services/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/services/appointment_service.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/employee_picker.dart';
 import 'package:scheduling/features/calendar/widgets/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/time_range_row.dart';
+import 'package:scheduling/features/clients/models/client_record.dart';
+import 'package:scheduling/features/clients/services/client_service.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
+import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
+
+
 
 class EventDetailsSheet extends StatefulWidget {
   final AppointmentRecord appointment;
@@ -58,15 +63,12 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   final List<AppointmentImage> _removedExistingImages = [];
   List<File> _newImages = [];
   bool _isSaving = false;
+  ClientRecord? _client;
 
-  final _formKey = GlobalKey<FormState>();
-
-  final _compressService = ImageCompressService();
-  final _storageService = ImageStorageService();
+  final _imageUploadService = AppointmentImageUploadService();
   final _imageService = ImagePickerService();
   final _userService = UserService();
-
-
+  final _clientService = ClientService();
 
   @override
   void initState() {
@@ -93,6 +95,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     _existingImages = List.from(a.pictures);
 
     _loadEmployees();
+    _loadClient();
   }
 
   @override
@@ -118,6 +121,19 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     });
   }
 
+  Future<void> _loadClient() async {
+    final clientId = widget.appointment.clientId.trim();
+    if (clientId.isEmpty) return;
+
+    try {
+      final client = await _clientService.getClientById(clientId);
+      if (!mounted) return;
+      setState(() => _client = client);
+    } catch (_) {
+      // Keep the appointment details usable even if the client record cannot load.
+    }
+  }
+
   Future<void> _markAsDone() async {
     final id = widget.appointment.id;
     if (id == null) return;
@@ -132,9 +148,9 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     } catch (_) {
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Something went wrong")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Something went wrong")));
       }
     }
   }
@@ -217,14 +233,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         throw StateError('Cannot save an appointment without an id.');
       }
 
-      List<AppointmentImage> uploadedImages = const [];
-      if (_newImages.isNotEmpty) {
-        final compressed = await _compressService.compressImages(_newImages);
-        uploadedImages =
-            await _storageService.uploadImages(appointmentId, compressed);
-      }
-      final allPictures = [..._existingImages, ...uploadedImages];
-
+      // Save immediately with the current existing pictures so the user
+      // can continue using the app. New uploads are patched in the background.
       final updated = AppointmentRecord(
         id: widget.appointment.id,
         title: _titleController.text.trim(),
@@ -238,19 +248,24 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         employeeNames: _selectedEmployees.map((e) => e.name).toList(),
         notes: _notesController.text.trim(),
         materialsNeeded: _materialsController.text.trim(),
-        pictures: allPictures,
+        pictures: _existingImages,
         status: widget.appointment.status,
       );
 
       await AppointmentService().updateAppointment(updated);
 
-      if (_removedExistingImages.isNotEmpty) {
-        await _storageService.deleteImages(List.of(_removedExistingImages));
-        _removedExistingImages.clear();
-      }
-
       if (mounted) setState(() => _isEditing = false);
       if (mounted) Navigator.pop(context, updated);
+
+      // Fire-and-forget: upload new images and delete removed ones.
+      if (_newImages.isNotEmpty || _removedExistingImages.isNotEmpty) {
+        _imageUploadService.uploadInBackground(
+          appointmentId: appointmentId,
+          newImages: _newImages,
+          existingImages: _existingImages,
+          toDelete: List.of(_removedExistingImages),
+        );
+      }
     } catch (_) {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -263,55 +278,35 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final maxHeight = MediaQuery.of(context).size.height * 0.95;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => FocusScope.of(context).unfocus(),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxHeight),
-        child: Container(
-          decoration: BoxDecoration(
-            color: scheme.surface,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(20),
-            ),
+    return DraggableSheetFrame(
+      builder: (sheetContext, scrollController) {
+        return ListView(
+          controller: scrollController,
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 12,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
           ),
-          child: SingleChildScrollView(
-            padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 12,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SheetHandle(),
-                const SizedBox(height: 16),
-                _isEditing ? _buildEditHeader() : _buildViewHeader(),
-                const SizedBox(height: 20),
-                const Divider(height: 1),
-                const SizedBox(height: 20),
-                if (_isEditing)
-                  ..._buildEditFields()
-                else
-                  ..._buildViewFields(),
-                const SizedBox(height: 20),
-                _buildPhotosSection(),
-                const SizedBox(height: 20),
-                _buildEmployeesSection(),
-                if (widget.showActions) ...[
-                  const SizedBox(height: 24),
-                  _buildActionButtons(),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
+          children: [
+            const SheetHandle(),
+            const SizedBox(height: 16),
+            _isEditing ? _buildEditHeader() : _buildViewHeader(),
+            const SizedBox(height: 20),
+            const Divider(height: 1),
+            const SizedBox(height: 20),
+            if (_isEditing) ..._buildEditFields() else ..._buildViewFields(),
+            const SizedBox(height: 20),
+            _buildPhotosSection(),
+            const SizedBox(height: 20),
+            _buildEmployeesSection(),
+            if (widget.showActions) ...[
+              const SizedBox(height: 24),
+              _buildActionButtons(),
+            ],
+          ],
+        );
+      },
     );
   }
 
@@ -332,23 +327,28 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
           style: theme.textTheme.headlineLarge,
         ),
         const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        Wrap(
+          alignment: WrapAlignment.center,
+          runAlignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          runSpacing: 6,
           children: [
             Icon(
               Icons.calendar_today_outlined,
               size: 13,
               color: scheme.onSurfaceVariant,
             ),
-            const SizedBox(width: 6),
-            Text(DateUtilsHelper.formatDate(a.startTime), style: secondaryStyle),
-            const SizedBox(width: 12),
+            Text(
+              DateUtilsHelper.formatDate(a.startTime),
+              textAlign: TextAlign.center,
+              style: secondaryStyle,
+            ),
             Icon(
               Icons.access_time_outlined,
               size: 13,
               color: scheme.onSurfaceVariant,
             ),
-            const SizedBox(width: 6),
             Text(
               "${DateUtilsHelper.formatTime(a.startTime)} – ${DateUtilsHelper.formatTime(a.endTime)}",
               style: secondaryStyle,
@@ -379,7 +379,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
           formSectionLabel(context, "Client"),
           const SizedBox(height: 6),
           Text(
-            a.clientName,
+            _client?.displayName ?? a.clientName,
             style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
           ),
           Text(
@@ -388,10 +388,23 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
               color: a.clientPhone.isNotEmpty ? null : muted,
             ),
           ),
+          if ((_client?.contacts ?? const <ClientContact>[]).isNotEmpty) ...[
+            const SizedBox(height: 14),
+            formSectionLabel(context, "Contacts"),
+            const SizedBox(height: 8),
+            ..._client!.contacts.map(_contactCard),
+          ],
         ],
       ),
       const SizedBox(height: 16),
-      _viewSection("Address", a.address.isNotEmpty ? a.address : "No address"),
+      _viewSection(
+        "Address",
+        a.address.isNotEmpty ? a.address : "No address",
+        onTap: a.address.isNotEmpty
+            ? () =>
+                  AddressMapLauncher.showMapChoices(context, address: a.address)
+            : null,
+      ),
       const SizedBox(height: 16),
       _viewSection("Notes", a.notes.isNotEmpty ? a.notes : "No notes"),
       const SizedBox(height: 16),
@@ -421,56 +434,133 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     ];
   }
 
-  Widget _viewSection(String label, String value) {
+  Widget _contactCard(ClientContact contact) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (contact.name.trim().isNotEmpty)
+            _contactLine(Icons.person_outline, contact.name.trim()),
+          if (contact.phone.trim().isNotEmpty)
+            _contactLine(Icons.phone_outlined, contact.phone.trim()),
+          if (contact.email.trim().isNotEmpty)
+            _contactLine(Icons.mail_outline, contact.email.trim()),
+        ],
+      ),
+    );
+  }
+
+  Widget _contactLine(IconData icon, String text) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: theme.textTheme.bodySmall?.copyWith(height: 1.35),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _viewSection(String label, String value, {VoidCallback? onTap}) {
+    final scheme = Theme.of(context).colorScheme;
+
+    final text = Text(
+      value,
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+        height: 1.5,
+        color: onTap != null
+            ? Color.lerp(scheme.primary, const Color(0xFF4A8DFF), 0.5)
+            : null,
+      ),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         formSectionLabel(context, label),
         const SizedBox(height: 6),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
-        ),
+        onTap == null
+            ? text
+            : InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: onTap,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: text),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.open_in_new, size: 16),
+                    ],
+                  ),
+                ),
+              ),
       ],
     );
   }
 
   List<Widget> _buildEditFields() {
     return [
-      LabeledTextField(
-        label: "Job title",
-        hint: "e.g. Plumbing repair",
-        controller: _titleController,
-        errorText: _errors['title'],
-        onChanged: (_) {
-          if (_errors['title'] != null) {
-            setState(() => _errors['title'] = null);
-          }
-        },
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: "Job title",
+          hint: "e.g. Plumbing repair",
+          controller: _titleController,
+          errorText: _errors['title'],
+          onChanged: (_) {
+            if (_errors['title'] != null) {
+              setState(() => _errors['title'] = null);
+            }
+          },
+        ),
       ),
       const SizedBox(height: 16),
 
-      LabeledTextField(
-        label: "Date",
-        hint: "Select date",
-        controller: _dateController,
-        readOnly: true,
-        errorText: _errors['date'],
-        suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
-        onTap: () async {
-          final picked = await showDatePicker(
-            context: context,
-            initialDate: _selectedDate,
-            firstDate: DateTime(2020),
-            lastDate: DateTime(2100),
-          );
-          if (picked == null) return;
-          setState(() {
-            _selectedDate = picked;
-            _dateController.text = DateUtilsHelper.formatDate(picked);
-            _errors['date'] = null;
-          });
-        },
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: "Date",
+          hint: "Select date",
+          controller: _dateController,
+          readOnly: true,
+          errorText: _errors['date'],
+          suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: _selectedDate,
+              firstDate: DateTime(2020),
+              lastDate: DateTime(2100),
+            );
+            if (picked == null) return;
+            setState(() {
+              _selectedDate = picked;
+              _dateController.text = DateUtilsHelper.formatDate(picked);
+              _errors['date'] = null;
+            });
+          },
+        ),
       ),
       const SizedBox(height: 16),
 
@@ -509,20 +599,24 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       ),
       const SizedBox(height: 16),
 
-      LabeledTextField(
-        label: "Notes",
-        hint: "Type the note here...",
-        controller: _notesController,
-        optional: true,
-        maxLines: 3,
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: "Notes",
+          hint: "Type the note here...",
+          controller: _notesController,
+          optional: true,
+          maxLines: 3,
+        ),
       ),
       const SizedBox(height: 16),
 
-      LabeledTextField(
-        label: "Materials needed",
-        hint: "e.g. Pipe wrench, tape (comma separated)",
-        controller: _materialsController,
-        optional: true,
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: "Materials needed",
+          hint: "e.g. Pipe wrench, tape (comma separated)",
+          controller: _materialsController,
+          optional: true,
+        ),
       ),
     ];
   }
@@ -590,7 +684,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   // Button switching
   Widget _buildActionButtons() {
     final now = DateTime.now();
-    final isToday = widget.appointment.startTime.year == now.year &&
+    final isToday =
+        widget.appointment.startTime.year == now.year &&
         widget.appointment.startTime.month == now.month &&
         widget.appointment.startTime.day == now.day;
     final scheme = Theme.of(context).colorScheme;
@@ -598,35 +693,32 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
     // Mode édition — inchangé
     if (_isEditing) {
-      return Row(
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              onPressed: _isSaving ? null : _cancelEdit,
-              child: const Text("Cancel"),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
             ),
+            onPressed: _isSaving ? null : _cancelEdit,
+            child: const Text("Cancel"),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              onPressed: _isSaving ? null : _save,
-              child: _isSaving
-                  ? SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: scheme.onPrimary,
-                ),
-              )
-                  : const Text("Save changes"),
+          const SizedBox(height: 12),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
             ),
+            onPressed: _isSaving ? null : _save,
+            child: _isSaving
+                ? SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: scheme.onPrimary,
+                    )
+                  )
+                : const Text("Save changes"),
           ),
         ],
       );
@@ -642,16 +734,16 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
-            onPressed: _isSaving ? null : _markAsDone,  // ← appel correct
+            onPressed: _isSaving ? null : _markAsDone, // ← appel correct
             icon: _isSaving
                 ? SizedBox(
-              height: 18,
-              width: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: scheme.onPrimary,
-              ),
-            )
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: scheme.onPrimary,
+                    ),
+                  )
                 : const Icon(Icons.check, size: 18),
             label: const Text("Mark as done"),
           ),
