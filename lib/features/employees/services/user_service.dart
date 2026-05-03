@@ -110,8 +110,6 @@ class UserService {
   }
 
 
-
-
   Future<QueryDocumentSnapshot<Map<String, dynamic>>?>
   findInvitedEmployeeByEmail(String email) async {
     final normalizedEmail = email.trim().toLowerCase();

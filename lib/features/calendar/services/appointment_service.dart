@@ -100,6 +100,30 @@ class AppointmentService {
         .delete();
   }
 
+  Future<List<EmployeeRecord>> checkAvailableEmployee({
+    required List<EmployeeRecord> employeeId,
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    List<EmployeeRecord> busyEmployees = [];
+
+
+    for (final employee in employeeId) {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('appointments')
+          .where('employeeIds', arrayContains: employee.id)
+          .where('startTime', isLessThan: Timestamp.fromDate(end))
+          .where('endTime', isGreaterThan: Timestamp.fromDate(start))
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        busyEmployees.add(employee);
+      }
+    }
+
+    return busyEmployees;
+  }
+
   Stream<List<AppointmentRecord>> employeeAppointmentsStream(
     String employeeId,
   ) {

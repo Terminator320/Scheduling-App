@@ -59,9 +59,8 @@ class _MainCalendar extends State<MainCalendar> {
       });
     });
 
-    service.getAllAppointments().listen((data) {
+    service.getAppointmentStatus('booked').listen((data) {
       setState(() {
-        // Employees only see appointments assigned to them
         if (widget.isAdmin) {
           _allAppointments = data;
         } else {
