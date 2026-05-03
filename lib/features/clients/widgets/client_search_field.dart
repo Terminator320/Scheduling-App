@@ -33,10 +33,12 @@ class ClientSearchField extends StatelessWidget {
         TextFormField(
           controller: controller,
           readOnly: selectedClient != null,
+          // Show a Search action and dismiss the keyboard when it is pressed.
+          textInputAction: TextInputAction.search,
           decoration:
               formInputDecoration(
                 context,
-                "Search by name or phone number",
+                "Search by name, business, phone, email, address...",
               ).copyWith(
                 errorText: errorText,
                 suffixIcon: selectedClient != null
@@ -57,6 +59,7 @@ class ClientSearchField extends StatelessWidget {
               ),
 
           onChanged: onChanged,
+          onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
         ),
         if (results.isNotEmpty)
           Container(
@@ -77,10 +80,20 @@ class ClientSearchField extends StatelessWidget {
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       subtitle: Text(
-                        client.phone,
+                        client.phone.trim().isNotEmpty
+                            ? client.phone
+                            : client.email.trim().isNotEmpty
+                                ? client.email
+                                : client.address,
                         style: Theme.of(context).textTheme.labelLarge,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      onTap: () => onSelect(client),
+                      onTap: () {
+                        // Hide the keyboard once a client has been chosen.
+                        FocusScope.of(context).unfocus();
+                        onSelect(client);
+                      },
                     ),
                   )
                   .toList(),

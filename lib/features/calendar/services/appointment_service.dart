@@ -1,8 +1,23 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'package:scheduling/features/calendar/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 
-import '../../employees/models/employee_record.dart';
+class AppointmentDateRange {
+  final DateTime start;
+  final DateTime end;
+
+  const AppointmentDateRange({required this.start, required this.end});
+
+  factory AppointmentDateRange.visibleMonth(DateTime date) {
+    final firstDay = DateTime(date.year, date.month);
+    final lastDay = DateTime(date.year, date.month + 1, 0);
+    return AppointmentDateRange(
+      start: firstDay.subtract(const Duration(days: 7)),
+      end: lastDay.add(const Duration(days: 8)),
+    );
+  }
+}
 
 class AppointmentService {
   final CollectionReference<Map<String, dynamic>> appointments =
@@ -54,6 +69,16 @@ class AppointmentService {
     if (appointment.id == null) return;
     await appointments.doc(appointment.id).update({
       ...appointment.toMap(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> updateAppointmentPictures(
+    String appointmentId,
+    List<AppointmentImage> pictures,
+  ) async {
+    await appointments.doc(appointmentId).update({
+      'pictures': pictures.map((p) => p.toMap()).toList(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }

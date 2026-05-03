@@ -3,11 +3,11 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 
 class DefaultFirebaseOptions {
-  static String _FIREBASE_API_KEY = dotenv.env['FIREBASE_API_KEY'] ?? 'default_key';
-  static String _APP_ID = dotenv.env['APP_ID'] ?? 'default_key';
-  static String _MESSAGING_SENDER_ID = dotenv.env['MESSAGING_SENDER_ID'] ?? 'default_key';
-  static String _PROJECT_ID = dotenv.env['PROJECT_ID'] ?? 'default_key';
-  static String _STORAGE_BUCKET = dotenv.env['STORAGE_BUCKET'] ?? 'default_key';
+  static final String _FIREBASE_API_KEY = dotenv.env['FIREBASE_API_KEY'] ?? 'default_key';
+  static final String _APP_ID = dotenv.env['APP_ID'] ?? 'default_key';
+  static final String _MESSAGING_SENDER_ID = dotenv.env['MESSAGING_SENDER_ID'] ?? 'default_key';
+  static final String _PROJECT_ID = dotenv.env['PROJECT_ID'] ?? 'default_key';
+  static final String _STORAGE_BUCKET = dotenv.env['STORAGE_BUCKET'] ?? 'default_key';
 
 
   static final FirebaseOptions android = FirebaseOptions(

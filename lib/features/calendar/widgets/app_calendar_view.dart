@@ -39,14 +39,22 @@ class AppCalendar extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxH = constraints.maxHeight;
-        final circleSize = (maxH - 9).clamp(20.0, 36.0);
-        return Center(
-          child: Container(
-            width: circleSize,
-            height: circleSize,
-            decoration: decoration,
-            alignment: Alignment.center,
-            child: Text('${day.day}', style: textStyle),
+        const markerSpace = 12.0;
+        final availableHeight = (maxH - markerSpace).clamp(0.0, double.infinity);
+        final circleSize = availableHeight < 20
+            ? availableHeight
+            : availableHeight.clamp(20.0, 36.0);
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: markerSpace),
+          child: Center(
+            child: Container(
+              width: circleSize,
+              height: circleSize,
+              decoration: decoration,
+              alignment: Alignment.center,
+              child: Text('${day.day}', style: textStyle),
+            ),
           ),
         );
       },
@@ -61,6 +69,7 @@ class AppCalendar extends StatelessWidget {
       focusedDay: focusedDay,
 
       rowHeight: rowHeight ?? 56,
+      daysOfWeekHeight: 36,
 
       selectedDayPredicate: (day) =>
           isSameDay(selectedDay, day),
