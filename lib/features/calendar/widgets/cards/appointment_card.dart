@@ -1,4 +1,3 @@
-import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/animations/tap_scale.dart';
@@ -65,7 +64,7 @@ class AppointmentCard extends StatelessWidget {
                         Row(
                           children: [
                             Expanded(
-                              child: AutoSizeText(
+                              child: Text(
                                 appointment.title,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
