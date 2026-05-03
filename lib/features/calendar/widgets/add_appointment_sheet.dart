@@ -240,6 +240,23 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
     if (_errors.values.any((e) => e != null)) return;
 
+    final startTime = _combineDateAndTime(_selectedDate!, _selectedStartTime!);
+    final endTime = _combineDateAndTime(_selectedDate!, _selectedEndTime!);
+
+    final busyEmployees = await _appointmentService.checkAvailableEmployee(
+      employeeId: _selectedEmployees,
+      start: startTime,
+      end: endTime,
+    );
+
+    if (busyEmployees.isNotEmpty) {
+      setState(
+        () => _errors['employees'] =
+            "Busy: ${busyEmployees.map((e) => e.name).join(', ')}",
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
