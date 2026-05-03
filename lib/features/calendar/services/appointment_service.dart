@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:scheduling/features/calendar/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 
+import '../../employees/models/employee_record.dart';
+
 class AppointmentDateRange {
   final DateTime start;
   final DateTime end;
