@@ -47,8 +47,10 @@ class _ListInformationState extends State<ListInformation> {
   final ClientService _clientService = ClientService();
   final AppointmentService _appointmentService = AppointmentService();
   StreamSubscription? _clientsSubscription;
+  StreamSubscription? _appointmentsSubscription;
   final UserService _userService = UserService();
   List<EmployeeRecord> _allEmployees = [];
+  Map<String, int> _appointmentCountsByClientId = const {};
   StreamSubscription? _employeesSubscription;
 
 
@@ -63,6 +65,19 @@ class _ListInformationState extends State<ListInformation> {
     _clientsSubscription = _clientService.clientsStream().listen((clients) {
       if (mounted) setState(() => _allClients = clients);
     });
+    _appointmentsSubscription = _appointmentService
+        .getAllAppointments()
+        .listen((appointments) {
+          final counts = <String, int>{};
+          for (final appointment in appointments) {
+            final clientId = appointment.clientId.trim();
+            if (clientId.isEmpty) continue;
+            counts.update(clientId, (value) => value + 1, ifAbsent: () => 1);
+          }
+          if (mounted) {
+            setState(() => _appointmentCountsByClientId = counts);
+          }
+        });
     _employeesSubscription = _userService.allUsersStream().listen((data) {
       if (mounted) setState(() => _allEmployees = data);
     });
@@ -80,6 +95,7 @@ class _ListInformationState extends State<ListInformation> {
     _appointmentSearchController.dispose();
     _scrollController.dispose();
     _clientsSubscription?.cancel();
+    _appointmentsSubscription?.cancel();
     _employeesSubscription?.cancel();
     super.dispose();
   }
@@ -250,6 +266,9 @@ class _ListInformationState extends State<ListInformation> {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: ClientTile(
                       client: displayed[index],
+                      appointmentCount:
+                          _appointmentCountsByClientId[displayed[index].id] ??
+                          0,
                       onOpen: () => _openClientFromSearch(displayed[index]),
                     ),
                   ),
