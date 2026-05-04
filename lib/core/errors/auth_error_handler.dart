@@ -1,7 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/widgets.dart';
 
-import 'package:scheduling/core/utils/app_text.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 
 enum AuthErrorContext {
   login,
@@ -23,7 +23,7 @@ class AuthErrorHandler {
     if (error is FirebaseAuthException) {
       return _messageForCode(context, error.code, authContext);
     }
-    return tr(context, 'Something went wrong, please try again');
+    return context.l10n.somethingWentWrongPleaseTryAgain;
   }
 
   // Returns null for account-existence errors (user-not-found, user-disabled,
@@ -34,7 +34,7 @@ class AuthErrorHandler {
     Object error,
   ) {
     if (error is! FirebaseAuthException) {
-      return tr(context, 'Something went wrong, please try again');
+      return context.l10n.somethingWentWrongPleaseTryAgain;
     }
 
     switch (error.code) {
@@ -57,39 +57,36 @@ static String _messageForCode(
   ) {
     switch (code) {
       case 'invalid-email':
-        return tr(context, 'Please enter a valid email address');
+        return context.l10n.pleaseEnterAValidEmailAddress;
       case 'user-disabled':
-        return tr(context, 'This account has been disabled');
+        return context.l10n.thisAccountHasBeenDisabled;
       case 'user-not-found':
         return authContext == AuthErrorContext.reauthentication
-            ? tr(context, 'Please log in again and retry')
-            : tr(context, 'No account found with this email');
+            ? context.l10n.pleaseLogInAgainAndRetry
+            : context.l10n.noAccountFoundWithThisEmail;
       // Firebase may return any of these three codes for a wrong password.
       case 'wrong-password':
       case 'invalid-credential':
       case 'INVALID_LOGIN_CREDENTIALS':
         return authContext == AuthErrorContext.reauthentication
-            ? tr(context, 'Please log in again and retry')
-            : tr(context, 'Invalid email or password');
+            ? context.l10n.pleaseLogInAgainAndRetry
+            : context.l10n.invalidEmailOrPassword;
       case 'too-many-requests':
-        return tr(context, 'Too many attempts, please try again later');
+        return context.l10n.tooManyAttemptsPleaseTryAgainLater2;
       case 'network-request-failed':
-        return tr(
-          context,
-          'Network error. Check your connection and try again',
-        );
+        return context.l10n.networkErrorCheckYourConnectionAndTryAgain;
       case 'email-already-in-use':
-        return tr(context, 'An account with this email already exists');
+        return context.l10n.anAccountWithThisEmailAlreadyExists;
       case 'weak-password':
-        return tr(context, 'Password is too weak. Use at least 6 characters');
+        return context.l10n.passwordIsTooWeakUseAtLeast6Characters;
       case 'operation-not-allowed':
-        return tr(context, 'Sign-in is temporarily unavailable');
+        return context.l10n.signInIsTemporarilyUnavailable;
       case 'requires-recent-login':
-        return tr(context, 'Please log in again and retry');
+        return context.l10n.pleaseLogInAgainAndRetry;
       case 'not-authorized':
-        return tr(context, 'This email is not authorized to sign up');
+        return context.l10n.thisEmailIsNotAuthorizedToSignUp;
       default:
-        return tr(context, 'Something went wrong, please try again');
+        return context.l10n.somethingWentWrongPleaseTryAgain;
     }
   }
 }

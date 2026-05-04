@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/clients/models/client_record.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
@@ -38,7 +39,7 @@ class ClientSearchField extends StatelessWidget {
           decoration:
               formInputDecoration(
                 context,
-                "Search by name, business, phone, email, address...",
+                context.l10n.searchByNameBusinessPhoneEmailAddress,
               ).copyWith(
                 errorText: errorText,
                 suffixIcon: selectedClient != null
@@ -107,7 +108,7 @@ class ClientSearchField extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
-              "No clients found",
+              context.l10n.noClientsFound,
               style: TextStyle(
                 fontSize: 13,
                 color: Theme.of(context).colorScheme.error,
