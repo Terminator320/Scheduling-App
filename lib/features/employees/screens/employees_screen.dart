@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:scheduling/core/utils/app_text.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
 import 'package:scheduling/features/employees/widgets/employee_card.dart';
@@ -66,14 +66,19 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
     if (result == 'deleted') {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(tr(context, 'Employee deleted'))));
+      ).showSnackBar(SnackBar(content: Text(context.l10n.employeeDeleted)));
     } else if (result == true) {
-      final messageKey = employee == null
-          ? 'Employee added successfully'
-          : 'Employee updated successfully';
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(tr(context, messageKey))));
+      ).showSnackBar(
+        SnackBar(
+          content: Text(
+            employee == null
+                ? context.l10n.employeeAddedSuccessfully
+                : context.l10n.employeeUpdatedSuccessfully,
+          ),
+        ),
+      );
     }
   }
 
@@ -95,7 +100,7 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
 
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(tr(context, 'Employee deleted'))));
+    ).showSnackBar(SnackBar(content: Text(context.l10n.employeeDeleted)));
   }
 
   void _clearSearch() {
@@ -109,18 +114,18 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(tr(ctx, 'Delete employee')),
+        title: Text(ctx.l10n.deleteEmployee),
         content: Text(
-          tr(ctx, 'Are you sure you want to delete this employee?'),
+          ctx.l10n.areYouSureYouWantToDeleteThisEmployee,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(tr(ctx, 'Cancel')),
+            child: Text(ctx.l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(tr(ctx, 'Delete')),
+            child: Text(ctx.l10n.delete),
           ),
         ],
       ),
@@ -133,13 +138,18 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
 
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(tr(context, 'Employee deleted'))));
+    ).showSnackBar(SnackBar(content: Text(context.l10n.employeeDeleted)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: appScaffoldBar(context, 'Employees', widget.employeeId, widget.isAdmin),
+      appBar: appScaffoldBar(
+        context,
+        context.l10n.employees,
+        widget.employeeId,
+        widget.isAdmin,
+      ),
       endDrawer: SettingsDrawer(
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
@@ -162,7 +172,7 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
                 onSubmitted: (_) => FocusScope.of(context).unfocus(),
                 decoration: formInputDecoration(
                   context,
-                  tr(context, 'Search by name or phone number...'),
+                  context.l10n.searchByNameOrPhoneNumber2,
                 ).copyWith(prefixIcon: const Icon(Icons.search)),
               ),
               const SizedBox(height: 14),
@@ -175,14 +185,14 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
                     }
                     if (snapshot.hasError) {
                       return Center(
-                        child: Text(tr(context, 'Error loading employees')),
+                        child: Text(context.l10n.errorLoadingEmployees),
                       );
                     }
 
                     final employees = _filterEmployees(snapshot.data ?? []);
                     if (employees.isEmpty) {
                       return Center(
-                        child: Text(tr(context, 'No employees found')),
+                        child: Text(context.l10n.noEmployeesFound),
                       );
                     }
 

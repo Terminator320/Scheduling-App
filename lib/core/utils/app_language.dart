@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class AppLanguageController extends ValueNotifier<String> {
-  AppLanguageController._() : super('en');
+  AppLanguageController._() : super('en') {
+    Intl.defaultLocale = 'en_CA';
+  }
 
   static final AppLanguageController instance = AppLanguageController._();
 
@@ -9,6 +12,7 @@ class AppLanguageController extends ValueNotifier<String> {
 
   void setLanguage(String code) {
     if (code == value) return;
+    Intl.defaultLocale = code == 'fr' ? 'fr_CA' : 'en_CA';
     value = code;
   }
 }

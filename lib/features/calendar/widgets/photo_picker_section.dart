@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/calendar/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/widgets/image_viewer.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
@@ -129,7 +130,7 @@ class PhotoPickerSection extends StatelessWidget {
                         children: [
                           Icon(Icons.add, color: scheme.onSurfaceVariant),
                           Text(
-                            "Add more",
+                            context.l10n.addMore,
                             style: TextStyle(
                               fontSize: 10,
                               color: scheme.onSurfaceVariant,
@@ -158,7 +159,7 @@ class PhotoPickerSection extends StatelessWidget {
                     Icon(Icons.image_outlined, color: scheme.onSurfaceVariant),
                     const SizedBox(height: 4),
                     Text(
-                      "Tap to add photos",
+                      context.l10n.tapToAddPhotos,
                       style: TextStyle(
                         fontSize: 13,
                         color: scheme.onSurfaceVariant,
@@ -185,7 +186,7 @@ class PhotoPickerSection extends StatelessWidget {
                       color: scheme.onSurfaceVariant, size: 24),
                   const SizedBox(height: 4),
                   Text(
-                    "No photos",
+                    context.l10n.noPhotos,
                     style: TextStyle(
                       fontSize: 12,
                       color: scheme.onSurfaceVariant,

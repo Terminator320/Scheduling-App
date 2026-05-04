@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/clients/models/client_record.dart';
 import 'package:scheduling/features/clients/services/client_service.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
@@ -288,19 +289,19 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
 
     setState(() {
       _errors['businessName'] = !hasBusinessOrName
-          ? "Business name or contact name is required"
+          ? context.l10n.businessNameOrContactNameIsRequired
           : null;
       _errors['name'] = !hasBusinessOrName
-          ? "Business name or contact name is required"
+          ? context.l10n.businessNameOrContactNameIsRequired
           : null;
       _errors['phone'] = !hasContactMethod
-          ? "Phone or email is required"
+          ? context.l10n.phoneOrEmailIsRequired
           : null;
       _errors['email'] = email.isNotEmpty && !_emailRegex.hasMatch(email)
-          ? "Enter a valid email"
+          ? context.l10n.enterAValidEmail
           : null;
       _errors['address'] = businessName.isEmpty && address.isEmpty
-          ? "Address is required"
+          ? context.l10n.addressIsRequired
           : null;
     });
 
@@ -327,7 +328,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Could not save changes. Try again.")),
+        SnackBar(content: Text(context.l10n.couldNotSaveChangesTryAgain)),
       );
     }
   }
@@ -335,21 +336,21 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
   Future<void> _confirmDelete() async {
     final clientName = widget.client.displayName.isNotEmpty
         ? widget.client.displayName
-        : 'this client';
+        : context.l10n.thisClient;
 
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         final scheme = Theme.of(dialogContext).colorScheme;
         return AlertDialog(
-          title: const Text('Delete client?'),
+          title: Text(dialogContext.l10n.deleteClient),
           content: Text(
-            'Are you sure you want to delete $clientName? This cannot be undone.',
+            '${dialogContext.l10n.areYouSureYouWantToDelete} $clientName? ${dialogContext.l10n.thisCannotBeUndone}',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
+              child: Text(dialogContext.l10n.cancel),
             ),
             FilledButton(
               style: FilledButton.styleFrom(
@@ -357,7 +358,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
                 foregroundColor: scheme.onError,
               ),
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Delete'),
+              child: Text(dialogContext.l10n.delete),
             ),
           ],
         );
@@ -373,13 +374,13 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
       if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Client deleted successfully.')),
+        SnackBar(content: Text(context.l10n.clientDeletedSuccessfully)),
       );
     } catch (_) {
       if (!mounted) return;
       setState(() => _isDeleting = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not delete client. Try again.')),
+        SnackBar(content: Text(context.l10n.couldNotDeleteClientTryAgain)),
       );
     }
   }
@@ -403,7 +404,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
             const SizedBox(height: 16),
             _isEditing
                 ? Text(
-                    "Edit client",
+                    context.l10n.editClient2,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.headlineLarge,
                   )
@@ -494,7 +495,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
 
       if (c.contacts.isNotEmpty) ...[
         const SizedBox(height: 24),
-        formSectionLabel(context, "Contacts"),
+        formSectionLabel(context, context.l10n.contacts),
         const SizedBox(height: 8),
         ...c.contacts.map(
           (contact) => Container(
@@ -525,7 +526,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
     return [
       SheetFocusScroll(
         child: LabeledTextField(
-          label: "Business name",
+          label: context.l10n.businessName,
           controller: _businessNameController,
           optional: true,
           autofillHints: const [AutofillHints.organizationName],
@@ -541,7 +542,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
       const SizedBox(height: 16),
       SheetFocusScroll(
         child: LabeledTextField(
-          label: "Contact name",
+          label: context.l10n.contactName,
           controller: _nameController,
           required: _businessNameController.text.trim().isEmpty,
           optional: _businessNameController.text.trim().isNotEmpty,
@@ -557,7 +558,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
       const SizedBox(height: 16),
       SheetFocusScroll(
         child: LabeledTextField(
-          label: "Phone",
+          label: context.l10n.phone,
           controller: _phoneController,
           keyboard: TextInputType.phone,
           autofillHints: const [AutofillHints.telephoneNumber],
@@ -571,7 +572,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
       const SizedBox(height: 16),
       SheetFocusScroll(
         child: LabeledTextField(
-          label: "Email",
+          label: context.l10n.email,
           controller: _emailController,
           keyboard: TextInputType.emailAddress,
           autofillHints: const [AutofillHints.email],
@@ -598,7 +599,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
       const SizedBox(height: 16),
       SheetFocusScroll(
         child: LabeledTextField(
-          label: "Apt / Unit",
+          label: context.l10n.aptUnit,
           controller: _aptController,
           optional: true,
         ),
@@ -609,7 +610,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
           Expanded(
             child: SheetFocusScroll(
               child: LabeledTextField(
-                label: "City",
+                label: context.l10n.city,
                 controller: _cityController,
                 autofillHints: const [AutofillHints.addressCity],
               ),
@@ -619,7 +620,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
           Expanded(
             child: SheetFocusScroll(
               child: LabeledTextField(
-                label: "Province",
+                label: context.l10n.province,
                 controller: _provinceController,
                 autofillHints: const [AutofillHints.addressState],
               ),
@@ -633,7 +634,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
           Expanded(
             child: SheetFocusScroll(
               child: LabeledTextField(
-                label: "Postal code",
+                label: context.l10n.postalCode,
                 controller: _postalCodeController,
                 autofillHints: const [AutofillHints.postalCode],
               ),
@@ -643,7 +644,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
           Expanded(
             child: SheetFocusScroll(
               child: LabeledTextField(
-                label: "Country",
+                label: context.l10n.country,
                 controller: _countryController,
                 autofillHints: const [AutofillHints.countryName],
               ),
@@ -664,7 +665,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
             onPressed: _cancelEdit,
-            child: const Text("Cancel"),
+            child: Text(context.l10n.cancel),
           ),
           const SizedBox(height: 12),
           FilledButton(
@@ -672,7 +673,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
             onPressed: _save,
-            child: const Text("Save changes"),
+            child: Text(context.l10n.saveChanges),
           ),
         ],
       );
@@ -695,7 +696,9 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.delete_outline, size: 18),
-          label: Text(_isDeleting ? "Deleting..." : "Delete"),
+          label: Text(
+            _isDeleting ? context.l10n.deleting : context.l10n.delete,
+          ),
         ),
         const SizedBox(height: 12),
         FilledButton.icon(
@@ -706,7 +709,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
               ? null
               : () => setState(() => _isEditing = true),
           icon: const Icon(Icons.edit_outlined, size: 18),
-          label: const Text("Edit"),
+          label: Text(context.l10n.edit),
         ),
       ],
     );

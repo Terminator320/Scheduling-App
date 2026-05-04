@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/utils/l10n_extensions.dart';
+
 Widget formLabel(BuildContext context, String text, {bool optional = false}) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 6),
@@ -8,7 +10,7 @@ Widget formLabel(BuildContext context, String text, {bool optional = false}) {
         Text(text, style: Theme.of(context).textTheme.labelMedium),
         if (optional)
           Text(
-            " (optional)",
+            ' (${context.l10n.optional})',
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),

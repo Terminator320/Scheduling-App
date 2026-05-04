@@ -6,7 +6,7 @@ import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/animations/fade_slide_entrance.dart';
 import 'package:scheduling/core/animations/staggered_entrance_controller.dart';
 import 'package:scheduling/core/errors/auth_error_handler.dart';
-import 'package:scheduling/core/utils/app_text.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/auth/widgets/auth_banner.dart';
@@ -84,10 +84,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
 
     String? confirmErr;
     if (_confirmPasswordController.text.trim().isEmpty) {
-      confirmErr = tr(context, 'Please confirm your password');
+      confirmErr = context.l10n.pleaseConfirmYourPassword;
     } else if (_confirmPasswordController.text.trim() !=
         _passwordController.text.trim()) {
-      confirmErr = tr(context, 'Passwords do not match');
+      confirmErr = context.l10n.passwordsDoNotMatch;
     }
 
     setState(() {
@@ -166,10 +166,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           appBar: AppBar(
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
-              tooltip: tr(context, 'Back'),
+              tooltip: context.l10n.back,
               onPressed: _isLoading ? null : _backToSignIn,
             ),
-            title: Text(tr(context, 'Create Account')),
+            title: Text(context.l10n.createAccount2),
             centerTitle: true,
             elevation: 0,
             backgroundColor: colour.surface,
@@ -258,7 +258,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           child: Column(
             children: [
               Text(
-                tr(context, 'Create Account'),
+                context.l10n.createAccount2,
                 textAlign: TextAlign.center,
                 style: textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w600,
@@ -266,10 +266,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                tr(
-                  context,
-                  'Use the email your admin added to the employee list.',
-                ),
+                context.l10n.useTheEmailYourAdminAddedToTheEmployeeList,
                 textAlign: TextAlign.center,
                 style: textTheme.bodyMedium?.copyWith(
                   color: colour.onSurface.withAlpha(150),
@@ -294,7 +291,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               enabled: !_isLoading,
               onSubmitted: (_) => _passwordFocus.requestFocus(),
               onChanged: (_) => _onFieldChanged(),
-              decoration: formInputDecoration(context, 'Email').copyWith(
+              decoration: formInputDecoration(
+                context,
+                context.l10n.email,
+              ).copyWith(
                 errorText: _emailError,
                 prefixIcon: const Icon(Icons.email_outlined, size: 20),
               ),
@@ -315,7 +315,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               enabled: !_isLoading,
               onSubmitted: (_) => _confirmPasswordFocus.requestFocus(),
               onChanged: (_) => _onFieldChanged(),
-              decoration: formInputDecoration(context, 'Password').copyWith(
+              decoration: formInputDecoration(
+                context,
+                context.l10n.password,
+              ).copyWith(
                 errorText: _passwordError,
                 prefixIcon: const Icon(Icons.lock_outlined, size: 20),
                 suffixIcon: IconButton(
@@ -326,8 +329,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                     size: 20,
                   ),
                   tooltip: _isObscured
-                      ? tr(context, 'Show password')
-                      : tr(context, 'Hide password'),
+                      ? context.l10n.showPassword
+                      : context.l10n.hidePassword,
                   onPressed: () => setState(() => _isObscured = !_isObscured),
                 ),
               ),
@@ -348,7 +351,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               enabled: !_isLoading,
               onSubmitted: (_) => _createAccount(),
               onChanged: (_) => _onFieldChanged(),
-              decoration: formInputDecoration(context, 'Confirm Password')
+              decoration: formInputDecoration(
+                context,
+                context.l10n.confirmPassword,
+              )
                   .copyWith(
                     errorText: _confirmPasswordError,
                     prefixIcon: const Icon(Icons.lock_reset_outlined, size: 20),
@@ -360,8 +366,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                         size: 20,
                       ),
                       tooltip: _isConfirmObscured
-                          ? tr(context, 'Show password')
-                          : tr(context, 'Hide password'),
+                          ? context.l10n.showPassword
+                          : context.l10n.hidePassword,
                       onPressed: () => setState(
                         () => _isConfirmObscured = !_isConfirmObscured,
                       ),
@@ -395,7 +401,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
         FadeSlideEntrance(
           animation: animations[5],
           child: AnimatedLoadingButton(
-            label: tr(context, 'Create account'),
+            label: context.l10n.createAccount,
             isLoading: _isLoading,
             onPressed: _createAccount,
           ),
@@ -405,7 +411,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           animation: animations[6],
           child: TextButton(
             onPressed: _isLoading ? null : _backToSignIn,
-            child: Text(tr(context, 'Back to Sign In')),
+            child: Text(context.l10n.backToSignIn),
           ),
         ),
       ],
@@ -447,7 +453,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
         FadeSlideEntrance(
           animation: animations[1],
           child: Text(
-            tr(context, 'Account created'),
+            context.l10n.accountCreated,
             textAlign: TextAlign.center,
             style: textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w600,
@@ -458,7 +464,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
         FadeSlideEntrance(
           animation: animations[2],
           child: Text(
-            tr(context, 'You can now sign in with this email and password.'),
+            context.l10n.youCanNowSignInWithThisEmailAndPassword,
             textAlign: TextAlign.center,
             style: textTheme.bodyMedium?.copyWith(
               color: colour.onSurface.withAlpha(150),
@@ -469,7 +475,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
         FadeSlideEntrance(
           animation: animations[3],
           child: AnimatedLoadingButton(
-            label: tr(context, 'Back to Sign In'),
+            label: context.l10n.backToSignIn,
             isLoading: false,
             onPressed: _backToSignIn,
           ),

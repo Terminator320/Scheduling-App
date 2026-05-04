@@ -169,17 +169,17 @@ class UserService {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
-      return Stream.value('User');
+      return Stream.value('');
     }
 
     return _users.where('uid', isEqualTo: user.uid).limit(1).snapshots().map(
           (snapshot) {
-        if (snapshot.docs.isEmpty) return 'User';
+        if (snapshot.docs.isEmpty) return '';
 
         final data = snapshot.docs.first.data();
         final name = (data['name'] ?? '').toString().trim();
 
-        return name.isNotEmpty ? name : 'User';
+        return name;
       },
     );
   }

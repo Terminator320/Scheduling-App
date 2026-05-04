@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/services/image_picker_service.dart';
 import 'package:scheduling/features/calendar/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
@@ -150,7 +151,9 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text("Something went wrong")));
+        ).showSnackBar(
+          SnackBar(content: Text(context.l10n.somethingWentWrong)),
+        );
       }
     }
   }
@@ -180,24 +183,24 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   Future<void> _save() async {
     setState(() {
       _errors['title'] = _titleController.text.trim().isEmpty
-          ? "Title is required"
+          ? context.l10n.titleIsRequired
           : null;
       _errors['date'] = _dateController.text.trim().isEmpty
-          ? "Please select a date"
+          ? context.l10n.pleaseSelectADate
           : null;
       _errors['startTime'] = _startTimeController.text.trim().isEmpty
-          ? "Please select a start time"
+          ? context.l10n.pleaseSelectAStartTime
           : null;
       _errors['endTime'] = _endTimeController.text.trim().isEmpty
-          ? "Please select an end time"
+          ? context.l10n.pleaseSelectAnEndTime
           : (() {
               final start =
                   _selectedStartTime.hour * 60 + _selectedStartTime.minute;
               final end = _selectedEndTime.hour * 60 + _selectedEndTime.minute;
-              return end <= start ? "Must be after start time" : null;
+              return end <= start ? context.l10n.mustBeAfterStartTime : null;
             })();
       _errors['employees'] = _selectedEmployees.isEmpty
-          ? "Please select at least one employee"
+          ? context.l10n.pleaseSelectAtLeastOneEmployee
           : null;
     });
 
@@ -205,7 +208,9 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
     if (_selectedEmployees.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please select at least one employee")),
+        SnackBar(
+          content: Text(context.l10n.pleaseSelectAtLeastOneEmployee),
+        ),
       );
       return;
     }
@@ -270,7 +275,9 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       if (mounted) {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Something went wrong saving changes")),
+          SnackBar(
+            content: Text(context.l10n.somethingWentWrongSavingChanges),
+          ),
         );
       }
     }
@@ -361,7 +368,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
   Widget _buildEditHeader() {
     return Text(
-      "Edit job",
+      context.l10n.editJob,
       textAlign: TextAlign.center,
       style: Theme.of(context).textTheme.headlineLarge,
     );
@@ -376,21 +383,21 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          formSectionLabel(context, "Client"),
+          formSectionLabel(context, context.l10n.client),
           const SizedBox(height: 6),
           Text(
             _client?.displayName ?? a.clientName,
             style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
           ),
           Text(
-            a.clientPhone.isNotEmpty ? a.clientPhone : "No number",
+            a.clientPhone.isNotEmpty ? a.clientPhone : context.l10n.noNumber,
             style: theme.textTheme.bodySmall?.copyWith(
               color: a.clientPhone.isNotEmpty ? null : muted,
             ),
           ),
           if ((_client?.contacts ?? const <ClientContact>[]).isNotEmpty) ...[
             const SizedBox(height: 14),
-            formSectionLabel(context, "Contacts"),
+            formSectionLabel(context, context.l10n.contacts),
             const SizedBox(height: 8),
             ..._client!.contacts.map(_contactCard),
           ],
@@ -398,17 +405,20 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       ),
       const SizedBox(height: 16),
       _viewSection(
-        "Address",
-        a.address.isNotEmpty ? a.address : "No address",
+        context.l10n.address,
+        a.address.isNotEmpty ? a.address : context.l10n.noAddress,
         onTap: a.address.isNotEmpty
             ? () =>
                   AddressMapLauncher.showMapChoices(context, address: a.address)
             : null,
       ),
       const SizedBox(height: 16),
-      _viewSection("Notes", a.notes.isNotEmpty ? a.notes : "No notes"),
+      _viewSection(
+        context.l10n.notes,
+        a.notes.isNotEmpty ? a.notes : context.l10n.noNotes,
+      ),
       const SizedBox(height: 16),
-      formSectionLabel(context, "Materials needed"),
+      formSectionLabel(context, context.l10n.materialsNeeded),
       const SizedBox(height: 8),
       a.materialsNeeded.isNotEmpty
           ? Wrap(
@@ -428,7 +438,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
                   .toList(),
             )
           : Text(
-              "No materials",
+              context.l10n.noMaterials,
               style: theme.textTheme.bodyMedium?.copyWith(color: muted),
             ),
     ];
@@ -525,8 +535,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     return [
       SheetFocusScroll(
         child: LabeledTextField(
-          label: "Job title",
-          hint: "e.g. Plumbing repair",
+          label: context.l10n.jobTitle2,
+          hint: context.l10n.eGPlumbingRepair,
           controller: _titleController,
           errorText: _errors['title'],
           onChanged: (_) {
@@ -540,8 +550,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
       SheetFocusScroll(
         child: LabeledTextField(
-          label: "Date",
-          hint: "Select date",
+          label: context.l10n.date,
+          hint: context.l10n.selectDate,
           controller: _dateController,
           readOnly: true,
           errorText: _errors['date'],
@@ -564,7 +574,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       ),
       const SizedBox(height: 16),
 
-      formLabel(context, "Time"),
+      formLabel(context, context.l10n.time),
       TimeRangeRow(
         startController: _startTimeController,
         endController: _endTimeController,
@@ -601,8 +611,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
       SheetFocusScroll(
         child: LabeledTextField(
-          label: "Notes",
-          hint: "Type the note here...",
+          label: context.l10n.notes,
+          hint: context.l10n.typeTheNoteHere,
           controller: _notesController,
           optional: true,
           maxLines: 3,
@@ -612,8 +622,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
       SheetFocusScroll(
         child: LabeledTextField(
-          label: "Materials needed",
-          hint: "e.g. Pipe wrench, tape (comma separated)",
+          label: context.l10n.materialsNeeded,
+          hint: context.l10n.eGPipeWrenchTapeCommaSeparated,
           controller: _materialsController,
           optional: true,
         ),
@@ -626,7 +636,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        formSectionLabel(context, "Photos"),
+        formSectionLabel(context, context.l10n.pictures),
         const SizedBox(height: 8),
         PhotoPickerSection(
           existingImages: _existingImages,
@@ -651,7 +661,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        formSectionLabel(context, "Employees"),
+        formSectionLabel(context, context.l10n.employees),
         const SizedBox(height: 8),
         EmployeePicker(
           allEmployees: _allEmployees,
@@ -701,7 +711,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
             onPressed: _isSaving ? null : _cancelEdit,
-            child: const Text("Cancel"),
+            child: Text(context.l10n.cancel),
           ),
           const SizedBox(height: 12),
           FilledButton(
@@ -718,7 +728,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
                       color: scheme.onPrimary,
                     )
                   )
-                : const Text("Save changes"),
+                : Text(context.l10n.saveChanges),
           ),
         ],
       );
@@ -745,7 +755,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
                     ),
                   )
                 : const Icon(Icons.check, size: 18),
-            label: const Text("Mark as done"),
+            label: Text(context.l10n.markAsDone),
           ),
 
         // Déjà complété
@@ -758,7 +768,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
             ),
             onPressed: null, // désactivé
             icon: const Icon(Icons.check_circle_outline, size: 18),
-            label: const Text("Completed"),
+            label: Text(context.l10n.completed),
           ),
       ],
     );
