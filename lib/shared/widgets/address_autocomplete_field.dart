@@ -10,7 +10,7 @@ class AddressAutocompleteField extends StatefulWidget {
   const AddressAutocompleteField({
     super.key,
     required this.controller,
-    this.label = 'Address',
+    this.label,
     this.required = false,
     this.optional = false,
     this.errorText,
@@ -19,7 +19,7 @@ class AddressAutocompleteField extends StatefulWidget {
   });
 
   final TextEditingController controller;
-  final String label;
+  final String? label;
   final bool required;
   final bool optional;
   final String? errorText;
@@ -122,7 +122,7 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         LabeledTextField(
-          label: widget.label,
+          label: widget.label ?? context.l10n.address,
           controller: widget.controller,
           required: widget.required,
           optional: widget.optional,
