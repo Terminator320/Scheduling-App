@@ -211,17 +211,14 @@ class _AddClientSheetState extends State<AddClientSheet> {
     if (cleanStreet.isEmpty || cleanApt.isEmpty) return cleanStreet;
 
     final commaIndex = cleanStreet.indexOf(',');
-
-
     if (commaIndex == -1) {
-      return '$cleanStreet #$cleanApt';
+      return '$cleanApt-$cleanStreet';
     }
-
 
     final firstLine = cleanStreet.substring(0, commaIndex).trim();
     final rest = cleanStreet.substring(commaIndex);
 
-    return '$firstLine #$cleanApt$rest';
+    return '$cleanApt-$firstLine$rest';
   }
 
   void _fillAddressPartsFromText(String rawAddress) {

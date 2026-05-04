@@ -16,9 +16,11 @@ import 'package:scheduling/features/calendar/widgets/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/time_range_row.dart';
 import 'package:scheduling/features/clients/models/client_record.dart';
 import 'package:scheduling/features/clients/services/client_service.dart';
+import 'package:scheduling/features/clients/widgets/client_search_field.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
+import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
@@ -50,6 +52,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   late final TextEditingController _dateController;
   late final TextEditingController _startTimeController;
   late final TextEditingController _endTimeController;
+  late final TextEditingController _clientSearchController;
+  late final TextEditingController _addressController;
   late final TextEditingController _notesController;
   late final TextEditingController _materialsController;
 
@@ -65,6 +69,9 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   List<File> _newImages = [];
   bool _isSaving = false;
   ClientRecord? _client;
+  ClientRecord? _selectedClient;
+  List<ClientRecord> _clientResults = [];
+  bool _isSearchingClient = false;
 
   final _imageUploadService = AppointmentImageUploadService();
   final _imageService = ImagePickerService();
@@ -87,6 +94,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     _endTimeController = TextEditingController(
       text: DateUtilsHelper.formatTime(a.endTime),
     );
+    _clientSearchController = TextEditingController(text: a.clientName);
+    _addressController = TextEditingController(text: a.address);
     _notesController = TextEditingController(text: a.notes);
     _materialsController = TextEditingController(text: a.materialsNeeded);
 
@@ -105,6 +114,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     _dateController.dispose();
     _startTimeController.dispose();
     _endTimeController.dispose();
+    _clientSearchController.dispose();
+    _addressController.dispose();
     _notesController.dispose();
     _materialsController.dispose();
     super.dispose();
@@ -129,10 +140,55 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     try {
       final client = await _clientService.getClientById(clientId);
       if (!mounted) return;
-      setState(() => _client = client);
+      setState(() {
+        _client = client;
+        _selectedClient = client;
+      });
     } catch (_) {
       // Keep the appointment details usable even if the client record cannot load.
     }
+  }
+
+  Future<void> _searchClients(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _clientResults = [];
+        _isSearchingClient = false;
+      });
+      return;
+    }
+    setState(() => _isSearchingClient = true);
+    try {
+      final results = await _clientService.searchClients(query);
+      if (!mounted) return;
+      setState(() {
+        _clientResults = results;
+        _isSearchingClient = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isSearchingClient = false);
+    }
+  }
+
+  void _selectClient(ClientRecord client) {
+    setState(() {
+      _selectedClient = client;
+      _client = client;
+      _clientSearchController.text = client.displayName;
+      _addressController.text = client.address;
+      _clientResults = [];
+      _errors['client'] = null;
+    });
+  }
+
+  void _clearClient() {
+    setState(() {
+      _selectedClient = null;
+      _client = null;
+      _clientSearchController.clear();
+      _addressController.clear();
+      _clientResults = [];
+    });
   }
 
   Future<void> _markAsDone() async {
@@ -166,6 +222,9 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       _dateController.text = DateUtilsHelper.formatDate(a.startTime);
       _startTimeController.text = DateUtilsHelper.formatTime(a.startTime);
       _endTimeController.text = DateUtilsHelper.formatTime(a.endTime);
+      _clientSearchController.text = _client?.displayName ?? a.clientName;
+      _selectedClient = _client;
+      _addressController.text = a.address;
       _notesController.text = a.notes;
       _materialsController.text = a.materialsNeeded;
       _selectedDate = a.startTime;
@@ -199,6 +258,11 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
               final end = _selectedEndTime.hour * 60 + _selectedEndTime.minute;
               return end <= start ? context.l10n.mustBeAfterStartTime : null;
             })();
+      _errors['client'] =
+          _selectedClient == null &&
+              widget.appointment.clientId.trim().isEmpty
+          ? context.l10n.pleaseSelectAClient
+          : null;
       _errors['employees'] = _selectedEmployees.isEmpty
           ? context.l10n.pleaseSelectAtLeastOneEmployee
           : null;
@@ -245,10 +309,13 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         title: _titleController.text.trim(),
         startTime: startTime,
         endTime: endTime,
-        clientId: widget.appointment.clientId,
-        clientName: widget.appointment.clientName,
-        clientPhone: widget.appointment.clientPhone,
-        address: widget.appointment.address,
+        clientId: _selectedClient?.id ?? widget.appointment.clientId,
+        clientName: _selectedClient?.displayName ??
+            (_clientSearchController.text.trim().isNotEmpty
+                ? _clientSearchController.text.trim()
+                : widget.appointment.clientName),
+        clientPhone: _selectedClient?.phone ?? widget.appointment.clientPhone,
+        address: _addressController.text.trim(),
         employeeIds: _selectedEmployees.map((e) => e.id).toList(),
         employeeNames: _selectedEmployees.map((e) => e.name).toList(),
         notes: _notesController.text.trim(),
@@ -606,6 +673,29 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         },
         startError: _errors['startTime'],
         endError: _errors['endTime'],
+      ),
+      const SizedBox(height: 16),
+
+      formLabel(context, context.l10n.client),
+      SheetFocusScroll(
+        child: ClientSearchField(
+          controller: _clientSearchController,
+          selectedClient: _selectedClient,
+          results: _clientResults,
+          isSearching: _isSearchingClient,
+          onChanged: _searchClients,
+          onSelect: _selectClient,
+          onClear: _clearClient,
+          errorText: _errors['client'],
+        ),
+      ),
+      const SizedBox(height: 16),
+
+      SheetFocusScroll(
+        child: AddressAutocompleteField(
+          controller: _addressController,
+          optional: true,
+        ),
       ),
       const SizedBox(height: 16),
 

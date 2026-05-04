@@ -18,6 +18,7 @@ import 'package:scheduling/features/clients/services/client_service.dart';
 import 'package:scheduling/features/clients/widgets/client_search_field.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
+import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
@@ -44,6 +45,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
   final _startTimeController = TextEditingController();
   final _endTimeController = TextEditingController();
   final _clientSearchController = TextEditingController();
+  final _addressController = TextEditingController();
   final _notesController = TextEditingController();
   final _materialsController = TextEditingController();
 
@@ -89,6 +91,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
     _startTimeController.dispose();
     _endTimeController.dispose();
     _clientSearchController.dispose();
+    _addressController.dispose();
     _notesController.dispose();
     _materialsController.dispose();
     super.dispose();
@@ -120,6 +123,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
     setState(() {
       _selectedClient = client;
       _clientSearchController.text = client.displayName;
+      _addressController.text = client.address;
       _clientResults = [];
       _errors['client'] = null;
     });
@@ -129,6 +133,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
     setState(() {
       _selectedClient = null;
       _clientSearchController.clear();
+      _addressController.clear();
       _clientResults = [];
     });
   }
@@ -278,7 +283,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
         clientId: _selectedClient!.id,
         clientName: _selectedClient!.displayName,
         clientPhone: _selectedClient!.phone,
-        address: _selectedClient!.address,
+        address: _addressController.text.trim(),
         employeeIds: _selectedEmployees.map((e) => e.id).toList(),
         employeeNames: _selectedEmployees.map((e) => e.name).toList(),
         notes: _notesController.text.trim(),
@@ -380,6 +385,14 @@ class _AddEventSheetState extends State<AddEventSheet> {
                 onSelect: _selectClient,
                 onClear: _clearClient,
                 errorText: _errors['client'],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            SheetFocusScroll(
+              child: AddressAutocompleteField(
+                controller: _addressController,
+                optional: true,
               ),
             ),
             const SizedBox(height: 16),
