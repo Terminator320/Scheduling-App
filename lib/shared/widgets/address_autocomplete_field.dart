@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/shared/models/address_suggestion.dart';
 import 'package:scheduling/core/services/google_places_service.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
@@ -9,7 +10,7 @@ class AddressAutocompleteField extends StatefulWidget {
   const AddressAutocompleteField({
     super.key,
     required this.controller,
-    this.label = "Address",
+    this.label = 'Address',
     this.required = false,
     this.optional = false,
     this.errorText,
@@ -81,7 +82,7 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
       setState(() {
         _suggestions = [];
         _isLoading = false;
-        _serviceError = "Address lookup failed";
+        _serviceError = context.l10n.addressLookupFailed;
       });
     }
   }
@@ -107,7 +108,7 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _serviceError = "Could not load address details";
+        _serviceError = context.l10n.couldNotLoadAddressDetails;
       });
       widget.onAddressSelected?.call(widget.controller.text);
     }
