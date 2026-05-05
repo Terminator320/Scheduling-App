@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/utils/app_language.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/routes/app_routes.dart';
 
@@ -54,12 +55,12 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Text('Menu', style: textTheme.headlineLarge),
+            child: Text(context.l10n.menu, style: textTheme.headlineLarge),
           ),
           const SizedBox(height: 24),
           _DrawerItem(
             icon: Icons.calendar_month_outlined,
-            label: 'Calendar',
+            label: context.l10n.calendar,
             textTheme: textTheme,
             scheme: scheme,
             onTap: () {
@@ -77,7 +78,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
           if (widget.isAdmin) ...[
             _DrawerItem(
               icon: Icons.badge_outlined,
-              label: 'Employees',
+              label: context.l10n.employees,
               textTheme: textTheme,
               scheme: scheme,
               onTap: () {
@@ -94,7 +95,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
             ),
             _DrawerItem(
               icon: Icons.people_outline,
-              label: 'Clients',
+              label: context.l10n.clients,
               textTheme: textTheme,
               scheme: scheme,
               onTap: () {
@@ -112,7 +113,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
             ),
             _DrawerItem(
               icon: Icons.assignment_outlined,
-              label: 'Appointments',
+              label: context.l10n.appointments,
               textTheme: textTheme,
               scheme: scheme,
               onTap: () {
@@ -131,7 +132,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
           ],
           _DrawerItem(
             icon: Icons.settings_outlined,
-            label: 'Settings',
+            label: context.l10n.settings,
             textTheme: textTheme,
             scheme: scheme,
             onTap: () => setState(() => _showSettings = true),
@@ -140,11 +141,10 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
           const Divider(height: 1),
           _DrawerItem(
             icon: Icons.logout,
-            label: 'Log out',
+            label: context.l10n.logOut,
             textTheme: textTheme,
             scheme: scheme,
             isDestructive: true,
-
             onTap: () async {
               Navigator.pop(context);
               await AuthService().signOut();
@@ -177,7 +177,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                   onPressed: () => setState(() => _showSettings = false),
                 ),
                 const SizedBox(width: 8),
-                Text('Settings', style: textTheme.headlineLarge),
+                Text(context.l10n.settings, style: textTheme.headlineLarge),
               ],
             ),
           ),
@@ -190,7 +190,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
 
               return _DrawerItem(
                 icon: Icons.text_fields_outlined,
-                label: 'Text Size',
+                label: context.l10n.textSize,
                 textTheme: textTheme,
                 scheme: scheme,
                 onTap: () {
@@ -202,16 +202,15 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                       return StatefulBuilder(
                         builder: (context, setDialogState) {
                           return AlertDialog(
-                            title: const Text('Text Size'),
+                            title: Text(context.l10n.textSize),
                             content: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 MediaQuery(
-                                  // Preview the new scale inside the dialog before applying it globally.
                                   data: MediaQuery.of(context).copyWith(
                                     textScaler: TextScaler.linear(tempScale),
                                   ),
-                                  child: const Text('Preview text'),
+                                  child: Text(context.l10n.previewText),
                                 ),
                                 const SizedBox(height: 16),
                                 Slider(
@@ -231,11 +230,10 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                             actions: [
                               TextButton(
                                 onPressed: () {
-                                  // Apply text scale once when the user confirms the preview.
                                   themeNotifier.setTextScale(tempScale);
                                   Navigator.pop(dialogContext);
                                 },
-                                child: const Text('Done'),
+                                child: Text(context.l10n.done),
                               ),
                             ],
                           );
@@ -255,7 +253,9 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                 icon: isDark
                     ? Icons.light_mode_outlined
                     : Icons.dark_mode_outlined,
-                label: isDark ? 'Light Mode' : 'Dark Mode',
+                label: isDark
+                    ? context.l10n.lightMode
+                    : context.l10n.darkMode,
                 textTheme: textTheme,
                 scheme: scheme,
                 onTap: themeNotifier.toggleTheme,
@@ -268,7 +268,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               final langController = AppLanguageScope.of(ctx);
               return _DrawerItem(
                 icon: Icons.language_outlined,
-                label: 'Language',
+                label: context.l10n.language,
                 textTheme: textTheme,
                 scheme: scheme,
                 onTap: () {
@@ -279,12 +279,12 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                       return StatefulBuilder(
                         builder: (context, setDialogState) {
                           return AlertDialog(
-                            title: const Text('Language'),
+                            title: Text(context.l10n.language),
                             content: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 RadioListTile<String>(
-                                  title: const Text('English'),
+                                  title: Text(context.l10n.english),
                                   value: 'en',
                                   groupValue: selected,
                                   onChanged: (value) {
@@ -292,7 +292,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                                   },
                                 ),
                                 RadioListTile<String>(
-                                  title: const Text('Français'),
+                                  title: Text(context.l10n.french),
                                   value: 'fr',
                                   groupValue: selected,
                                   onChanged: (value) {
@@ -304,11 +304,10 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                             actions: [
                               TextButton(
                                 onPressed: () {
-                                  // Apply language once when the user confirms the selection.
                                   themeNotifier.setLanguage(selected);
                                   Navigator.pop(dialogContext);
                                 },
-                                child: const Text('Done'),
+                                child: Text(context.l10n.done),
                               ),
                             ],
                           );

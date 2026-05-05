@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/services/appointment_service.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
@@ -166,6 +167,7 @@ class _MainCalendar extends State<MainCalendar> {
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth > 600;
+    final displayName = _userName.isEmpty ? context.l10n.user : _userName;
 
     return Column(
       children: [
@@ -175,7 +177,7 @@ class _MainCalendar extends State<MainCalendar> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Hello, $_userName',
+                '${context.l10n.hello}, $displayName',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               IconButton(

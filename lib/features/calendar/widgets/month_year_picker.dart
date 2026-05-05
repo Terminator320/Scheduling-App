@@ -1,7 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
-import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 
 class MonthYearPicker {
   static const int _startYear = 2000;
@@ -45,6 +46,8 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
 
   @override
   Widget build(BuildContext context) {
+    final locale = Localizations.localeOf(context).toString();
+
     return SizedBox(
       height: 300,
       child: Column(
@@ -57,7 +60,7 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                 CupertinoButton(
                   padding: EdgeInsets.zero,
                   child: Text(
-                    'Cancel',
+                    context.l10n.cancel,
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.primary,
                     ),
@@ -67,7 +70,7 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                 CupertinoButton(
                   padding: EdgeInsets.zero,
                   child: Text(
-                    'Done',
+                    context.l10n.done,
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       color: Theme.of(context).colorScheme.primary,
@@ -100,7 +103,7 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                       12,
                       (i) => Center(
                         child: Text(
-                          DateUtilsHelper.getMonthName(i + 1),
+                          DateFormat.MMMM(locale).format(DateTime(0, i + 1)),
                           style: Theme.of(context).textTheme.bodyLarge,
                         ),
                       ),

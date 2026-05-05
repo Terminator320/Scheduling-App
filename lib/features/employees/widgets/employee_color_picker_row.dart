@@ -1,7 +1,7 @@
 import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:flutter/material.dart';
 
-import 'package:scheduling/core/utils/app_text.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 
 /// Single-row color selector: tapping the indicator opens
 /// the full flex_color_picker dialog (primary palette + wheel).
@@ -21,7 +21,7 @@ class EmployeeColorPickerRow extends StatelessWidget {
       context,
       selected,
       title: Text(
-        tr(context, 'Employee Color'),
+        context.l10n.employeeColor,
         style: theme.textTheme.titleMedium?.copyWith(
           fontWeight: FontWeight.w700,
         ),
@@ -71,7 +71,7 @@ class EmployeeColorPickerRow extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: Text(
-            tr(context, 'Tap to change color'),
+            context.l10n.tapToChangeColor,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurface.withAlpha(170),
             ),

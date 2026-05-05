@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 
+import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
@@ -67,7 +68,11 @@ class AppCalendar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final effectiveRowH = rowHeight ?? 56.0;
+    final localeCode = AppLanguageScope.of(context).value == 'fr'
+        ? 'fr_CA'
+        : 'en_CA';
     return TableCalendar(
+      locale: localeCode,
       firstDay: DateTime(focusedDay.year - 10, 1, 1),
       lastDay: DateTime(focusedDay.year + 10, 12, 31),
       focusedDay: focusedDay,

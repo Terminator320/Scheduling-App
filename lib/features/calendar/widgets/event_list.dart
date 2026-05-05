@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/services/appointment_service.dart';
@@ -25,17 +26,17 @@ class EventList extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete job'),
-        content: const Text('Are you sure you want to delete this job?'),
+        title: Text(ctx.l10n.deleteJob),
+        content: Text(ctx.l10n.areYouSureYouWantToDeleteThisJob),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(ctx.l10n.cancel),
           ),
           TextButton(
             style: TextButton.styleFrom(foregroundColor: scheme.error),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: Text(ctx.l10n.delete),
           ),
         ],
       ),
@@ -61,7 +62,7 @@ class EventList extends StatelessWidget {
     if (updated != null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Appointment updated')),
+          SnackBar(content: Text(context.l10n.appointmentUpdated)),
         );
       }
     }
@@ -89,7 +90,7 @@ class EventList extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "No events",
+                    context.l10n.noEvents,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
@@ -172,14 +173,14 @@ class EventList extends StatelessWidget {
                               onPressed: () => _openEditSheet(context, e),
                               icon: const Icon(Icons.edit_outlined),
                               color: scheme.onSurfaceVariant,
-                              tooltip: 'Edit',
+                              tooltip: context.l10n.edit,
                               visualDensity: VisualDensity.compact,
                             ),
                             IconButton(
                               onPressed: () => _confirmDelete(context, e),
                               icon: const Icon(Icons.delete_outline),
                               color: scheme.error,
-                              tooltip: 'Delete',
+                              tooltip: context.l10n.delete,
                               visualDensity: VisualDensity.compact,
                             ),
                             const SizedBox(width: 4),
