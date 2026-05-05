@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/services/appointment_service.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
@@ -46,14 +47,14 @@ class _ListInformationState extends State<ListInformation> {
   final ClientService _clientService = ClientService();
   final AppointmentService _appointmentService = AppointmentService();
   StreamSubscription? _clientsSubscription;
+  StreamSubscription? _appointmentsSubscription;
   final UserService _userService = UserService();
   List<EmployeeRecord> _allEmployees = [];
+  Map<String, int> _appointmentCountsByClientId = const {};
   StreamSubscription? _employeesSubscription;
 
 
   bool get _isClients => widget.mode == 'Clients';
-
-  String get _title => _isClients ? 'Clients' : 'Appointments';
 
   @override
   void initState() {
@@ -64,6 +65,19 @@ class _ListInformationState extends State<ListInformation> {
     _clientsSubscription = _clientService.clientsStream().listen((clients) {
       if (mounted) setState(() => _allClients = clients);
     });
+    _appointmentsSubscription = _appointmentService
+        .getAllAppointments()
+        .listen((appointments) {
+          final counts = <String, int>{};
+          for (final appointment in appointments) {
+            final clientId = appointment.clientId.trim();
+            if (clientId.isEmpty) continue;
+            counts.update(clientId, (value) => value + 1, ifAbsent: () => 1);
+          }
+          if (mounted) {
+            setState(() => _appointmentCountsByClientId = counts);
+          }
+        });
     _employeesSubscription = _userService.allUsersStream().listen((data) {
       if (mounted) setState(() => _allEmployees = data);
     });
@@ -81,6 +95,7 @@ class _ListInformationState extends State<ListInformation> {
     _appointmentSearchController.dispose();
     _scrollController.dispose();
     _clientsSubscription?.cancel();
+    _appointmentsSubscription?.cancel();
     _employeesSubscription?.cancel();
     super.dispose();
   }
@@ -147,7 +162,12 @@ class _ListInformationState extends State<ListInformation> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: appScaffoldBar(context, _title, widget.employeeId, widget.isAdmin),
+      appBar: appScaffoldBar(
+        context,
+        _isClients ? context.l10n.clients : context.l10n.appointments,
+        widget.employeeId,
+        widget.isAdmin,
+      ),
       endDrawer: SettingsDrawer(
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
@@ -191,7 +211,7 @@ class _ListInformationState extends State<ListInformation> {
             decoration:
                 formInputDecoration(
                   context,
-                  'Search by name or phone...',
+                  context.l10n.searchByNameOrPhone,
                 ).copyWith(
                   prefixIcon: Icon(
                     Icons.search,
@@ -207,7 +227,7 @@ class _ListInformationState extends State<ListInformation> {
                           ),
                           onPressed: () =>
                               setState(() => _searchController.clear()),
-                          tooltip: 'Clear',
+                          tooltip: context.l10n.clear,
                         )
                       : null,
                 ),
@@ -229,8 +249,8 @@ class _ListInformationState extends State<ListInformation> {
                       const SizedBox(height: 8),
                       Text(
                         query.isEmpty
-                            ? 'No clients yet'
-                            : 'No clients match "$query"',
+                            ? context.l10n.noClientsYet
+                            : '${context.l10n.noClientsMatch} "$query"',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
@@ -246,6 +266,9 @@ class _ListInformationState extends State<ListInformation> {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: ClientTile(
                       client: displayed[index],
+                      appointmentCount:
+                          _appointmentCountsByClientId[displayed[index].id] ??
+                          0,
                       onOpen: () => _openClientFromSearch(displayed[index]),
                     ),
                   ),
@@ -271,7 +294,7 @@ class _ListInformationState extends State<ListInformation> {
             decoration:
                 formInputDecoration(
                   context,
-                  'Search by client or employee...',
+                  context.l10n.searchByClientOrEmployee,
                 ).copyWith(
                   prefixIcon: Icon(
                     Icons.search,
@@ -288,7 +311,7 @@ class _ListInformationState extends State<ListInformation> {
                           onPressed: () => setState(
                             () => _appointmentSearchController.clear(),
                           ),
-                          tooltip: 'Clear',
+                          tooltip: context.l10n.clear,
                         )
                       : null,
                 ),
@@ -303,7 +326,9 @@ class _ListInformationState extends State<ListInformation> {
                 return const Center(child: CircularProgressIndicator());
               }
               if (snapshot.hasError) {
-                return Center(child: Text('Error : ${snapshot.error}'));
+                return Center(
+                  child: Text('${context.l10n.error}: ${snapshot.error}'),
+                );
               }
 
               final appointments = snapshot.data ?? [];
@@ -341,8 +366,8 @@ class _ListInformationState extends State<ListInformation> {
                       const SizedBox(height: 8),
                       Text(
                         query.isEmpty
-                            ? 'No appointments found.'
-                            : 'No appointments match "$query"',
+                            ? context.l10n.noAppointmentsFound
+                            : '${context.l10n.noAppointmentsMatch} "$query"',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),

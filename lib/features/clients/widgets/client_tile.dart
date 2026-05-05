@@ -5,9 +5,15 @@ import 'package:scheduling/features/clients/widgets/client_detail_sheet.dart';
 
 class ClientTile extends StatelessWidget {
   final ClientRecord client;
+  final int appointmentCount;
   final Future<void> Function()? onOpen;
 
-  const ClientTile({super.key, required this.client, this.onOpen});
+  const ClientTile({
+    super.key,
+    required this.client,
+    this.appointmentCount = 0,
+    this.onOpen,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -58,11 +64,19 @@ class ClientTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      client.displayName,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            client.displayName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _AppointmentCountBadge(count: appointmentCount),
+                      ],
                     ),
                     if (client.phone.isNotEmpty) ...[
                       const SizedBox(height: 4),
@@ -121,6 +135,44 @@ class ClientTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AppointmentCountBadge extends StatelessWidget {
+  const _AppointmentCountBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.event_outlined,
+            size: 15,
+            color: scheme.onPrimaryContainer,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            '$count',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onPrimaryContainer,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }

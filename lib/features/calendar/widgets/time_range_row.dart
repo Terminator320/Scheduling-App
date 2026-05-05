@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
 class TimeRangeRow extends StatelessWidget {
@@ -33,7 +34,8 @@ class TimeRangeRow extends StatelessWidget {
             controller: startController,
             readOnly: true,
             style: Theme.of(context).textTheme.bodyMedium,
-            decoration: formInputDecoration(context, "Start").copyWith(
+            decoration: formInputDecoration(context, context.l10n.start)
+                .copyWith(
               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
               errorText: startError,
             ),
@@ -46,7 +48,7 @@ class TimeRangeRow extends StatelessWidget {
             controller: endController,
             readOnly: true,
             style: Theme.of(context).textTheme.bodyMedium,
-            decoration: formInputDecoration(context, "End").copyWith(
+            decoration: formInputDecoration(context, context.l10n.end).copyWith(
               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
               errorText: endError,
             ),

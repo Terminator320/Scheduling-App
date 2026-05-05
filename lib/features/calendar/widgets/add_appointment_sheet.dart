@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/services/image_picker_service.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/services/appointment_image_upload_service.dart';
@@ -17,6 +18,7 @@ import 'package:scheduling/features/clients/services/client_service.dart';
 import 'package:scheduling/features/clients/widgets/client_search_field.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
+import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
@@ -43,6 +45,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
   final _startTimeController = TextEditingController();
   final _endTimeController = TextEditingController();
   final _clientSearchController = TextEditingController();
+  final _addressController = TextEditingController();
   final _notesController = TextEditingController();
   final _materialsController = TextEditingController();
 
@@ -88,6 +91,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
     _startTimeController.dispose();
     _endTimeController.dispose();
     _clientSearchController.dispose();
+    _addressController.dispose();
     _notesController.dispose();
     _materialsController.dispose();
     super.dispose();
@@ -119,6 +123,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
     setState(() {
       _selectedClient = client;
       _clientSearchController.text = client.displayName;
+      _addressController.text = client.address;
       _clientResults = [];
       _errors['client'] = null;
     });
@@ -128,6 +133,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
     setState(() {
       _selectedClient = null;
       _clientSearchController.clear();
+      _addressController.clear();
       _clientResults = [];
     });
   }
@@ -219,22 +225,24 @@ class _AddEventSheetState extends State<AddEventSheet> {
             _selectedEndTime!,
           ).isAfter(_combineDateAndTime(_selectedDate!, _selectedStartTime!));
       _errors['title'] = _titleController.text.trim().isEmpty
-          ? "Title is required"
+          ? context.l10n.titleIsRequired
           : null;
-      _errors['date'] = _selectedDate == null ? "Please select a date" : null;
+      _errors['date'] = _selectedDate == null
+          ? context.l10n.pleaseSelectADate
+          : null;
       _errors['startTime'] = _selectedStartTime == null
-          ? "Please select a start time"
+          ? context.l10n.pleaseSelectAStartTime
           : null;
       _errors['endTime'] = _selectedEndTime == null
-          ? "Please select an end time"
+          ? context.l10n.pleaseSelectAnEndTime
           : !hasValidTimeRange
-          ? "Must be after start time"
+          ? context.l10n.mustBeAfterStartTime
           : null;
       _errors['client'] = _selectedClient == null
-          ? "Please select a client"
+          ? context.l10n.pleaseSelectAClient
           : null;
       _errors['employees'] = _selectedEmployees.isEmpty
-          ? "Please select at least one employee"
+          ? context.l10n.pleaseSelectAtLeastOneEmployee
           : null;
     });
 
@@ -252,7 +260,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
     if (busyEmployees.isNotEmpty) {
       setState(
         () => _errors['employees'] =
-            "Busy: ${busyEmployees.map((e) => e.name).join(', ')}",
+            '${context.l10n.busy}: ${busyEmployees.map((e) => e.name).join(', ')}',
       );
       return;
     }
@@ -275,7 +283,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
         clientId: _selectedClient!.id,
         clientName: _selectedClient!.displayName,
         clientPhone: _selectedClient!.phone,
-        address: _selectedClient!.address,
+        address: _addressController.text.trim(),
         employeeIds: _selectedEmployees.map((e) => e.id).toList(),
         employeeNames: _selectedEmployees.map((e) => e.name).toList(),
         notes: _notesController.text.trim(),
@@ -298,7 +306,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
     } catch (_) {
       if (ctx.mounted) {
         setState(() => _isSubmitting = false);
-        _showSnack(ctx, "Something went wrong creating the appointment");
+        _showSnack(ctx, ctx.l10n.somethingWentWrongCreatingTheAppointment);
       }
     }
   }
@@ -319,7 +327,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
             const SheetHandle(),
             const SizedBox(height: 16),
             Text(
-              "Add New Job",
+              sheetContext.l10n.addNewJob,
               textAlign: TextAlign.center,
               style: Theme.of(sheetContext).textTheme.headlineLarge,
             ),
@@ -327,8 +335,8 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
             SheetFocusScroll(
               child: LabeledTextField(
-                label: "Job Title",
-                hint: "e.g. Plumbing repair",
+                label: sheetContext.l10n.jobTitle,
+                hint: sheetContext.l10n.eGPlumbingRepair,
                 controller: _titleController,
                 errorText: _errors['title'],
                 onChanged: (_) {
@@ -342,8 +350,8 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
             SheetFocusScroll(
               child: LabeledTextField(
-                label: "Date",
-                hint: "Select date",
+                label: sheetContext.l10n.date,
+                hint: sheetContext.l10n.selectDate,
                 controller: _dateController,
                 readOnly: true,
                 suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
@@ -353,7 +361,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
             ),
             const SizedBox(height: 16),
 
-            formLabel(sheetContext, "Time"),
+            formLabel(sheetContext, sheetContext.l10n.time),
             TimeRangeRow(
               startController: _startTimeController,
               endController: _endTimeController,
@@ -366,7 +374,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
             ),
             const SizedBox(height: 16),
 
-            formLabel(sheetContext, "Client"),
+            formLabel(sheetContext, sheetContext.l10n.client),
             SheetFocusScroll(
               child: ClientSearchField(
                 controller: _clientSearchController,
@@ -382,9 +390,17 @@ class _AddEventSheetState extends State<AddEventSheet> {
             const SizedBox(height: 16),
 
             SheetFocusScroll(
+              child: AddressAutocompleteField(
+                controller: _addressController,
+                optional: true,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            SheetFocusScroll(
               child: LabeledTextField(
-                label: "Notes",
-                hint: "Type the note here...",
+                label: sheetContext.l10n.notes,
+                hint: sheetContext.l10n.typeTheNoteHere,
                 controller: _notesController,
                 optional: true,
                 maxLines: 3,
@@ -394,15 +410,15 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
             SheetFocusScroll(
               child: LabeledTextField(
-                label: "Materials needed",
-                hint: "Type the materials here...",
+                label: sheetContext.l10n.materialsNeeded,
+                hint: sheetContext.l10n.typeTheMaterialsHere,
                 controller: _materialsController,
                 optional: true,
               ),
             ),
             const SizedBox(height: 16),
 
-            formLabel(sheetContext, "Pictures", optional: true),
+            formLabel(sheetContext, sheetContext.l10n.pictures, optional: true),
             PhotoPickerSection(
               existingImages: const [],
               newImages: _selectedImages,
@@ -418,7 +434,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
             ),
             const SizedBox(height: 16),
 
-            formLabel(sheetContext, "Select employees"),
+            formLabel(sheetContext, sheetContext.l10n.selectEmployees),
             EmployeePicker(
               allEmployees: _allEmployees,
               selectedEmployees: _selectedEmployees,
@@ -454,7 +470,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
                           color: Theme.of(sheetContext).colorScheme.onPrimary,
                         ),
                       )
-                    : const Text("Create event"),
+                    : Text(sheetContext.l10n.createEvent2),
               ),
             ),
           ],

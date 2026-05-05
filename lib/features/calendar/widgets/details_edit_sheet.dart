@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/services/image_picker_service.dart';
 import 'package:scheduling/features/calendar/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
@@ -15,9 +16,11 @@ import 'package:scheduling/features/calendar/widgets/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/time_range_row.dart';
 import 'package:scheduling/features/clients/models/client_record.dart';
 import 'package:scheduling/features/clients/services/client_service.dart';
+import 'package:scheduling/features/clients/widgets/client_search_field.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
+import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
@@ -49,6 +52,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   late final TextEditingController _dateController;
   late final TextEditingController _startTimeController;
   late final TextEditingController _endTimeController;
+  late final TextEditingController _clientSearchController;
+  late final TextEditingController _addressController;
   late final TextEditingController _notesController;
   late final TextEditingController _materialsController;
 
@@ -64,6 +69,9 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   List<File> _newImages = [];
   bool _isSaving = false;
   ClientRecord? _client;
+  ClientRecord? _selectedClient;
+  List<ClientRecord> _clientResults = [];
+  bool _isSearchingClient = false;
 
   final _imageUploadService = AppointmentImageUploadService();
   final _imageService = ImagePickerService();
@@ -86,6 +94,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     _endTimeController = TextEditingController(
       text: DateUtilsHelper.formatTime(a.endTime),
     );
+    _clientSearchController = TextEditingController(text: a.clientName);
+    _addressController = TextEditingController(text: a.address);
     _notesController = TextEditingController(text: a.notes);
     _materialsController = TextEditingController(text: a.materialsNeeded);
 
@@ -104,6 +114,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     _dateController.dispose();
     _startTimeController.dispose();
     _endTimeController.dispose();
+    _clientSearchController.dispose();
+    _addressController.dispose();
     _notesController.dispose();
     _materialsController.dispose();
     super.dispose();
@@ -128,10 +140,55 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     try {
       final client = await _clientService.getClientById(clientId);
       if (!mounted) return;
-      setState(() => _client = client);
+      setState(() {
+        _client = client;
+        _selectedClient = client;
+      });
     } catch (_) {
       // Keep the appointment details usable even if the client record cannot load.
     }
+  }
+
+  Future<void> _searchClients(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _clientResults = [];
+        _isSearchingClient = false;
+      });
+      return;
+    }
+    setState(() => _isSearchingClient = true);
+    try {
+      final results = await _clientService.searchClients(query);
+      if (!mounted) return;
+      setState(() {
+        _clientResults = results;
+        _isSearchingClient = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isSearchingClient = false);
+    }
+  }
+
+  void _selectClient(ClientRecord client) {
+    setState(() {
+      _selectedClient = client;
+      _client = client;
+      _clientSearchController.text = client.displayName;
+      _addressController.text = client.address;
+      _clientResults = [];
+      _errors['client'] = null;
+    });
+  }
+
+  void _clearClient() {
+    setState(() {
+      _selectedClient = null;
+      _client = null;
+      _clientSearchController.clear();
+      _addressController.clear();
+      _clientResults = [];
+    });
   }
 
   Future<void> _markAsDone() async {
@@ -150,7 +207,9 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text("Something went wrong")));
+        ).showSnackBar(
+          SnackBar(content: Text(context.l10n.somethingWentWrong)),
+        );
       }
     }
   }
@@ -163,6 +222,9 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       _dateController.text = DateUtilsHelper.formatDate(a.startTime);
       _startTimeController.text = DateUtilsHelper.formatTime(a.startTime);
       _endTimeController.text = DateUtilsHelper.formatTime(a.endTime);
+      _clientSearchController.text = _client?.displayName ?? a.clientName;
+      _selectedClient = _client;
+      _addressController.text = a.address;
       _notesController.text = a.notes;
       _materialsController.text = a.materialsNeeded;
       _selectedDate = a.startTime;
@@ -180,24 +242,29 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   Future<void> _save() async {
     setState(() {
       _errors['title'] = _titleController.text.trim().isEmpty
-          ? "Title is required"
+          ? context.l10n.titleIsRequired
           : null;
       _errors['date'] = _dateController.text.trim().isEmpty
-          ? "Please select a date"
+          ? context.l10n.pleaseSelectADate
           : null;
       _errors['startTime'] = _startTimeController.text.trim().isEmpty
-          ? "Please select a start time"
+          ? context.l10n.pleaseSelectAStartTime
           : null;
       _errors['endTime'] = _endTimeController.text.trim().isEmpty
-          ? "Please select an end time"
+          ? context.l10n.pleaseSelectAnEndTime
           : (() {
               final start =
                   _selectedStartTime.hour * 60 + _selectedStartTime.minute;
               final end = _selectedEndTime.hour * 60 + _selectedEndTime.minute;
-              return end <= start ? "Must be after start time" : null;
+              return end <= start ? context.l10n.mustBeAfterStartTime : null;
             })();
+      _errors['client'] =
+          _selectedClient == null &&
+              widget.appointment.clientId.trim().isEmpty
+          ? context.l10n.pleaseSelectAClient
+          : null;
       _errors['employees'] = _selectedEmployees.isEmpty
-          ? "Please select at least one employee"
+          ? context.l10n.pleaseSelectAtLeastOneEmployee
           : null;
     });
 
@@ -205,7 +272,9 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
     if (_selectedEmployees.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please select at least one employee")),
+        SnackBar(
+          content: Text(context.l10n.pleaseSelectAtLeastOneEmployee),
+        ),
       );
       return;
     }
@@ -240,10 +309,13 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         title: _titleController.text.trim(),
         startTime: startTime,
         endTime: endTime,
-        clientId: widget.appointment.clientId,
-        clientName: widget.appointment.clientName,
-        clientPhone: widget.appointment.clientPhone,
-        address: widget.appointment.address,
+        clientId: _selectedClient?.id ?? widget.appointment.clientId,
+        clientName: _selectedClient?.displayName ??
+            (_clientSearchController.text.trim().isNotEmpty
+                ? _clientSearchController.text.trim()
+                : widget.appointment.clientName),
+        clientPhone: _selectedClient?.phone ?? widget.appointment.clientPhone,
+        address: _addressController.text.trim(),
         employeeIds: _selectedEmployees.map((e) => e.id).toList(),
         employeeNames: _selectedEmployees.map((e) => e.name).toList(),
         notes: _notesController.text.trim(),
@@ -270,7 +342,9 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       if (mounted) {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Something went wrong saving changes")),
+          SnackBar(
+            content: Text(context.l10n.somethingWentWrongSavingChanges),
+          ),
         );
       }
     }
@@ -361,7 +435,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
   Widget _buildEditHeader() {
     return Text(
-      "Edit job",
+      context.l10n.editJob,
       textAlign: TextAlign.center,
       style: Theme.of(context).textTheme.headlineLarge,
     );
@@ -376,21 +450,21 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          formSectionLabel(context, "Client"),
+          formSectionLabel(context, context.l10n.client),
           const SizedBox(height: 6),
           Text(
             _client?.displayName ?? a.clientName,
             style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
           ),
           Text(
-            a.clientPhone.isNotEmpty ? a.clientPhone : "No number",
+            a.clientPhone.isNotEmpty ? a.clientPhone : context.l10n.noNumber,
             style: theme.textTheme.bodySmall?.copyWith(
               color: a.clientPhone.isNotEmpty ? null : muted,
             ),
           ),
           if ((_client?.contacts ?? const <ClientContact>[]).isNotEmpty) ...[
             const SizedBox(height: 14),
-            formSectionLabel(context, "Contacts"),
+            formSectionLabel(context, context.l10n.contacts),
             const SizedBox(height: 8),
             ..._client!.contacts.map(_contactCard),
           ],
@@ -398,17 +472,20 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       ),
       const SizedBox(height: 16),
       _viewSection(
-        "Address",
-        a.address.isNotEmpty ? a.address : "No address",
+        context.l10n.address,
+        a.address.isNotEmpty ? a.address : context.l10n.noAddress,
         onTap: a.address.isNotEmpty
             ? () =>
                   AddressMapLauncher.showMapChoices(context, address: a.address)
             : null,
       ),
       const SizedBox(height: 16),
-      _viewSection("Notes", a.notes.isNotEmpty ? a.notes : "No notes"),
+      _viewSection(
+        context.l10n.notes,
+        a.notes.isNotEmpty ? a.notes : context.l10n.noNotes,
+      ),
       const SizedBox(height: 16),
-      formSectionLabel(context, "Materials needed"),
+      formSectionLabel(context, context.l10n.materialsNeeded),
       const SizedBox(height: 8),
       a.materialsNeeded.isNotEmpty
           ? Wrap(
@@ -428,7 +505,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
                   .toList(),
             )
           : Text(
-              "No materials",
+              context.l10n.noMaterials,
               style: theme.textTheme.bodyMedium?.copyWith(color: muted),
             ),
     ];
@@ -525,8 +602,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     return [
       SheetFocusScroll(
         child: LabeledTextField(
-          label: "Job title",
-          hint: "e.g. Plumbing repair",
+          label: context.l10n.jobTitle2,
+          hint: context.l10n.eGPlumbingRepair,
           controller: _titleController,
           errorText: _errors['title'],
           onChanged: (_) {
@@ -540,8 +617,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
       SheetFocusScroll(
         child: LabeledTextField(
-          label: "Date",
-          hint: "Select date",
+          label: context.l10n.date,
+          hint: context.l10n.selectDate,
           controller: _dateController,
           readOnly: true,
           errorText: _errors['date'],
@@ -564,7 +641,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       ),
       const SizedBox(height: 16),
 
-      formLabel(context, "Time"),
+      formLabel(context, context.l10n.time),
       TimeRangeRow(
         startController: _startTimeController,
         endController: _endTimeController,
@@ -599,10 +676,33 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       ),
       const SizedBox(height: 16),
 
+      formLabel(context, context.l10n.client),
+      SheetFocusScroll(
+        child: ClientSearchField(
+          controller: _clientSearchController,
+          selectedClient: _selectedClient,
+          results: _clientResults,
+          isSearching: _isSearchingClient,
+          onChanged: _searchClients,
+          onSelect: _selectClient,
+          onClear: _clearClient,
+          errorText: _errors['client'],
+        ),
+      ),
+      const SizedBox(height: 16),
+
+      SheetFocusScroll(
+        child: AddressAutocompleteField(
+          controller: _addressController,
+          optional: true,
+        ),
+      ),
+      const SizedBox(height: 16),
+
       SheetFocusScroll(
         child: LabeledTextField(
-          label: "Notes",
-          hint: "Type the note here...",
+          label: context.l10n.notes,
+          hint: context.l10n.typeTheNoteHere,
           controller: _notesController,
           optional: true,
           maxLines: 3,
@@ -612,8 +712,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
       SheetFocusScroll(
         child: LabeledTextField(
-          label: "Materials needed",
-          hint: "e.g. Pipe wrench, tape (comma separated)",
+          label: context.l10n.materialsNeeded,
+          hint: context.l10n.eGPipeWrenchTapeCommaSeparated,
           controller: _materialsController,
           optional: true,
         ),
@@ -626,7 +726,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        formSectionLabel(context, "Photos"),
+        formSectionLabel(context, context.l10n.pictures),
         const SizedBox(height: 8),
         PhotoPickerSection(
           existingImages: _existingImages,
@@ -651,7 +751,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        formSectionLabel(context, "Employees"),
+        formSectionLabel(context, context.l10n.employees),
         const SizedBox(height: 8),
         EmployeePicker(
           allEmployees: _allEmployees,
@@ -701,7 +801,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
             onPressed: _isSaving ? null : _cancelEdit,
-            child: const Text("Cancel"),
+            child: Text(context.l10n.cancel),
           ),
           const SizedBox(height: 12),
           FilledButton(
@@ -718,7 +818,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
                       color: scheme.onPrimary,
                     )
                   )
-                : const Text("Save changes"),
+                : Text(context.l10n.saveChanges),
           ),
         ],
       );
@@ -745,7 +845,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
                     ),
                   )
                 : const Icon(Icons.check, size: 18),
-            label: const Text("Mark as done"),
+            label: Text(context.l10n.markAsDone),
           ),
 
         // Déjà complété
@@ -758,7 +858,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
             ),
             onPressed: null, // désactivé
             icon: const Icon(Icons.check_circle_outline, size: 18),
-            label: const Text("Completed"),
+            label: Text(context.l10n.completed),
           ),
       ],
     );
