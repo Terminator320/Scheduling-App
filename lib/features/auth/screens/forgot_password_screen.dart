@@ -6,7 +6,7 @@ import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/animations/fade_slide_entrance.dart';
 import 'package:scheduling/core/animations/staggered_entrance_controller.dart';
 import 'package:scheduling/core/errors/auth_error_handler.dart';
-import 'package:scheduling/core/utils/app_text.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/auth/widgets/auth_banner.dart';
@@ -123,10 +123,10 @@ class _ForgotPasswordState extends State<ForgotPassword>
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
-            tooltip: tr(context, 'Back'),
+            tooltip: context.l10n.back,
             onPressed: () => Navigator.of(context).pop(),
           ),
-          title: Text(tr(context, 'Reset Password')),
+          title: Text(context.l10n.resetPassword),
           centerTitle: true,
           elevation: 0,
           backgroundColor: colour.surface,
@@ -214,7 +214,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
           child: Column(
             children: [
               Text(
-                tr(context, 'Forgot your password?'),
+                context.l10n.forgotYourPassword,
                 textAlign: TextAlign.center,
                 style: textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w600,
@@ -222,10 +222,9 @@ class _ForgotPasswordState extends State<ForgotPassword>
               ),
               const SizedBox(height: 10),
               Text(
-                tr(
-                  context,
-                  'Enter your account email and we\'ll send you a link to reset your password.',
-                ),
+                context
+                    .l10n
+                    .enterYourAccountEmailAndWeLlSendYouALinkToResetYourPassword,
                 textAlign: TextAlign.center,
                 style: textTheme.bodyMedium?.copyWith(
                   color: colour.onSurface.withAlpha(160),
@@ -241,7 +240,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              tr(context, 'Email'),
+              context.l10n.email,
               style: textTheme.labelLarge?.copyWith(
                 color: colour.onSurface.withAlpha(200),
                 fontWeight: FontWeight.w500,
@@ -270,7 +269,10 @@ class _ForgotPasswordState extends State<ForgotPassword>
                   });
                 }
               },
-              decoration: formInputDecoration(context, 'you@example.com')
+              decoration: formInputDecoration(
+                context,
+                context.l10n.youExampleCom,
+              )
                   .copyWith(
                     errorText: _emailError,
                     prefixIcon: const Icon(Icons.email_outlined, size: 20),
@@ -303,7 +305,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
         FadeSlideEntrance(
           animation: animations[4],
           child: AnimatedLoadingButton(
-            label: tr(context, 'Send Reset Email'),
+            label: context.l10n.sendResetEmail,
             isLoading: _isLoading,
             onPressed: _sendResetEmail,
           ),
@@ -314,7 +316,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
           child: TextButton(
             onPressed: _isLoading ? null : _backToSignIn,
             child: Text(
-              tr(context, 'Back to Sign In'),
+              context.l10n.backToSignIn,
               style: textTheme.bodyMedium?.copyWith(
                 color: colour.primary,
                 fontWeight: FontWeight.w500,
@@ -361,7 +363,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
         FadeSlideEntrance(
           animation: animations[1],
           child: Text(
-            tr(context, 'Check your inbox'),
+            context.l10n.checkYourInbox,
             textAlign: TextAlign.center,
             style: textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w600,
@@ -373,10 +375,8 @@ class _ForgotPasswordState extends State<ForgotPassword>
           animation: animations[2],
           child: AuthBanner(
             kind: AuthBannerKind.success,
-            message: tr(
-              context,
-              'If an account exists for this email, a password reset link has been sent.',
-            ),
+            message:
+                context.l10n.ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent,
           ),
         ),
         const SizedBox(height: 16),
@@ -384,17 +384,16 @@ class _ForgotPasswordState extends State<ForgotPassword>
           animation: animations[3],
           child: AuthBanner(
             kind: AuthBannerKind.info,
-            message: tr(
-              context,
-              'The email may take a few minutes to arrive. Remember to check your spam folder.',
-            ),
+            message: context
+                .l10n
+                .theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder,
           ),
         ),
         const SizedBox(height: 32),
         FadeSlideEntrance(
           animation: animations[4],
           child: AnimatedLoadingButton(
-            label: tr(context, 'Back to Sign In'),
+            label: context.l10n.backToSignIn,
             onPressed: _backToSignIn,
           ),
         ),
@@ -404,7 +403,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
           child: TextButton(
             onPressed: _resendEmail,
             child: Text(
-              tr(context, 'Use a different email'),
+              context.l10n.useADifferentEmail,
               style: textTheme.bodySmall?.copyWith(
                 color: colour.primary,
                 fontWeight: FontWeight.w500,

@@ -1,26 +1,21 @@
 import 'package:intl/intl.dart';
 
 class DateUtilsHelper {
+  static String get _locale => Intl.defaultLocale ?? 'en_CA';
 
   static String formatTime(DateTime date) {
-    return DateFormat('h:mm a').format(date); // "3:05 PM"
+    return DateFormat.jm(_locale).format(date);
   }
 
   static String formatDate(DateTime date) {
-    return DateFormat('MMM d, yyyy').format(date); // "Apr 8, 2026"
+    return DateFormat.yMMMd(_locale).format(date);
   }
 
   static String formatPrettyDate(DateTime date) {
-    return DateFormat('EEEE, MMM d, h:mm a').format(date); // "Tuesday, Apr 8, 2:30 PM"
+    return DateFormat.yMMMEd(_locale).add_jm().format(date);
   }
 
   static String getMonthName(int month) {
-    return DateFormat('MMM').format(DateTime(0, month)); // "Jan", "Feb"...
+    return DateFormat.MMM(_locale).format(DateTime(0, month));
   }
-
-
-
-
-
-
 }

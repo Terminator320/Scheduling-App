@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:scheduling/core/utils/app_text.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 
 /// List-row card for a single employee with tap / edit / delete affordances.
@@ -77,9 +77,9 @@ class _EmployeeSummary extends StatelessWidget {
     final scheme = theme.colorScheme;
 
     final statusLabel = employee.isActive
-        ? tr(context, 'Active')
-        : employee.status.isEmpty
-            ? tr(context, 'Invited')
+        ? context.l10n.active
+        : employee.status == 'invited' || employee.status.isEmpty
+            ? context.l10n.invited
             : employee.status;
 
     return Column(
@@ -87,7 +87,7 @@ class _EmployeeSummary extends StatelessWidget {
       children: [
         Text(
           employee.name.isEmpty
-              ? tr(context, 'Employee name')
+              ? context.l10n.employeeName
               : employee.name,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
@@ -123,7 +123,7 @@ class _EmployeeSummary extends StatelessWidget {
             ),
             if (employee.isAdmin) ...[
               _StatusChip(
-                label: tr(context, 'Admin'),
+                label: context.l10n.admin,
                 color: scheme.tertiary,
               ),
             ],

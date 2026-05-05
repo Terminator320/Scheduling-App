@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AddressMapLauncher {
@@ -16,21 +17,21 @@ class AddressMapLauncher {
     final options = <_MapOption>[
       if (Platform.isIOS)
         _MapOption(
-          label: 'Apple Maps',
+          label: context.l10n.appleMaps,
           icon: Icons.map_outlined,
           uri: Uri.parse(
             'http://maps.apple.com/?q=${Uri.encodeComponent(cleanAddress)}',
           ),
         ),
       _MapOption(
-        label: 'Google Maps',
+        label: context.l10n.googleMaps,
         icon: Icons.map_outlined,
         uri: Uri.parse(
           'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(cleanAddress)}',
         ),
       ),
       _MapOption(
-        label: 'Waze',
+        label: context.l10n.waze,
         icon: Icons.navigation_outlined,
         uri: Uri.parse(
           'https://waze.com/ul?q=${Uri.encodeComponent(cleanAddress)}&navigate=yes',
@@ -54,7 +55,7 @@ class AddressMapLauncher {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Open address with',
+                  context.l10n.openAddressWith,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -82,7 +83,7 @@ class AddressMapLauncher {
                       if (!opened && context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('Could not open ${option.label}.'),
+                            content: Text(context.l10n.couldNotOpenMapApp),
                           ),
                         );
                       }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/clients/models/client_record.dart';
 import 'package:scheduling/features/clients/services/client_service.dart';
 import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
@@ -90,7 +91,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
 
   String? _validateEmail(String value) {
     if (value.isEmpty) return null;
-    if (!_emailRegex.hasMatch(value)) return "Enter a valid email";
+    if (!_emailRegex.hasMatch(value)) return context.l10n.enterAValidEmail;
     return null;
   }
 
@@ -210,17 +211,14 @@ class _AddClientSheetState extends State<AddClientSheet> {
     if (cleanStreet.isEmpty || cleanApt.isEmpty) return cleanStreet;
 
     final commaIndex = cleanStreet.indexOf(',');
-
-
     if (commaIndex == -1) {
-      return '$cleanStreet #$cleanApt';
+      return '$cleanApt-$cleanStreet';
     }
-
 
     final firstLine = cleanStreet.substring(0, commaIndex).trim();
     final rest = cleanStreet.substring(commaIndex);
 
-    return '$firstLine #$cleanApt$rest';
+    return '$cleanApt-$firstLine$rest';
   }
 
   void _fillAddressPartsFromText(String rawAddress) {
@@ -316,15 +314,17 @@ class _AddClientSheetState extends State<AddClientSheet> {
     final hasBusinessOrName = businessName.isNotEmpty || name.isNotEmpty;
 
     nextErrors['businessName'] = !hasBusinessOrName
-        ? 'Business name or contact name is required'
+        ? context.l10n.businessNameOrContactNameIsRequired
         : null;
     nextErrors['name'] = !hasBusinessOrName
-        ? 'Business name or contact name is required'
+        ? context.l10n.businessNameOrContactNameIsRequired
         : null;
-    nextErrors['phone'] = !hasContactMethod ? 'Phone or email is required' : null;
+    nextErrors['phone'] = !hasContactMethod
+        ? context.l10n.phoneOrEmailIsRequired
+        : null;
     nextErrors['email'] = _validateEmail(email);
     nextErrors['address'] = businessName.isEmpty && address.isEmpty
-        ? 'Address is required'
+        ? context.l10n.addressIsRequired
         : null;
 
     if (businessName.isNotEmpty) {
@@ -339,9 +339,9 @@ class _AddClientSheetState extends State<AddClientSheet> {
             contactPhone.isNotEmpty || contactEmail.isNotEmpty;
 
         nextErrors['contact_${i}_name'] =
-            contactName.isEmpty ? 'Contact name is required' : null;
+            contactName.isEmpty ? context.l10n.contactNameIsRequired : null;
         nextErrors['contact_${i}_phone'] = !hasAdditionalContactMethod
-            ? 'Phone or email is required'
+            ? context.l10n.phoneOrEmailIsRequired
             : null;
         nextErrors['contact_${i}_email'] = _validateEmail(contactEmail);
       }
@@ -386,7 +386,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
       if (!mounted) return;
       setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Could not add client. Try again.")),
+        SnackBar(content: Text(context.l10n.couldNotAddClientTryAgain)),
       );
     }
   }
@@ -411,7 +411,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
               const SizedBox(height: 16),
               Center(
                 child: Text(
-                  "New client",
+                  context.l10n.newClient,
                   style: theme.textTheme.headlineLarge,
                 ),
               ),
@@ -420,7 +420,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
               const SizedBox(height: 20),
               SheetFocusScroll(
                 child: LabeledTextField(
-                  label: "Business name",
+                  label: context.l10n.businessName,
                   controller: _businessNameController,
                   optional: true,
                   autofillHints: const [AutofillHints.organizationName],
@@ -436,7 +436,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
               const SizedBox(height: 16),
               SheetFocusScroll(
                 child: LabeledTextField(
-                  label: "Contact name",
+                  label: context.l10n.contactName,
                   controller: _nameController,
                   required: !_isBusiness,
                   optional: _isBusiness,
@@ -452,7 +452,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
               const SizedBox(height: 16),
               SheetFocusScroll(
                 child: LabeledTextField(
-                  label: "Phone",
+                  label: context.l10n.phone,
                   controller: _phoneController,
                   keyboard: TextInputType.phone,
                   autofillHints: const [AutofillHints.telephoneNumber],
@@ -466,7 +466,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
               const SizedBox(height: 16),
               SheetFocusScroll(
                 child: LabeledTextField(
-                  label: "Email",
+                  label: context.l10n.email,
                   controller: _emailController,
                   keyboard: TextInputType.emailAddress,
                   autofillHints: const [AutofillHints.email],
@@ -503,7 +503,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
               const SizedBox(height: 16),
               SheetFocusScroll(
                 child: LabeledTextField(
-                  label: "Apt / Unit",
+                  label: context.l10n.aptUnit,
                   controller: _aptController,
                   optional: true,
                 ),
@@ -514,7 +514,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
                   Expanded(
                     child: SheetFocusScroll(
                       child: LabeledTextField(
-                        label: "City",
+                        label: context.l10n.city,
                         controller: _cityController,
                         autofillHints: const [AutofillHints.addressCity],
                       ),
@@ -524,7 +524,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
                   Expanded(
                     child: SheetFocusScroll(
                       child: LabeledTextField(
-                        label: "Province",
+                        label: context.l10n.province,
                         controller: _provinceController,
                         autofillHints: const [AutofillHints.addressState],
                       ),
@@ -538,7 +538,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
                   Expanded(
                     child: SheetFocusScroll(
                       child: LabeledTextField(
-                        label: "Postal code",
+                        label: context.l10n.postalCode,
                         controller: _postalCodeController,
                         autofillHints: const [AutofillHints.postalCode],
                       ),
@@ -548,7 +548,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
                   Expanded(
                     child: SheetFocusScroll(
                       child: LabeledTextField(
-                        label: "Country",
+                        label: context.l10n.country,
                         controller: _countryController,
                         autofillHints: const [AutofillHints.countryName],
                       ),
@@ -567,7 +567,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
                       onPressed: _isSaving
                           ? null
                           : () => Navigator.pop(context),
-                      child: const Text("Cancel"),
+                      child: Text(context.l10n.cancel),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -586,7 +586,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
                                 color: scheme.onPrimary,
                               ),
                             )
-                          : const Text("Add client"),
+                          : Text(context.l10n.addClient2),
                     ),
                   ),
                 ],
@@ -634,7 +634,7 @@ class _AdditionalContactsSection extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Additional business contacts',
+                  context.l10n.additionalBusinessContacts,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -643,13 +643,15 @@ class _AdditionalContactsSection extends StatelessWidget {
               TextButton.icon(
                 onPressed: onAddContact,
                 icon: const Icon(Icons.add),
-                label: const Text('Add'),
+                label: Text(context.l10n.add),
               ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
-            'The first contact is the main contact above. Add more contacts here if needed.',
+            context
+                .l10n
+                .theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded,
             style: theme.textTheme.bodySmall?.copyWith(
               color: scheme.onSurfaceVariant,
             ),
@@ -659,7 +661,7 @@ class _AdditionalContactsSection extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: onAddContact,
               icon: const Icon(Icons.person_add_alt_1),
-              label: const Text('Add another contact'),
+              label: Text(context.l10n.addAnotherContact),
             ),
           ],
           for (var i = 0; i < contacts.length; i++) ...[
@@ -712,14 +714,14 @@ class _AdditionalContactCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Contact ${index + 2}',
+                  '${context.l10n.contact} ${index + 2}',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
               IconButton(
-                tooltip: 'Remove contact',
+                tooltip: context.l10n.removeContact,
                 onPressed: onRemove,
                 icon: const Icon(Icons.close),
               ),
@@ -728,7 +730,7 @@ class _AdditionalContactCard extends StatelessWidget {
           const SizedBox(height: 8),
           SheetFocusScroll(
             child: LabeledTextField(
-              label: 'Contact name',
+              label: context.l10n.contactName,
               controller: contact.nameController,
               required: true,
               autofillHints: const [AutofillHints.name],
@@ -739,7 +741,7 @@ class _AdditionalContactCard extends StatelessWidget {
           const SizedBox(height: 12),
           SheetFocusScroll(
             child: LabeledTextField(
-              label: 'Phone',
+              label: context.l10n.phone,
               controller: contact.phoneController,
               keyboard: TextInputType.phone,
               autofillHints: const [AutofillHints.telephoneNumber],
@@ -750,7 +752,7 @@ class _AdditionalContactCard extends StatelessWidget {
           const SizedBox(height: 12),
           SheetFocusScroll(
             child: LabeledTextField(
-              label: 'Email',
+              label: context.l10n.email,
               controller: contact.emailController,
               keyboard: TextInputType.emailAddress,
               autofillHints: const [AutofillHints.email],

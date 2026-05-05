@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 
 class CalendarHeader extends StatelessWidget {
   final DateTime focusedDay;
@@ -21,6 +22,8 @@ class CalendarHeader extends StatelessWidget {
     final now = DateTime.now();
     final isCurrent =
         focusedDay.year == now.year && focusedDay.month == now.month;
+    final locale = Localizations.localeOf(context).toString();
+    final monthLabel = DateFormat.MMMM(locale).format(focusedDay);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -32,7 +35,7 @@ class CalendarHeader extends StatelessWidget {
           GestureDetector(
             onTap: onTapMonth,
             child: Text(
-              DateFormat('MMMM').format(focusedDay),
+              monthLabel,
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -44,7 +47,10 @@ class CalendarHeader extends StatelessWidget {
           Row(
             children: [
               if (!isCurrent)
-                TextButton(onPressed: onToday, child: const Text("Today")),
+                TextButton(
+                  onPressed: onToday,
+                  child: Text(context.l10n.today),
+                ),
               IconButton(
                 icon: const Icon(Icons.chevron_right),
                 onPressed: onRight,

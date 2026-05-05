@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:scheduling/core/utils/app_text.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
@@ -28,21 +28,26 @@ class EmployeeDetailsSheet extends StatelessWidget {
             const SizedBox(height: 18),
             Center(
               child: Text(
-                tr(context, 'Employee details'),
+                context.l10n.employeeDetails,
                 style: theme.textTheme.headlineSmall
               ),
             ),
             const SizedBox(height: 18),
-            _DetailField(label: tr(context, 'Name'), value: employee.name),
+            _DetailField(label: context.l10n.name2, value: employee.name),
             const SizedBox(height: 12),
-            _DetailField(label: tr(context, 'Email'), value: employee.email),
+            _DetailField(label: context.l10n.email, value: employee.email),
             const SizedBox(height: 12),
             _DetailField(
-              label: tr(context, 'Phone number'),
+              label: context.l10n.phoneNumber,
               value: employee.phone.isEmpty ? '-' : employee.phone,
             ),
             const SizedBox(height: 12),
-            _DetailField(label: tr(context, 'Role'), value: employee.role),
+            _DetailField(
+              label: context.l10n.role,
+              value: employee.isAdmin
+                  ? context.l10n.admin
+                  : context.l10n.employeeRoleValue,
+            ),
             const SizedBox(height: 12),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -56,7 +61,7 @@ class EmployeeDetailsSheet extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                Expanded(child: Text(tr(context, 'Employee color'))),
+                Expanded(child: Text(context.l10n.employeeColor2)),
               ],
             ),
           ],
