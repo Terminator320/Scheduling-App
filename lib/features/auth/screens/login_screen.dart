@@ -6,7 +6,7 @@ import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/animations/fade_slide_entrance.dart';
 import 'package:scheduling/core/animations/staggered_entrance_controller.dart';
 import 'package:scheduling/core/errors/auth_error_handler.dart';
-import 'package:scheduling/core/utils/app_text.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/screens/create_account_screen.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
@@ -110,7 +110,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
       if (user == null) {
         if (!mounted) return;
         setState(() {
-          _bannerError = tr(context, 'Invalid email or password');
+          _bannerError = context.l10n.invalidEmailOrPassword;
           _isLoading = false;
         });
         return;
@@ -121,7 +121,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
 
       if (userDoc == null || !userDoc.exists) {
         setState(() {
-          _bannerError = tr(context, 'No user profile found for this account');
+          _bannerError = context.l10n.noUserProfileFoundForThisAccount;
           _isLoading = false;
         });
         return;
@@ -168,7 +168,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
       _passwordError = null;
       _bannerError = null;
       _bannerSuccess = result?.created == true
-          ? tr(context, 'Account created. You can now sign in.')
+          ? context.l10n.accountCreatedYouCanNowSignIn
           : null;
     });
 
@@ -248,13 +248,13 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                         child: Column(
                           children: [
                             Text(
-                              tr(context, 'Sign In'),
+                              context.l10n.signIn,
                               textAlign: TextAlign.center,
                               style: textTheme.headlineLarge,
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              tr(context, 'Enter email and password'),
+                              context.l10n.enterEmailAndPassword,
                               textAlign: TextAlign.center,
                               style: textTheme.bodyMedium?.copyWith(
                                 color: colour.onSurface.withAlpha(150),
@@ -279,7 +279,10 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                             enabled: !_isLoading,
                             onSubmitted: (_) => _passwordFocus.requestFocus(),
                             onChanged: (_) => _onFieldChanged(),
-                            decoration: formInputDecoration(context, 'Email')
+                            decoration: formInputDecoration(
+                              context,
+                              context.l10n.email,
+                            )
                                 .copyWith(
                                   errorText: _emailError,
                                   prefixIcon: const Icon(
@@ -304,7 +307,10 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                             enabled: !_isLoading,
                             onSubmitted: (_) => _signIn(),
                             onChanged: (_) => _onFieldChanged(),
-                            decoration: formInputDecoration(context, 'Password')
+                            decoration: formInputDecoration(
+                              context,
+                              context.l10n.password,
+                            )
                                 .copyWith(
                                   errorText: _passwordError,
                                   prefixIcon: const Icon(
@@ -333,8 +339,8 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                                         size: 20,
                                       ),
                                       tooltip: _isObscured
-                                          ? tr(context, 'Show password')
-                                          : tr(context, 'Hide password'),
+                                          ? context.l10n.showPassword
+                                          : context.l10n.hidePassword,
                                       onPressed: () => setState(
                                         () => _isObscured = !_isObscured,
                                       ),
@@ -352,7 +358,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                           child: TextButton(
                             onPressed: _isLoading ? null : _openForgotPassword,
                             child: Text(
-                              tr(context, 'Forgot Password?'),
+                              context.l10n.forgotPassword3,
                               style: textTheme.bodySmall?.copyWith(
                                 color: colour.primary,
                                 fontWeight: FontWeight.w500,
@@ -397,7 +403,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                       FadeSlideEntrance(
                         animation: animations[5],
                         child: AnimatedLoadingButton(
-                          label: tr(context, 'Sign In'),
+                          label: context.l10n.signIn,
                           isLoading: _isLoading,
                           onPressed: _signIn,
                         ),
@@ -416,7 +422,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                                     horizontal: 16,
                                   ),
                                   child: Text(
-                                    tr(context, 'or'),
+                                    context.l10n.or,
                                     style: textTheme.bodySmall?.copyWith(
                                       color: colour.onSurface.withAlpha(100),
                                     ),
@@ -427,7 +433,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                             ),
                             const SizedBox(height: 24),
                             AnimatedLoadingButton(
-                              label: tr(context, 'Create account'),
+                              label: context.l10n.createAccount,
                               isLoading: false,
                               onPressed: _isLoading ? null : _openCreateAccount,
                               variant: AnimatedLoadingButtonVariant.outlined,
