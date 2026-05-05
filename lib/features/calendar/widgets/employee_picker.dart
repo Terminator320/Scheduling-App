@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 
 class EmployeePicker extends StatelessWidget {
@@ -27,7 +28,9 @@ class EmployeePicker extends StatelessWidget {
 
     if (displayEmployees.isEmpty) {
       return Text(
-        selectable ? "No employees found" : "No employees assigned",
+        selectable
+            ? context.l10n.noEmployeesFound
+            : context.l10n.noEmployeesAssigned,
         style: TextStyle(fontSize: 13, color: Colors.grey[500]),
       );
     }
@@ -44,7 +47,9 @@ class EmployeePicker extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       child: displayEmployees.isEmpty
           ? Text(
-              selectable ? "No employees found" : "No employees assigned",
+              selectable
+                  ? context.l10n.noEmployeesFound
+                  : context.l10n.noEmployeesAssigned,
               style: TextStyle(fontSize: 13, color: Colors.grey[500]),
             )
           : Wrap(

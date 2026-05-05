@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:scheduling/core/utils/app_text.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
 import 'package:scheduling/features/employees/widgets/employee_color_picker_row.dart';
@@ -85,8 +85,11 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
+      final message = e.toString().contains('Employee email already exists')
+          ? context.l10n.anEmployeeWithThisEmailAlreadyExists
+          : context.l10n.couldNotCreateEmployee;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(content: Text(message)),
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -95,7 +98,7 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
 
   String? _requiredValidator(String? value) {
     return (value == null || value.trim().isEmpty)
-        ? tr(context, 'Name and email are required')
+        ? context.l10n.nameAndEmailAreRequired
         : null;
   }
 
@@ -104,11 +107,11 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final title = _isEdit
-        ? tr(context, 'Edit Employee')
-        : tr(context, 'Create Employee');
+        ? context.l10n.editEmployee
+        : context.l10n.createEmployee;
     final submitLabel = _isEdit
-        ? tr(context, 'Update Employee')
-        : tr(context, 'Create Employee');
+        ? context.l10n.updateEmployee
+        : context.l10n.createEmployee;
 
     return DraggableSheetFrame(
       builder: (sheetContext, scrollController) {
@@ -141,7 +144,7 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
               SheetFocusScroll(
                 child: TextFormField(
                   controller: _nameController,
-                  decoration: formInputDecoration(context, tr(context, 'Name')),
+                  decoration: formInputDecoration(context, context.l10n.name2),
                   validator: _requiredValidator,
                 ),
               ),
@@ -152,7 +155,7 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
                   keyboardType: TextInputType.emailAddress,
                   decoration: formInputDecoration(
                     context,
-                    tr(context, 'Email'),
+                    context.l10n.email,
                   ),
                   validator: _requiredValidator,
                 ),
@@ -164,13 +167,13 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
                   keyboardType: TextInputType.phone,
                   decoration: formInputDecoration(
                     context,
-                    tr(context, 'Phone number'),
+                    context.l10n.phoneNumber,
                   ),
                 ),
               ),
               const SizedBox(height: 16),
               Text(
-                tr(context, 'Employee Color'),
+                context.l10n.employeeColor,
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
@@ -185,7 +188,7 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
                 contentPadding: EdgeInsets.zero,
                 value: _isAdmin,
                 onChanged: (v) => setState(() => _isAdmin = v),
-                title: Text(tr(context, 'Give admin mode access')),
+                title: Text(context.l10n.giveAdminModeAccess),
               ),
               const SizedBox(height: 12),
               SizedBox(

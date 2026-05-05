@@ -2,6 +2,7 @@ import 'package:animations/animations.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
@@ -111,7 +112,7 @@ class _SplashScreenState extends State<SplashScreen> {
                           show: show,
                           delay: const Duration(milliseconds: 120),
                           child: Text(
-                            'Welcome to Scheduling App',
+                            context.l10n.welcomeToSchedulingApp,
                             style: textTheme.headlineMedium,
                             textAlign: TextAlign.center,
                           ),
@@ -121,7 +122,7 @@ class _SplashScreenState extends State<SplashScreen> {
                           show: show,
                           delay: const Duration(milliseconds: 200),
                           child: Text(
-                            'Hope you are enjoying your day!',
+                            context.l10n.hopeYouAreEnjoyingYourDay,
                             style: textTheme.bodyMedium?.copyWith(
                               color: scheme.onSurface.withAlpha(150),
                             ),

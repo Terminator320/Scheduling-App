@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:scheduling/l10n/app_localizations.dart';
 
 import 'package:scheduling/core/services/settings_service.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
@@ -12,6 +15,9 @@ import 'package:scheduling/routes/app_routes.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await initializeDateFormatting('en_CA');
+  await initializeDateFormatting('fr_CA');
 
   await dotenv.load(fileName: "dev/.env");
 
@@ -84,19 +90,33 @@ class _PaulAppState extends State<PaulApp> {
         textScale: _textScale,
         setTextScale: setTextScale,
         setLanguage: setLanguage,
-        child: MaterialApp(
-          debugShowCheckedModeBanner: false,
-          theme: Themes.light,
-          darkTheme: Themes.dark,
-          themeMode: _themeMode,
-          initialRoute: AppRoutes.splash,
-          onGenerateRoute: AppRoutes.onGenerateRoute,
-          builder: (context, child) {
-            return MediaQuery(
-              data: MediaQuery.of(
-                context,
-              ).copyWith(textScaler: TextScaler.linear(_textScale)),
-              child: child ?? const SizedBox.shrink(),
+        child: ValueListenableBuilder<String>(
+          valueListenable: _languageController,
+          builder: (context, languageCode, _) {
+            final locale = Locale(languageCode, 'CA');
+            return MaterialApp(
+              debugShowCheckedModeBanner: false,
+              locale: locale,
+              supportedLocales: AppLocalizations.supportedLocales,
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              theme: Themes.light,
+              darkTheme: Themes.dark,
+              themeMode: _themeMode,
+              initialRoute: AppRoutes.splash,
+              onGenerateRoute: AppRoutes.onGenerateRoute,
+              builder: (context, child) {
+                return MediaQuery(
+                  data: MediaQuery.of(context).copyWith(
+                    textScaler: TextScaler.linear(_textScale),
+                  ),
+                  child: child ?? const SizedBox.shrink(),
+                );
+              },
             );
           },
         ),
