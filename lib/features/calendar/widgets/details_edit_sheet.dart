@@ -3,9 +3,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/services/image_picker_service.dart';
+import 'package:scheduling/core/services/image_storage_service.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
-import 'package:scheduling/core/services/image_picker_service.dart';
 import 'package:scheduling/features/calendar/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/services/appointment_image_upload_service.dart';
@@ -75,6 +76,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   bool _isSearchingClient = false;
 
   final _imageUploadService = AppointmentImageUploadService();
+  final _storageService = ImageStorageService();
   final _imageService = ImagePickerService();
   final _userService = UserService();
   final _clientService = ClientService();
@@ -304,8 +306,14 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         throw StateError('Cannot save an appointment without an id.');
       }
 
-      // Save immediately with the current existing pictures so the user
-      // can continue using the app. New uploads are patched in the background.
+      // 1. Delete removed images from Storage before saving so that orphaned
+      //    files can never accumulate. Errors surface here instead of silently
+      //    failing in the background.
+      if (_removedExistingImages.isNotEmpty) {
+        await _storageService.deleteImages(_removedExistingImages);
+      }
+
+      // 2. Save the appointment with the updated pictures list.
       final updated = AppointmentRecord(
         id: widget.appointment.id,
         title: _titleController.text.trim(),
@@ -331,13 +339,12 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       if (mounted) setState(() => _isEditing = false);
       if (mounted) Navigator.pop(context, updated);
 
-      // Fire-and-forget: upload new images and delete removed ones.
-      if (_newImages.isNotEmpty || _removedExistingImages.isNotEmpty) {
+      // 3. Upload new images in the background — sheet is already closed.
+      if (_newImages.isNotEmpty) {
         _imageUploadService.uploadInBackground(
           appointmentId: appointmentId,
           newImages: _newImages,
           existingImages: _existingImages,
-          toDelete: List.of(_removedExistingImages),
         );
       }
     } catch (_) {

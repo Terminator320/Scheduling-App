@@ -45,9 +45,12 @@ class ImageStorageService {
   }
 
   Future<void> deleteImage(AppointmentImage image) async {
-    if (image.storagePath.isEmpty) return;
+    final path = image.storagePath.isNotEmpty
+        ? image.storagePath
+        : _pathFromUrl(image.url);
+    if (path.isEmpty) return;
     try {
-      await _storage.ref(image.storagePath).delete();
+      await _storage.ref(path).delete();
     } on FirebaseException catch (e) {
       if (e.code == 'object-not-found') return;
       rethrow;
@@ -56,6 +59,22 @@ class ImageStorageService {
 
   Future<void> deleteImages(List<AppointmentImage> images) async {
     await Future.wait(images.map(deleteImage));
+  }
+
+  /// Extracts the Storage object path from a Firebase download URL.
+  /// Handles URLs of the form:
+  ///   https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{encoded_path}?...
+  /// Falls back to empty string on any parse error.
+  static String _pathFromUrl(String url) {
+    if (url.isEmpty) return '';
+    try {
+      final parts = url.split('/o/');
+      if (parts.length < 2) return '';
+      final encoded = parts[1].split('?').first;
+      return Uri.decodeComponent(encoded);
+    } catch (_) {
+      return '';
+    }
   }
 
   String _contentTypeFor(String fileName) {

@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:animations/animations.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/services/user_cache_service.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
@@ -57,6 +60,8 @@ class _SplashScreenState extends State<SplashScreen> {
     _show.value = false;
   }
 
+  /// Firestore lookup for the logged-in user. Writes cache on success so the
+  /// next cold start can skip this screen entirely.
   Future<Widget> _resolveAuth() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return const Login();
@@ -68,6 +73,7 @@ class _SplashScreenState extends State<SplashScreen> {
     }
 
     final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data());
+    unawaited(UserCacheService().save(employee));
     return MainCalendar(isAdmin: employee.isAdmin, employeeId: employee.id);
   }
 
@@ -96,7 +102,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 child: Center(
                   child: ValueListenableBuilder<bool>(
                     valueListenable: _show,
-                    builder: (_, show, __) => Column(
+                    builder: (_, show, _) => Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         _Stagger(

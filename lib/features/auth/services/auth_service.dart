@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:scheduling/core/services/user_cache_service.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
 
 class AuthService {
@@ -73,6 +74,7 @@ class AuthService {
   }
 
   Future<void> signOut() async {
+    await UserCacheService().clear();
     await _auth.signOut();
   }
 }
