@@ -29,15 +29,14 @@ class InfoRow extends StatelessWidget {
             child: Icon(
               icon,
               size: 16,
-              color: iconColor ?? scheme.onSurfaceVariant,
+              color: iconColor ?? scheme.primary,
             ),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
-              style: textStyle ??
-                  theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+              style: textStyle ?? theme.textTheme.bodyMedium,
             ),
           ),
         ],

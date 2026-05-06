@@ -18,6 +18,7 @@ class LabeledTextField extends StatelessWidget {
     this.prefixIcon,
     this.hint,
     this.errorText,
+    this.focusNode,
   });
 
   final String label;
@@ -34,6 +35,7 @@ class LabeledTextField extends StatelessWidget {
   final Widget? prefixIcon;
   final String? hint;
   final String? errorText;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +46,7 @@ class LabeledTextField extends StatelessWidget {
         formLabel(context, displayLabel, optional: optional),
         TextField(
           controller: controller,
+          focusNode: focusNode,
           keyboardType: keyboard,
           autofillHints: autofillHints,
           maxLines: maxLines,
