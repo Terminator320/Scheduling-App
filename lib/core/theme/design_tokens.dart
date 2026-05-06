@@ -51,6 +51,10 @@ class AppColors {
   static const Color darkErrorTint = Color(0xFF450A0A);
   static const Color darkErrorText = Color(0xFFFCA5A5);
   static const Color darkAccent = Color(0xFFA78BFA);
+  static const Color invitedTint = Color(0xFFF3E8FF);
+  static const Color invitedText = Color(0xFF6B21A8);
+  static const Color darkInvitedTint = Color(0xFF3B0764);
+  static const Color darkInvitedText = Color(0xFFD8B4FE);
 
   // Employee color palette (used by AppAvatar auto-color + EmployeeColorGrid)
   static const List<Color> employeePalette = [

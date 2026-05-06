@@ -1,0 +1,64 @@
+// lib/shared/widgets/status_chip.dart
+import 'package:flutter/material.dart';
+import '../../core/theme/design_tokens.dart';
+
+enum AppointmentStatus { confirmed, done, pending, cancelled, invited, active }
+
+class StatusChip extends StatelessWidget {
+  const StatusChip({super.key, required this.status});
+  final AppointmentStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final (label, bg, fg) = _resolve(isDark);
+    return Container(
+      // 10px horizontal: sp8 (8) + 2px optical correction for pill label
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp8 + 2, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(AppRadius.rFull),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: fg,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  (String, Color, Color) _resolve(bool isDark) => switch (status) {
+    AppointmentStatus.confirmed => (
+      'Confirmed',
+      isDark ? AppColors.darkPrimaryTint : AppColors.primaryTint,
+      isDark ? AppColors.darkPrimaryOnDark : AppColors.primaryDark,
+    ),
+    AppointmentStatus.done => (
+      'Done',
+      isDark ? AppColors.darkSuccessTint : AppColors.successTint,
+      isDark ? AppColors.darkSuccessText : AppColors.successText,
+    ),
+    AppointmentStatus.pending => (
+      'Pending',
+      isDark ? AppColors.darkWarningTint : AppColors.warningTint,
+      isDark ? AppColors.darkWarningText : AppColors.warningText,
+    ),
+    AppointmentStatus.cancelled => (
+      'Cancelled',
+      isDark ? AppColors.darkErrorTint : AppColors.errorTint,
+      isDark ? AppColors.darkErrorText : AppColors.errorText,
+    ),
+    AppointmentStatus.active => (
+      'Active',
+      isDark ? AppColors.darkSuccessTint : AppColors.successTint,
+      isDark ? AppColors.darkSuccessText : AppColors.successText,
+    ),
+    AppointmentStatus.invited => (
+      'Invited',
+      isDark ? AppColors.darkInvitedTint : AppColors.invitedTint,
+      isDark ? AppColors.darkInvitedText : AppColors.invitedText,
+    ),
+  };
+}
