@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
@@ -6,6 +8,7 @@ import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/animations/fade_slide_entrance.dart';
 import 'package:scheduling/core/animations/staggered_entrance_controller.dart';
 import 'package:scheduling/core/errors/auth_error_handler.dart';
+import 'package:scheduling/core/services/user_cache_service.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/screens/create_account_screen.dart';
@@ -128,6 +131,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
       }
 
       final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data());
+      unawaited(UserCacheService().save(employee));
 
       Navigator.pushReplacementNamed(
         context,
