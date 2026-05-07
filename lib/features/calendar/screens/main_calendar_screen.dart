@@ -162,6 +162,7 @@ class _MainCalendar extends State<MainCalendar> {
       endDrawer: SettingsDrawer(
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
+        userName: _userName,
       ),
       body: SafeArea(child: content()),
     );

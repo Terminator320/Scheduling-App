@@ -5,6 +5,7 @@ import 'package:scheduling/features/auth/screens/login_screen.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
 import 'package:scheduling/features/clients/screens/clients_screen.dart';
 import 'package:scheduling/features/employees/screens/employees_screen.dart';
+import 'package:scheduling/features/settings/screens/settings_screen.dart';
 import 'package:scheduling/features/splash/screens/splash_screen.dart';
 
 class AppRoutes {
@@ -16,6 +17,7 @@ class AppRoutes {
   static const String mainCalendar = '/calendar';
   static const String employees = '/employees';
   static const String clients = '/clients';
+  static const String settings = '/settings';
 
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -64,6 +66,12 @@ class AppRoutes {
             isAdmin: args.isAdmin,
             employeeId: args.employeeId,
           ),
+        );
+
+      case AppRoutes.settings:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const CalendarScreen(),
         );
 
       default:

@@ -68,6 +68,15 @@ class AppointmentService {
     );
   }
 
+  Stream<List<AppointmentRecord>> getHistoryAppointments() {
+    return appointments
+        .where('status', whereIn: ['done', 'cancelled'])
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
+            .toList());
+  }
+
   Future<AppointmentRecord?> getAppointmentById(String appointmentId) async {
     final doc = await appointments.doc(appointmentId).get();
 
