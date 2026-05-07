@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -46,11 +47,7 @@ class AddressMapLauncher {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      sheetAnimationStyle: const AnimationStyle(
-        duration: Duration(milliseconds: 280),
-        reverseDuration: Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-      ),
+      sheetAnimationStyle: AppMotion.sheetStyle,
       builder: (sheetContext) {
         final theme = Theme.of(sheetContext);
 

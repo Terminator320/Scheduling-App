@@ -61,11 +61,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      sheetAnimationStyle: const AnimationStyle(
-        duration: Duration(milliseconds: 280),
-        reverseDuration: Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-      ),
+      sheetAnimationStyle: AppMotion.sheetStyle,
       builder: (_) =>
           EmployeeFormSheet(employee: employee, usedColors: usedColors),
     );
@@ -104,11 +100,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      sheetAnimationStyle: const AnimationStyle(
-        duration: Duration(milliseconds: 280),
-        reverseDuration: Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-      ),
+      sheetAnimationStyle: AppMotion.sheetStyle,
       builder: (_) => EmployeeDetailsSheet(
         employee: employee,
         isCurrentUserAdmin: widget.isAdmin,

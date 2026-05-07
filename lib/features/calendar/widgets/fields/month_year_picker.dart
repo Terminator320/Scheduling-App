@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 class MonthYearPicker {
@@ -15,11 +16,7 @@ class MonthYearPicker {
     return showModalBottomSheet<DateTime>(
       context: context,
       backgroundColor: Theme.of(context).colorScheme.surface,
-      sheetAnimationStyle: const AnimationStyle(
-        duration: Duration(milliseconds: 280),
-        reverseDuration: Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-      ),
+      sheetAnimationStyle: AppMotion.sheetStyle,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),

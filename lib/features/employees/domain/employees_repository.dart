@@ -32,8 +32,6 @@ abstract class EmployeesRepository {
 
   Future<UserUidMatch?> findUserByUid(String uid);
 
-  Future<bool> isUserAdmin(String uid);
-
   Future<void> activateEmployee({required String docId, required String uid});
 
   Future<void> deactivateEmployee(String docId);

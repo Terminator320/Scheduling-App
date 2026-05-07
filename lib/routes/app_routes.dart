@@ -37,7 +37,8 @@ class AppRoutes {
         final args = settings.arguments as ForgotPasswordArgs?;
         return MaterialPageRoute(
           settings: settings,
-          builder: (_) => ForgotPassword(initialEmail: args?.initialEmail),
+          builder: (_) =>
+              ForgotPasswordScreen(initialEmail: args?.initialEmail),
         );
 
       case mainCalendar:
