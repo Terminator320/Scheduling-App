@@ -120,21 +120,21 @@ class EventDetailsController
   void selectDate(DateTime date) {
     state = state.copyWith(
       selectedDate: date,
-      errors: _withoutKey(state.errors, 'date'),
+      errors: withoutKey(state.errors, 'date'),
     );
   }
 
   void selectStartTime(TimeOfDay time) {
     state = state.copyWith(
       selectedStartTime: time,
-      errors: _withoutKey(state.errors, 'startTime'),
+      errors: withoutKey(state.errors, 'startTime'),
     );
   }
 
   void selectEndTime(TimeOfDay time) {
     state = state.copyWith(
       selectedEndTime: time,
-      errors: _withoutKey(state.errors, 'endTime'),
+      errors: withoutKey(state.errors, 'endTime'),
     );
   }
 
@@ -165,7 +165,7 @@ class EventDetailsController
       selectedClient: client,
       client: client,
       clientResults: const [],
-      errors: _withoutKey(state.errors, 'client'),
+      errors: withoutKey(state.errors, 'client'),
     );
   }
 
@@ -189,7 +189,7 @@ class EventDetailsController
       selectedEmployees: next,
       errors: next.isEmpty
           ? state.errors
-          : _withoutKey(state.errors, 'employees'),
+          : withoutKey(state.errors, 'employees'),
     );
   }
 
@@ -374,11 +374,3 @@ final eventDetailsControllerProvider =
       EventDetailsState,
       AppointmentRecord
     >(EventDetailsController.new);
-
-Map<String, AppointmentFormError> _withoutKey(
-  Map<String, AppointmentFormError> errors,
-  String key,
-) {
-  if (!errors.containsKey(key)) return errors;
-  return Map<String, AppointmentFormError>.from(errors)..remove(key);
-}

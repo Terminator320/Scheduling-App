@@ -156,14 +156,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }
 
   @override
-  Future<bool> isUserAdmin(String uid) async {
-    if (uid.isEmpty) return false;
-    final match = await findUserByUid(uid);
-    if (match == null) return false;
-    return (match.data['role'] ?? '') == 'admin';
-  }
-
-  @override
   Future<void> activateEmployee({
     required String docId,
     required String uid,

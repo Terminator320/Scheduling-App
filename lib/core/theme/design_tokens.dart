@@ -102,6 +102,75 @@ class AppDuration {
   static const Duration shimmer = Duration(milliseconds: 1200);
 }
 
+class AppMotion {
+  AppMotion._();
+
+  /// Shared open/close curve for `showModalBottomSheet` across the app.
+  static const AnimationStyle sheetStyle = AnimationStyle(
+    duration: Duration(milliseconds: 280),
+    reverseDuration: Duration(milliseconds: 220),
+    curve: Curves.easeOutCubic,
+  );
+}
+
+/// Surface-card decoration shared across the settings cards. The light/dark
+/// difference (drop shadow vs. outline border) is theme-driven via
+/// [AppCardStyle] — no brightness checks at the call site.
+BoxDecoration appCardDecoration(
+  ThemeData theme, {
+  double radius = AppRadius.r12,
+  Color? color,
+}) {
+  final style = theme.cardStyle;
+  return BoxDecoration(
+    color: color,
+    borderRadius: BorderRadius.circular(radius),
+    boxShadow: style.shadow,
+    border: style.border,
+  );
+}
+
+/// Per-theme surface-card treatment: a soft drop shadow in light mode, swapped
+/// for an outline border in dark mode. Registered on `ThemeData.extensions`
+/// so widgets read it via `theme.cardStyle` instead of branching on brightness.
+@immutable
+class AppCardStyle extends ThemeExtension<AppCardStyle> {
+  const AppCardStyle({required this.shadow, required this.border});
+
+  final List<BoxShadow>? shadow;
+  final BoxBorder? border;
+
+  static const light = AppCardStyle(shadow: AppShadow.card, border: null);
+
+  static const dark = AppCardStyle(
+    shadow: null,
+    border: Border.fromBorderSide(BorderSide(color: AppColors.darkSurfaceAlt)),
+  );
+
+  @override
+  AppCardStyle copyWith({List<BoxShadow>? shadow, BoxBorder? border}) {
+    return AppCardStyle(
+      shadow: shadow ?? this.shadow,
+      border: border ?? this.border,
+    );
+  }
+
+  @override
+  AppCardStyle lerp(ThemeExtension<AppCardStyle>? other, double t) {
+    if (other is! AppCardStyle) return this;
+    return AppCardStyle(
+      shadow: BoxShadow.lerpList(shadow, other.shadow, t),
+      border: BoxBorder.lerp(border, other.border, t),
+    );
+  }
+}
+
+extension AppCardStyleX on ThemeData {
+  AppCardStyle get cardStyle =>
+      extension<AppCardStyle>() ??
+      (brightness == Brightness.dark ? AppCardStyle.dark : AppCardStyle.light);
+}
+
 @immutable
 class AppStatusColors extends ThemeExtension<AppStatusColors> {
   const AppStatusColors({
@@ -193,23 +262,47 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     if (other is! AppStatusColors) return this;
     return AppStatusColors(
       success: Color.lerp(success, other.success, t)!,
-      successContainer:
-          Color.lerp(successContainer, other.successContainer, t)!,
-      onSuccessContainer:
-          Color.lerp(onSuccessContainer, other.onSuccessContainer, t)!,
+      successContainer: Color.lerp(
+        successContainer,
+        other.successContainer,
+        t,
+      )!,
+      onSuccessContainer: Color.lerp(
+        onSuccessContainer,
+        other.onSuccessContainer,
+        t,
+      )!,
       warning: Color.lerp(warning, other.warning, t)!,
-      warningContainer:
-          Color.lerp(warningContainer, other.warningContainer, t)!,
-      onWarningContainer:
-          Color.lerp(onWarningContainer, other.onWarningContainer, t)!,
-      invitedContainer:
-          Color.lerp(invitedContainer, other.invitedContainer, t)!,
-      onInvitedContainer:
-          Color.lerp(onInvitedContainer, other.onInvitedContainer, t)!,
-      inProgressContainer:
-          Color.lerp(inProgressContainer, other.inProgressContainer, t)!,
-      onInProgressContainer:
-          Color.lerp(onInProgressContainer, other.onInProgressContainer, t)!,
+      warningContainer: Color.lerp(
+        warningContainer,
+        other.warningContainer,
+        t,
+      )!,
+      onWarningContainer: Color.lerp(
+        onWarningContainer,
+        other.onWarningContainer,
+        t,
+      )!,
+      invitedContainer: Color.lerp(
+        invitedContainer,
+        other.invitedContainer,
+        t,
+      )!,
+      onInvitedContainer: Color.lerp(
+        onInvitedContainer,
+        other.onInvitedContainer,
+        t,
+      )!,
+      inProgressContainer: Color.lerp(
+        inProgressContainer,
+        other.inProgressContainer,
+        t,
+      )!,
+      onInProgressContainer: Color.lerp(
+        onInProgressContainer,
+        other.onInProgressContainer,
+        t,
+      )!,
       accent: Color.lerp(accent, other.accent, t)!,
     );
   }
@@ -218,5 +311,7 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
 extension AppStatusColorsX on ThemeData {
   AppStatusColors get statusColors =>
       extension<AppStatusColors>() ??
-      (brightness == Brightness.dark ? AppStatusColors.dark : AppStatusColors.light);
+      (brightness == Brightness.dark
+          ? AppStatusColors.dark
+          : AppStatusColors.light);
 }

@@ -9,6 +9,7 @@ import 'package:scheduling/features/calendar/application/appointments_providers.
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
+import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
@@ -74,7 +75,7 @@ class AddEventController
   void selectDate(DateTime date) {
     state = state.copyWith(
       selectedDate: date,
-      errors: _withoutKey(state.errors, 'date'),
+      errors: withoutKey(state.errors, 'date'),
     );
   }
 
@@ -82,9 +83,11 @@ class AddEventController
     final auto = !state.endTimeWasPickedManually;
     state = state.copyWith(
       selectedStartTime: time,
-      selectedEndTime: auto ? _addOneHour(time) : state.selectedEndTime,
-      errors: _withoutKey(
-        _withoutKey(state.errors, 'startTime'),
+      selectedEndTime: auto
+          ? AppointmentDraftDefaults.defaultEndTime(time)
+          : state.selectedEndTime,
+      errors: withoutKey(
+        withoutKey(state.errors, 'startTime'),
         auto ? 'endTime' : '_',
       ),
     );
@@ -94,7 +97,7 @@ class AddEventController
     state = state.copyWith(
       selectedEndTime: time,
       endTimeWasPickedManually: true,
-      errors: _withoutKey(state.errors, 'endTime'),
+      errors: withoutKey(state.errors, 'endTime'),
     );
   }
 
@@ -121,7 +124,7 @@ class AddEventController
       selectedClient: client,
       clientResults: const [],
       useCustomAddress: false,
-      errors: _withoutKey(state.errors, 'client'),
+      errors: withoutKey(state.errors, 'client'),
     );
   }
 
@@ -149,7 +152,7 @@ class AddEventController
       selectedEmployees: next,
       errors: next.isEmpty
           ? state.errors
-          : _withoutKey(state.errors, 'employees'),
+          : withoutKey(state.errors, 'employees'),
     );
   }
 
@@ -262,18 +265,3 @@ final addEventControllerProvider =
       AddEventState,
       DateTime?
     >(AddEventController.new);
-
-Map<String, AppointmentFormError> _withoutKey(
-  Map<String, AppointmentFormError> errors,
-  String key,
-) {
-  if (!errors.containsKey(key)) return errors;
-  final next = Map<String, AppointmentFormError>.from(errors)..remove(key);
-  return next;
-}
-
-TimeOfDay _addOneHour(TimeOfDay time) {
-  final totalMinutes = time.hour * 60 + time.minute + 60;
-  final wrapped = totalMinutes % (24 * 60);
-  return TimeOfDay(hour: wrapped ~/ 60, minute: wrapped % 60);
-}

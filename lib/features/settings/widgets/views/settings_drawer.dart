@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
-import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
@@ -27,49 +27,25 @@ class SettingsDrawer extends ConsumerStatefulWidget {
 }
 
 class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
+
   String _displayName = '';
   String _displayEmail = '';
 
-  @override
-  void initState() {
-    super.initState();
-    _resolveUser();
-  }
-
-  Future<void> _resolveUser() async {
-    if (widget.userName != null && widget.email != null) {
-      if (mounted) {
-        setState(() {
-          _displayName = widget.userName!;
-          _displayEmail = widget.email!;
-        });
-      }
-      return;
-    }
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    final email = widget.email ?? user.email ?? '';
-
-    var name = widget.userName ?? user.displayName ?? '';
-    if (name.isEmpty) {
-      final doc = await ref
-          .read(employeesRepositoryProvider)
-          .findUserByUid(user.uid);
-      if (!mounted) return;
-      name = (doc?.data['name'] ?? '').toString();
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _displayName = name;
-      _displayEmail = email;
-    });
+  String _resolveName() {
+    final docName = ref.watch(currentUserNameProvider);
+    if (docName.isNotEmpty) return docName;
+    return FirebaseAuth.instance.currentUser?.displayName ?? '';
   }
 
   @override
   Widget build(BuildContext context) {
+    _displayName = (widget.userName?.isNotEmpty ?? false)
+        ? widget.userName!
+        : _resolveName();
+    _displayEmail = (widget.email?.isNotEmpty ?? false)
+        ? widget.email!
+        : (FirebaseAuth.instance.currentUser?.email ?? '');
+
     final scheme = Theme.of(context).colorScheme;
 
     return Drawer(

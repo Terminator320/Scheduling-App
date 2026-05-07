@@ -7,6 +7,7 @@ import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
+import 'package:scheduling/features/calendar/utils/appointment_form_error_text.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/fields/appointment_status_picker.dart';
 import 'package:scheduling/features/calendar/widgets/fields/employee_picker.dart';
@@ -488,21 +489,5 @@ String? _errorFor(
   String field,
 ) {
   final key = errors[field];
-  if (key == null) return null;
-  return switch (key) {
-    AppointmentFormError.titleRequired =>
-      context.l10n.validation_titleIsRequired,
-    AppointmentFormError.dateRequired =>
-      context.l10n.validation_pleaseSelectADate,
-    AppointmentFormError.startTimeRequired =>
-      context.l10n.validation_pleaseSelectAStartTime,
-    AppointmentFormError.endTimeRequired =>
-      context.l10n.validation_pleaseSelectAnEndTime,
-    AppointmentFormError.endTimeMustBeAfterStart =>
-      context.l10n.calendar_mustBeAfterStartTime,
-    AppointmentFormError.clientRequired =>
-      context.l10n.validation_pleaseSelectAClient,
-    AppointmentFormError.employeesRequired =>
-      context.l10n.validation_pleaseSelectAtLeastOneEmployee,
-  };
+  return key == null ? null : appointmentFormErrorText(context, key);
 }
