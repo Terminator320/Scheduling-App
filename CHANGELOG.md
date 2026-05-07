@@ -37,6 +37,20 @@ code; it increments by one on every store upload regardless of the semver part.
   compute intrinsic dimensions through `AutoSizeText`'s internal `LayoutBuilder`,
   which surfaced in release builds as a paint-time `Null check operator used on
   a null value`. The title is now a plain `Text`.
+- Login no longer fails with a false "this account has been disabled" crash or a
+  generic "something went wrong please try again" banner. The deleted-account
+  watcher mistook the transient empty placeholder doc — surfaced while the
+  `authStateChanges()` uid stream lags `FirebaseAuth.currentUser` right after
+  sign-in — for a real deletion. It now fires only for a settled, non-loading
+  empty doc with a resolved uid (`isAccountDeletionSignal`).
+- The account-exit handler can no longer wedge the root navigator. It previously
+  pushed a route while the navigator was mid-transition, throwing `!_debugLocked`
+  and permanently locking navigation — which cascaded into the login "something
+  went wrong" banner and dead Create-account / Forgot-password links. Navigation
+  is now deferred to a post-frame callback (idle navigator) and guarded against
+  re-entrancy across the three account listeners.
+- Login failures are now logged (`login.sign_in`) instead of being silently
+  swallowed, so post-authentication errors surface in the debug console.
 
 ## [1.0.3+4] - 2026-05-23
 

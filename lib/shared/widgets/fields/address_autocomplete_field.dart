@@ -1,16 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/errors/failure.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
-import 'package:scheduling/features/maps/data/google_places_repository.dart';
+import 'package:scheduling/features/maps/application/maps_providers.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/features/maps/domain/models/address_suggestion.dart';
+import 'package:scheduling/features/maps/domain/places_repository.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:uuid/uuid.dart';
 
-class AddressAutocompleteField extends StatefulWidget {
+class AddressAutocompleteField extends ConsumerStatefulWidget {
   const AddressAutocompleteField({
     required this.controller,
     super.key,
@@ -31,12 +33,13 @@ class AddressAutocompleteField extends StatefulWidget {
   final ValueChanged<String>? onAddressSelected;
 
   @override
-  State<AddressAutocompleteField> createState() =>
+  ConsumerState<AddressAutocompleteField> createState() =>
       _AddressAutocompleteFieldState();
 }
 
-class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
-  final _service = GooglePlacesRepository();
+class _AddressAutocompleteFieldState
+    extends ConsumerState<AddressAutocompleteField> {
+  late final PlacesRepository _service = ref.read(placesRepositoryProvider);
   static const _uuid = Uuid();
   Timer? _debounce;
   List<AddressSuggestion> _suggestions = [];
@@ -47,8 +50,7 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
   String _lastTypedApt = '';
   String _lastFetched = '';
 
-  // Don't fire a billable Places Autocomplete call until there's enough to
-  // match on. Shorter prefixes return noise and just burn quota.
+
   static const _minQueryLength = 3;
   static const _debounceDelay = Duration(milliseconds: 700);
 

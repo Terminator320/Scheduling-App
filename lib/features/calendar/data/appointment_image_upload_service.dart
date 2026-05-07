@@ -30,13 +30,11 @@ class AppointmentImageUploadService {
     required String appointmentId,
     required List<File> newImages,
     List<AppointmentImage> existingImages = const [],
-    List<AppointmentImage> toDelete = const [],
   }) {
     _run(
       appointmentId: appointmentId,
       newImages: List.of(newImages),
       existingImages: List.of(existingImages),
-      toDelete: List.of(toDelete),
     );
   }
 
@@ -44,7 +42,6 @@ class AppointmentImageUploadService {
     required String appointmentId,
     required List<File> newImages,
     required List<AppointmentImage> existingImages,
-    required List<AppointmentImage> toDelete,
   }) async {
     try {
       var failedCount = 0;
@@ -58,7 +55,6 @@ class AppointmentImageUploadService {
         tooLargeNames.addAll(result.tooLargeNames);
         failedCount += result.failedCount;
       }
-      if (toDelete.isNotEmpty) await _storage.deleteImages(toDelete);
 
       if (failedCount > 0 || tooLargeNames.isNotEmpty) {
         _notifier.reportFailure(

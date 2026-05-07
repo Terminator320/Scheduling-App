@@ -35,18 +35,12 @@ class ClientsListView extends ConsumerStatefulWidget {
 class _ClientsListViewState extends ConsumerState<ClientsListView> {
   static const int _pageSize = 50;
 
-  static const _sheetAnimationStyle = AnimationStyle(
-    duration: Duration(milliseconds: 280),
-    reverseDuration: Duration(milliseconds: 220),
-    curve: Curves.easeOutCubic,
-  );
-
   late final PagingController<int, ClientRecord> _pagingController =
       PagingController<int, ClientRecord>(
         getNextPageKey: (state) {
           final pages = state.pages;
           if (pages == null) return 1;
-          // A short final page means there is nothing left to load.
+
           if (pages.isNotEmpty && pages.last.length < _pageSize) return null;
           return (state.keys?.last ?? 0) + 1;
         },
@@ -79,7 +73,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      sheetAnimationStyle: _sheetAnimationStyle,
+      sheetAnimationStyle: AppMotion.sheetStyle,
       builder: (_) => const AddClientSheet(),
     );
   }
@@ -97,7 +91,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      sheetAnimationStyle: _sheetAnimationStyle,
+      sheetAnimationStyle: AppMotion.sheetStyle,
       builder: (_) => ClientDetailSheet(client: client),
     );
 

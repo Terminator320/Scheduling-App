@@ -59,7 +59,14 @@ TextTheme _buildTextTheme(Color onSurface, Color subtle) {
   );
 }
 
-ThemeData lightTheme() {
+
+ThemeData? _lightThemeCache;
+ThemeData lightTheme() => _lightThemeCache ??= _buildLightTheme();
+
+ThemeData? _darkThemeCache;
+ThemeData darkTheme() => _darkThemeCache ??= _buildDarkTheme();
+
+ThemeData _buildLightTheme() {
   const cs = ColorScheme.light(
     primary: AppColors.primary,
     primaryContainer: AppColors.primarySurface,
@@ -86,7 +93,7 @@ ThemeData lightTheme() {
   return ThemeData(
     useMaterial3: true,
     colorScheme: cs,
-    extensions: const [AppStatusColors.light],
+    extensions: const [AppStatusColors.light, AppCardStyle.light],
     scaffoldBackgroundColor: AppColors.background,
     textTheme: _buildTextTheme(AppColors.onSurface, AppColors.subtle),
     appBarTheme: AppBarTheme(
@@ -202,7 +209,7 @@ ThemeData lightTheme() {
   );
 }
 
-ThemeData darkTheme() {
+ThemeData _buildDarkTheme() {
   const cs = ColorScheme.dark(
     primary: AppColors.primary,
     onPrimary: Colors.white,
@@ -232,7 +239,7 @@ ThemeData darkTheme() {
   return ThemeData(
     useMaterial3: true,
     colorScheme: cs,
-    extensions: const [AppStatusColors.dark],
+    extensions: const [AppStatusColors.dark, AppCardStyle.dark],
     scaffoldBackgroundColor: AppColors.darkBackground,
     textTheme: _buildTextTheme(AppColors.darkOnSurface, AppColors.darkSubtle),
     appBarTheme: AppBarTheme(

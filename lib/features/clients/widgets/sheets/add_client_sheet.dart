@@ -7,6 +7,7 @@ import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/sections/additional_contacts_section.dart';
+import 'package:scheduling/features/maps/address_field_filler.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/address_autocomplete_field.dart';
@@ -106,37 +107,20 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
     return contacts;
   }
 
-  void _fillAddressPartsFromText(String rawAddress) {
-    final fields = AddressParser.parse(rawAddress);
-
-    if (fields.apt != null && _aptController.text.trim().isEmpty) {
-      _aptController.text = fields.apt!;
-    }
-    if (fields.street != null &&
-        _addressController.text.trim() != fields.street) {
-      _addressController.value = TextEditingValue(
-        text: fields.street!,
-        selection: TextSelection.collapsed(offset: fields.street!.length),
-      );
-    }
-    if (fields.postalCode != null) {
-      _postalCodeController.text = fields.postalCode!;
-    }
-    if (fields.country != null &&
-        (fields.country != 'Canada' ||
-            _countryController.text.trim().isEmpty)) {
-      _countryController.text = fields.country!;
-    }
-    if (fields.province != null) _provinceController.text = fields.province!;
-    if (fields.city != null) _cityController.text = fields.city!;
-  }
-
   void _handleAddressSelected() {
     Future<void>.microtask(() {
       if (!mounted) return;
       setState(() {
         _errors['address'] = null;
-        _fillAddressPartsFromText(_addressController.text);
+        fillAddressControllersFromText(
+          _addressController.text,
+          address: _addressController,
+          apt: _aptController,
+          city: _cityController,
+          province: _provinceController,
+          postalCode: _postalCodeController,
+          country: _countryController,
+        );
       });
     });
   }

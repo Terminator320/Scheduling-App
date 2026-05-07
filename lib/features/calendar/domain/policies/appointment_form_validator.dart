@@ -87,3 +87,13 @@ DateTime combineEndDateAndTime(
   final start = combineDateAndTime(date, startTime);
   return end.isAfter(start) ? end : end.add(const Duration(days: 1));
 }
+
+/// Returns [errors] without [key], or the same map untouched when absent —
+/// used by the form controllers to clear a field's error as the user fixes it.
+Map<String, AppointmentFormError> withoutKey(
+  Map<String, AppointmentFormError> errors,
+  String key,
+) {
+  if (!errors.containsKey(key)) return errors;
+  return Map<String, AppointmentFormError>.from(errors)..remove(key);
+}
