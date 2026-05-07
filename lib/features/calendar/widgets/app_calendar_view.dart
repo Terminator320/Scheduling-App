@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
@@ -101,14 +102,12 @@ class AppCalendar extends StatelessWidget {
           return _dayCell(
             context,
             day,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(
-                color: Theme.of(context).colorScheme.onSurface,
-                width: 1.5,
-              ),
+              color: AppColors.primaryTint,
             ),
             textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppColors.primaryDark,
               fontWeight: FontWeight.w600,
             ),
             rowH: effectiveRowH,
@@ -118,12 +117,12 @@ class AppCalendar extends StatelessWidget {
           return _dayCell(
             context,
             day,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              color: Theme.of(context).colorScheme.primary,
+              color: AppColors.primary,
             ),
             textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onPrimary,
+              color: Colors.white,
               fontWeight: FontWeight.w600,
             ),
             rowH: effectiveRowH,
