@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
@@ -26,7 +27,7 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
   late final TextEditingController _phoneController;
 
   late bool _isAdmin;
-  late Color _selectedColor;
+  late int _selectedColor;
   bool _isSaving = false;
 
   bool get _isEdit => widget.employee != null;
@@ -39,7 +40,7 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
     _emailController = TextEditingController(text: e?.email ?? '');
     _phoneController = TextEditingController(text: e?.phone ?? '');
     _isAdmin = e?.isAdmin ?? false;
-    _selectedColor = e?.color ?? Colors.blue.shade500;
+    _selectedColor = e?.color.toARGB32() ?? AppColors.employeePalette.first.toARGB32();
   }
 
   @override
@@ -60,7 +61,7 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
       final name = _nameController.text.trim();
       final email = _emailController.text.trim().toLowerCase();
       final phone = _phoneController.text.trim();
-      final colorValue = _selectedColor.toARGB32().toString();
+      final colorValue = _selectedColor.toString();
 
       if (_isEdit) {
         await _service.updateEmployee(
@@ -172,16 +173,9 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              Text(
-                context.l10n.employeeColor,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 10),
               EmployeeColorPickerRow(
-                selected: _selectedColor,
-                onSelect: (c) => setState(() => _selectedColor = c),
+                selectedColor: _selectedColor,
+                onColorChanged: (value) => setState(() => _selectedColor = value),
               ),
               const SizedBox(height: 8),
               SwitchListTile(
