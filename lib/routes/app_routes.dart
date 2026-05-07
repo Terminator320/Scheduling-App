@@ -71,7 +71,7 @@ class AppRoutes {
       case AppRoutes.settings:
         return MaterialPageRoute(
           settings: settings,
-          builder: (_) => const CalendarScreen(),
+          builder: (_) => const SettingsScreen(),
         );
 
       default:
