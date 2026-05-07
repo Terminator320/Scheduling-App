@@ -1,20 +1,26 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/services/appointment_service.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
-import 'package:scheduling/features/calendar/widgets/appointment_tile.dart';
 import 'package:scheduling/features/clients/models/client_record.dart';
 import 'package:scheduling/features/clients/services/client_service.dart';
 import 'package:scheduling/features/clients/widgets/add_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/client_detail_sheet.dart';
 import 'package:scheduling/features/clients/widgets/client_tile.dart';
 import 'package:scheduling/features/settings/widgets/settings_drawer.dart';
+import 'package:scheduling/routes/app_routes.dart';
+import 'package:scheduling/shared/widgets/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/appScaffoldBar.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
+import 'package:scheduling/shared/widgets/skeleton_loader.dart';
+import 'package:scheduling/shared/widgets/status_chip.dart';
 
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
@@ -118,13 +124,6 @@ class _ListInformationState extends State<ListInformation> {
     setState(() => _searchController.clear());
   }
 
-  void _clearAppointmentSearch() {
-    // Cancel search before opening a result so the list returns cleanly.
-    FocusManager.instance.primaryFocus?.unfocus();
-    if (_appointmentSearchController.text.isEmpty) return;
-    setState(() => _appointmentSearchController.clear());
-  }
-
   Future<void> _settleSearchBeforeSheet() async {
     await Future<void>.delayed(const Duration(milliseconds: 80));
   }
@@ -151,25 +150,67 @@ class _ListInformationState extends State<ListInformation> {
     if (mounted) await _unfocusAfterSheetClose();
   }
 
-  Future<void> _openAppointmentFromSearch(AppointmentRecord appointment) async {
-    _clearAppointmentSearch();
-    await _settleSearchBeforeSheet();
-    if (!mounted) return;
-
-    await showEventDetails(context, appointment, showActions: false);
-
-    if (mounted) await _unfocusAfterSheetClose();
+  PreferredSizeWidget _buildHistoryAppBar() {
+    return AppBar(
+      backgroundColor: AppColors.primary,
+      foregroundColor: Colors.white,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_rounded),
+        onPressed: () => Navigator.pushReplacementNamed(
+          context,
+          AppRoutes.mainCalendar,
+          arguments: MainCalendarArgs(
+            isAdmin: widget.isAdmin,
+            employeeId: widget.employeeId,
+          ),
+        ),
+      ),
+      title: Text(
+        context.l10n.history,
+        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+      ),
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(52),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: TextField(
+            controller: _appointmentSearchController,
+            onChanged: (_) => setState(() {}),
+            style: const TextStyle(color: Colors.white, fontSize: 13),
+            decoration: InputDecoration(
+              hintText: context.l10n.searchByClientOrEmployee,
+              hintStyle: TextStyle(
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 13,
+              ),
+              prefixIcon: Icon(
+                Icons.search,
+                size: 16,
+                color: Colors.white.withValues(alpha: 0.7),
+              ),
+              filled: true,
+              fillColor: Colors.white.withValues(alpha: 0.15),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadius.r12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                vertical: 8,
+                horizontal: 12,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: appScaffoldBar(
-        context,
-        _isClients ? context.l10n.clients : context.l10n.appointments,
-        widget.employeeId,
-        widget.isAdmin,
-      ),
+      appBar: _isClients
+          ? appScaffoldBar(context, context.l10n.clients, widget.employeeId, widget.isAdmin)
+          : _buildHistoryAppBar(),
       endDrawer: SettingsDrawer(
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
@@ -281,120 +322,233 @@ class _ListInformationState extends State<ListInformation> {
   }
 
   Widget _buildAppointmentList() {
-    final scheme = Theme.of(context).colorScheme;
+    final colorMap = buildEmployeeColorMap(_allEmployees);
+    final query = _appointmentSearchController.text.trim().toLowerCase();
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: TextField(
-            controller: _appointmentSearchController,
-            onChanged: (_) => setState(() {}),
-            textInputAction: TextInputAction.search,
-            // Close the keyboard after the user submits a search.
-            onSubmitted: (_) => FocusScope.of(context).unfocus(),
-            decoration:
-                formInputDecoration(
-                  context,
-                  context.l10n.searchByClientOrEmployee,
-                ).copyWith(
-                  prefixIcon: Icon(
-                    Icons.search,
-                    size: 20,
-                    color: scheme.onSurfaceVariant,
+    return ColoredBox(
+      color: AppColors.background,
+      child: StreamBuilder<List<AppointmentRecord>>(
+        stream: _appointmentService.getHistoryAppointments(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return ListView(
+              padding: const EdgeInsets.all(12),
+              children: const [
+                SkeletonListTile(),
+                SizedBox(height: 8),
+                SkeletonListTile(),
+                SizedBox(height: 8),
+                SkeletonListTile(),
+              ],
+            );
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          final appointments = snapshot.data ?? [];
+
+          final filtered = query.isEmpty
+              ? appointments
+              : appointments.where((a) {
+                  final matchesClient =
+                      a.clientName.toLowerCase().contains(query);
+                  final matchesEmployee =
+                      a.employeeNames.any((e) => e.toLowerCase().contains(query));
+                  return matchesClient || matchesEmployee;
+                }).toList();
+
+          if (filtered.isEmpty) {
+            return AppEmptyState(
+              icon: query.isEmpty
+                  ? Icons.history_outlined
+                  : Icons.search_off_outlined,
+              title: query.isEmpty
+                  ? context.l10n.noAppointmentsFound
+                  : '${context.l10n.noAppointmentsMatch} "$query"',
+              body: query.isEmpty
+                  ? context.l10n.tapToScheduleAnAppointment
+                  : context.l10n.tryADifferentSearchTerm,
+            );
+          }
+
+          // Sort descending (newest first)
+          filtered.sort((a, b) => b.startTime.compareTo(a.startTime));
+
+          // Group by date
+          final locale = Intl.defaultLocale ?? 'en_CA';
+          final dateKeyFormat = DateFormat('yyyy-MM-dd');
+          final dateHeaderFormat = DateFormat('EEEE, MMMM d', locale);
+
+          final grouped = <String, List<AppointmentRecord>>{};
+          for (final app in filtered) {
+            final key = dateKeyFormat.format(app.startTime);
+            grouped.putIfAbsent(key, () => []).add(app);
+          }
+
+          final sortedKeys = grouped.keys.toList()
+            ..sort((a, b) => b.compareTo(a));
+
+          // Build flat list of widgets
+          final items = <Widget>[];
+          for (final key in sortedKeys) {
+            final group = grouped[key]!;
+            final date = DateTime.parse(key);
+            final label = dateHeaderFormat.format(date).toUpperCase();
+
+            items.add(
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.subtle,
+                    letterSpacing: 0.6,
                   ),
-                  suffixIcon: _appointmentSearchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: Icon(
-                            Icons.close,
-                            size: 18,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                          onPressed: () => setState(
-                            () => _appointmentSearchController.clear(),
-                          ),
-                          tooltip: context.l10n.clear,
-                        )
-                      : null,
                 ),
-          ),
-        ),
-        Expanded(
-          child: StreamBuilder<List<AppointmentRecord>>(
-            stream: _appointmentService.getAppointmentStatus('done'),
-            // Takes all appointments with status done
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+              ),
+            );
+
+            for (int i = 0; i < group.length; i++) {
+              items.add(
+                _HistoryCard(
+                  appointment: group[i],
+                  employeeColorMap: colorMap,
+                ),
+              );
+              if (i < group.length - 1) {
+                items.add(const SizedBox(height: 7));
               }
-              if (snapshot.hasError) {
-                return Center(
-                  child: Text('${context.l10n.error}: ${snapshot.error}'),
-                );
-              }
+            }
+            items.add(const SizedBox(height: 8));
+          }
 
-              final appointments = snapshot.data ?? [];
-              final query = _appointmentSearchController.text
-                  .trim()
-                  .toLowerCase();
+          return ListView(
+            padding: const EdgeInsets.all(12),
+            children: items,
+          );
+        },
+      ),
+    );
+  }
+}
 
-              final filtered = query.isEmpty
-                  ? appointments
-                  : appointments.where((a) {
-                      final matchesClient = a.clientName.toLowerCase().contains(
-                        query,
-                      );
-                      final matchesEmployee = a.employeeNames.any(
-                        (e) => e.toLowerCase().contains(query),
-                      );
-                      return matchesClient || matchesEmployee;
-                    }).toList();
+AppointmentStatus _mapHistoryStatus(String status) =>
+    switch (status.toLowerCase()) {
+      'confirmed' => AppointmentStatus.confirmed,
+      'done' || 'completed' => AppointmentStatus.done,
+      'cancelled' => AppointmentStatus.cancelled,
+      _ => AppointmentStatus.pending,
+    };
 
-              final sorted = [...filtered]
-                ..sort((a, b) => a.startTime.compareTo(b.startTime));
+class _HistoryCard extends StatelessWidget {
+  const _HistoryCard({
+    required this.appointment,
+    required this.employeeColorMap,
+  });
 
-              if (sorted.isEmpty) {
-                return Center(
+  final AppointmentRecord appointment;
+  final Map<String, Color> employeeColorMap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isCancelled = appointment.status.toLowerCase() == 'cancelled';
+    final accent =
+        colorFromMap(appointment, employeeColorMap) ?? AppColors.primary;
+    final status = _mapHistoryStatus(appointment.status);
+
+    final employeeName = appointment.employeeNames.isNotEmpty
+        ? appointment.employeeNames.first
+        : null;
+
+    final timeLabel =
+        '${DateUtilsHelper.formatTime(appointment.startTime)} – ${DateUtilsHelper.formatTime(appointment.endTime)}'
+        '${employeeName != null ? ' · $employeeName' : ''}';
+
+    Widget card = Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => showEventDetails(context, appointment, showActions: false),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(width: 4, color: accent),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        query.isEmpty
-                            ? Icons.event_busy_outlined
-                            : Icons.search_off_outlined,
-                        size: 40,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(height: 8),
                       Text(
-                        query.isEmpty
-                            ? context.l10n.noAppointmentsFound
-                            : '${context.l10n.noAppointmentsMatch} "$query"',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: scheme.onSurfaceVariant,
+                        appointment.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          decoration: isCancelled
+                              ? TextDecoration.lineThrough
+                              : null,
+                          color: isCancelled ? AppColors.subtle : null,
                         ),
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: BoxDecoration(
+                              color: accent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              timeLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: AppColors.subtle,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                );
-              }
-
-              final colorMap = buildEmployeeColorMap(_allEmployees);
-              return ListView.separated(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-                itemCount: sorted.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (context, index) => AppointmentTile(
-                  appointment: sorted[index],
-                  employeeColorMap: colorMap,
-                  showActions: false,
-                  onOpen: () => _openAppointmentFromSearch(sorted[index]),
                 ),
-              );
-            },
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 10, left: 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    StatusChip(status: status),
+                    const SizedBox(width: 7),
+                    const Icon(
+                      Icons.chevron_right,
+                      size: 16,
+                      color: AppColors.muted,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
+
+    if (isCancelled) {
+      card = Opacity(opacity: 0.75, child: card);
+    }
+
+    return card;
   }
 }
