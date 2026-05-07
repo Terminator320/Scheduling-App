@@ -886,4 +886,64 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get employeeRoleValue => 'Employee';
+
+  @override
+  String get welcomeBack => 'Welcome back';
+
+  @override
+  String get signInToYourAccount => 'Sign in to your account';
+
+  @override
+  String get fillInYourDetailsBelow => 'Fill in your details below';
+
+  @override
+  String get alreadyHaveAnAccountSignIn => 'Already have an account? Sign in';
+
+  @override
+  String get weLlSendALinkToYourEmail => 'We\'ll send a link to your email.';
+
+  @override
+  String get sendResetLink => 'Send Reset Link';
+
+  @override
+  String get backToSignIn2 => 'Back to sign in';
+
+  @override
+  String get tapToScheduleAnAppointment => 'Tap + to schedule an appointment.';
+
+  @override
+  String get searchClients => 'Search clients…';
+
+  @override
+  String get searchEmployees => 'Search employees…';
+
+  @override
+  String get searchAppointments => 'Search appointments…';
+
+  @override
+  String get noResults => 'No results';
+
+  @override
+  String get tapToAddYourFirstClient => 'Tap + to add your first client.';
+
+  @override
+  String get tryADifferentSearchTerm => 'Try a different search term.';
+
+  @override
+  String get noEmployeesYet => 'No employees yet';
+
+  @override
+  String get tapToInviteYourFirstEmployee => 'Tap + to invite your first employee.';
+
+  @override
+  String get history => 'History';
+
+  @override
+  String get appearance => 'Appearance';
+
+  @override
+  String get account => 'Account';
+
+  @override
+  String get pickAColor => 'Pick a Color';
 }

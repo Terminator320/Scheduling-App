@@ -1852,6 +1852,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Employee'**
   String get employeeRoleValue;
+
+  /// No description provided for @welcomeBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome back'**
+  String get welcomeBack;
+
+  /// No description provided for @signInToYourAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to your account'**
+  String get signInToYourAccount;
+
+  /// No description provided for @fillInYourDetailsBelow.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill in your details below'**
+  String get fillInYourDetailsBelow;
+
+  /// No description provided for @alreadyHaveAnAccountSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Already have an account? Sign in'**
+  String get alreadyHaveAnAccountSignIn;
+
+  /// No description provided for @weLlSendALinkToYourEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ll send a link to your email.'**
+  String get weLlSendALinkToYourEmail;
+
+  /// No description provided for @sendResetLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Send Reset Link'**
+  String get sendResetLink;
+
+  /// No description provided for @backToSignIn2.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to sign in'**
+  String get backToSignIn2;
+
+  /// No description provided for @tapToScheduleAnAppointment.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap + to schedule an appointment.'**
+  String get tapToScheduleAnAppointment;
+
+  /// No description provided for @searchClients.
+  ///
+  /// In en, this message translates to:
+  /// **'Search clients…'**
+  String get searchClients;
+
+  /// No description provided for @searchEmployees.
+  ///
+  /// In en, this message translates to:
+  /// **'Search employees…'**
+  String get searchEmployees;
+
+  /// No description provided for @searchAppointments.
+  ///
+  /// In en, this message translates to:
+  /// **'Search appointments…'**
+  String get searchAppointments;
+
+  /// No description provided for @noResults.
+  ///
+  /// In en, this message translates to:
+  /// **'No results'**
+  String get noResults;
+
+  /// No description provided for @tapToAddYourFirstClient.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap + to add your first client.'**
+  String get tapToAddYourFirstClient;
+
+  /// No description provided for @tryADifferentSearchTerm.
+  ///
+  /// In en, this message translates to:
+  /// **'Try a different search term.'**
+  String get tryADifferentSearchTerm;
+
+  /// No description provided for @noEmployeesYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No employees yet'**
+  String get noEmployeesYet;
+
+  /// No description provided for @tapToInviteYourFirstEmployee.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap + to invite your first employee.'**
+  String get tapToInviteYourFirstEmployee;
+
+  /// No description provided for @history.
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get history;
+
+  /// No description provided for @appearance.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get appearance;
+
+  /// No description provided for @account.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get account;
+
+  /// No description provided for @pickAColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a Color'**
+  String get pickAColor;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

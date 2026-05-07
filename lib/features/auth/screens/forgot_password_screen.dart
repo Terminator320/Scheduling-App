@@ -6,10 +6,10 @@ import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/animations/fade_slide_entrance.dart';
 import 'package:scheduling/core/animations/staggered_entrance_controller.dart';
 import 'package:scheduling/core/errors/auth_error_handler.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
-import 'package:scheduling/features/auth/widgets/auth_banner.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
 class ForgotPassword extends StatefulWidget {
@@ -115,61 +115,34 @@ class _ForgotPasswordState extends State<ForgotPassword>
 
   @override
   Widget build(BuildContext context) {
-    final colour = Theme.of(context).colorScheme;
-
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            tooltip: context.l10n.back,
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          title: Text(context.l10n.resetPassword),
-          centerTitle: true,
-          elevation: 0,
-          backgroundColor: colour.surface,
-          foregroundColor: colour.onSurface,
-        ),
+        backgroundColor: AppColors.background,
         body: SafeArea(
           child: SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: 400,
-                  minHeight:
-                      MediaQuery.of(context).size.height -
-                      MediaQuery.of(context).padding.top -
-                      MediaQuery.of(context).padding.bottom -
-                      kToolbarHeight,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 24,
-                  ),
-                  child: AnimatedSwitcher(
-                    duration: AppAnimationDurations.banner,
-                    switchInCurve: AppAnimationCurves.entrance,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, animation) => FadeTransition(
-                      opacity: animation,
-                      child: SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(0, 0.04),
-                          end: Offset.zero,
-                        ).animate(animation),
-                        child: child,
-                      ),
-                    ),
-                    child: _emailSent
-                        ? _buildSuccess(key: const ValueKey('success'))
-                        : _buildForm(key: const ValueKey('form')),
-                  ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sp24,
+              vertical: AppSpacing.sp32,
+            ),
+            child: AnimatedSwitcher(
+              duration: AppAnimationDurations.banner,
+              switchInCurve: AppAnimationCurves.entrance,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.04),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
                 ),
               ),
+              child: _emailSent
+                  ? _buildSuccess(key: const ValueKey('success'))
+                  : _buildForm(key: const ValueKey('form')),
             ),
           ),
         ),
@@ -178,79 +151,52 @@ class _ForgotPasswordState extends State<ForgotPassword>
   }
 
   Widget _buildForm({required Key key}) {
-    final colour = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final animations = _entrance.animations;
 
     return Column(
       key: key,
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ScaleTransition(
-          scale: Tween<double>(begin: 0.82, end: 1).animate(animations[0]),
-          child: FadeTransition(
-            opacity: animations[0],
-            child: Center(
-              child: Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: colour.primary.withAlpha(28),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.lock_reset_rounded,
-                  size: 36,
-                  color: colour.primary,
-                ),
-              ),
+        FadeSlideEntrance(
+          animation: animations[0],
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(AppRadius.r12),
+            ),
+            child: const Icon(
+              Icons.calendar_today_rounded,
+              color: Colors.white,
+              size: 22,
             ),
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.sp24),
         FadeSlideEntrance(
           animation: animations[1],
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 context.l10n.forgotYourPassword,
-                textAlign: TextAlign.center,
-                style: textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: textTheme.headlineLarge,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 4),
               Text(
                 context
                     .l10n
                     .enterYourAccountEmailAndWeLlSendYouALinkToResetYourPassword,
-                textAlign: TextAlign.center,
-                style: textTheme.bodyMedium?.copyWith(
-                  color: colour.onSurface.withAlpha(160),
-                  height: 1.4,
-                ),
+                style: textTheme.bodyMedium,
               ),
             ],
           ),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: AppSpacing.sp32),
         FadeSlideEntrance(
           animation: animations[2],
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              context.l10n.email,
-              style: textTheme.labelLarge?.copyWith(
-                color: colour.onSurface.withAlpha(200),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        FadeSlideEntrance(
-          animation: animations[3],
           child: AnimatedFormFieldWrapper(
             hasError: _emailError != null,
             child: TextField(
@@ -272,11 +218,10 @@ class _ForgotPasswordState extends State<ForgotPassword>
               decoration: formInputDecoration(
                 context,
                 context.l10n.youExampleCom,
-              )
-                  .copyWith(
-                    errorText: _emailError,
-                    prefixIcon: const Icon(Icons.email_outlined, size: 20),
-                  ),
+              ).copyWith(
+                errorText: _emailError,
+                prefixIcon: const Icon(Icons.email_outlined, size: 20),
+              ),
             ),
           ),
         ),
@@ -293,33 +238,55 @@ class _ForgotPasswordState extends State<ForgotPassword>
           child: _errorMessage.isNotEmpty
               ? Padding(
                   key: ValueKey('error_$_errorMessage'),
-                  padding: const EdgeInsets.only(top: 14),
-                  child: AuthBanner(
-                    kind: AuthBannerKind.error,
-                    message: _errorMessage,
+                  padding: const EdgeInsets.only(top: AppSpacing.sp12),
+                  child: Container(
+                    padding: const EdgeInsets.all(AppSpacing.sp12),
+                    decoration: BoxDecoration(
+                      color: AppColors.errorTint,
+                      borderRadius: BorderRadius.circular(AppRadius.r8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          color: AppColors.error,
+                          size: 16,
+                        ),
+                        const SizedBox(width: AppSpacing.sp8),
+                        Expanded(
+                          child: Text(
+                            _errorMessage,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: AppColors.errorText,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 )
               : const SizedBox.shrink(key: ValueKey('error_none')),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.sp24),
         FadeSlideEntrance(
-          animation: animations[4],
+          animation: animations[3],
           child: AnimatedLoadingButton(
             label: context.l10n.sendResetEmail,
             isLoading: _isLoading,
             onPressed: _sendResetEmail,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.sp16),
         FadeSlideEntrance(
-          animation: animations[5],
-          child: TextButton(
-            onPressed: _isLoading ? null : _backToSignIn,
-            child: Text(
-              context.l10n.backToSignIn,
-              style: textTheme.bodyMedium?.copyWith(
-                color: colour.primary,
-                fontWeight: FontWeight.w500,
+          animation: animations[4],
+          child: Center(
+            child: TextButton(
+              onPressed: _isLoading ? null : _backToSignIn,
+              child: Text(
+                context.l10n.backToSignIn,
+                style: textTheme.bodySmall?.copyWith(
+                  color: AppColors.primary,
+                ),
               ),
             ),
           ),
@@ -329,67 +296,80 @@ class _ForgotPasswordState extends State<ForgotPassword>
   }
 
   Widget _buildSuccess({required Key key}) {
-    final colour = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final animations = _entrance.animations;
 
     return Column(
       key: key,
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ScaleTransition(
           scale: Tween<double>(begin: 0.82, end: 1).animate(animations[0]),
           child: FadeTransition(
             opacity: animations[0],
-            child: Center(
-              child: Container(
-                width: 88,
-                height: 88,
-                decoration: BoxDecoration(
-                  color: colour.secondary.withAlpha(40),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.mark_email_read_rounded,
-                  size: 44,
-                  color: colour.secondary,
-                ),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.successTint,
+                borderRadius: BorderRadius.circular(AppRadius.r12),
+              ),
+              child: const Icon(
+                Icons.mark_email_read_rounded,
+                size: 22,
+                color: AppColors.success,
               ),
             ),
           ),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: AppSpacing.sp24),
         FadeSlideEntrance(
           animation: animations[1],
           child: Text(
             context.l10n.checkYourInbox,
-            textAlign: TextAlign.center,
-            style: textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w600,
+            style: textTheme.headlineLarge,
+          ),
+        ),
+        const SizedBox(height: 4),
+        FadeSlideEntrance(
+          animation: animations[2],
+          child: Text(
+            context.l10n.ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent,
+            style: textTheme.bodyMedium,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        FadeSlideEntrance(
+          animation: animations[3],
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.sp12),
+            decoration: BoxDecoration(
+              color: AppColors.primaryTint,
+              borderRadius: BorderRadius.circular(AppRadius.r8),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.info_outline,
+                  color: AppColors.primary,
+                  size: 16,
+                ),
+                const SizedBox(width: AppSpacing.sp8),
+                Expanded(
+                  child: Text(
+                    context
+                        .l10n
+                        .theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: AppColors.primaryDark,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-        const SizedBox(height: 20),
-        FadeSlideEntrance(
-          animation: animations[2],
-          child: AuthBanner(
-            kind: AuthBannerKind.success,
-            message:
-                context.l10n.ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent,
-          ),
-        ),
-        const SizedBox(height: 16),
-        FadeSlideEntrance(
-          animation: animations[3],
-          child: AuthBanner(
-            kind: AuthBannerKind.info,
-            message: context
-                .l10n
-                .theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder,
-          ),
-        ),
-        const SizedBox(height: 32),
+        const SizedBox(height: AppSpacing.sp24),
         FadeSlideEntrance(
           animation: animations[4],
           child: AnimatedLoadingButton(
@@ -397,16 +377,17 @@ class _ForgotPasswordState extends State<ForgotPassword>
             onPressed: _backToSignIn,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.sp16),
         FadeSlideEntrance(
           animation: animations[5],
-          child: TextButton(
-            onPressed: _resendEmail,
-            child: Text(
-              context.l10n.useADifferentEmail,
-              style: textTheme.bodySmall?.copyWith(
-                color: colour.primary,
-                fontWeight: FontWeight.w500,
+          child: Center(
+            child: TextButton(
+              onPressed: _resendEmail,
+              child: Text(
+                context.l10n.useADifferentEmail,
+                style: textTheme.bodySmall?.copyWith(
+                  color: AppColors.primary,
+                ),
               ),
             ),
           ),

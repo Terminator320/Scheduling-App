@@ -6,10 +6,10 @@ import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/animations/fade_slide_entrance.dart';
 import 'package:scheduling/core/animations/staggered_entrance_controller.dart';
 import 'package:scheduling/core/errors/auth_error_handler.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
-import 'package:scheduling/features/auth/widgets/auth_banner.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
 class CreateAccountResult {
@@ -153,8 +153,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
 
   @override
   Widget build(BuildContext context) {
-    final colour = Theme.of(context).colorScheme;
-
     return WillPopScope(
       onWillPop: () async {
         _backToSignIn();
@@ -163,56 +161,31 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
       child: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         child: Scaffold(
-          appBar: AppBar(
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              tooltip: context.l10n.back,
-              onPressed: _isLoading ? null : _backToSignIn,
-            ),
-            title: Text(context.l10n.createAccount2),
-            centerTitle: true,
-            elevation: 0,
-            backgroundColor: colour.surface,
-            foregroundColor: colour.onSurface,
-          ),
+          backgroundColor: AppColors.background,
           body: SafeArea(
             child: SingleChildScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: 400,
-                    minHeight:
-                        MediaQuery.of(context).size.height -
-                        MediaQuery.of(context).padding.top -
-                        MediaQuery.of(context).padding.bottom -
-                        kToolbarHeight,
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 24,
-                    ),
-                    child: AnimatedSwitcher(
-                      duration: AppAnimationDurations.banner,
-                      switchInCurve: AppAnimationCurves.entrance,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder: (child, animation) => FadeTransition(
-                        opacity: animation,
-                        child: SlideTransition(
-                          position: Tween<Offset>(
-                            begin: const Offset(0, 0.04),
-                            end: Offset.zero,
-                          ).animate(animation),
-                          child: child,
-                        ),
-                      ),
-                      child: _created
-                          ? _buildSuccess(key: const ValueKey('success'))
-                          : _buildForm(key: const ValueKey('form')),
-                    ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sp24,
+                vertical: AppSpacing.sp32,
+              ),
+              child: AnimatedSwitcher(
+                duration: AppAnimationDurations.banner,
+                switchInCurve: AppAnimationCurves.entrance,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.04),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
                   ),
                 ),
+                child: _created
+                    ? _buildSuccess(key: const ValueKey('success'))
+                    : _buildForm(key: const ValueKey('form')),
               ),
             ),
           ),
@@ -222,60 +195,48 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
   }
 
   Widget _buildForm({required Key key}) {
-    final colour = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final animations = _entrance.animations;
 
     return Column(
       key: key,
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ScaleTransition(
-          scale: Tween<double>(begin: 0.82, end: 1).animate(animations[0]),
-          child: FadeTransition(
-            opacity: animations[0],
-            child: Center(
-              child: Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: colour.primary.withAlpha(28),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.person_add_alt_1_rounded,
-                  size: 36,
-                  color: colour.primary,
-                ),
-              ),
+        FadeSlideEntrance(
+          animation: animations[0],
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(AppRadius.r12),
+            ),
+            child: const Icon(
+              Icons.calendar_today_rounded,
+              color: Colors.white,
+              size: 22,
             ),
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.sp24),
         FadeSlideEntrance(
           animation: animations[1],
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 context.l10n.createAccount2,
-                textAlign: TextAlign.center,
-                style: textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: textTheme.headlineLarge,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               Text(
                 context.l10n.useTheEmailYourAdminAddedToTheEmployeeList,
-                textAlign: TextAlign.center,
-                style: textTheme.bodyMedium?.copyWith(
-                  color: colour.onSurface.withAlpha(150),
-                ),
+                style: textTheme.bodyMedium,
               ),
             ],
           ),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: AppSpacing.sp32),
         FadeSlideEntrance(
           animation: animations[2],
           child: AnimatedFormFieldWrapper(
@@ -301,7 +262,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
             ),
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpacing.sp16),
         FadeSlideEntrance(
           animation: animations[3],
           child: AnimatedFormFieldWrapper(
@@ -327,6 +288,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                         ? Icons.visibility_off_outlined
                         : Icons.visibility_outlined,
                     size: 20,
+                    color: AppColors.muted,
                   ),
                   tooltip: _isObscured
                       ? context.l10n.showPassword
@@ -337,7 +299,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
             ),
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpacing.sp16),
         FadeSlideEntrance(
           animation: animations[4],
           child: AnimatedFormFieldWrapper(
@@ -354,29 +316,27 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               decoration: formInputDecoration(
                 context,
                 context.l10n.confirmPassword,
-              )
-                  .copyWith(
-                    errorText: _confirmPasswordError,
-                    prefixIcon: const Icon(Icons.lock_reset_outlined, size: 20),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _isConfirmObscured
-                            ? Icons.visibility_off_outlined
-                            : Icons.visibility_outlined,
-                        size: 20,
-                      ),
-                      tooltip: _isConfirmObscured
-                          ? context.l10n.showPassword
-                          : context.l10n.hidePassword,
-                      onPressed: () => setState(
-                        () => _isConfirmObscured = !_isConfirmObscured,
-                      ),
-                    ),
+              ).copyWith(
+                errorText: _confirmPasswordError,
+                prefixIcon: const Icon(Icons.lock_reset_outlined, size: 20),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _isConfirmObscured
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 20,
+                    color: AppColors.muted,
                   ),
+                  tooltip: _isConfirmObscured
+                      ? context.l10n.showPassword
+                      : context.l10n.hidePassword,
+                  onPressed: () =>
+                      setState(() => _isConfirmObscured = !_isConfirmObscured),
+                ),
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 18),
         AnimatedSwitcher(
           duration: AppAnimationDurations.banner,
           transitionBuilder: (child, animation) => FadeTransition(
@@ -390,14 +350,36 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           child: _bannerError != null
               ? Padding(
                   key: ValueKey('err_$_bannerError'),
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: AuthBanner(
-                    kind: AuthBannerKind.error,
-                    message: _bannerError!,
+                  padding: const EdgeInsets.only(top: AppSpacing.sp12),
+                  child: Container(
+                    padding: const EdgeInsets.all(AppSpacing.sp12),
+                    decoration: BoxDecoration(
+                      color: AppColors.errorTint,
+                      borderRadius: BorderRadius.circular(AppRadius.r8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          color: AppColors.error,
+                          size: 16,
+                        ),
+                        const SizedBox(width: AppSpacing.sp8),
+                        Expanded(
+                          child: Text(
+                            _bannerError!,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: AppColors.errorText,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 )
               : const SizedBox.shrink(key: ValueKey('banner_none')),
         ),
+        const SizedBox(height: AppSpacing.sp24),
         FadeSlideEntrance(
           animation: animations[5],
           child: AnimatedLoadingButton(
@@ -406,12 +388,19 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
             onPressed: _createAccount,
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpacing.sp16),
         FadeSlideEntrance(
           animation: animations[6],
-          child: TextButton(
-            onPressed: _isLoading ? null : _backToSignIn,
-            child: Text(context.l10n.backToSignIn),
+          child: Center(
+            child: TextButton(
+              onPressed: _isLoading ? null : _backToSignIn,
+              child: Text(
+                context.l10n.backToSignIn,
+                style: textTheme.bodySmall?.copyWith(
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
           ),
         ),
       ],
@@ -419,59 +408,49 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
   }
 
   Widget _buildSuccess({required Key key}) {
-    final colour = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final animations = _entrance.animations;
 
     return Column(
       key: key,
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ScaleTransition(
           scale: Tween<double>(begin: 0.82, end: 1).animate(animations[0]),
           child: FadeTransition(
             opacity: animations[0],
-            child: Center(
-              child: Container(
-                width: 76,
-                height: 76,
-                decoration: BoxDecoration(
-                  color: colour.primary.withAlpha(28),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.check_circle_outline_rounded,
-                  size: 42,
-                  color: colour.primary,
-                ),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.successTint,
+                borderRadius: BorderRadius.circular(AppRadius.r12),
+              ),
+              child: const Icon(
+                Icons.check_circle_outline_rounded,
+                size: 22,
+                color: AppColors.success,
               ),
             ),
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.sp24),
         FadeSlideEntrance(
           animation: animations[1],
           child: Text(
             context.l10n.accountCreated,
-            textAlign: TextAlign.center,
-            style: textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+            style: textTheme.headlineLarge,
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 4),
         FadeSlideEntrance(
           animation: animations[2],
           child: Text(
             context.l10n.youCanNowSignInWithThisEmailAndPassword,
-            textAlign: TextAlign.center,
-            style: textTheme.bodyMedium?.copyWith(
-              color: colour.onSurface.withAlpha(150),
-            ),
+            style: textTheme.bodyMedium,
           ),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: AppSpacing.sp32),
         FadeSlideEntrance(
           animation: animations[3],
           child: AnimatedLoadingButton(
