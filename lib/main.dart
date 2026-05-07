@@ -15,6 +15,7 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
+import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/security/app_lock.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
@@ -50,12 +51,8 @@ Future<void> main() async {
       final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
       FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
-      // SharedPreferences load is independent of dotenv/Firebase; start it
-      // eagerly and await only right before runApp.
       final settingsFuture = SharedPrefsSettingsRepository().load();
 
-      // Locale data and dotenv are mutually independent — run in parallel.
-      // Firebase init must follow dotenv (firebase_options.dart reads env).
       await Future.wait([
         initializeDateFormatting('en_CA'),
         initializeDateFormatting('fr_CA'),
@@ -115,6 +112,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   late ThemeMode _themeMode;
   late double _textScale;
   late AppLanguageController _languageController;
+  bool _isHandlingAccountExit = false;
 
   @override
   void initState() {
@@ -157,36 +155,41 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   Future<void> _handleAccountDisabled(
     String Function(AppLocalizations) selectMessage,
   ) async {
+
+    if (_isHandlingAccountExit) return;
     if (FirebaseAuth.instance.currentUser == null) return;
-    // Resolve l10n/theme from the navigator context (below MaterialApp). The
-    // _PaulAppState build context sits above MaterialApp and has no
-    // Localizations, so context.l10n there throws a null-check error.
+
     final navContext = _navigatorKey.currentContext;
     if (navContext == null) return;
+    _isHandlingAccountExit = true;
     final scheme = Theme.of(navContext).colorScheme;
     final message = selectMessage(AppLocalizations.of(navContext));
     await AuthService().signOut();
-    final nav = _navigatorKey.currentState;
-    if (nav != null) {
-      await nav.pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
-    }
-    _scaffoldMessengerKey.currentState?.showSnackBar(
-      SnackBar(
-        backgroundColor: scheme.errorContainer,
-        content: Row(
-          children: [
-            Icon(Icons.error_outline, color: scheme.onErrorContainer),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(color: scheme.onErrorContainer),
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        AppRoutes.login,
+        (_) => false,
+      );
+      _scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(
+          backgroundColor: scheme.errorContainer,
+          content: Row(
+            children: [
+              Icon(Icons.error_outline, color: scheme.onErrorContainer),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: TextStyle(color: scheme.onErrorContainer),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
+      );
+      _isHandlingAccountExit = false;
+    });
   }
 
   void _listenForAccountDisabled() {
@@ -209,18 +212,16 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     });
   }
 
-  // Optimistic splash routing skips the authoritative findUserByUid that used
-  // to sign out a user whose `users` doc no longer exists (e.g. an employee
-  // deleted while their Auth session is still valid). The shared doc stream
-  // resolving to an empty map reproduces that guard.
   void _listenForDeletedAccount() {
     ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
       prev,
       next,
     ) {
-      if (FirebaseAuth.instance.currentUser == null) return;
-      final doc = next.valueOrNull;
-      if (doc != null && doc.isEmpty) {
+      if (isAccountDeletionSignal(
+        isSignedIn: FirebaseAuth.instance.currentUser != null,
+        resolvedUid: ref.read(authUidProvider).valueOrNull,
+        docState: next,
+      )) {
         _handleAccountDisabled((l10n) => l10n.error_thisAccountHasBeenDisabled);
       }
     });

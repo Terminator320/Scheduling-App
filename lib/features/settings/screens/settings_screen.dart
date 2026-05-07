@@ -328,8 +328,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _confirmDeleteAccount() async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) =>
-          DeleteAccountDialog(isAdmin: widget.role == 'admin'),
+      builder: (dialogContext) => DeleteAccountDialog(isAdmin: _isAdmin),
     );
     if (result != true || !mounted) return;
 

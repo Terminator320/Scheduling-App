@@ -11,26 +11,18 @@ import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
-class ForgotPassword extends StatefulWidget {
-  const ForgotPassword({super.key, this.initialEmail, this.authService});
+class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({super.key, this.initialEmail, this.authService});
 
   final String? initialEmail;
 
   final AuthService? authService;
 
   @override
-  State<ForgotPassword> createState() => _ForgotPasswordState();
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordState();
 }
 
-class ForgotPasswordScreen extends ForgotPassword {
-  const ForgotPasswordScreen({
-    super.key,
-    super.initialEmail,
-    super.authService,
-  });
-}
-
-class _ForgotPasswordState extends State<ForgotPassword> {
+class _ForgotPasswordState extends State<ForgotPasswordScreen> {
   late final AuthService _authService = widget.authService ?? AuthService();
   late final TextEditingController _emailController;
 

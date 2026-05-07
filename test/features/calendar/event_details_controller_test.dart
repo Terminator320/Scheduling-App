@@ -314,7 +314,6 @@ void main() {
           appointmentId: any(named: 'appointmentId'),
           newImages: any(named: 'newImages'),
           existingImages: any(named: 'existingImages'),
-          toDelete: any(named: 'toDelete'),
         ),
       );
     });

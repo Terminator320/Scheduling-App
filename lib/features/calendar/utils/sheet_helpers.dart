@@ -1,14 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/add_appointment_sheet.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/details_edit_sheet.dart';
-
-const _sheetStyle = AnimationStyle(
-  duration: Duration(milliseconds: 280),
-  reverseDuration: Duration(milliseconds: 220),
-  curve: Curves.easeOutCubic,
-);
 
 Future<AppointmentRecord?> showAddEventPopup(
   BuildContext context, {
@@ -18,7 +13,7 @@ Future<AppointmentRecord?> showAddEventPopup(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    sheetAnimationStyle: _sheetStyle,
+    sheetAnimationStyle: AppMotion.sheetStyle,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
@@ -35,7 +30,7 @@ Future<void> showEventDetails(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    sheetAnimationStyle: _sheetStyle,
+    sheetAnimationStyle: AppMotion.sheetStyle,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),

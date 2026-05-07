@@ -139,6 +139,77 @@ void main() {
     );
   });
 
+  group('isAccountDeletionSignal', () {
+    const emptyData = AsyncData<Map<String, dynamic>>({});
+
+    test('false when not signed in', () {
+      expect(
+        isAccountDeletionSignal(
+          isSignedIn: false,
+          resolvedUid: 'uid1',
+          docState: emptyData,
+        ),
+        isFalse,
+      );
+    });
+
+    test('false when the auth uid has not resolved yet', () {
+      // Fresh sign-in: FirebaseAuth.currentUser is set but authStateChanges()
+      // lags, so the provider still serves the uid==null placeholder doc.
+      expect(
+        isAccountDeletionSignal(
+          isSignedIn: true,
+          resolvedUid: null,
+          docState: emptyData,
+        ),
+        isFalse,
+      );
+    });
+
+    test(
+      'false for the reload transition that retains the empty placeholder',
+      () {
+        // uid just resolved: provider rebuilds into AsyncLoading retaining the
+        // previous empty doc via copyWithPrevious — not an authoritative delete.
+        final reloading = const AsyncLoading<Map<String, dynamic>>()
+            .copyWithPrevious(emptyData);
+        expect(
+          isAccountDeletionSignal(
+            isSignedIn: true,
+            resolvedUid: 'uid1',
+            docState: reloading,
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test('false when the settled doc is non-empty', () {
+      expect(
+        isAccountDeletionSignal(
+          isSignedIn: true,
+          resolvedUid: 'uid1',
+          docState: const AsyncData({'status': 'active'}),
+        ),
+        isFalse,
+      );
+    });
+
+    test(
+      'true for a settled empty doc with a resolved uid (real deletion)',
+      () {
+        expect(
+          isAccountDeletionSignal(
+            isSignedIn: true,
+            resolvedUid: 'uid1',
+            docState: emptyData,
+          ),
+          isTrue,
+        );
+      },
+    );
+  });
+
   group('userRoleProvider', () {
     late _MockFirebaseAuth mockAuth;
     late _MockUser mockUser;
