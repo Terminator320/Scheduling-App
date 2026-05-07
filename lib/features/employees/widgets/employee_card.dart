@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
+import 'package:scheduling/shared/widgets/app_avatar.dart';
+import 'package:scheduling/shared/widgets/status_chip.dart';
 
 /// List-row card for a single employee with tap / edit / delete affordances.
 class EmployeeCard extends StatelessWidget {
@@ -23,7 +26,7 @@ class EmployeeCard extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return Material(
+    Widget card = Material(
       color: theme.cardColor,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
@@ -38,7 +41,11 @@ class EmployeeCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _EmployeeAvatar(employee: employee),
+              AppAvatar(
+                name: employee.name,
+                color: employee.isDisabled ? AppColors.disabled : employee.color,
+                size: AvatarSize.md,
+              ),
               const SizedBox(width: 12),
               Expanded(child: _EmployeeSummary(employee: employee)),
               Column(
@@ -63,6 +70,12 @@ class EmployeeCard extends StatelessWidget {
         ),
       ),
     );
+
+    if (employee.isDisabled) {
+      card = Opacity(opacity: 0.65, child: card);
+    }
+
+    return card;
   }
 }
 
@@ -75,12 +88,6 @@ class _EmployeeSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-
-    final statusLabel = employee.isActive
-        ? context.l10n.active
-        : employee.status == 'invited' || employee.status.isEmpty
-            ? context.l10n.invited
-            : employee.status;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -117,46 +124,21 @@ class _EmployeeSummary extends StatelessWidget {
           spacing: 8,
           runSpacing: 6,
           children: [
-            _StatusChip(
-              label: statusLabel,
-              color: employee.isActive ? Colors.green : scheme.primary,
+            StatusChip(
+              status: employee.isActive
+                  ? AppointmentStatus.active
+                  : employee.isDisabled
+                      ? AppointmentStatus.disabled
+                      : AppointmentStatus.invited,
             ),
-            if (employee.isAdmin) ...[
+            if (employee.isAdmin)
               _StatusChip(
                 label: context.l10n.admin,
                 color: scheme.tertiary,
               ),
-            ],
           ],
         ),
       ],
-    );
-  }
-}
-
-class _EmployeeAvatar extends StatelessWidget {
-  const _EmployeeAvatar({required this.employee});
-
-  final EmployeeRecord employee;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: employee.color.withAlpha(40),
-        shape: BoxShape.circle,
-      ),
-      child: Center(
-        child: Text(
-          employee.initials,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: employee.color,
-              ),
-        ),
-      ),
     );
   }
 }

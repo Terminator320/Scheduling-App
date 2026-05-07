@@ -1972,6 +1972,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pick a Color'**
   String get pickAColor;
+
+  /// No description provided for @disableEmployee.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable employee'**
+  String get disableEmployee;
+
+  /// No description provided for @enableEmployee.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable employee'**
+  String get enableEmployee;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

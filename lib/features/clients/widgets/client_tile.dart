@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/features/clients/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/client_detail_sheet.dart';
+import 'package:scheduling/shared/widgets/app_avatar.dart';
 
 class ClientTile extends StatelessWidget {
   final ClientRecord client;
@@ -45,18 +46,9 @@ class ClientTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: scheme.primaryContainer,
-                child: Text(
-                  client.displayName.isNotEmpty
-                      ? client.displayName[0].toUpperCase()
-                      : '?',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: scheme.onPrimaryContainer,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+              AppAvatar(
+                name: client.displayName,
+                size: AvatarSize.md,
               ),
               const SizedBox(width: 14),
               Expanded(

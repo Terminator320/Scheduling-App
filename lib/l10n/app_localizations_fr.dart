@@ -946,4 +946,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get pickAColor => 'Choisir une couleur';
+
+  @override
+  String get disableEmployee => 'Désactiver l\'employé';
+
+  @override
+  String get enableEmployee => 'Activer l\'employé';
 }

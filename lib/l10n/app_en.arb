@@ -312,5 +312,7 @@
   "history": "History",
   "appearance": "Appearance",
   "account": "Account",
-  "pickAColor": "Pick a Color"
+  "pickAColor": "Pick a Color",
+  "disableEmployee": "Disable employee",
+  "enableEmployee": "Enable employee"
 }

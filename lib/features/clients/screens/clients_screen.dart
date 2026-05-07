@@ -17,8 +17,6 @@ import 'package:scheduling/features/clients/widgets/client_tile.dart';
 import 'package:scheduling/features/settings/widgets/settings_drawer.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_empty_state.dart';
-import 'package:scheduling/shared/widgets/appScaffoldBar.dart';
-import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/skeleton_loader.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';
 
@@ -50,6 +48,7 @@ class _ListInformationState extends State<ListInformation> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _appointmentSearchController =
       TextEditingController();
+  bool _clientsLoaded = false;
   List<ClientRecord> _allClients = [];
   final ClientService _clientService = ClientService();
   final AppointmentService _appointmentService = AppointmentService();
@@ -71,7 +70,12 @@ class _ListInformationState extends State<ListInformation> {
 
   void _initStreams() {
     _clientsSubscription = _clientService.clientsStream().listen((clients) {
-      if (mounted) setState(() => _allClients = clients);
+      if (mounted) {
+        setState(() {
+          _allClients = clients;
+          _clientsLoaded = true;
+        });
+      }
     });
     _appointmentsSubscription = _appointmentService
         .getAllAppointments()
@@ -150,6 +154,61 @@ class _ListInformationState extends State<ListInformation> {
     if (mounted) await _unfocusAfterSheetClose();
   }
 
+  PreferredSizeWidget _buildClientsAppBar() {
+    return AppBar(
+      backgroundColor: AppColors.primary,
+      foregroundColor: Colors.white,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_rounded),
+        onPressed: () => Navigator.pushReplacementNamed(
+          context,
+          AppRoutes.mainCalendar,
+          arguments: MainCalendarArgs(
+            isAdmin: widget.isAdmin,
+            employeeId: widget.employeeId,
+          ),
+        ),
+      ),
+      title: Text(
+        context.l10n.clients,
+        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+      ),
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(52),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (_) => setState(() {}),
+            style: const TextStyle(color: Colors.white, fontSize: 13),
+            decoration: InputDecoration(
+              hintText: context.l10n.searchByNameOrPhone,
+              hintStyle: TextStyle(
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 13,
+              ),
+              prefixIcon: Icon(
+                Icons.search,
+                size: 16,
+                color: Colors.white.withValues(alpha: 0.7),
+              ),
+              filled: true,
+              fillColor: Colors.white.withValues(alpha: 0.15),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadius.r12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                vertical: 8,
+                horizontal: 12,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   PreferredSizeWidget _buildHistoryAppBar() {
     return AppBar(
       backgroundColor: AppColors.primary,
@@ -208,9 +267,7 @@ class _ListInformationState extends State<ListInformation> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _isClients
-          ? appScaffoldBar(context, context.l10n.clients, widget.employeeId, widget.isAdmin)
-          : _buildHistoryAppBar(),
+      appBar: _isClients ? _buildClientsAppBar() : _buildHistoryAppBar(),
       endDrawer: SettingsDrawer(
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
@@ -226,9 +283,23 @@ class _ListInformationState extends State<ListInformation> {
   }
 
   Widget _buildClientList() {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final query = _searchController.text.trim().toLowerCase();
+
+    // Show skeleton while the first subscription data hasn't arrived yet
+    if (!_clientsLoaded) {
+      return ListView(
+        padding: const EdgeInsets.all(AppSpacing.sp16),
+        children: const [
+          SkeletonListTile(),
+          SizedBox(height: 8),
+          SkeletonListTile(),
+          SizedBox(height: 8),
+          SkeletonListTile(),
+          SizedBox(height: 8),
+          SkeletonListTile(),
+        ],
+      );
+    }
 
     final filtered = query.isEmpty
         ? _allClients
@@ -241,83 +312,35 @@ class _ListInformationState extends State<ListInformation> {
         ? filtered.sublist(0, _displayLimit)
         : filtered;
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: TextField(
-            controller: _searchController,
-            onChanged: (_) => setState(() {}),
-            textInputAction: TextInputAction.search,
-            // Close the keyboard after the user submits a search.
-            onSubmitted: (_) => FocusScope.of(context).unfocus(),
-            decoration:
-                formInputDecoration(
-                  context,
-                  context.l10n.searchByNameOrPhone,
-                ).copyWith(
-                  prefixIcon: Icon(
-                    Icons.search,
-                    size: 20,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: Icon(
-                            Icons.close,
-                            size: 18,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                          onPressed: () =>
-                              setState(() => _searchController.clear()),
-                          tooltip: context.l10n.clear,
-                        )
-                      : null,
-                ),
-          ),
+    if (displayed.isEmpty) {
+      return AppEmptyState(
+        icon: query.isEmpty ? Icons.people_outline : Icons.search_off_outlined,
+        title: query.isEmpty
+            ? context.l10n.noClientsYet
+            : '${context.l10n.noClientsMatch} "$query"',
+        body: query.isEmpty
+            ? context.l10n.tapToAddYourFirstClient
+            : context.l10n.tryADifferentSearchTerm,
+        actionLabel: query.isEmpty && widget.isAdmin
+            ? context.l10n.addClient
+            : null,
+        onAction: query.isEmpty && widget.isAdmin ? _onAddClient : null,
+      );
+    }
+
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      itemCount: displayed.length,
+      itemBuilder: (context, index) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: ClientTile(
+          client: displayed[index],
+          appointmentCount:
+              _appointmentCountsByClientId[displayed[index].id] ?? 0,
+          onOpen: () => _openClientFromSearch(displayed[index]),
         ),
-        Expanded(
-          child: displayed.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        query.isEmpty
-                            ? Icons.groups_outlined
-                            : Icons.search_off_outlined,
-                        size: 40,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        query.isEmpty
-                            ? context.l10n.noClientsYet
-                            : '${context.l10n.noClientsMatch} "$query"',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                  itemCount: displayed.length,
-                  itemBuilder: (context, index) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: ClientTile(
-                      client: displayed[index],
-                      appointmentCount:
-                          _appointmentCountsByClientId[displayed[index].id] ??
-                          0,
-                      onOpen: () => _openClientFromSearch(displayed[index]),
-                    ),
-                  ),
-                ),
-        ),
-      ],
+      ),
     );
   }
 
