@@ -312,5 +312,7 @@
   "history": "Historique",
   "appearance": "Apparence",
   "account": "Compte",
-  "pickAColor": "Choisir une couleur"
+  "pickAColor": "Choisir une couleur",
+  "disableEmployee": "Désactiver l'employé",
+  "enableEmployee": "Activer l'employé"
 }

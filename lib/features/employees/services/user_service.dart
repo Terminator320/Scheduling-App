@@ -156,6 +156,14 @@ class UserService {
     await _users.doc(docId).update({'uid': uid, 'status': 'active'});
   }
 
+  Future<void> deactivateEmployee(String docId) async {
+    await _users.doc(docId).update({'status': 'disabled'});
+  }
+
+  Future<void> reactivateEmployee(String docId) async {
+    await _users.doc(docId).update({'status': 'active'});
+  }
+
   Stream<String> loggedInUserNameStream() {
     final user = FirebaseAuth.instance.currentUser;
 

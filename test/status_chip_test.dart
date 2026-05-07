@@ -35,4 +35,11 @@ void main() {
     await tester.pumpWidget(_wrap(const StatusChip(status: AppointmentStatus.invited)));
     expect(find.text('Invited'), findsOneWidget);
   });
+
+  testWidgets('StatusChip renders Disabled label', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: StatusChip(status: AppointmentStatus.disabled))),
+    );
+    expect(find.text('Disabled'), findsOneWidget);
+  });
 }

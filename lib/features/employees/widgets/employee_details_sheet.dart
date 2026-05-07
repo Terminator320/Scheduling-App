@@ -1,17 +1,41 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
+import 'package:scheduling/features/employees/services/user_service.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
-class EmployeeDetailsSheet extends StatelessWidget {
+class EmployeeDetailsSheet extends StatefulWidget {
   const EmployeeDetailsSheet({super.key, required this.employee});
-
   final EmployeeRecord employee;
+
+  @override
+  State<EmployeeDetailsSheet> createState() => _EmployeeDetailsSheetState();
+}
+
+class _EmployeeDetailsSheetState extends State<EmployeeDetailsSheet> {
+  final _userService = UserService();
+  bool _isLoading = false;
+
+  Future<void> _toggleStatus() async {
+    setState(() => _isLoading = true);
+    try {
+      if (widget.employee.isDisabled) {
+        await _userService.reactivateEmployee(widget.employee.id);
+      } else {
+        await _userService.deactivateEmployee(widget.employee.id);
+      }
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDisabled = widget.employee.isDisabled;
 
     return DraggableSheetFrame(
       builder: (sheetContext, scrollController) {
@@ -29,22 +53,22 @@ class EmployeeDetailsSheet extends StatelessWidget {
             Center(
               child: Text(
                 context.l10n.employeeDetails,
-                style: theme.textTheme.headlineSmall
+                style: theme.textTheme.headlineSmall,
               ),
             ),
             const SizedBox(height: 18),
-            _DetailField(label: context.l10n.name2, value: employee.name),
+            _DetailField(label: context.l10n.name2, value: widget.employee.name),
             const SizedBox(height: 12),
-            _DetailField(label: context.l10n.email, value: employee.email),
+            _DetailField(label: context.l10n.email, value: widget.employee.email),
             const SizedBox(height: 12),
             _DetailField(
               label: context.l10n.phoneNumber,
-              value: employee.phone.isEmpty ? '-' : employee.phone,
+              value: widget.employee.phone.isEmpty ? '-' : widget.employee.phone,
             ),
             const SizedBox(height: 12),
             _DetailField(
               label: context.l10n.role,
-              value: employee.isAdmin
+              value: widget.employee.isAdmin
                   ? context.l10n.admin
                   : context.l10n.employeeRoleValue,
             ),
@@ -56,7 +80,7 @@ class EmployeeDetailsSheet extends StatelessWidget {
                   width: 18,
                   height: 18,
                   decoration: BoxDecoration(
-                    color: employee.color,
+                    color: widget.employee.color,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -64,6 +88,57 @@ class EmployeeDetailsSheet extends StatelessWidget {
                 Expanded(child: Text(context.l10n.employeeColor2)),
               ],
             ),
+            const SizedBox(height: 24),
+            // Enable / Disable toggle button (admin-only feature)
+            if (!widget.employee.isAdmin) ...[
+              const Divider(),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: isDisabled
+                    ? FilledButton.icon(
+                        onPressed: _isLoading ? null : _toggleStatus,
+                        icon: _isLoading
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.check_circle_outline, size: 18),
+                        label: Text(context.l10n.enableEmployee),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                        ),
+                      )
+                    : OutlinedButton.icon(
+                        onPressed: _isLoading ? null : _toggleStatus,
+                        icon: _isLoading
+                            ? SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.error,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.block_outlined,
+                                size: 18,
+                                color: AppColors.error,
+                              ),
+                        label: Text(
+                          context.l10n.disableEmployee,
+                          style: const TextStyle(color: AppColors.error),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppColors.error),
+                        ),
+                      ),
+              ),
+            ],
           ],
         );
       },
