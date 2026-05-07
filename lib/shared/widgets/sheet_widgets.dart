@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/design_tokens.dart';
+
 class DraggableSheetFrame extends StatelessWidget {
   const DraggableSheetFrame({
     super.key,
@@ -31,8 +33,8 @@ class DraggableSheetFrame extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               color: scheme.surface,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(AppRadius.r16),
               ),
             ),
             child: builder(sheetContext, scrollController),
@@ -51,7 +53,6 @@ class SheetFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -61,15 +62,9 @@ class SheetFrame extends StatelessWidget {
       ),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: scheme.outlineVariant, width: 1.4),
-          boxShadow: [
-            BoxShadow(
-              color: scheme.shadow.withValues(alpha: 0.08),
-              blurRadius: 18,
-              offset: const Offset(0, 6),
-            ),
-          ],
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.r16)),
+          boxShadow: AppShadow.sheet,
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(28),
@@ -132,11 +127,11 @@ class SheetHandle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        width: 48,
-        height: 5,
+        width: 36,
+        height: 4,
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.outlineVariant,
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(AppRadius.rFull),
         ),
       ),
     );
