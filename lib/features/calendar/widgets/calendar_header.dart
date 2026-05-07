@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 
 class CalendarHeader extends StatelessWidget {
@@ -39,7 +40,9 @@ class CalendarHeader extends StatelessWidget {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: isCurrent ? Theme.of(context).colorScheme.primary : null,
+                color: isCurrent
+                    ? AppColors.primary
+                    : Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
@@ -8,17 +9,21 @@ import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/details_edit_sheet.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
+import 'package:scheduling/shared/widgets/app_empty_state.dart';
+import 'package:scheduling/shared/widgets/skeleton_loader.dart';
 
 class EventList extends StatelessWidget {
   final ValueNotifier<List<AppointmentRecord>> events;
   final List<EmployeeRecord> employees;
   final bool isAdmin;
+  final bool isLoading;
 
   const EventList({
     super.key,
     required this.events,
     required this.employees,
     this.isAdmin = true,
+    this.isLoading = false,
   });
 
   Future<void> _confirmDelete(BuildContext context, AppointmentRecord e) async {
@@ -47,7 +52,7 @@ class EventList extends StatelessWidget {
     await AppointmentService.deleteAppointment(e.id!);
   }
 
-  void _openEditSheet(BuildContext context, AppointmentRecord e) async {
+  Future<void> _openEditSheet(BuildContext context, AppointmentRecord e) async {
     final updated = await showModalBottomSheet<AppointmentRecord>(
         context: context,
         isScrollControlled: true,
@@ -68,6 +73,22 @@ class EventList extends StatelessWidget {
     }
   }
 
+  Widget _buildSkeleton() {
+    return ListView(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sp16,
+        vertical: AppSpacing.sp8,
+      ),
+      children: const [
+        SkeletonAppointmentRow(),
+        SizedBox(height: AppSpacing.sp8),
+        SkeletonAppointmentRow(),
+        SizedBox(height: AppSpacing.sp8),
+        SkeletonAppointmentRow(),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -75,33 +96,21 @@ class EventList extends StatelessWidget {
     final colorMap = buildEmployeeColorMap(employees);
 
     return Expanded(
-      child: ValueListenableBuilder<List<AppointmentRecord>>(
+      child: isLoading
+          ? _buildSkeleton()
+          : ValueListenableBuilder<List<AppointmentRecord>>(
         valueListenable: events,
         builder: (context, value, _) {
           if (value.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.event_busy_outlined,
-                    size: 40,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    context.l10n.noEvents,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
+            return AppEmptyState(
+              icon: Icons.event_outlined,
+              title: context.l10n.noAppointmentsFound,
+              body: context.l10n.tapToScheduleAnAppointment,
             );
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sp4),
             itemCount: value.length,
             itemBuilder: (context, index) {
               final e = value[index];
@@ -109,8 +118,8 @@ class EventList extends StatelessWidget {
 
               return Padding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 4,
+                  horizontal: AppSpacing.sp16,
+                  vertical: AppSpacing.sp4,
                 ),
                 child: Card(
                   margin: EdgeInsets.zero,
@@ -125,10 +134,10 @@ class EventList extends StatelessWidget {
                           Expanded(
                             child: Padding(
                               padding: const EdgeInsets.fromLTRB(
-                                14,
-                                12,
-                                8,
-                                12,
+                                AppSpacing.sp12,
+                                AppSpacing.sp12,
+                                AppSpacing.sp8,
+                                AppSpacing.sp12,
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -140,7 +149,7 @@ class EventList extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                     style: theme.textTheme.titleMedium,
                                   ),
-                                  const SizedBox(height: 4),
+                                  const SizedBox(height: AppSpacing.sp4),
                                   Row(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
@@ -150,7 +159,7 @@ class EventList extends StatelessWidget {
                                         size: 13,
                                         color: scheme.onSurfaceVariant,
                                       ),
-                                      const SizedBox(width: 4),
+                                      const SizedBox(width: AppSpacing.sp4),
                                       Expanded(
                                         child: Text(
                                         "${DateUtilsHelper.formatTime(e.startTime)} – ${DateUtilsHelper.formatTime(e.endTime)}",
@@ -183,7 +192,7 @@ class EventList extends StatelessWidget {
                               tooltip: context.l10n.delete,
                               visualDensity: VisualDensity.compact,
                             ),
-                            const SizedBox(width: 4),
+                            const SizedBox(width: AppSpacing.sp4),
                           ] else
                             Padding(
                               padding: const EdgeInsets.only(right: 12),

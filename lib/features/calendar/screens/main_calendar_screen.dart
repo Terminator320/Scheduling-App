@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/services/appointment_service.dart';
@@ -42,6 +43,7 @@ class _MainCalendar extends State<MainCalendar> {
   PageController? _pageController;
   String _userName = '';
   List<EmployeeRecord> _allEmployees = [];
+  bool _isLoading = true;
 
   final ValueNotifier<List<AppointmentRecord>> _selectedEvents = ValueNotifier(
     [],
@@ -72,6 +74,7 @@ class _MainCalendar extends State<MainCalendar> {
   }
 
   void _subscribeAppointmentsForFocusedMonth() {
+    if (mounted) setState(() => _isLoading = true);
     // Listen only to appointments near the visible month instead of the whole collection.
     _appointmentRange = AppointmentDateRange.visibleMonth(_focusedDay);
     _appointmentsSub?.cancel();
@@ -85,6 +88,7 @@ class _MainCalendar extends State<MainCalendar> {
             : data
                   .where((a) => a.employeeIds.contains(widget.employeeId))
                   .toList();
+        if (_isLoading) _isLoading = false;
       });
       _selectedEvents.value = _getEventsForDay(_selectedDay!);
     });
@@ -228,11 +232,15 @@ class _MainCalendar extends State<MainCalendar> {
           employeeColorMap: _employeeColorMap,
         ),
 
-        SizedBox(height: 10),
+        const SizedBox(height: AppSpacing.sp12),
 
         Divider(),
 
-        EventList(events: _selectedEvents, employees: _allEmployees),
+        EventList(
+          events: _selectedEvents,
+          employees: _allEmployees,
+          isLoading: _isLoading,
+        ),
       ],
     );
   }
