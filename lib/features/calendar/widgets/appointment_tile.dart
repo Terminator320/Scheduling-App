@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
+import 'package:scheduling/shared/widgets/status_chip.dart';
 
 class AppointmentTile extends StatelessWidget {
   final AppointmentRecord appointment;
@@ -23,8 +25,8 @@ class AppointmentTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final accent =
-        colorFromMap(appointment, employeeColorMap) ?? scheme.outline;
+    final accent = colorFromMap(appointment, employeeColorMap) ?? AppColors.primary;
+    final status = _mapStatus(appointment.status);
 
     return Card(
       margin: EdgeInsets.zero,
@@ -35,21 +37,13 @@ class AppointmentTile extends StatelessWidget {
             await onOpen!();
             return;
           }
-
-          await showEventDetails(
-            context,
-            appointment,
-            showActions: showActions,
-          );
+          await showEventDetails(context, appointment, showActions: showActions);
         },
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-
               Container(width: 5, color: accent),
-
-
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
@@ -63,26 +57,17 @@ class AppointmentTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleMedium,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpacing.sp4),
                       Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.calendar_today_outlined,
-                            size: 13,
-                            color: scheme.onSurfaceVariant,
-                          ),
+                          Icon(Icons.access_time_outlined, size: 13, color: scheme.onSurfaceVariant),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              DateUtilsHelper.formatPrettyDate(
-                                appointment.endTime,
-                              ),
-                              maxLines: 2,
+                              '${DateUtilsHelper.formatTime(appointment.startTime)} – ${DateUtilsHelper.formatTime(appointment.endTime)}',
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
+                              style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
                             ),
                           ),
                         ],
@@ -92,13 +77,8 @@ class AppointmentTile extends StatelessWidget {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Center(
-                  child: Icon(
-                    Icons.chevron_right,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp8),
+                child: Center(child: StatusChip(status: status)),
               ),
             ],
           ),
@@ -106,4 +86,12 @@ class AppointmentTile extends StatelessWidget {
       ),
     );
   }
+
+  static AppointmentStatus _mapStatus(String status) =>
+      switch (status.toLowerCase()) {
+        'confirmed' => AppointmentStatus.confirmed,
+        'done' || 'completed' => AppointmentStatus.done,
+        'cancelled' => AppointmentStatus.cancelled,
+        _ => AppointmentStatus.pending,
+      };
 }

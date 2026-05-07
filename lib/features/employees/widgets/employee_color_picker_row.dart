@@ -1,81 +1,33 @@
-import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'employee_color_grid.dart';
 
-/// Single-row color selector: tapping the indicator opens
-/// the full flex_color_picker dialog (primary palette + wheel).
+/// Color selector row: quick-pick swatches + custom color wheel button.
 class EmployeeColorPickerRow extends StatelessWidget {
   const EmployeeColorPickerRow({
     super.key,
-    required this.selected,
-    required this.onSelect,
+    required this.selectedColor,
+    required this.onColorChanged,
   });
 
-  final Color selected;
-  final ValueChanged<Color> onSelect;
-
-  Future<void> _openDialog(BuildContext context) async {
-    final theme = Theme.of(context);
-    final picked = await showColorPickerDialog(
-      context,
-      selected,
-      title: Text(
-        context.l10n.employeeColor,
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      spacing: 6,
-      runSpacing: 6,
-      enableShadesSelection: false,
-      wheelDiameter: 180,
-      pickersEnabled: const {
-        ColorPickerType.primary: true,
-        ColorPickerType.accent: false,
-        ColorPickerType.wheel: true,
-      },
-      actionButtons: const ColorPickerActionButtons(
-        okButton: true,
-        closeButton: true,
-        dialogActionButtons: false,
-      ),
-      constraints: const BoxConstraints(
-        minHeight: 220,
-        minWidth: 320,
-        maxWidth: 340,
-      ),
-    );
-    onSelect(picked);
-  }
+  final int selectedColor;
+  final ValueChanged<int> onColorChanged;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ColorIndicator(
-          width: 40,
-          height: 40,
-          borderRadius: 20,
-          color: selected,
-          hasBorder: true,
-          borderColor: theme.colorScheme.outlineVariant,
-          onSelectFocus: false,
-          onSelect: () => _openDialog(context),
+        Text(
+          context.l10n.employeeColor,
+          style: Theme.of(context).textTheme.labelLarge,
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            context.l10n.tapToChangeColor,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withAlpha(170),
-            ),
-          ),
+        const SizedBox(height: AppSpacing.sp12),
+        EmployeeColorGrid(
+          selectedColor: selectedColor,
+          onColorSelected: onColorChanged,
         ),
       ],
     );
