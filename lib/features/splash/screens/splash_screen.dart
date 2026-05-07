@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:animations/animations.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'package:scheduling/core/services/user_cache_service.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
@@ -79,10 +80,6 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
-    final scheme = theme.colorScheme;
-
     // PageTransitionSwitcher gives a Material fade-through (z-axis) when we
     // swap the splash content out for the destination screen.
     return PageTransitionSwitcher(
@@ -97,50 +94,88 @@ class _SplashScreenState extends State<SplashScreen> {
           ? _destination!
           : Scaffold(
               key: const ValueKey('splash'),
-              backgroundColor: theme.scaffoldBackgroundColor,
-              body: SafeArea(
-                child: Center(
+              body: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF0C3A52), // primaryDark
+                      Color(0xFF1E82C8), // primary
+                      Color(0xFF3BA8DC), // primaryLight
+                    ],
+                  ),
+                ),
+                child: SafeArea(
                   child: ValueListenableBuilder<bool>(
                     valueListenable: _show,
-                    builder: (_, show, _) => Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    builder: (context, show, child) => Column(
                       children: [
-                        _Stagger(
-                          show: show,
-                          delay: const Duration(milliseconds: 0),
-                          child: Image.asset(
-                            'assets/images/logo1.png',
-                            height: 170,
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-                        _Stagger(
-                          show: show,
-                          delay: const Duration(milliseconds: 120),
-                          child: Text(
-                            context.l10n.welcomeToSchedulingApp,
-                            style: textTheme.headlineMedium,
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        _Stagger(
-                          show: show,
-                          delay: const Duration(milliseconds: 200),
-                          child: Text(
-                            context.l10n.hopeYouAreEnjoyingYourDay,
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: scheme.onSurface.withAlpha(150),
+                        Expanded(
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _Stagger(
+                                  show: show,
+                                  delay: const Duration(milliseconds: 0),
+                                  child: Image.asset(
+                                    'assets/images/logo1.png',
+                                    height: 120,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                _Stagger(
+                                  show: show,
+                                  delay: const Duration(milliseconds: 120),
+                                  child: Text(
+                                    context.l10n.schedulingApp,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 26,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                      letterSpacing: -0.5,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                _Stagger(
+                                  show: show,
+                                  delay: const Duration(milliseconds: 200),
+                                  child: Text(
+                                    context.l10n.hopeYouAreEnjoyingYourDay,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.white.withValues(alpha: 0.7),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ],
                             ),
-                            textAlign: TextAlign.center,
                           ),
                         ),
-                        const SizedBox(height: 32),
                         _Stagger(
                           show: show,
                           delay: const Duration(milliseconds: 280),
-                          child: CircularProgressIndicator(
-                            color: scheme.secondary,
+                          child: Padding(
+                            padding: const EdgeInsets.only(
+                              bottom: 48,
+                              left: 48,
+                              right: 48,
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                backgroundColor:
+                                    Colors.white.withValues(alpha: 0.2),
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                                minHeight: 3,
+                              ),
+                            ),
                           ),
                         ),
                       ],

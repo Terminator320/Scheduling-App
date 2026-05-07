@@ -13,7 +13,7 @@ import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/screens/create_account_screen.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
-import 'package:scheduling/features/auth/widgets/auth_banner.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
 import 'package:scheduling/routes/app_routes.dart';
@@ -204,252 +204,261 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final colour = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final safeArea = MediaQuery.of(context).padding;
     final animations = _entrance.animations;
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
+        backgroundColor: AppColors.background,
         body: SafeArea(
           child: SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: 400,
-                  minHeight:
-                      MediaQuery.of(context).size.height -
-                      safeArea.top -
-                      safeArea.bottom,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sp24,
+              vertical: AppSpacing.sp32,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Logo
+                FadeSlideEntrance(
+                  animation: animations[0],
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(AppRadius.r12),
+                    ),
+                    child: const Icon(
+                      Icons.calendar_today_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                const SizedBox(height: AppSpacing.sp24),
+                FadeSlideEntrance(
+                  animation: animations[1],
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 28),
-                      ScaleTransition(
-                        scale: Tween<double>(
-                          begin: 0.82,
-                          end: 1,
-                        ).animate(animations[0]),
-                        child: FadeTransition(
-                          opacity: animations[0],
-                          child: Center(
-                            child: Image.asset(
-                              'assets/images/logo1.png',
-                              height: 120,
-                            ),
-                          ),
+                      Text(
+                        context.l10n.welcomeBack,
+                        style: textTheme.headlineLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        context.l10n.signInToYourAccount,
+                        style: textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sp32),
+                // Email field
+                FadeSlideEntrance(
+                  animation: animations[2],
+                  child: AnimatedFormFieldWrapper(
+                    hasError: _emailError != null,
+                    child: TextField(
+                      controller: _emailController,
+                      focusNode: _emailFocus,
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      autofillHints: const [AutofillHints.email],
+                      enabled: !_isLoading,
+                      onSubmitted: (_) => _passwordFocus.requestFocus(),
+                      onChanged: (_) => _onFieldChanged(),
+                      decoration: formInputDecoration(
+                        context,
+                        context.l10n.email,
+                      ).copyWith(
+                        errorText: _submitted ? _emailError : null,
+                        prefixIcon: const Icon(
+                          Icons.email_outlined,
+                          size: 20,
                         ),
                       ),
-                      const SizedBox(height: 18),
-                      FadeSlideEntrance(
-                        animation: animations[1],
-                        child: Column(
-                          children: [
-                            Text(
-                              context.l10n.signIn,
-                              textAlign: TextAlign.center,
-                              style: textTheme.headlineLarge,
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              context.l10n.enterEmailAndPassword,
-                              textAlign: TextAlign.center,
-                              style: textTheme.bodyMedium?.copyWith(
-                                color: colour.onSurface.withAlpha(150),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sp16),
+                // Password field
+                FadeSlideEntrance(
+                  animation: animations[3],
+                  child: AnimatedFormFieldWrapper(
+                    hasError: _passwordError != null,
+                    child: TextField(
+                      controller: _passwordController,
+                      focusNode: _passwordFocus,
+                      obscureText: _isObscured,
+                      textInputAction: TextInputAction.done,
+                      autofillHints: const [AutofillHints.password],
+                      enabled: !_isLoading,
+                      onSubmitted: (_) => _signIn(),
+                      onChanged: (_) => _onFieldChanged(),
+                      decoration: formInputDecoration(
+                        context,
+                        context.l10n.password,
+                      ).copyWith(
+                        errorText: _submitted ? _passwordError : null,
+                        prefixIcon: const Icon(
+                          Icons.lock_outlined,
+                          size: 20,
+                        ),
+                        suffixIcon: AnimatedSwitcher(
+                          duration: AppAnimationDurations.quick,
+                          transitionBuilder: (child, animation) =>
+                              FadeTransition(
+                                opacity: animation,
+                                child: ScaleTransition(
+                                  scale: Tween<double>(
+                                    begin: 0.7,
+                                    end: 1,
+                                  ).animate(animation),
+                                  child: child,
+                                ),
                               ),
+                          child: IconButton(
+                            key: ValueKey(_isObscured),
+                            icon: Icon(
+                              _isObscured
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              size: 20,
+                              color: AppColors.muted,
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 36),
-                      FadeSlideEntrance(
-                        animation: animations[2],
-                        child: AnimatedFormFieldWrapper(
-                          hasError: _emailError != null,
-                          child: TextField(
-                            controller: _emailController,
-                            focusNode: _emailFocus,
-                            keyboardType: TextInputType.emailAddress,
-                            textInputAction: TextInputAction.next,
-                            autocorrect: false,
-                            enableSuggestions: false,
-                            autofillHints: const [AutofillHints.email],
-                            enabled: !_isLoading,
-                            onSubmitted: (_) => _passwordFocus.requestFocus(),
-                            onChanged: (_) => _onFieldChanged(),
-                            decoration: formInputDecoration(
-                              context,
-                              context.l10n.email,
-                            )
-                                .copyWith(
-                                  errorText: _emailError,
-                                  prefixIcon: const Icon(
-                                    Icons.email_outlined,
-                                    size: 20,
-                                  ),
-                                ),
+                            tooltip: _isObscured
+                                ? context.l10n.showPassword
+                                : context.l10n.hidePassword,
+                            onPressed: () =>
+                                setState(() => _isObscured = !_isObscured),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 14),
-                      FadeSlideEntrance(
-                        animation: animations[3],
-                        child: AnimatedFormFieldWrapper(
-                          hasError: _passwordError != null,
-                          child: TextField(
-                            controller: _passwordController,
-                            focusNode: _passwordFocus,
-                            obscureText: _isObscured,
-                            textInputAction: TextInputAction.done,
-                            autofillHints: const [AutofillHints.password],
-                            enabled: !_isLoading,
-                            onSubmitted: (_) => _signIn(),
-                            onChanged: (_) => _onFieldChanged(),
-                            decoration: formInputDecoration(
-                              context,
-                              context.l10n.password,
-                            )
-                                .copyWith(
-                                  errorText: _passwordError,
-                                  prefixIcon: const Icon(
-                                    Icons.lock_outlined,
-                                    size: 20,
-                                  ),
-                                  suffixIcon: AnimatedSwitcher(
-                                    duration: AppAnimationDurations.quick,
-                                    transitionBuilder: (child, animation) =>
-                                        FadeTransition(
-                                          opacity: animation,
-                                          child: ScaleTransition(
-                                            scale: Tween<double>(
-                                              begin: 0.7,
-                                              end: 1,
-                                            ).animate(animation),
-                                            child: child,
-                                          ),
-                                        ),
-                                    child: IconButton(
-                                      key: ValueKey(_isObscured),
-                                      icon: Icon(
-                                        _isObscured
-                                            ? Icons.visibility_off_outlined
-                                            : Icons.visibility_outlined,
-                                        size: 20,
-                                      ),
-                                      tooltip: _isObscured
-                                          ? context.l10n.showPassword
-                                          : context.l10n.hidePassword,
-                                      onPressed: () => setState(
-                                        () => _isObscured = !_isObscured,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      FadeSlideEntrance(
-                        animation: animations[4],
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: _isLoading ? null : _openForgotPassword,
-                            child: Text(
-                              context.l10n.forgotPassword3,
-                              style: textTheme.bodySmall?.copyWith(
-                                color: colour.primary,
-                                fontWeight: FontWeight.w500,
-                              ),
+                    ),
+                  ),
+                ),
+                // Inline error / success banners
+                AnimatedSwitcher(
+                  duration: AppAnimationDurations.banner,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SizeTransition(
+                      sizeFactor: animation,
+                      axisAlignment: -1,
+                      child: child,
+                    ),
+                  ),
+                  child: _bannerError != null
+                      ? Padding(
+                          key: ValueKey('err_$_bannerError'),
+                          padding: const EdgeInsets.only(top: AppSpacing.sp12),
+                          child: Container(
+                            padding: const EdgeInsets.all(AppSpacing.sp12),
+                            decoration: BoxDecoration(
+                              color: AppColors.errorTint,
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.r8),
                             ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      AnimatedSwitcher(
-                        duration: AppAnimationDurations.banner,
-                        transitionBuilder: (child, animation) => FadeTransition(
-                          opacity: animation,
-                          child: SizeTransition(
-                            sizeFactor: animation,
-                            axisAlignment: -1,
-                            child: child,
-                          ),
-                        ),
-                        child: _bannerError != null
-                            ? Padding(
-                                key: ValueKey('err_$_bannerError'),
-                                padding: const EdgeInsets.only(bottom: 14),
-                                child: AuthBanner(
-                                  kind: AuthBannerKind.error,
-                                  message: _bannerError!,
-                                ),
-                              )
-                            : _bannerSuccess != null
-                            ? Padding(
-                                key: ValueKey('ok_$_bannerSuccess'),
-                                padding: const EdgeInsets.only(bottom: 14),
-                                child: AuthBanner(
-                                  kind: AuthBannerKind.success,
-                                  message: _bannerSuccess!,
-                                ),
-                              )
-                            : const SizedBox.shrink(
-                                key: ValueKey('banner_none'),
-                              ),
-                      ),
-                      FadeSlideEntrance(
-                        animation: animations[5],
-                        child: AnimatedLoadingButton(
-                          label: context.l10n.signIn,
-                          isLoading: _isLoading,
-                          onPressed: _signIn,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      FadeSlideEntrance(
-                        animation: animations[6],
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
+                            child: Row(
                               children: [
-                                const Expanded(child: Divider()),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
+                                const Icon(
+                                  Icons.error_outline,
+                                  color: AppColors.error,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: AppSpacing.sp8),
+                                Expanded(
                                   child: Text(
-                                    context.l10n.or,
+                                    _bannerError!,
                                     style: textTheme.bodySmall?.copyWith(
-                                      color: colour.onSurface.withAlpha(100),
+                                      color: AppColors.errorText,
                                     ),
                                   ),
                                 ),
-                                const Expanded(child: Divider()),
                               ],
                             ),
-                            const SizedBox(height: 24),
-                            AnimatedLoadingButton(
-                              label: context.l10n.createAccount,
-                              isLoading: false,
-                              onPressed: _isLoading ? null : _openCreateAccount,
-                              variant: AnimatedLoadingButtonVariant.outlined,
+                          ),
+                        )
+                      : _bannerSuccess != null
+                      ? Padding(
+                          key: ValueKey('ok_$_bannerSuccess'),
+                          padding: const EdgeInsets.only(top: AppSpacing.sp12),
+                          child: Container(
+                            padding: const EdgeInsets.all(AppSpacing.sp12),
+                            decoration: BoxDecoration(
+                              color: AppColors.successTint,
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.r8),
                             ),
-                            const SizedBox(height: 28),
-                          ],
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.check_circle_outline,
+                                  color: AppColors.success,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: AppSpacing.sp8),
+                                Expanded(
+                                  child: Text(
+                                    _bannerSuccess!,
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: AppColors.successText,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(key: ValueKey('banner_none')),
+                ),
+                const SizedBox(height: AppSpacing.sp24),
+                // Sign In button
+                FadeSlideEntrance(
+                  animation: animations[5],
+                  child: AnimatedLoadingButton(
+                    label: context.l10n.signIn,
+                    isLoading: _isLoading,
+                    onPressed: _signIn,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sp16),
+                // Bottom links row
+                FadeSlideEntrance(
+                  animation: animations[6],
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton(
+                        onPressed: _isLoading ? null : _openForgotPassword,
+                        child: Text(
+                          context.l10n.forgotPassword3,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _isLoading ? null : _openCreateAccount,
+                        child: Text(
+                          context.l10n.createAccount,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
+              ],
             ),
           ),
         ),

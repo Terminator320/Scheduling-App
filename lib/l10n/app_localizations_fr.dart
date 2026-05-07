@@ -886,4 +886,64 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get employeeRoleValue => 'Employé';
+
+  @override
+  String get welcomeBack => 'Bienvenue';
+
+  @override
+  String get signInToYourAccount => 'Connectez-vous à votre compte';
+
+  @override
+  String get fillInYourDetailsBelow => 'Remplissez vos informations ci-dessous';
+
+  @override
+  String get alreadyHaveAnAccountSignIn => 'Vous avez déjà un compte ? Connectez-vous';
+
+  @override
+  String get weLlSendALinkToYourEmail => 'Nous vous enverrons un lien à votre courriel.';
+
+  @override
+  String get sendResetLink => 'Envoyer le lien de réinitialisation';
+
+  @override
+  String get backToSignIn2 => 'Retour à la connexion';
+
+  @override
+  String get tapToScheduleAnAppointment => 'Touchez + pour planifier un rendez-vous.';
+
+  @override
+  String get searchClients => 'Rechercher des clients…';
+
+  @override
+  String get searchEmployees => 'Rechercher des employés…';
+
+  @override
+  String get searchAppointments => 'Rechercher des rendez-vous…';
+
+  @override
+  String get noResults => 'Aucun résultat';
+
+  @override
+  String get tapToAddYourFirstClient => 'Touchez + pour ajouter votre premier client.';
+
+  @override
+  String get tryADifferentSearchTerm => 'Essayez un autre terme de recherche.';
+
+  @override
+  String get noEmployeesYet => 'Aucun employé pour le moment';
+
+  @override
+  String get tapToInviteYourFirstEmployee => 'Touchez + pour inviter votre premier employé.';
+
+  @override
+  String get history => 'Historique';
+
+  @override
+  String get appearance => 'Apparence';
+
+  @override
+  String get account => 'Compte';
+
+  @override
+  String get pickAColor => 'Choisir une couleur';
 }
