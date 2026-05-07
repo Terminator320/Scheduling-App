@@ -93,16 +93,19 @@ class _ListInformationState extends State<ListInformation> {
     _employeesSubscription = _userService.allUsersStream().listen((data) {
       if (mounted) setState(() => _allEmployees = data);
     });
-    _scrollController.addListener(() {
-      if (_scrollController.position.pixels >=
-          _scrollController.position.maxScrollExtent - 200) {
-        setState(() => _displayLimit += 50);
-      }
-    });
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      setState(() => _displayLimit += 50);
+    }
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
     _searchController.dispose();
     _appointmentSearchController.dispose();
     _scrollController.dispose();
