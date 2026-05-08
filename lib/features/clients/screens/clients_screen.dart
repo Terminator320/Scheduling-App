@@ -56,7 +56,6 @@ class _ListInformationState extends State<ListInformation> {
   StreamSubscription? _appointmentsSubscription;
   final UserService _userService = UserService();
   List<EmployeeRecord> _allEmployees = [];
-  Map<String, int> _appointmentCountsByClientId = const {};
   StreamSubscription? _employeesSubscription;
 
 
@@ -79,17 +78,7 @@ class _ListInformationState extends State<ListInformation> {
     });
     _appointmentsSubscription = _appointmentService
         .getAllAppointments()
-        .listen((appointments) {
-          final counts = <String, int>{};
-          for (final appointment in appointments) {
-            final clientId = appointment.clientId.trim();
-            if (clientId.isEmpty) continue;
-            counts.update(clientId, (value) => value + 1, ifAbsent: () => 1);
-          }
-          if (mounted) {
-            setState(() => _appointmentCountsByClientId = counts);
-          }
-        });
+        .listen((_) {});
     _employeesSubscription = _userService.allUsersStream().listen((data) {
       if (mounted) setState(() => _allEmployees = data);
     });
@@ -331,18 +320,15 @@ class _ListInformationState extends State<ListInformation> {
       );
     }
 
-    return ListView.builder(
+    return ListView.separated(
       controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.only(bottom: 16),
       itemCount: displayed.length,
-      itemBuilder: (context, index) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: ClientTile(
-          client: displayed[index],
-          appointmentCount:
-              _appointmentCountsByClientId[displayed[index].id] ?? 0,
-          onOpen: () => _openClientFromSearch(displayed[index]),
-        ),
+      separatorBuilder: (context, index) =>
+          const Divider(height: 1, indent: 64, endIndent: 0),
+      itemBuilder: (context, index) => ClientTile(
+        client: displayed[index],
+        onOpen: () => _openClientFromSearch(displayed[index]),
       ),
     );
   }
