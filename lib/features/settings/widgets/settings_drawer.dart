@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -10,12 +11,14 @@ class SettingsDrawer extends StatelessWidget {
   final bool isAdmin;
   final String employeeId;
   final String? userName;
+  final String? email;
 
   const SettingsDrawer({
     super.key,
     required this.isAdmin,
     required this.employeeId,
     this.userName,
+    this.email,
   });
 
   @override
@@ -37,20 +40,72 @@ class SettingsDrawer extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
-    return UserAccountsDrawerHeader(
-      decoration: const BoxDecoration(color: AppColors.primary),
-      accountName: Text(
-        userName ?? '…',
-        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+    final theme = Theme.of(context);
+    final displayEmail =
+        email ?? FirebaseAuth.instance.currentUser?.email ?? '';
+    final statusBarHeight = MediaQuery.of(context).padding.top;
+    final roleLabel =
+        isAdmin ? context.l10n.admin : context.l10n.employeeRoleValue;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, statusBarHeight + 20, 20, 18),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: AppColors.outline),
+        ),
       ),
-      accountEmail: Text(
-        isAdmin ? context.l10n.admin : context.l10n.employeeRoleValue,
-        style: const TextStyle(fontSize: 12, color: AppColors.primaryTint),
-      ),
-      currentAccountPicture: AppAvatar(
-        name: userName ?? '?',
-        color: AppColors.primaryDark,
-        size: AvatarSize.lg,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppAvatar(
+            name: userName ?? '?',
+            color: AppColors.primary,
+            size: AvatarSize.lg,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            userName ?? '…',
+            style: theme.textTheme.bodyLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryTint,
+                  borderRadius: BorderRadius.circular(AppRadius.rFull),
+                ),
+                child: Text(
+                  roleLabel,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primaryDark,
+                  ),
+                ),
+              ),
+              if (displayEmail.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    displayEmail,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.subtle,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -59,7 +114,7 @@ class SettingsDrawer extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return ListView(
-      padding: EdgeInsets.zero,
+      padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
         _DrawerItem(
           icon: Icons.calendar_today_outlined,
@@ -91,7 +146,7 @@ class SettingsDrawer extends StatelessWidget {
             onTap: () => _goToHistory(context),
           ),
         ],
-        const Divider(),
+        const Divider(indent: 16, endIndent: 16),
         _DrawerItem(
           icon: Icons.settings_outlined,
           label: context.l10n.settings,
@@ -189,10 +244,12 @@ class _DrawerItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = isDestructive ? scheme.error : scheme.onSurface;
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-      leading: Icon(icon, color: color, size: 22),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      leading: Icon(icon, color: color, size: 20),
       title: Text(label, style: textTheme.bodyLarge?.copyWith(color: color)),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.r8),
+      ),
       onTap: onTap,
     );
   }
