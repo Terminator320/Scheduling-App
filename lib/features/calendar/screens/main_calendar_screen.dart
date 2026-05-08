@@ -142,8 +142,66 @@ class _MainCalendar extends State<MainCalendar> {
 
   @override
   Widget build(BuildContext context) {
+    final locale = Localizations.localeOf(context).toString();
+    final monthLabel = _formatMonth(locale);
+    final jobCount = _selectedEvents.value.length;
+    final jobLabel = '$jobCount ${context.l10n.appointments}';
+
     return Scaffold(
       key: _scaffoldKey,
+      appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        automaticallyImplyLeading: false,
+        title: Text(
+          context.l10n.calendar,
+          style: const TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.menu, color: Colors.white),
+            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+          ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(28),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                GestureDetector(
+                  onTap: () async {
+                    final picked =
+                        await MonthYearPicker.show(context, _focusedDay);
+                    if (picked != null) _setFocusedDay(picked);
+                  },
+                  child: Text(
+                    monthLabel,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white.withValues(alpha: 0.82),
+                    ),
+                  ),
+                ),
+                Text(
+                  jobLabel,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withValues(alpha: 0.82),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton(
               onPressed: () async {
@@ -151,7 +209,6 @@ class _MainCalendar extends State<MainCalendar> {
                   context,
                   initialDate: _selectedDay ?? _focusedDay,
                 );
-
                 if (newEvent != null) {
                   await service.addAppointment(newEvent);
                 }
@@ -168,39 +225,37 @@ class _MainCalendar extends State<MainCalendar> {
     );
   }
 
+  String _formatMonth(String locale) {
+    try {
+      return '${_monthName()} ${_focusedDay.year}';
+    } catch (_) {
+      return '${_focusedDay.year}';
+    }
+  }
+
+  String _monthName() {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    return months[_focusedDay.month - 1];
+  }
+
   Widget content() {
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth > 600;
-    final displayName = _userName.isEmpty ? context.l10n.user : _userName;
 
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 16, right: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '${context.l10n.hello}, $displayName',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              IconButton(
-                icon: const Icon(Icons.menu),
-                visualDensity: VisualDensity.compact,
-                onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-              ),
-            ],
-          ),
-        ),
         CalendarHeader(
           focusedDay: _focusedDay,
           onLeft: () => _pageController?.previousPage(
-            duration: Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 300),
             curve: Curves.easeOut,
           ),
           onRight: () => _pageController?.nextPage(
-            duration: Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 300),
             curve: Curves.easeOut,
           ),
           onToday: () {
@@ -214,10 +269,7 @@ class _MainCalendar extends State<MainCalendar> {
           },
           onTapMonth: () async {
             final picked = await MonthYearPicker.show(context, _focusedDay);
-
-            if (picked != null) {
-              _setFocusedDay(picked);
-            }
+            if (picked != null) _setFocusedDay(picked);
           },
         ),
 
@@ -234,8 +286,7 @@ class _MainCalendar extends State<MainCalendar> {
         ),
 
         const SizedBox(height: AppSpacing.sp12),
-
-        Divider(),
+        const Divider(),
 
         EventList(
           events: _selectedEvents,
