@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/design_tokens.dart';
 
-enum AppointmentStatus { confirmed, done, pending, cancelled, invited, active, disabled }
+enum AppointmentStatus { confirmed, done, pending, cancelled, invited, active, disabled, inProgress }
 
 class StatusChip extends StatelessWidget {
   const StatusChip({super.key, required this.status});
@@ -64,6 +64,11 @@ class StatusChip extends StatelessWidget {
       'Disabled',
       isDark ? AppColors.darkDisabled : AppColors.disabled,
       isDark ? AppColors.darkMuted : AppColors.subtle,
+    ),
+    AppointmentStatus.inProgress => (
+      'In Progress',
+      isDark ? const Color(0xFF0C4A6E) : const Color(0xFFE0F2FE),
+      isDark ? const Color(0xFF7DD3FC) : const Color(0xFF0369A1),
     ),
   };
 }

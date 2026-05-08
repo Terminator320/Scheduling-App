@@ -42,4 +42,10 @@ void main() {
     );
     expect(find.text('Disabled'), findsOneWidget);
   });
+
+  testWidgets('StatusChip renders In Progress label', (tester) async {
+    await tester.pumpWidget(_wrap(const StatusChip(status: AppointmentStatus.inProgress)));
+    expect(find.text('In Progress'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
