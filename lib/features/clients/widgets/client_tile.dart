@@ -1,170 +1,84 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/clients/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/client_detail_sheet.dart';
 import 'package:scheduling/shared/widgets/app_avatar.dart';
 
 class ClientTile extends StatelessWidget {
-  final ClientRecord client;
-  final int appointmentCount;
-  final Future<void> Function()? onOpen;
-
   const ClientTile({
     super.key,
     required this.client,
-    this.appointmentCount = 0,
     this.onOpen,
   });
 
+  final ClientRecord client;
+  final Future<void> Function()? onOpen;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final mutedStyle = theme.textTheme.bodySmall?.copyWith(
-      color: scheme.onSurfaceVariant,
-    );
 
-    return Card(
-      margin: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () async {
-          if (onOpen != null) {
-            await onOpen!();
-            return;
-          }
-
-          await showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (_) => ClientDetailSheet(client: client),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              AppAvatar(
-                name: client.displayName,
-                size: AvatarSize.md,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            client.displayName,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleMedium,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        _AppointmentCountBadge(count: appointmentCount),
-                      ],
-                    ),
-                    if (client.phone.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.phone_outlined,
-                            size: 13,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              client.phone,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: mutedStyle,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    if (client.address.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.location_on_outlined,
-                            size: 13,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              client.address,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: mutedStyle,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 4, right: 4),
-                child: Center(
-                  child: Icon(
-                    Icons.chevron_right,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ],
-          ),
+    return InkWell(
+      onTap: () async {
+        if (onOpen != null) {
+          await onOpen!();
+          return;
+        }
+        await showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => ClientDetailSheet(client: client),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sp16,
+          vertical: AppSpacing.sp12,
         ),
-      ),
-    );
-  }
-}
-
-class _AppointmentCountBadge extends StatelessWidget {
-  const _AppointmentCountBadge({required this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.event_outlined,
-            size: 15,
-            color: scheme.onPrimaryContainer,
-          ),
-          const SizedBox(width: 5),
-          Text(
-            '$count',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onPrimaryContainer,
-              fontWeight: FontWeight.w700,
+        child: Row(
+          children: [
+            AppAvatar(
+              name: client.displayName,
+              size: AvatarSize.md,
             ),
-          ),
-        ],
+            const SizedBox(width: AppSpacing.sp12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    client.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (client.phone.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      client.phone,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: scheme.onSurfaceVariant,
+            ),
+          ],
+        ),
       ),
     );
   }
