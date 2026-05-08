@@ -25,8 +25,19 @@ class AppointmentTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final accent = colorFromMap(appointment, employeeColorMap) ?? AppColors.primary;
+    final accent =
+        colorFromMap(appointment, employeeColorMap) ?? AppColors.primary;
     final status = _mapStatus(appointment.status);
+    final showChip = status != AppointmentStatus.confirmed;
+
+    final employeeName = appointment.employeeNames.isNotEmpty
+        ? appointment.employeeNames.first
+        : null;
+
+    final timeLabel =
+        '${DateUtilsHelper.formatTime(appointment.startTime)} – '
+        '${DateUtilsHelper.formatTime(appointment.endTime)}'
+        '${employeeName != null ? ' · $employeeName' : ''}';
 
     return Card(
       margin: EdgeInsets.zero,
@@ -37,16 +48,17 @@ class AppointmentTile extends StatelessWidget {
             await onOpen!();
             return;
           }
-          await showEventDetails(context, appointment, showActions: showActions);
+          await showEventDetails(context, appointment,
+              showActions: showActions);
         },
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(width: 5, color: accent),
+              Container(width: 4, color: accent),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+                  padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -55,19 +67,32 @@ class AppointmentTile extends StatelessWidget {
                         appointment.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                      const SizedBox(height: AppSpacing.sp4),
+                      const SizedBox(height: 3),
                       Row(
                         children: [
-                          Icon(Icons.access_time_outlined, size: 13, color: scheme.onSurfaceVariant),
-                          const SizedBox(width: 4),
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: BoxDecoration(
+                              color: accent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
                           Expanded(
                             child: Text(
-                              '${DateUtilsHelper.formatTime(appointment.startTime)} – ${DateUtilsHelper.formatTime(appointment.endTime)}',
+                              timeLabel,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
                         ],
@@ -77,8 +102,21 @@ class AppointmentTile extends StatelessWidget {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp8),
-                child: Center(child: StatusChip(status: status)),
+                padding: const EdgeInsets.only(right: 10, left: 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (showChip) ...[
+                      StatusChip(status: status),
+                      const SizedBox(width: 7),
+                    ],
+                    Icon(
+                      Icons.chevron_right,
+                      size: 16,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -92,6 +130,7 @@ class AppointmentTile extends StatelessWidget {
         'confirmed' => AppointmentStatus.confirmed,
         'done' || 'completed' => AppointmentStatus.done,
         'cancelled' => AppointmentStatus.cancelled,
+        'in_progress' || 'inprogress' => AppointmentStatus.inProgress,
         _ => AppointmentStatus.pending,
       };
 }
