@@ -18,6 +18,34 @@ class _EmployeeDetailsSheetState extends State<EmployeeDetailsSheet> {
   final _userService = UserService();
   bool _isLoading = false;
 
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(ctx.l10n.deleteEmployee),
+        content: Text(ctx.l10n.areYouSureYouWantToDeleteThisEmployee),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(ctx.l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(ctx.l10n.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      await _userService.deleteEmployee(widget.employee.id);
+      if (mounted) Navigator.pop(context, 'deleted');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _toggleStatus() async {
     setState(() => _isLoading = true);
     try {
@@ -89,6 +117,39 @@ class _EmployeeDetailsSheetState extends State<EmployeeDetailsSheet> {
               ],
             ),
             const SizedBox(height: 24),
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 8),
+
+            OutlinedButton.icon(
+              onPressed: () => Navigator.pop(context, 'edit'),
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: Text(context.l10n.edit),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 46),
+                side: const BorderSide(color: AppColors.outline),
+                foregroundColor: AppColors.onSurface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.r8),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            OutlinedButton.icon(
+              onPressed: _isLoading ? null : _confirmDelete,
+              icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+              label: const Text('Delete', style: TextStyle(color: AppColors.error)),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 46),
+                side: const BorderSide(color: AppColors.error),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.r8),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+
             // Enable / Disable toggle button (admin-only feature)
             if (!widget.employee.isAdmin) ...[
               const Divider(),
