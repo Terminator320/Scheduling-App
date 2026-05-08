@@ -6,22 +6,27 @@ import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/appointment_tile.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';
 
-AppointmentRecord _fakeAppt({String status = 'confirmed'}) => AppointmentRecord(
-  id: '1',
-  title: 'Haircut',
-  startTime: DateTime(2026, 5, 6, 9, 0),
-  endTime: DateTime(2026, 5, 6, 9, 45),
-  clientId: 'c1',
-  clientName: 'Sarah Johnson',
-  clientPhone: '514-555-0101',
-  employeeIds: ['e1'],
-  employeeNames: ['Alex'],
-  address: '123 Main St',
-  notes: '',
-  materialsNeeded: '',
-  status: status,
-  pictures: [],
-);
+AppointmentRecord _fakeAppt({
+  String status = 'confirmed',
+  List<String> employeeNames = const ['Sarah Johnson'],
+  List<String> employeeIds = const ['e1'],
+}) =>
+    AppointmentRecord(
+      id: '1',
+      title: 'Haircut',
+      startTime: DateTime(2026, 5, 6, 9, 0),
+      endTime: DateTime(2026, 5, 6, 9, 45),
+      clientId: 'c1',
+      clientName: 'Sarah Johnson',
+      clientPhone: '514-555-0101',
+      employeeIds: employeeIds,
+      employeeNames: employeeNames,
+      address: '123 Main St',
+      notes: '',
+      materialsNeeded: '',
+      status: status,
+      pictures: [],
+    );
 
 const _colorMap = {'e1': Color(0xFF6366F1)};
 
@@ -32,7 +37,7 @@ void main() {
     await initializeDateFormatting('en_CA');
   });
 
-  testWidgets('AppointmentTile shows service title', (tester) async {
+  testWidgets('shows service title', (tester) async {
     await tester.pumpWidget(_wrap(AppointmentTile(
       appointment: _fakeAppt(),
       employeeColorMap: _colorMap,
@@ -40,15 +45,47 @@ void main() {
     expect(find.textContaining('Haircut'), findsOneWidget);
   });
 
-  testWidgets('AppointmentTile shows StatusChip', (tester) async {
+  testWidgets('shows employee name in subtitle', (tester) async {
     await tester.pumpWidget(_wrap(AppointmentTile(
       appointment: _fakeAppt(),
+      employeeColorMap: _colorMap,
+    )));
+    expect(find.textContaining('Sarah Johnson'), findsOneWidget);
+  });
+
+  testWidgets('does NOT show StatusChip for confirmed status', (tester) async {
+    await tester.pumpWidget(_wrap(AppointmentTile(
+      appointment: _fakeAppt(status: 'confirmed'),
+      employeeColorMap: _colorMap,
+    )));
+    expect(find.byType(StatusChip), findsNothing);
+  });
+
+  testWidgets('shows StatusChip for done status', (tester) async {
+    await tester.pumpWidget(_wrap(AppointmentTile(
+      appointment: _fakeAppt(status: 'done'),
       employeeColorMap: _colorMap,
     )));
     expect(find.byType(StatusChip), findsOneWidget);
   });
 
-  testWidgets('AppointmentTile calls onOpen when tapped', (tester) async {
+  testWidgets('shows StatusChip for pending status', (tester) async {
+    await tester.pumpWidget(_wrap(AppointmentTile(
+      appointment: _fakeAppt(status: 'pending'),
+      employeeColorMap: _colorMap,
+    )));
+    expect(find.byType(StatusChip), findsOneWidget);
+  });
+
+  testWidgets('shows StatusChip for cancelled status', (tester) async {
+    await tester.pumpWidget(_wrap(AppointmentTile(
+      appointment: _fakeAppt(status: 'cancelled'),
+      employeeColorMap: _colorMap,
+    )));
+    expect(find.byType(StatusChip), findsOneWidget);
+  });
+
+  testWidgets('calls onOpen when tapped', (tester) async {
     bool tapped = false;
     await tester.pumpWidget(_wrap(AppointmentTile(
       appointment: _fakeAppt(),
@@ -60,7 +97,7 @@ void main() {
     expect(tapped, isTrue);
   });
 
-  testWidgets('AppointmentTile does not overflow at small size + large text', (tester) async {
+  testWidgets('does not overflow at small screen + 2x text scale', (tester) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     tester.view.physicalSize = const Size(260 * 3, 640 * 3);
@@ -72,6 +109,15 @@ void main() {
         employeeColorMap: _colorMap,
       )),
     ));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows fallback when employeeNames is empty', (tester) async {
+    await tester.pumpWidget(_wrap(AppointmentTile(
+      appointment: _fakeAppt(employeeNames: [], employeeIds: []),
+      employeeColorMap: {},
+    )));
+    expect(find.textContaining('Haircut'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
