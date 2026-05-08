@@ -92,16 +92,17 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
     );
 
     if (!mounted) return;
-    // Keep search from regaining focus after the details sheet closes.
     FocusManager.instance.primaryFocus?.unfocus();
     await Future<void>.delayed(const Duration(milliseconds: 120));
     if (!mounted) return;
     FocusManager.instance.primaryFocus?.unfocus();
-    if (result != 'deleted') return;
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(context.l10n.employeeDeleted)));
+    if (result == 'edit') {
+      await _openEmployeeSheet(employee: employee);
+    } else if (result == 'deleted') {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(context.l10n.employeeDeleted)));
+    }
   }
 
   void _clearSearch() {
@@ -109,37 +110,6 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
     FocusManager.instance.primaryFocus?.unfocus();
     if (_searchController.text.isEmpty) return;
     setState(() => _searchController.clear());
-  }
-
-  Future<void> _confirmDelete(EmployeeRecord employee) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(ctx.l10n.deleteEmployee),
-        content: Text(
-          ctx.l10n.areYouSureYouWantToDeleteThisEmployee,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(ctx.l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(ctx.l10n.delete),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    await _userService.deleteEmployee(employee.id);
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(context.l10n.employeeDeleted)));
   }
 
   PreferredSizeWidget _buildAppBar() {
@@ -246,9 +216,10 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
           }
 
           return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            padding: const EdgeInsets.only(bottom: 16),
             itemCount: employees.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 12),
+            separatorBuilder: (context, index) =>
+                const Divider(height: 1, indent: 64, endIndent: 0),
             itemBuilder: (context, index) {
               final employee = employees[index];
               return EmployeeCard(
@@ -258,12 +229,6 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
                   await Future<void>.delayed(const Duration(milliseconds: 80));
                   await _showEmployeeDetails(employee);
                 },
-                onEdit: () async {
-                  _clearSearch();
-                  await Future<void>.delayed(const Duration(milliseconds: 80));
-                  await _openEmployeeSheet(employee: employee);
-                },
-                onDelete: () => _confirmDelete(employee),
               );
             },
           );
