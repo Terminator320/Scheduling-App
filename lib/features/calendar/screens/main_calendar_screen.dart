@@ -248,30 +248,30 @@ class _MainCalendar extends State<MainCalendar> {
 
     return Column(
       children: [
-        CalendarHeader(
-          focusedDay: _focusedDay,
-          onLeft: () => _pageController?.previousPage(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          ),
-          onRight: () => _pageController?.nextPage(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          ),
-          onToday: () {
-            final now = DateTime.now();
-            setState(() {
-              _focusedDay = now;
-              _selectedDay = now;
-              _selectedEvents.value = _getEventsForDay(now);
-            });
-            _subscribeAppointmentsForFocusedMonth();
-          },
-          onTapMonth: () async {
-            final picked = await MonthYearPicker.show(context, _focusedDay);
-            if (picked != null) _setFocusedDay(picked);
-          },
-        ),
+        // CalendarHeader(
+        //   focusedDay: _focusedDay,
+        //   onLeft: () => _pageController?.previousPage(
+        //     duration: const Duration(milliseconds: 300),
+        //     curve: Curves.easeOut,
+        //   ),
+        //   onRight: () => _pageController?.nextPage(
+        //     duration: const Duration(milliseconds: 300),
+        //     curve: Curves.easeOut,
+        //   ),
+        //   onToday: () {
+        //     final now = DateTime.now();
+        //     setState(() {
+        //       _focusedDay = now;
+        //       _selectedDay = now;
+        //       _selectedEvents.value = _getEventsForDay(now);
+        //     });
+        //     _subscribeAppointmentsForFocusedMonth();
+        //   },
+        //   onTapMonth: () async {
+        //     final picked = await MonthYearPicker.show(context, _focusedDay);
+        //     if (picked != null) _setFocusedDay(picked);
+        //   },
+        // ),
 
         AppCalendar(
           focusedDay: _focusedDay,

@@ -1984,6 +1984,162 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enable employee'**
   String get enableEmployee;
+
+  /// No description provided for @newAppointment.
+  ///
+  /// In en, this message translates to:
+  /// **'New Appointment'**
+  String get newAppointment;
+
+  /// No description provided for @saveAppointment.
+  ///
+  /// In en, this message translates to:
+  /// **'Save Appointment'**
+  String get saveAppointment;
+
+  /// No description provided for @assignEmployee.
+  ///
+  /// In en, this message translates to:
+  /// **'Assign Employee'**
+  String get assignEmployee;
+
+  /// No description provided for @serviceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Service / Title'**
+  String get serviceTitle;
+
+  /// No description provided for @changeAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get changeAddress;
+
+  /// No description provided for @clientSAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Client\'s address'**
+  String get clientSAddress;
+
+  /// No description provided for @useClientsAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'← Use client\'s address'**
+  String get useClientsAddress;
+
+  /// No description provided for @editAppointment.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Appointment'**
+  String get editAppointment;
+
+  /// No description provided for @deleteAppointment.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete Appointment'**
+  String get deleteAppointment;
+
+  /// No description provided for @cancelAppointment.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel Appointment'**
+  String get cancelAppointment;
+
+  /// No description provided for @cancelledJobsAreSavedToHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled jobs are saved to history.'**
+  String get cancelledJobsAreSavedToHistory;
+
+  /// No description provided for @appointmentStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Appointment Status'**
+  String get appointmentStatus;
+
+  /// No description provided for @assignedEmployee.
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned Employee'**
+  String get assignedEmployee;
+
+  /// No description provided for @saveClient.
+  ///
+  /// In en, this message translates to:
+  /// **'Save Client'**
+  String get saveClient;
+
+  /// No description provided for @inviteEmployee.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite Employee'**
+  String get inviteEmployee;
+
+  /// No description provided for @sendInvite.
+  ///
+  /// In en, this message translates to:
+  /// **'Send Invite'**
+  String get sendInvite;
+
+  /// No description provided for @permissions.
+  ///
+  /// In en, this message translates to:
+  /// **'Permissions'**
+  String get permissions;
+
+  /// No description provided for @adminAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin access'**
+  String get adminAccess;
+
+  /// No description provided for @adminAccessDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Can manage all appointments, clients & employees'**
+  String get adminAccessDescription;
+
+  /// No description provided for @accountStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Account Status'**
+  String get accountStatus;
+
+  /// No description provided for @accountStatusDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Controls access & job assignment'**
+  String get accountStatusDescription;
+
+  /// No description provided for @disableAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable Account'**
+  String get disableAccount;
+
+  /// No description provided for @reEnableAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-enable Account'**
+  String get reEnableAccount;
+
+  /// No description provided for @disableAccountNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabling removes them from new job assignments. Their past appointments and data are kept.'**
+  String get disableAccountNote;
+
+  /// No description provided for @reEnableAccountNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-enabling restores their access and allows them to be assigned to jobs again.'**
+  String get reEnableAccountNote;
+
+  /// No description provided for @colorAlreadyUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'This color is already used by another employee.'**
+  String get colorAlreadyUsed;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

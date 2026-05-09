@@ -7,8 +7,6 @@ import 'package:scheduling/features/clients/services/client_service.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/app_avatar.dart';
-import 'package:scheduling/shared/widgets/form_helpers.dart';
-import 'package:scheduling/shared/widgets/info_row.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
@@ -264,25 +262,6 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
     });
   }
 
-  void _cancelEdit() {
-    final c = widget.client;
-    setState(() {
-      _isEditing = false;
-      _businessNameController.text = c.businessName;
-      _nameController.text = c.name;
-      _phoneController.text = c.phone;
-      _emailController.text = c.email;
-      _addressController.text = _stripAptFromAddress(c.address);
-      _aptController.text = c.apt.isNotEmpty
-          ? c.apt
-          : _extractAptFromAddress(c.address);
-      _cityController.text = c.city;
-      _provinceController.text = c.province;
-      _countryController.text = c.country;
-      _postalCodeController.text = c.postalCode;
-      _errors.clear();
-    });
-  }
 
   Future<void> _save() async {
     final businessName = _businessNameController.text.trim();
@@ -410,7 +389,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
             const SizedBox(height: 16),
             _isEditing
                 ? Text(
-                    context.l10n.editClient2,
+                    context.l10n.editClient,
                     style: theme.textTheme.headlineLarge,
                   )
                 : _buildViewHeader(theme),
@@ -432,93 +411,129 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
   Widget _buildViewHeader(ThemeData theme) {
     final c = widget.client;
     final scheme = theme.colorScheme;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
       children: [
         AppAvatar(name: c.displayName, size: AvatarSize.lg),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(c.displayName, style: theme.textTheme.headlineLarge),
-              if (c.name.isNotEmpty && c.name != c.displayName) ...[
-                const SizedBox(height: 2),
-                Text(
-                  c.name,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ],
-          ),
+        const SizedBox(height: 12),
+        Text(
+          c.displayName,
+          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+          textAlign: TextAlign.center,
         ),
+        if (c.name.isNotEmpty && c.name != c.displayName) ...[
+          const SizedBox(height: 3),
+          Text(
+            c.name,
+            style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ],
     );
   }
 
   List<Widget> _buildViewFields(ThemeData theme) {
     final c = widget.client;
-    final scheme = theme.colorScheme;
+    final hasContactInfo = c.phone.isNotEmpty || c.email.isNotEmpty || c.address.isNotEmpty;
 
     return [
-      if (c.phone.isNotEmpty)
-        InfoRow(icon: Icons.phone_outlined, text: c.phone),
-
-      if (c.email.isNotEmpty)
-        InfoRow(icon: Icons.email_outlined, text: c.email),
-
-      if (c.address.isNotEmpty)
-        InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () =>
-              AddressMapLauncher.showMapChoices(context, address: c.address),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: InfoRow(
-              icon: Icons.location_on_outlined,
-              text: c.address,
-              iconColor: AppColors.primary,
-              textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                height: 1.4,
-                color: AppColors.primary,
-              ),
-            ),
+      if (hasContactInfo)
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceAlt,
+            border: Border.all(color: AppColors.outline),
+            borderRadius: BorderRadius.circular(AppRadius.r12),
           ),
-        ),
-
-      if (c.contacts.isNotEmpty) ...[
-        const SizedBox(height: 24),
-        formSectionLabel(context, context.l10n.contacts),
-        const SizedBox(height: 8),
-        ...c.contacts.map(
-          (contact) => Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
-            ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.r12),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (contact.name.isNotEmpty)
-                  InfoRow(icon: Icons.person_outline, text: contact.name),
-                if (contact.phone.isNotEmpty)
-                  InfoRow(icon: Icons.phone_outlined, text: contact.phone),
-                if (contact.email.isNotEmpty)
-                  InfoRow(icon: Icons.mail_outline, text: contact.email),
+                if (c.phone.isNotEmpty) ...[
+                  _ViewContactRow(icon: Icons.phone_outlined, text: c.phone),
+                  if (c.email.isNotEmpty || c.address.isNotEmpty)
+                    const Divider(height: 1, indent: 48),
+                ],
+                if (c.email.isNotEmpty) ...[
+                  _ViewContactRow(icon: Icons.email_outlined, text: c.email),
+                  if (c.address.isNotEmpty) const Divider(height: 1, indent: 48),
+                ],
+                if (c.address.isNotEmpty)
+                  _ViewContactRow(
+                    icon: Icons.location_on_outlined,
+                    text: c.address,
+                    onTap: () => AddressMapLauncher.showMapChoices(context, address: c.address),
+                    color: AppColors.primary,
+                  ),
               ],
             ),
           ),
         ),
+      if (c.contacts.isNotEmpty) ...[
+        const SizedBox(height: 24),
+        Text(
+          context.l10n.contacts.toUpperCase(),
+          style: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: AppColors.subtle,
+            letterSpacing: 0.7,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...c.contacts.map(_buildContactCard),
       ],
     ];
   }
 
+  Widget _buildContactCard(ClientContact contact) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        border: Border.all(color: AppColors.outline),
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+        child: Column(
+          children: [
+            if (contact.name.isNotEmpty) ...[
+              _ViewContactRow(icon: Icons.person_outline, text: contact.name),
+              if (contact.phone.isNotEmpty || contact.email.isNotEmpty)
+                const Divider(height: 1, indent: 48),
+            ],
+            if (contact.phone.isNotEmpty) ...[
+              _ViewContactRow(icon: Icons.phone_outlined, text: contact.phone),
+              if (contact.email.isNotEmpty) const Divider(height: 1, indent: 48),
+            ],
+            if (contact.email.isNotEmpty)
+              _ViewContactRow(icon: Icons.email_outlined, text: contact.email),
+          ],
+        ),
+      ),
+    );
+  }
+
   List<Widget> _buildEditFields() {
+    final theme = Theme.of(context);
     return [
+      // Avatar header
+      Row(
+        children: [
+          AppAvatar(name: widget.client.displayName, size: AvatarSize.lg),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              widget.client.displayName,
+              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      const Divider(height: 1),
+      const SizedBox(height: 14),
+
       SheetFocusScroll(
         child: LabeledTextField(
           label: context.l10n.businessName,
@@ -551,32 +566,41 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
         ),
       ),
       const SizedBox(height: 16),
-      SheetFocusScroll(
-        child: LabeledTextField(
-          label: context.l10n.phone,
-          controller: _phoneController,
-          keyboard: TextInputType.phone,
-          autofillHints: const [AutofillHints.telephoneNumber],
-          errorText: _errors['phone'],
-          onChanged: (_) {
-            _clearError('phone');
-            _clearError('email');
-          },
-        ),
-      ),
-      const SizedBox(height: 16),
-      SheetFocusScroll(
-        child: LabeledTextField(
-          label: context.l10n.email,
-          controller: _emailController,
-          keyboard: TextInputType.emailAddress,
-          autofillHints: const [AutofillHints.email],
-          errorText: _errors['email'],
-          onChanged: (_) {
-            _clearError('email');
-            _clearError('phone');
-          },
-        ),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: SheetFocusScroll(
+              child: LabeledTextField(
+                label: context.l10n.phone,
+                controller: _phoneController,
+                keyboard: TextInputType.phone,
+                autofillHints: const [AutofillHints.telephoneNumber],
+                errorText: _errors['phone'],
+                onChanged: (_) {
+                  _clearError('phone');
+                  _clearError('email');
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: SheetFocusScroll(
+              child: LabeledTextField(
+                label: context.l10n.email,
+                controller: _emailController,
+                keyboard: TextInputType.emailAddress,
+                autofillHints: const [AutofillHints.email],
+                errorText: _errors['email'],
+                onChanged: (_) {
+                  _clearError('email');
+                  _clearError('phone');
+                },
+              ),
+            ),
+          ),
+        ],
       ),
       const SizedBox(height: 16),
       SheetFocusScroll(
@@ -655,20 +679,22 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-            onPressed: _cancelEdit,
-            child: Text(context.l10n.cancel),
-          ),
-          const SizedBox(height: 12),
           FilledButton(
             style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
+              minimumSize: const Size(double.infinity, 46),
             ),
             onPressed: _save,
             child: Text(context.l10n.saveChanges),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 44),
+              foregroundColor: AppColors.error,
+              side: const BorderSide(color: AppColors.error),
+            ),
+            onPressed: _isDeleting ? null : _confirmDelete,
+            child: Text(context.l10n.delete),
           ),
         ],
       );
@@ -706,6 +732,55 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ViewContactRow extends StatelessWidget {
+  const _ViewContactRow({required this.icon, required this.text, this.onTap, this.color});
+
+  final IconData icon;
+  final String text;
+  final VoidCallback? onTap;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final effectiveTextColor = color ?? AppColors.onSurface;
+    final effectiveIconColor = color ?? AppColors.subtle;
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: Icon(icon, size: 17, color: effectiveIconColor),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                text,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: effectiveTextColor,
+                  height: 1.4,
+                ),
+              ),
+            ),
+            if (onTap != null) ...[
+              const SizedBox(width: 8),
+              const Padding(
+                padding: EdgeInsets.only(top: 2),
+                child: Icon(Icons.open_in_new, size: 14, color: AppColors.primary),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

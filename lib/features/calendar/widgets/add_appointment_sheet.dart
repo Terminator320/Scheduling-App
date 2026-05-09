@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/services/image_picker_service.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
@@ -13,7 +14,6 @@ import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.da
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/employee_picker.dart';
 import 'package:scheduling/features/calendar/widgets/photo_picker_section.dart';
-import 'package:scheduling/features/calendar/widgets/time_range_row.dart';
 import 'package:scheduling/features/clients/models/client_record.dart';
 import 'package:scheduling/features/clients/services/client_service.dart';
 import 'package:scheduling/features/clients/widgets/client_search_field.dart';
@@ -58,11 +58,12 @@ class _AddEventSheetState extends State<AddEventSheet> {
   ClientRecord? _selectedClient;
   List<ClientRecord> _clientResults = [];
   bool _isSearchingClient = false;
+  bool _useCustomAddress = false;
 
   List<EmployeeRecord> _allEmployees = [];
-  List<EmployeeRecord> _selectedEmployees = [];
+  final List<EmployeeRecord> _selectedEmployees = [];
 
-  List<File> _selectedImages = [];
+  final List<File> _selectedImages = [];
   bool _isSubmitting = false;
   StreamSubscription? _employeesSub;
   Timer? _clientSearchDebounce;
@@ -105,7 +106,6 @@ class _AddEventSheetState extends State<AddEventSheet> {
   }
 
   Future<void> _searchClients(String query) async {
-    // Wait until typing pauses before searching to avoid extra Firestore reads.
     _clientSearchDebounce?.cancel();
     if (!ClientSearchPolicy.shouldSearch(query)) {
       setState(() {
@@ -136,6 +136,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
       _clientSearchController.text = client.displayName;
       _addressController.text = client.address;
       _clientResults = [];
+      _useCustomAddress = false;
       _errors['client'] = null;
     });
   }
@@ -146,6 +147,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
       _clientSearchController.clear();
       _addressController.clear();
       _clientResults = [];
+      _useCustomAddress = false;
     });
   }
 
@@ -280,17 +282,14 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
     try {
       final docRef = _appointmentService.newDocRef();
-      final startTime = _combineDateAndTime(
-        _selectedDate!,
-        _selectedStartTime!,
-      );
-      final endTime = _combineEndDateAndTime(_selectedDate!, _selectedEndTime!);
+      final start = _combineDateAndTime(_selectedDate!, _selectedStartTime!);
+      final end = _combineEndDateAndTime(_selectedDate!, _selectedEndTime!);
 
       final newAppointment = AppointmentRecord(
         id: docRef.id,
         title: _titleController.text.trim(),
-        startTime: startTime,
-        endTime: endTime,
+        startTime: start,
+        endTime: end,
         clientId: _selectedClient!.id,
         clientName: _selectedClient!.displayName,
         clientPhone: _selectedClient!.phone,
@@ -303,7 +302,6 @@ class _AddEventSheetState extends State<AddEventSheet> {
         status: 'booked',
       );
 
-      // Save appointment immediately so the user can continue using the app.
       await _appointmentService.addAppointment(newAppointment);
 
       if (ctx.mounted) Navigator.pop(ctx, newAppointment);
@@ -322,6 +320,108 @@ class _AddEventSheetState extends State<AddEventSheet> {
     }
   }
 
+  Widget _buildAddressPill(BuildContext context) {
+    final client = _selectedClient!;
+    final address = client.address.isNotEmpty ? client.address : context.l10n.noAddress;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+        border: Border.all(color: AppColors.outline),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(AppRadius.r8),
+            ),
+            child: const Icon(Icons.location_on_outlined, color: Colors.white, size: 16),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.l10n.clientSAddress,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.muted,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  address,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.onSurface,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => setState(() => _useCustomAddress = true),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              context.l10n.changeAddress,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddressField(BuildContext context) {
+    final showPill = _selectedClient != null && !_useCustomAddress;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+
+        if (showPill)
+          _buildAddressPill(context)
+        else ...[
+          SheetFocusScroll(
+            child: AddressAutocompleteField(
+              controller: _addressController,
+
+            ),
+          ),
+          if (_selectedClient != null && _useCustomAddress) ...[
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: () {
+                _addressController.text = _selectedClient!.address;
+                setState(() => _useCustomAddress = false);
+              },
+              child: Text(
+                context.l10n.useClientsAddress,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return DraggableSheetFrame(
@@ -329,27 +429,29 @@ class _AddEventSheetState extends State<AddEventSheet> {
         return ListView(
           controller: scrollController,
           padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 12,
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+            left: AppSpacing.sp16,
+            right: AppSpacing.sp16,
+            top: AppSpacing.sp12,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + AppSpacing.sp24,
           ),
           children: [
             const SheetHandle(),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.sp16),
             Text(
-              sheetContext.l10n.addNewJob,
+              sheetContext.l10n.newAppointment,
               style: Theme.of(sheetContext).textTheme.headlineLarge,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.sp16),
             const Divider(height: 1),
-            const SizedBox(height: 20),
+            const SizedBox(height: AppSpacing.sp16),
 
+            // Service / Title
             SheetFocusScroll(
               child: LabeledTextField(
-                label: sheetContext.l10n.jobTitle,
+                label: sheetContext.l10n.serviceTitle,
                 hint: sheetContext.l10n.eGPlumbingRepair,
                 controller: _titleController,
+                required: true,
                 errorText: _errors['title'],
                 onChanged: (_) {
                   if (_errors['title'] != null) {
@@ -358,48 +460,10 @@ class _AddEventSheetState extends State<AddEventSheet> {
                 },
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.sp16),
 
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: SheetFocusScroll(
-                    child: LabeledTextField(
-                      label: sheetContext.l10n.date,
-                      hint: sheetContext.l10n.selectDate,
-                      controller: _dateController,
-                      readOnly: true,
-                      suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
-                      errorText: _errors['date'],
-                      onTap: _pickDate,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      formLabel(sheetContext, sheetContext.l10n.time),
-                      TimeRangeRow(
-                        startController: _startTimeController,
-                        endController: _endTimeController,
-                        selectedStart: _selectedStartTime,
-                        selectedEnd: _selectedEndTime,
-                        onTapStart: _pickStartTime,
-                        onTapEnd: _pickEndTime,
-                        startError: _errors['startTime'],
-                        endError: _errors['endTime'],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            formLabel(sheetContext, sheetContext.l10n.client),
+            // Client
+            formLabel(sheetContext, sheetContext.l10n.client, required: true),
             SheetFocusScroll(
               child: ClientSearchField(
                 controller: _clientSearchController,
@@ -412,37 +476,108 @@ class _AddEventSheetState extends State<AddEventSheet> {
                 errorText: _errors['client'],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.sp16),
 
-            SheetFocusScroll(
-              child: AddressAutocompleteField(
-                controller: _addressController,
-                optional: true,
-              ),
+            // Assign Employee
+            formLabel(sheetContext, sheetContext.l10n.assignEmployee, required: true),
+            const SizedBox(height: 6),
+            EmployeePicker(
+              allEmployees: _allEmployees,
+              selectedEmployees: _selectedEmployees,
+              onToggle: _toggleEmployee,
+              hasError: _errors['employees'] != null,
             ),
-            const SizedBox(height: 16),
+            if (_errors['employees'] != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6, left: 4),
+                child: Text(
+                  _errors['employees']!,
+                  style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(sheetContext).colorScheme.error,
+                  ),
+                ),
+              ),
+            const SizedBox(height: AppSpacing.sp16),
 
+            // Date — full width
             SheetFocusScroll(
               child: LabeledTextField(
-                label: sheetContext.l10n.notes,
-                hint: sheetContext.l10n.typeTheNoteHere,
-                controller: _notesController,
-                optional: true,
-                maxLines: 3,
+                label: sheetContext.l10n.date,
+                hint: sheetContext.l10n.selectDate,
+                controller: _dateController,
+                required: true,
+                readOnly: true,
+                suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+                errorText: _errors['date'],
+                onTap: _pickDate,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.sp16),
 
+            // Start time + End time side-by-side, each with their own label
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: SheetFocusScroll(
+                    child: LabeledTextField(
+                      label: sheetContext.l10n.startTime,
+                      hint: sheetContext.l10n.start,
+                      controller: _startTimeController,
+                      required: true,
+                      readOnly: true,
+                      errorText: _errors['startTime'],
+                      onTap: _pickStartTime,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sp12),
+                Expanded(
+                  child: SheetFocusScroll(
+                    child: LabeledTextField(
+                      label: sheetContext.l10n.endTime,
+                      hint: sheetContext.l10n.end,
+                      controller: _endTimeController,
+                      required: true,
+                      readOnly: true,
+                      errorText: _errors['endTime'],
+                      onTap: _pickEndTime,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sp16),
+
+            // Address (pill if client selected, field otherwise)
+            _buildAddressField(sheetContext),
+            const SizedBox(height: AppSpacing.sp16),
+
+            // Materials needed
             SheetFocusScroll(
               child: LabeledTextField(
                 label: sheetContext.l10n.materialsNeeded,
                 hint: sheetContext.l10n.typeTheMaterialsHere,
                 controller: _materialsController,
                 optional: true,
+                maxLines: 2,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.sp16),
 
+            // Notes
+            SheetFocusScroll(
+              child: LabeledTextField(
+                label: sheetContext.l10n.notes,
+                hint: sheetContext.l10n.typeTheNoteHere,
+                controller: _notesController,
+                optional: true,
+                maxLines: 2,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sp16),
+
+            // Photos
             formLabel(sheetContext, sheetContext.l10n.pictures, optional: true),
             PhotoPickerSection(
               existingImages: const [],
@@ -457,46 +592,24 @@ class _AddEventSheetState extends State<AddEventSheet> {
               onRemoveExisting: (_) {},
               onRemoveNew: (i) => setState(() => _selectedImages.removeAt(i)),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.sp24),
 
-            formLabel(sheetContext, sheetContext.l10n.selectEmployees),
-            EmployeePicker(
-              allEmployees: _allEmployees,
-              selectedEmployees: _selectedEmployees,
-              onToggle: _toggleEmployee,
-              hasError: _errors['employees'] != null,
-            ),
-            if (_errors['employees'] != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 6, left: 12),
-                child: Text(
-                  _errors['employees']!,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(sheetContext).colorScheme.error,
-                  ),
-                ),
+            // Save button
+            FilledButton(
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
               ),
-            const SizedBox(height: 24),
-
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 48),
-                ),
-                onPressed: _isSubmitting ? null : () => _submit(sheetContext),
-                child: _isSubmitting
-                    ? SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Theme.of(sheetContext).colorScheme.onPrimary,
-                        ),
-                      )
-                    : Text(sheetContext.l10n.createEvent2),
-              ),
+              onPressed: _isSubmitting ? null : () => _submit(sheetContext),
+              child: _isSubmitting
+                  ? SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Theme.of(sheetContext).colorScheme.onPrimary,
+                      ),
+                    )
+                  : Text(sheetContext.l10n.saveAppointment),
             ),
           ],
         );
@@ -504,4 +617,3 @@ class _AddEventSheetState extends State<AddEventSheet> {
     );
   }
 }
-

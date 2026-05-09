@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
-import 'package:scheduling/features/employees/services/user_service.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';
 
@@ -16,51 +15,6 @@ class EmployeeDetailsSheet extends StatefulWidget {
 }
 
 class _EmployeeDetailsSheetState extends State<EmployeeDetailsSheet> {
-  final _userService = UserService();
-  bool _isLoading = false;
-
-  Future<void> _confirmDelete() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(ctx.l10n.deleteEmployee),
-        content: Text(ctx.l10n.areYouSureYouWantToDeleteThisEmployee),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(ctx.l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(ctx.l10n.delete),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    setState(() => _isLoading = true);
-    try {
-      await _userService.deleteEmployee(widget.employee.id);
-      if (mounted) Navigator.pop(context, 'deleted');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _toggleStatus() async {
-    setState(() => _isLoading = true);
-    try {
-      if (widget.employee.isDisabled) {
-        await _userService.reactivateEmployee(widget.employee.id);
-      } else {
-        await _userService.deactivateEmployee(widget.employee.id);
-      }
-      if (mounted) Navigator.pop(context);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -164,74 +118,20 @@ class _EmployeeDetailsSheetState extends State<EmployeeDetailsSheet> {
                 minimumSize: const Size(double.infinity, 48),
               ),
             ),
-            const SizedBox(height: 10),
 
-            OutlinedButton.icon(
-              onPressed: _isLoading ? null : _confirmDelete,
-              icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
-              label: Text(context.l10n.delete, style: const TextStyle(color: AppColors.error)),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 48),
-                side: const BorderSide(color: AppColors.error),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.r8),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Enable / Disable toggle button (admin-only feature)
-            if (!widget.employee.isAdmin) ...[
-              const Divider(),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: isDisabled
-                    ? FilledButton.icon(
-                        onPressed: _isLoading ? null : _toggleStatus,
-                        icon: _isLoading
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.check_circle_outline, size: 18),
-                        label: Text(context.l10n.enableEmployee),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          minimumSize: const Size(double.infinity, 48),
-                        ),
-                      )
-                    : OutlinedButton.icon(
-                        onPressed: _isLoading ? null : _toggleStatus,
-                        icon: _isLoading
-                            ? SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.error,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.block_outlined,
-                                size: 18,
-                                color: AppColors.error,
-                              ),
-                        label: Text(
-                          context.l10n.disableEmployee,
-                          style: const TextStyle(color: AppColors.error),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: AppColors.error),
-                          minimumSize: const Size(double.infinity, 48),
-                        ),
-                      ),
-              ),
-            ],
+            //Deleting Account (Apple maybe needs this)
+            // OutlinedButton.icon(
+            //   onPressed: _isLoading ? null : _confirmDelete,
+            //   icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+            //   label: Text(context.l10n.delete, style: const TextStyle(color: AppColors.error)),
+            //   style: OutlinedButton.styleFrom(
+            //     minimumSize: const Size(double.infinity, 48),
+            //     side: const BorderSide(color: AppColors.error),
+            //     shape: RoundedRectangleBorder(
+            //       borderRadius: BorderRadius.circular(AppRadius.r8),
+            //     ),
+            //   ),
+            // ),
           ],
         );
       },

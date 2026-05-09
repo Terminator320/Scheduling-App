@@ -1,6 +1,7 @@
 import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/utils/l10n_extensions.dart';
 import '../../../core/theme/design_tokens.dart';
 
 class EmployeeColorGrid extends StatelessWidget {
@@ -8,22 +9,40 @@ class EmployeeColorGrid extends StatelessWidget {
     super.key,
     required this.selectedColor,
     required this.onColorSelected,
+    this.usedColors = const {},
   });
 
   final int selectedColor;
   final ValueChanged<int> onColorSelected;
+  final Set<int> usedColors;
 
   static final _quickPicks = AppColors.employeePalette.take(8).toList();
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final isCustomColor =
+        !_quickPicks.any((c) => c.toARGB32() == selectedColor);
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
       children: [
-        ..._quickPicks.map((color) => _SwatchButton(
-              color: color,
-              isSelected: color.toARGB32() == selectedColor,
-              onTap: () => onColorSelected(color.toARGB32()),
-            )),
+        ..._quickPicks.map((color) {
+          final colorInt = color.toARGB32();
+          final isUsed = usedColors.contains(colorInt);
+          return _SwatchButton(
+            color: color,
+            isSelected: colorInt == selectedColor,
+            isDisabled: isUsed,
+            onTap: isUsed ? null : () => onColorSelected(colorInt),
+          );
+        }),
+        if (isCustomColor)
+          _SwatchButton(
+            color: Color(selectedColor),
+            isSelected: true,
+            onTap: null,
+          ),
         GestureDetector(
           onTap: () => _openCustomPicker(context),
           child: Container(
@@ -77,6 +96,13 @@ class EmployeeColorGrid extends StatelessWidget {
         maxWidth: 320,
       ),
     );
+    if (!context.mounted) return;
+    if (usedColors.contains(picked.toARGB32())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.colorAlreadyUsed)),
+      );
+      return;
+    }
     onColorSelected(picked.toARGB32());
   }
 }
@@ -86,16 +112,18 @@ class _SwatchButton extends StatelessWidget {
     required this.color,
     required this.isSelected,
     required this.onTap,
+    this.isDisabled = false,
   });
 
   final Color color;
   final bool isSelected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool isDisabled;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: AppSpacing.sp8),
+    return Opacity(
+      opacity: isDisabled ? 0.3 : 1.0,
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(

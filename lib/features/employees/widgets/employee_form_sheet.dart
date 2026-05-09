@@ -5,14 +5,17 @@ import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
 import 'package:scheduling/features/employees/widgets/employee_color_picker_row.dart';
+import 'package:scheduling/shared/widgets/app_avatar.dart';
+import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
-
+import 'package:scheduling/shared/widgets/status_chip.dart';
 
 class EmployeeFormSheet extends StatefulWidget {
-  const EmployeeFormSheet({super.key, this.employee});
+  const EmployeeFormSheet({super.key, this.employee, this.usedColors = const {}});
 
   final EmployeeRecord? employee;
+  final Set<int> usedColors;
 
   @override
   State<EmployeeFormSheet> createState() => _EmployeeFormSheetState();
@@ -27,7 +30,9 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
 
   late bool _isAdmin;
   late int _selectedColor;
+  late bool _isDisabled;
   bool _isSaving = false;
+  bool _isTogglingStatus = false;
   final Map<String, String?> _errors = {};
 
   bool get _isEdit => widget.employee != null;
@@ -40,6 +45,7 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
     _emailController = TextEditingController(text: e?.email ?? '');
     _phoneController = TextEditingController(text: e?.phone ?? '');
     _isAdmin = e?.isAdmin ?? false;
+    _isDisabled = e?.isDisabled ?? false;
     _selectedColor = e?.color.toARGB32() ?? AppColors.employeePalette.first.toARGB32();
   }
 
@@ -101,26 +107,232 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      final message = e.toString().contains('Employee email already exists')
-          ? context.l10n.anEmployeeWithThisEmailAlreadyExists
-          : context.l10n.couldNotCreateEmployee;
+      final isDuplicate = e.toString().contains('Employee email already exists');
+      if (isDuplicate) {
+        setState(() => _errors['email'] = context.l10n.anEmployeeWithThisEmailAlreadyExists);
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
+        SnackBar(
+          content: Text(
+            isDuplicate
+                ? context.l10n.anEmployeeWithThisEmailAlreadyExists
+                : context.l10n.couldNotCreateEmployee,
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
 
+  Future<void> _toggleStatus() async {
+    setState(() => _isTogglingStatus = true);
+    try {
+      if (_isDisabled) {
+        await _service.reactivateEmployee(widget.employee!.id);
+      } else {
+        await _service.deactivateEmployee(widget.employee!.id);
+      }
+      if (mounted) setState(() => _isDisabled = !_isDisabled);
+    } finally {
+      if (mounted) setState(() => _isTogglingStatus = false);
+    }
+  }
+
+  Widget _buildEditHeader(ThemeData theme) {
+    final e = widget.employee!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            AppAvatar(name: e.name, color: e.color, size: AvatarSize.lg),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  e.name,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                StatusChip(
+                  status: _isDisabled
+                      ? AppointmentStatus.disabled
+                      : AppointmentStatus.active,
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        const Divider(height: 1),
+      ],
+    );
+  }
+
+  Widget _buildPermissionsCard(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        formLabel(context, context.l10n.permissions),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(AppRadius.r12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.l10n.adminAccess,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      context.l10n.adminAccessDescription,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _isAdmin,
+                onChanged: (v) => setState(() => _isAdmin = v),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAccountStatusSection(ThemeData theme) {
+    final scheme = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(height: 1),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.l10n.accountStatus,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    context.l10n.accountStatusDescription,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            StatusChip(
+              status: _isDisabled
+                  ? AppointmentStatus.disabled
+                  : AppointmentStatus.active,
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_isDisabled)
+          OutlinedButton.icon(
+            onPressed: _isTogglingStatus ? null : _toggleStatus,
+            icon: _isTogglingStatus
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.successText,
+                    ),
+                  )
+                : const Icon(
+                    Icons.check_circle_outline,
+                    size: 14,
+                    color: AppColors.successText,
+                  ),
+            label: Text(
+              context.l10n.reEnableAccount,
+              style: const TextStyle(color: AppColors.successText),
+            ),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 44),
+              side: const BorderSide(color: AppColors.success),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.r8),
+              ),
+            ),
+          )
+        else
+          OutlinedButton.icon(
+            onPressed: _isTogglingStatus ? null : _toggleStatus,
+            icon: _isTogglingStatus
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.warningText,
+                    ),
+                  )
+                : const Icon(
+                    Icons.block_outlined,
+                    size: 14,
+                    color: AppColors.warningText,
+                  ),
+            label: Text(
+              context.l10n.disableAccount,
+              style: const TextStyle(color: AppColors.warningText),
+            ),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 44),
+              side: const BorderSide(color: AppColors.warning),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.r8),
+              ),
+            ),
+          ),
+        const SizedBox(height: 8),
+        Text(
+          _isDisabled
+              ? context.l10n.reEnableAccountNote
+              : context.l10n.disableAccountNote,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final title = _isEdit
-        ? context.l10n.editEmployee
-        : context.l10n.createEmployee;
-    final submitLabel = _isEdit
-        ? context.l10n.updateEmployee
-        : context.l10n.createEmployee;
+    final title = _isEdit ? context.l10n.editEmployee : context.l10n.inviteEmployee;
+    final submitLabel = _isEdit ? context.l10n.saveChanges : context.l10n.sendInvite;
 
     return DraggableSheetFrame(
       builder: (sheetContext, scrollController) {
@@ -138,17 +350,20 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
             Text(title, style: theme.textTheme.headlineLarge),
             const SizedBox(height: 16),
             const Divider(height: 1),
-            const SizedBox(height: 20),
+            if (_isEdit) ...[
+              const SizedBox(height: 4),
+              _buildEditHeader(theme),
+              const SizedBox(height: 14),
+            ] else
+              const SizedBox(height: 20),
             SheetFocusScroll(
               child: LabeledTextField(
                 label: context.l10n.name2,
                 controller: _nameController,
-                required: true,
+                required: !_isEdit,
                 errorText: _errors['name'],
                 onChanged: (_) {
-                  if (_errors['name'] != null) {
-                    setState(() => _errors['name'] = null);
-                  }
+                  if (_errors['name'] != null) setState(() => _errors['name'] = null);
                 },
               ),
             ),
@@ -158,12 +373,10 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
                 label: context.l10n.email,
                 controller: _emailController,
                 keyboard: TextInputType.emailAddress,
-                required: true,
+                required: !_isEdit,
                 errorText: _errors['email'],
                 onChanged: (_) {
-                  if (_errors['email'] != null) {
-                    setState(() => _errors['email'] = null);
-                  }
+                  if (_errors['email'] != null) setState(() => _errors['email'] = null);
                 },
               ),
             ),
@@ -177,18 +390,15 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
               ),
             ),
             const SizedBox(height: 16),
+            _buildPermissionsCard(theme),
+            const SizedBox(height: 12),
             EmployeeColorPickerRow(
               selectedColor: _selectedColor,
               onColorChanged: (value) => setState(() => _selectedColor = value),
+              required: !_isEdit,
+              usedColors: widget.usedColors,
             ),
-            const SizedBox(height: 8),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _isAdmin,
-              onChanged: (v) => setState(() => _isAdmin = v),
-              title: Text(context.l10n.giveAdminModeAccess),
-            ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             FilledButton(
               style: FilledButton.styleFrom(
                 minimumSize: const Size(double.infinity, 48),
@@ -200,11 +410,15 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
                       width: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Theme.of(context).colorScheme.onPrimary,
+                        color: theme.colorScheme.onPrimary,
                       ),
                     )
                   : Text(submitLabel),
             ),
+            if (_isEdit) ...[
+              const SizedBox(height: 16),
+              _buildAccountStatusSection(theme),
+            ],
           ],
         );
       },

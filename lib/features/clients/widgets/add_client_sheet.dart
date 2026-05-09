@@ -448,32 +448,43 @@ class _AddClientSheetState extends State<AddClientSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              SheetFocusScroll(
-                child: LabeledTextField(
-                  label: context.l10n.phone,
-                  controller: _phoneController,
-                  keyboard: TextInputType.phone,
-                  autofillHints: const [AutofillHints.telephoneNumber],
-                  errorText: _errors['phone'],
-                  onChanged: (_) {
-                    _clearError('phone');
-                    _clearError('email');
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-              SheetFocusScroll(
-                child: LabeledTextField(
-                  label: context.l10n.email,
-                  controller: _emailController,
-                  keyboard: TextInputType.emailAddress,
-                  autofillHints: const [AutofillHints.email],
-                  errorText: _errors['email'],
-                  onChanged: (_) {
-                    _clearError('email');
-                    _clearError('phone');
-                  },
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: SheetFocusScroll(
+                      child: LabeledTextField(
+                        label: context.l10n.phone,
+                        controller: _phoneController,
+                        keyboard: TextInputType.phone,
+                        required: true,
+                        autofillHints: const [AutofillHints.telephoneNumber],
+                        errorText: _errors['phone'],
+                        onChanged: (_) {
+                          _clearError('phone');
+                          _clearError('email');
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SheetFocusScroll(
+                      child: LabeledTextField(
+                        label: context.l10n.email,
+                        controller: _emailController,
+                        keyboard: TextInputType.emailAddress,
+                        optional: true,
+                        autofillHints: const [AutofillHints.email],
+                        errorText: _errors['email'],
+                        onChanged: (_) {
+                          _clearError('email');
+                          _clearError('phone');
+                        },
+                      ),
+                    ),
+                  ),
+                ],
               ),
               if (_isBusiness) ...[
                 const SizedBox(height: 8),
@@ -555,26 +566,37 @@ class _AddClientSheetState extends State<AddClientSheet> {
                 ],
               ),
               const SizedBox(height: 24),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 48),
-                ),
-                onPressed: _isSaving ? null : _save,
-                child: _isSaving
-                    ? SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: scheme.onPrimary,
-                        ),
-                      )
-                    : Text(context.l10n.addClient2),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: _isSaving ? null : () => Navigator.pop(context),
-                child: Text(context.l10n.cancel),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 46),
+                      ),
+                      onPressed: _isSaving ? null : () => Navigator.pop(context),
+                      child: Text(context.l10n.cancel),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 46),
+                      ),
+                      onPressed: _isSaving ? null : _save,
+                      child: _isSaving
+                          ? SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: scheme.onPrimary,
+                              ),
+                            )
+                          : Text(context.l10n.saveClient),
+                    ),
+                  ),
+                ],
               ),
           ],
         );
