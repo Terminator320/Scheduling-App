@@ -39,11 +39,10 @@ class LabeledTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayLabel = required ? "$label *" : label;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        formLabel(context, displayLabel, optional: optional),
+        formLabel(context, label, optional: optional, required: this.required),
         TextField(
           controller: controller,
           focusNode: focusNode,

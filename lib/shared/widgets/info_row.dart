@@ -32,7 +32,7 @@ class InfoRow extends StatelessWidget {
               color: iconColor ?? scheme.primary,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,

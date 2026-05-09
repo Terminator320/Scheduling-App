@@ -5,6 +5,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/employees/services/user_service.dart';
 import 'package:scheduling/features/settings/screens/text_size_screen.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_avatar.dart';
@@ -17,6 +18,23 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  String? _role;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRole();
+  }
+
+  Future<void> _fetchRole() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final userDoc = await UserService().findUserByUid(uid);
+    if (!mounted || userDoc == null) return;
+    final data = userDoc.data();
+    setState(() => _role = (data['role'] ?? 'employee').toString());
+  }
+
   String get _displayName {
     try {
       return FirebaseAuth.instance.currentUser?.displayName ?? 'User';
@@ -96,6 +114,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           color: scheme.onSurfaceVariant,
                         ),
                       ),
+                      if (_role != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          _role == 'admin'
+                              ? context.l10n.admin
+                              : context.l10n.employeeRoleValue,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -183,9 +212,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // ── Account card ──────────────────────────────────────────
           _SectionCard(
             child: _SettingsTile(
-              iconBg: AppColors.errorTint,
-              icon: Icons.logout,
-              iconColor: AppColors.error,
               label: context.l10n.logOut,
               labelColor: AppColors.error,
               isLast: true,
@@ -246,9 +272,9 @@ class _SectionHeader extends StatelessWidget {
 
 class _SettingsTile extends StatelessWidget {
   const _SettingsTile({
-    required this.iconBg,
-    required this.icon,
-    required this.iconColor,
+    this.iconBg,
+    this.icon,
+    this.iconColor,
     required this.label,
     this.labelColor,
     this.trailing,
@@ -256,9 +282,9 @@ class _SettingsTile extends StatelessWidget {
     this.isLast = false,
   });
 
-  final Color iconBg;
-  final IconData icon;
-  final Color iconColor;
+  final Color? iconBg;
+  final IconData? icon;
+  final Color? iconColor;
   final String label;
   final Color? labelColor;
   final Widget? trailing;
@@ -276,16 +302,18 @@ class _SettingsTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Row(
           children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: iconBg,
-                borderRadius: BorderRadius.circular(AppRadius.r8),
+            if (icon != null && iconBg != null && iconColor != null) ...[
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(AppRadius.r8),
+                ),
+                child: Icon(icon, size: 18, color: iconColor),
               ),
-              child: Icon(icon, size: 18, color: iconColor),
-            ),
-            const SizedBox(width: 12),
+              const SizedBox(width: 12),
+            ],
             Expanded(
               child: Text(
                 label,

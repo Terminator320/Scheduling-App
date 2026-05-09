@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 
-Widget formLabel(BuildContext context, String text, {bool optional = false}) {
+Widget formLabel(BuildContext context, String text, {bool optional = false, bool required = false}) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 6),
     child: Row(
       children: [
-        Text(text, style: Theme.of(context).textTheme.labelMedium),
+        Text(text, style: Theme.of(context).textTheme.labelLarge),
+        if (required)
+          Text(
+            ' *',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.error),
+          ),
         if (optional)
           Text(
             ' (${context.l10n.optional})',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
@@ -30,31 +36,12 @@ Widget formSectionLabel(BuildContext context, String text) {
 }
 
 InputDecoration formInputDecoration(BuildContext context, String hint) {
-  final scheme = Theme.of(context).colorScheme;
   return InputDecoration(
     hintText: hint,
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: scheme.outline),
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.sp16,
+      vertical: AppSpacing.sp12,
     ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: scheme.outline),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: scheme.primary, width: 1.5),
-    ),
-    errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: scheme.error),
-    ),
-    focusedErrorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: scheme.error, width: 1.5),
-    ),
-    filled: false,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
   );
 }
 

@@ -5,6 +5,7 @@ import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
+import 'package:scheduling/shared/widgets/status_chip.dart';
 
 class EmployeeDetailsSheet extends StatefulWidget {
   const EmployeeDetailsSheet({super.key, required this.employee});
@@ -70,31 +71,53 @@ class _EmployeeDetailsSheetState extends State<EmployeeDetailsSheet> {
         return ListView(
           controller: scrollController,
           padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
+            left: 16,
+            right: 16,
             top: 12,
             bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
           ),
           children: [
             const SheetHandle(),
-            const SizedBox(height: 18),
-            Center(
-              child: Text(
-                context.l10n.employeeDetails,
-                style: theme.textTheme.headlineSmall,
-              ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    context.l10n.employeeDetails,
+                    style: theme.textTheme.headlineLarge,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                StatusChip(
+                  status: isDisabled
+                      ? AppointmentStatus.disabled
+                      : AppointmentStatus.active,
+                ),
+              ],
             ),
-            const SizedBox(height: 18),
-            _DetailField(label: context.l10n.name2, value: widget.employee.name),
-            const SizedBox(height: 12),
-            _DetailField(label: context.l10n.email, value: widget.employee.email),
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 20),
+            _DetailField(
+              icon: Icons.person_outline,
+              label: context.l10n.name2,
+              value: widget.employee.name,
+            ),
             const SizedBox(height: 12),
             _DetailField(
+              icon: Icons.email_outlined,
+              label: context.l10n.email,
+              value: widget.employee.email,
+            ),
+            const SizedBox(height: 12),
+            _DetailField(
+              icon: Icons.phone_outlined,
               label: context.l10n.phoneNumber,
               value: widget.employee.phone.isEmpty ? '-' : widget.employee.phone,
             ),
             const SizedBox(height: 12),
             _DetailField(
+              icon: Icons.shield_outlined,
               label: context.l10n.role,
               value: widget.employee.isAdmin
                   ? context.l10n.admin
@@ -102,36 +125,43 @@ class _EmployeeDetailsSheetState extends State<EmployeeDetailsSheet> {
             ),
             const SizedBox(height: 12),
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Container(
-                  width: 18,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    color: widget.employee.color,
-                    shape: BoxShape.circle,
-                  ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Icon(Icons.palette_outlined, size: 16, color: AppColors.primary),
                 ),
-                const SizedBox(width: 10),
-                Expanded(child: Text(context.l10n.employeeColor2)),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.l10n.employeeColor2,
+                      style: theme.textTheme.labelSmall?.copyWith(color: AppColors.muted),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: widget.employee.color,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.outline),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 24),
-            const SizedBox(height: 24),
-            const Divider(),
-            const SizedBox(height: 8),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
 
-            OutlinedButton.icon(
+            FilledButton.icon(
               onPressed: () => Navigator.pop(context, 'edit'),
               icon: const Icon(Icons.edit_outlined, size: 18),
               label: Text(context.l10n.edit),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 46),
-                side: const BorderSide(color: AppColors.outline),
-                foregroundColor: AppColors.onSurface,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.r8),
-                ),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
               ),
             ),
             const SizedBox(height: 10),
@@ -139,9 +169,9 @@ class _EmployeeDetailsSheetState extends State<EmployeeDetailsSheet> {
             OutlinedButton.icon(
               onPressed: _isLoading ? null : _confirmDelete,
               icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
-              label: const Text('Delete', style: TextStyle(color: AppColors.error)),
+              label: Text(context.l10n.delete, style: const TextStyle(color: AppColors.error)),
               style: OutlinedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 46),
+                minimumSize: const Size(double.infinity, 48),
                 side: const BorderSide(color: AppColors.error),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppRadius.r8),
@@ -172,6 +202,7 @@ class _EmployeeDetailsSheetState extends State<EmployeeDetailsSheet> {
                         label: Text(context.l10n.enableEmployee),
                         style: FilledButton.styleFrom(
                           backgroundColor: AppColors.primary,
+                          minimumSize: const Size(double.infinity, 48),
                         ),
                       )
                     : OutlinedButton.icon(
@@ -196,6 +227,7 @@ class _EmployeeDetailsSheetState extends State<EmployeeDetailsSheet> {
                         ),
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: AppColors.error),
+                          minimumSize: const Size(double.infinity, 48),
                         ),
                       ),
               ),
@@ -208,43 +240,42 @@ class _EmployeeDetailsSheetState extends State<EmployeeDetailsSheet> {
 }
 
 class _DetailField extends StatelessWidget {
-  const _DetailField({required this.label, required this.value});
+  const _DetailField({required this.label, required this.value, this.icon});
 
   final String label;
   final String value;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: scheme.onSurface.withAlpha(170),
-            ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (icon != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 2, right: 12),
+            child: Icon(icon, size: 16, color: AppColors.primary),
           ),
-          const SizedBox(height: 4),
-          Text(
-            value.isEmpty ? '-' : value,
-            softWrap: true,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(color: AppColors.muted),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value.isEmpty ? '-' : value,
+                softWrap: true,
+                style: theme.textTheme.bodyMedium,
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

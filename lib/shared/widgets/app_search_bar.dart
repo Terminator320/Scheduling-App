@@ -7,10 +7,14 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
     super.key,
     required this.onChanged,
     this.hintText = 'Search…',
+    this.controller,
+    this.focusNode,
   });
 
   final ValueChanged<String> onChanged;
   final String hintText;
+  final TextEditingController? controller;
+  final FocusNode? focusNode;
 
   @override
   Size get preferredSize => const Size.fromHeight(52);
@@ -24,6 +28,8 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
         vertical: AppSpacing.sp8,
       ),
       child: TextField(
+        controller: controller,
+        focusNode: focusNode,
         onChanged: onChanged,
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
           color: Theme.of(context).colorScheme.onSurface,

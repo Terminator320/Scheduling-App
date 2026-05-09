@@ -1,0 +1,118 @@
+import 'package:flutter/material.dart';
+
+import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/features/calendar/models/appointment_record.dart';
+import 'package:scheduling/shared/widgets/status_chip.dart';
+
+class AppointmentCard extends StatelessWidget {
+  const AppointmentCard({
+    super.key,
+    required this.appointment,
+    required this.employeeColor,
+    this.employeeName,
+    this.onTap,
+  });
+
+  final AppointmentRecord appointment;
+  final Color employeeColor;
+  final String? employeeName;
+  final VoidCallback? onTap;
+
+  AppointmentStatus _statusFromString(String status) => switch (status) {
+    'done' => AppointmentStatus.done,
+    'cancelled' => AppointmentStatus.cancelled,
+    'pending' => AppointmentStatus.pending,
+    _ => AppointmentStatus.confirmed,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(width: 3, color: employeeColor),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.sp12,
+                    AppSpacing.sp12,
+                    AppSpacing.sp8,
+                    AppSpacing.sp12,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              appointment.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sp8),
+                          StatusChip(status: _statusFromString(appointment.status)),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.sp4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.access_time_outlined,
+                            size: 13,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: AppSpacing.sp4),
+                          Text(
+                            '${DateUtilsHelper.formatTime(appointment.startTime)} – ${DateUtilsHelper.formatTime(appointment.endTime)}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (employeeName != null) ...[
+                        const SizedBox(height: AppSpacing.sp4),
+                        Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: employeeColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sp4),
+                            Text(
+                              employeeName!,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

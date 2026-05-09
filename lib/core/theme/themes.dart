@@ -10,7 +10,7 @@ TextTheme _buildTextTheme(Color onSurface, Color subtle) {
     headlineMedium: base.headlineMedium?.copyWith(fontSize: 17, fontWeight: FontWeight.w600, color: onSurface),
     titleMedium: base.titleMedium?.copyWith(fontSize: 15, fontWeight: FontWeight.w600, color: onSurface),
     bodyLarge: base.bodyLarge?.copyWith(fontSize: 15, fontWeight: FontWeight.w400, color: onSurface),
-    bodyMedium: base.bodyMedium?.copyWith(fontSize: 13, fontWeight: FontWeight.w400, color: subtle),
+    bodyMedium: base.bodyMedium?.copyWith(fontSize: 13, fontWeight: FontWeight.w400, color: onSurface),
     bodySmall: base.bodySmall?.copyWith(fontSize: 11, fontWeight: FontWeight.w400, color: subtle),
     labelLarge: base.labelLarge?.copyWith(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.3, color: onSurface),
     labelMedium: base.labelMedium?.copyWith(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.5, color: subtle),
@@ -92,7 +92,7 @@ ThemeData lightTheme() {
     ),
     drawerTheme: const DrawerThemeData(
       backgroundColor: AppColors.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.horizontal(right: Radius.circular(AppRadius.r16))),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.horizontal(left: Radius.circular(AppRadius.r16))),
     ),
     dividerTheme: const DividerThemeData(color: AppColors.outline, thickness: 1, space: 0),
     chipTheme: ChipThemeData(
@@ -180,7 +180,7 @@ ThemeData darkTheme() {
     ),
     drawerTheme: const DrawerThemeData(
       backgroundColor: AppColors.darkSurface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.horizontal(right: Radius.circular(AppRadius.r16))),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.horizontal(left: Radius.circular(AppRadius.r16))),
     ),
     dividerTheme: const DividerThemeData(color: AppColors.darkOutline, thickness: 1, space: 0),
     chipTheme: ChipThemeData(

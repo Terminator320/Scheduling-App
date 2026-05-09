@@ -344,14 +344,15 @@ class _ForgotPasswordState extends State<ForgotPassword>
           child: Container(
             padding: const EdgeInsets.all(AppSpacing.sp12),
             decoration: BoxDecoration(
-              color: AppColors.primaryTint,
+              color: AppColors.successTint,
               borderRadius: BorderRadius.circular(AppRadius.r8),
+              border: Border.all(color: const Color(0xFFBBF7D0)),
             ),
             child: Row(
               children: [
                 const Icon(
-                  Icons.info_outline,
-                  color: AppColors.primary,
+                  Icons.check_circle_outline,
+                  color: AppColors.success,
                   size: 16,
                 ),
                 const SizedBox(width: AppSpacing.sp8),
@@ -361,7 +362,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
                         .l10n
                         .theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder,
                     style: textTheme.bodySmall?.copyWith(
-                      color: AppColors.primaryDark,
+                      color: AppColors.successText,
                     ),
                   ),
                 ),
@@ -384,7 +385,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
             child: TextButton(
               onPressed: _resendEmail,
               child: Text(
-                context.l10n.useADifferentEmail,
+                context.l10n.didnTReceiveTheEmailTryAgain,
                 style: textTheme.bodySmall?.copyWith(
                   color: AppColors.primary,
                 ),

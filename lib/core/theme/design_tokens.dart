@@ -5,9 +5,9 @@ class AppColors {
 
   // Primary — cyan-blue matched to Plombier Eau Secours! logo (#1E82C8)
   static const Color primary = Color(0xFF1E82C8);
-  static const Color primaryDark = Color(0xFF0C3A52);
-  static const Color primaryTint = Color(0xFFD4EDFA);
-  static const Color primarySurface = Color(0xFFEBF5FD);
+  static const Color primaryDark = Color(0xFF155E8E);
+  static const Color primaryTint = Color(0xFFC5E6F6);
+  static const Color primarySurface = Color(0xFFE8F5FC);
 
   // Light surfaces
   static const Color background = Color(0xFFF8FAFC);
@@ -43,7 +43,7 @@ class AppColors {
 
   // Status — dark
   static const Color darkPrimaryTint = Color(0xFF0C3A52);
-  static const Color darkPrimaryOnDark = Color(0xFF7DC4E8);
+  static const Color darkPrimaryOnDark = Color(0xFF93C5FD);
   static const Color darkSuccessTint = Color(0xFF14532D);
   static const Color darkSuccessText = Color(0xFF86EFAC);
   static const Color darkWarningTint = Color(0xFF422006);

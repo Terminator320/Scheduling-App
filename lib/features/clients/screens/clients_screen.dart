@@ -17,6 +17,7 @@ import 'package:scheduling/features/clients/widgets/client_tile.dart';
 import 'package:scheduling/features/settings/widgets/settings_drawer.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_empty_state.dart';
+import 'package:scheduling/shared/widgets/app_search_bar.dart';
 import 'package:scheduling/shared/widgets/skeleton_loader.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';
 
@@ -53,7 +54,6 @@ class _ListInformationState extends State<ListInformation> {
   final ClientService _clientService = ClientService();
   final AppointmentService _appointmentService = AppointmentService();
   StreamSubscription? _clientsSubscription;
-  StreamSubscription? _appointmentsSubscription;
   final UserService _userService = UserService();
   List<EmployeeRecord> _allEmployees = [];
   StreamSubscription? _employeesSubscription;
@@ -76,9 +76,6 @@ class _ListInformationState extends State<ListInformation> {
         });
       }
     });
-    _appointmentsSubscription = _appointmentService
-        .getAllAppointments()
-        .listen((_) {});
     _employeesSubscription = _userService.allUsersStream().listen((data) {
       if (mounted) setState(() => _allEmployees = data);
     });
@@ -99,7 +96,6 @@ class _ListInformationState extends State<ListInformation> {
     _appointmentSearchController.dispose();
     _scrollController.dispose();
     _clientsSubscription?.cancel();
-    _appointmentsSubscription?.cancel();
     _employeesSubscription?.cancel();
     super.dispose();
   }
@@ -165,38 +161,10 @@ class _ListInformationState extends State<ListInformation> {
         context.l10n.clients,
         style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
       ),
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(52),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-          child: TextField(
-            controller: _searchController,
-            onChanged: (_) => setState(() {}),
-            style: const TextStyle(color: Colors.white, fontSize: 13),
-            decoration: InputDecoration(
-              hintText: context.l10n.searchByNameOrPhone,
-              hintStyle: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 13,
-              ),
-              prefixIcon: Icon(
-                Icons.search,
-                size: 16,
-                color: Colors.white.withValues(alpha: 0.7),
-              ),
-              filled: true,
-              fillColor: Colors.white.withValues(alpha: 0.15),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppRadius.r12),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                vertical: 8,
-                horizontal: 12,
-              ),
-            ),
-          ),
-        ),
+      bottom: AppSearchBar(
+        controller: _searchController,
+        onChanged: (_) => setState(() {}),
+        hintText: context.l10n.searchByNameOrPhone,
       ),
     );
   }

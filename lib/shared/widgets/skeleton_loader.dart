@@ -32,8 +32,8 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final base = isDark ? AppColors.darkSurface : AppColors.surfaceAlt;
-    final highlight = isDark ? AppColors.darkSurfaceAlt : AppColors.outline;
+    final base = isDark ? AppColors.darkSurfaceAlt : AppColors.surfaceAlt;
+    final highlight = isDark ? AppColors.darkOutline : AppColors.outline;
     return AnimatedBuilder(
       animation: _anim,
       builder: (_, __) => Container(
@@ -66,6 +66,7 @@ class SkeletonAppointmentRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(AppRadius.r8),
+        border: const Border(left: BorderSide(color: AppColors.outline, width: 3)),
         boxShadow: AppShadow.card,
       ),
       child: Row(

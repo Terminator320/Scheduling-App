@@ -202,6 +202,61 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
     });
   }
 
+  Widget _buildBanner(TextTheme textTheme) {
+    if (_bannerError != null) {
+      return Padding(
+        key: ValueKey('err_$_bannerError'),
+        padding: const EdgeInsets.only(bottom: AppSpacing.sp12),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.sp12),
+          decoration: BoxDecoration(
+            color: AppColors.errorTint,
+            borderRadius: BorderRadius.circular(AppRadius.r8),
+            border: Border.all(color: const Color(0xFFFECACA)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.error_outline, color: AppColors.error, size: 16),
+              const SizedBox(width: AppSpacing.sp8),
+              Expanded(
+                child: Text(
+                  _bannerError!,
+                  style: textTheme.bodySmall?.copyWith(color: AppColors.errorText),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_bannerSuccess != null) {
+      return Padding(
+        key: ValueKey('ok_$_bannerSuccess'),
+        padding: const EdgeInsets.only(bottom: AppSpacing.sp12),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.sp12),
+          decoration: BoxDecoration(
+            color: AppColors.successTint,
+            borderRadius: BorderRadius.circular(AppRadius.r8),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.check_circle_outline, color: AppColors.success, size: 16),
+              const SizedBox(width: AppSpacing.sp8),
+              Expanded(
+                child: Text(
+                  _bannerSuccess!,
+                  style: textTheme.bodySmall?.copyWith(color: AppColors.successText),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return const SizedBox.shrink(key: ValueKey('banner_none'));
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -256,7 +311,20 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                     ],
                   ),
                 ),
-                const SizedBox(height: AppSpacing.sp32),
+                const SizedBox(height: AppSpacing.sp16),
+                AnimatedSwitcher(
+                  duration: AppAnimationDurations.banner,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SizeTransition(
+                      sizeFactor: animation,
+                      axisAlignment: -1,
+                      child: child,
+                    ),
+                  ),
+                  child: _buildBanner(textTheme),
+                ),
+                const SizedBox(height: AppSpacing.sp16),
                 // Email field
                 FadeSlideEntrance(
                   animation: animations[2],
@@ -342,81 +410,6 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                       ),
                     ),
                   ),
-                ),
-                // Inline error / success banners
-                AnimatedSwitcher(
-                  duration: AppAnimationDurations.banner,
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: SizeTransition(
-                      sizeFactor: animation,
-                      axisAlignment: -1,
-                      child: child,
-                    ),
-                  ),
-                  child: _bannerError != null
-                      ? Padding(
-                          key: ValueKey('err_$_bannerError'),
-                          padding: const EdgeInsets.only(top: AppSpacing.sp12),
-                          child: Container(
-                            padding: const EdgeInsets.all(AppSpacing.sp12),
-                            decoration: BoxDecoration(
-                              color: AppColors.errorTint,
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.r8),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.error_outline,
-                                  color: AppColors.error,
-                                  size: 16,
-                                ),
-                                const SizedBox(width: AppSpacing.sp8),
-                                Expanded(
-                                  child: Text(
-                                    _bannerError!,
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: AppColors.errorText,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      : _bannerSuccess != null
-                      ? Padding(
-                          key: ValueKey('ok_$_bannerSuccess'),
-                          padding: const EdgeInsets.only(top: AppSpacing.sp12),
-                          child: Container(
-                            padding: const EdgeInsets.all(AppSpacing.sp12),
-                            decoration: BoxDecoration(
-                              color: AppColors.successTint,
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.r8),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.check_circle_outline,
-                                  color: AppColors.success,
-                                  size: 16,
-                                ),
-                                const SizedBox(width: AppSpacing.sp8),
-                                Expanded(
-                                  child: Text(
-                                    _bannerSuccess!,
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: AppColors.successText,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      : const SizedBox.shrink(key: ValueKey('banner_none')),
                 ),
                 const SizedBox(height: AppSpacing.sp24),
                 // Sign In button

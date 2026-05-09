@@ -401,19 +401,17 @@ class _AddClientSheetState extends State<AddClientSheet> {
         return ListView(
           controller: scrollController,
           padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
+            left: 16,
+            right: 16,
             top: 12,
             bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
           ),
           children: [
               const SheetHandle(),
               const SizedBox(height: 16),
-              Center(
-                child: Text(
-                  context.l10n.newClient,
-                  style: theme.textTheme.headlineLarge,
-                ),
+              Text(
+                context.l10n.newClient,
+                style: theme.textTheme.headlineLarge,
               ),
               const SizedBox(height: 20),
               const Divider(height: 1),
@@ -557,39 +555,26 @@ class _AddClientSheetState extends State<AddClientSheet> {
                 ],
               ),
               const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      onPressed: _isSaving
-                          ? null
-                          : () => Navigator.pop(context),
-                      child: Text(context.l10n.cancel),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      onPressed: _isSaving ? null : _save,
-                      child: _isSaving
-                          ? SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: scheme.onPrimary,
-                              ),
-                            )
-                          : Text(context.l10n.addClient2),
-                    ),
-                  ),
-                ],
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                ),
+                onPressed: _isSaving ? null : _save,
+                child: _isSaving
+                    ? SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: scheme.onPrimary,
+                        ),
+                      )
+                    : Text(context.l10n.addClient2),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: _isSaving ? null : () => Navigator.pop(context),
+                child: Text(context.l10n.cancel),
               ),
           ],
         );
