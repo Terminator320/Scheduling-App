@@ -115,6 +115,20 @@ class _MainCalendar extends State<MainCalendar> {
     });
   }
 
+  void _goToToday() {
+    final now = DateTime.now();
+    final oldRange = _appointmentRange;
+    setState(() {
+      _focusedDay = now;
+      _selectedDay = now;
+    });
+    final newRange = AppointmentDateRange.visibleMonth(now);
+    if (newRange.start != oldRange.start || newRange.end != oldRange.end) {
+      _subscribeAppointmentsForFocusedMonth();
+    }
+    _selectedEvents.value = _getEventsForDay(now);
+  }
+
   void _setFocusedDay(DateTime day) {
     final oldRange = _appointmentRange;
     setState(() => _focusedDay = day);
@@ -184,6 +198,17 @@ class _MainCalendar extends State<MainCalendar> {
           ),
         ),
         actions: [
+          TextButton(
+            onPressed: _goToToday,
+            child: Text(
+              context.l10n.today,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.menu, color: Colors.white),
             onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),

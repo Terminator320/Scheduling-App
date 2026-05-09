@@ -2,16 +2,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/features/employees/services/user_service.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_avatar.dart';
 
-class SettingsDrawer extends StatelessWidget {
-  final bool isAdmin;
-  final String employeeId;
-  final String? userName;
-  final String? email;
-
+class SettingsDrawer extends StatefulWidget {
   const SettingsDrawer({
     super.key,
     required this.isAdmin,
@@ -19,6 +16,48 @@ class SettingsDrawer extends StatelessWidget {
     this.userName,
     this.email,
   });
+
+  final bool isAdmin;
+  final String employeeId;
+  final String? userName;
+  final String? email;
+
+  @override
+  State<SettingsDrawer> createState() => _SettingsDrawerState();
+}
+
+class _SettingsDrawerState extends State<SettingsDrawer> {
+  String _displayName = '';
+  String _displayEmail = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveUser();
+  }
+
+  Future<void> _resolveUser() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // Email is always available from Auth
+    final email = widget.email ?? user.email ?? '';
+
+    // Name: prefer the passed-in value, then Auth displayName, then Firestore
+    String name = widget.userName ?? user.displayName ?? '';
+    if (name.isEmpty) {
+      final doc = await UserService().findUserByUid(user.uid);
+      if (!mounted) return;
+      final data = doc?.data();
+      name = (data?['name'] ?? '').toString();
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _displayName = name;
+      _displayEmail = email;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,72 +71,87 @@ class SettingsDrawer extends StatelessWidget {
       child: Column(
         children: [
           _buildHeader(context),
-          Expanded(child: _buildNavList(context, scheme)),
+          Expanded(child: _buildNav(context)),
         ],
       ),
     );
   }
 
   Widget _buildHeader(BuildContext context) {
-    final theme = Theme.of(context);
-    final displayEmail =
-        email ?? FirebaseAuth.instance.currentUser?.email ?? '';
     final statusBarHeight = MediaQuery.of(context).padding.top;
     final roleLabel =
-        isAdmin ? context.l10n.admin : context.l10n.employeeRoleValue;
+        widget.isAdmin ? context.l10n.admin : context.l10n.employeeRoleValue;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(20, statusBarHeight + 20, 20, 18),
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(20, statusBarHeight + 24, 20, 22),
       decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: AppColors.outline),
+        gradient: LinearGradient(
+          colors: [AppColors.primary, AppColors.primaryDark],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AppAvatar(
-            name: userName ?? '?',
-            color: AppColors.primary,
-            size: AvatarSize.lg,
-          ),
-          const SizedBox(height: 10),
-          Text(
-            userName ?? '…',
-            style: theme.textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              fontSize: 15,
+          // Avatar with translucent ring
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.25),
+              shape: BoxShape.circle,
+            ),
+            child: AppAvatar(
+              name: _displayName,
+              color: AppColors.primaryDark,
+              size: AvatarSize.lg,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 12),
+          // Name
+          Text(
+            _displayName.isNotEmpty ? _displayName : ' ',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              height: 1.2,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 7),
+          // Role badge + email
           Row(
             children: [
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryTint,
+                  color: Colors.white.withValues(alpha: 0.22),
                   borderRadius: BorderRadius.circular(AppRadius.rFull),
                 ),
                 child: Text(
                   roleLabel,
                   style: const TextStyle(
+                    color: Colors.white,
                     fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primaryDark,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.3,
                   ),
                 ),
               ),
-              if (displayEmail.isNotEmpty) ...[
-                const SizedBox(width: 6),
+              if (_displayEmail.isNotEmpty) ...[
+                const SizedBox(width: 8),
                 Flexible(
                   child: Text(
-                    displayEmail,
+                    _displayEmail,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.75),
                       fontSize: 11,
-                      color: AppColors.subtle,
                     ),
                   ),
                 ),
@@ -109,51 +163,55 @@ class SettingsDrawer extends StatelessWidget {
     );
   }
 
-  Widget _buildNavList(BuildContext context, ColorScheme scheme) {
-    final textTheme = Theme.of(context).textTheme;
+  Widget _buildNav(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      children: [
-        _DrawerItem(
-          icon: Icons.calendar_today_outlined,
-          label: context.l10n.calendar,
-          textTheme: textTheme,
-          scheme: scheme,
-          onTap: () => _goToCalendar(context),
-        ),
-        if (isAdmin) ...[
-          _DrawerItem(
-            icon: Icons.people_outline,
-            label: context.l10n.clients,
-            textTheme: textTheme,
-            scheme: scheme,
-            onTap: () => _goToClients(context),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Column(
+        children: [
+          // ── Main navigation ─────────────────────────────────────────
+          _NavItem(
+            icon: Icons.calendar_today_rounded,
+            iconColor: AppColors.primary,
+            label: context.l10n.calendar,
+            onTap: () => _goToCalendar(context),
           ),
-          _DrawerItem(
-            icon: Icons.badge_outlined,
-            label: context.l10n.employees,
-            textTheme: textTheme,
-            scheme: scheme,
-            onTap: () => _goToEmployees(context),
+          if (widget.isAdmin) ...[
+            _NavItem(
+              icon: Icons.people_rounded,
+              iconColor: AppColors.success,
+              label: context.l10n.clients,
+              onTap: () => _goToClients(context),
+            ),
+            _NavItem(
+              icon: Icons.badge_rounded,
+              iconColor: AppColors.accent,
+              label: context.l10n.employees,
+              onTap: () => _goToEmployees(context),
+            ),
+          ],
+          _NavItem(
+            icon: Icons.history_rounded,
+            iconColor: AppColors.warning,
+            label: context.l10n.history,
+            onTap: () => _goToHistory(context),
           ),
+
+          const Spacer(),
+
+          // ── Settings pinned at bottom ───────────────────────────────
+          const Divider(height: 1),
+          const SizedBox(height: 4),
+          _NavItem(
+            icon: Icons.settings_rounded,
+            iconColor: AppColors.subtle,
+            label: context.l10n.settings,
+            onTap: () => _goToSettings(context),
+          ),
+          SizedBox(height: bottomPadding + 4),
         ],
-        _DrawerItem(
-          icon: Icons.history_outlined,
-          label: context.l10n.history,
-          textTheme: textTheme,
-          scheme: scheme,
-          onTap: () => _goToHistory(context),
-        ),
-        const Divider(height: 1),
-        _DrawerItem(
-          icon: Icons.settings_outlined,
-          label: context.l10n.settings,
-          textTheme: textTheme,
-          scheme: scheme,
-          onTap: () => _goToSettings(context),
-        ),
-      ],
+      ),
     );
   }
 
@@ -162,7 +220,8 @@ class SettingsDrawer extends StatelessWidget {
     Navigator.pushReplacementNamed(
       context,
       AppRoutes.mainCalendar,
-      arguments: MainCalendarArgs(isAdmin: isAdmin, employeeId: employeeId),
+      arguments:
+          MainCalendarArgs(isAdmin: widget.isAdmin, employeeId: widget.employeeId),
     );
   }
 
@@ -174,7 +233,7 @@ class SettingsDrawer extends StatelessWidget {
       arguments: ClientsListArgs(
         mode: 'Clients',
         isAdmin: true,
-        employeeId: employeeId,
+        employeeId: widget.employeeId,
       ),
     );
   }
@@ -184,7 +243,8 @@ class SettingsDrawer extends StatelessWidget {
     Navigator.pushNamed(
       context,
       AppRoutes.employees,
-      arguments: MainCalendarArgs(isAdmin: isAdmin, employeeId: employeeId),
+      arguments:
+          MainCalendarArgs(isAdmin: widget.isAdmin, employeeId: widget.employeeId),
     );
   }
 
@@ -196,43 +256,74 @@ class SettingsDrawer extends StatelessWidget {
       arguments: ClientsListArgs(
         mode: 'Appointments',
         isAdmin: true,
-        employeeId: employeeId,
+        employeeId: widget.employeeId,
       ),
     );
   }
 
   void _goToSettings(BuildContext context) {
     Navigator.pop(context);
-    Navigator.pushNamed(context, AppRoutes.settings);
+    Navigator.pushNamed(
+      context,
+      AppRoutes.settings,
+      arguments: SettingsArgs(
+        name: _displayName,
+        email: _displayEmail,
+        role: widget.isAdmin ? 'admin' : 'employee',
+      ),
+    );
   }
-
 }
 
-class _DrawerItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final TextTheme textTheme;
-  final ColorScheme scheme;
-  final VoidCallback onTap;
+// ── Nav Item ──────────────────────────────────────────────────────────────────
 
-  const _DrawerItem({
+class _NavItem extends StatelessWidget {
+  const _NavItem({
     required this.icon,
+    required this.iconColor,
     required this.label,
-    required this.textTheme,
-    required this.scheme,
     required this.onTap,
   });
 
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      leading: Icon(icon, color: scheme.onSurface, size: 20),
-      title: Text(label, style: textTheme.bodyLarge?.copyWith(color: scheme.onSurface)),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.r8),
-      ),
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = ThemeNotifier.of(context).isDark;
+
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.r12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: isDark ? 0.15 : 0.10),
+                borderRadius: BorderRadius.circular(AppRadius.r8),
+              ),
+              child: Icon(icon, size: 19, color: iconColor),
+            ),
+            const SizedBox(width: 14),
+            Text(
+              label,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurface,
+                fontSize: 15,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

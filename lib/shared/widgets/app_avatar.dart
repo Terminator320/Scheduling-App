@@ -23,6 +23,7 @@ class AppAvatar extends StatelessWidget {
       AvatarSize.md => 13.0,
       AvatarSize.lg => 17.0,
     };
+    final initials = _initials(name);
     return Container(
       constraints: BoxConstraints.tight(Size(diameter, diameter)),
       decoration: BoxDecoration(
@@ -30,14 +31,16 @@ class AppAvatar extends StatelessWidget {
         shape: BoxShape.circle,
       ),
       alignment: Alignment.center,
-      child: Text(
-        _initials(name),
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: fontSize,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+      child: initials == '?'
+          ? Icon(Icons.person, color: Colors.white, size: fontSize + 4)
+          : Text(
+              initials,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: fontSize,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
     );
   }
 

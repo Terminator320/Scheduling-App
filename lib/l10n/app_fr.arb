@@ -355,5 +355,9 @@
     "placeholders": {
       "fileName": { "type": "String" }
     }
-  }
+  },
+  "scheduleConflict": "Conflit d'horaire",
+  "alreadyBookedThisSlot": "Déjà réservé pendant ce créneau :",
+  "doubleBookingWarning": "Les planifier quand même créera un double rendez-vous.",
+  "scheduleAnyway": "Planifier quand même"
 }

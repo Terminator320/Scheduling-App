@@ -66,7 +66,7 @@ class SkeletonAppointmentRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(AppRadius.r8),
-        border: const Border(left: BorderSide(color: AppColors.outline, width: 3)),
+        border: Border(left: BorderSide(color: Theme.of(context).colorScheme.outlineVariant, width: 3)),
         boxShadow: AppShadow.card,
       ),
       child: Row(

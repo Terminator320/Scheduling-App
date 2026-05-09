@@ -54,11 +54,13 @@ class LabeledTextField extends StatelessWidget {
           onTap: onTap,
           onChanged: onChanged,
           decoration: formInputDecoration(context, hint ?? label).copyWith(
-            error: errorText != null ? _FieldError(errorText!) : null,
+            errorText: errorText != null ? '' : null,
+            errorStyle: const TextStyle(fontSize: 0, height: 0),
             suffixIcon: suffixIcon,
             prefixIcon: prefixIcon,
           ),
         ),
+        if (errorText != null) _FieldError(errorText!),
       ],
     );
   }

@@ -227,6 +227,182 @@ class _AddEventSheetState extends State<AddEventSheet> {
   void _showSnack(BuildContext ctx, String message) =>
       ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(message)));
 
+  Future<bool> _showBusyConflictDialog(
+    BuildContext ctx,
+    List<EmployeeRecord> busyEmployees,
+    DateTime start,
+    DateTime end,
+  ) async {
+    final result = await showDialog<bool>(
+      context: ctx,
+      builder: (dialogCtx) {
+        final t = Theme.of(dialogCtx);
+        final tScheme = t.colorScheme;
+        final tIsDark = tScheme.brightness == Brightness.dark;
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.r16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.sp24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Warning badge
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: tIsDark ? AppColors.darkWarningTint : AppColors.warningTint,
+                    borderRadius: BorderRadius.circular(AppRadius.r12),
+                  ),
+                  child: Icon(
+                    Icons.warning_amber_rounded,
+                    color: tIsDark ? AppColors.darkWarningText : AppColors.warningText,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sp16),
+
+                // Title
+                Text(
+                  ctx.l10n.scheduleConflict,
+                  style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: AppSpacing.sp4),
+
+                // Time slot
+                Text(
+                  '${DateUtilsHelper.formatDate(start)} · '
+                  '${DateUtilsHelper.formatTime(start)} – ${DateUtilsHelper.formatTime(end)}',
+                  style: t.textTheme.bodySmall?.copyWith(color: tScheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: AppSpacing.sp16),
+
+                // Section label
+                Text(
+                  ctx.l10n.alreadyBookedThisSlot,
+                  style: t.textTheme.labelMedium?.copyWith(
+                    color: tScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sp12),
+
+                // Employee rows
+                ...busyEmployees.map(
+                  (e) => Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sp8),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: e.color,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              e.initials,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sp12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                e.name,
+                                style: t.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (e.email.isNotEmpty)
+                                Text(
+                                  e.email,
+                                  style: t.textTheme.bodySmall?.copyWith(
+                                    color: tScheme.onSurfaceVariant,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const Divider(height: AppSpacing.sp24),
+
+                // Warning note
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Icon(
+                        Icons.info_outline_rounded,
+                        size: 14,
+                        color: tIsDark ? AppColors.darkWarningText : AppColors.warningText,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sp8),
+                    Expanded(
+                      child: Text(
+                        ctx.l10n.doubleBookingWarning,
+                        style: t.textTheme.bodySmall?.copyWith(
+                          color: tIsDark ? AppColors.darkWarningText : AppColors.warningText,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sp24),
+
+                // Action buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 44),
+                        ),
+                        onPressed: () => Navigator.pop(dialogCtx, false),
+                        child: Text(ctx.l10n.cancel),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sp12),
+                    Expanded(
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 44),
+                          backgroundColor: AppColors.warning,
+                          foregroundColor: AppColors.warningText,
+                        ),
+                        onPressed: () => Navigator.pop(dialogCtx, true),
+                        child: Text(ctx.l10n.scheduleAnyway),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    return result == true;
+  }
+
   Future<void> _submit(BuildContext ctx) async {
     setState(() {
       final hasValidTimeRange =
@@ -271,11 +447,9 @@ class _AddEventSheetState extends State<AddEventSheet> {
     );
 
     if (busyEmployees.isNotEmpty) {
-      setState(
-        () => _errors['employees'] =
-            '${context.l10n.busy}: ${busyEmployees.map((e) => e.name).join(', ')}',
-      );
-      return;
+      if (!ctx.mounted) return;
+      final confirmed = await _showBusyConflictDialog(ctx, busyEmployees, startTime, endTime);
+      if (!confirmed || !ctx.mounted) return;
     }
 
     setState(() => _isSubmitting = true);
@@ -323,13 +497,14 @@ class _AddEventSheetState extends State<AddEventSheet> {
   Widget _buildAddressPill(BuildContext context) {
     final client = _selectedClient!;
     final address = client.address.isNotEmpty ? client.address : context.l10n.noAddress;
+    final scheme = Theme.of(context).colorScheme;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
       decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
+        color: scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(AppRadius.r12),
-        border: Border.all(color: AppColors.outline),
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child: Row(
         children: [
@@ -350,14 +525,14 @@ class _AddEventSheetState extends State<AddEventSheet> {
                 Text(
                   context.l10n.clientSAddress,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppColors.muted,
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   address,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.onSurface,
+                    color: scheme.onSurface,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,

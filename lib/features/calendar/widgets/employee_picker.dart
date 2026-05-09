@@ -21,6 +21,7 @@ class EmployeePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final displayEmployees = selectable
         ? allEmployees
         : allEmployees
@@ -32,7 +33,7 @@ class EmployeePicker extends StatelessWidget {
         selectable
             ? context.l10n.noEmployeesFound
             : context.l10n.noEmployeesAssigned,
-        style: const TextStyle(fontSize: 13, color: AppColors.muted),
+        style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
       );
     }
 
@@ -47,13 +48,13 @@ class EmployeePicker extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.fromLTRB(6, 4, 10, 4),
             decoration: BoxDecoration(
-              color: isSelected ? AppColors.primarySurface : AppColors.surfaceAlt,
+              color: isSelected ? scheme.primaryContainer : scheme.surfaceContainerHighest,
               border: Border.all(
                 color: hasError && !isSelected
-                    ? AppColors.error
+                    ? scheme.error
                     : isSelected
                         ? AppColors.primary
-                        : AppColors.outline,
+                        : scheme.outlineVariant,
                 width: 1.5,
               ),
               borderRadius: BorderRadius.circular(AppRadius.rFull),
@@ -85,7 +86,7 @@ class EmployeePicker extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                    color: isSelected ? AppColors.primary : AppColors.subtle,
+                    color: isSelected ? AppColors.primary : scheme.onSurfaceVariant,
                   ),
                 ),
               ],

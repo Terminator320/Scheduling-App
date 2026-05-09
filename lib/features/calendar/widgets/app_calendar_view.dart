@@ -117,9 +117,9 @@ class AppCalendar extends StatelessWidget {
           return _dayCell(
             context,
             day,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.primarySurface,
+              color: Theme.of(context).colorScheme.primaryContainer,
             ),
             textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: AppColors.primary,

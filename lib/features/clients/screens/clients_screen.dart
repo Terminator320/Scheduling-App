@@ -306,7 +306,7 @@ class _ListInformationState extends State<ListInformation> {
     final query = _appointmentSearchController.text.trim().toLowerCase();
 
     return ColoredBox(
-      color: AppColors.background,
+      color: Theme.of(context).scaffoldBackgroundColor,
       child: StreamBuilder<List<AppointmentRecord>>(
         stream: _appointmentService.getHistoryAppointments(),
         builder: (context, snapshot) {
@@ -381,10 +381,10 @@ class _ListInformationState extends State<ListInformation> {
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.subtle,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     letterSpacing: 0.6,
                   ),
                 ),
@@ -420,6 +420,7 @@ AppointmentStatus _mapHistoryStatus(String status) =>
       'confirmed' => AppointmentStatus.confirmed,
       'done' || 'completed' => AppointmentStatus.done,
       'cancelled' => AppointmentStatus.cancelled,
+      'in_progress' || 'inprogress' => AppointmentStatus.inProgress,
       _ => AppointmentStatus.pending,
     };
 
@@ -435,10 +436,11 @@ class _HistoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final isCancelled = appointment.status.toLowerCase() == 'cancelled';
     final accent =
         colorFromMap(appointment, employeeColorMap) ?? AppColors.primary;
-    final status = _mapHistoryStatus(appointment.status);
+    final status = _mapHistoryStatus(appointment.displayStatus);
 
     final employeeName = appointment.employeeNames.isNotEmpty
         ? appointment.employeeNames.first
@@ -473,7 +475,7 @@ class _HistoryCard extends StatelessWidget {
                           decoration: isCancelled
                               ? TextDecoration.lineThrough
                               : null,
-                          color: isCancelled ? AppColors.subtle : null,
+                          color: isCancelled ? scheme.onSurfaceVariant : null,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -494,7 +496,7 @@ class _HistoryCard extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: AppColors.subtle,
+                                color: scheme.onSurfaceVariant,
                               ),
                             ),
                           ),
@@ -511,10 +513,10 @@ class _HistoryCard extends StatelessWidget {
                   children: [
                     StatusChip(status: status),
                     const SizedBox(width: 7),
-                    const Icon(
+                    Icon(
                       Icons.chevron_right,
                       size: 16,
-                      color: AppColors.muted,
+                      color: scheme.onSurfaceVariant,
                     ),
                   ],
                 ),

@@ -69,9 +69,14 @@ class AppRoutes {
         );
 
       case AppRoutes.settings:
+        final args = settings.arguments as SettingsArgs?;
         return MaterialPageRoute(
           settings: settings,
-          builder: (_) => const SettingsScreen(),
+          builder: (_) => SettingsScreen(
+            name: args?.name ?? '',
+            email: args?.email ?? '',
+            role: args?.role,
+          ),
         );
 
       default:
@@ -100,4 +105,11 @@ class ClientsListArgs {
     required this.isAdmin,
     required this.employeeId,
   });
+}
+
+class SettingsArgs {
+  final String name;
+  final String email;
+  final String? role;
+  const SettingsArgs({required this.name, required this.email, this.role});
 }

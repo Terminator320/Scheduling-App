@@ -356,7 +356,10 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
           children: [
             const SheetHandle(),
             const SizedBox(height: AppSpacing.sp8),
-            if (_isEditing) ..._buildEditContent(sheetContext) else ..._buildViewContent(sheetContext),
+            if (_isEditing && widget.appointment.status.toLowerCase() != 'cancelled')
+              ..._buildEditContent(sheetContext)
+            else
+              ..._buildViewContent(sheetContext),
           ],
         );
       },
@@ -386,20 +389,20 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               decoration: BoxDecoration(
-                color: AppColors.surfaceAlt,
-                border: Border.all(color: AppColors.outline, width: 1.5),
+                color: scheme.surfaceContainerHighest,
+                border: Border.all(color: scheme.outlineVariant, width: 1.5),
                 borderRadius: BorderRadius.circular(AppRadius.r8),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.edit_outlined, size: 13, color: AppColors.onSurface),
+                  Icon(Icons.edit_outlined, size: 13, color: scheme.onSurface),
                   const SizedBox(width: 5),
                   Text(
                     ctx.l10n.edit,
                     style: theme.textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: AppColors.onSurface,
+                      color: scheme.onSurface,
                     ),
                   ),
                 ],
@@ -419,21 +422,32 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.sp8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 16,
+              runSpacing: 4,
               children: [
-                Icon(Icons.calendar_today_outlined, size: 13, color: AppColors.subtle),
-                const SizedBox(width: 4),
-                Text(
-                  DateUtilsHelper.formatDate(a.startTime),
-                  style: theme.textTheme.bodySmall?.copyWith(color: AppColors.subtle),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.calendar_today_outlined, size: 13, color: scheme.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                    Text(
+                      DateUtilsHelper.formatDate(a.startTime),
+                      style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 16),
-                Icon(Icons.access_time_outlined, size: 13, color: AppColors.subtle),
-                const SizedBox(width: 4),
-                Text(
-                  '${DateUtilsHelper.formatTime(a.startTime)} – ${DateUtilsHelper.formatTime(a.endTime)}',
-                  style: theme.textTheme.bodySmall?.copyWith(color: AppColors.subtle),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.access_time_outlined, size: 13, color: scheme.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${DateUtilsHelper.formatTime(a.startTime)} – ${DateUtilsHelper.formatTime(a.endTime)}',
+                      style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -551,7 +565,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
           Center(
             child: Text(
               ctx.l10n.cancelledJobsAreSavedToHistory,
-              style: Theme.of(ctx).textTheme.bodySmall?.copyWith(color: AppColors.subtle),
+              style: Theme.of(ctx).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ),
         ],
@@ -560,6 +574,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   }
 
   Widget _buildMaterialsView(AppointmentRecord a, ThemeData theme) {
+    final scheme = theme.colorScheme;
     return _SectionRow(
       label: context.l10n.materialsNeeded,
       value: a.materialsNeeded.isEmpty ? context.l10n.noMaterials : '',
@@ -575,16 +590,16 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
                     (m) => Container(
                       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceAlt,
-                        border: Border.all(color: AppColors.outline),
+                        color: scheme.surfaceContainerHighest,
+                        border: Border.all(color: scheme.outlineVariant),
                         borderRadius: BorderRadius.circular(AppRadius.rFull),
                       ),
                       child: Text(
                         m,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
-                          color: AppColors.onSurface,
+                          color: scheme.onSurface,
                         ),
                       ),
                     ),
@@ -596,15 +611,16 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   }
 
   Widget _buildEmployeesView(ThemeData theme) {
+    final scheme = theme.colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           context.l10n.employees.toUpperCase(),
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w700,
-            color: AppColors.subtle,
+            color: scheme.onSurfaceVariant,
             letterSpacing: 0.7,
           ),
         ),
@@ -612,7 +628,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         if (_selectedEmployees.isEmpty)
           Text(
             context.l10n.noEmployeesAssigned,
-            style: theme.textTheme.bodyMedium?.copyWith(color: AppColors.muted),
+            style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
           )
         else
           ..._selectedEmployees.map((e) => _EmployeePillView(employee: e)),
@@ -622,16 +638,17 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
   Widget _buildPhotosView(ThemeData theme) {
     final id = widget.appointment.id;
+    final isCancelled = widget.appointment.status.toLowerCase() == 'cancelled';
     final failure = id != null ? PhotoUploadNotifier.instance.failureFor(id) : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           context.l10n.pictures.toUpperCase(),
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w700,
-            color: AppColors.subtle,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
             letterSpacing: 0.7,
           ),
         ),
@@ -645,7 +662,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
           onRemoveNew: (_) {},
           failedCount: failure?.failedCount ?? 0,
           tooLargeFileNames: failure?.tooLargeFileNames ?? const [],
-          onRetry: (failure?.failedCount ?? 0) > 0
+          onRetry: (failure?.failedCount ?? 0) > 0 && !isCancelled
               ? () {
                   PhotoUploadNotifier.instance.clearFailure(id!);
                   setState(() => _isEditing = true);
@@ -933,9 +950,11 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   }
 
   Widget _buildStatusPicker() {
-    const statuses = ['confirmed', 'pending', 'done', 'cancelled'];
+    final scheme = Theme.of(context).colorScheme;
+    const statuses = ['confirmed', 'in_progress', 'pending', 'done', 'cancelled'];
     const labels = {
       'confirmed': 'Confirmed',
+      'in_progress': 'In Progress',
       'pending': 'Pending',
       'done': 'Done',
       'cancelled': 'Cancelled',
@@ -951,9 +970,9 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             decoration: BoxDecoration(
-              color: isSelected ? AppColors.primarySurface : Colors.transparent,
+              color: isSelected ? scheme.primaryContainer : Colors.transparent,
               border: Border.all(
-                color: isSelected ? AppColors.primary : AppColors.outline,
+                color: isSelected ? AppColors.primary : scheme.outlineVariant,
                 width: 1.5,
               ),
               borderRadius: BorderRadius.circular(AppRadius.rFull),
@@ -963,7 +982,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
-                color: isSelected ? AppColors.primary : AppColors.subtle,
+                color: isSelected ? AppColors.primary : scheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -991,15 +1010,16 @@ class _SectionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label.toUpperCase(),
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w700,
-            color: AppColors.subtle,
+            color: scheme.onSurfaceVariant,
             letterSpacing: 0.7,
           ),
         ),
@@ -1012,7 +1032,7 @@ class _SectionRow extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             subtitle!,
-            style: theme.textTheme.bodySmall?.copyWith(color: AppColors.subtle),
+            style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
           ),
         ],
       ],
@@ -1030,15 +1050,16 @@ class _AddressRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label.toUpperCase(),
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w700,
-            color: AppColors.subtle,
+            color: scheme.onSurfaceVariant,
             letterSpacing: 0.7,
           ),
         ),
@@ -1085,11 +1106,12 @@ class _EmployeePillView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
+        color: scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(AppRadius.r8 + 2),
       ),
       child: Row(
@@ -1109,19 +1131,23 @@ class _EmployeePillView extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                employee.name,
-                style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              if (employee.email.isNotEmpty)
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  employee.email,
-                  style: theme.textTheme.bodySmall?.copyWith(color: AppColors.subtle),
+                  employee.name,
+                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis,
                 ),
-            ],
+                if (employee.email.isNotEmpty)
+                  Text(
+                    employee.email,
+                    style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
           ),
         ],
       ),
