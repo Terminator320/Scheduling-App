@@ -8,6 +8,7 @@ import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/services/appointment_service.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
+import 'package:scheduling/features/calendar/services/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/app_calendar_view.dart';
 import 'package:scheduling/features/calendar/widgets/calendar_header.dart';
@@ -70,7 +71,27 @@ class _MainCalendar extends State<MainCalendar> {
       if (mounted) setState(() => _allEmployees = data);
     });
 
+    PhotoUploadNotifier.instance.latestFailure.addListener(_onUploadFailure);
     _subscribeAppointmentsForFocusedMonth();
+  }
+
+  void _onUploadFailure() {
+    final failure = PhotoUploadNotifier.instance.latestFailure.value;
+    if (failure == null || !mounted) return;
+    final appointmentId = failure.appointmentId;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(context.l10n.photoUploadFailedSnackbar),
+        action: SnackBarAction(
+          label: context.l10n.open,
+          onPressed: () async {
+            final appointment = await AppointmentService().getAppointmentById(appointmentId);
+            if (!mounted || appointment == null) return;
+            showEventDetails(context, appointment);
+          },
+        ),
+      ),
+    );
   }
 
   void _subscribeAppointmentsForFocusedMonth() {
@@ -106,6 +127,7 @@ class _MainCalendar extends State<MainCalendar> {
 
   @override
   void dispose() {
+    PhotoUploadNotifier.instance.latestFailure.removeListener(_onUploadFailure);
     _nameSub?.cancel();
     _employeesSub?.cancel();
     _appointmentsSub?.cancel();

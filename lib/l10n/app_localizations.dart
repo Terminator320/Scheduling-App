@@ -2140,6 +2140,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This color is already used by another employee.'**
   String get colorAlreadyUsed;
+
+  /// No description provided for @retry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get retry;
+
+  /// No description provided for @open.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get open;
+
+  /// No description provided for @photoUploadFailedSnackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo upload failed. Open the appointment to retry.'**
+  String get photoUploadFailedSnackbar;
+
+  /// No description provided for @nPhotosFailedToUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 photo failed to upload.} other{{count} photos failed to upload.}}'**
+  String nPhotosFailedToUpload(int count);
+
+  /// No description provided for @fileTooLargeWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'{fileName} is too large to upload. Maximum is 8 MB even after compression. Please use a smaller or lower-resolution image.'**
+  String fileTooLargeWarning(String fileName);
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

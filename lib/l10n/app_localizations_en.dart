@@ -1030,4 +1030,29 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get colorAlreadyUsed => 'This color is already used by another employee.';
+
+  @override
+  String get retry => 'Retry';
+
+  @override
+  String get open => 'Open';
+
+  @override
+  String get photoUploadFailedSnackbar => 'Photo upload failed. Open the appointment to retry.';
+
+  @override
+  String nPhotosFailedToUpload(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count photos failed to upload.',
+      one: '1 photo failed to upload.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String fileTooLargeWarning(String fileName) {
+    return '$fileName is too large to upload. Maximum is 8 MB even after compression. Please use a smaller or lower-resolution image.';
+  }
 }

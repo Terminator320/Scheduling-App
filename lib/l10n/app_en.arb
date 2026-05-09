@@ -340,5 +340,20 @@
   "reEnableAccount": "Re-enable Account",
   "disableAccountNote": "Disabling removes them from new job assignments. Their past appointments and data are kept.",
   "reEnableAccountNote": "Re-enabling restores their access and allows them to be assigned to jobs again.",
-  "colorAlreadyUsed": "This color is already used by another employee."
+  "colorAlreadyUsed": "This color is already used by another employee.",
+  "retry": "Retry",
+  "open": "Open",
+  "photoUploadFailedSnackbar": "Photo upload failed. Open the appointment to retry.",
+  "nPhotosFailedToUpload": "{count, plural, =1{1 photo failed to upload.} other{{count} photos failed to upload.}}",
+  "@nPhotosFailedToUpload": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "fileTooLargeWarning": "{fileName} is too large to upload. Maximum is 8 MB even after compression. Please use a smaller or lower-resolution image.",
+  "@fileTooLargeWarning": {
+    "placeholders": {
+      "fileName": { "type": "String" }
+    }
+  }
 }

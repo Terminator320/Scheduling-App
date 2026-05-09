@@ -1030,4 +1030,29 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get colorAlreadyUsed => 'Cette couleur est déjà utilisée par un autre employé.';
+
+  @override
+  String get retry => 'Réessayer';
+
+  @override
+  String get open => 'Ouvrir';
+
+  @override
+  String get photoUploadFailedSnackbar => 'Téléchargement de photo échoué. Ouvrez le rendez-vous pour réessayer.';
+
+  @override
+  String nPhotosFailedToUpload(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count photos n\'ont pas pu être téléchargées.',
+      one: '1 photo n\'a pas pu être téléchargée.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String fileTooLargeWarning(String fileName) {
+    return '$fileName est trop volumineux pour être téléchargé. La taille maximale est de 8 Mo même après compression. Veuillez utiliser une image plus petite.';
+  }
 }
