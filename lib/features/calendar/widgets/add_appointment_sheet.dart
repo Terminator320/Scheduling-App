@@ -329,8 +329,8 @@ class _AddEventSheetState extends State<AddEventSheet> {
         return ListView(
           controller: scrollController,
           padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
+            left: 16,
+            right: 16,
             top: 12,
             bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
           ),
@@ -339,10 +339,11 @@ class _AddEventSheetState extends State<AddEventSheet> {
             const SizedBox(height: 16),
             Text(
               sheetContext.l10n.addNewJob,
-              textAlign: TextAlign.center,
               style: Theme.of(sheetContext).textTheme.headlineLarge,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 20),
 
             SheetFocusScroll(
               child: LabeledTextField(
@@ -359,29 +360,42 @@ class _AddEventSheetState extends State<AddEventSheet> {
             ),
             const SizedBox(height: 16),
 
-            SheetFocusScroll(
-              child: LabeledTextField(
-                label: sheetContext.l10n.date,
-                hint: sheetContext.l10n.selectDate,
-                controller: _dateController,
-                readOnly: true,
-                suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
-                errorText: _errors['date'],
-                onTap: _pickDate,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            formLabel(sheetContext, sheetContext.l10n.time),
-            TimeRangeRow(
-              startController: _startTimeController,
-              endController: _endTimeController,
-              selectedStart: _selectedStartTime,
-              selectedEnd: _selectedEndTime,
-              onTapStart: _pickStartTime,
-              onTapEnd: _pickEndTime,
-              startError: _errors['startTime'],
-              endError: _errors['endTime'],
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: SheetFocusScroll(
+                    child: LabeledTextField(
+                      label: sheetContext.l10n.date,
+                      hint: sheetContext.l10n.selectDate,
+                      controller: _dateController,
+                      readOnly: true,
+                      suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+                      errorText: _errors['date'],
+                      onTap: _pickDate,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      formLabel(sheetContext, sheetContext.l10n.time),
+                      TimeRangeRow(
+                        startController: _startTimeController,
+                        endController: _endTimeController,
+                        selectedStart: _selectedStartTime,
+                        selectedEnd: _selectedEndTime,
+                        onTapStart: _pickStartTime,
+                        onTapEnd: _pickEndTime,
+                        startError: _errors['startTime'],
+                        endError: _errors['endTime'],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
 
@@ -469,7 +483,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
               width: double.infinity,
               child: FilledButton(
                 style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  minimumSize: const Size(double.infinity, 48),
                 ),
                 onPressed: _isSubmitting ? null : () => _submit(sheetContext),
                 child: _isSubmitting

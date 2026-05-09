@@ -9,6 +9,7 @@ import 'package:scheduling/features/employees/widgets/employee_details_sheet.dar
 import 'package:scheduling/features/employees/widgets/employee_form_sheet.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_empty_state.dart';
+import 'package:scheduling/shared/widgets/app_search_bar.dart';
 import 'package:scheduling/shared/widgets/skeleton_loader.dart';
 
 import 'package:scheduling/features/settings/widgets/settings_drawer.dart';
@@ -131,38 +132,10 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
         context.l10n.employees,
         style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
       ),
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(52),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-          child: TextField(
-            controller: _searchController,
-            onChanged: (_) => setState(() {}),
-            style: const TextStyle(color: Colors.white, fontSize: 13),
-            decoration: InputDecoration(
-              hintText: context.l10n.searchEmployees,
-              hintStyle: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 13,
-              ),
-              prefixIcon: Icon(
-                Icons.search,
-                size: 16,
-                color: Colors.white.withValues(alpha: 0.7),
-              ),
-              filled: true,
-              fillColor: Colors.white.withValues(alpha: 0.15),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppRadius.r12),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                vertical: 8,
-                horizontal: 12,
-              ),
-            ),
-          ),
-        ),
+      bottom: AppSearchBar(
+        controller: _searchController,
+        onChanged: (_) => setState(() {}),
+        hintText: context.l10n.searchEmployees,
       ),
     );
   }
@@ -175,10 +148,12 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openEmployeeSheet,
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: widget.isAdmin
+          ? FloatingActionButton(
+              onPressed: _openEmployeeSheet,
+              child: const Icon(Icons.add),
+            )
+          : null,
       body: StreamBuilder<List<EmployeeRecord>>(
         stream: _userService.employeesStream(),
         builder: (context, snapshot) {

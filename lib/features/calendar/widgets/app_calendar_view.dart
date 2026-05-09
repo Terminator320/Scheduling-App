@@ -104,10 +104,10 @@ class AppCalendar extends StatelessWidget {
             day,
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.primaryTint,
+              color: AppColors.primary,
             ),
             textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.primaryDark,
+              color: Colors.white,
               fontWeight: FontWeight.w600,
             ),
             rowH: effectiveRowH,
@@ -119,10 +119,10 @@ class AppCalendar extends StatelessWidget {
             day,
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.primary,
+              color: AppColors.primarySurface,
             ),
             textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.white,
+              color: AppColors.primary,
               fontWeight: FontWeight.w600,
             ),
             rowH: effectiveRowH,

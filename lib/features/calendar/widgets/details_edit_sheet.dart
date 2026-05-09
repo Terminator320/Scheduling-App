@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/services/image_picker_service.dart';
 import 'package:scheduling/core/services/image_storage_service.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
@@ -25,6 +26,7 @@ import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
+import 'package:scheduling/shared/widgets/status_chip.dart';
 
 
 
@@ -218,6 +220,26 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     }
   }
 
+  Future<void> _cancelAppointment() async {
+    final id = widget.appointment.id;
+    if (id == null) return;
+    setState(() => _isSaving = true);
+    try {
+      await AppointmentService().updateAppointmentStatus(
+        appointmentId: id,
+        status: 'cancelled',
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.somethingWentWrong)),
+        );
+      }
+    }
+  }
+
   void _cancelEdit() {
     final a = widget.appointment;
     setState(() {
@@ -366,8 +388,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         return ListView(
           controller: scrollController,
           padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
+            left: 16,
+            right: 16,
             top: 12,
             bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
           ),
@@ -395,46 +417,45 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
   // ── view header ───────────────────────────────────────────────
 
+  AppointmentStatus _appointmentStatus() => switch (widget.appointment.status.toLowerCase()) {
+    'done' || 'completed' => AppointmentStatus.done,
+    'cancelled' => AppointmentStatus.cancelled,
+    'pending' => AppointmentStatus.pending,
+    _ => AppointmentStatus.confirmed,
+  };
+
   Widget _buildViewHeader() {
     final a = widget.appointment;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final secondaryStyle = theme.textTheme.bodySmall?.copyWith(
-      color: scheme.onSurfaceVariant,
-    );
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          a.title,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.headlineLarge,
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          alignment: WrapAlignment.center,
-          runAlignment: WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 12,
-          runSpacing: 6,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(
-              Icons.calendar_today_outlined,
-              size: 13,
-              color: scheme.onSurfaceVariant,
+            Expanded(
+              child: Text(a.title, style: theme.textTheme.headlineLarge),
             ),
+            const SizedBox(width: 8),
+            StatusChip(status: _appointmentStatus()),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Icon(Icons.calendar_today_outlined, size: 13, color: scheme.onSurfaceVariant),
+            const SizedBox(width: 4),
             Text(
               DateUtilsHelper.formatDate(a.startTime),
-              textAlign: TextAlign.center,
-              style: secondaryStyle,
+              style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
             ),
-            Icon(
-              Icons.access_time_outlined,
-              size: 13,
-              color: scheme.onSurfaceVariant,
-            ),
+            const SizedBox(width: 12),
+            Icon(Icons.access_time_outlined, size: 13, color: scheme.onSurfaceVariant),
+            const SizedBox(width: 4),
             Text(
-              "${DateUtilsHelper.formatTime(a.startTime)} – ${DateUtilsHelper.formatTime(a.endTime)}",
-              style: secondaryStyle,
+              '${DateUtilsHelper.formatTime(a.startTime)} – ${DateUtilsHelper.formatTime(a.endTime)}',
+              style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -445,7 +466,6 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   Widget _buildEditHeader() {
     return Text(
       context.l10n.editJob,
-      textAlign: TextAlign.center,
       style: Theme.of(context).textTheme.headlineLarge,
     );
   }
@@ -456,67 +476,66 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     final scheme = theme.colorScheme;
     final muted = scheme.onSurfaceVariant;
     return [
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          formSectionLabel(context, context.l10n.client),
-          const SizedBox(height: 6),
-          Text(
-            _client?.displayName ?? a.clientName,
-            style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
-          ),
-          Text(
-            a.clientPhone.isNotEmpty ? a.clientPhone : context.l10n.noNumber,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: a.clientPhone.isNotEmpty ? null : muted,
-            ),
-          ),
-          if ((_client?.contacts ?? const <ClientContact>[]).isNotEmpty) ...[
-            const SizedBox(height: 14),
-            formSectionLabel(context, context.l10n.contacts),
-            const SizedBox(height: 8),
-            ..._client!.contacts.map(_contactCard),
-          ],
-        ],
+      _ViewRow(
+        icon: Icons.person_outline,
+        label: context.l10n.client,
+        value: _client?.displayName ?? a.clientName,
+        subtitle: a.clientPhone.isNotEmpty ? a.clientPhone : context.l10n.noNumber,
       ),
+      if ((_client?.contacts ?? const <ClientContact>[]).isNotEmpty) ...[
+        const SizedBox(height: 14),
+        Padding(
+          padding: const EdgeInsets.only(left: 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(context.l10n.contacts,
+                  style: theme.textTheme.labelSmall?.copyWith(color: muted)),
+              const SizedBox(height: 8),
+              ..._client!.contacts.map(_contactCard),
+            ],
+          ),
+        ),
+      ],
       const SizedBox(height: 16),
-      _viewSection(
-        context.l10n.address,
-        a.address.isNotEmpty ? a.address : context.l10n.noAddress,
+      _ViewRow(
+        icon: Icons.location_on_outlined,
+        label: context.l10n.address,
+        value: a.address.isNotEmpty ? a.address : context.l10n.noAddress,
         onTap: a.address.isNotEmpty
-            ? () =>
-                  AddressMapLauncher.showMapChoices(context, address: a.address)
+            ? () => AddressMapLauncher.showMapChoices(context, address: a.address)
             : null,
       ),
       const SizedBox(height: 16),
-      _viewSection(
-        context.l10n.notes,
-        a.notes.isNotEmpty ? a.notes : context.l10n.noNotes,
+      _ViewRow(
+        icon: Icons.notes_outlined,
+        label: context.l10n.notes,
+        value: a.notes.isNotEmpty ? a.notes : context.l10n.noNotes,
       ),
       const SizedBox(height: 16),
-      formSectionLabel(context, context.l10n.materialsNeeded),
-      const SizedBox(height: 8),
-      a.materialsNeeded.isNotEmpty
-          ? Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: a.materialsNeeded
-                  .split(',')
-                  .map((m) => m.trim())
-                  .where((m) => m.isNotEmpty)
-                  .map(
-                    (m) => Chip(
-                      label: Text(m, style: theme.textTheme.bodySmall),
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  )
-                  .toList(),
-            )
-          : Text(
-              context.l10n.noMaterials,
-              style: theme.textTheme.bodyMedium?.copyWith(color: muted),
-            ),
+      _ViewRow(
+        icon: Icons.build_outlined,
+        label: context.l10n.materialsNeeded,
+        value: a.materialsNeeded.isEmpty ? context.l10n.noMaterials : '',
+        customValue: a.materialsNeeded.isNotEmpty
+            ? Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: a.materialsNeeded
+                    .split(',')
+                    .map((m) => m.trim())
+                    .where((m) => m.isNotEmpty)
+                    .map(
+                      (m) => Chip(
+                        label: Text(m, style: theme.textTheme.bodySmall),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    )
+                    .toList(),
+              )
+            : null,
+      ),
     ];
   }
 
@@ -568,45 +587,6 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     );
   }
 
-  Widget _viewSection(String label, String value, {VoidCallback? onTap}) {
-    final scheme = Theme.of(context).colorScheme;
-
-    final text = Text(
-      value,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-        height: 1.5,
-        color: onTap != null
-            ? Color.lerp(scheme.primary, const Color(0xFF4A8DFF), 0.5)
-            : null,
-      ),
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        formSectionLabel(context, label),
-        const SizedBox(height: 6),
-        onTap == null
-            ? text
-            : InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: onTap,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: text),
-                      const SizedBox(width: 8),
-                      const Icon(Icons.open_in_new, size: 16),
-                    ],
-                  ),
-                ),
-              ),
-      ],
-    );
-  }
-
   List<Widget> _buildEditFields() {
     return [
       SheetFocusScroll(
@@ -624,64 +604,77 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       ),
       const SizedBox(height: 16),
 
-      SheetFocusScroll(
-        child: LabeledTextField(
-          label: context.l10n.date,
-          hint: context.l10n.selectDate,
-          controller: _dateController,
-          readOnly: true,
-          errorText: _errors['date'],
-          suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
-          onTap: () async {
-            final picked = await showDatePicker(
-              context: context,
-              initialDate: _selectedDate,
-              firstDate: DateTime(2020),
-              lastDate: DateTime(2100),
-            );
-            if (picked == null) return;
-            setState(() {
-              _selectedDate = picked;
-              _dateController.text = DateUtilsHelper.formatDate(picked);
-              _errors['date'] = null;
-            });
-          },
-        ),
-      ),
-      const SizedBox(height: 16),
-
-      formLabel(context, context.l10n.time),
-      TimeRangeRow(
-        startController: _startTimeController,
-        endController: _endTimeController,
-        selectedStart: _selectedStartTime,
-        selectedEnd: _selectedEndTime,
-        onTapStart: () async {
-          final picked = await showCupertinoTimePicker(
-            context,
-            initialTime: _selectedStartTime,
-          );
-          if (picked == null) return;
-          setState(() {
-            _selectedStartTime = picked;
-            _startTimeController.text = picked.format(context);
-            _errors['startTime'] = null;
-          });
-        },
-        onTapEnd: () async {
-          final picked = await showCupertinoTimePicker(
-            context,
-            initialTime: _selectedEndTime,
-          );
-          if (picked == null) return;
-          setState(() {
-            _selectedEndTime = picked;
-            _endTimeController.text = picked.format(context);
-            _errors['endTime'] = null;
-          });
-        },
-        startError: _errors['startTime'],
-        endError: _errors['endTime'],
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: SheetFocusScroll(
+              child: LabeledTextField(
+                label: context.l10n.date,
+                hint: context.l10n.selectDate,
+                controller: _dateController,
+                readOnly: true,
+                errorText: _errors['date'],
+                suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedDate,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2100),
+                  );
+                  if (picked == null) return;
+                  setState(() {
+                    _selectedDate = picked;
+                    _dateController.text = DateUtilsHelper.formatDate(picked);
+                    _errors['date'] = null;
+                  });
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                formLabel(context, context.l10n.time),
+                TimeRangeRow(
+                  startController: _startTimeController,
+                  endController: _endTimeController,
+                  selectedStart: _selectedStartTime,
+                  selectedEnd: _selectedEndTime,
+                  onTapStart: () async {
+                    final picked = await showCupertinoTimePicker(
+                      context,
+                      initialTime: _selectedStartTime,
+                    );
+                    if (picked == null) return;
+                    setState(() {
+                      _selectedStartTime = picked;
+                      _startTimeController.text = picked.format(context);
+                      _errors['startTime'] = null;
+                    });
+                  },
+                  onTapEnd: () async {
+                    final picked = await showCupertinoTimePicker(
+                      context,
+                      initialTime: _selectedEndTime,
+                    );
+                    if (picked == null) return;
+                    setState(() {
+                      _selectedEndTime = picked;
+                      _endTimeController.text = picked.format(context);
+                      _errors['endTime'] = null;
+                    });
+                  },
+                  startError: _errors['startTime'],
+                  endError: _errors['endTime'],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
       const SizedBox(height: 16),
 
@@ -757,35 +750,54 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
   // Employee Section
   Widget _buildEmployeesSection() {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         formSectionLabel(context, context.l10n.employees),
         const SizedBox(height: 8),
-        EmployeePicker(
-          allEmployees: _allEmployees,
-          selectedEmployees: _selectedEmployees,
-          selectable: _isEditing,
-          hasError: _errors['employees'] != null,
-          onToggle: (employee) => setState(() {
-            if (_selectedEmployees.any((e) => e.id == employee.id)) {
-              _selectedEmployees.removeWhere((e) => e.id == employee.id);
-            } else {
-              _selectedEmployees.add(employee);
-              _errors['employees'] = null;
-            }
-          }),
-        ),
-        if (_errors['employees'] != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 6, left: 12),
-            child: Text(
-              _errors['employees']!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.error,
+        if (!_isEditing) ...[
+          ..._selectedEmployees.map((e) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(color: e.color, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 8),
+                Text(e.name, style: theme.textTheme.bodyMedium),
+              ],
+            ),
+          )),
+        ] else ...[
+          EmployeePicker(
+            allEmployees: _allEmployees,
+            selectedEmployees: _selectedEmployees,
+            selectable: true,
+            hasError: _errors['employees'] != null,
+            onToggle: (employee) => setState(() {
+              if (_selectedEmployees.any((e) => e.id == employee.id)) {
+                _selectedEmployees.removeWhere((e) => e.id == employee.id);
+              } else {
+                _selectedEmployees.add(employee);
+                _errors['employees'] = null;
+              }
+            }),
+          ),
+          if (_errors['employees'] != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6, left: 12),
+              child: Text(
+                _errors['employees']!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.error,
+                ),
               ),
             ),
-          ),
+        ],
       ],
     );
   }
@@ -800,7 +812,6 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     final scheme = Theme.of(context).colorScheme;
     final isDone = widget.appointment.status == 'done';
 
-    // Mode édition — inchangé
     if (_isEditing) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -833,17 +844,44 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
       );
     }
 
-    // Mode lecture — boutons selon le contexte
+    // View mode — Edit + Cancel buttons side-by-side, then status action
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Bouton Done uniquement si c'est aujourd'hui et pas déjà "done"
-        if (isToday && !isDone)
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: _isSaving ? null : () => setState(() => _isEditing = true),
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: Text(context.l10n.editJob),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _isSaving ? null : _cancelAppointment,
+                icon: const Icon(Icons.cancel_outlined, size: 18, color: AppColors.error),
+                label: Text(
+                  context.l10n.cancel,
+                  style: const TextStyle(color: AppColors.error),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.error),
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        if (isToday && !isDone) ...[
+          const SizedBox(height: 12),
           FilledButton.icon(
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
+              backgroundColor: Colors.green,
             ),
-            onPressed: _isSaving ? null : _markAsDone, // ← appel correct
+            onPressed: _isSaving ? null : _markAsDone,
             icon: _isSaving
                 ? SizedBox(
                     height: 18,
@@ -856,19 +894,104 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
                 : const Icon(Icons.check, size: 18),
             label: Text(context.l10n.markAsDone),
           ),
+        ],
 
-        // Déjà complété
-        if (isDone)
+        if (isDone) ...[
+          const SizedBox(height: 12),
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
               foregroundColor: Colors.green,
               side: const BorderSide(color: Colors.green),
             ),
-            onPressed: null, // désactivé
+            onPressed: null,
             icon: const Icon(Icons.check_circle_outline, size: 18),
             label: Text(context.l10n.completed),
           ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ViewRow extends StatelessWidget {
+  const _ViewRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.subtitle,
+    this.customValue,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final String? subtitle;
+  final Widget? customValue;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    final Widget valueWidget;
+    if (onTap != null && customValue == null) {
+      final colored = Text(
+        value,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          height: 1.5,
+          color: Color.lerp(scheme.primary, const Color(0xFF4A8DFF), 0.5),
+        ),
+      );
+      valueWidget = InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.r8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: colored),
+              const SizedBox(width: 8),
+              const Icon(Icons.open_in_new, size: 16),
+            ],
+          ),
+        ),
+      );
+    } else {
+      valueWidget = customValue ??
+          Text(value, style: theme.textTheme.bodyMedium?.copyWith(height: 1.5));
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2, right: 12),
+          child: Icon(icon, size: 16, color: AppColors.primary),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 2),
+              valueWidget,
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle!,
+                  style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ],
+            ],
+          ),
+        ),
       ],
     );
   }

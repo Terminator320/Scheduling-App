@@ -36,6 +36,7 @@ class DraggableSheetFrame extends StatelessWidget {
               borderRadius: BorderRadius.vertical(
                 top: Radius.circular(AppRadius.r16),
               ),
+              boxShadow: AppShadow.sheet,
             ),
             child: builder(sheetContext, scrollController),
           ),
@@ -56,8 +57,8 @@ class SheetFrame extends StatelessWidget {
 
     return Padding(
       padding: EdgeInsets.only(
-        left: 12,
-        right: 12,
+        left: AppSpacing.sp16,
+        right: AppSpacing.sp16,
         bottom: MediaQuery.of(context).viewInsets.bottom + 12,
       ),
       child: Container(
@@ -67,10 +68,10 @@ class SheetFrame extends StatelessWidget {
           boxShadow: AppShadow.sheet,
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(AppRadius.r16),
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
+            padding: const EdgeInsets.fromLTRB(AppSpacing.sp16, AppSpacing.sp12, AppSpacing.sp16, 22),
             color: theme.bottomSheetTheme.backgroundColor ?? theme.cardColor,
             child: child,
           ),
@@ -130,7 +131,7 @@ class SheetHandle extends StatelessWidget {
         width: 36,
         height: 4,
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.outlineVariant,
+          color: Theme.of(context).colorScheme.outline,
           borderRadius: BorderRadius.circular(AppRadius.rFull),
         ),
       ),

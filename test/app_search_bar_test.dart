@@ -3,10 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/shared/widgets/app_search_bar.dart';
 
-Widget _wrap(Widget child) => MaterialApp(home: Scaffold(
-  appBar: AppBar(bottom: child is PreferredSizeWidget ? child as PreferredSizeWidget : null),
-));
-
 void main() {
   testWidgets('AppSearchBar calls onChanged when typing', (tester) async {
     String result = '';

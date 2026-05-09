@@ -5,7 +5,7 @@ import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
 import 'package:scheduling/features/employees/widgets/employee_color_picker_row.dart';
-import 'package:scheduling/shared/widgets/form_helpers.dart';
+import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
 
@@ -19,7 +19,6 @@ class EmployeeFormSheet extends StatefulWidget {
 }
 
 class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
-  final _formKey = GlobalKey<FormState>();
   final _service = UserService();
 
   late final TextEditingController _nameController;
@@ -29,6 +28,7 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
   late bool _isAdmin;
   late int _selectedColor;
   bool _isSaving = false;
+  final Map<String, String?> _errors = {};
 
   bool get _isEdit => widget.employee != null;
 
@@ -51,9 +51,24 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
     super.dispose();
   }
 
+  bool _validate() {
+    final errors = <String, String?>{};
+    if (_nameController.text.trim().isEmpty) {
+      errors['name'] = context.l10n.nameAndEmailAreRequired;
+    }
+    if (_emailController.text.trim().isEmpty) {
+      errors['email'] = context.l10n.nameAndEmailAreRequired;
+    }
+    setState(() {
+      _errors
+        ..clear()
+        ..addAll(errors);
+    });
+    return errors.isEmpty;
+  }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_validate()) return;
 
     setState(() => _isSaving = true);
 
@@ -97,13 +112,6 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
     }
   }
 
-  String? _requiredValidator(String? value) {
-    return (value == null || value.trim().isEmpty)
-        ? context.l10n.nameAndEmailAreRequired
-        : null;
-  }
-
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -119,87 +127,83 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
         return ListView(
           controller: scrollController,
           padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
+            left: 16,
+            right: 16,
             top: 12,
             bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
           ),
           children: [
-            Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SheetHandle(),
-              const SizedBox(height: 16),
-              Center(
-                child: Text(
-                  title,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+            const SheetHandle(),
+            const SizedBox(height: 16),
+            Text(title, style: theme.textTheme.headlineLarge),
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 20),
+            SheetFocusScroll(
+              child: LabeledTextField(
+                label: context.l10n.name2,
+                controller: _nameController,
+                required: true,
+                errorText: _errors['name'],
+                onChanged: (_) {
+                  if (_errors['name'] != null) {
+                    setState(() => _errors['name'] = null);
+                  }
+                },
               ),
-              const SizedBox(height: 18),
-              SheetFocusScroll(
-                child: TextFormField(
-                  controller: _nameController,
-                  decoration: formInputDecoration(context, context.l10n.name2),
-                  validator: _requiredValidator,
-                ),
+            ),
+            const SizedBox(height: 12),
+            SheetFocusScroll(
+              child: LabeledTextField(
+                label: context.l10n.email,
+                controller: _emailController,
+                keyboard: TextInputType.emailAddress,
+                required: true,
+                errorText: _errors['email'],
+                onChanged: (_) {
+                  if (_errors['email'] != null) {
+                    setState(() => _errors['email'] = null);
+                  }
+                },
               ),
-              const SizedBox(height: 12),
-              SheetFocusScroll(
-                child: TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: formInputDecoration(
-                    context,
-                    context.l10n.email,
-                  ),
-                  validator: _requiredValidator,
-                ),
+            ),
+            const SizedBox(height: 12),
+            SheetFocusScroll(
+              child: LabeledTextField(
+                label: context.l10n.phoneNumber,
+                controller: _phoneController,
+                keyboard: TextInputType.phone,
+                optional: true,
               ),
-              const SizedBox(height: 12),
-              SheetFocusScroll(
-                child: TextFormField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: formInputDecoration(
-                    context,
-                    context.l10n.phoneNumber,
-                  ),
-                ),
+            ),
+            const SizedBox(height: 16),
+            EmployeeColorPickerRow(
+              selectedColor: _selectedColor,
+              onColorChanged: (value) => setState(() => _selectedColor = value),
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _isAdmin,
+              onChanged: (v) => setState(() => _isAdmin = v),
+              title: Text(context.l10n.giveAdminModeAccess),
+            ),
+            const SizedBox(height: 12),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
               ),
-              const SizedBox(height: 16),
-              EmployeeColorPickerRow(
-                selectedColor: _selectedColor,
-                onColorChanged: (value) => setState(() => _selectedColor = value),
-              ),
-              const SizedBox(height: 8),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _isAdmin,
-                onChanged: (v) => setState(() => _isAdmin = v),
-                title: Text(context.l10n.giveAdminModeAccess),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isSaving ? null : _save,
-                  child: _isSaving
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(submitLabel),
-                ),
-              ),
-                ],
-              ),
+              onPressed: _isSaving ? null : _save,
+              child: _isSaving
+                  ? SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Theme.of(context).colorScheme.onPrimary,
+                      ),
+                    )
+                  : Text(submitLabel),
             ),
           ],
         );

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/clients/models/client_record.dart';
 import 'package:scheduling/features/clients/services/client_service.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
+import 'package:scheduling/shared/widgets/app_avatar.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/info_row.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
@@ -398,8 +400,8 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
         return ListView(
           controller: scrollController,
           padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
+            left: 16,
+            right: 16,
             top: 12,
             bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
           ),
@@ -409,7 +411,6 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
             _isEditing
                 ? Text(
                     context.l10n.editClient2,
-                    textAlign: TextAlign.center,
                     style: theme.textTheme.headlineLarge,
                   )
                 : _buildViewHeader(theme),
@@ -434,17 +435,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CircleAvatar(
-          radius: 28,
-          backgroundColor: scheme.primaryContainer,
-          child: Text(
-            c.displayName.isNotEmpty ? c.displayName[0].toUpperCase() : '?',
-            style: theme.textTheme.headlineMedium?.copyWith(
-              color: scheme.onPrimaryContainer,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
+        AppAvatar(name: c.displayName, size: AvatarSize.lg),
         const SizedBox(width: 14),
         Expanded(
           child: Column(
@@ -488,10 +479,10 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
             child: InfoRow(
               icon: Icons.location_on_outlined,
               text: c.address,
-              iconColor: Theme.of(context).colorScheme.primary.withOpacity(0.9),
+              iconColor: AppColors.primary,
               textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 height: 1.4,
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.9),
+                color: AppColors.primary,
               ),
             ),
           ),
@@ -683,37 +674,36 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Row(
       children: [
-        OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            foregroundColor: Theme.of(context).colorScheme.error,
-            side: BorderSide(color: Theme.of(context).colorScheme.error),
-          ),
-          onPressed: _isDeleting ? null : _confirmDelete,
-          icon: _isDeleting
-              ? const SizedBox(
-                  height: 18,
-                  width: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.delete_outline, size: 18),
-          label: Text(
-            _isDeleting ? context.l10n.deleting : context.l10n.delete,
+        Expanded(
+          child: FilledButton.icon(
+            onPressed: _isDeleting
+                ? null
+                : () => setState(() => _isEditing = true),
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: Text(context.l10n.edit),
           ),
         ),
-        const SizedBox(height: 12),
-        FilledButton.icon(
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 14),
+        const SizedBox(width: 12),
+        Expanded(
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.error,
+              side: const BorderSide(color: AppColors.error),
+            ),
+            onPressed: _isDeleting ? null : _confirmDelete,
+            icon: _isDeleting
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.delete_outline, size: 18),
+            label: Text(
+              _isDeleting ? context.l10n.deleting : context.l10n.delete,
+            ),
           ),
-          onPressed: _isDeleting
-              ? null
-              : () => setState(() => _isEditing = true),
-          icon: const Icon(Icons.edit_outlined, size: 18),
-          label: Text(context.l10n.edit),
         ),
       ],
     );

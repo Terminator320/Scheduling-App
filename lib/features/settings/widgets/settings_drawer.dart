@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
-import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_avatar.dart';
 
@@ -138,29 +137,21 @@ class SettingsDrawer extends StatelessWidget {
             scheme: scheme,
             onTap: () => _goToEmployees(context),
           ),
-          _DrawerItem(
-            icon: Icons.history_outlined,
-            label: context.l10n.history,
-            textTheme: textTheme,
-            scheme: scheme,
-            onTap: () => _goToHistory(context),
-          ),
         ],
-        const Divider(indent: 16, endIndent: 16),
+        _DrawerItem(
+          icon: Icons.history_outlined,
+          label: context.l10n.history,
+          textTheme: textTheme,
+          scheme: scheme,
+          onTap: () => _goToHistory(context),
+        ),
+        const Divider(height: 1),
         _DrawerItem(
           icon: Icons.settings_outlined,
           label: context.l10n.settings,
           textTheme: textTheme,
           scheme: scheme,
           onTap: () => _goToSettings(context),
-        ),
-        _DrawerItem(
-          icon: Icons.logout,
-          label: context.l10n.logOut,
-          textTheme: textTheme,
-          scheme: scheme,
-          isDestructive: true,
-          onTap: () => _signOut(context),
         ),
       ],
     );
@@ -215,12 +206,6 @@ class SettingsDrawer extends StatelessWidget {
     Navigator.pushNamed(context, AppRoutes.settings);
   }
 
-  Future<void> _signOut(BuildContext context) async {
-    Navigator.pop(context);
-    await AuthService().signOut();
-    if (!context.mounted) return;
-    Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (_) => false);
-  }
 }
 
 class _DrawerItem extends StatelessWidget {
@@ -229,7 +214,6 @@ class _DrawerItem extends StatelessWidget {
   final TextTheme textTheme;
   final ColorScheme scheme;
   final VoidCallback onTap;
-  final bool isDestructive;
 
   const _DrawerItem({
     required this.icon,
@@ -237,16 +221,14 @@ class _DrawerItem extends StatelessWidget {
     required this.textTheme,
     required this.scheme,
     required this.onTap,
-    this.isDestructive = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = isDestructive ? scheme.error : scheme.onSurface;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      leading: Icon(icon, color: color, size: 20),
-      title: Text(label, style: textTheme.bodyLarge?.copyWith(color: color)),
+      leading: Icon(icon, color: scheme.onSurface, size: 20),
+      title: Text(label, style: textTheme.bodyLarge?.copyWith(color: scheme.onSurface)),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.r8),
       ),
