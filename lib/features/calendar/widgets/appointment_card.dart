@@ -19,10 +19,11 @@ class AppointmentCard extends StatelessWidget {
   final String? employeeName;
   final VoidCallback? onTap;
 
-  AppointmentStatus _statusFromString(String status) => switch (status) {
-    'done' => AppointmentStatus.done,
+  AppointmentStatus _statusFromString(String status) => switch (status.toLowerCase()) {
+    'done' || 'completed' => AppointmentStatus.done,
     'cancelled' => AppointmentStatus.cancelled,
     'pending' => AppointmentStatus.pending,
+    'in_progress' || 'inprogress' => AppointmentStatus.inProgress,
     _ => AppointmentStatus.confirmed,
   };
 
@@ -63,7 +64,7 @@ class AppointmentCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: AppSpacing.sp8),
-                          StatusChip(status: _statusFromString(appointment.status)),
+                          StatusChip(status: _statusFromString(appointment.displayStatus)),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.sp4),

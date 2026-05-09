@@ -2170,6 +2170,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{fileName} is too large to upload. Maximum is 8 MB even after compression. Please use a smaller or lower-resolution image.'**
   String fileTooLargeWarning(String fileName);
+
+  /// No description provided for @scheduleConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule Conflict'**
+  String get scheduleConflict;
+
+  /// No description provided for @alreadyBookedThisSlot.
+  ///
+  /// In en, this message translates to:
+  /// **'Already booked during this time:'**
+  String get alreadyBookedThisSlot;
+
+  /// No description provided for @doubleBookingWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduling them anyway will create a double booking.'**
+  String get doubleBookingWarning;
+
+  /// No description provided for @scheduleAnyway.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule Anyway'**
+  String get scheduleAnyway;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

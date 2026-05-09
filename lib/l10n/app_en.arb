@@ -355,5 +355,9 @@
     "placeholders": {
       "fileName": { "type": "String" }
     }
-  }
+  },
+  "scheduleConflict": "Schedule Conflict",
+  "alreadyBookedThisSlot": "Already booked during this time:",
+  "doubleBookingWarning": "Scheduling them anyway will create a double booking.",
+  "scheduleAnyway": "Schedule Anyway"
 }

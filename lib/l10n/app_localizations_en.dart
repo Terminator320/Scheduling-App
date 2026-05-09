@@ -1055,4 +1055,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String fileTooLargeWarning(String fileName) {
     return '$fileName is too large to upload. Maximum is 8 MB even after compression. Please use a smaller or lower-resolution image.';
   }
+
+  @override
+  String get scheduleConflict => 'Schedule Conflict';
+
+  @override
+  String get alreadyBookedThisSlot => 'Already booked during this time:';
+
+  @override
+  String get doubleBookingWarning => 'Scheduling them anyway will create a double booking.';
+
+  @override
+  String get scheduleAnyway => 'Schedule Anyway';
 }

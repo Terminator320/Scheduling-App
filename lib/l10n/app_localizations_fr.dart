@@ -1055,4 +1055,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String fileTooLargeWarning(String fileName) {
     return '$fileName est trop volumineux pour être téléchargé. La taille maximale est de 8 Mo même après compression. Veuillez utiliser une image plus petite.';
   }
+
+  @override
+  String get scheduleConflict => 'Conflit d\'horaire';
+
+  @override
+  String get alreadyBookedThisSlot => 'Déjà réservé pendant ce créneau :';
+
+  @override
+  String get doubleBookingWarning => 'Les planifier quand même créera un double rendez-vous.';
+
+  @override
+  String get scheduleAnyway => 'Planifier quand même';
 }

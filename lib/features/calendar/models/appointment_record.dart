@@ -79,6 +79,14 @@ class AppointmentRecord {
     };
   }
 
+  String get displayStatus {
+    final s = status.toLowerCase();
+    if (s == 'done' || s == 'completed' || s == 'cancelled') return status;
+    final now = DateTime.now();
+    if (now.isAfter(startTime)) return 'in_progress';
+    return status;
+  }
+
   static DateTime _parseDateTime(dynamic value) {
     if (value is Timestamp) return value.toDate();
     if (value is String) return DateTime.tryParse(value) ?? DateTime.now();

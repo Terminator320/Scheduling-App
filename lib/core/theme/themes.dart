@@ -65,6 +65,7 @@ ThemeData lightTheme() {
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.outline, width: 1.5)),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
       errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.error, width: 1.5)),
+      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.error, width: 2.0)),
       hintStyle: GoogleFonts.inter(fontSize: 13, color: AppColors.muted),
     ),
     filledButtonTheme: FilledButtonThemeData(
@@ -153,6 +154,7 @@ ThemeData darkTheme() {
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.darkSurfaceAlt, width: 1.5)),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
       errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.error, width: 1.5)),
+      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.error, width: 2.0)),
       hintStyle: GoogleFonts.inter(fontSize: 13, color: AppColors.darkMuted),
     ),
     filledButtonTheme: FilledButtonThemeData(
