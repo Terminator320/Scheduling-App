@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 
@@ -31,79 +32,67 @@ class EmployeePicker extends StatelessWidget {
         selectable
             ? context.l10n.noEmployeesFound
             : context.l10n.noEmployeesAssigned,
-        style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+        style: const TextStyle(fontSize: 13, color: AppColors.muted),
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: hasError
-              ? Theme.of(context).colorScheme.error
-              : Theme.of(context).colorScheme.outlineVariant,
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-      child: displayEmployees.isEmpty
-          ? Text(
-              selectable
-                  ? context.l10n.noEmployeesFound
-                  : context.l10n.noEmployeesAssigned,
-              style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-            )
-          : Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: displayEmployees.map((employee) {
-                final isSelected = selectedEmployees.any(
-                  (e) => e.id == employee.id,
-                );
+    return Wrap(
+      spacing: AppSpacing.sp8,
+      runSpacing: AppSpacing.sp8,
+      children: displayEmployees.map((employee) {
+        final isSelected = selectedEmployees.any((e) => e.id == employee.id);
 
-                return GestureDetector(
-                  onTap: selectable ? () => onToggle?.call(employee) : null,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: employee.color.withOpacity(0.2),
-                          shape: BoxShape.circle,
-                          border: isSelected
-                              ? Border.all(color: employee.color, width: 2.5)
-                              : null,
-                        ),
-                        child: Center(
-                          child: Text(
-                            employee.initials,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: employee.color,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      SizedBox(
-                        width: 52,
-                        child: Text(
-                          employee.name.split(' ').first,
-                          textAlign: TextAlign.center,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
+        return GestureDetector(
+          onTap: selectable ? () => onToggle?.call(employee) : null,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(6, 4, 10, 4),
+            decoration: BoxDecoration(
+              color: isSelected ? AppColors.primarySurface : AppColors.surfaceAlt,
+              border: Border.all(
+                color: hasError && !isSelected
+                    ? AppColors.error
+                    : isSelected
+                        ? AppColors.primary
+                        : AppColors.outline,
+                width: 1.5,
+              ),
+              borderRadius: BorderRadius.circular(AppRadius.rFull),
             ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: employee.color,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      employee.initials,
+                      style: const TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  employee.name.split(' ').first,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                    color: isSelected ? AppColors.primary : AppColors.subtle,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

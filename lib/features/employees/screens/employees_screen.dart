@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -31,11 +33,29 @@ class AddEmployeePage extends StatefulWidget {
 class _AddEmployeePageState extends State<AddEmployeePage> {
   final UserService _userService = UserService();
   final TextEditingController _searchController = TextEditingController();
+  List<EmployeeRecord> _employees = [];
+  StreamSubscription<List<EmployeeRecord>>? _employeesSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _employeesSub = _userService.employeesStream().listen((list) {
+      if (mounted) setState(() => _employees = list);
+    });
+  }
 
   @override
   void dispose() {
+    _employeesSub?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  Set<int> _usedColors({String? excludeId}) {
+    return _employees
+        .where((e) => e.id != excludeId)
+        .map((e) => e.color.toARGB32())
+        .toSet();
   }
 
   // methods
@@ -51,11 +71,12 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
   }
 
   Future<void> _openEmployeeSheet({EmployeeRecord? employee}) async {
+    final usedColors = _usedColors(excludeId: employee?.id);
     final result = await showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => EmployeeFormSheet(employee: employee),
+      builder: (_) => EmployeeFormSheet(employee: employee, usedColors: usedColors),
     );
 
     if (!mounted) return;

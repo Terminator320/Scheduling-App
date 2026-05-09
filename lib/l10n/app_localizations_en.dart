@@ -952,4 +952,82 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get enableEmployee => 'Enable employee';
+
+  @override
+  String get newAppointment => 'New Appointment';
+
+  @override
+  String get saveAppointment => 'Save Appointment';
+
+  @override
+  String get assignEmployee => 'Assign Employee';
+
+  @override
+  String get serviceTitle => 'Service / Title';
+
+  @override
+  String get changeAddress => 'Change';
+
+  @override
+  String get clientSAddress => 'Client\'s address';
+
+  @override
+  String get useClientsAddress => '← Use client\'s address';
+
+  @override
+  String get editAppointment => 'Edit Appointment';
+
+  @override
+  String get deleteAppointment => 'Delete Appointment';
+
+  @override
+  String get cancelAppointment => 'Cancel Appointment';
+
+  @override
+  String get cancelledJobsAreSavedToHistory => 'Cancelled jobs are saved to history.';
+
+  @override
+  String get appointmentStatus => 'Appointment Status';
+
+  @override
+  String get assignedEmployee => 'Assigned Employee';
+
+  @override
+  String get saveClient => 'Save Client';
+
+  @override
+  String get inviteEmployee => 'Invite Employee';
+
+  @override
+  String get sendInvite => 'Send Invite';
+
+  @override
+  String get permissions => 'Permissions';
+
+  @override
+  String get adminAccess => 'Admin access';
+
+  @override
+  String get adminAccessDescription => 'Can manage all appointments, clients & employees';
+
+  @override
+  String get accountStatus => 'Account Status';
+
+  @override
+  String get accountStatusDescription => 'Controls access & job assignment';
+
+  @override
+  String get disableAccount => 'Disable Account';
+
+  @override
+  String get reEnableAccount => 'Re-enable Account';
+
+  @override
+  String get disableAccountNote => 'Disabling removes them from new job assignments. Their past appointments and data are kept.';
+
+  @override
+  String get reEnableAccountNote => 'Re-enabling restores their access and allows them to be assigned to jobs again.';
+
+  @override
+  String get colorAlreadyUsed => 'This color is already used by another employee.';
 }

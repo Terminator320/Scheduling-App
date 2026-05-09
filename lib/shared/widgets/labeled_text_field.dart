@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
 class LabeledTextField extends StatelessWidget {
@@ -42,7 +43,7 @@ class LabeledTextField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        formLabel(context, label, optional: optional, required: this.required),
+        formLabel(context, label, optional: optional, required: required),
         TextField(
           controller: controller,
           focusNode: focusNode,
@@ -53,12 +54,37 @@ class LabeledTextField extends StatelessWidget {
           onTap: onTap,
           onChanged: onChanged,
           decoration: formInputDecoration(context, hint ?? label).copyWith(
-            errorText: errorText,
+            error: errorText != null ? _FieldError(errorText!) : null,
             suffixIcon: suffixIcon,
             prefixIcon: prefixIcon,
           ),
         ),
       ],
+    );
+  }
+}
+
+class _FieldError extends StatelessWidget {
+  const _FieldError(this.message);
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded, size: 11, color: AppColors.error),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(fontSize: 11, color: AppColors.error, height: 1.3),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

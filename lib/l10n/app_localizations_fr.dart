@@ -952,4 +952,82 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get enableEmployee => 'Activer l\'employé';
+
+  @override
+  String get newAppointment => 'Nouveau rendez-vous';
+
+  @override
+  String get saveAppointment => 'Enregistrer le rendez-vous';
+
+  @override
+  String get assignEmployee => 'Assigner un employé';
+
+  @override
+  String get serviceTitle => 'Service / Titre';
+
+  @override
+  String get changeAddress => 'Modifier';
+
+  @override
+  String get clientSAddress => 'Adresse du client';
+
+  @override
+  String get useClientsAddress => '← Utiliser l\'adresse du client';
+
+  @override
+  String get editAppointment => 'Modifier le rendez-vous';
+
+  @override
+  String get deleteAppointment => 'Supprimer le rendez-vous';
+
+  @override
+  String get cancelAppointment => 'Annuler le rendez-vous';
+
+  @override
+  String get cancelledJobsAreSavedToHistory => 'Les travaux annulés sont sauvegardés dans l\'historique.';
+
+  @override
+  String get appointmentStatus => 'Statut du rendez-vous';
+
+  @override
+  String get assignedEmployee => 'Employé assigné';
+
+  @override
+  String get saveClient => 'Enregistrer le client';
+
+  @override
+  String get inviteEmployee => 'Inviter un employé';
+
+  @override
+  String get sendInvite => 'Envoyer l\'invitation';
+
+  @override
+  String get permissions => 'Autorisations';
+
+  @override
+  String get adminAccess => 'Accès administrateur';
+
+  @override
+  String get adminAccessDescription => 'Peut gérer tous les rendez-vous, clients et employés';
+
+  @override
+  String get accountStatus => 'Statut du compte';
+
+  @override
+  String get accountStatusDescription => 'Contrôle l\'accès et l\'attribution des emplois';
+
+  @override
+  String get disableAccount => 'Désactiver le compte';
+
+  @override
+  String get reEnableAccount => 'Réactiver le compte';
+
+  @override
+  String get disableAccountNote => 'Désactiver retire l\'employé des nouvelles attributions. Ses rendez-vous et données passés sont conservés.';
+
+  @override
+  String get reEnableAccountNote => 'La réactivation restaure leur accès et leur permet d\'être à nouveau assignés à des emplois.';
+
+  @override
+  String get colorAlreadyUsed => 'Cette couleur est déjà utilisée par un autre employé.';
 }
