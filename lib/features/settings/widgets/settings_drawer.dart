@@ -37,6 +37,17 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
   }
 
   Future<void> _resolveUser() async {
+    // Short-circuit when both values are already injected via props.
+    if (widget.userName != null && widget.email != null) {
+      if (mounted) {
+        setState(() {
+          _displayName = widget.userName!;
+          _displayEmail = widget.email!;
+        });
+      }
+      return;
+    }
+
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 

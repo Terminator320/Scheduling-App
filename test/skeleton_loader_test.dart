@@ -8,9 +8,7 @@ Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
 void main() {
   testWidgets('SkeletonBox renders with given dimensions', (tester) async {
     await tester.pumpWidget(_wrap(const SkeletonBox(width: 120, height: 14)));
-    final box = tester.renderObject<RenderBox>(find.byType(SkeletonBox));
-    expect(box.size.width, 120);
-    expect(box.size.height, 14);
+    expect(tester.getSize(find.byType(SkeletonBox)), const Size(120, 14));
   });
 
   testWidgets('SkeletonAppointmentRow renders without overflow', (tester) async {

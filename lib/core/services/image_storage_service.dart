@@ -10,7 +10,24 @@ class ImageStorageService {
 
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
+  Future<bool> _isValidImageFile(File file) async {
+    final raf = await file.open();
+    try {
+      final bytes = await raf.read(4);
+      if (bytes.length < 3) return false;
+      final isJpeg = bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF;
+      final isPng = bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E;
+      return isJpeg || isPng;
+    } finally {
+      await raf.close();
+    }
+  }
+
   Future<AppointmentImage> uploadImage(String appointmentId, File file) async {
+    if (!await _isValidImageFile(file)) {
+      throw StateError('File is not a valid image.');
+    }
+
     final size = await file.length();
     if (size > maxUploadBytes) {
       throw StateError('Image is too large to upload after compression.');

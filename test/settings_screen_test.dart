@@ -19,7 +19,7 @@ Widget _wrap({double textScale = 1.0, bool isDark = false}) => ThemeNotifier(
           GlobalWidgetsLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        home: const SettingsScreen(),
+        home: const SettingsScreen(name: 'Test User', email: 'test@example.com'),
       ),
     );
 
