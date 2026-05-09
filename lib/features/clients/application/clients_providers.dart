@@ -14,7 +14,16 @@ final clientsRepositoryProvider = Provider<ClientsRepository>((ref) {
 /// Bumped after any client add/update/delete so the paginated clients list
 /// (which no longer streams) can refresh itself. Replaces the previous live
 /// `watchClients` stream's auto-update behavior.
-final clientsRefreshProvider = StateProvider<int>((ref) => 0);
+final clientsRefreshProvider = NotifierProvider<ClientsRefresh, int>(
+  ClientsRefresh.new,
+);
+
+class ClientsRefresh extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void bump() => state++;
+}
 
 final clientSearchProvider = FutureProvider.family<List<ClientRecord>, String>((
   ref,

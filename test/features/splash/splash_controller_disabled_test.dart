@@ -174,6 +174,9 @@ void main() {
           firebaseAuthProvider.overrideWithValue(mockAuth),
           employeesRepositoryProvider.overrideWithValue(mockRepo),
         ],
+        // Match the app's ProviderScope: retry disabled so the transient
+        // error propagates instead of being retried in the background.
+        retry: (retryCount, error) => null,
       );
       addTearDown(container.dispose);
 

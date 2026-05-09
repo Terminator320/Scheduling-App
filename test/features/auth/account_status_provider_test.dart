@@ -115,8 +115,12 @@ void main() {
             employeesRepositoryProvider.overrideWithValue(mockRepo),
           ],
         );
-        addTearDown(container.dispose);
+        // Teardowns run in reverse order: dispose the container (cancelling
+        // the provider's inner subscription) before awaiting close(). Riverpod
+        // 3 pauses unlistened providers, and a paused subscription never
+        // receives the done event, so the reverse order hangs the test.
         addTearDown(statusController.close);
+        addTearDown(container.dispose);
 
         // Attach a listener so the provider stays alive
         final emissions = <bool>[];
@@ -172,6 +176,9 @@ void main() {
         // uid just resolved: provider rebuilds into AsyncLoading retaining the
         // previous empty doc via copyWithPrevious — not an authoritative delete.
         final reloading = const AsyncLoading<Map<String, dynamic>>()
+            // copyWithPrevious is @internal in Riverpod 3, but this test must
+            // reproduce the exact reload transition the framework emits.
+            // ignore: invalid_use_of_internal_member
             .copyWithPrevious(emptyData);
         expect(
           isAccountDeletionSignal(
@@ -281,8 +288,9 @@ void main() {
       ).thenAnswer((_) => Stream.value(mockUser));
 
       final container = container0();
-      addTearDown(container.dispose);
+      // Same teardown ordering as the status test above: dispose before close.
       addTearDown(roleController.close);
+      addTearDown(container.dispose);
 
       final emissions = <String>[];
       final sub = container.listen(userRoleProvider, (_, next) {

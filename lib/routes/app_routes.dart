@@ -90,8 +90,8 @@ class AppRoutes {
     return PageRouteBuilder<T>(
       settings: settings,
       reverseTransitionDuration: const Duration(milliseconds: 250),
-      pageBuilder: (_, __, ___) => page,
-      transitionsBuilder: (_, animation, __, child) => FadeTransition(
+      pageBuilder: (_, _, _) => page,
+      transitionsBuilder: (_, animation, _, child) => FadeTransition(
         opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
         child: child,
       ),

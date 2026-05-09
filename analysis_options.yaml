@@ -32,3 +32,18 @@ linter:
     # both — it would force splitting l10n keys and test descriptions, hurting
     # readability. Formatting (dart format) still governs general line wrapping.
     lines_longer_than_80_chars: false
+    # Fire-and-forget is a deliberate convention here: notices, navigation,
+    # logging, and background image uploads are intentionally not awaited from
+    # synchronous widget callbacks. Wrapping ~60 call sites in `unawaited()`
+    # adds noise without changing behavior.
+    discarded_futures: false
+    # The error-handling convention is a bare `catch (e, st)` + logger.warn at
+    # service/controller boundaries (see .claude/rules/error-handling.md);
+    # specific failures are modeled as typed Failure families instead of
+    # `on` clauses at every catch site.
+    avoid_catches_without_on_clauses: false
+    # The manual Riverpod style declares providers as inferred top-level
+    # finals (`final xProvider = Provider<T>(...)`); spelling out the full
+    # generic provider type on every declaration duplicates the right-hand
+    # side without adding information.
+    specify_nonobvious_property_types: false

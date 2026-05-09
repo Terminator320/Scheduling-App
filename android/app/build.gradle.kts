@@ -3,7 +3,7 @@ import java.io.FileInputStream
 
 plugins {
     id("com.android.application")
-    id("kotlin-android")
+
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 
@@ -15,10 +15,12 @@ plugins {
     id("com.google.firebase.crashlytics")
 }
 
-// C2: release signing reads from android/key.properties when present.
-// If the file is absent (dev machines that haven't generated a keystore),
-// release builds fall back to the debug keystore — `flutter run --release`
-// keeps working. See HANDOFF.md for the keytool command + backup procedure.
+val agpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.substringBefore('.').toInt()
+
+if (agpMajor < 9) {
+    apply(plugin = "org.jetbrains.kotlin.android")
+}
+
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties().apply {
     if (keystorePropertiesFile.exists()) {
@@ -38,16 +40,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
-    }
 
     defaultConfig {
         applicationId = "net.vogas.scheduling"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // floor of 23 required by flutter_secure_storage 10.x (Jetpack Security
-        // EncryptedSharedPreferences); never goes below Flutter's own default.
+
         minSdk = maxOf(flutter.minSdkVersion, 23)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -67,17 +63,13 @@ android {
 
     buildTypes {
         release {
-            // C2: use real signing config when key.properties is present;
-            // fall back to debug keystore so dev `flutter run --release` works.
+
             signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")
             }
-            // C3: R8 + resource shrinking. Keep rules in proguard-rules.pro
-            // cover Firebase, Crashlytics, image_picker, flutter_image_compress,
-            // and Kotlin reflection — anything reached via reflection that R8
-            // can't trace from a call site.
+
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -85,6 +77,19 @@ android {
                 "proguard-rules.pro",
             )
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
+
+project.extensions.configure(org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension::class.java) {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 

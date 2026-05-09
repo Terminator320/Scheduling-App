@@ -7,7 +7,7 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 /// Firestore listener; name, disabled-status and role all derive from it
 /// instead of each opening their own `where('uid').limit(1).snapshots()`.
 final currentUserDocProvider = StreamProvider<Map<String, dynamic>>((ref) {
-  final uid = ref.watch(authUidProvider).valueOrNull;
+  final uid = ref.watch(authUidProvider).value;
   if (uid == null) return Stream.value(const {});
   return ref.watch(employeesRepositoryProvider).watchUserDoc(uid);
 });
@@ -21,7 +21,7 @@ final accountDisabledProvider = Provider<AsyncValue<bool>>((ref) {
 /// Streams the signed-in user's role (e.g. `admin`, `employee`).
 ///
 /// Emits an empty string when no user is signed in or the doc has no role.
-/// Used by `main.dart` to detect live admin → employee demotion (H3).
+/// Used by `main.dart` to detect live admin â†’ employee demotion (H3).
 final userRoleProvider = Provider<AsyncValue<String>>((ref) {
   return ref
       .watch(currentUserDocProvider)
@@ -29,7 +29,7 @@ final userRoleProvider = Provider<AsyncValue<String>>((ref) {
 });
 
 /// Whether a [currentUserDocProvider] emission means the signed-in user's
-/// account doc was deleted server-side — as opposed to a transient empty
+/// account doc was deleted server-side â€” as opposed to a transient empty
 /// placeholder.
 ///
 /// On a fresh sign-in `FirebaseAuth.currentUser` is set immediately, but the
@@ -46,12 +46,12 @@ bool isAccountDeletionSignal({
 }) {
   if (!isSignedIn || resolvedUid == null) return false;
   if (docState.isLoading) return false;
-  final doc = docState.valueOrNull;
+  final doc = docState.value;
   return doc != null && doc.isEmpty;
 }
 
 /// The signed-in user's display name (empty until the doc loads).
 final currentUserNameProvider = Provider<String>((ref) {
-  final doc = ref.watch(currentUserDocProvider).valueOrNull;
+  final doc = ref.watch(currentUserDocProvider).value;
   return (doc?['name'] ?? '').toString().trim();
 });

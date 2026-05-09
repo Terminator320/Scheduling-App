@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 void main() {
-  testWidgets('French localizations load', (WidgetTester tester) async {
+  testWidgets('French localizations load', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         locale: const Locale('fr', 'CA'),

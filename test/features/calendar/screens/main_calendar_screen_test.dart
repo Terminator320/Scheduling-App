@@ -44,8 +44,8 @@ Widget _wrap({
       employeesRepositoryProvider.overrideWithValue(repo),
       currentUserNameProvider.overrideWithValue('Jane'),
       allUsersStreamProvider.overrideWith((_) => allUsers),
-      appointmentsInRangeProvider.overrideWith((_, __) => appointments),
-      myAppointmentsProvider.overrideWith((_, __) => appointments),
+      appointmentsInRangeProvider.overrideWith((_, _) => appointments),
+      myAppointmentsProvider.overrideWith((_, _) => appointments),
     ],
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
