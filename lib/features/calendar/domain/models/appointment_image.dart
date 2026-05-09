@@ -33,7 +33,6 @@ abstract class AppointmentImage with _$AppointmentImage {
     if (value == null) return null;
     final type = value.runtimeType.toString();
     if (type == 'Timestamp') {
-      // ignore: avoid_dynamic_calls
       return (value as dynamic).toDate() as DateTime;
     }
     if (value is DateTime) return value;

@@ -196,7 +196,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     if (!widget.isAdmin) {
       // Upgrade the optimistic employee view to admin once the live role
       // resolves to 'admin'. The user doc can load before this screen mounts,
-      // so a plain listen (which only fires on later changes) would miss it —
+      // so a plain listen (which only fires on later changes) would miss it â€”
       // check the current value too. Defer the nav out of build.
       void upgradeIfAdmin(String? role) {
         if (role != 'admin' || !mounted || _upgradingToAdmin) return;
@@ -215,9 +215,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
       ref.listen<AsyncValue<String>>(
         userRoleProvider,
-        (_, next) => upgradeIfAdmin(next.valueOrNull),
+        (_, next) => upgradeIfAdmin(next.value),
       );
-      upgradeIfAdmin(ref.read(userRoleProvider).valueOrNull);
+      upgradeIfAdmin(ref.read(userRoleProvider).value);
     }
 
     final employees =

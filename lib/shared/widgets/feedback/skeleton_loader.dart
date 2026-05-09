@@ -46,7 +46,7 @@ class _SkeletonBoxState extends State<SkeletonBox>
     final highlight = scheme.outline;
     return AnimatedBuilder(
       animation: _anim,
-      builder: (_, __) => Container(
+      builder: (_, _) => Container(
         width: widget.width,
         height: widget.height,
         decoration: BoxDecoration(

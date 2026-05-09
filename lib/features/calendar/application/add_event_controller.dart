@@ -65,10 +65,13 @@ class AddEventFailed extends AddEventSubmitOutcome {
   final Object error;
 }
 
-class AddEventController
-    extends AutoDisposeFamilyNotifier<AddEventState, DateTime?> {
+class AddEventController extends Notifier<AddEventState> {
+  AddEventController(this.initialDate);
+
+  final DateTime? initialDate;
+
   @override
-  AddEventState build(DateTime? initialDate) {
+  AddEventState build() {
     return AddEventState(selectedDate: initialDate);
   }
 
@@ -259,9 +262,7 @@ class AddEventController
   }
 }
 
-final addEventControllerProvider =
-    AutoDisposeNotifierProviderFamily<
-      AddEventController,
-      AddEventState,
-      DateTime?
-    >(AddEventController.new);
+final addEventControllerProvider = NotifierProvider.autoDispose
+    .family<AddEventController, AddEventState, DateTime?>(
+      AddEventController.new,
+    );

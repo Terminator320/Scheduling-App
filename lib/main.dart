@@ -87,7 +87,13 @@ Future<void> main() async {
 
       final settings = await settingsFuture;
 
-      runApp(ProviderScope(child: PaulApp(settings: settings)));
+
+      runApp(
+        ProviderScope(
+          retry: (retryCount, error) => null,
+          child: PaulApp(settings: settings),
+        ),
+      );
     },
     (error, stack) {
       FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
@@ -155,7 +161,6 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   Future<void> _handleAccountDisabled(
     String Function(AppLocalizations) selectMessage,
   ) async {
-
     if (_isHandlingAccountExit) return;
     if (FirebaseAuth.instance.currentUser == null) return;
 
@@ -194,8 +199,8 @@ class _PaulAppState extends ConsumerState<PaulApp> {
 
   void _listenForAccountDisabled() {
     ref.listen<AsyncValue<bool>>(accountDisabledProvider, (prev, next) {
-      final wasDisabled = prev?.valueOrNull ?? false;
-      final isDisabled = next.valueOrNull ?? false;
+      final wasDisabled = prev?.value ?? false;
+      final isDisabled = next.value ?? false;
       if (!wasDisabled && isDisabled) {
         _handleAccountDisabled((l10n) => l10n.error_thisAccountHasBeenDisabled);
       }
@@ -204,8 +209,8 @@ class _PaulAppState extends ConsumerState<PaulApp> {
 
   void _listenForRoleRevocation() {
     ref.listen<AsyncValue<String>>(userRoleProvider, (prev, next) {
-      final prevRole = prev?.valueOrNull;
-      final nextRole = next.valueOrNull;
+      final prevRole = prev?.value;
+      final nextRole = next.value;
       if (prevRole == 'admin' && nextRole != null && nextRole != 'admin') {
         _handleAccountDisabled((l10n) => l10n.error_yourAdminAccessWasRevoked);
       }
@@ -219,7 +224,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     ) {
       if (isAccountDeletionSignal(
         isSignedIn: FirebaseAuth.instance.currentUser != null,
-        resolvedUid: ref.read(authUidProvider).valueOrNull,
+        resolvedUid: ref.read(authUidProvider).value,
         docState: next,
       )) {
         _handleAccountDisabled((l10n) => l10n.error_thisAccountHasBeenDisabled);

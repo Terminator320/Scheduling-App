@@ -59,10 +59,13 @@ class EventDetailsFailed extends EventDetailsSaveOutcome {
   final Object error;
 }
 
-class EventDetailsController
-    extends AutoDisposeFamilyNotifier<EventDetailsState, AppointmentRecord> {
+class EventDetailsController extends Notifier<EventDetailsState> {
+  EventDetailsController(this.appointment);
+
+  final AppointmentRecord appointment;
+
   @override
-  EventDetailsState build(AppointmentRecord appointment) {
+  EventDetailsState build() {
     Future.microtask(() => _loadClientIfNeeded(appointment.clientId));
     Future.microtask(() => _seedSelectedEmployees(appointment.employeeIds));
     return EventDetailsState(
@@ -368,9 +371,7 @@ ClientRecord _placeholderClient(AppointmentRecord a) => ClientRecord(
   address: a.address,
 );
 
-final eventDetailsControllerProvider =
-    AutoDisposeNotifierProviderFamily<
-      EventDetailsController,
-      EventDetailsState,
-      AppointmentRecord
-    >(EventDetailsController.new);
+final eventDetailsControllerProvider = NotifierProvider.autoDispose
+    .family<EventDetailsController, EventDetailsState, AppointmentRecord>(
+      EventDetailsController.new,
+    );

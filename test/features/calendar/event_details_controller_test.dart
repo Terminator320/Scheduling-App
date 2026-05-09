@@ -113,7 +113,7 @@ void main() {
           )
           // Keep the provider alive across reads so autoDispose doesn't tear
           // down the seeded state between assertions.
-          ..listen(eventDetailsControllerProvider(_appointment), (_, __) {});
+          ..listen(eventDetailsControllerProvider(_appointment), (_, _) {});
     addTearDown(container.dispose);
   });
 
