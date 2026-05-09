@@ -14,8 +14,8 @@ AppointmentRecord _fakeAppt({
     AppointmentRecord(
       id: '1',
       title: 'Haircut',
-      startTime: DateTime(2026, 5, 6, 9, 0),
-      endTime: DateTime(2026, 5, 6, 9, 45),
+      startTime: DateTime(2099, 5, 6, 9, 0),
+      endTime: DateTime(2099, 5, 6, 9, 45),
       clientId: 'c1',
       clientName: 'Sarah Johnson',
       clientPhone: '514-555-0101',
