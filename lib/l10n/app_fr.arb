@@ -340,5 +340,20 @@
   "reEnableAccount": "Réactiver le compte",
   "disableAccountNote": "Désactiver retire l'employé des nouvelles attributions. Ses rendez-vous et données passés sont conservés.",
   "reEnableAccountNote": "La réactivation restaure leur accès et leur permet d'être à nouveau assignés à des emplois.",
-  "colorAlreadyUsed": "Cette couleur est déjà utilisée par un autre employé."
+  "colorAlreadyUsed": "Cette couleur est déjà utilisée par un autre employé.",
+  "retry": "Réessayer",
+  "open": "Ouvrir",
+  "photoUploadFailedSnackbar": "Téléchargement de photo échoué. Ouvrez le rendez-vous pour réessayer.",
+  "nPhotosFailedToUpload": "{count, plural, =1{1 photo n'a pas pu être téléchargée.} other{{count} photos n'ont pas pu être téléchargées.}}",
+  "@nPhotosFailedToUpload": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "fileTooLargeWarning": "{fileName} est trop volumineux pour être téléchargé. La taille maximale est de 8 Mo même après compression. Veuillez utiliser une image plus petite.",
+  "@fileTooLargeWarning": {
+    "placeholders": {
+      "fileName": { "type": "String" }
+    }
+  }
 }

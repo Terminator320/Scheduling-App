@@ -14,6 +14,7 @@ import 'package:scheduling/features/calendar/services/appointment_image_upload_s
 import 'package:scheduling/features/calendar/services/appointment_service.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/employee_picker.dart';
+import 'package:scheduling/features/calendar/services/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/widgets/photo_picker_section.dart';
 import 'package:scheduling/features/clients/models/client_record.dart';
 import 'package:scheduling/features/clients/services/client_service.dart';
@@ -620,6 +621,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   }
 
   Widget _buildPhotosView(ThemeData theme) {
+    final id = widget.appointment.id;
+    final failure = id != null ? PhotoUploadNotifier.instance.failureFor(id) : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -640,6 +643,14 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
           onPickImages: () {},
           onRemoveExisting: (_) {},
           onRemoveNew: (_) {},
+          failedCount: failure?.failedCount ?? 0,
+          tooLargeFileNames: failure?.tooLargeFileNames ?? const [],
+          onRetry: (failure?.failedCount ?? 0) > 0
+              ? () {
+                  PhotoUploadNotifier.instance.clearFailure(id!);
+                  setState(() => _isEditing = true);
+                }
+              : null,
         ),
       ],
     );

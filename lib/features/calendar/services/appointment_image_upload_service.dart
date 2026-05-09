@@ -5,13 +5,15 @@ import 'package:scheduling/core/services/image_compress_service.dart';
 import 'package:scheduling/core/services/image_storage_service.dart';
 import 'package:scheduling/features/calendar/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/services/appointment_service.dart';
+import 'package:scheduling/features/calendar/services/photo_upload_notifier.dart';
 
 /// Handles background image compression, upload, and Firestore patching
 /// for appointment images. Call [uploadInBackground] and forget it — it
 /// never throws; the appointment record is already saved before this runs.
 
-
 class AppointmentImageUploadService {
+  static const int _maxUploadBytes = 8 * 1024 * 1024; // 8 MB
+
   final ImageCompressService _compress;
   final ImageStorageService _storage;
   final AppointmentService _appointments;
@@ -48,19 +50,33 @@ class AppointmentImageUploadService {
     required List<AppointmentImage> toDelete,
   }) async {
     try {
-      await Future.wait([
-        if (newImages.isNotEmpty)
-          _compressUploadAndPatch(appointmentId, newImages, existingImages),
-        if (toDelete.isNotEmpty) _storage.deleteImages(toDelete),
-      ]);
+      final List<String> tooLargeNames = [];
+      if (newImages.isNotEmpty) {
+        tooLargeNames.addAll(
+          await _compressUploadAndPatch(appointmentId, newImages, existingImages),
+        );
+      }
+      if (toDelete.isNotEmpty) await _storage.deleteImages(toDelete);
+
+      if (tooLargeNames.isNotEmpty) {
+        PhotoUploadNotifier.instance.reportFailure(
+          appointmentId,
+          tooLargeFileNames: tooLargeNames,
+        );
+      }
       debugPrint('[AppointmentImageUpload] done for $appointmentId');
     } catch (e, st) {
+      PhotoUploadNotifier.instance.reportFailure(
+        appointmentId,
+        failedCount: newImages.length,
+      );
       debugPrint('[AppointmentImageUpload] FAILED for $appointmentId: $e');
       debugPrintStack(stackTrace: st);
     }
   }
 
-  Future<void> _compressUploadAndPatch(
+  /// Returns names of files that were skipped because they exceeded [_maxUploadBytes].
+  Future<List<String>> _compressUploadAndPatch(
     String appointmentId,
     List<File> newImages,
     List<AppointmentImage> existingImages,
@@ -70,17 +86,38 @@ class AppointmentImageUploadService {
     );
     final compressed = await _compress.compressImages(newImages);
 
-    debugPrint(
-      '[AppointmentImageUpload] uploading ${compressed.length} image(s)...',
-    );
-    final uploaded = await _storage.uploadImages(appointmentId, compressed);
+    final List<File> uploadable = [];
+    final List<String> tooLargeNames = [];
 
-    debugPrint(
-      '[AppointmentImageUpload] patching Firestore with ${uploaded.length} new + ${existingImages.length} existing...',
-    );
-    await _appointments.updateAppointmentPictures(
-      appointmentId,
-      [...existingImages, ...uploaded],
-    );
+    for (int i = 0; i < compressed.length; i++) {
+      final size = await compressed[i].length();
+      if (size > _maxUploadBytes) {
+        tooLargeNames.add(_fileName(newImages[i]));
+      } else {
+        uploadable.add(compressed[i]);
+      }
+    }
+
+    if (uploadable.isNotEmpty) {
+      debugPrint(
+        '[AppointmentImageUpload] uploading ${uploadable.length} image(s)...',
+      );
+      final uploaded = await _storage.uploadImages(appointmentId, uploadable);
+
+      debugPrint(
+        '[AppointmentImageUpload] patching Firestore with ${uploaded.length} new + ${existingImages.length} existing...',
+      );
+      await _appointments.updateAppointmentPictures(
+        appointmentId,
+        [...existingImages, ...uploaded],
+      );
+    }
+
+    return tooLargeNames;
+  }
+
+  static String _fileName(File file) {
+    final segments = file.uri.pathSegments;
+    return segments.isNotEmpty ? segments.last : file.path;
   }
 }
