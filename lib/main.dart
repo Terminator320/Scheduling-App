@@ -4,7 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/l10n/app_localizations.dart';
@@ -30,6 +32,12 @@ void main() async {
   await dotenv.load(fileName: "dev/.env");
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.android);
+
+  await FirebaseAppCheck.instance.activate(
+    providerAndroid: kDebugMode
+        ? const AndroidDebugProvider()
+        : const AndroidPlayIntegrityProvider(),
+  );
 
   final settings = await SettingsService().load();
   final home = await _resolveHome();
