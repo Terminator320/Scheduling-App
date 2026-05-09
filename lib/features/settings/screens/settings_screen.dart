@@ -5,6 +5,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/settings/screens/text_size_screen.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_avatar.dart';
 
@@ -16,21 +17,36 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _auth = FirebaseAuth.instance;
+  String get _displayName {
+    try {
+      return FirebaseAuth.instance.currentUser?.displayName ?? 'User';
+    } catch (_) {
+      return 'User';
+    }
+  }
 
-  String get _displayName => _auth.currentUser?.displayName ?? 'User';
-  String get _email => _auth.currentUser?.email ?? '';
+  String get _email {
+    try {
+      return FirebaseAuth.instance.currentUser?.email ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  static String _textScaleLabel(double scale) {
+    if (scale <= 0.85) return 'Small';
+    if (scale <= 1.05) return 'Medium';
+    if (scale <= 1.25) return 'Large';
+    return 'Extra Large';
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final themeNotifier = ThemeNotifier.of(context);
-    final isDark = themeNotifier.isDark;
-
-    // Determine current language label from locale
+    final notifier = ThemeNotifier.of(context);
+    final isDark = notifier.isDark;
     final langCode = Localizations.localeOf(context).languageCode;
-    final langLabel = langCode == 'fr' ? context.l10n.francais : context.l10n.english;
 
     return Scaffold(
       appBar: AppBar(
@@ -45,32 +61,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
         ),
       ),
+      backgroundColor: AppColors.background,
       body: ListView(
+        padding: const EdgeInsets.all(AppSpacing.sp16),
         children: [
-          // Profile card
-          Container(
-            color: scheme.surface,
-            padding: const EdgeInsets.all(AppSpacing.sp16),
+          // ── Profile card ──────────────────────────────────────────
+          _SectionCard(
             child: Row(
               children: [
                 AppAvatar(
                   name: _displayName,
-                  color: AppColors.primaryDark,
+                  color: AppColors.primary,
                   size: AvatarSize.lg,
                 ),
-                const SizedBox(width: AppSpacing.sp16),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(_displayName, style: theme.textTheme.titleMedium),
+                      Text(
+                        _displayName,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
                       const SizedBox(height: 2),
                       Text(
-                        _email,
-                        style: theme.textTheme.bodyMedium?.copyWith(
+                        _email.isNotEmpty ? _email : '—',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -78,109 +102,93 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          const Divider(height: 1),
           const SizedBox(height: AppSpacing.sp16),
 
-          // Appearance section header
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sp16,
-              vertical: AppSpacing.sp8,
-            ),
-            child: Text(
-              context.l10n.appearance.toUpperCase(),
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-                letterSpacing: 0.6,
-              ),
-            ),
-          ),
+          // ── Appearance header ─────────────────────────────────────
+          _SectionHeader(label: context.l10n.appearance.toUpperCase()),
 
-          // Appearance section body
-          Container(
-            color: scheme.surface,
+          // ── Appearance card ───────────────────────────────────────
+          _SectionCard(
             child: Column(
               children: [
-                SwitchListTile(
-                  title: Text(
-                    context.l10n.darkMode,
-                    style: theme.textTheme.bodyLarge,
+                // Dark Mode
+                _SettingsTile(
+                  iconBg: AppColors.primarySurface,
+                  icon: isDark
+                      ? Icons.dark_mode_outlined
+                      : Icons.light_mode_outlined,
+                  iconColor: AppColors.primary,
+                  label: context.l10n.darkMode,
+                  trailing: Switch(
+                    value: isDark,
+                    onChanged: (_) => notifier.toggleTheme(),
+                    activeThumbColor: AppColors.primary,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  value: isDark,
-                  onChanged: (_) => themeNotifier.toggleTheme(),
-                  activeThumbColor: AppColors.primary,
                 ),
-                const Divider(height: 1, indent: 16),
-                ListTile(
-                  title: Text(
-                    context.l10n.language,
-                    style: theme.textTheme.bodyLarge,
-                  ),
+                const Divider(height: 1, color: AppColors.outline),
+
+                // Text Size
+                _SettingsTile(
+                  iconBg: const Color(0xFFF3E8FF),
+                  icon: Icons.text_fields_outlined,
+                  iconColor: AppColors.accent,
+                  label: context.l10n.textSize,
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        langLabel,
+                        _textScaleLabel(notifier.textScale),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
                       ),
                       const SizedBox(width: 4),
-                      Icon(
-                        Icons.chevron_right,
-                        color: scheme.onSurfaceVariant,
-                      ),
+                      Icon(Icons.chevron_right,
+                          size: 18, color: scheme.onSurfaceVariant),
                     ],
                   ),
-                  onTap: _showLanguagePicker,
+                  onTap: () async {
+                    await Navigator.push<void>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const TextSizeScreen(),
+                      ),
+                    );
+                    if (mounted) setState(() {});
+                  },
                 ),
-                const Divider(height: 1, indent: 16),
-                ListTile(
-                  title: Text(
-                    context.l10n.textSize,
-                    style: theme.textTheme.bodyLarge,
+                const Divider(height: 1, color: AppColors.outline),
+
+                // Language
+                _SettingsTile(
+                  iconBg: const Color(0xFFECFDF5),
+                  icon: Icons.language_outlined,
+                  iconColor: AppColors.success,
+                  label: context.l10n.language,
+                  trailing: _LangToggle(
+                    currentCode: langCode,
+                    onChanged: (code) => notifier.setLanguage(code),
                   ),
-                  subtitle: Slider(
-                    value: themeNotifier.textScale,
-                    min: 0.8,
-                    max: 1.4,
-                    divisions: 6,
-                    activeColor: AppColors.primary,
-                    label: themeNotifier.textScale.toStringAsFixed(1),
-                    onChanged: (v) => themeNotifier.setTextScale(v),
-                  ),
+                  isLast: true,
                 ),
               ],
             ),
           ),
           const SizedBox(height: AppSpacing.sp16),
 
-          // Account section header
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sp16,
-              vertical: AppSpacing.sp8,
-            ),
-            child: Text(
-              context.l10n.account.toUpperCase(),
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-                letterSpacing: 0.6,
-              ),
-            ),
-          ),
+          // ── Account header ────────────────────────────────────────
+          _SectionHeader(label: context.l10n.account.toUpperCase()),
 
-          // Account section body
-          Container(
-            color: scheme.surface,
-            child: ListTile(
-              leading: Icon(Icons.logout, color: AppColors.error),
-              title: Text(
-                context.l10n.logOut,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: AppColors.error,
-                ),
-              ),
+          // ── Account card ──────────────────────────────────────────
+          _SectionCard(
+            child: _SettingsTile(
+              iconBg: AppColors.errorTint,
+              icon: Icons.logout,
+              iconColor: AppColors.error,
+              label: context.l10n.logOut,
+              labelColor: AppColors.error,
+              isLast: true,
               onTap: _signOut,
             ),
           ),
@@ -190,55 +198,189 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showLanguagePicker() {
-    showModalBottomSheet<void>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        final notifier = ThemeNotifier.of(ctx);
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              title: Text(context.l10n.english),
-              onTap: () {
-                Navigator.pop(ctx);
-                notifier.setLanguage('en');
-              },
-            ),
-            ListTile(
-              title: Text(context.l10n.francais),
-              onTap: () {
-                Navigator.pop(ctx);
-                notifier.setLanguage('fr');
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        );
-      },
-    );
-  }
-
   Future<void> _signOut() async {
     await AuthService().signOut();
     if (!mounted) return;
-    Navigator.pushNamedAndRemoveUntil(
-      context,
-      AppRoutes.login,
-      (_) => false,
+    Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (_) => false);
+  }
+}
+
+// ── Private helpers ────────────────────────────────────────────────────────
+
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: child,
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, bottom: 7),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          letterSpacing: 0.8,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  const _SettingsTile({
+    required this.iconBg,
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    this.labelColor,
+    this.trailing,
+    this.onTap,
+    this.isLast = false,
+  });
+
+  final Color iconBg;
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final Color? labelColor;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.r8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: iconBg,
+                borderRadius: BorderRadius.circular(AppRadius.r8),
+              ),
+              child: Icon(icon, size: 18, color: iconColor),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w500,
+                  color: labelColor,
+                ),
+              ),
+            ),
+            ?trailing,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LangToggle extends StatelessWidget {
+  const _LangToggle({required this.currentCode, required this.onChanged});
+
+  final String currentCode;
+  final void Function(String code) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(AppRadius.r8),
+      ),
+      padding: const EdgeInsets.all(3),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _LangBtn(
+            code: 'en',
+            label: 'EN',
+            isActive: currentCode == 'en',
+            onTap: () => onChanged('en'),
+          ),
+          const SizedBox(width: 2),
+          _LangBtn(
+            code: 'fr',
+            label: 'FR',
+            isActive: currentCode == 'fr',
+            onTap: () => onChanged('fr'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LangBtn extends StatelessWidget {
+  const _LangBtn({
+    required this.code,
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  final String code;
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: AppDuration.fast,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isActive ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          boxShadow: isActive
+              ? [
+                  const BoxShadow(
+                    color: Color(0x1A000000),
+                    blurRadius: 3,
+                    offset: Offset(0, 1),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: isActive ? AppColors.primary : AppColors.subtle,
+          ),
+        ),
+      ),
     );
   }
 }
