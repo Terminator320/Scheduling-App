@@ -1,34 +1,18 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'package:scheduling/features/clients/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/clients_repository.dart';
+import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 
-class ClientService {
-  final CollectionReference<Map<String, dynamic>> _clients = FirebaseFirestore
-      .instance
-      .collection('clients');
-  // Reuse identical search results while this service instance is alive.
+class FirebaseClientsRepository implements ClientsRepository {
+  FirebaseClientsRepository(FirebaseFirestore firestore)
+    : _clients = firestore.collection('clients');
+
+  final CollectionReference<Map<String, dynamic>> _clients;
   final Map<String, List<ClientRecord>> _searchCache = {};
 
-  Future<void> addClient(ClientRecord client) async {
-    await _clients.add({
-      ...client.toMap(), //spread operator merges the map fields
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  Future<void> updateClient(ClientRecord client) async {
-    await _clients.doc(client.id).update({
-      ...client.toMap(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  Future<void> deleteClient(String id) async {
-    await _clients.doc(id).delete();
-  }
-
-  Stream<List<ClientRecord>> clientsStream({int? limit}) {
+  @override
+  Stream<List<ClientRecord>> watchClients({int? limit}) {
     Query<Map<String, dynamic>> query = _clients.orderBy(
       'createdAt',
       descending: true,
@@ -36,11 +20,42 @@ class ClientService {
     if (limit != null) query = query.limit(limit);
 
     return query.snapshots().map(
-      (snapshot) =>
-          snapshot.docs.map((doc) => ClientRecord.fromDoc(doc)).toList(),
+      (snapshot) => snapshot.docs
+          .map((doc) => ClientRecord.fromMap(doc.id, doc.data()))
+          .toList(),
     );
   }
 
+  @override
+  Future<ClientRecord?> getClientById(String id) async {
+    final doc = await _clients.doc(id).get();
+    if (!doc.exists) return null;
+    return ClientRecord.fromMap(doc.id, doc.data() ?? {});
+  }
+
+  @override
+  Future<void> addClient(ClientRecord client) async {
+    await _clients.add({
+      ..._normalizedMap(client),
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  @override
+  Future<void> updateClient(ClientRecord client) async {
+    await _clients.doc(client.id).update({
+      ..._normalizedMap(client),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  @override
+  Future<void> deleteClient(String id) async {
+    await _clients.doc(id).delete();
+  }
+
+  @override
   Future<List<ClientRecord>> searchClients(String query) async {
     final q = query.trim();
     if (!ClientSearchPolicy.shouldSearch(q)) return [];
@@ -49,24 +64,8 @@ class ClientService {
     final cached = _searchCache[cacheKey];
     if (cached != null) return cached;
 
-    // Normalize text so searches are case-insensitive and accent-insensitive.
-    String normalize(String value) {
-      return value
-          .toLowerCase()
-          .replaceAll(RegExp(r'[àáâãäå]'), 'a')
-          .replaceAll(RegExp(r'[èéêë]'), 'e')
-          .replaceAll(RegExp(r'[ìíîï]'), 'i')
-          .replaceAll(RegExp(r'[òóôõö]'), 'o')
-          .replaceAll(RegExp(r'[ùúûü]'), 'u')
-          .replaceAll(RegExp(r'[ç]'), 'c')
-          .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-          .trim();
-    }
-
-    String digitsOnly(String value) => value.replaceAll(RegExp(r'\D'), '');
-
-    final normalizedQuery = normalize(q);
-    final queryDigits = digitsOnly(q);
+    final normalizedQuery = ClientSearchPolicy.normalize(q);
+    final queryDigits = ClientSearchPolicy.digitsOnly(q);
 
     final snapshot = await _clients
         .orderBy('createdAt', descending: true)
@@ -77,7 +76,7 @@ class ClientService {
 
     for (final doc in snapshot.docs) {
       final data = doc.data();
-      final client = ClientRecord.fromDoc(doc);
+      final client = ClientRecord.fromMap(doc.id, data);
 
       final contacts = (data['contacts'] as List?) ?? const [];
       final contactSearchText = contacts
@@ -92,7 +91,7 @@ class ClientService {
           })
           .join(' ');
 
-      final searchableText = normalize(
+      final searchableText = ClientSearchPolicy.normalize(
         [
           data['businessName'],
           data['name'],
@@ -107,11 +106,17 @@ class ClientService {
         ].whereType<Object>().map((v) => v.toString()).join(' '),
       );
 
-      final displayName = normalize(client.displayName);
-      final name = normalize(data['name']?.toString() ?? '');
-      final businessName = normalize(data['businessName']?.toString() ?? '');
-      final phoneDigits = digitsOnly(data['phone']?.toString() ?? '');
-      final contactsDigits = digitsOnly(contactSearchText);
+      final displayName = ClientSearchPolicy.normalize(client.displayName);
+      final name = ClientSearchPolicy.normalize(
+        data['name']?.toString() ?? '',
+      );
+      final businessName = ClientSearchPolicy.normalize(
+        data['businessName']?.toString() ?? '',
+      );
+      final phoneDigits = ClientSearchPolicy.digitsOnly(
+        data['phone']?.toString() ?? '',
+      );
+      final contactsDigits = ClientSearchPolicy.digitsOnly(contactSearchText);
 
       final matchesText = searchableText.contains(normalizedQuery);
       final matchesPhone =
@@ -154,44 +159,31 @@ class ClientService {
       );
     });
 
-    final results = scoredClients.take(25).map((entry) => entry.value).toList();
+    final results = scoredClients
+        .take(ClientSearchPolicy.resultDisplayLimit)
+        .map((entry) => entry.value)
+        .toList();
     _searchCache[cacheKey] = results;
     return results;
   }
 
-  Future<ClientRecord?> getClientById(String id) async {
-    final doc = await _clients.doc(id).get();
-    if (!doc.exists) return null;
-    return ClientRecord.fromDoc(doc);
-  }
-}
-
-class ClientSearchPolicy {
-  // Avoid broad reads for one-letter searches, but allow short phone searches.
-  static const int minimumTextLength = 2;
-  static const int minimumPhoneDigits = 3;
-  static const int serverReadLimit = 1000;
-
-  static bool shouldSearch(String query) {
-    final trimmed = query.trim();
-    if (trimmed.isEmpty) return false;
-    final digits = trimmed.replaceAll(RegExp(r'\D'), '');
-    if (digits.length >= minimumPhoneDigits) return true;
-    return _normalize(trimmed).length >= minimumTextLength;
-  }
-
-  static String cacheKey(String query) => _normalize(query);
-
-  static String _normalize(String value) {
-    return value
-        .toLowerCase()
-        .replaceAll(RegExp(r'[àáâãäå]'), 'a')
-        .replaceAll(RegExp(r'[èéêë]'), 'e')
-        .replaceAll(RegExp(r'[ìíîï]'), 'i')
-        .replaceAll(RegExp(r'[òóôõö]'), 'o')
-        .replaceAll(RegExp(r'[ùúûü]'), 'u')
-        .replaceAll(RegExp(r'[ç]'), 'c')
-        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-        .trim();
+  /// Normalizes the model on its way to Firestore: emails lower-cased +
+  /// trimmed (CLAUDE.md invariant). All other string fields are already
+  /// trimmed inside `ClientRecord.toMap()`.
+  Map<String, dynamic> _normalizedMap(ClientRecord client) {
+    final base = Map<String, dynamic>.from(client.toMap());
+    final email = (base['email'] as String? ?? '').trim().toLowerCase();
+    base['email'] = email;
+    final contacts = base['contacts'] as List? ?? const [];
+    base['contacts'] = contacts
+        .whereType<Map>()
+        .map((c) {
+          final m = Map<String, dynamic>.from(c);
+          final ce = (m['email'] as String? ?? '').trim().toLowerCase();
+          m['email'] = ce;
+          return m;
+        })
+        .toList();
+    return base;
   }
 }
