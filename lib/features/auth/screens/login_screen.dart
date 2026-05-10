@@ -12,10 +12,11 @@ import 'package:scheduling/core/services/user_cache_service.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/screens/create_account_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/employees/models/employee_record.dart';
-import 'package:scheduling/features/employees/services/user_service.dart';
+import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
@@ -30,7 +31,9 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
   static const int _itemCount = 7;
 
   final AuthService _authService = AuthService();
-  final UserService _userService = UserService();
+  final FirebaseEmployeesRepository _userService = FirebaseEmployeesRepository(
+    FirebaseFirestore.instance,
+  );
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _emailFocus = FocusNode();
@@ -122,7 +125,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
       final userDoc = await _userService.findUserByUid(user.uid);
       if (!mounted) return;
 
-      if (userDoc == null || !userDoc.exists) {
+      if (userDoc == null) {
         setState(() {
           _bannerError = context.l10n.noUserProfileFoundForThisAccount;
           _isLoading = false;
@@ -130,7 +133,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
         return;
       }
 
-      final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data());
+      final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
       unawaited(UserCacheService().save(employee));
 
       Navigator.pushReplacementNamed(

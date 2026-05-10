@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 
@@ -14,8 +15,8 @@ import 'package:scheduling/features/calendar/widgets/app_calendar_view.dart';
 import 'package:scheduling/features/calendar/widgets/calendar_header.dart';
 import 'package:scheduling/features/calendar/widgets/event_list.dart';
 import 'package:scheduling/features/calendar/widgets/month_year_picker.dart';
-import 'package:scheduling/features/employees/models/employee_record.dart';
-import 'package:scheduling/features/employees/services/user_service.dart';
+import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/settings/widgets/settings_drawer.dart';
 
 class MainCalendar extends StatefulWidget {
@@ -35,7 +36,7 @@ class MainCalendar extends StatefulWidget {
 class _MainCalendar extends State<MainCalendar> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final service = AppointmentService();
-  final userService = UserService();
+  final userService = FirebaseEmployeesRepository(FirebaseFirestore.instance);
 
   StreamSubscription? _nameSub;
   StreamSubscription? _employeesSub;
@@ -67,7 +68,7 @@ class _MainCalendar extends State<MainCalendar> {
       if (mounted) setState(() => _userName = name);
     });
 
-    _employeesSub = userService.allUsersStream().listen((data) {
+    _employeesSub = userService.watchAllUsers().listen((data) {
       if (mounted) setState(() => _allEmployees = data);
     });
 

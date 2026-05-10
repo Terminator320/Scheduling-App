@@ -7,8 +7,9 @@ import 'package:scheduling/features/calendar/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/services/appointment_service.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
-import 'package:scheduling/features/employees/models/employee_record.dart';
-import 'package:scheduling/features/employees/services/user_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/skeleton_loader.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';
@@ -29,7 +30,9 @@ class AppointmentHistoryView extends StatefulWidget {
 
 class _AppointmentHistoryViewState extends State<AppointmentHistoryView> {
   final AppointmentService _appointmentService = AppointmentService();
-  final UserService _userService = UserService();
+  final FirebaseEmployeesRepository _userService = FirebaseEmployeesRepository(
+    FirebaseFirestore.instance,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +41,7 @@ class _AppointmentHistoryViewState extends State<AppointmentHistoryView> {
     return ColoredBox(
       color: Theme.of(context).scaffoldBackgroundColor,
       child: StreamBuilder<List<EmployeeRecord>>(
-        stream: _userService.allUsersStream(),
+        stream: _userService.watchAllUsers(),
         builder: (context, employeesSnap) {
           final employees = employeesSnap.data ?? const <EmployeeRecord>[];
           final colorMap = buildEmployeeColorMap(employees);

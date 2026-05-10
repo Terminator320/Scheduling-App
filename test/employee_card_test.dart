@@ -1,7 +1,7 @@
 // test/employee_card_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scheduling/features/employees/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/widgets/employee_card.dart';
 import 'package:scheduling/shared/widgets/app_avatar.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';

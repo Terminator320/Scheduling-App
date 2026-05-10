@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/employees/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/app_avatar.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:animations/animations.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -9,8 +10,8 @@ import 'package:scheduling/core/services/user_cache_service.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
-import 'package:scheduling/features/employees/models/employee_record.dart';
-import 'package:scheduling/features/employees/services/user_service.dart';
+import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -67,13 +68,15 @@ class _SplashScreenState extends State<SplashScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return const Login();
 
-    final userDoc = await UserService().findUserByUid(user.uid);
+    final userDoc = await FirebaseEmployeesRepository(
+      FirebaseFirestore.instance,
+    ).findUserByUid(user.uid);
     if (userDoc == null) {
       await FirebaseAuth.instance.signOut();
       return const Login();
     }
 
-    final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data());
+    final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
     unawaited(UserCacheService().save(employee));
     return MainCalendar(isAdmin: employee.isAdmin, employeeId: employee.id);
   }

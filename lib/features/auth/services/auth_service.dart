@@ -1,15 +1,22 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
 import 'package:scheduling/core/services/user_cache_service.dart';
-import 'package:scheduling/features/employees/services/user_service.dart';
+import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
+import 'package:scheduling/features/employees/domain/employees_repository.dart';
 
 class AuthService {
   // Optional injection allows tests to pass fakes without hitting Firebase.
-  AuthService({FirebaseAuth? firebaseAuth, UserService? userService})
-    : _auth = firebaseAuth ?? FirebaseAuth.instance,
-      _userService = userService ?? UserService();
+  AuthService({
+    FirebaseAuth? firebaseAuth,
+    EmployeesRepository? employeesRepository,
+  }) : _auth = firebaseAuth ?? FirebaseAuth.instance,
+       _employees =
+           employeesRepository ??
+           FirebaseEmployeesRepository(FirebaseFirestore.instance);
 
   final FirebaseAuth _auth;
-  final UserService _userService;
+  final EmployeesRepository _employees;
 
   User? get currentUser => _auth.currentUser;
 
@@ -48,9 +55,7 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    final invitedEmployee = await _userService.findInvitedEmployeeByEmail(
-      email,
-    );
+    final invitedEmployee = await _employees.findInvitedEmployeeByEmail(email);
 
     // Employees must be pre-invited by an admin; reject unknown emails up front.
     if (invitedEmployee == null) {
@@ -65,8 +70,8 @@ class AuthService {
       password: password.trim(),
     );
 
-    await _userService.activateEmployee(
-      docId: invitedEmployee.id,
+    await _employees.activateEmployee(
+      docId: invitedEmployee.docId,
       uid: credential.user!.uid,
     );
 

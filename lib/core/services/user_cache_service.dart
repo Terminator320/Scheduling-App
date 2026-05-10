@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:scheduling/features/employees/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 class UserCacheService {
   static const _kUid = 'uc_uid';

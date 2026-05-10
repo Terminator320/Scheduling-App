@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
-import 'package:scheduling/features/employees/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';
 
@@ -83,14 +83,20 @@ class _EmployeeDetailsSheetState extends State<EmployeeDetailsSheet> {
               children: [
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
-                  child: Icon(Icons.palette_outlined, size: 16, color: AppColors.primary),
+                  child: Icon(
+                    Icons.palette_outlined,
+                    size: 16,
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       context.l10n.employeeColor2,
-                      style: theme.textTheme.labelSmall?.copyWith(color: AppColors.muted),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Container(
@@ -99,7 +105,9 @@ class _EmployeeDetailsSheetState extends State<EmployeeDetailsSheet> {
                       decoration: BoxDecoration(
                         color: widget.employee.color,
                         shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.outline),
+                        border: Border.all(
+                          color: theme.colorScheme.outlineVariant,
+                        ),
                       ),
                     ),
                   ],
@@ -156,7 +164,7 @@ class _DetailField extends StatelessWidget {
         if (icon != null)
           Padding(
             padding: const EdgeInsets.only(top: 2, right: 12),
-            child: Icon(icon, size: 16, color: AppColors.primary),
+            child: Icon(icon, size: 16, color: theme.colorScheme.primary),
           ),
         Expanded(
           child: Column(
@@ -164,7 +172,9 @@ class _DetailField extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: theme.textTheme.labelSmall?.copyWith(color: AppColors.muted),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 2),
               Text(

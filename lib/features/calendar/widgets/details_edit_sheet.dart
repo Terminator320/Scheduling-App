@@ -20,8 +20,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:scheduling/features/clients/data/firebase_clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/client_search_field.dart';
-import 'package:scheduling/features/employees/models/employee_record.dart';
-import 'package:scheduling/features/employees/services/user_service.dart';
+import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
@@ -78,7 +78,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   final _imageUploadService = AppointmentImageUploadService();
   final _storageService = ImageStorageService();
   final _imageService = ImagePickerService();
-  final _userService = UserService();
+  final _userService = FirebaseEmployeesRepository(FirebaseFirestore.instance);
   final _clientService = FirebaseClientsRepository(FirebaseFirestore.instance);
 
   @override
@@ -121,7 +121,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   }
 
   Future<void> _loadEmployees() async {
-    _employeesSub = _userService.employeesStream().listen((employees) {
+    _employeesSub = _userService.watchEmployees().listen((employees) {
       if (!mounted) return;
       setState(() {
         _allEmployees = employees;
