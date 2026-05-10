@@ -45,5 +45,17 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>This app uses the camera to take appointment photos and profile pictures.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app accesses your photo library to attach images to appointments and profiles.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+		<string>tel</string>
+		<string>mailto</string>
+		<string>maps</string>
+		<string>comgooglemaps</string>
+	</array>
 </dict>
 </plist>

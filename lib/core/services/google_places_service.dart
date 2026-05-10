@@ -79,8 +79,8 @@ class GooglePlacesService {
 
     for (final c in components) {
       final types = (c['types'] as List? ?? []).cast<String>();
-      final longText = c['longText'] ?? '';
-      final shortText = c['shortText'] ?? '';
+      final longText = (c['longText'] as String?) ?? '';
+      final shortText = (c['shortText'] as String?) ?? '';
 
       if (types.contains('subpremise')) unit = longText;
       if (types.contains('street_number')) streetNumber = longText;
@@ -100,7 +100,7 @@ class GooglePlacesService {
         : baseStreet;
 
     return ParsedAddress(
-      fullAddress: data['formattedAddress'] ?? '',
+      fullAddress: (data['formattedAddress'] as String?) ?? '',
       street: street,
       city: city,
       province: province,
