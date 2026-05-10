@@ -1,8 +1,11 @@
 import 'dart:io';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
-import 'package:scheduling/features/calendar/models/appointment_image.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/widgets/image_viewer.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
@@ -63,8 +66,8 @@ class PhotoPickerSection extends StatelessWidget {
                           onTap: () => _openViewer(context, entry.key),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
-                              entry.value.url,
+                            child: CachedNetworkImage(
+                              imageUrl: entry.value.url,
                               width: 90,
                               height: 90,
                               fit: BoxFit.cover,

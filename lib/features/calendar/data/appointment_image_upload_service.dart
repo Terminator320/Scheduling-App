@@ -1,25 +1,31 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/services/image_compress_service.dart';
 import 'package:scheduling/core/services/image_storage_service.dart';
-import 'package:scheduling/features/calendar/models/appointment_image.dart';
-import 'package:scheduling/features/calendar/services/appointment_service.dart';
-import 'package:scheduling/features/calendar/services/photo_upload_notifier.dart';
+import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
+import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 
 class AppointmentImageUploadService {
-
-  final ImageCompressService _compress;
-  final ImageStorageService _storage;
-  final AppointmentService _appointments;
-
   AppointmentImageUploadService({
+    required AppointmentsRepository appointments,
+    required PhotoUploadNotifier notifier,
     ImageCompressService? compress,
     ImageStorageService? storage,
-    AppointmentService? appointments,
-  })  : _compress = compress ?? ImageCompressService(),
-        _storage = storage ?? ImageStorageService(),
-        _appointments = appointments ?? AppointmentService();
+  }) : _appointments = appointments,
+       _notifier = notifier,
+       _compress = compress ?? ImageCompressService(),
+       _storage = storage ?? ImageStorageService();
+
+  final AppointmentsRepository _appointments;
+  final PhotoUploadNotifier _notifier;
+  final ImageCompressService _compress;
+  final ImageStorageService _storage;
 
   void uploadInBackground({
     required String appointmentId,
@@ -42,23 +48,27 @@ class AppointmentImageUploadService {
     required List<AppointmentImage> toDelete,
   }) async {
     try {
-      final List<String> tooLargeNames = [];
+      final tooLargeNames = <String>[];
       if (newImages.isNotEmpty) {
         tooLargeNames.addAll(
-          await _compressUploadAndPatch(appointmentId, newImages, existingImages),
+          await _compressUploadAndPatch(
+            appointmentId,
+            newImages,
+            existingImages,
+          ),
         );
       }
       if (toDelete.isNotEmpty) await _storage.deleteImages(toDelete);
 
       if (tooLargeNames.isNotEmpty) {
-        PhotoUploadNotifier.instance.reportFailure(
+        _notifier.reportFailure(
           appointmentId,
           tooLargeFileNames: tooLargeNames,
         );
       }
       debugPrint('[AppointmentImageUpload] done for $appointmentId');
     } catch (e, st) {
-      PhotoUploadNotifier.instance.reportFailure(
+      _notifier.reportFailure(
         appointmentId,
         failedCount: newImages.length,
       );
@@ -72,17 +82,14 @@ class AppointmentImageUploadService {
     List<File> newImages,
     List<AppointmentImage> existingImages,
   ) async {
-    debugPrint(
-      '[AppointmentImageUpload] compressing ${newImages.length} image(s)...',
-    );
     final compressed = await _compress.compressImages(newImages);
 
     final sizes = await Future.wait(compressed.map((f) => f.length()));
 
-    final List<File> uploadable = [];
-    final List<String> tooLargeNames = [];
+    final uploadable = <File>[];
+    final tooLargeNames = <String>[];
 
-    for (int i = 0; i < compressed.length; i++) {
+    for (var i = 0; i < compressed.length; i++) {
       if (sizes[i] > ImageStorageService.maxUploadBytes) {
         tooLargeNames.add(_fileName(newImages[i]));
       } else {
@@ -91,14 +98,7 @@ class AppointmentImageUploadService {
     }
 
     if (uploadable.isNotEmpty) {
-      debugPrint(
-        '[AppointmentImageUpload] uploading ${uploadable.length} image(s)...',
-      );
       final uploaded = await _storage.uploadImages(appointmentId, uploadable);
-
-      debugPrint(
-        '[AppointmentImageUpload] patching Firestore with ${uploaded.length} new + ${existingImages.length} existing...',
-      );
       await _appointments.updateAppointmentPictures(
         appointmentId,
         [...existingImages, ...uploaded],
@@ -113,3 +113,12 @@ class AppointmentImageUploadService {
     return segments.isNotEmpty ? segments.last : file.path;
   }
 }
+
+final appointmentImageUploadProvider = Provider<AppointmentImageUploadService>(
+  (ref) {
+    return AppointmentImageUploadService(
+      appointments: ref.watch(appointmentsRepositoryProvider),
+      notifier: ref.watch(photoUploadNotifierProvider),
+    );
+  },
+);

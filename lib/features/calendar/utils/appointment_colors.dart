@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:scheduling/features/calendar/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 /// Build once per employee list update; pass the result to colorFromMap.

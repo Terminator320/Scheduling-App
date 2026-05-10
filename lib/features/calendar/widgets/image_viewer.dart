@@ -1,4 +1,6 @@
 import 'dart:io';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 class ImageViewer extends StatefulWidget {
@@ -125,7 +127,7 @@ List<ImageProvider> buildImageProviders({
   required List<File> files,
 }) {
   return [
-    ...urls.map<ImageProvider>((u) => NetworkImage(u)),
-    ...files.map<ImageProvider>((f) => FileImage(f)),
+    ...urls.map<ImageProvider>(CachedNetworkImageProvider.new),
+    ...files.map<ImageProvider>(FileImage.new),
   ];
 }
