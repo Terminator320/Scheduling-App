@@ -5,7 +5,6 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:scheduling/features/calendar/models/appointment_image.dart';
 
 class ImageStorageService {
-  // Guard against unexpectedly large files even after picker resizing/compression.
   static const int maxUploadBytes = 8 * 1024 * 1024;
 
   final FirebaseStorage _storage = FirebaseStorage.instance;
@@ -78,10 +77,6 @@ class ImageStorageService {
     await Future.wait(images.map(deleteImage));
   }
 
-  /// Extracts the Storage object path from a Firebase download URL.
-  /// Handles URLs of the form:
-  ///   https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{encoded_path}?...
-  /// Falls back to empty string on any parse error.
   static String _pathFromUrl(String url) {
     if (url.isEmpty) return '';
     try {
