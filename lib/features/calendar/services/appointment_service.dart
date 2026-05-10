@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:scheduling/features/calendar/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
 
-import '../../employees/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 class AppointmentService {
   final CollectionReference<Map<String, dynamic>> appointments =

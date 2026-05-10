@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
-import 'package:scheduling/features/employees/models/employee_record.dart';
-import 'package:scheduling/features/employees/services/user_service.dart';
+import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/widgets/employee_color_picker_row.dart';
 import 'package:scheduling/shared/widgets/app_avatar.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
@@ -11,19 +13,21 @@ import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';
 
-class EmployeeFormSheet extends StatefulWidget {
-  const EmployeeFormSheet({super.key, this.employee, this.usedColors = const {}});
+class EmployeeFormSheet extends ConsumerStatefulWidget {
+  const EmployeeFormSheet({
+    super.key,
+    this.employee,
+    this.usedColors = const {},
+  });
 
   final EmployeeRecord? employee;
   final Set<int> usedColors;
 
   @override
-  State<EmployeeFormSheet> createState() => _EmployeeFormSheetState();
+  ConsumerState<EmployeeFormSheet> createState() => _EmployeeFormSheetState();
 }
 
-class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
-  final _service = UserService();
-
+class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
   late final TextEditingController _nameController;
   late final TextEditingController _emailController;
   late final TextEditingController _phoneController;
@@ -78,6 +82,8 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
 
     setState(() => _isSaving = true);
 
+    final repo = ref.read(employeesRepositoryProvider);
+    final notices = ref.read(noticeServiceProvider);
     try {
       final name = _nameController.text.trim();
       final email = _emailController.text.trim().toLowerCase();
@@ -85,7 +91,7 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
       final colorValue = _selectedColor.toString();
 
       if (_isEdit) {
-        await _service.updateEmployee(
+        await repo.updateEmployee(
           docId: widget.employee!.id,
           name: name,
           email: email,
@@ -94,7 +100,7 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
           isAdmin: _isAdmin,
         );
       } else {
-        await _service.addEmployee(
+        await repo.addEmployee(
           name: name,
           email: email,
           phone: phone,
@@ -107,18 +113,18 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      final isDuplicate = e.toString().contains('Employee email already exists');
+      final isDuplicate =
+          e.toString().contains('Employee email already exists');
       if (isDuplicate) {
-        setState(() => _errors['email'] = context.l10n.anEmployeeWithThisEmailAlreadyExists);
+        setState(
+          () => _errors['email'] =
+              context.l10n.anEmployeeWithThisEmailAlreadyExists,
+        );
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isDuplicate
-                ? context.l10n.anEmployeeWithThisEmailAlreadyExists
-                : context.l10n.couldNotCreateEmployee,
-          ),
-        ),
+      notices.error(
+        isDuplicate
+            ? context.l10n.anEmployeeWithThisEmailAlreadyExists
+            : context.l10n.couldNotCreateEmployee,
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -127,11 +133,12 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
 
   Future<void> _toggleStatus() async {
     setState(() => _isTogglingStatus = true);
+    final repo = ref.read(employeesRepositoryProvider);
     try {
       if (_isDisabled) {
-        await _service.reactivateEmployee(widget.employee!.id);
+        await repo.reactivateEmployee(widget.employee!.id);
       } else {
-        await _service.deactivateEmployee(widget.employee!.id);
+        await repo.deactivateEmployee(widget.employee!.id);
       }
       if (mounted) setState(() => _isDisabled = !_isDisabled);
     } finally {
@@ -180,7 +187,7 @@ class _EmployeeFormSheetState extends State<EmployeeFormSheet> {
         formLabel(context, context.l10n.permissions),
         Container(
           decoration: BoxDecoration(
-            color: AppColors.surfaceAlt,
+            color: theme.colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(AppRadius.r12),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

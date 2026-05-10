@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -18,8 +19,8 @@ import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
-import 'package:scheduling/features/employees/models/employee_record.dart';
-import 'package:scheduling/features/employees/services/user_service.dart';
+import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/splash/screens/splash_screen.dart';
 import 'package:scheduling/firebase_options.dart';
 import 'package:scheduling/l10n/app_localizations.dart';
@@ -90,14 +91,16 @@ Future<Widget> _resolveHome() async {
   final cached = await UserCacheService().loadIfMatch(user.uid);
   if (cached == null) return const SplashScreen();
 
-  final userDoc = await UserService().findUserByUid(user.uid);
+  final userDoc = await FirebaseEmployeesRepository(
+    FirebaseFirestore.instance,
+  ).findUserByUid(user.uid);
   if (userDoc == null) {
     await FirebaseAuth.instance.signOut();
     await UserCacheService().clear();
     return const SplashScreen();
   }
 
-  final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data());
+  final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
   unawaited(UserCacheService().save(employee));
   return MainCalendar(isAdmin: employee.isAdmin, employeeId: employee.id);
 }

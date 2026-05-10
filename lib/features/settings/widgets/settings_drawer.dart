@@ -1,10 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
-import 'package:scheduling/features/employees/services/user_service.dart';
+import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_avatar.dart';
 
@@ -57,10 +58,11 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
     // Name: prefer the passed-in value, then Auth displayName, then Firestore
     String name = widget.userName ?? user.displayName ?? '';
     if (name.isEmpty) {
-      final doc = await UserService().findUserByUid(user.uid);
+      final doc = await FirebaseEmployeesRepository(
+        FirebaseFirestore.instance,
+      ).findUserByUid(user.uid);
       if (!mounted) return;
-      final data = doc?.data();
-      name = (data?['name'] ?? '').toString();
+      name = (doc?.data['name'] ?? '').toString();
     }
 
     if (!mounted) return;
