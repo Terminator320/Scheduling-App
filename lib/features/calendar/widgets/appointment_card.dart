@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
-import 'package:scheduling/features/calendar/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';
 
 class AppointmentCard extends StatelessWidget {

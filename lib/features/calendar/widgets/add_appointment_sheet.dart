@@ -2,45 +2,43 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/services/image_picker_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
-import 'package:scheduling/features/calendar/models/appointment_record.dart';
-import 'package:scheduling/features/calendar/services/appointment_image_upload_service.dart';
-import 'package:scheduling/features/calendar/services/appointment_service.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
+import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/employee_picker.dart';
 import 'package:scheduling/features/calendar/widgets/photo_picker_section.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:scheduling/features/clients/data/firebase_clients_repository.dart';
+import 'package:scheduling/features/clients/application/clients_providers.dart';
+import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/clients/widgets/client_search_field.dart';
-import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
+import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
-class AddEventSheet extends StatefulWidget {
-  const AddEventSheet({
-    super.key,
-    this.initialDate,
-    this.employeesStream,
-  });
+class AddEventSheet extends ConsumerStatefulWidget {
+  const AddEventSheet({super.key, this.initialDate, this.employeesStream});
 
   final DateTime? initialDate;
   final Stream<List<EmployeeRecord>>? employeesStream;
 
   @override
-  State<AddEventSheet> createState() => _AddEventSheetState();
+  ConsumerState<AddEventSheet> createState() => _AddEventSheetState();
 }
 
-class _AddEventSheetState extends State<AddEventSheet> {
+class _AddEventSheetState extends ConsumerState<AddEventSheet> {
   final Map<String, String?> _errors = {};
 
   final _titleController = TextEditingController();
@@ -70,14 +68,18 @@ class _AddEventSheetState extends State<AddEventSheet> {
   StreamSubscription? _employeesSub;
   Timer? _clientSearchDebounce;
   final _imageService = ImagePickerService();
-  final _imageUploadService = AppointmentImageUploadService();
-  final _clientService = FirebaseClientsRepository(FirebaseFirestore.instance);
-  final _userService = FirebaseEmployeesRepository(FirebaseFirestore.instance);
-  final _appointmentService = AppointmentService();
+
+  late final AppointmentImageUploadService _imageUploadService;
+  late final ClientsRepository _clientService;
+  late final AppointmentsRepository _appointmentService;
 
   @override
   void initState() {
     super.initState();
+    _imageUploadService = ref.read(appointmentImageUploadProvider);
+    _clientService = ref.read(clientsRepositoryProvider);
+    _appointmentService = ref.read(appointmentsRepositoryProvider);
+
     final initialDate = widget.initialDate;
     if (initialDate != null) {
       _selectedDate = initialDate;
@@ -87,7 +89,8 @@ class _AddEventSheetState extends State<AddEventSheet> {
   }
 
   void _initStreams() {
-    _employeesSub = (widget.employeesStream ?? _userService.watchEmployees()).listen((employees) {
+    final fallback = ref.read(employeesRepositoryProvider).watchEmployees();
+    _employeesSub = (widget.employeesStream ?? fallback).listen((employees) {
       if (mounted) setState(() => _allEmployees = employees);
     });
   }
@@ -442,8 +445,8 @@ class _AddEventSheetState extends State<AddEventSheet> {
     final startTime = _combineDateAndTime(_selectedDate!, _selectedStartTime!);
     final endTime = _combineDateAndTime(_selectedDate!, _selectedEndTime!);
 
-    final busyEmployees = await _appointmentService.checkAvailableEmployee(
-      employeeId: _selectedEmployees,
+    final busyEmployees = await _appointmentService.findBusyEmployees(
+      candidates: _selectedEmployees,
       start: startTime,
       end: endTime,
     );
@@ -457,12 +460,12 @@ class _AddEventSheetState extends State<AddEventSheet> {
     setState(() => _isSubmitting = true);
 
     try {
-      final docRef = _appointmentService.newDocRef();
+      final docId = _appointmentService.newDocId();
       final start = _combineDateAndTime(_selectedDate!, _selectedStartTime!);
       final end = _combineEndDateAndTime(_selectedDate!, _selectedEndTime!);
 
       final newAppointment = AppointmentRecord(
-        id: docRef.id,
+        id: docId,
         title: _titleController.text.trim(),
         startTime: start,
         endTime: end,
@@ -484,7 +487,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
 
       if (_selectedImages.isNotEmpty) {
         _imageUploadService.uploadInBackground(
-          appointmentId: docRef.id,
+          appointmentId: docId,
           newImages: _selectedImages,
         );
       }

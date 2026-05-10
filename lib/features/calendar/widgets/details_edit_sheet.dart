@@ -1,26 +1,28 @@
-import 'dart:io';
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/services/image_picker_service.dart';
 import 'package:scheduling/core/services/image_storage_service.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
-import 'package:scheduling/features/calendar/models/appointment_image.dart';
-import 'package:scheduling/features/calendar/models/appointment_record.dart';
-import 'package:scheduling/features/calendar/services/appointment_image_upload_service.dart';
-import 'package:scheduling/features/calendar/services/appointment_service.dart';
+import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
+import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
+import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/employee_picker.dart';
-import 'package:scheduling/features/calendar/services/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/widgets/photo_picker_section.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:scheduling/features/clients/data/firebase_clients_repository.dart';
+import 'package:scheduling/features/clients/application/clients_providers.dart';
+import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/client_search_field.dart';
-import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
+import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
@@ -29,7 +31,7 @@ import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
 
-class EventDetailsSheet extends StatefulWidget {
+class EventDetailsSheet extends ConsumerStatefulWidget {
   final AppointmentRecord appointment;
   final bool showActions;
   final bool initialEditing;
@@ -42,10 +44,10 @@ class EventDetailsSheet extends StatefulWidget {
   });
 
   @override
-  State<EventDetailsSheet> createState() => _EventDetailsSheetState();
+  ConsumerState<EventDetailsSheet> createState() => _EventDetailsSheetState();
 }
 
-class _EventDetailsSheetState extends State<EventDetailsSheet> {
+class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
   bool _isEditing = false;
   final Map<String, String?> _errors = {};
 
@@ -75,15 +77,18 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   List<ClientRecord> _clientResults = [];
   bool _isSearchingClient = false;
 
-  final _imageUploadService = AppointmentImageUploadService();
+  late final AppointmentImageUploadService _imageUploadService;
+  late final ClientsRepository _clientService;
+  late final AppointmentsRepository _appointmentRepo;
   final _storageService = ImageStorageService();
   final _imageService = ImagePickerService();
-  final _userService = FirebaseEmployeesRepository(FirebaseFirestore.instance);
-  final _clientService = FirebaseClientsRepository(FirebaseFirestore.instance);
 
   @override
   void initState() {
     super.initState();
+    _imageUploadService = ref.read(appointmentImageUploadProvider);
+    _clientService = ref.read(clientsRepositoryProvider);
+    _appointmentRepo = ref.read(appointmentsRepositoryProvider);
     _isEditing = widget.initialEditing;
     final a = widget.appointment;
 
@@ -121,7 +126,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   }
 
   Future<void> _loadEmployees() async {
-    _employeesSub = _userService.watchEmployees().listen((employees) {
+    final employeesRepo = ref.read(employeesRepositoryProvider);
+    _employeesSub = employeesRepo.watchEmployees().listen((employees) {
       if (!mounted) return;
       setState(() {
         _allEmployees = employees;
@@ -194,7 +200,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     if (id == null) return;
     setState(() => _isSaving = true);
     try {
-      await AppointmentService().updateAppointmentStatus(appointmentId: id, status: 'done');
+      await _appointmentRepo.updateAppointmentStatus(id: id, status: 'done');
       if (mounted) Navigator.pop(context);
     } catch (_) {
       if (mounted) {
@@ -209,7 +215,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
     if (id == null) return;
     setState(() => _isSaving = true);
     try {
-      await AppointmentService().updateAppointmentStatus(appointmentId: id, status: 'cancelled');
+      await _appointmentRepo.updateAppointmentStatus(id: id, status: 'cancelled');
       if (mounted) Navigator.pop(context);
     } catch (_) {
       if (mounted) {
@@ -285,7 +291,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         status: _editingStatus,
       );
 
-      await AppointmentService().updateAppointment(updated);
+      await _appointmentRepo.updateAppointment(updated);
 
       if (mounted) setState(() => _isEditing = false);
       if (mounted) Navigator.pop(context, updated);
@@ -330,7 +336,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
 
     setState(() => _isSaving = true);
     try {
-      await AppointmentService.deleteAppointment(widget.appointment.id!);
+      await _appointmentRepo.deleteAppointment(widget.appointment.id!);
       if (mounted) Navigator.pop(context);
     } catch (_) {
       if (mounted) {
@@ -640,7 +646,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   Widget _buildPhotosView(ThemeData theme) {
     final id = widget.appointment.id;
     final isCancelled = widget.appointment.status.toLowerCase() == 'cancelled';
-    final failure = id != null ? PhotoUploadNotifier.instance.failureFor(id) : null;
+    final notifier = ref.read(photoUploadNotifierProvider);
+    final failure = id != null ? notifier.failureFor(id) : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -665,7 +672,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
           tooLargeFileNames: failure?.tooLargeFileNames ?? const [],
           onRetry: (failure?.failedCount ?? 0) > 0 && !isCancelled
               ? () {
-                  PhotoUploadNotifier.instance.clearFailure(id!);
+                  notifier.clearFailure(id!);
                   setState(() => _isEditing = true);
                 }
               : null,

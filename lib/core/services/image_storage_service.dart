@@ -1,8 +1,7 @@
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
-import 'package:scheduling/features/calendar/models/appointment_image.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 
 class ImageStorageService {
   static const int maxUploadBytes = 8 * 1024 * 1024;
@@ -49,7 +48,7 @@ class ImageStorageService {
       url: url,
       storagePath: path,
       fileName: fileName,
-      uploadedAt: Timestamp.now(),
+      uploadedAt: DateTime.now(),
     );
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class PhotoUploadFailure {
   const PhotoUploadFailure({
@@ -14,16 +15,16 @@ class PhotoUploadFailure {
   bool get hasErrors => failedCount > 0 || tooLargeFileNames.isNotEmpty;
 }
 
-/// In-memory singleton that tracks background photo upload failures.
-/// The upload service writes here; the calendar screen and detail sheet read here.
+/// Tracks background photo-upload failures across the app. Held as a single
+/// instance via Riverpod so the upload pipeline can report from anywhere
+/// while the calendar screen listens via `latestFailure` for the snackbar.
 class PhotoUploadNotifier {
-  static final PhotoUploadNotifier instance = PhotoUploadNotifier._();
-  PhotoUploadNotifier._();
+  PhotoUploadNotifier();
 
-  /// Fires whenever a new failure arrives — used to trigger the calendar snackbar.
-  final latestFailure = ValueNotifier<PhotoUploadFailure?>(null);
+  /// Fires whenever a new failure arrives.
+  final ValueNotifier<PhotoUploadFailure?> latestFailure = ValueNotifier(null);
 
-  final _failures = <String, PhotoUploadFailure>{};
+  final Map<String, PhotoUploadFailure> _failures = {};
 
   void reportFailure(
     String appointmentId, {
@@ -46,4 +47,14 @@ class PhotoUploadNotifier {
   void clearFailure(String appointmentId) {
     _failures.remove(appointmentId);
   }
+
+  void dispose() {
+    latestFailure.dispose();
+  }
 }
+
+final photoUploadNotifierProvider = Provider<PhotoUploadNotifier>((ref) {
+  final notifier = PhotoUploadNotifier();
+  ref.onDispose(notifier.dispose);
+  return notifier;
+});
