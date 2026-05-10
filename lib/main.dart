@@ -13,7 +13,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
-import 'package:scheduling/core/services/settings_service.dart';
 import 'package:scheduling/core/services/user_cache_service.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
@@ -21,6 +20,9 @@ import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/settings/application/settings_providers.dart';
+import 'package:scheduling/features/settings/data/shared_prefs_settings_repository.dart';
+import 'package:scheduling/features/settings/domain/models/app_settings.dart';
 import 'package:scheduling/features/splash/screens/splash_screen.dart';
 import 'package:scheduling/firebase_options.dart';
 import 'package:scheduling/l10n/app_localizations.dart';
@@ -58,7 +60,7 @@ Future<void> main() async {
             : const AppleDeviceCheckProvider(),
       );
 
-      final settings = await SettingsService().load();
+      final settings = await SharedPrefsSettingsRepository().load();
       final home = await _resolveHome();
 
       runApp(
@@ -116,7 +118,8 @@ class PaulApp extends StatefulWidget {
 }
 
 class _PaulAppState extends State<PaulApp> {
-  final SettingsService _settingsService = SettingsService();
+  final SharedPrefsSettingsRepository _settingsRepository =
+      SharedPrefsSettingsRepository();
   final SettingsSaveDebouncer _settingsSaveDebouncer = SettingsSaveDebouncer();
   late ThemeMode _themeMode;
   late double _textScale;
@@ -142,19 +145,19 @@ class _PaulAppState extends State<PaulApp> {
       _themeMode =
           _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
     });
-    _settingsService.save(themeMode: _themeMode);
+    _settingsRepository.save(themeMode: _themeMode);
   }
 
   void setTextScale(double value) {
     setState(() {
       _textScale = value;
     });
-    _settingsSaveDebouncer.run(() => _settingsService.save(textScale: value));
+    _settingsSaveDebouncer.run(() => _settingsRepository.save(textScale: value));
   }
 
   void setLanguage(String code) {
     _languageController.setLanguage(code);
-    _settingsService.save(language: code);
+    _settingsRepository.save(language: code);
   }
 
   @override
