@@ -2,8 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/utils/l10n_extensions.dart';
-import 'package:scheduling/shared/models/address_suggestion.dart';
-import 'package:scheduling/core/services/google_places_service.dart';
+import 'package:scheduling/features/maps/data/google_places_repository.dart';
+import 'package:scheduling/features/maps/domain/models/address_suggestion.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 
 class AddressAutocompleteField extends StatefulWidget {
@@ -32,7 +32,7 @@ class AddressAutocompleteField extends StatefulWidget {
 }
 
 class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
-  final _service = GooglePlacesService();
+  final _service = GooglePlacesRepository();
   Timer? _debounce;
   List<AddressSuggestion> _suggestions = [];
   bool _isLoading = false;
