@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/clients/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/client_detail_sheet.dart';
 import 'package:scheduling/shared/widgets/app_avatar.dart';
 

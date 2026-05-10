@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
-import 'package:scheduling/features/clients/models/client_record.dart';
-import 'package:scheduling/features/clients/services/client_service.dart';
+import 'package:scheduling/features/clients/application/clients_providers.dart';
+import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/app_avatar.dart';
@@ -17,16 +19,16 @@ class _ParsedAptAddress {
   const _ParsedAptAddress({required this.apt, required this.street});
 }
 
-class ClientDetailSheet extends StatefulWidget {
+class ClientDetailSheet extends ConsumerStatefulWidget {
   final ClientRecord client;
 
   const ClientDetailSheet({super.key, required this.client});
 
   @override
-  State<ClientDetailSheet> createState() => _ClientDetailSheetState();
+  ConsumerState<ClientDetailSheet> createState() => _ClientDetailSheetState();
 }
 
-class _ClientDetailSheetState extends State<ClientDetailSheet> {
+class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
   bool _isEditing = false;
   bool _isDeleting = false;
   final Map<String, String?> _errors = {};
@@ -41,8 +43,6 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
   late final TextEditingController _provinceController;
   late final TextEditingController _countryController;
   late final TextEditingController _postalCodeController;
-
-  final _clientService = ClientService();
 
   static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
@@ -308,13 +308,13 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
     );
 
     try {
-      await _clientService.updateClient(updated);
+      await ref.read(clientsRepositoryProvider).updateClient(updated);
       if (mounted) setState(() => _isEditing = false);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.couldNotSaveChangesTryAgain)),
-      );
+      ref
+          .read(noticeServiceProvider)
+          .error(context.l10n.couldNotSaveChangesTryAgain);
     }
   }
 
@@ -354,19 +354,16 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
 
     setState(() => _isDeleting = true);
 
+    final notices = ref.read(noticeServiceProvider);
     try {
-      await _clientService.deleteClient(widget.client.id);
+      await ref.read(clientsRepositoryProvider).deleteClient(widget.client.id);
       if (!mounted) return;
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.clientDeletedSuccessfully)),
-      );
+      notices.success(context.l10n.clientDeletedSuccessfully);
     } catch (_) {
       if (!mounted) return;
       setState(() => _isDeleting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.couldNotDeleteClientTryAgain)),
-      );
+      notices.error(context.l10n.couldNotDeleteClientTryAgain);
     }
   }
 
@@ -434,14 +431,16 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
 
   List<Widget> _buildViewFields(ThemeData theme) {
     final c = widget.client;
-    final hasContactInfo = c.phone.isNotEmpty || c.email.isNotEmpty || c.address.isNotEmpty;
+    final scheme = theme.colorScheme;
+    final hasContactInfo =
+        c.phone.isNotEmpty || c.email.isNotEmpty || c.address.isNotEmpty;
 
     return [
       if (hasContactInfo)
         Container(
           decoration: BoxDecoration(
-            color: AppColors.surfaceAlt,
-            border: Border.all(color: AppColors.outline),
+            color: scheme.surfaceContainerHighest,
+            border: Border.all(color: scheme.outlineVariant),
             borderRadius: BorderRadius.circular(AppRadius.r12),
           ),
           child: ClipRRect(
@@ -455,14 +454,18 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
                 ],
                 if (c.email.isNotEmpty) ...[
                   _ViewContactRow(icon: Icons.email_outlined, text: c.email),
-                  if (c.address.isNotEmpty) const Divider(height: 1, indent: 48),
+                  if (c.address.isNotEmpty)
+                    const Divider(height: 1, indent: 48),
                 ],
                 if (c.address.isNotEmpty)
                   _ViewContactRow(
                     icon: Icons.location_on_outlined,
                     text: c.address,
-                    onTap: () => AddressMapLauncher.showMapChoices(context, address: c.address),
-                    color: AppColors.primary,
+                    onTap: () => AddressMapLauncher.showMapChoices(
+                      context,
+                      address: c.address,
+                    ),
+                    color: scheme.primary,
                   ),
               ],
             ),
@@ -472,25 +475,25 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
         const SizedBox(height: 24),
         Text(
           context.l10n.contacts.toUpperCase(),
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w700,
-            color: AppColors.subtle,
+            color: scheme.onSurfaceVariant,
             letterSpacing: 0.7,
           ),
         ),
         const SizedBox(height: 8),
-        ...c.contacts.map(_buildContactCard),
+        ...c.contacts.map((contact) => _buildContactCard(contact, scheme)),
       ],
     ];
   }
 
-  Widget _buildContactCard(ClientContact contact) {
+  Widget _buildContactCard(ClientContact contact, ColorScheme scheme) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
-        border: Border.all(color: AppColors.outline),
+        color: scheme.surfaceContainerHighest,
+        border: Border.all(color: scheme.outlineVariant),
         borderRadius: BorderRadius.circular(AppRadius.r12),
       ),
       child: ClipRRect(
@@ -690,8 +693,8 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
           OutlinedButton(
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 44),
-              foregroundColor: AppColors.error,
-              side: const BorderSide(color: AppColors.error),
+              foregroundColor: Theme.of(context).colorScheme.error,
+              side: BorderSide(color: Theme.of(context).colorScheme.error),
             ),
             onPressed: _isDeleting ? null : _confirmDelete,
             child: Text(context.l10n.delete),
@@ -715,8 +718,8 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
         Expanded(
           child: OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.error,
-              side: const BorderSide(color: AppColors.error),
+              foregroundColor: Theme.of(context).colorScheme.error,
+              side: BorderSide(color: Theme.of(context).colorScheme.error),
             ),
             onPressed: _isDeleting ? null : _confirmDelete,
             icon: _isDeleting
@@ -747,8 +750,9 @@ class _ViewContactRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final effectiveTextColor = color ?? AppColors.onSurface;
-    final effectiveIconColor = color ?? AppColors.subtle;
+    final scheme = theme.colorScheme;
+    final effectiveTextColor = color ?? scheme.onSurface;
+    final effectiveIconColor = color ?? scheme.onSurfaceVariant;
 
     return InkWell(
       onTap: onTap,
@@ -773,9 +777,13 @@ class _ViewContactRow extends StatelessWidget {
             ),
             if (onTap != null) ...[
               const SizedBox(width: 8),
-              const Padding(
-                padding: EdgeInsets.only(top: 2),
-                child: Icon(Icons.open_in_new, size: 14, color: AppColors.primary),
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Icon(
+                  Icons.open_in_new,
+                  size: 14,
+                  color: scheme.primary,
+                ),
               ),
             ],
           ],

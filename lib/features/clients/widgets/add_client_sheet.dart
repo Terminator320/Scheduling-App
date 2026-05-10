@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
-import 'package:scheduling/features/clients/models/client_record.dart';
-import 'package:scheduling/features/clients/services/client_service.dart';
+import 'package:scheduling/features/clients/application/clients_providers.dart';
+import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
@@ -43,14 +45,14 @@ class _ContactFields {
   }
 }
 
-class AddClientSheet extends StatefulWidget {
+class AddClientSheet extends ConsumerStatefulWidget {
   const AddClientSheet({super.key});
 
   @override
-  State<AddClientSheet> createState() => _AddClientSheetState();
+  ConsumerState<AddClientSheet> createState() => _AddClientSheetState();
 }
 
-class _AddClientSheetState extends State<AddClientSheet> {
+class _AddClientSheetState extends ConsumerState<AddClientSheet> {
   final _businessNameController = TextEditingController();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -63,7 +65,6 @@ class _AddClientSheetState extends State<AddClientSheet> {
   final _aptController = TextEditingController();
   final List<_ContactFields> _additionalContacts = [];
 
-  final _clientService = ClientService();
   final Map<String, String?> _errors = {};
   bool _isSaving = false;
 
@@ -380,14 +381,14 @@ class _AddClientSheetState extends State<AddClientSheet> {
     );
 
     try {
-      await _clientService.addClient(newClient);
+      await ref.read(clientsRepositoryProvider).addClient(newClient);
       if (mounted) Navigator.pop(context);
     } catch (_) {
       if (!mounted) return;
       setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.couldNotAddClientTryAgain)),
-      );
+      ref
+          .read(noticeServiceProvider)
+          .error(context.l10n.couldNotAddClientTryAgain);
     }
   }
 

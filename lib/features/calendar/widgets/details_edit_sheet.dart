@@ -16,8 +16,9 @@ import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/employee_picker.dart';
 import 'package:scheduling/features/calendar/services/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/widgets/photo_picker_section.dart';
-import 'package:scheduling/features/clients/models/client_record.dart';
-import 'package:scheduling/features/clients/services/client_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:scheduling/features/clients/data/firebase_clients_repository.dart';
+import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/client_search_field.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
@@ -78,7 +79,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   final _storageService = ImageStorageService();
   final _imageService = ImagePickerService();
   final _userService = UserService();
-  final _clientService = ClientService();
+  final _clientService = FirebaseClientsRepository(FirebaseFirestore.instance);
 
   @override
   void initState() {

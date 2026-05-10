@@ -1,7 +1,7 @@
 // test/client_tile_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scheduling/features/clients/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/client_tile.dart';
 import 'package:scheduling/shared/widgets/app_avatar.dart';
 
