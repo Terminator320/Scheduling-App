@@ -7,12 +7,7 @@ import 'package:scheduling/features/calendar/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/services/appointment_service.dart';
 import 'package:scheduling/features/calendar/services/photo_upload_notifier.dart';
 
-/// Handles background image compression, upload, and Firestore patching
-/// for appointment images. Call [uploadInBackground] and forget it — it
-/// never throws; the appointment record is already saved before this runs.
-
 class AppointmentImageUploadService {
-  static const int _maxUploadBytes = 8 * 1024 * 1024; // 8 MB
 
   final ImageCompressService _compress;
   final ImageStorageService _storage;
@@ -26,9 +21,6 @@ class AppointmentImageUploadService {
         _storage = storage ?? ImageStorageService(),
         _appointments = appointments ?? AppointmentService();
 
-  /// Compresses and uploads [newImages], then patches the appointment's
-  /// pictures field to [existingImages] + the newly uploaded ones.
-  /// Also deletes any [toDelete] images from Firebase Storage.
   void uploadInBackground({
     required String appointmentId,
     required List<File> newImages,
@@ -75,7 +67,6 @@ class AppointmentImageUploadService {
     }
   }
 
-  /// Returns names of files that were skipped because they exceeded [_maxUploadBytes].
   Future<List<String>> _compressUploadAndPatch(
     String appointmentId,
     List<File> newImages,
@@ -86,12 +77,13 @@ class AppointmentImageUploadService {
     );
     final compressed = await _compress.compressImages(newImages);
 
+    final sizes = await Future.wait(compressed.map((f) => f.length()));
+
     final List<File> uploadable = [];
     final List<String> tooLargeNames = [];
 
     for (int i = 0; i < compressed.length; i++) {
-      final size = await compressed[i].length();
-      if (size > _maxUploadBytes) {
+      if (sizes[i] > ImageStorageService.maxUploadBytes) {
         tooLargeNames.add(_fileName(newImages[i]));
       } else {
         uploadable.add(compressed[i]);

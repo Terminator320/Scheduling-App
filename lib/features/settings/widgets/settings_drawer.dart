@@ -243,7 +243,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
       AppRoutes.clients,
       arguments: ClientsListArgs(
         mode: 'Clients',
-        isAdmin: true,
+        isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
       ),
     );
@@ -266,7 +266,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
       AppRoutes.clients,
       arguments: ClientsListArgs(
         mode: 'Appointments',
-        isAdmin: true,
+        isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
       ),
     );
