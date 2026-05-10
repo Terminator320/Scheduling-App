@@ -2,8 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/utils/l10n_extensions.dart';
-import 'package:scheduling/shared/models/address_suggestion.dart';
-import 'package:scheduling/core/services/google_places_service.dart';
+import 'package:scheduling/features/maps/data/google_places_repository.dart';
+import 'package:scheduling/features/maps/domain/models/address_suggestion.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 
@@ -40,7 +40,7 @@ class AddressFieldsBlock extends StatefulWidget {
 }
 
 class _AddressFieldsBlockState extends State<AddressFieldsBlock> {
-  final _service = GooglePlacesService();
+  final _service = GooglePlacesRepository();
   final _searchController = TextEditingController();
   Timer? _debounce;
   List<AddressSuggestion> _suggestions = [];

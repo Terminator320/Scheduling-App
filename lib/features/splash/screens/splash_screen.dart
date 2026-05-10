@@ -1,28 +1,23 @@
-import 'dart:async';
-
 import 'package:animations/animations.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:scheduling/core/services/user_cache_service.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
-import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
-import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/splash/application/splash_controller.dart';
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   static const Duration displayDuration = Duration(seconds: 3);
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends ConsumerState<SplashScreen> {
   // Drives FadeScaleTransition for each splash element. Flipped from 0→1 on
   // first frame; flipped back to 0 just before navigating away.
   final ValueNotifier<bool> _show = ValueNotifier(false);
@@ -33,7 +28,6 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // Defer to the next frame so the first build completes before animations start.
     WidgetsBinding.instance.addPostFrameCallback((_) => _show.value = true);
     _init();
   }
@@ -45,13 +39,25 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _init() async {
-    Widget? destination;
+    Widget destination = const Login();
 
     // Run auth resolution and the minimum display time in parallel; whichever
-    // finishes last unblocks navigation.
-    await Future.wait([
-      Future.delayed(SplashScreen.displayDuration),
-      _resolveAuth().then((d) => destination = d),
+    // finishes last unblocks navigation. On any unexpected failure, fall
+    // through to the login screen rather than wedging on the splash.
+    final resolution = ref
+        .read(splashDestinationProvider.future)
+        .then<void>((d) {
+          destination = switch (d) {
+            SplashGoToLogin() => const Login(),
+            SplashGoToCalendar(:final isAdmin, :final employeeId) =>
+              MainCalendar(isAdmin: isAdmin, employeeId: employeeId),
+          };
+        })
+        .catchError((Object _) {});
+
+    await Future.wait<void>([
+      Future<void>.delayed(SplashScreen.displayDuration),
+      resolution,
     ]);
 
     if (!mounted) return;
@@ -62,32 +68,11 @@ class _SplashScreenState extends State<SplashScreen> {
     _show.value = false;
   }
 
-  /// Firestore lookup for the logged-in user. Writes cache on success so the
-  /// next cold start can skip this screen entirely.
-  Future<Widget> _resolveAuth() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return const Login();
-
-    final userDoc = await FirebaseEmployeesRepository(
-      FirebaseFirestore.instance,
-    ).findUserByUid(user.uid);
-    if (userDoc == null) {
-      await FirebaseAuth.instance.signOut();
-      return const Login();
-    }
-
-    final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
-    unawaited(UserCacheService().save(employee));
-    return MainCalendar(isAdmin: employee.isAdmin, employeeId: employee.id);
-  }
-
   @override
   Widget build(BuildContext context) {
-    // PageTransitionSwitcher gives a Material fade-through (z-axis) when we
-    // swap the splash content out for the destination screen.
+    final scheme = Theme.of(context).colorScheme;
     return PageTransitionSwitcher(
       duration: const Duration(milliseconds: 400),
-      reverse: false,
       transitionBuilder: (child, primary, secondary) => FadeThroughTransition(
         animation: primary,
         secondaryAnimation: secondary,
@@ -97,15 +82,15 @@ class _SplashScreenState extends State<SplashScreen> {
           ? _destination!
           : Scaffold(
               key: const ValueKey('splash'),
-              body: Container(
-                decoration: const BoxDecoration(
+              body: DecoratedBox(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Color(0xFF155E8E), // primaryDark
-                      Color(0xFF1E82C8), // primary
-                      Color(0xFF3B82F6), // blue-500
+                      scheme.primary,
+                      scheme.primary.withValues(alpha: 0.85),
+                      scheme.primary.withValues(alpha: 0.7),
                     ],
                   ),
                 ),
@@ -121,7 +106,7 @@ class _SplashScreenState extends State<SplashScreen> {
                               children: [
                                 _Stagger(
                                   show: show,
-                                  delay: const Duration(milliseconds: 0),
+                                  delay: Duration.zero,
                                   child: Image.asset(
                                     'assets/images/logo1.png',
                                     height: 120,
@@ -136,7 +121,7 @@ class _SplashScreenState extends State<SplashScreen> {
                                     style: GoogleFonts.inter(
                                       fontSize: 26,
                                       fontWeight: FontWeight.w800,
-                                      color: Colors.white,
+                                      color: scheme.onPrimary,
                                       letterSpacing: -0.5,
                                     ),
                                     textAlign: TextAlign.center,
@@ -150,7 +135,9 @@ class _SplashScreenState extends State<SplashScreen> {
                                     context.l10n.hopeYouAreEnjoyingYourDay,
                                     style: TextStyle(
                                       fontSize: 13,
-                                      color: Colors.white.withValues(alpha: 0.7),
+                                      color: scheme.onPrimary.withValues(
+                                        alpha: 0.7,
+                                      ),
                                     ),
                                     textAlign: TextAlign.center,
                                   ),
@@ -171,10 +158,11 @@ class _SplashScreenState extends State<SplashScreen> {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(4),
                               child: LinearProgressIndicator(
-                                backgroundColor:
-                                    Colors.white.withValues(alpha: 0.2),
-                                valueColor: const AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
+                                backgroundColor: scheme.onPrimary.withValues(
+                                  alpha: 0.2,
+                                ),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  scheme.onPrimary,
                                 ),
                                 minHeight: 3,
                               ),
@@ -191,8 +179,8 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-// Wraps a child in FadeScaleTransition (Material "appears in place" motion)
-// driven by an AnimationController, with a per-item start delay for stagger.
+/// Wraps a child in `FadeScaleTransition` (Material "appears in place" motion)
+/// driven by an `AnimationController`, with a per-item start delay for stagger.
 class _Stagger extends StatefulWidget {
   const _Stagger({
     required this.show,
@@ -230,7 +218,7 @@ class _StaggerState extends State<_Stagger>
 
   Future<void> _drive() async {
     if (widget.show) {
-      await Future.delayed(widget.delay);
+      await Future<void>.delayed(widget.delay);
       if (mounted) _c.forward();
     } else {
       if (mounted) _c.reverse();

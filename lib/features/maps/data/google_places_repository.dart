@@ -1,21 +1,31 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 
-import 'package:scheduling/shared/models/address_suggestion.dart';
-import 'package:scheduling/shared/models/parsed_address.dart';
+import 'package:scheduling/features/maps/domain/models/address_suggestion.dart';
+import 'package:scheduling/features/maps/domain/models/parsed_address.dart';
+import 'package:scheduling/features/maps/domain/places_repository.dart';
 
-class GooglePlacesService {
-  final String _apiKey = dotenv.env['GOOGLE_MAP_API_KEY'] ?? '';
+class GooglePlacesRepository implements PlacesRepository {
+  GooglePlacesRepository({http.Client? client, String? apiKey})
+    : _client = client ?? http.Client(),
+      _apiKey = apiKey ?? (dotenv.env['GOOGLE_MAP_API_KEY'] ?? '');
 
+  final http.Client _client;
+  final String _apiKey;
 
+  static final _autocompleteUri = Uri.parse(
+    'https://places.googleapis.com/v1/places:autocomplete',
+  );
+
+  @override
   Future<List<AddressSuggestion>> autocomplete(String input) async {
-    if (input.trim().isEmpty) return [];
-
+    if (input.trim().isEmpty) return const [];
     if (_apiKey.isEmpty) throw Exception('Google Maps API key is missing');
 
-    final response = await http.post(
-      Uri.parse('https://places.googleapis.com/v1/places:autocomplete'),
+    final response = await _client.post(
+      _autocompleteUri,
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': _apiKey,
@@ -25,10 +35,13 @@ class GooglePlacesService {
         'includedRegionCodes': ['ca'],
         'locationBias': {
           'circle': {
-            'center': {'latitude': 45.5017, 'longitude': -73.5673}, // Montreal
+            'center': {
+              'latitude': 45.5017,
+              'longitude': -73.5673,
+            }, // Montreal
             'radius': 50000.0,
-          }
-        }
+          },
+        },
       }),
     );
 
@@ -38,23 +51,19 @@ class GooglePlacesService {
 
     try {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final suggestions = (data['suggestions'] as List? ?? [])
+      return (data['suggestions'] as List? ?? [])
           .map((e) => AddressSuggestion.fromJson(e as Map<String, dynamic>))
           .toList();
-
-      return suggestions;
-    }
-    catch (e) {
+    } catch (_) {
       throw Exception('Autocomplete failed: ${response.body}');
     }
   }
 
-
-
+  @override
   Future<ParsedAddress> getPlaceDetails(String placeId) async {
     if (_apiKey.isEmpty) throw Exception('Google Maps API key is missing');
 
-    final response = await http.get(
+    final response = await _client.get(
       Uri.parse('https://places.googleapis.com/v1/places/$placeId'),
       headers: {
         'X-Goog-Api-Key': _apiKey,
@@ -67,15 +76,15 @@ class GooglePlacesService {
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final components =
-    (data['addressComponents'] as List? ?? []).cast<Map<String, dynamic>>();
+    final components = (data['addressComponents'] as List? ?? [])
+        .cast<Map<String, dynamic>>();
 
-    String unit = '';
-    String streetNumber = '';
-    String route = '';
-    String city = '';
-    String province = '';
-    String postalCode = '';
+    var unit = '';
+    var streetNumber = '';
+    var route = '';
+    var city = '';
+    var province = '';
+    var postalCode = '';
 
     for (final c in components) {
       final types = (c['types'] as List? ?? []).cast<String>();
@@ -90,10 +99,10 @@ class GooglePlacesService {
       if (types.contains('postal_code')) postalCode = longText;
     }
 
-    final baseStreet = [streetNumber, route]
-        .where((e) => e.isNotEmpty)
-        .join(' ')
-        .trim();
+    final baseStreet = [
+      streetNumber,
+      route,
+    ].where((e) => e.isNotEmpty).join(' ').trim();
 
     final street = unit.isNotEmpty && baseStreet.isNotEmpty
         ? '$unit-$baseStreet'

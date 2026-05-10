@@ -1,0 +1,26 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'address_suggestion.freezed.dart';
+
+/// One Google Places autocomplete suggestion. The `placeId` is what we
+/// pass back to `getPlaceDetails` to fetch the full address breakdown.
+@freezed
+abstract class AddressSuggestion with _$AddressSuggestion {
+  const AddressSuggestion._();
+
+  const factory AddressSuggestion({
+    @Default('') String placeId,
+    @Default('') String description,
+  }) = _AddressSuggestion;
+
+  factory AddressSuggestion.fromJson(Map<String, dynamic> json) {
+    final placePrediction =
+        json['placePrediction'] as Map<String, dynamic>? ?? {};
+    final text = placePrediction['text'] as Map<String, dynamic>?;
+
+    return AddressSuggestion(
+      placeId: (placePrediction['placeId'] as String?) ?? '',
+      description: (text?['text'] as String?) ?? '',
+    );
+  }
+}
