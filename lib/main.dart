@@ -1,16 +1,17 @@
 import 'dart:async';
-
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'dart:ui';
 
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart' show kDebugMode, kReleaseMode;
+import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:scheduling/l10n/app_localizations.dart';
-
+import 'package:scheduling/core/notices/notice_listener.dart';
 import 'package:scheduling/core/services/settings_service.dart';
 import 'package:scheduling/core/services/user_cache_service.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
@@ -21,28 +22,55 @@ import 'package:scheduling/features/employees/models/employee_record.dart';
 import 'package:scheduling/features/employees/services/user_service.dart';
 import 'package:scheduling/features/splash/screens/splash_screen.dart';
 import 'package:scheduling/firebase_options.dart';
+import 'package:scheduling/l10n/app_localizations.dart';
 import 'package:scheduling/routes/app_routes.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+Future<void> main() async {
+  await runZonedGuarded<Future<void>>(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
 
-  await initializeDateFormatting('en_CA');
-  await initializeDateFormatting('fr_CA');
+      await initializeDateFormatting('en_CA');
+      await initializeDateFormatting('fr_CA');
 
-  await dotenv.load(fileName: "dev/.env");
+      await dotenv.load(fileName: 'dev/.env');
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.android);
+      // TODO(restructure): swap to DefaultFirebaseOptions.currentPlatform once
+      // `flutterfire configure` has been run on a Mac to add iOS values.
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.android);
 
-  await FirebaseAppCheck.instance.activate(
-    providerAndroid: kDebugMode
-        ? const AndroidDebugProvider()
-        : const AndroidPlayIntegrityProvider(),
+      await FirebaseCrashlytics.instance
+          .setCrashlyticsCollectionEnabled(kReleaseMode);
+      FlutterError.onError =
+          FirebaseCrashlytics.instance.recordFlutterFatalError;
+      PlatformDispatcher.instance.onError = (error, stack) {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+        return true;
+      };
+
+      await FirebaseAppCheck.instance.activate(
+        providerAndroid: kDebugMode
+            ? const AndroidDebugProvider()
+            : const AndroidPlayIntegrityProvider(),
+        providerApple: kDebugMode
+            ? const AppleDebugProvider()
+            : const AppleDeviceCheckProvider(),
+      );
+
+      final settings = await SettingsService().load();
+      final home = await _resolveHome();
+
+      runApp(
+        ProviderScope(
+          child: PaulApp(settings: settings, home: home),
+        ),
+      );
+    },
+    (error, stack) {
+      FirebaseCrashlytics.instance
+          .recordError(error, stack, fatal: true);
+    },
   );
-
-  final settings = await SettingsService().load();
-  final home = await _resolveHome();
-
-  runApp(PaulApp(settings: settings, home: home));
 }
 
 /// Determines the first screen to show.
@@ -62,7 +90,6 @@ Future<Widget> _resolveHome() async {
   final cached = await UserCacheService().loadIfMatch(user.uid);
   if (cached == null) return const SplashScreen();
 
-  // Cache hit: skip the splash delay but still verify role from Firestore.
   final userDoc = await UserService().findUserByUid(user.uid);
   if (userDoc == null) {
     await FirebaseAuth.instance.signOut();
@@ -76,10 +103,10 @@ Future<Widget> _resolveHome() async {
 }
 
 class PaulApp extends StatefulWidget {
+  const PaulApp({required this.settings, required this.home, super.key});
+
   final AppSettings settings;
   final Widget home;
-
-  const PaulApp({super.key, required this.settings, required this.home});
 
   @override
   State<PaulApp> createState() => _PaulAppState();
@@ -109,9 +136,8 @@ class _PaulAppState extends State<PaulApp> {
 
   void toggleTheme() {
     setState(() {
-      _themeMode = _themeMode == ThemeMode.dark
-          ? ThemeMode.light
-          : ThemeMode.dark;
+      _themeMode =
+          _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
     });
     _settingsService.save(themeMode: _themeMode);
   }
@@ -162,7 +188,9 @@ class _PaulAppState extends State<PaulApp> {
                   data: MediaQuery.of(context).copyWith(
                     textScaler: TextScaler.linear(_textScale),
                   ),
-                  child: child ?? const SizedBox.shrink(),
+                  child: NoticeListener(
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 );
               },
             );

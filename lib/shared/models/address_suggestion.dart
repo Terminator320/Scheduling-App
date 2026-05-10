@@ -11,9 +11,11 @@ class AddressSuggestion {
     final placePrediction =
         json['placePrediction'] as Map<String, dynamic>? ?? {};
 
+    final text = placePrediction['text'] as Map<String, dynamic>?;
+
     return AddressSuggestion(
-      placeId: placePrediction['placeId'] ?? '',
-      description: placePrediction['text']?['text'] ?? '',
+      placeId: (placePrediction['placeId'] as String?) ?? '',
+      description: (text?['text'] as String?) ?? '',
     );
   }
 }

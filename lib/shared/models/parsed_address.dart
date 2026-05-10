@@ -25,11 +25,11 @@ class ParsedAddress {
 
   factory ParsedAddress.fromMap(Map<String, dynamic> map) {
     return ParsedAddress(
-      fullAddress: map['fullAddress'] ?? '',
-      street: map['street'] ?? '',
-      city: map['city'] ?? '',
-      province: map['province'] ?? '',
-      postalCode: map['postalCode'] ?? '',
+      fullAddress: (map['fullAddress'] as String?) ?? '',
+      street: (map['street'] as String?) ?? '',
+      city: (map['city'] as String?) ?? '',
+      province: (map['province'] as String?) ?? '',
+      postalCode: (map['postalCode'] as String?) ?? '',
     );
   }
 }
