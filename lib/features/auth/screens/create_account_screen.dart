@@ -5,10 +5,11 @@ import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/animations/fade_slide_entrance.dart';
 import 'package:scheduling/core/animations/staggered_entrance_controller.dart';
-import 'package:scheduling/core/errors/auth_error_handler.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
+import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
+import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
@@ -131,11 +132,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
       _entrance.controller.forward(from: 0);
     } catch (error) {
       if (!mounted) return;
+      final failure = AuthErrorMapper.map(error);
       setState(() {
-        _bannerError = AuthErrorHandler.getMessage(
+        _bannerError = failure.toLocalizedMessageInContext(
           context,
-          error,
-          authContext: AuthErrorContext.register,
+          AuthErrorContext.register,
         );
         _isLoading = false;
       });
