@@ -1,44 +1,15 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class AppSettings {
-  final ThemeMode themeMode;
-  final double textScale;
-  final String language;
+import 'package:scheduling/features/settings/domain/models/app_settings.dart';
+import 'package:scheduling/features/settings/domain/settings_repository.dart';
 
-  const AppSettings({
-    required this.themeMode,
-    required this.textScale,
-    required this.language,
-  });
-}
-
-class SettingsSaveDebouncer {
-  SettingsSaveDebouncer({this.delay = const Duration(milliseconds: 250)});
-
-  final Duration delay;
-  Timer? _timer;
-
-  void run(Future<void> Function() save) {
-    // Save only after settings changes settle, such as a slider drag ending.
-    _timer?.cancel();
-    _timer = Timer(delay, () {
-      save();
-    });
-  }
-
-  void dispose() {
-    _timer?.cancel();
-  }
-}
-
-class SettingsService {
+class SharedPrefsSettingsRepository implements SettingsRepository {
   static const _keyThemeMode = 'theme_mode';
   static const _keyTextScale = 'text_scale';
   static const _keyLanguage = 'language';
 
+  @override
   Future<AppSettings> load() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -54,6 +25,7 @@ class SettingsService {
     );
   }
 
+  @override
   Future<void> save({
     ThemeMode? themeMode,
     double? textScale,
