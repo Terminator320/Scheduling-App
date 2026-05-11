@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/providers/firebase_providers.dart';
-import 'package:scheduling/core/services/user_cache_service.dart';
+import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
@@ -41,7 +41,7 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((ref) async 
   }
 
   final employee = EmployeeRecord.fromMap(match.id, match.data);
-  unawaited(UserCacheService().save(employee));
+  unawaited(AuthCache().save(employee));
   return SplashGoToCalendar(
     isAdmin: employee.isAdmin,
     employeeId: employee.id,

@@ -4,8 +4,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:scheduling/core/services/image_picker_service.dart';
-import 'package:scheduling/core/services/image_storage_service.dart';
+import 'package:scheduling/core/images/image_picker_service.dart';
+import 'package:scheduling/core/images/image_storage_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
@@ -325,7 +325,9 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(ctx).colorScheme.error,
+            ),
             child: Text(context.l10n.delete),
           ),
         ],
@@ -529,13 +531,18 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
           FilledButton.icon(
             style: FilledButton.styleFrom(
               minimumSize: const Size(double.infinity, 48),
-              backgroundColor: AppColors.success,
+              backgroundColor: scheme.tertiary,
+              foregroundColor: scheme.onTertiary,
             ),
             onPressed: _isSaving ? null : _markAsDone,
             icon: _isSaving
-                ? const SizedBox(
-                    height: 18, width: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                ? SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: scheme.onTertiary,
+                    ),
                   )
                 : const Icon(Icons.check, size: 18),
             label: Text(ctx.l10n.markAsDone),
@@ -546,8 +553,8 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 44),
-              foregroundColor: AppColors.success,
-              side: const BorderSide(color: AppColors.success),
+              foregroundColor: scheme.tertiary,
+              side: BorderSide(color: scheme.tertiary),
             ),
             onPressed: null,
             icon: const Icon(Icons.check_circle_outline, size: 18),
@@ -560,8 +567,8 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 44),
-              foregroundColor: AppColors.error,
-              side: const BorderSide(color: AppColors.error),
+              foregroundColor: scheme.error,
+              side: BorderSide(color: scheme.error),
             ),
             onPressed: _isSaving ? null : _cancelAppointment,
             icon: const Icon(Icons.close, size: 15),
@@ -946,8 +953,8 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
       OutlinedButton(
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(double.infinity, 44),
-          foregroundColor: AppColors.error,
-          side: const BorderSide(color: AppColors.error),
+          foregroundColor: scheme.error,
+          side: BorderSide(color: scheme.error),
         ),
         onPressed: _isSaving ? null : _deleteAppointment,
         child: Text(ctx.l10n.deleteAppointment),
@@ -978,7 +985,7 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
             decoration: BoxDecoration(
               color: isSelected ? scheme.primaryContainer : Colors.transparent,
               border: Border.all(
-                color: isSelected ? AppColors.primary : scheme.outlineVariant,
+                color: isSelected ? scheme.primary : scheme.outlineVariant,
                 width: 1.5,
               ),
               borderRadius: BorderRadius.circular(AppRadius.rFull),
@@ -988,7 +995,7 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
-                color: isSelected ? AppColors.primary : scheme.onSurfaceVariant,
+                color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -1084,14 +1091,18 @@ class _AddressRow extends StatelessWidget {
                       address,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         height: 1.5,
-                        color: AppColors.primary,
+                        color: scheme.primary,
                       ),
                     ),
                   ),
                   const SizedBox(width: 6),
-                  const Padding(
-                    padding: EdgeInsets.only(top: 2),
-                    child: Icon(Icons.open_in_new, size: 14, color: AppColors.primary),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.open_in_new,
+                      size: 14,
+                      color: scheme.primary,
+                    ),
                   ),
                 ],
               ),

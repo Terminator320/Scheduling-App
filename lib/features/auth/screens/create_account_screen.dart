@@ -154,6 +154,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return WillPopScope(
       onWillPop: () async {
         _backToSignIn();
@@ -162,7 +163,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
       child: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         child: Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: scheme.surface,
           body: SafeArea(
             child: SingleChildScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -196,7 +197,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
   }
 
   Widget _buildForm({required Key key}) {
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final scheme = theme.colorScheme;
     final animations = _entrance.animations;
 
     return Column(
@@ -209,12 +212,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: AppColors.primary,
+              color: scheme.primary,
               borderRadius: BorderRadius.circular(AppRadius.r12),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.calendar_today_rounded,
-              color: Colors.white,
+              color: scheme.onPrimary,
               size: 22,
             ),
           ),
@@ -289,7 +292,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                         ? Icons.visibility_off_outlined
                         : Icons.visibility_outlined,
                     size: 20,
-                    color: AppColors.muted,
+                    color: scheme.onSurfaceVariant,
                   ),
                   tooltip: _isObscured
                       ? context.l10n.showPassword
@@ -326,7 +329,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                         ? Icons.visibility_off_outlined
                         : Icons.visibility_outlined,
                     size: 20,
-                    color: AppColors.muted,
+                    color: scheme.onSurfaceVariant,
                   ),
                   tooltip: _isConfirmObscured
                       ? context.l10n.showPassword
@@ -355,14 +358,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                   child: Container(
                     padding: const EdgeInsets.all(AppSpacing.sp12),
                     decoration: BoxDecoration(
-                      color: AppColors.errorTint,
+                      color: scheme.errorContainer,
                       borderRadius: BorderRadius.circular(AppRadius.r8),
                     ),
                     child: Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.error_outline,
-                          color: AppColors.error,
+                          color: scheme.error,
                           size: 16,
                         ),
                         const SizedBox(width: AppSpacing.sp8),
@@ -370,7 +373,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                           child: Text(
                             _bannerError!,
                             style: textTheme.bodySmall?.copyWith(
-                              color: AppColors.errorText,
+                              color: scheme.onErrorContainer,
                             ),
                           ),
                         ),
@@ -398,7 +401,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               child: Text(
                 context.l10n.backToSignIn,
                 style: textTheme.bodySmall?.copyWith(
-                  color: AppColors.primary,
+                  color: scheme.primary,
                 ),
               ),
             ),
@@ -409,7 +412,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
   }
 
   Widget _buildSuccess({required Key key}) {
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final scheme = theme.colorScheme;
     final animations = _entrance.animations;
 
     return Column(
@@ -424,13 +429,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: AppColors.successTint,
+                color: scheme.tertiaryContainer,
                 borderRadius: BorderRadius.circular(AppRadius.r12),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.check_circle_outline_rounded,
                 size: 22,
-                color: AppColors.success,
+                color: scheme.tertiary,
               ),
             ),
           ),

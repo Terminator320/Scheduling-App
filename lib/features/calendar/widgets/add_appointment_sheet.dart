@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:scheduling/core/services/image_picker_service.dart';
+import 'package:scheduling/core/images/image_picker_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
@@ -259,12 +259,12 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: tIsDark ? AppColors.darkWarningTint : AppColors.warningTint,
+                    color: tScheme.tertiaryContainer,
                     borderRadius: BorderRadius.circular(AppRadius.r12),
                   ),
                   child: Icon(
                     Icons.warning_amber_rounded,
-                    color: tIsDark ? AppColors.darkWarningText : AppColors.warningText,
+                    color: tScheme.onTertiaryContainer,
                     size: 22,
                   ),
                 ),
@@ -357,7 +357,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
                       child: Icon(
                         Icons.info_outline_rounded,
                         size: 14,
-                        color: tIsDark ? AppColors.darkWarningText : AppColors.warningText,
+                        color: tScheme.onTertiaryContainer,
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sp8),
@@ -365,7 +365,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
                       child: Text(
                         ctx.l10n.doubleBookingWarning,
                         style: t.textTheme.bodySmall?.copyWith(
-                          color: tIsDark ? AppColors.darkWarningText : AppColors.warningText,
+                          color: tScheme.onTertiaryContainer,
                         ),
                       ),
                     ),
@@ -390,8 +390,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
                       child: FilledButton(
                         style: FilledButton.styleFrom(
                           minimumSize: const Size(double.infinity, 44),
-                          backgroundColor: AppColors.warning,
-                          foregroundColor: AppColors.warningText,
+                          backgroundColor: tScheme.tertiary,
+                          foregroundColor: tScheme.onTertiary,
                         ),
                         onPressed: () => Navigator.pop(dialogCtx, true),
                         child: Text(ctx.l10n.scheduleAnyway),
@@ -516,10 +516,14 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
             width: 30,
             height: 30,
             decoration: BoxDecoration(
-              color: AppColors.primary,
+              color: scheme.primary,
               borderRadius: BorderRadius.circular(AppRadius.r8),
             ),
-            child: const Icon(Icons.location_on_outlined, color: Colors.white, size: 16),
+            child: Icon(
+              Icons.location_on_outlined,
+              color: scheme.onPrimary,
+              size: 16,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -554,7 +558,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
             child: Text(
               context.l10n.changeAddress,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: AppColors.primary,
+                color: scheme.primary,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -566,19 +570,16 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
 
   Widget _buildAddressField(BuildContext context) {
     final showPill = _selectedClient != null && !_useCustomAddress;
+    final scheme = Theme.of(context).colorScheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-
         if (showPill)
           _buildAddressPill(context)
         else ...[
           SheetFocusScroll(
-            child: AddressAutocompleteField(
-              controller: _addressController,
-
-            ),
+            child: AddressAutocompleteField(controller: _addressController),
           ),
           if (_selectedClient != null && _useCustomAddress) ...[
             const SizedBox(height: 6),
@@ -590,7 +591,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
               child: Text(
                 context.l10n.useClientsAddress,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppColors.primary,
+                  color: scheme.primary,
                   fontWeight: FontWeight.w500,
                 ),
               ),
