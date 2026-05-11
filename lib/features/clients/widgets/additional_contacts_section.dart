@@ -1,0 +1,206 @@
+import 'package:flutter/material.dart';
+
+import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/shared/widgets/labeled_text_field.dart';
+import 'package:scheduling/shared/widgets/sheet_widgets.dart';
+
+/// Bag of `TextEditingController`s for one editable additional contact in
+/// the new-client form. Lives outside the section widget so the parent
+/// state can own its lifecycle (dispose with the form).
+class ContactFields {
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController phoneController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
+
+  bool get isEmpty =>
+      nameController.text.trim().isEmpty &&
+      phoneController.text.trim().isEmpty &&
+      emailController.text.trim().isEmpty;
+
+  ClientContact toContact() => ClientContact(
+    name: nameController.text.trim(),
+    phone: phoneController.text.trim(),
+    email: emailController.text.trim(),
+  );
+
+  void dispose() {
+    nameController.dispose();
+    phoneController.dispose();
+    emailController.dispose();
+  }
+}
+
+/// Card wrapping zero or more `AdditionalContactCard`s with a header and an
+/// "Add another contact" affordance. Used in the new-client form when the
+/// business name field is non-empty.
+class AdditionalContactsSection extends StatelessWidget {
+  const AdditionalContactsSection({
+    required this.contacts,
+    required this.errors,
+    required this.onAddContact,
+    required this.onRemoveContact,
+    required this.onClearError,
+    super.key,
+  });
+
+  final List<ContactFields> contacts;
+  final Map<String, String?> errors;
+  final VoidCallback onAddContact;
+  final ValueChanged<int> onRemoveContact;
+  final ValueChanged<String> onClearError;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  context.l10n.additionalBusinessContacts,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onAddContact,
+                icon: const Icon(Icons.add),
+                label: Text(context.l10n.add),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            context
+                .l10n
+                .theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          if (contacts.isEmpty) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: onAddContact,
+              icon: const Icon(Icons.person_add_alt_1),
+              label: Text(context.l10n.addAnotherContact),
+            ),
+          ],
+          for (var i = 0; i < contacts.length; i++) ...[
+            const SizedBox(height: 16),
+            _AdditionalContactCard(
+              index: i,
+              contact: contacts[i],
+              errors: errors,
+              onRemove: () => onRemoveContact(i),
+              onClearError: onClearError,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AdditionalContactCard extends StatelessWidget {
+  const _AdditionalContactCard({
+    required this.index,
+    required this.contact,
+    required this.errors,
+    required this.onRemove,
+    required this.onClearError,
+  });
+
+  final int index;
+  final ContactFields contact;
+  final Map<String, String?> errors;
+  final VoidCallback onRemove;
+  final ValueChanged<String> onClearError;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${context.l10n.contact} ${index + 2}',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: context.l10n.removeContact,
+                onPressed: onRemove,
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SheetFocusScroll(
+            child: LabeledTextField(
+              label: context.l10n.contactName,
+              controller: contact.nameController,
+              required: true,
+              autofillHints: const [AutofillHints.name],
+              errorText: errors['contact_${index}_name'],
+              onChanged: (_) => onClearError('contact_${index}_name'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SheetFocusScroll(
+            child: LabeledTextField(
+              label: context.l10n.phone,
+              controller: contact.phoneController,
+              keyboard: TextInputType.phone,
+              autofillHints: const [AutofillHints.telephoneNumber],
+              errorText: errors['contact_${index}_phone'],
+              onChanged: (_) => onClearError('contact_${index}_phone'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SheetFocusScroll(
+            child: LabeledTextField(
+              label: context.l10n.email,
+              controller: contact.emailController,
+              keyboard: TextInputType.emailAddress,
+              autofillHints: const [AutofillHints.email],
+              errorText: errors['contact_${index}_email'],
+              onChanged: (_) {
+                onClearError('contact_${index}_email');
+                onClearError('contact_${index}_phone');
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

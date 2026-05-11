@@ -5,36 +5,11 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/widgets/additional_contacts_section.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
-
-
-class _ContactFields {
-  final TextEditingController nameController = TextEditingController();
-  final TextEditingController phoneController = TextEditingController();
-  final TextEditingController emailController = TextEditingController();
-
-  bool get isEmpty =>
-      nameController.text.trim().isEmpty &&
-      phoneController.text.trim().isEmpty &&
-      emailController.text.trim().isEmpty;
-
-  ClientContact toContact() {
-    return ClientContact(
-      name: nameController.text.trim(),
-      phone: phoneController.text.trim(),
-      email: emailController.text.trim(),
-    );
-  }
-
-  void dispose() {
-    nameController.dispose();
-    phoneController.dispose();
-    emailController.dispose();
-  }
-}
 
 class AddClientSheet extends ConsumerStatefulWidget {
   const AddClientSheet({super.key});
@@ -54,7 +29,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
   final _countryController = TextEditingController();
   final _postalCodeController = TextEditingController();
   final _aptController = TextEditingController();
-  final List<_ContactFields> _additionalContacts = [];
+  final List<ContactFields> _additionalContacts = [];
 
   final Map<String, String?> _errors = {};
   bool _isSaving = false;
@@ -93,7 +68,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
 
   void _addAdditionalContact() {
     setState(() {
-      _additionalContacts.add(_ContactFields());
+      _additionalContacts.add(ContactFields());
     });
   }
 
@@ -350,7 +325,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
               ),
               if (_isBusiness) ...[
                 const SizedBox(height: 8),
-                _AdditionalContactsSection(
+                AdditionalContactsSection(
                   contacts: _additionalContacts,
                   errors: _errors,
                   onAddContact: _addAdditionalContact,
@@ -463,177 +438,6 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
           ],
         );
       },
-    );
-  }
-}
-
-
-class _AdditionalContactsSection extends StatelessWidget {
-
-  const _AdditionalContactsSection({
-    required this.contacts,
-    required this.errors,
-    required this.onAddContact,
-    required this.onRemoveContact,
-    required this.onClearError,
-  });
-  final List<_ContactFields> contacts;
-  final Map<String, String?> errors;
-  final VoidCallback onAddContact;
-  final ValueChanged<int> onRemoveContact;
-  final ValueChanged<String> onClearError;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  context.l10n.additionalBusinessContacts,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: onAddContact,
-                icon: const Icon(Icons.add),
-                label: Text(context.l10n.add),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            context
-                .l10n
-                .theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-          if (contacts.isEmpty) ...[
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: onAddContact,
-              icon: const Icon(Icons.person_add_alt_1),
-              label: Text(context.l10n.addAnotherContact),
-            ),
-          ],
-          for (var i = 0; i < contacts.length; i++) ...[
-            const SizedBox(height: 16),
-            _AdditionalContactCard(
-              index: i,
-              contact: contacts[i],
-              errors: errors,
-              onRemove: () => onRemoveContact(i),
-              onClearError: onClearError,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _AdditionalContactCard extends StatelessWidget {
-
-  const _AdditionalContactCard({
-    required this.index,
-    required this.contact,
-    required this.errors,
-    required this.onRemove,
-    required this.onClearError,
-  });
-  final int index;
-  final _ContactFields contact;
-  final Map<String, String?> errors;
-  final VoidCallback onRemove;
-  final ValueChanged<String> onClearError;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${context.l10n.contact} ${index + 2}',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: context.l10n.removeContact,
-                onPressed: onRemove,
-                icon: const Icon(Icons.close),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SheetFocusScroll(
-            child: LabeledTextField(
-              label: context.l10n.contactName,
-              controller: contact.nameController,
-              required: true,
-              autofillHints: const [AutofillHints.name],
-              errorText: errors['contact_${index}_name'],
-              onChanged: (_) => onClearError('contact_${index}_name'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SheetFocusScroll(
-            child: LabeledTextField(
-              label: context.l10n.phone,
-              controller: contact.phoneController,
-              keyboard: TextInputType.phone,
-              autofillHints: const [AutofillHints.telephoneNumber],
-              errorText: errors['contact_${index}_phone'],
-              onChanged: (_) => onClearError('contact_${index}_phone'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SheetFocusScroll(
-            child: LabeledTextField(
-              label: context.l10n.email,
-              controller: contact.emailController,
-              keyboard: TextInputType.emailAddress,
-              autofillHints: const [AutofillHints.email],
-              errorText: errors['contact_${index}_email'],
-              onChanged: (_) {
-                onClearError('contact_${index}_email');
-                onClearError('contact_${index}_phone');
-              },
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
