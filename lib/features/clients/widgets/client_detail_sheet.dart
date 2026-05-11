@@ -9,15 +9,9 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/app_avatar.dart';
+import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
-
-class _ParsedAptAddress {
-
-  const _ParsedAptAddress({required this.apt, required this.street});
-  final String apt;
-  final String street;
-}
 
 class ClientDetailSheet extends ConsumerStatefulWidget {
 
@@ -46,97 +40,13 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
 
   static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
-  _ParsedAptAddress? _splitAptFromAddress(String rawAddress) {
-    final value = rawAddress.trim();
-    if (value.isEmpty) return null;
-
-    final savedMatch = RegExp(
-      r'^Apt-?\s*([^\-]+)\s*-\s*(.+)$',
-      caseSensitive: false,
-    ).firstMatch(value);
-
-    if (savedMatch != null) {
-      return _ParsedAptAddress(
-        apt: savedMatch.group(1)!.trim(),
-        street: savedMatch.group(2)!.trim(),
-      );
-    }
-
-    final labeledMatch = RegExp(
-      r'^\s*(?:apt|apartment|unit|suite|ste|#)\s*[-#: ]*\s*([A-Za-z0-9][A-Za-z0-9 /]*)\s*[-,]\s*(.+)$',
-      caseSensitive: false,
-    ).firstMatch(value);
-
-    if (labeledMatch != null) {
-      return _ParsedAptAddress(
-        apt: labeledMatch.group(1)!.trim(),
-        street: labeledMatch.group(2)!.trim(),
-      );
-    }
-
-    final dashMatch = RegExp(
-      r'^\s*([A-Za-z0-9][A-Za-z0-9 /]*)\s*-\s*(\d+.+)$',
-    ).firstMatch(value);
-
-    if (dashMatch != null) {
-      return _ParsedAptAddress(
-        apt: dashMatch.group(1)!.trim(),
-        street: dashMatch.group(2)!.trim(),
-      );
-    }
-
-    // Handles addresses where the unit is written after the street,
-    // for example: "1245 Rue de Bleury #3406, Montréal, QC"
-    // or: "1245 Rue de Bleury Apt 3406, Montréal, QC".
-    final trailingUnitMatch = RegExp(
-      r'^\s*(.+?)\s+(?:#|apt\.?|apartment|unit|suite|ste\.?)\s*[-#: ]*\s*([A-Za-z0-9][A-Za-z0-9 /]*)\s*(,.*)?$',
-      caseSensitive: false,
-    ).firstMatch(value);
-
-    if (trailingUnitMatch != null) {
-      final beforeUnit = trailingUnitMatch.group(1)!.trim();
-      final apt = trailingUnitMatch.group(2)!.trim();
-      final afterUnit = trailingUnitMatch.group(3)?.trim() ?? '';
-      return _ParsedAptAddress(
-        apt: apt,
-        street: afterUnit.isEmpty ? beforeUnit : '$beforeUnit$afterUnit',
-      );
-    }
-
-    return null;
-  }
-
-  String _extractAptFromAddress(String address) {
-    return _splitAptFromAddress(address)?.apt ?? '';
-  }
-
-  String _stripAptFromAddress(String address) {
-    return _splitAptFromAddress(address)?.street ?? address;
-  }
-
-  String _addressWithVisualApt(String street, String apt) {
-    final cleanStreet = street.trim();
-    final cleanApt = apt.trim().replaceAll(RegExp('^#+'), '');
-    if (cleanStreet.isEmpty || cleanApt.isEmpty) return cleanStreet;
-
-    final commaIndex = cleanStreet.indexOf(',');
-    if (commaIndex == -1) {
-      return '$cleanApt-$cleanStreet';
-    }
-
-    final firstLine = cleanStreet.substring(0, commaIndex).trim();
-    final rest = cleanStreet.substring(commaIndex);
-    return '$cleanApt-$firstLine$rest';
-  }
-
   String _buildFullAddress() {
-    final parsedAddress = _splitAptFromAddress(_addressController.text);
-    final street = (parsedAddress?.street ?? _addressController.text).trim();
+    final parsed = AddressParser.splitApt(_addressController.text);
+    final street = (parsed?.street ?? _addressController.text).trim();
     final apt = _aptController.text.trim().isNotEmpty
         ? _aptController.text.trim()
-        : (parsedAddress?.apt ?? '').trim();
-
-    return _addressWithVisualApt(street, apt);
+        : (parsed?.apt ?? '').trim();
+    return AddressParser.combineAptAndStreet(street, apt);
   }
 
   @override
@@ -151,11 +61,12 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
     _nameController = TextEditingController(text: c.name);
     _phoneController = TextEditingController(text: c.phone);
     _emailController = TextEditingController(text: c.email);
+    final parsed = AddressParser.splitApt(c.address);
     _addressController = TextEditingController(
-      text: _stripAptFromAddress(c.address),
+      text: parsed?.street ?? c.address,
     );
     _aptController = TextEditingController(
-      text: c.apt.isNotEmpty ? c.apt : _extractAptFromAddress(c.address),
+      text: c.apt.isNotEmpty ? c.apt : (parsed?.apt ?? ''),
     );
     _cityController = TextEditingController(text: c.city);
     _provinceController = TextEditingController(text: c.province);
@@ -183,73 +94,27 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
   }
 
   void _fillAddressPartsFromText(String rawAddress) {
-    final aptAddress = _splitAptFromAddress(rawAddress);
+    final fields = AddressParser.parse(rawAddress);
 
-    if (aptAddress != null) {
-      if (_aptController.text.trim().isEmpty) {
-        _aptController.text = aptAddress.apt;
-      }
-
-      if (_addressController.text.trim() != aptAddress.street) {
-        _addressController.value = TextEditingValue(
-          text: aptAddress.street,
-          selection: TextSelection.collapsed(offset: aptAddress.street.length),
-        );
-      }
+    if (fields.apt != null && _aptController.text.trim().isEmpty) {
+      _aptController.text = fields.apt!;
     }
-
-    final value = (aptAddress?.street ?? rawAddress).trim();
-    if (value.isEmpty) return;
-
-    final parts = value
-        .split(',')
-        .map((part) => part.trim())
-        .where((part) => part.isNotEmpty)
-        .toList();
-
-    final postalMatch = RegExp(
-      r'\b[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z][ -]?\d[ABCEGHJ-NPRSTV-Z]\d\b',
-      caseSensitive: false,
-    ).firstMatch(value);
-
-    if (postalMatch != null) {
-      _postalCodeController.text = postalMatch.group(0)!.toUpperCase();
+    if (fields.street != null &&
+        _addressController.text.trim() != fields.street) {
+      _addressController.value = TextEditingValue(
+        text: fields.street!,
+        selection: TextSelection.collapsed(offset: fields.street!.length),
+      );
     }
-
-    if (parts.isNotEmpty) {
-      final last = parts.last;
-      final postal = postalMatch?.group(0);
-      if (postal != null && last.toLowerCase().contains(postal.toLowerCase())) {
-        if (_countryController.text.trim().isEmpty) {
-          _countryController.text = 'Canada';
-        }
-      } else if (last.length > 2) {
-        _countryController.text = last;
-      }
+    if (fields.postalCode != null) {
+      _postalCodeController.text = fields.postalCode!;
     }
-
-    for (final part in parts) {
-      final provinceMatch = RegExp(
-        r'\b(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)\b',
-        caseSensitive: false,
-      ).firstMatch(part);
-      if (provinceMatch != null) {
-        _provinceController.text = provinceMatch.group(0)!.toUpperCase();
-        break;
-      }
+    if (fields.country != null &&
+        (fields.country != 'Canada' || _countryController.text.trim().isEmpty)) {
+      _countryController.text = fields.country!;
     }
-
-    if (parts.length >= 3) {
-      final possibleCity = parts[parts.length - 3];
-      if (!RegExp(r'\d').hasMatch(possibleCity)) {
-        _cityController.text = possibleCity;
-      }
-    } else if (parts.length >= 2) {
-      final possibleCity = parts[parts.length - 2];
-      if (!RegExp(r'\d').hasMatch(possibleCity)) {
-        _cityController.text = possibleCity;
-      }
-    }
+    if (fields.province != null) _provinceController.text = fields.province!;
+    if (fields.city != null) _cityController.text = fields.city!;
   }
 
   void _handleAddressSelected() {
