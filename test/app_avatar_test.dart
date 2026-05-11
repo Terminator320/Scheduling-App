@@ -19,7 +19,7 @@ void main() {
   testWidgets('AppAvatar uses provided color', (tester) async {
     await tester.pumpWidget(_wrap(const AppAvatar(name: 'Test User', color: Color(0xFF6366F1))));
     final container = tester.widget<Container>(find.byType(Container).first);
-    final decoration = container.decoration as BoxDecoration;
+    final decoration = container.decoration! as BoxDecoration;
     expect(decoration.color, const Color(0xFF6366F1));
   });
 

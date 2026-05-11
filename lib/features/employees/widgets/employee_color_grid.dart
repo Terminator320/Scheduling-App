@@ -1,14 +1,11 @@
 import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:flutter/material.dart';
-
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
-import '../../../core/theme/design_tokens.dart';
 
 class EmployeeColorGrid extends StatelessWidget {
   const EmployeeColorGrid({
-    super.key,
-    required this.selectedColor,
-    required this.onColorSelected,
+    required this.selectedColor, required this.onColorSelected, super.key,
     this.usedColors = const {},
   });
 
@@ -71,13 +68,10 @@ class EmployeeColorGrid extends StatelessWidget {
     final picked = await showColorPickerDialog(
       context,
       Color(selectedColor),
-      width: 40,
-      height: 40,
       spacing: 0,
       runSpacing: 0,
       borderRadius: 4,
       wheelDiameter: 165,
-      enableOpacity: false,
       showColorCode: true,
       colorCodeHasColor: true,
       pickersEnabled: const <ColorPickerType, bool>{

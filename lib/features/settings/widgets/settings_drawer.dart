@@ -1,19 +1,19 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
-import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
+import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_avatar.dart';
 
-class SettingsDrawer extends StatefulWidget {
+class SettingsDrawer extends ConsumerStatefulWidget {
   const SettingsDrawer({
-    super.key,
     required this.isAdmin,
     required this.employeeId,
+    super.key,
     this.userName,
     this.email,
   });
@@ -24,10 +24,10 @@ class SettingsDrawer extends StatefulWidget {
   final String? email;
 
   @override
-  State<SettingsDrawer> createState() => _SettingsDrawerState();
+  ConsumerState<SettingsDrawer> createState() => _SettingsDrawerState();
 }
 
-class _SettingsDrawerState extends State<SettingsDrawer> {
+class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
   String _displayName = '';
   String _displayEmail = '';
 
@@ -56,11 +56,11 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
     final email = widget.email ?? user.email ?? '';
 
     // Name: prefer the passed-in value, then Auth displayName, then Firestore
-    String name = widget.userName ?? user.displayName ?? '';
+    var name = widget.userName ?? user.displayName ?? '';
     if (name.isEmpty) {
-      final doc = await FirebaseEmployeesRepository(
-        FirebaseFirestore.instance,
-      ).findUserByUid(user.uid);
+      final doc = await ref
+          .read(employeesRepositoryProvider)
+          .findUserByUid(user.uid);
       if (!mounted) return;
       name = (doc?.data['name'] ?? '').toString();
     }

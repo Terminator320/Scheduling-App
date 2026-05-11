@@ -41,7 +41,7 @@ class AppRoutes {
         );
 
       case mainCalendar:
-        final args = settings.arguments as MainCalendarArgs;
+        final args = settings.arguments! as MainCalendarArgs;
         return MaterialPageRoute(
           settings: settings,
           builder: (_) => MainCalendar(
@@ -51,14 +51,14 @@ class AppRoutes {
         );
 
       case employees:
-        final args = settings.arguments as MainCalendarArgs;
+        final args = settings.arguments! as MainCalendarArgs;
         return MaterialPageRoute(
           settings: settings,
           builder: (_) => AddEmployeePage(isAdmin: args.isAdmin, employeeId: args.employeeId),
         );
 
       case clients:
-        final args = settings.arguments as ClientsListArgs;
+        final args = settings.arguments! as ClientsListArgs;
         return MaterialPageRoute(
           settings: settings,
           builder: (_) => ListInformation(
@@ -86,30 +86,30 @@ class AppRoutes {
 }
 
 class ForgotPasswordArgs {
-  final String? initialEmail;
   const ForgotPasswordArgs({this.initialEmail});
+  final String? initialEmail;
 }
 
 class MainCalendarArgs {
+  const MainCalendarArgs({required this.isAdmin, required this.employeeId});
   final bool isAdmin;
   final String employeeId;
-  const MainCalendarArgs({required this.isAdmin, required this.employeeId});
 }
 
 class ClientsListArgs {
-  final String mode;
-  final bool isAdmin;
-  final String employeeId;
   const ClientsListArgs({
     required this.mode,
     required this.isAdmin,
     required this.employeeId,
   });
+  final String mode;
+  final bool isAdmin;
+  final String employeeId;
 }
 
 class SettingsArgs {
+  const SettingsArgs({required this.name, required this.email, this.role});
   final String name;
   final String email;
   final String? role;
-  const SettingsArgs({required this.name, required this.email, this.role});
 }

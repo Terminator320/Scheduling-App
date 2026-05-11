@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 
-import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';
 
 class EmployeeDetailsSheet extends StatefulWidget {
-  const EmployeeDetailsSheet({super.key, required this.employee});
+  const EmployeeDetailsSheet({required this.employee, super.key});
   final EmployeeRecord employee;
 
   @override
@@ -79,7 +78,6 @@ class _EmployeeDetailsSheetState extends State<EmployeeDetailsSheet> {
             ),
             const SizedBox(height: 12),
             Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Padding(
                   padding: const EdgeInsets.only(right: 12),

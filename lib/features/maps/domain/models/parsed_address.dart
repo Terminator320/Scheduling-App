@@ -6,7 +6,6 @@ part 'parsed_address.freezed.dart';
 /// Stored on `ClientRecord` as nested fields.
 @freezed
 abstract class ParsedAddress with _$ParsedAddress {
-  const ParsedAddress._();
 
   const factory ParsedAddress({
     @Default('') String fullAddress,
@@ -15,6 +14,7 @@ abstract class ParsedAddress with _$ParsedAddress {
     @Default('') String province,
     @Default('') String postalCode,
   }) = _ParsedAddress;
+  const ParsedAddress._();
 
   factory ParsedAddress.fromMap(Map<String, dynamic> map) => ParsedAddress(
     fullAddress: (map['fullAddress'] as String?) ?? '',

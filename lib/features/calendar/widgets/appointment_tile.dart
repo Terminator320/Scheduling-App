@@ -8,18 +8,16 @@ import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';
 
 class AppointmentTile extends StatelessWidget {
+
+  const AppointmentTile({
+    required this.appointment, required this.employeeColorMap, super.key,
+    this.showActions = true,
+    this.onOpen,
+  });
   final AppointmentRecord appointment;
   final bool showActions;
   final Map<String, Color> employeeColorMap;
   final Future<void> Function()? onOpen;
-
-  const AppointmentTile({
-    super.key,
-    required this.appointment,
-    required this.employeeColorMap,
-    this.showActions = true,
-    this.onOpen,
-  });
 
   @override
   Widget build(BuildContext context) {

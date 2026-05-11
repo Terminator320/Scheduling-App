@@ -10,6 +10,13 @@ import 'package:scheduling/features/calendar/widgets/image_viewer.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
 class PhotoPickerSection extends StatelessWidget {
+
+  const PhotoPickerSection({
+    required this.existingImages, required this.newImages, required this.isEditing, required this.onPickImages, required this.onRemoveExisting, required this.onRemoveNew, super.key,
+    this.failedCount = 0,
+    this.tooLargeFileNames = const [],
+    this.onRetry,
+  });
   final List<AppointmentImage> existingImages;
   final List<File> newImages;
   final bool isEditing;
@@ -19,19 +26,6 @@ class PhotoPickerSection extends StatelessWidget {
   final int failedCount;
   final List<String> tooLargeFileNames;
   final VoidCallback? onRetry;
-
-  const PhotoPickerSection({
-    super.key,
-    required this.existingImages,
-    required this.newImages,
-    required this.isEditing,
-    required this.onPickImages,
-    required this.onRemoveExisting,
-    required this.onRemoveNew,
-    this.failedCount = 0,
-    this.tooLargeFileNames = const [],
-    this.onRetry,
-  });
 
   void _openViewer(BuildContext context, int tappedIndex) {
     final providers = buildImageProviders(
@@ -226,14 +220,14 @@ class _FailedPhotoThumb extends StatelessWidget {
         border: Border.all(color: AppColors.error, width: 1.5),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Column(
+      child: const Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.info_outline_rounded, size: 22, color: AppColors.error),
-          const SizedBox(height: 4),
+          Icon(Icons.info_outline_rounded, size: 22, color: AppColors.error),
+          SizedBox(height: 4),
           Text(
             'Failed',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 9,
               fontWeight: FontWeight.w700,
               color: AppColors.error,

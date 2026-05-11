@@ -5,6 +5,11 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
 class ClientSearchField extends StatelessWidget {
+
+  const ClientSearchField({
+    required this.controller, required this.selectedClient, required this.results, required this.isSearching, required this.onChanged, required this.onSelect, required this.onClear, super.key,
+    this.errorText,
+  });
   final TextEditingController controller;
   final ClientRecord? selectedClient;
   final List<ClientRecord> results;
@@ -13,18 +18,6 @@ class ClientSearchField extends StatelessWidget {
   final ValueChanged<ClientRecord> onSelect;
   final VoidCallback onClear;
   final String? errorText;
-
-  const ClientSearchField({
-    super.key,
-    required this.controller,
-    required this.selectedClient,
-    required this.results,
-    required this.isSearching,
-    required this.onChanged,
-    required this.onSelect,
-    required this.onClear,
-    this.errorText,
-  });
 
   @override
   Widget build(BuildContext context) {

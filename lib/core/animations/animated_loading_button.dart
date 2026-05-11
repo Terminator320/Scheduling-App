@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 
-import 'app_animation_constants.dart';
-import 'tap_scale.dart';
+import 'package:scheduling/core/animations/app_animation_constants.dart';
+import 'package:scheduling/core/animations/tap_scale.dart';
 
 enum AnimatedLoadingButtonVariant { filled, outlined }
 
 class AnimatedLoadingButton extends StatelessWidget {
   const AnimatedLoadingButton({
-    super.key,
-    required this.label,
-    required this.onPressed,
+    required this.label, required this.onPressed, super.key,
     this.isLoading = false,
     this.variant = AnimatedLoadingButtonVariant.filled,
     this.height = 52,

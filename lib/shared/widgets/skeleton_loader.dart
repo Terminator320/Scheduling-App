@@ -1,9 +1,9 @@
 // lib/shared/widgets/skeleton_loader.dart
 import 'package:flutter/material.dart';
-import '../../core/theme/design_tokens.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 
 class SkeletonBox extends StatefulWidget {
-  const SkeletonBox({super.key, required this.width, required this.height, this.borderRadius});
+  const SkeletonBox({required this.width, required this.height, super.key, this.borderRadius});
   final double width;
   final double height;
   final double? borderRadius;
@@ -69,14 +69,14 @@ class SkeletonAppointmentRow extends StatelessWidget {
         border: Border(left: BorderSide(color: Theme.of(context).colorScheme.outlineVariant, width: 3)),
         boxShadow: AppShadow.card,
       ),
-      child: Row(
+      child: const Row(
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SkeletonBox(width: 130, height: 11),
-                const SizedBox(height: 5),
+                SizedBox(height: 5),
                 SkeletonBox(width: 90, height: 9),
               ],
             ),
@@ -104,16 +104,16 @@ class SkeletonListTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.r8),
         boxShadow: AppShadow.card,
       ),
-      child: Row(
+      child: const Row(
         children: [
-          const SkeletonBox(width: 36, height: 36, borderRadius: AppRadius.rFull),
-          const SizedBox(width: AppSpacing.sp12),
+          SkeletonBox(width: 36, height: 36, borderRadius: AppRadius.rFull),
+          SizedBox(width: AppSpacing.sp12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SkeletonBox(width: 110, height: 11),
-                const SizedBox(height: 5),
+                SizedBox(height: 5),
                 SkeletonBox(width: 75, height: 9),
               ],
             ),

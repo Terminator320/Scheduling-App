@@ -18,7 +18,7 @@ void main() {
   });
 
   testWidgets('AppEmptyState shows action button when provided', (tester) async {
-    bool tapped = false;
+    var tapped = false;
     await tester.pumpWidget(_wrap(AppEmptyState(
       icon: Icons.people_outline,
       title: 'No clients',

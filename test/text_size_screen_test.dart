@@ -38,7 +38,7 @@ void main() {
   });
 
   testWidgets('Medium is selected by default when scale is 1.0', (tester) async {
-    await tester.pumpWidget(_wrap(const TextSizeScreen(), textScale: 1.0));
+    await tester.pumpWidget(_wrap(const TextSizeScreen()));
     expect(find.text('Medium'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -55,17 +55,17 @@ void main() {
     await tester.pumpWidget(ThemeNotifier(
       themeMode: ThemeMode.light,
       toggleTheme: () {},
-      textScale: 1.0,
+      textScale: 1,
       setTextScale: (v) => appliedScale = v,
       setLanguage: (_) {},
-      child: MaterialApp(
-        localizationsDelegates: const [
+      child: const MaterialApp(
+        localizationsDelegates: [
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        home: const Scaffold(body: TextSizeScreen()),
+        home: Scaffold(body: TextSizeScreen()),
       ),
     ));
     await tester.tap(find.text('Apply'));
@@ -79,7 +79,7 @@ void main() {
     tester.view.physicalSize = const Size(320 * 3, 640 * 3);
     tester.view.devicePixelRatio = 3;
     await tester.pumpWidget(MediaQuery(
-      data: const MediaQueryData(textScaler: TextScaler.linear(2.0)),
+      data: const MediaQueryData(textScaler: TextScaler.linear(2)),
       child: _wrap(const TextSizeScreen()),
     ));
     expect(tester.takeException(), isNull);

@@ -31,13 +31,10 @@ part 'appointment_record.freezed.dart';
 /// CLAUDE.md invariant enforced both client-side and in `firestore.rules`.
 @freezed
 abstract class AppointmentRecord with _$AppointmentRecord {
-  const AppointmentRecord._();
 
   const factory AppointmentRecord({
-    String? id,
+    required DateTime startTime, required DateTime endTime, String? id,
     @Default('') String title,
-    required DateTime startTime,
-    required DateTime endTime,
     @Default('') String clientId,
     @Default('') String clientName,
     @Default('') String clientPhone,
@@ -51,6 +48,7 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     DateTime? updatedAt,
     @Default(<AppointmentImage>[]) List<AppointmentImage> pictures,
   }) = _AppointmentRecord;
+  const AppointmentRecord._();
 
   factory AppointmentRecord.fromMap(String id, Map<String, dynamic> data) {
     return AppointmentRecord(
@@ -123,7 +121,7 @@ abstract class AppointmentRecord with _$AppointmentRecord {
   static List<AppointmentImage> _parseImageList(dynamic value) {
     if (value is! List) return const [];
     return value
-        .whereType<Map>()
+        .whereType<Map<Object?, Object?>>()
         .map((item) => AppointmentImage.fromMap(Map<String, dynamic>.from(item)))
         .toList();
   }
@@ -135,9 +133,6 @@ abstract class AppointmentRecord with _$AppointmentRecord {
 class AppointmentDateRange {
   const AppointmentDateRange({required this.start, required this.end});
 
-  final DateTime start;
-  final DateTime end;
-
   factory AppointmentDateRange.visibleMonth(DateTime focusedDay) {
     final firstOfMonth = DateTime(focusedDay.year, focusedDay.month);
     final firstOfNextMonth = DateTime(focusedDay.year, focusedDay.month + 1);
@@ -146,6 +141,9 @@ class AppointmentDateRange {
       end: firstOfNextMonth.add(const Duration(days: 7)),
     );
   }
+
+  final DateTime start;
+  final DateTime end;
 
   @override
   bool operator ==(Object other) =>

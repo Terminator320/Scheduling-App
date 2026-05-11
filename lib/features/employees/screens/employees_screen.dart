@@ -100,7 +100,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
   void _clearSearch() {
     FocusManager.instance.primaryFocus?.unfocus();
     if (_searchController.text.isEmpty) return;
-    setState(() => _searchController.clear());
+    setState(_searchController.clear);
   }
 
   PreferredSizeWidget _buildAppBar() {

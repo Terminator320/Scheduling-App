@@ -1,11 +1,10 @@
 // lib/shared/widgets/app_search_bar.dart
 import 'package:flutter/material.dart';
-import '../../core/theme/design_tokens.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 
 class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
   const AppSearchBar({
-    super.key,
-    required this.onChanged,
+    required this.onChanged, super.key,
     this.hintText = 'Search…',
     this.controller,
     this.focusNode,

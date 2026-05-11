@@ -100,13 +100,13 @@ class AddressMapLauncher {
 }
 
 class _MapOption {
-  final String label;
-  final IconData icon;
-  final Uri uri;
 
   const _MapOption({
     required this.label,
     required this.icon,
     required this.uri,
   });
+  final String label;
+  final IconData icon;
+  final Uri uri;
 }

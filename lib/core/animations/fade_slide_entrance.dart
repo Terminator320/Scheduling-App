@@ -4,9 +4,7 @@ import 'package:flutter/material.dart';
 // Pair with StaggeredEntranceController to stagger multiple items.
 class FadeSlideEntrance extends StatelessWidget {
   const FadeSlideEntrance({
-    super.key,
-    required this.animation,
-    required this.child,
+    required this.animation, required this.child, super.key,
     this.beginOffset = const Offset(0, 0.28),
   });
 

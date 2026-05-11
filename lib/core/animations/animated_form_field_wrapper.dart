@@ -4,8 +4,7 @@ import 'package:flutter/material.dart';
 
 class AnimatedFormFieldWrapper extends StatefulWidget {
   const AnimatedFormFieldWrapper({
-    super.key,
-    required this.child,
+    required this.child, super.key,
     this.hasError = false,
   });
 

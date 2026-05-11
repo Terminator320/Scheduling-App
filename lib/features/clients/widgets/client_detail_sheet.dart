@@ -13,16 +13,16 @@ import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
 class _ParsedAptAddress {
-  final String apt;
-  final String street;
 
   const _ParsedAptAddress({required this.apt, required this.street});
+  final String apt;
+  final String street;
 }
 
 class ClientDetailSheet extends ConsumerStatefulWidget {
-  final ClientRecord client;
 
-  const ClientDetailSheet({super.key, required this.client});
+  const ClientDetailSheet({required this.client, super.key});
+  final ClientRecord client;
 
   @override
   ConsumerState<ClientDetailSheet> createState() => _ClientDetailSheetState();
@@ -89,17 +89,17 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
     // for example: "1245 Rue de Bleury #3406, Montréal, QC"
     // or: "1245 Rue de Bleury Apt 3406, Montréal, QC".
     final trailingUnitMatch = RegExp(
-      r"^\s*(.+?)\s+(?:#|apt\.?|apartment|unit|suite|ste\.?)\s*[-#: ]*\s*([A-Za-z0-9][A-Za-z0-9 /]*)\s*(,.*)?$",
+      r'^\s*(.+?)\s+(?:#|apt\.?|apartment|unit|suite|ste\.?)\s*[-#: ]*\s*([A-Za-z0-9][A-Za-z0-9 /]*)\s*(,.*)?$',
       caseSensitive: false,
     ).firstMatch(value);
 
     if (trailingUnitMatch != null) {
       final beforeUnit = trailingUnitMatch.group(1)!.trim();
       final apt = trailingUnitMatch.group(2)!.trim();
-      final afterUnit = trailingUnitMatch.group(3)?.trim() ?? "";
+      final afterUnit = trailingUnitMatch.group(3)?.trim() ?? '';
       return _ParsedAptAddress(
         apt: apt,
-        street: afterUnit.isEmpty ? beforeUnit : "$beforeUnit$afterUnit",
+        street: afterUnit.isEmpty ? beforeUnit : '$beforeUnit$afterUnit',
       );
     }
 
@@ -116,7 +116,7 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
 
   String _addressWithVisualApt(String street, String apt) {
     final cleanStreet = street.trim();
-    final cleanApt = apt.trim().replaceAll(RegExp(r'^#+'), '');
+    final cleanApt = apt.trim().replaceAll(RegExp('^#+'), '');
     if (cleanStreet.isEmpty || cleanApt.isEmpty) return cleanStreet;
 
     final commaIndex = cleanStreet.indexOf(',');
@@ -384,12 +384,10 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
           children: [
             const SheetHandle(),
             const SizedBox(height: 16),
-            _isEditing
-                ? Text(
+            if (_isEditing) Text(
                     context.l10n.editClient,
                     style: theme.textTheme.headlineLarge,
-                  )
-                : _buildViewHeader(theme),
+                  ) else _buildViewHeader(theme),
             const SizedBox(height: 20),
             const Divider(height: 1),
             const SizedBox(height: 20),

@@ -1,11 +1,11 @@
 // lib/shared/widgets/status_chip.dart
 import 'package:flutter/material.dart';
-import '../../core/theme/design_tokens.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 
 enum AppointmentStatus { confirmed, done, pending, cancelled, invited, active, disabled, inProgress }
 
 class StatusChip extends StatelessWidget {
-  const StatusChip({super.key, required this.status});
+  const StatusChip({required this.status, super.key});
   final AppointmentStatus status;
 
   @override

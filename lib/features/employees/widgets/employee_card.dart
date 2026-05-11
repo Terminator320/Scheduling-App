@@ -7,9 +7,7 @@ import 'package:scheduling/shared/widgets/status_chip.dart';
 
 class EmployeeCard extends StatelessWidget {
   const EmployeeCard({
-    super.key,
-    required this.employee,
-    required this.onTap,
+    required this.employee, required this.onTap, super.key,
   });
 
   final EmployeeRecord employee;
@@ -32,7 +30,6 @@ class EmployeeCard extends StatelessWidget {
             AppAvatar(
               name: employee.name.isEmpty ? '?' : employee.name,
               color: employee.isDisabled ? AppColors.disabled : employee.color,
-              size: AvatarSize.md,
             ),
             const SizedBox(width: AppSpacing.sp12),
             Expanded(

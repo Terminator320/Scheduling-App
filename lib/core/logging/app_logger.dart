@@ -25,7 +25,7 @@ class AppLogger {
     if (kReleaseMode) {
       _crashlytics.log(message);
       if (error != null) {
-        _crashlytics.recordError(error, stack, fatal: false);
+        _crashlytics.recordError(error, stack);
       }
     }
   }
@@ -34,7 +34,7 @@ class AppLogger {
     if (kDebugMode) _logger.e(message, error: error, stackTrace: stack);
     if (kReleaseMode) {
       _crashlytics.log(message);
-      _crashlytics.recordError(error ?? message, stack, fatal: false);
+      _crashlytics.recordError(error ?? message, stack);
     }
   }
 

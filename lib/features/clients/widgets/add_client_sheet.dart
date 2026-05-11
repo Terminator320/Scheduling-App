@@ -10,13 +10,13 @@ import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
 class _ParsedAptAddress {
-  final String apt;
-  final String street;
 
   const _ParsedAptAddress({
     required this.apt,
     required this.street,
   });
+  final String apt;
+  final String street;
 }
 
 
@@ -182,17 +182,17 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
     // for example: "1245 Rue de Bleury #3406, Montréal, QC"
     // or: "1245 Rue de Bleury Apt 3406, Montréal, QC".
     final trailingUnitMatch = RegExp(
-      r"^\s*(.+?)\s+(?:#|apt\.?|apartment|unit|suite|ste\.?)\s*[-#: ]*\s*([A-Za-z0-9][A-Za-z0-9 /]*)\s*(,.*)?$",
+      r'^\s*(.+?)\s+(?:#|apt\.?|apartment|unit|suite|ste\.?)\s*[-#: ]*\s*([A-Za-z0-9][A-Za-z0-9 /]*)\s*(,.*)?$',
       caseSensitive: false,
     ).firstMatch(value);
 
     if (trailingUnitMatch != null) {
       final beforeUnit = trailingUnitMatch.group(1)!.trim();
       final apt = trailingUnitMatch.group(2)!.trim();
-      final afterUnit = trailingUnitMatch.group(3)?.trim() ?? "";
+      final afterUnit = trailingUnitMatch.group(3)?.trim() ?? '';
       return _ParsedAptAddress(
         apt: apt,
-        street: afterUnit.isEmpty ? beforeUnit : "$beforeUnit$afterUnit",
+        street: afterUnit.isEmpty ? beforeUnit : '$beforeUnit$afterUnit',
       );
     }
 
@@ -208,7 +208,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
       '',
     ).trim();
 
-    final cleanApt = apt.trim().replaceAll(RegExp(r'^#+'), '');
+    final cleanApt = apt.trim().replaceAll(RegExp('^#+'), '');
     if (cleanStreet.isEmpty || cleanApt.isEmpty) return cleanStreet;
 
     final commaIndex = cleanStreet.indexOf(',');
@@ -608,11 +608,6 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
 
 
 class _AdditionalContactsSection extends StatelessWidget {
-  final List<_ContactFields> contacts;
-  final Map<String, String?> errors;
-  final VoidCallback onAddContact;
-  final ValueChanged<int> onRemoveContact;
-  final ValueChanged<String> onClearError;
 
   const _AdditionalContactsSection({
     required this.contacts,
@@ -621,6 +616,11 @@ class _AdditionalContactsSection extends StatelessWidget {
     required this.onRemoveContact,
     required this.onClearError,
   });
+  final List<_ContactFields> contacts;
+  final Map<String, String?> errors;
+  final VoidCallback onAddContact;
+  final ValueChanged<int> onRemoveContact;
+  final ValueChanged<String> onClearError;
 
   @override
   Widget build(BuildContext context) {
@@ -689,11 +689,6 @@ class _AdditionalContactsSection extends StatelessWidget {
 }
 
 class _AdditionalContactCard extends StatelessWidget {
-  final int index;
-  final _ContactFields contact;
-  final Map<String, String?> errors;
-  final VoidCallback onRemove;
-  final ValueChanged<String> onClearError;
 
   const _AdditionalContactCard({
     required this.index,
@@ -702,6 +697,11 @@ class _AdditionalContactCard extends StatelessWidget {
     required this.onRemove,
     required this.onClearError,
   });
+  final int index;
+  final _ContactFields contact;
+  final Map<String, String?> errors;
+  final VoidCallback onRemove;
+  final ValueChanged<String> onClearError;
 
   @override
   Widget build(BuildContext context) {

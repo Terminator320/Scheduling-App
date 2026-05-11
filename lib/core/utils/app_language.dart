@@ -19,9 +19,7 @@ class AppLanguageController extends ValueNotifier<String> {
 
 class AppLanguageScope extends InheritedNotifier<AppLanguageController> {
   const AppLanguageScope({
-    super.key,
-    required AppLanguageController controller,
-    required super.child,
+    required AppLanguageController controller, required super.child, super.key,
   }) : super(notifier: controller);
 
   static AppLanguageController of(BuildContext context) {

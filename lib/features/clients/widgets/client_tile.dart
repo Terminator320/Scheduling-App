@@ -7,8 +7,7 @@ import 'package:scheduling/shared/widgets/app_avatar.dart';
 
 class ClientTile extends StatelessWidget {
   const ClientTile({
-    super.key,
-    required this.client,
+    required this.client, super.key,
     this.onOpen,
   });
 
@@ -26,7 +25,7 @@ class ClientTile extends StatelessWidget {
           await onOpen!();
           return;
         }
-        await showModalBottomSheet(
+        await showModalBottomSheet<void>(
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
@@ -42,7 +41,6 @@ class ClientTile extends StatelessWidget {
           children: [
             AppAvatar(
               name: client.displayName,
-              size: AvatarSize.md,
             ),
             const SizedBox(width: AppSpacing.sp12),
             Expanded(

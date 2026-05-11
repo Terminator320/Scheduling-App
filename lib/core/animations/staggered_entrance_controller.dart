@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'app_animation_constants.dart';
+import 'package:scheduling/core/animations/app_animation_constants.dart';
 
 // Drives N staggered animations from a single AnimationController.
 // Call forward() once; each item in [animations] plays at its own offset

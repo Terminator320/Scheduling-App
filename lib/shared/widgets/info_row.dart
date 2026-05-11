@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
 
 class InfoRow extends StatelessWidget {
+
+  const InfoRow({
+    required this.icon, required this.text, super.key,
+    this.textStyle,
+    this.iconColor,
+  });
   final IconData icon;
   final String text;
   final TextStyle? textStyle;
   final Color? iconColor;
-
-  const InfoRow({
-    super.key,
-    required this.icon,
-    required this.text,
-    this.textStyle,
-    this.iconColor,
-  });
 
   @override
   Widget build(BuildContext context) {

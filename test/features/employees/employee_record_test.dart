@@ -36,12 +36,10 @@ void main() {
       const admin = EmployeeRecord(id: 'e1', role: 'admin', status: 'active');
       const employee = EmployeeRecord(
         id: 'e2',
-        role: 'employee',
         status: 'active',
       );
       const disabled = EmployeeRecord(
         id: 'e3',
-        role: 'employee',
         status: 'disabled',
       );
 

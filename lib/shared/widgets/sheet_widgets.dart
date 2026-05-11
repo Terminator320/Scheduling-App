@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/design_tokens.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 
 class DraggableSheetFrame extends StatelessWidget {
   const DraggableSheetFrame({
-    super.key,
-    required this.builder,
+    required this.builder, super.key,
     this.initialChildSize = 0.7,
     this.minChildSize = 0.5,
     this.maxChildSize = 0.95,
@@ -25,7 +24,6 @@ class DraggableSheetFrame extends StatelessWidget {
       minChildSize: minChildSize,
       maxChildSize: maxChildSize,
       expand: false,
-      shouldCloseOnMinExtent: true,
       builder: (sheetContext, scrollController) {
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -33,7 +31,7 @@ class DraggableSheetFrame extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               color: scheme.surface,
-              borderRadius: BorderRadius.vertical(
+              borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(AppRadius.r16),
               ),
               boxShadow: AppShadow.sheet,
@@ -47,7 +45,7 @@ class DraggableSheetFrame extends StatelessWidget {
 }
 
 class SheetFrame extends StatelessWidget {
-  const SheetFrame({super.key, required this.child});
+  const SheetFrame({required this.child, super.key});
 
   final Widget child;
 
@@ -83,7 +81,7 @@ class SheetFrame extends StatelessWidget {
 
 // Scrolls sheet form fields into view when the keyboard would otherwise cover them.
 class SheetFocusScroll extends StatefulWidget {
-  const SheetFocusScroll({super.key, required this.child});
+  const SheetFocusScroll({required this.child, super.key});
 
   final Widget child;
 
@@ -105,7 +103,6 @@ class _SheetFocusScrollState extends State<SheetFocusScroll> {
       duration: const Duration(milliseconds: 360),
       curve: Curves.easeInOutCubic,
       alignment: 0.3,
-      alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
     );
   }
 

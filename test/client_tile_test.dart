@@ -7,11 +7,9 @@ import 'package:scheduling/shared/widgets/app_avatar.dart';
 
 ClientRecord _fakeClient({String phone = '514-555-0101'}) => ClientRecord(
       id: 'c1',
-      businessName: '',
       name: 'Sarah Johnson',
       address: '123 Main St',
       phone: phone,
-      email: '',
       contacts: [],
     );
 
@@ -34,7 +32,7 @@ void main() {
   });
 
   testWidgets('calls onOpen when tapped', (tester) async {
-    bool tapped = false;
+    var tapped = false;
     await tester.pumpWidget(_wrap(
       ClientTile(client: _fakeClient(), onOpen: () async => tapped = true),
     ));
@@ -49,7 +47,7 @@ void main() {
     tester.view.physicalSize = const Size(260 * 3, 200 * 3);
     tester.view.devicePixelRatio = 3;
     await tester.pumpWidget(MediaQuery(
-      data: const MediaQueryData(textScaler: TextScaler.linear(2.0)),
+      data: const MediaQueryData(textScaler: TextScaler.linear(2)),
       child: _wrap(ClientTile(client: _fakeClient())),
     ));
     expect(tester.takeException(), isNull);

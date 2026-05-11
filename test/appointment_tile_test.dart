@@ -14,7 +14,7 @@ AppointmentRecord _fakeAppt({
     AppointmentRecord(
       id: '1',
       title: 'Haircut',
-      startTime: DateTime(2099, 5, 6, 9, 0),
+      startTime: DateTime(2099, 5, 6, 9),
       endTime: DateTime(2099, 5, 6, 9, 45),
       clientId: 'c1',
       clientName: 'Sarah Johnson',
@@ -22,8 +22,6 @@ AppointmentRecord _fakeAppt({
       employeeIds: employeeIds,
       employeeNames: employeeNames,
       address: '123 Main St',
-      notes: '',
-      materialsNeeded: '',
       status: status,
       pictures: [],
     );
@@ -55,7 +53,7 @@ void main() {
 
   testWidgets('does NOT show StatusChip for confirmed status', (tester) async {
     await tester.pumpWidget(_wrap(AppointmentTile(
-      appointment: _fakeAppt(status: 'confirmed'),
+      appointment: _fakeAppt(),
       employeeColorMap: _colorMap,
     )));
     expect(find.byType(StatusChip), findsNothing);
@@ -86,7 +84,7 @@ void main() {
   });
 
   testWidgets('calls onOpen when tapped', (tester) async {
-    bool tapped = false;
+    var tapped = false;
     await tester.pumpWidget(_wrap(AppointmentTile(
       appointment: _fakeAppt(),
       employeeColorMap: _colorMap,
@@ -103,7 +101,7 @@ void main() {
     tester.view.physicalSize = const Size(260 * 3, 640 * 3);
     tester.view.devicePixelRatio = 3;
     await tester.pumpWidget(MediaQuery(
-      data: const MediaQueryData(textScaler: TextScaler.linear(2.0)),
+      data: const MediaQueryData(textScaler: TextScaler.linear(2)),
       child: _wrap(AppointmentTile(
         appointment: _fakeAppt(),
         employeeColorMap: _colorMap,
@@ -115,7 +113,7 @@ void main() {
   testWidgets('shows fallback when employeeNames is empty', (tester) async {
     await tester.pumpWidget(_wrap(AppointmentTile(
       appointment: _fakeAppt(employeeNames: [], employeeIds: []),
-      employeeColorMap: {},
+      employeeColorMap: const {},
     )));
     expect(find.textContaining('Haircut'), findsOneWidget);
     expect(tester.takeException(), isNull);

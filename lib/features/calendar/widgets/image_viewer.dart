@@ -4,14 +4,13 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 class ImageViewer extends StatefulWidget {
-  final List<ImageProvider> images;
-  final int initialIndex;
 
   const ImageViewer({
-    super.key,
-    required this.images,
+    required this.images, super.key,
     this.initialIndex = 0,
   });
+  final List<ImageProvider> images;
+  final int initialIndex;
 
   static Future<void> open(
     BuildContext context, {
@@ -95,7 +94,7 @@ class _ImageViewerState extends State<ImageViewer> {
               child: Padding(
                 padding: const EdgeInsets.all(8),
                 child: IconButton(
-                  icon: Icon(Icons.close, color: foreground),
+                  icon: const Icon(Icons.close, color: foreground),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ),

@@ -11,11 +11,7 @@ import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 /// code). Tapping a suggestion fills the four fields from Google Places.
 class AddressFieldsBlock extends StatefulWidget {
   const AddressFieldsBlock({
-    super.key,
-    required this.streetController,
-    required this.cityController,
-    required this.provinceController,
-    required this.postalCodeController,
+    required this.streetController, required this.cityController, required this.provinceController, required this.postalCodeController, super.key,
     this.streetError,
     this.cityError,
     this.provinceError,

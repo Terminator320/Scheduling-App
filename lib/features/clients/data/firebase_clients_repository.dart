@@ -13,7 +13,7 @@ class FirebaseClientsRepository implements ClientsRepository {
 
   @override
   Stream<List<ClientRecord>> watchClients({int? limit}) {
-    Query<Map<String, dynamic>> query = _clients.orderBy(
+    var query = _clients.orderBy(
       'createdAt',
       descending: true,
     );
@@ -80,7 +80,7 @@ class FirebaseClientsRepository implements ClientsRepository {
 
       final contacts = (data['contacts'] as List?) ?? const [];
       final contactSearchText = contacts
-          .whereType<Map>()
+          .whereType<Map<Object?, Object?>>()
           .map((contact) {
             final map = Map<String, dynamic>.from(contact);
             return [

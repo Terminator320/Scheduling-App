@@ -1,13 +1,10 @@
 // lib/shared/widgets/app_empty_state.dart
 import 'package:flutter/material.dart';
-import '../../core/theme/design_tokens.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 
 class AppEmptyState extends StatelessWidget {
   const AppEmptyState({
-    super.key,
-    required this.icon,
-    required this.title,
-    required this.body,
+    required this.icon, required this.title, required this.body, super.key,
     this.actionLabel,
     this.onAction,
   });

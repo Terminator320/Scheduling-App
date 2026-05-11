@@ -11,18 +11,16 @@ import 'package:scheduling/shared/widgets/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/skeleton_loader.dart';
 
 class EventList extends StatelessWidget {
+
+  const EventList({
+    required this.events, required this.employees, super.key,
+    this.isAdmin = true,
+    this.isLoading = false,
+  });
   final ValueNotifier<List<AppointmentRecord>> events;
   final List<EmployeeRecord> employees;
   final bool isAdmin;
   final bool isLoading;
-
-  const EventList({
-    super.key,
-    required this.events,
-    required this.employees,
-    this.isAdmin = true,
-    this.isLoading = false,
-  });
 
   Widget _buildSkeleton() {
     return ListView(

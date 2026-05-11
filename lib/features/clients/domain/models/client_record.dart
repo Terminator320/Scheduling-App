@@ -26,13 +26,13 @@ part 'client_record.freezed.dart';
 /// ```
 @freezed
 abstract class ClientContact with _$ClientContact {
-  const ClientContact._();
 
   const factory ClientContact({
     @Default('') String name,
     @Default('') String phone,
     @Default('') String email,
   }) = _ClientContact;
+  const ClientContact._();
 
   factory ClientContact.fromMap(Map<String, dynamic> map) {
     return ClientContact(
@@ -51,7 +51,6 @@ abstract class ClientContact with _$ClientContact {
 
 @freezed
 abstract class ClientRecord with _$ClientRecord {
-  const ClientRecord._();
 
   const factory ClientRecord({
     required String id,
@@ -67,6 +66,7 @@ abstract class ClientRecord with _$ClientRecord {
     @Default('') String email,
     @Default(<ClientContact>[]) List<ClientContact> contacts,
   }) = _ClientRecord;
+  const ClientRecord._();
 
   factory ClientRecord.fromMap(String id, Map<String, dynamic> data) {
     final rawContacts = (data['contacts'] as List?) ?? const [];
@@ -83,7 +83,7 @@ abstract class ClientRecord with _$ClientRecord {
       phone: (data['phone'] ?? '').toString(),
       email: (data['email'] ?? '').toString(),
       contacts: rawContacts
-          .whereType<Map>()
+          .whereType<Map<Object?, Object?>>()
           .map((c) => ClientContact.fromMap(Map<String, dynamic>.from(c)))
           .toList(),
     );

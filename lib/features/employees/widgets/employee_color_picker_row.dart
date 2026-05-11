@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
-
 import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/features/employees/widgets/employee_color_grid.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
-import 'employee_color_grid.dart';
 
 /// Color selector row: quick-pick swatches + custom color wheel button.
 class EmployeeColorPickerRow extends StatelessWidget {
   const EmployeeColorPickerRow({
-    super.key,
-    required this.selectedColor,
-    required this.onColorChanged,
+    required this.selectedColor, required this.onColorChanged, super.key,
     this.required = false,
     this.usedColors = const {},
   });

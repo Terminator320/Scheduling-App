@@ -61,7 +61,7 @@ class _TextSizeScreenState extends State<TextSizeScreen> {
                   'PREVIEW',
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: scheme.onSurfaceVariant,
-                    letterSpacing: 1.0,
+                    letterSpacing: 1,
                     fontWeight: FontWeight.w700,
                   ),
                 ),

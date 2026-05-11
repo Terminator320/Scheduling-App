@@ -4,20 +4,18 @@ import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 class EmployeePicker extends StatelessWidget {
-  final List<EmployeeRecord> allEmployees;
-  final List<EmployeeRecord> selectedEmployees;
-  final bool selectable;
-  final bool hasError;
-  final Function(EmployeeRecord)? onToggle;
 
   const EmployeePicker({
-    super.key,
-    required this.allEmployees,
-    required this.selectedEmployees,
+    required this.allEmployees, required this.selectedEmployees, super.key,
     this.selectable = true,
     this.hasError = false,
     this.onToggle,
   });
+  final List<EmployeeRecord> allEmployees;
+  final List<EmployeeRecord> selectedEmployees;
+  final bool selectable;
+  final bool hasError;
+  final void Function(EmployeeRecord)? onToggle;
 
   @override
   Widget build(BuildContext context) {

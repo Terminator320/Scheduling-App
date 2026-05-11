@@ -1,45 +1,37 @@
 import 'package:flutter/material.dart';
-import 'package:table_calendar/table_calendar.dart';
-
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:table_calendar/table_calendar.dart';
 
 
 class AppCalendar extends StatelessWidget {
-  final DateTime focusedDay;
-  final DateTime? selectedDay;
-  final Function(DateTime, DateTime) onDaySelected;
-  final List<AppointmentRecord> Function(DateTime) eventLoader;
-  final Function(PageController)? onCalendarCreated;
-  final Function(DateTime)? onPageChanged;
-  final double? rowHeight;
-
-  final List<EmployeeRecord> employees;
-  final Map<String, Color> employeeColorMap;
 
   const AppCalendar({
-    super.key,
-    required this.focusedDay,
-    required this.selectedDay,
-    required this.onDaySelected,
-    required this.eventLoader,
-    required this.employees,
-    required this.employeeColorMap,
+    required this.focusedDay, required this.selectedDay, required this.onDaySelected, required this.eventLoader, required this.employees, required this.employeeColorMap, super.key,
     this.onCalendarCreated,
     this.onPageChanged,
     this.rowHeight,
   });
+  final DateTime focusedDay;
+  final DateTime? selectedDay;
+  final void Function(DateTime, DateTime) onDaySelected;
+  final List<AppointmentRecord> Function(DateTime) eventLoader;
+  final void Function(PageController)? onCalendarCreated;
+  final void Function(DateTime)? onPageChanged;
+  final double? rowHeight;
+
+  final List<EmployeeRecord> employees;
+  final Map<String, Color> employeeColorMap;
 
 
   Widget _dayCell(
     BuildContext context,
     DateTime day, {
     required BoxDecoration decoration,
-    TextStyle? textStyle,
-    required double rowH,
+    required double rowH, TextStyle? textStyle,
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -74,7 +66,7 @@ class AppCalendar extends StatelessWidget {
         : 'en_CA';
     return TableCalendar(
       locale: localeCode,
-      firstDay: DateTime(focusedDay.year - 10, 1, 1),
+      firstDay: DateTime(focusedDay.year - 10),
       lastDay: DateTime(focusedDay.year + 10, 12, 31),
       focusedDay: focusedDay,
 
@@ -91,7 +83,7 @@ class AppCalendar extends StatelessWidget {
       onCalendarCreated: onCalendarCreated,
       onPageChanged: onPageChanged,
 
-      headerStyle: HeaderStyle(
+      headerStyle: const HeaderStyle(
         formatButtonVisible: false,
         titleCentered: true,
         titleTextStyle: TextStyle(fontSize: 16),
