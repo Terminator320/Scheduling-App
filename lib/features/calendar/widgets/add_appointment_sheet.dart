@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/images/image_picker_service.dart';
+import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
@@ -68,8 +69,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
   bool _isSubmitting = false;
   StreamSubscription<List<EmployeeRecord>>? _employeesSub;
   Timer? _clientSearchDebounce;
-  final _imageService = ImagePickerService();
 
+  late final ImagePickerService _imageService;
   late final AppointmentImageUploadService _imageUploadService;
   late final ClientsRepository _clientService;
   late final AppointmentsRepository _appointmentService;
@@ -77,6 +78,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
   @override
   void initState() {
     super.initState();
+    _imageService = ref.read(imagePickerProvider);
     _imageUploadService = ref.read(appointmentImageUploadProvider);
     _clientService = ref.read(clientsRepositoryProvider);
     _appointmentService = ref.read(appointmentsRepositoryProvider);

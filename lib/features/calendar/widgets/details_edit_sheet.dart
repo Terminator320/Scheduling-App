@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/images/image_picker_service.dart';
 import 'package:scheduling/core/images/image_storage_service.dart';
+import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
@@ -80,8 +81,8 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
   late final AppointmentImageUploadService _imageUploadService;
   late final ClientsRepository _clientService;
   late final AppointmentsRepository _appointmentRepo;
-  final _storageService = ImageStorageService();
-  final _imageService = ImagePickerService();
+  late final ImageStorageService _storageService;
+  late final ImagePickerService _imageService;
 
   @override
   void initState() {
@@ -89,6 +90,8 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
     _imageUploadService = ref.read(appointmentImageUploadProvider);
     _clientService = ref.read(clientsRepositoryProvider);
     _appointmentRepo = ref.read(appointmentsRepositoryProvider);
+    _storageService = ref.read(imageStorageProvider);
+    _imageService = ref.read(imagePickerProvider);
     _isEditing = widget.initialEditing;
     final a = widget.appointment;
 
