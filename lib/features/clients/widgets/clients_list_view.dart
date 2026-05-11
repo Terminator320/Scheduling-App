@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/core/utils/sheet_focus.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/add_client_sheet.dart';
@@ -65,10 +66,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
   }
 
   Future<void> _openClient(ClientRecord client) async {
-    // Sheet-from-search timing per CLAUDE.md: 80ms settle before sheet,
-    // double-unfocus with 120ms gap after close.
-    FocusManager.instance.primaryFocus?.unfocus();
-    await Future<void>.delayed(const Duration(milliseconds: 80));
+    await SheetFocus.settleBeforeSheet();
     if (!mounted) return;
 
     await showModalBottomSheet<void>(
@@ -79,10 +77,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     );
 
     if (!mounted) return;
-    FocusManager.instance.primaryFocus?.unfocus();
-    await Future<void>.delayed(const Duration(milliseconds: 120));
-    if (!mounted) return;
-    FocusManager.instance.primaryFocus?.unfocus();
+    await SheetFocus.unfocusAfterSheet();
   }
 
   @override

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/additional_contacts_section.dart';
@@ -36,8 +37,6 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
 
   bool get _isBusiness => _businessNameController.text.trim().isNotEmpty;
 
-  static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-
   @override
   void dispose() {
     _businessNameController.dispose();
@@ -58,7 +57,9 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
 
   String? _validateEmail(String value) {
     if (value.isEmpty) return null;
-    if (!_emailRegex.hasMatch(value)) return context.l10n.enterAValidEmail;
+    if (!AuthValidators.isValidEmailFormat(value)) {
+      return context.l10n.enterAValidEmail;
+    }
     return null;
   }
 
