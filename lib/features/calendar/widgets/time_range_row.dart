@@ -4,6 +4,12 @@ import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
 class TimeRangeRow extends StatelessWidget {
+
+  const TimeRangeRow({
+    required this.startController, required this.endController, required this.onTapStart, required this.onTapEnd, required this.selectedStart, required this.selectedEnd, super.key,
+    this.startError,
+    this.endError,
+  });
   final TextEditingController startController;
   final TextEditingController endController;
   final VoidCallback onTapStart;
@@ -12,18 +18,6 @@ class TimeRangeRow extends StatelessWidget {
   final TimeOfDay? selectedEnd;
   final String? startError;
   final String? endError;
-
-  const TimeRangeRow({
-    super.key,
-    required this.startController,
-    required this.endController,
-    required this.onTapStart,
-    required this.onTapEnd,
-    required this.selectedStart,
-    required this.selectedEnd,
-    this.startError,
-    this.endError,
-  });
 
   @override
   Widget build(BuildContext context) {

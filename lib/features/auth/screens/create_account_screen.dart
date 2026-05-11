@@ -456,7 +456,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           animation: animations[3],
           child: AnimatedLoadingButton(
             label: context.l10n.backToSignIn,
-            isLoading: false,
             onPressed: _backToSignIn,
           ),
         ),

@@ -1,40 +1,37 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/animations/fade_slide_entrance.dart';
 import 'package:scheduling/core/animations/staggered_entrance_controller.dart';
-import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
-import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/core/services/user_cache_service.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
+import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
+import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/screens/create_account_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
-import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
+import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
-class Login extends StatefulWidget {
+class Login extends ConsumerStatefulWidget {
   const Login({super.key});
 
   @override
-  State<Login> createState() => _LoginState();
+  ConsumerState<Login> createState() => _LoginState();
 }
 
-class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
+class _LoginState extends ConsumerState<Login>
+    with SingleTickerProviderStateMixin {
   static const int _itemCount = 7;
 
   final AuthService _authService = AuthService();
-  final FirebaseEmployeesRepository _userService = FirebaseEmployeesRepository(
-    FirebaseFirestore.instance,
-  );
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _emailFocus = FocusNode();
@@ -123,7 +120,9 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
         return;
       }
 
-      final userDoc = await _userService.findUserByUid(user.uid);
+      final userDoc = await ref
+          .read(employeesRepositoryProvider)
+          .findUserByUid(user.uid);
       if (!mounted) return;
 
       if (userDoc == null) {
@@ -175,7 +174,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
       _emailError = null;
       _passwordError = null;
       _bannerError = null;
-      _bannerSuccess = result?.created == true
+      _bannerSuccess = result?.created ?? false
           ? context.l10n.accountCreatedYouCanNowSignIn
           : null;
     });

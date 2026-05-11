@@ -4,9 +4,7 @@ import 'package:scheduling/shared/widgets/form_helpers.dart';
 
 class LabeledTextField extends StatelessWidget {
   const LabeledTextField({
-    super.key,
-    required this.label,
-    required this.controller,
+    required this.label, required this.controller, super.key,
     this.required = false,
     this.optional = false,
     this.keyboard = TextInputType.text,

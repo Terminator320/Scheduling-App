@@ -65,7 +65,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
 
   final List<File> _selectedImages = [];
   bool _isSubmitting = false;
-  StreamSubscription? _employeesSub;
+  StreamSubscription<List<EmployeeRecord>>? _employeesSub;
   Timer? _clientSearchDebounce;
   final _imageService = ImagePickerService();
 
@@ -405,7 +405,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
         );
       },
     );
-    return result == true;
+    return result ?? false;
   }
 
   Future<void> _submit(BuildContext ctx) async {
@@ -477,7 +477,6 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
         employeeNames: _selectedEmployees.map((e) => e.name).toList(),
         notes: _notesController.text.trim(),
         materialsNeeded: _materialsController.text.trim(),
-        pictures: const [],
         status: 'booked',
       );
 

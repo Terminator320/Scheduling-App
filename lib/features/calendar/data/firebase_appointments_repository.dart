@@ -48,7 +48,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     List<AppointmentImage> pictures,
   ) async {
     await _appointments.doc(id).update({
-      'pictures': pictures.map((p) => _imageToFirestoreMap(p)).toList(),
+      'pictures': pictures.map(_imageToFirestoreMap).toList(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }

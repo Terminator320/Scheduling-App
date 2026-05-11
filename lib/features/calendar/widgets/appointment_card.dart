@@ -7,9 +7,7 @@ import 'package:scheduling/shared/widgets/status_chip.dart';
 
 class AppointmentCard extends StatelessWidget {
   const AppointmentCard({
-    super.key,
-    required this.appointment,
-    required this.employeeColor,
+    required this.appointment, required this.employeeColor, super.key,
     this.employeeName,
     this.onTap,
   });

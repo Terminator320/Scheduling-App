@@ -12,14 +12,14 @@ Widget _wrap({double textScale = 1.0, bool isDark = false}) => ThemeNotifier(
       textScale: textScale,
       setTextScale: (_) {},
       setLanguage: (_) {},
-      child: MaterialApp(
-        localizationsDelegates: const [
+      child: const MaterialApp(
+        localizationsDelegates: [
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        home: const SettingsScreen(name: 'Test User', email: 'test@example.com'),
+        home: SettingsScreen(name: 'Test User', email: 'test@example.com'),
       ),
     );
 
@@ -61,7 +61,7 @@ void main() {
   });
 
   testWidgets('shows current text scale label next to Text Size', (tester) async {
-    await tester.pumpWidget(_wrap(textScale: 1.0));
+    await tester.pumpWidget(_wrap());
     expect(find.text('Medium'), findsOneWidget);
   });
 
@@ -71,7 +71,7 @@ void main() {
     tester.view.physicalSize = const Size(320 * 3, 640 * 3);
     tester.view.devicePixelRatio = 3;
     await tester.pumpWidget(MediaQuery(
-      data: const MediaQueryData(textScaler: TextScaler.linear(2.0)),
+      data: const MediaQueryData(textScaler: TextScaler.linear(2)),
       child: _wrap(),
     ));
     expect(tester.takeException(), isNull);

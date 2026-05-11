@@ -56,7 +56,6 @@ void main() {
         id: 'a1',
         startTime: past,
         endTime: past.add(const Duration(hours: 1)),
-        status: 'pending',
       );
       expect(a.displayStatus, 'in_progress');
     });
@@ -82,7 +81,6 @@ void main() {
         clientName: 'Acme',
         employeeIds: const ['e1', 'e2'],
         employeeNames: const ['Jane', 'Bob'],
-        status: 'pending',
       );
       final restored = AppointmentRecord.fromMap('a1', original.toMap());
       expect(restored, equals(original));
@@ -113,7 +111,7 @@ void main() {
     });
 
     test('two ranges over the same focused month are equal', () {
-      final a = AppointmentDateRange.visibleMonth(DateTime(2026, 5, 1));
+      final a = AppointmentDateRange.visibleMonth(DateTime(2026, 5));
       final b = AppointmentDateRange.visibleMonth(DateTime(2026, 5, 30));
       expect(a, equals(b));
       expect(a.hashCode, equals(b.hashCode));

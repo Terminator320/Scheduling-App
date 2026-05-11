@@ -4,8 +4,7 @@ enum AuthBannerKind { error, success, info }
 
 class AuthBanner extends StatelessWidget {
   const AuthBanner({
-    super.key,
-    required this.message,
+    required this.message, super.key,
     this.kind = AuthBannerKind.info,
   });
 
@@ -24,17 +23,14 @@ class AuthBanner extends StatelessWidget {
         accent = scheme.error;
         background = scheme.error.withAlpha(22);
         icon = Icons.error_outline_rounded;
-        break;
       case AuthBannerKind.success:
         accent = scheme.secondary;
         background = scheme.secondary.withAlpha(38);
         icon = Icons.check_circle_rounded;
-        break;
       case AuthBannerKind.info:
         accent = scheme.primary;
         background = scheme.primary.withAlpha(22);
         icon = Icons.info_outline_rounded;
-        break;
     }
 
     return Container(
@@ -43,7 +39,7 @@ class AuthBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: accent.withAlpha(60), width: 1),
+        border: Border.all(color: accent.withAlpha(60)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

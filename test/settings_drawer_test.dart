@@ -10,7 +10,7 @@ import 'package:scheduling/shared/widgets/app_avatar.dart';
 Widget _wrap(Widget child) => ThemeNotifier(
       themeMode: ThemeMode.light,
       toggleTheme: () {},
-      textScale: 1.0,
+      textScale: 1,
       setTextScale: (_) {},
       setLanguage: (_) {},
       child: MaterialApp(

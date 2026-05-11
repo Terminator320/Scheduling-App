@@ -3,11 +3,11 @@ import 'package:flutter/foundation.dart';
 @immutable
 sealed class AppNotice {
   const AppNotice(this.message);
-  final String message;
 
   const factory AppNotice.success(String message) = NoticeSuccess;
   const factory AppNotice.info(String message) = NoticeInfo;
   const factory AppNotice.error(String message) = NoticeError;
+  final String message;
 }
 
 class NoticeSuccess extends AppNotice {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'design_tokens.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 
 TextTheme _buildTextTheme(Color onSurface, Color subtle) {
   final base = GoogleFonts.interTextTheme();
@@ -19,20 +19,17 @@ TextTheme _buildTextTheme(Color onSurface, Color subtle) {
 }
 
 ThemeData lightTheme() {
-  final cs = ColorScheme.light(
+  const cs = ColorScheme.light(
     primary: AppColors.primary,
-    onPrimary: Colors.white,
     primaryContainer: AppColors.primarySurface,
     onPrimaryContainer: AppColors.primaryDark,
     secondary: AppColors.success,
     onSecondary: Colors.white,
-    surface: AppColors.surface,
     onSurface: AppColors.onSurface,
     onSurfaceVariant: AppColors.subtle,
     outline: AppColors.outline,
     outlineVariant: AppColors.surfaceAlt,
     error: AppColors.error,
-    onError: Colors.white,
     errorContainer: AppColors.errorTint,
     onErrorContainer: AppColors.errorText,
     surfaceContainerHighest: AppColors.surfaceAlt,
@@ -65,7 +62,7 @@ ThemeData lightTheme() {
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.outline, width: 1.5)),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
       errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.error, width: 1.5)),
-      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.error, width: 2.0)),
+      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.error, width: 2)),
       hintStyle: GoogleFonts.inter(fontSize: 13, color: AppColors.muted),
     ),
     filledButtonTheme: FilledButtonThemeData(
@@ -108,7 +105,7 @@ ThemeData lightTheme() {
 }
 
 ThemeData darkTheme() {
-  final cs = ColorScheme.dark(
+  const cs = ColorScheme.dark(
     primary: AppColors.primary,
     onPrimary: Colors.white,
     primaryContainer: AppColors.darkPrimaryTint,
@@ -154,7 +151,7 @@ ThemeData darkTheme() {
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.darkSurfaceAlt, width: 1.5)),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
       errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.error, width: 1.5)),
-      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.error, width: 2.0)),
+      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.r12), borderSide: const BorderSide(color: AppColors.error, width: 2)),
       hintStyle: GoogleFonts.inter(fontSize: 13, color: AppColors.darkMuted),
     ),
     filledButtonTheme: FilledButtonThemeData(

@@ -2,8 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:table_calendar/table_calendar.dart';
-
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
@@ -16,6 +14,7 @@ import 'package:scheduling/features/calendar/widgets/event_list.dart';
 import 'package:scheduling/features/calendar/widgets/month_year_picker.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/settings/widgets/settings_drawer.dart';
+import 'package:table_calendar/table_calendar.dart';
 
 class MainCalendar extends ConsumerStatefulWidget {
   const MainCalendar({
@@ -34,7 +33,6 @@ class MainCalendar extends ConsumerStatefulWidget {
 class _MainCalendarState extends ConsumerState<MainCalendar> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  PageController? _pageController;
   String _userName = '';
   StreamSubscription<String>? _nameSub;
 
@@ -276,7 +274,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           onDaySelected: _onDaySelected,
           rowHeight: isTablet ? screenHeight * 0.08 : screenHeight * 0.065,
           eventLoader: (day) => _getEventsForDay(day, source),
-          onCalendarCreated: (controller) => _pageController = controller,
+          onCalendarCreated: (_) {},
           onPageChanged: _setFocusedDay,
           employees: employees,
           employeeColorMap: colorMap,

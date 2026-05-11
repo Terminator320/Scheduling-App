@@ -31,13 +31,13 @@ class ClientSearchPolicy {
   static String normalize(String value) {
     return value
         .toLowerCase()
-        .replaceAll(RegExp(r'[àáâãäå]'), 'a')
-        .replaceAll(RegExp(r'[èéêë]'), 'e')
-        .replaceAll(RegExp(r'[ìíîï]'), 'i')
-        .replaceAll(RegExp(r'[òóôõö]'), 'o')
-        .replaceAll(RegExp(r'[ùúûü]'), 'u')
-        .replaceAll(RegExp(r'[ç]'), 'c')
-        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .replaceAll(RegExp('[àáâãäå]'), 'a')
+        .replaceAll(RegExp('[èéêë]'), 'e')
+        .replaceAll(RegExp('[ìíîï]'), 'i')
+        .replaceAll(RegExp('[òóôõö]'), 'o')
+        .replaceAll(RegExp('[ùúûü]'), 'u')
+        .replaceAll(RegExp('[ç]'), 'c')
+        .replaceAll(RegExp('[^a-z0-9]+'), ' ')
         .trim();
   }
 

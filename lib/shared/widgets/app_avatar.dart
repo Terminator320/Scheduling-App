@@ -1,11 +1,11 @@
 // lib/shared/widgets/app_avatar.dart
 import 'package:flutter/material.dart';
-import '../../core/theme/design_tokens.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 
 enum AvatarSize { sm, md, lg }
 
 class AppAvatar extends StatelessWidget {
-  const AppAvatar({super.key, required this.name, this.color, this.size = AvatarSize.md});
+  const AppAvatar({required this.name, super.key, this.color, this.size = AvatarSize.md});
 
   final String name;
   final Color? color;

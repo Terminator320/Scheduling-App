@@ -16,7 +16,7 @@ PreferredSizeWidget appScaffoldBar(BuildContext context, String title, String em
             employeeId: employeeId,
           ),
         ),
-        icon: Icon(Icons.arrow_back_rounded),
+        icon: const Icon(Icons.arrow_back_rounded),
       ),
     );
 }

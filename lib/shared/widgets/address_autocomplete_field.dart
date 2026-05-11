@@ -8,8 +8,7 @@ import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 
 class AddressAutocompleteField extends StatefulWidget {
   const AddressAutocompleteField({
-    super.key,
-    required this.controller,
+    required this.controller, super.key,
     this.label,
     this.required = false,
     this.optional = false,

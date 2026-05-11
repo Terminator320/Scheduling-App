@@ -5,7 +5,7 @@ import 'package:scheduling/shared/widgets/app_search_bar.dart';
 
 void main() {
   testWidgets('AppSearchBar calls onChanged when typing', (tester) async {
-    String result = '';
+    var result = '';
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: AppSearchBar(

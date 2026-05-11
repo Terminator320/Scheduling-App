@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:scheduling/features/settings/domain/models/app_settings.dart';
 import 'package:scheduling/features/settings/domain/settings_repository.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SharedPrefsSettingsRepository implements SettingsRepository {
   static const _keyThemeMode = 'theme_mode';

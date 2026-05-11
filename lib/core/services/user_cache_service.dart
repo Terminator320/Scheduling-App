@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class UserCacheService {
   static const _kUid = 'uc_uid';
@@ -31,10 +30,7 @@ class UserCacheService {
       id: docId,
       uid: uid,
       name: prefs.getString(_kName) ?? '',
-      email: '',
-      phone: '',
       color: Color(prefs.getInt(_kColorValue) ?? Colors.blue.toARGB32()),
-      role: 'employee', // placeholder — caller must verify role from Firestore
       status: 'active',
     );
   }

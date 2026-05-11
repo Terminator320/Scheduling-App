@@ -44,7 +44,7 @@ class SettingsSectionHeader extends StatelessWidget {
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
           color: scheme.onSurfaceVariant,
-          letterSpacing: 1.0,
+          letterSpacing: 1,
           fontWeight: FontWeight.w700,
         ),
       ),

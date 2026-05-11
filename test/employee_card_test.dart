@@ -57,7 +57,7 @@ void main() {
   });
 
   testWidgets('calls onTap when tapped', (tester) async {
-    bool tapped = false;
+    var tapped = false;
     await tester.pumpWidget(_wrap(EmployeeCard(
       employee: _fakeEmployee(),
       onTap: () => tapped = true,
@@ -93,7 +93,7 @@ void main() {
     tester.view.physicalSize = const Size(260 * 3, 200 * 3);
     tester.view.devicePixelRatio = 3;
     await tester.pumpWidget(MediaQuery(
-      data: const MediaQueryData(textScaler: TextScaler.linear(2.0)),
+      data: const MediaQueryData(textScaler: TextScaler.linear(2)),
       child: _wrap(EmployeeCard(
         employee: _fakeEmployee(),
         onTap: () {},

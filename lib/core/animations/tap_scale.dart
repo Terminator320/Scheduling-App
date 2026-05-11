@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
-import 'app_animation_constants.dart';
+import 'package:scheduling/core/animations/app_animation_constants.dart';
 
 class TapScale extends StatefulWidget {
   const TapScale({
-    super.key,
-    required this.child,
+    required this.child, super.key,
     this.enabled = true,
     this.pressedScale = 0.97,
   });

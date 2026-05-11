@@ -12,7 +12,7 @@ class MonthYearPicker {
     BuildContext context,
     DateTime focusedDay,
   ) async {
-    return await showModalBottomSheet<DateTime>(
+    return showModalBottomSheet<DateTime>(
       context: context,
       backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
@@ -24,9 +24,9 @@ class MonthYearPicker {
 }
 
 class _MonthYearPickerContent extends StatefulWidget {
-  final DateTime focusedDay;
 
   const _MonthYearPickerContent({required this.focusedDay});
+  final DateTime focusedDay;
 
   @override
   State<_MonthYearPickerContent> createState() =>
@@ -97,7 +97,6 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                     useMagnifier: true,
                     magnification: 1.2,
                     squeeze: 1.2,
-                    selectionOverlay: const CupertinoPickerDefaultSelectionOverlay(),
                     onSelectedItemChanged: (i) => selectedMonth = i + 1,
                     children: List.generate(
                       12,
@@ -119,14 +118,13 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                     useMagnifier: true,
                     magnification: 1.2,
                     squeeze: 1.2,
-                    selectionOverlay: const CupertinoPickerDefaultSelectionOverlay(),
                     onSelectedItemChanged: (i) =>
                         selectedYear = MonthYearPicker._startYear + i,
                     children: List.generate(
                       MonthYearPicker._yearCount,
                       (i) => Center(
                         child: Text(
-                          "${MonthYearPicker._startYear + i}",
+                          '${MonthYearPicker._startYear + i}',
                           style: Theme.of(context).textTheme.bodyLarge,
                         ),
                       ),

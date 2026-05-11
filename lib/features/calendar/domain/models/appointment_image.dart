@@ -7,7 +7,6 @@ part 'appointment_image.freezed.dart';
 /// `storagePath`.
 @freezed
 abstract class AppointmentImage with _$AppointmentImage {
-  const AppointmentImage._();
 
   const factory AppointmentImage({
     @Default('') String url,
@@ -15,6 +14,7 @@ abstract class AppointmentImage with _$AppointmentImage {
     String? fileName,
     DateTime? uploadedAt,
   }) = _AppointmentImage;
+  const AppointmentImage._();
 
   factory AppointmentImage.fromMap(Map<String, dynamic> data) {
     return AppointmentImage(

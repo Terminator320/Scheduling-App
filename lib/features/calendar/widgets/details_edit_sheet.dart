@@ -32,16 +32,15 @@ import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
 
 class EventDetailsSheet extends ConsumerStatefulWidget {
-  final AppointmentRecord appointment;
-  final bool showActions;
-  final bool initialEditing;
 
   const EventDetailsSheet({
-    super.key,
-    required this.appointment,
+    required this.appointment, super.key,
     this.showActions = true,
     this.initialEditing = false,
   });
+  final AppointmentRecord appointment;
+  final bool showActions;
+  final bool initialEditing;
 
   @override
   ConsumerState<EventDetailsSheet> createState() => _EventDetailsSheetState();
@@ -72,7 +71,7 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
   final List<File> _newImages = [];
   bool _isSaving = false;
   ClientRecord? _client;
-  StreamSubscription? _employeesSub;
+  StreamSubscription<List<EmployeeRecord>>? _employeesSub;
   ClientRecord? _selectedClient;
   List<ClientRecord> _clientResults = [];
   bool _isSearchingClient = false;
@@ -774,7 +773,6 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
       EmployeePicker(
         allEmployees: _allEmployees,
         selectedEmployees: _selectedEmployees,
-        selectable: true,
         hasError: _errors['employees'] != null,
         onToggle: (employee) => setState(() {
           if (_selectedEmployees.any((e) => e.id == employee.id)) {

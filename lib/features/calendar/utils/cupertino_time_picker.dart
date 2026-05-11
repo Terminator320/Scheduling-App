@@ -8,7 +8,7 @@ Future<TimeOfDay?> showCupertinoTimePicker(
 }) {
   final now = DateTime.now();
   final init = initialTime ?? TimeOfDay.now();
-  DateTime tempPicked = DateTime(
+  var tempPicked = DateTime(
     now.year,
     now.month,
     now.day,
@@ -67,8 +67,6 @@ Future<TimeOfDay?> showCupertinoTimePicker(
               child: CupertinoDatePicker(
                 mode: CupertinoDatePickerMode.time,
                 initialDateTime: tempPicked,
-                use24hFormat: false,
-                minuteInterval: 1,
                 onDateTimeChanged: (dateTime) {
                   tempPicked = dateTime;
                 },

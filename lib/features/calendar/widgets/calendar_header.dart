@@ -4,19 +4,14 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 
 class CalendarHeader extends StatelessWidget {
+  const CalendarHeader({
+    required this.focusedDay, required this.onLeft, required this.onRight, required this.onToday, required this.onTapMonth, super.key,
+  });
   final DateTime focusedDay;
   final VoidCallback onLeft;
   final VoidCallback onRight;
   final VoidCallback onToday;
   final VoidCallback onTapMonth;
-  const CalendarHeader({
-    super.key,
-    required this.focusedDay,
-    required this.onLeft,
-    required this.onRight,
-    required this.onToday,
-    required this.onTapMonth,
-  });
 
   @override
   Widget build(BuildContext context) {

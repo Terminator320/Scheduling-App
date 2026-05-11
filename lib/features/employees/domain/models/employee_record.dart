@@ -24,7 +24,6 @@ part 'employee_record.freezed.dart';
 /// the freezed migration so existing documents keep working without backfill.
 @freezed
 abstract class EmployeeRecord with _$EmployeeRecord {
-  const EmployeeRecord._();
 
   const factory EmployeeRecord({
     required String id,
@@ -36,6 +35,7 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     @Default('') String status,
     @Default('') String uid,
   }) = _EmployeeRecord;
+  const EmployeeRecord._();
 
   factory EmployeeRecord.fromMap(String id, Map<String, dynamic> data) {
     final colorValue =
