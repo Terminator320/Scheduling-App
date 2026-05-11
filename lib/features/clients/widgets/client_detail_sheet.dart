@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
@@ -37,8 +38,6 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
   late final TextEditingController _provinceController;
   late final TextEditingController _countryController;
   late final TextEditingController _postalCodeController;
-
-  static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
   String _buildFullAddress() {
     final parsed = AddressParser.splitApt(_addressController.text);
@@ -147,7 +146,8 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
       _errors['phone'] = !hasContactMethod
           ? context.l10n.phoneOrEmailIsRequired
           : null;
-      _errors['email'] = email.isNotEmpty && !_emailRegex.hasMatch(email)
+      _errors['email'] =
+          email.isNotEmpty && !AuthValidators.isValidEmailFormat(email)
           ? context.l10n.enterAValidEmail
           : null;
       _errors['address'] = businessName.isEmpty && address.isEmpty

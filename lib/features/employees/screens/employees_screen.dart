@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/core/utils/sheet_focus.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/widgets/employee_card.dart';
@@ -59,10 +60,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     );
 
     if (!mounted) return;
-    FocusManager.instance.primaryFocus?.unfocus();
-    await Future<void>.delayed(const Duration(milliseconds: 120));
-    if (!mounted) return;
-    FocusManager.instance.primaryFocus?.unfocus();
+    await SheetFocus.unfocusAfterSheet();
 
     final notices = ref.read(noticeServiceProvider);
     if (result == 'deleted') {
@@ -85,10 +83,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     );
 
     if (!mounted) return;
-    FocusManager.instance.primaryFocus?.unfocus();
-    await Future<void>.delayed(const Duration(milliseconds: 120));
-    if (!mounted) return;
-    FocusManager.instance.primaryFocus?.unfocus();
+    await SheetFocus.unfocusAfterSheet();
 
     if (result == 'edit') {
       await _openEmployeeSheet(employee: employee);

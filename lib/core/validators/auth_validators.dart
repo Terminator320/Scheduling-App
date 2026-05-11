@@ -9,12 +9,18 @@ class AuthValidators {
 
   static final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
+  /// Pure-format check (no l10n / context). Useful for forms where the
+  /// email is optional but must be valid when non-empty (e.g. client
+  /// records). Always trim before calling.
+  static bool isValidEmailFormat(String email) =>
+      _emailPattern.hasMatch(email);
+
   static String? email(BuildContext context, String value) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) {
       return context.l10n.pleaseEnterYourEmail;
     }
-    if (!_emailPattern.hasMatch(trimmed)) {
+    if (!isValidEmailFormat(trimmed)) {
       return context.l10n.pleaseEnterAValidEmailAddress;
     }
     return null;
