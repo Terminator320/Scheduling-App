@@ -13,7 +13,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
-import 'package:scheduling/core/services/user_cache_service.dart';
+import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/core/utils/app_language.dart';
@@ -90,7 +90,7 @@ Future<Widget> _resolveHome() async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return const SplashScreen();
 
-  final cached = await UserCacheService().loadIfMatch(user.uid);
+  final cached = await AuthCache().loadIfMatch(user.uid);
   if (cached == null) return const SplashScreen();
 
   final userDoc = await FirebaseEmployeesRepository(
@@ -98,12 +98,12 @@ Future<Widget> _resolveHome() async {
   ).findUserByUid(user.uid);
   if (userDoc == null) {
     await FirebaseAuth.instance.signOut();
-    await UserCacheService().clear();
+    await AuthCache().clear();
     return const SplashScreen();
   }
 
   final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
-  unawaited(UserCacheService().save(employee));
+  unawaited(AuthCache().save(employee));
   return MainCalendar(isAdmin: employee.isAdmin, employeeId: employee.id);
 }
 

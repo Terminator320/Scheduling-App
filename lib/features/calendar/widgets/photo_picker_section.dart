@@ -212,25 +212,26 @@ class _FailedPhotoThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       width: 90,
       height: 90,
       decoration: BoxDecoration(
-        color: const Color(0xFFFEF2F2),
-        border: Border.all(color: AppColors.error, width: 1.5),
+        color: scheme.errorContainer,
+        border: Border.all(color: scheme.error, width: 1.5),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: const Column(
+      child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.info_outline_rounded, size: 22, color: AppColors.error),
-          SizedBox(height: 4),
+          Icon(Icons.info_outline_rounded, size: 22, color: scheme.error),
+          const SizedBox(height: 4),
           Text(
             'Failed',
             style: TextStyle(
               fontSize: 9,
               fontWeight: FontWeight.w700,
-              color: AppColors.error,
+              color: scheme.error,
             ),
           ),
         ],
@@ -246,16 +247,17 @@ class _UploadFailedRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
-        const Icon(Icons.info_outline_rounded, size: 13, color: AppColors.error),
+        Icon(Icons.info_outline_rounded, size: 13, color: scheme.error),
         const SizedBox(width: 5),
         Text(
           context.l10n.nPhotosFailedToUpload(count),
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: AppColors.error,
+            color: scheme.error,
           ),
         ),
         if (onRetry != null) ...[
@@ -264,10 +266,10 @@ class _UploadFailedRow extends StatelessWidget {
             onTap: onRetry,
             child: Text(
               context.l10n.retry,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                color: AppColors.primary,
+                color: scheme.primary,
               ),
             ),
           ),
@@ -283,29 +285,33 @@ class _TooLargeBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Material 3 ColorScheme has no semantic warning slot; map to the
+    // tertiary container which Flex renders as a soft amber in the default
+    // seed theme and adapts cleanly to dark mode.
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
       decoration: BoxDecoration(
-        color: AppColors.warningTint,
-        border: Border.all(color: AppColors.warning),
+        color: scheme.tertiaryContainer,
+        border: Border.all(color: scheme.tertiary),
         borderRadius: BorderRadius.circular(AppRadius.r8),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
+          Icon(
             Icons.warning_amber_rounded,
             size: 14,
-            color: AppColors.warningText,
+            color: scheme.onTertiaryContainer,
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               context.l10n.fileTooLargeWarning(fileName),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
-                color: AppColors.warningText,
+                color: scheme.onTertiaryContainer,
                 height: 1.4,
               ),
             ),

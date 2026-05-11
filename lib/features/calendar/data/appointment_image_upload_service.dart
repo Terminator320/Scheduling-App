@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:scheduling/core/services/image_compress_service.dart';
-import 'package:scheduling/core/services/image_storage_service.dart';
+import 'package:scheduling/core/images/image_compress_service.dart';
+import 'package:scheduling/core/images/image_storage_service.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';

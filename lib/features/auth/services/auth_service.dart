@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import 'package:scheduling/core/services/user_cache_service.dart';
+import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 
@@ -79,7 +79,7 @@ class AuthService {
   }
 
   Future<void> signOut() async {
-    await UserCacheService().clear();
+    await AuthCache().clear();
     await _auth.signOut();
   }
 }

@@ -91,30 +91,32 @@ class AppCalendar extends StatelessWidget {
 
       calendarBuilders: CalendarBuilders(
         todayBuilder: (context, day, focusedDay) {
+          final scheme = Theme.of(context).colorScheme;
           return _dayCell(
             context,
             day,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.primary,
+              color: scheme.primary,
             ),
             textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.white,
+              color: scheme.onPrimary,
               fontWeight: FontWeight.w600,
             ),
             rowH: effectiveRowH,
           );
         },
         selectedBuilder: (context, day, focusedDay) {
+          final scheme = Theme.of(context).colorScheme;
           return _dayCell(
             context,
             day,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Theme.of(context).colorScheme.primaryContainer,
+              color: scheme.primaryContainer,
             ),
             textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.primary,
+              color: scheme.primary,
               fontWeight: FontWeight.w600,
             ),
             rowH: effectiveRowH,

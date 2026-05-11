@@ -51,7 +51,7 @@ class EmployeePicker extends StatelessWidget {
                 color: hasError && !isSelected
                     ? scheme.error
                     : isSelected
-                        ? AppColors.primary
+                        ? scheme.primary
                         : scheme.outlineVariant,
                 width: 1.5,
               ),
@@ -84,7 +84,7 @@ class EmployeePicker extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                    color: isSelected ? AppColors.primary : scheme.onSurfaceVariant,
+                    color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
                   ),
                 ),
               ],

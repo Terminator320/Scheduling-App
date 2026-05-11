@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class UserCacheService {
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+
+/// Caches the minimum information needed to skip the full splash sequence on
+/// the next cold start (uid, Firestore doc id, display name, employee colour).
+///
+/// `isAdmin` and `status` are intentionally NOT cached — they are security
+/// boundaries and must be re-read from Firestore on every launch via
+/// `EmployeesRepository.findUserByUid` (CLAUDE.md invariant). The cache only
+/// tells callers "a Firestore lookup is worth attempting because the uid
+/// matches"; it never grants permissions on its own.
+class AuthCache {
   static const _kUid = 'uc_uid';
   static const _kDocId = 'uc_doc_id';
   static const _kColorValue = 'uc_color_value';
   static const _kName = 'uc_name';
-
-  // isAdmin is intentionally NOT cached — it is a security boundary and must
-  // always be verified from Firestore on startup.
 
   Future<void> save(EmployeeRecord record) async {
     final prefs = await SharedPreferences.getInstance();

@@ -36,7 +36,7 @@ class CalendarHeader extends StatelessWidget {
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: isCurrent
-                    ? AppColors.primary
+                    ? Theme.of(context).colorScheme.primary
                     : Theme.of(context).colorScheme.onSurface,
               ),
             ),

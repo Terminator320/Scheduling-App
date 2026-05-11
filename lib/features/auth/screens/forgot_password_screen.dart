@@ -118,10 +118,11 @@ class _ForgotPasswordState extends State<ForgotPassword>
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: scheme.surface,
         body: SafeArea(
           child: SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -154,7 +155,9 @@ class _ForgotPasswordState extends State<ForgotPassword>
   }
 
   Widget _buildForm({required Key key}) {
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final scheme = theme.colorScheme;
     final animations = _entrance.animations;
 
     return Column(
@@ -167,12 +170,12 @@ class _ForgotPasswordState extends State<ForgotPassword>
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: AppColors.primary,
+              color: scheme.primary,
               borderRadius: BorderRadius.circular(AppRadius.r12),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.calendar_today_rounded,
-              color: Colors.white,
+              color: scheme.onPrimary,
               size: 22,
             ),
           ),
@@ -245,14 +248,14 @@ class _ForgotPasswordState extends State<ForgotPassword>
                   child: Container(
                     padding: const EdgeInsets.all(AppSpacing.sp12),
                     decoration: BoxDecoration(
-                      color: AppColors.errorTint,
+                      color: scheme.errorContainer,
                       borderRadius: BorderRadius.circular(AppRadius.r8),
                     ),
                     child: Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.error_outline,
-                          color: AppColors.error,
+                          color: scheme.error,
                           size: 16,
                         ),
                         const SizedBox(width: AppSpacing.sp8),
@@ -260,7 +263,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
                           child: Text(
                             _errorMessage,
                             style: textTheme.bodySmall?.copyWith(
-                              color: AppColors.errorText,
+                              color: scheme.onErrorContainer,
                             ),
                           ),
                         ),
@@ -288,7 +291,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
               child: Text(
                 context.l10n.backToSignIn,
                 style: textTheme.bodySmall?.copyWith(
-                  color: AppColors.primary,
+                  color: scheme.primary,
                 ),
               ),
             ),
@@ -299,7 +302,9 @@ class _ForgotPasswordState extends State<ForgotPassword>
   }
 
   Widget _buildSuccess({required Key key}) {
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final scheme = theme.colorScheme;
     final animations = _entrance.animations;
 
     return Column(
@@ -314,13 +319,13 @@ class _ForgotPasswordState extends State<ForgotPassword>
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: AppColors.successTint,
+                color: scheme.tertiaryContainer,
                 borderRadius: BorderRadius.circular(AppRadius.r12),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.mark_email_read_rounded,
                 size: 22,
-                color: AppColors.success,
+                color: scheme.tertiary,
               ),
             ),
           ),
@@ -347,15 +352,17 @@ class _ForgotPasswordState extends State<ForgotPassword>
           child: Container(
             padding: const EdgeInsets.all(AppSpacing.sp12),
             decoration: BoxDecoration(
-              color: AppColors.successTint,
+              color: scheme.tertiaryContainer,
               borderRadius: BorderRadius.circular(AppRadius.r8),
-              border: Border.all(color: const Color(0xFFBBF7D0)),
+              border: Border.all(
+                color: scheme.tertiary.withValues(alpha: 0.4),
+              ),
             ),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.check_circle_outline,
-                  color: AppColors.success,
+                  color: scheme.tertiary,
                   size: 16,
                 ),
                 const SizedBox(width: AppSpacing.sp8),
@@ -365,7 +372,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
                         .l10n
                         .theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder,
                     style: textTheme.bodySmall?.copyWith(
-                      color: AppColors.successText,
+                      color: scheme.onTertiaryContainer,
                     ),
                   ),
                 ),
@@ -390,7 +397,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
               child: Text(
                 context.l10n.didnTReceiveTheEmailTryAgain,
                 style: textTheme.bodySmall?.copyWith(
-                  color: AppColors.primary,
+                  color: scheme.primary,
                 ),
               ),
             ),

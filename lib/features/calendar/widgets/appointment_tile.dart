@@ -24,7 +24,7 @@ class AppointmentTile extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final accent =
-        colorFromMap(appointment, employeeColorMap) ?? AppColors.primary;
+        colorFromMap(appointment, employeeColorMap) ?? scheme.primary;
     final status = _mapStatus(appointment.displayStatus);
     final showChip = status != AppointmentStatus.confirmed;
 

@@ -7,7 +7,7 @@ import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/animations/fade_slide_entrance.dart';
 import 'package:scheduling/core/animations/staggered_entrance_controller.dart';
-import 'package:scheduling/core/services/user_cache_service.dart';
+import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
@@ -134,7 +134,7 @@ class _LoginState extends ConsumerState<Login>
       }
 
       final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
-      unawaited(UserCacheService().save(employee));
+      unawaited(AuthCache().save(employee));
 
       Navigator.pushReplacementNamed(
         context,
@@ -206,6 +206,7 @@ class _LoginState extends ConsumerState<Login>
   }
 
   Widget _buildBanner(TextTheme textTheme) {
+    final scheme = Theme.of(context).colorScheme;
     if (_bannerError != null) {
       return Padding(
         key: ValueKey('err_$_bannerError'),
@@ -213,18 +214,20 @@ class _LoginState extends ConsumerState<Login>
         child: Container(
           padding: const EdgeInsets.all(AppSpacing.sp12),
           decoration: BoxDecoration(
-            color: AppColors.errorTint,
+            color: scheme.errorContainer,
             borderRadius: BorderRadius.circular(AppRadius.r8),
-            border: Border.all(color: const Color(0xFFFECACA)),
+            border: Border.all(color: scheme.error.withValues(alpha: 0.4)),
           ),
           child: Row(
             children: [
-              const Icon(Icons.error_outline, color: AppColors.error, size: 16),
+              Icon(Icons.error_outline, color: scheme.error, size: 16),
               const SizedBox(width: AppSpacing.sp8),
               Expanded(
                 child: Text(
                   _bannerError!,
-                  style: textTheme.bodySmall?.copyWith(color: AppColors.errorText),
+                  style: textTheme.bodySmall?.copyWith(
+                    color: scheme.onErrorContainer,
+                  ),
                 ),
               ),
             ],
@@ -239,17 +242,23 @@ class _LoginState extends ConsumerState<Login>
         child: Container(
           padding: const EdgeInsets.all(AppSpacing.sp12),
           decoration: BoxDecoration(
-            color: AppColors.successTint,
+            color: scheme.tertiaryContainer,
             borderRadius: BorderRadius.circular(AppRadius.r8),
           ),
           child: Row(
             children: [
-              const Icon(Icons.check_circle_outline, color: AppColors.success, size: 16),
+              Icon(
+                Icons.check_circle_outline,
+                color: scheme.tertiary,
+                size: 16,
+              ),
               const SizedBox(width: AppSpacing.sp8),
               Expanded(
                 child: Text(
                   _bannerSuccess!,
-                  style: textTheme.bodySmall?.copyWith(color: AppColors.successText),
+                  style: textTheme.bodySmall?.copyWith(
+                    color: scheme.onTertiaryContainer,
+                  ),
                 ),
               ),
             ],
@@ -262,13 +271,15 @@ class _LoginState extends ConsumerState<Login>
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final scheme = theme.colorScheme;
     final animations = _entrance.animations;
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: scheme.surface,
         body: SafeArea(
           child: SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -286,12 +297,12 @@ class _LoginState extends ConsumerState<Login>
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: AppColors.primary,
+                      color: scheme.primary,
                       borderRadius: BorderRadius.circular(AppRadius.r12),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.calendar_today_rounded,
-                      color: Colors.white,
+                      color: scheme.onPrimary,
                       size: 22,
                     ),
                   ),
@@ -401,7 +412,7 @@ class _LoginState extends ConsumerState<Login>
                                   ? Icons.visibility_off_outlined
                                   : Icons.visibility_outlined,
                               size: 20,
-                              color: AppColors.muted,
+                              color: scheme.onSurfaceVariant,
                             ),
                             tooltip: _isObscured
                                 ? context.l10n.showPassword
@@ -436,7 +447,7 @@ class _LoginState extends ConsumerState<Login>
                         child: Text(
                           context.l10n.forgotPassword3,
                           style: textTheme.bodySmall?.copyWith(
-                            color: AppColors.primary,
+                            color: scheme.primary,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -446,7 +457,7 @@ class _LoginState extends ConsumerState<Login>
                         child: Text(
                           context.l10n.createAccount,
                           style: textTheme.bodySmall?.copyWith(
-                            color: AppColors.primary,
+                            color: scheme.primary,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
