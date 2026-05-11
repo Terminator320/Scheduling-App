@@ -16,6 +16,7 @@ import 'package:scheduling/features/calendar/domain/appointments_repository.dart
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
+import 'package:scheduling/features/calendar/widgets/details_view_widgets.dart';
 import 'package:scheduling/features/calendar/widgets/employee_picker.dart';
 import 'package:scheduling/features/calendar/widgets/photo_picker_section.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
@@ -467,7 +468,7 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
       const SizedBox(height: AppSpacing.sp16),
 
       // Client
-      _SectionRow(
+      DetailsSectionRow(
         label: ctx.l10n.client,
         value: _client?.displayName ?? a.clientName,
         subtitle: a.clientPhone.isNotEmpty ? a.clientPhone : ctx.l10n.noNumber,
@@ -495,7 +496,7 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
       const SizedBox(height: AppSpacing.sp16),
 
       // Address (tappable if has address)
-      _AddressRow(
+      DetailsAddressRow(
         label: ctx.l10n.address,
         address: a.address.isNotEmpty ? a.address : ctx.l10n.noAddress,
         onTap: a.address.isNotEmpty
@@ -505,7 +506,7 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
       const SizedBox(height: AppSpacing.sp16),
 
       // Notes
-      _SectionRow(
+      DetailsSectionRow(
         label: ctx.l10n.notes,
         value: a.notes.isNotEmpty ? a.notes : ctx.l10n.noNotes,
       ),
@@ -588,7 +589,7 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
 
   Widget _buildMaterialsView(AppointmentRecord a, ThemeData theme) {
     final scheme = theme.colorScheme;
-    return _SectionRow(
+    return DetailsSectionRow(
       label: context.l10n.materialsNeeded,
       value: a.materialsNeeded.isEmpty ? context.l10n.noMaterials : '',
       customValue: a.materialsNeeded.isNotEmpty
@@ -644,7 +645,7 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
             style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
           )
         else
-          ..._selectedEmployees.map((e) => _EmployeePillView(employee: e)),
+          ..._selectedEmployees.map((e) => DetailsEmployeePill(employee: e)),
       ],
     );
   }
@@ -1001,173 +1002,6 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
           ),
         );
       }).toList(),
-    );
-  }
-}
-
-// ── Private view-mode widgets ─────────────────────────────────────────────
-
-class _SectionRow extends StatelessWidget {
-  const _SectionRow({
-    required this.label,
-    required this.value,
-    this.subtitle,
-    this.customValue,
-  });
-
-  final String label;
-  final String value;
-  final String? subtitle;
-  final Widget? customValue;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: scheme.onSurfaceVariant,
-            letterSpacing: 0.7,
-          ),
-        ),
-        const SizedBox(height: 6),
-        customValue ?? Text(
-          value,
-          style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
-        ),
-        if (subtitle != null) ...[
-          const SizedBox(height: 2),
-          Text(
-            subtitle!,
-            style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _AddressRow extends StatelessWidget {
-  const _AddressRow({required this.label, required this.address, this.onTap});
-
-  final String label;
-  final String address;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: scheme.onSurfaceVariant,
-            letterSpacing: 0.7,
-          ),
-        ),
-        const SizedBox(height: 6),
-        if (onTap != null)
-          InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(AppRadius.r8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      address,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        height: 1.5,
-                        color: scheme.primary,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Icon(
-                      Icons.open_in_new,
-                      size: 14,
-                      color: scheme.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          )
-        else
-          Text(address, style: theme.textTheme.bodyMedium?.copyWith(height: 1.5)),
-      ],
-    );
-  }
-}
-
-class _EmployeePillView extends StatelessWidget {
-  const _EmployeePillView({required this.employee});
-
-  final EmployeeRecord employee;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(AppRadius.r8 + 2),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: employee.color,
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                employee.initials,
-                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  employee.name,
-                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (employee.email.isNotEmpty)
-                  Text(
-                    employee.email,
-                    style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
