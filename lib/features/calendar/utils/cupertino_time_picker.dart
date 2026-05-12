@@ -19,6 +19,11 @@ Future<TimeOfDay?> showCupertinoTimePicker(
   return showModalBottomSheet<TimeOfDay>(
     context: context,
     backgroundColor: Theme.of(context).colorScheme.surface,
+    sheetAnimationStyle: const AnimationStyle(
+      duration: Duration(milliseconds: 280),
+      reverseDuration: Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    ),
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),

@@ -42,26 +42,23 @@ class AppRoutes {
 
       case mainCalendar:
         final args = settings.arguments! as MainCalendarArgs;
-        return MaterialPageRoute(
-          settings: settings,
-          builder: (_) => MainCalendar(
-            isAdmin: args.isAdmin,
-            employeeId: args.employeeId,
-          ),
+        return _fadeRoute(
+          settings,
+          MainCalendar(isAdmin: args.isAdmin, employeeId: args.employeeId),
         );
 
       case employees:
         final args = settings.arguments! as MainCalendarArgs;
-        return MaterialPageRoute(
-          settings: settings,
-          builder: (_) => AddEmployeePage(isAdmin: args.isAdmin, employeeId: args.employeeId),
+        return _fadeRoute(
+          settings,
+          AddEmployeePage(isAdmin: args.isAdmin, employeeId: args.employeeId),
         );
 
       case clients:
         final args = settings.arguments! as ClientsListArgs;
-        return MaterialPageRoute(
-          settings: settings,
-          builder: (_) => ListInformation(
+        return _fadeRoute(
+          settings,
+          ListInformation(
             mode: args.mode,
             isAdmin: args.isAdmin,
             employeeId: args.employeeId,
@@ -70,9 +67,9 @@ class AppRoutes {
 
       case AppRoutes.settings:
         final args = settings.arguments as SettingsArgs?;
-        return MaterialPageRoute(
-          settings: settings,
-          builder: (_) => SettingsScreen(
+        return _fadeRoute(
+          settings,
+          SettingsScreen(
             name: args?.name ?? '',
             email: args?.email ?? '',
             role: args?.role,
@@ -82,6 +79,25 @@ class AppRoutes {
       default:
         return null;
     }
+  }
+
+  static PageRouteBuilder<T> _fadeRoute<T>(
+    RouteSettings settings,
+    Widget page,
+  ) {
+    return PageRouteBuilder<T>(
+      settings: settings,
+      transitionDuration: const Duration(milliseconds: 300),
+      reverseTransitionDuration: const Duration(milliseconds: 250),
+      pageBuilder: (_, __, ___) => page,
+      transitionsBuilder: (_, animation, __, child) => FadeTransition(
+        opacity: CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        ),
+        child: child,
+      ),
+    );
   }
 }
 

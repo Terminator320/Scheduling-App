@@ -103,7 +103,7 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
         ref.watch(eventDetailsControllerProvider(widget.appointment));
     final isCancelled =
         widget.appointment.status.toLowerCase() == 'cancelled';
-    final showEdit = state.isEditing && !isCancelled;
+    final showEdit = state.isEditing && !isCancelled && widget.showActions;
 
     return DraggableSheetFrame(
       builder: (sheetContext, scrollController) {
@@ -119,6 +119,7 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
           children: [
             const SheetHandle(),
             const SizedBox(height: AppSpacing.sp8),
+
             if (showEdit)
               DetailsEditBody(
                 appointment: widget.appointment,

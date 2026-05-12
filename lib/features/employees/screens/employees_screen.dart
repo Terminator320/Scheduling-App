@@ -13,6 +13,7 @@ import 'package:scheduling/features/employees/widgets/employee_form_sheet.dart';
 import 'package:scheduling/features/settings/widgets/settings_drawer.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_empty_state.dart';
+import 'package:scheduling/shared/widgets/fade_in_item.dart';
 import 'package:scheduling/shared/widgets/app_search_bar.dart';
 import 'package:scheduling/shared/widgets/skeleton_loader.dart';
 
@@ -55,6 +56,11 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 280),
+        reverseDuration: Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      ),
       builder: (_) =>
           EmployeeFormSheet(employee: employee, usedColors: usedColors),
     );
@@ -79,6 +85,11 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 280),
+        reverseDuration: Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      ),
       builder: (_) => EmployeeDetailsSheet(employee: employee),
     );
 
@@ -182,14 +193,18 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
                 const Divider(height: 1, indent: 64),
             itemBuilder: (context, index) {
               final employee = filtered[index];
-              return EmployeeCard(
-                employee: employee,
-                onTap: () async {
-                  _clearSearch();
-                  await Future<void>.delayed(const Duration(milliseconds: 80));
-                  if (!mounted) return;
-                  await _showEmployeeDetails(employee);
-                },
+              return FadeInItem(
+                key: ValueKey(employee.id),
+                index: index,
+                child: EmployeeCard(
+                  employee: employee,
+                  onTap: () async {
+                    _clearSearch();
+                    await Future<void>.delayed(const Duration(milliseconds: 80));
+                    if (!mounted) return;
+                    await _showEmployeeDetails(employee);
+                  },
+                ),
               );
             },
           );

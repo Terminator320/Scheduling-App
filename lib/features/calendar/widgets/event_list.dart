@@ -8,6 +8,7 @@ import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/appointment_card.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/app_empty_state.dart';
+import 'package:scheduling/shared/widgets/fade_in_item.dart';
 import 'package:scheduling/shared/widgets/skeleton_loader.dart';
 
 class EventList extends StatelessWidget {
@@ -69,16 +70,20 @@ class EventList extends StatelessWidget {
                   ? nameMap[e.employeeIds.first]
                   : null;
 
-              return Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sp16,
-                  vertical: AppSpacing.sp4,
-                ),
-                child: AppointmentCard(
-                  appointment: e,
-                  employeeColor: accent,
-                  employeeName: employeeName,
-                  onTap: () => showEventDetails(context, e),
+              return FadeInItem(
+                key: ValueKey(e.id),
+                index: index,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sp16,
+                    vertical: AppSpacing.sp4,
+                  ),
+                  child: AppointmentCard(
+                    appointment: e,
+                    employeeColor: accent,
+                    employeeName: employeeName,
+                    onTap: () => showEventDetails(context, e, showActions: isAdmin),
+                  ),
                 ),
               );
             },

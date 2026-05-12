@@ -108,18 +108,25 @@ class AppCalendar extends StatelessWidget {
         },
         selectedBuilder: (context, day, focusedDay) {
           final scheme = Theme.of(context).colorScheme;
-          return _dayCell(
-            context,
-            day,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: scheme.primaryContainer,
+          return TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.7, end: 1.0),
+            duration: AppDuration.fast,
+            curve: Curves.easeOutCubic,
+            builder: (context, scale, child) =>
+                Transform.scale(scale: scale, child: child),
+            child: _dayCell(
+              context,
+              day,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: scheme.primaryContainer,
+              ),
+              textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: scheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+              rowH: effectiveRowH,
             ),
-            textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: scheme.primary,
-              fontWeight: FontWeight.w600,
-            ),
-            rowH: effectiveRowH,
           );
         },
         markerBuilder: (context, day, events) {

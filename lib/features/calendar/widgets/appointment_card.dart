@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/animations/tap_scale.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -30,85 +31,87 @@ class AppointmentCard extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return Card(
-      margin: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(width: 3, color: employeeColor),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.sp12,
-                    AppSpacing.sp12,
-                    AppSpacing.sp8,
-                    AppSpacing.sp12,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              appointment.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.titleMedium,
+    return TapScale(
+      child: Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(width: 3, color: employeeColor),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.sp12,
+                      AppSpacing.sp12,
+                      AppSpacing.sp8,
+                      AppSpacing.sp12,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                appointment.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleMedium,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: AppSpacing.sp8),
-                          StatusChip(status: _statusFromString(appointment.displayStatus)),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.sp4),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.access_time_outlined,
-                            size: 13,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: AppSpacing.sp4),
-                          Text(
-                            '${DateUtilsHelper.formatTime(appointment.startTime)} – ${DateUtilsHelper.formatTime(appointment.endTime)}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (employeeName != null) ...[
+                            const SizedBox(width: AppSpacing.sp8),
+                            StatusChip(status: _statusFromString(appointment.displayStatus)),
+                          ],
+                        ),
                         const SizedBox(height: AppSpacing.sp4),
                         Row(
                           children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: employeeColor,
-                                shape: BoxShape.circle,
-                              ),
+                            Icon(
+                              Icons.access_time_outlined,
+                              size: 13,
+                              color: scheme.onSurfaceVariant,
                             ),
                             const SizedBox(width: AppSpacing.sp4),
                             Text(
-                              employeeName!,
+                              '${DateUtilsHelper.formatTime(appointment.startTime)} – ${DateUtilsHelper.formatTime(appointment.endTime)}',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: scheme.onSurfaceVariant,
                               ),
                             ),
                           ],
                         ),
+                        if (employeeName != null) ...[
+                          const SizedBox(height: AppSpacing.sp4),
+                          Row(
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: employeeColor,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.sp4),
+                              Text(
+                                employeeName!,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
