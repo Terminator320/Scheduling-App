@@ -97,19 +97,41 @@ class DetailsViewBody extends ConsumerWidget {
           isCancelled: isCancelled,
           onRetry: notifier.enterEditing,
         ),
-        if (showActions)
-          DetailsActionBar(
-            isToday: isToday,
-            isDone: isDone,
-            isCancelled: isCancelled,
-            isSaving: state.isSaving,
-            onMarkDone: () async {
-              if (await notifier.markAsDone(appointment)) onClose();
-            },
-            onCancel: () async {
-              if (await notifier.cancelAppointment(appointment)) onClose();
-            },
+        DetailsActionBar(
+          isToday: isToday,
+          isDone: isDone,
+          isCancelled: isCancelled,
+          isSaving: state.isSaving,
+          showCancel: showActions,
+          onMarkDone: () async {
+            if (await notifier.markAsDone(appointment)) onClose();
+          },
+          onCancel: () async {
+            if (await notifier.cancelAppointment(appointment)) onClose();
+          },
+        ),
+        if (showActions) ...[
+          // TODO(pre-ship): Remove the SizedBox and OutlinedButton below — testing only.
+          const SizedBox(height: AppSpacing.sp8),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 44),
+              foregroundColor: Theme.of(context).colorScheme.error,
+              side: BorderSide(color: Theme.of(context).colorScheme.error),
+            ),
+            onPressed: state.isSaving
+                ? null
+                : () async {
+                    final confirmed = await _confirmDeleteDialog(context);
+                    if (!context.mounted || !confirmed) return;
+                    if (await notifier.deleteAppointment(appointment)) {
+                      onClose();
+                    }
+                  },
+            icon: const Icon(Icons.delete_outline, size: 15),
+            label: Text(context.l10n.deleteAppointment),
           ),
+        ],
       ],
     );
   }
@@ -364,5 +386,31 @@ class _PhotosView extends ConsumerWidget {
       ],
     );
   }
+}
+
+// TODO(pre-ship): Remove this entire function — used only by the testing delete button above.
+Future<bool> _confirmDeleteDialog(BuildContext context) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(ctx.l10n.deleteAppointment),
+      content: Text(ctx.l10n.areYouSureYouWantToDeleteThisJob),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: Text(ctx.l10n.cancel),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(ctx).colorScheme.error,
+            foregroundColor: Theme.of(ctx).colorScheme.onError,
+          ),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: Text(ctx.l10n.delete),
+        ),
+      ],
+    ),
+  );
+  return result ?? false;
 }
 

@@ -288,6 +288,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           events: _selectedEvents,
           employees: employees,
           isLoading: isLoading,
+          isAdmin: widget.isAdmin,
         ),
       ],
     );
