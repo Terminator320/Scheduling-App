@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dialog.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 
 Future<bool?> _showConfirm(WidgetTester tester, {required bool isAdmin}) async {
   bool? result;
@@ -14,10 +15,13 @@ Future<bool?> _showConfirm(WidgetTester tester, {required bool isAdmin}) async {
         builder: (context) => Scaffold(
           body: Center(
             child: ElevatedButton(
+              // Mirrors the composition in settings_screen._confirmDeleteAccount.
               onPressed: () async {
-                result = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => DeleteAccountDialog(isAdmin: isAdmin),
+                result = await showConfirmDialog(
+                  context,
+                  title: context.l10n.settings_deleteAccountConfirmTitle,
+                  confirmLabel: context.l10n.settings_deletePermanently,
+                  content: DeleteAccountWarningContent(isAdmin: isAdmin),
                 );
               },
               child: const Text('open'),
@@ -33,7 +37,7 @@ Future<bool?> _showConfirm(WidgetTester tester, {required bool isAdmin}) async {
 }
 
 void main() {
-  group('DeleteAccountDialog', () {
+  group('delete-account confirm dialog', () {
     testWidgets('shows admin warning when isAdmin = true', (tester) async {
       await _showConfirm(tester, isAdmin: true);
       expect(find.text('Delete account?'), findsOneWidget);
@@ -67,8 +71,9 @@ void main() {
   });
 
   group('DeleteAccountReauthDialog', () {
-    testWidgets('shows password field with obscured text by default',
-        (tester) async {
+    testWidgets('shows password field with obscured text by default', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,

@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 
-enum AvatarSize { sm, md, lg }
+enum AvatarSize { xs, sm, md, lg }
 
 class AppAvatar extends StatelessWidget {
-  const AppAvatar({required this.name, super.key, this.color, this.size = AvatarSize.md});
+  const AppAvatar({
+    required this.name,
+    super.key,
+    this.color,
+    this.size = AvatarSize.md,
+  });
 
   final String name;
   final Color? color;
@@ -13,29 +18,33 @@ class AppAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final diameter = switch (size) {
+      AvatarSize.xs => 20.0,
       AvatarSize.sm => 28.0,
       AvatarSize.md => 36.0,
       AvatarSize.lg => 48.0,
     };
     final fontSize = switch (size) {
+      AvatarSize.xs => 8.0,
       AvatarSize.sm => 10.0,
       AvatarSize.md => 13.0,
       AvatarSize.lg => 17.0,
     };
     final initials = _initials(name);
+    final background = color ?? _colorFromName(name);
+    final foreground = contrastingForegroundFor(background);
     return Container(
       constraints: BoxConstraints.tight(Size(diameter, diameter)),
       decoration: BoxDecoration(
-        color: color ?? _colorFromName(name),
+        color: background,
         shape: BoxShape.circle,
       ),
       alignment: Alignment.center,
       child: initials == '?'
-          ? Icon(Icons.person, color: Colors.white, size: fontSize + 4)
+          ? Icon(Icons.person, color: foreground, size: fontSize + 4)
           : Text(
               initials,
               style: TextStyle(
-                color: Colors.white,
+                color: foreground,
                 fontSize: fontSize,
                 fontWeight: FontWeight.w700,
               ),
@@ -51,6 +60,7 @@ class AppAvatar extends StatelessWidget {
   }
 
   static Color _colorFromName(String name) {
-    return AppColors.employeePalette[name.hashCode.abs() % AppColors.employeePalette.length];
+    return AppColors.employeePalette[name.hashCode.abs() %
+        AppColors.employeePalette.length];
   }
 }

@@ -6,6 +6,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
@@ -39,28 +40,13 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
   bool _isDisabling = false;
 
   Future<void> _confirmDelete() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(ctx.l10n.employees_deleteEmployee),
-        content: Text(ctx.l10n.employees_areYouSureYouWantToDeleteThisEmployee),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(ctx.l10n.common_cancel),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-              foregroundColor: Theme.of(ctx).colorScheme.onError,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(ctx.l10n.common_delete),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: context.l10n.employees_deleteEmployee,
+      message: context.l10n.employees_areYouSureYouWantToDeleteThisEmployee,
+      confirmLabel: context.l10n.common_delete,
     );
-    if (!mounted || confirmed != true) return;
+    if (!mounted || !confirmed) return;
     setState(() => _isDeleting = true);
     try {
       await ref
@@ -72,44 +58,27 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
       ref.read(loggerProvider).warn('deleteEmployee failed', e, st);
       if (!mounted) return;
       setState(() => _isDeleting = false);
-      ref.read(noticeServiceProvider).error(context.l10n.error_somethingWentWrong);
+      ref
+          .read(noticeServiceProvider)
+          .error(context.l10n.error_somethingWentWrong);
     }
   }
 
   Future<void> _confirmDisable() async {
     final isDisabled = widget.employee.isDisabled;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          isDisabled ? ctx.l10n.employees_enableEmployee : ctx.l10n.employees_disableEmployee,
-        ),
-        content: Text(
-          isDisabled
-              ? ctx.l10n.employees_enableEmployeeConfirmBody
-              : ctx.l10n.employees_disableEmployeeConfirmBody,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(ctx.l10n.common_cancel),
-          ),
-          FilledButton(
-            style: isDisabled
-                ? null
-                : FilledButton.styleFrom(
-                    backgroundColor: Theme.of(ctx).colorScheme.error,
-                    foregroundColor: Theme.of(ctx).colorScheme.onError,
-                  ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              isDisabled ? ctx.l10n.employees_enableEmployee : ctx.l10n.employees_disableEmployee,
-            ),
-          ),
-        ],
-      ),
+    final actionLabel = isDisabled
+        ? context.l10n.employees_enableEmployee
+        : context.l10n.employees_disableEmployee;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: actionLabel,
+      message: isDisabled
+          ? context.l10n.employees_enableEmployeeConfirmBody
+          : context.l10n.employees_disableEmployeeConfirmBody,
+      confirmLabel: actionLabel,
+      destructive: !isDisabled,
     );
-    if (!mounted || confirmed != true) return;
+    if (!mounted || !confirmed) return;
     setState(() => _isDisabling = true);
     try {
       final repo = ref.read(employeesRepositoryProvider);
@@ -124,7 +93,9 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
       ref.read(loggerProvider).warn('toggleEmployeeStatus failed', e, st);
       if (!mounted) return;
       setState(() => _isDisabling = false);
-      ref.read(noticeServiceProvider).error(context.l10n.error_somethingWentWrong);
+      ref
+          .read(noticeServiceProvider)
+          .error(context.l10n.error_somethingWentWrong);
     }
   }
 

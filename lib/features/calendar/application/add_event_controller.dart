@@ -84,15 +84,14 @@ class AddEventController extends Notifier<AddEventState> {
 
   void selectStartTime(TimeOfDay time) {
     final auto = !state.endTimeWasPickedManually;
+    var errors = withoutKey(state.errors, 'startTime');
+    if (auto) errors = withoutKey(errors, 'endTime');
     state = state.copyWith(
       selectedStartTime: time,
       selectedEndTime: auto
           ? AppointmentDraftDefaults.defaultEndTime(time)
           : state.selectedEndTime,
-      errors: withoutKey(
-        withoutKey(state.errors, 'startTime'),
-        auto ? 'endTime' : '_',
-      ),
+      errors: errors,
     );
   }
 

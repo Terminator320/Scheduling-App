@@ -143,11 +143,7 @@ class _SwatchButton extends StatelessWidget {
           child: isSelected
               ? Icon(
                   Icons.check,
-                  color:
-                      ThemeData.estimateBrightnessForColor(color) ==
-                          Brightness.dark
-                      ? Colors.white
-                      : Colors.black,
+                  color: contrastingForegroundFor(color),
                   size: 16,
                 )
               : null,

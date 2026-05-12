@@ -8,8 +8,6 @@ class AppLanguageController extends ValueNotifier<String> {
 
   static final AppLanguageController instance = AppLanguageController._();
 
-  bool get isFrench => value == 'fr';
-
   void setLanguage(String code) {
     if (code == value) return;
     Intl.defaultLocale = code == 'fr' ? 'fr_CA' : 'en_CA';
@@ -19,11 +17,14 @@ class AppLanguageController extends ValueNotifier<String> {
 
 class AppLanguageScope extends InheritedNotifier<AppLanguageController> {
   const AppLanguageScope({
-    required AppLanguageController controller, required super.child, super.key,
+    required AppLanguageController controller,
+    required super.child,
+    super.key,
   }) : super(notifier: controller);
 
   static AppLanguageController of(BuildContext context) {
-    final scope = context.dependOnInheritedWidgetOfExactType<AppLanguageScope>();
+    final scope = context
+        .dependOnInheritedWidgetOfExactType<AppLanguageScope>();
     return scope?.notifier ?? AppLanguageController.instance;
   }
 }

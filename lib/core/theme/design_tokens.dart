@@ -113,6 +113,13 @@ class AppMotion {
   );
 }
 
+/// Black or white, whichever contrasts with [background] (e.g. initials on an
+/// employee color). Not a theme-brightness branch — the input is data-driven.
+Color contrastingForegroundFor(Color background) =>
+    ThemeData.estimateBrightnessForColor(background) == Brightness.dark
+    ? Colors.white
+    : Colors.black;
+
 /// Surface-card decoration shared across the settings cards. The light/dark
 /// difference (drop shadow vs. outline border) is theme-driven via
 /// [AppCardStyle] — no brightness checks at the call site.

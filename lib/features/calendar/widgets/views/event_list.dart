@@ -4,7 +4,6 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
-import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
@@ -13,7 +12,7 @@ import 'package:scheduling/shared/widgets/primitives/fade_in_item.dart';
 class EventList extends StatelessWidget {
   const EventList({
     required this.events,
-    required this.employees,
+    required this.nameMap,
     required this.colorMap,
     super.key,
     this.isAdmin = true,
@@ -22,7 +21,7 @@ class EventList extends StatelessWidget {
     this.selectedAppointmentId,
   });
   final ValueNotifier<List<AppointmentRecord>> events;
-  final List<EmployeeRecord> employees;
+  final Map<String, String> nameMap;
   final Map<String, Color> colorMap;
   final bool isAdmin;
   final bool isLoading;
@@ -49,7 +48,6 @@ class EventList extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final nameMap = {for (final emp in employees) emp.id: emp.name};
 
     return Expanded(
       child: isLoading
