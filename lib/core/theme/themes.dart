@@ -3,16 +3,22 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 
 TextTheme _buildTextTheme(Color onSurface, Color subtle) {
-  final base = GoogleFonts.interTextTheme();
+  // `.apply` colors every variant (titleLarge / titleSmall / displayMedium /
+  // headlineSmall …) so widgets reading those styles stay legible in dark
+  // mode. The explicit copyWith below only customizes sizing/weight.
+  final base = GoogleFonts.interTextTheme().apply(
+    bodyColor: onSurface,
+    displayColor: onSurface,
+  );
   return base.copyWith(
-    displayLarge: base.displayLarge?.copyWith(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: onSurface),
-    headlineLarge: base.headlineLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: onSurface),
-    headlineMedium: base.headlineMedium?.copyWith(fontSize: 17, fontWeight: FontWeight.w600, color: onSurface),
-    titleMedium: base.titleMedium?.copyWith(fontSize: 15, fontWeight: FontWeight.w600, color: onSurface),
-    bodyLarge: base.bodyLarge?.copyWith(fontSize: 15, fontWeight: FontWeight.w400, color: onSurface),
-    bodyMedium: base.bodyMedium?.copyWith(fontSize: 13, fontWeight: FontWeight.w400, color: onSurface),
+    displayLarge: base.displayLarge?.copyWith(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+    headlineLarge: base.headlineLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: -0.3),
+    headlineMedium: base.headlineMedium?.copyWith(fontSize: 17, fontWeight: FontWeight.w600),
+    titleMedium: base.titleMedium?.copyWith(fontSize: 15, fontWeight: FontWeight.w600),
+    bodyLarge: base.bodyLarge?.copyWith(fontSize: 15, fontWeight: FontWeight.w400),
+    bodyMedium: base.bodyMedium?.copyWith(fontSize: 13, fontWeight: FontWeight.w400),
     bodySmall: base.bodySmall?.copyWith(fontSize: 11, fontWeight: FontWeight.w400, color: subtle),
-    labelLarge: base.labelLarge?.copyWith(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.3, color: onSurface),
+    labelLarge: base.labelLarge?.copyWith(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.3),
     labelMedium: base.labelMedium?.copyWith(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.5, color: subtle),
     labelSmall: base.labelSmall?.copyWith(fontSize: 9, fontWeight: FontWeight.w500, letterSpacing: 0.5, color: subtle),
   );
@@ -25,6 +31,12 @@ ThemeData lightTheme() {
     onPrimaryContainer: AppColors.primaryDark,
     secondary: AppColors.success,
     onSecondary: Colors.white,
+    secondaryContainer: AppColors.successTint,
+    onSecondaryContainer: AppColors.successText,
+    tertiary: AppColors.warning,
+    onTertiary: Colors.white,
+    tertiaryContainer: AppColors.warningTint,
+    onTertiaryContainer: AppColors.warningText,
     onSurface: AppColors.onSurface,
     onSurfaceVariant: AppColors.subtle,
     outline: AppColors.outline,
@@ -39,6 +51,7 @@ ThemeData lightTheme() {
   return ThemeData(
     useMaterial3: true,
     colorScheme: cs,
+    extensions: const [AppStatusColors.light],
     scaffoldBackgroundColor: AppColors.background,
     textTheme: _buildTextTheme(AppColors.onSurface, AppColors.subtle),
     appBarTheme: AppBarTheme(
@@ -112,6 +125,12 @@ ThemeData darkTheme() {
     onPrimaryContainer: AppColors.darkPrimaryOnDark,
     secondary: AppColors.success,
     onSecondary: Colors.white,
+    secondaryContainer: AppColors.darkSuccessTint,
+    onSecondaryContainer: AppColors.darkSuccessText,
+    tertiary: AppColors.warning,
+    onTertiary: Colors.white,
+    tertiaryContainer: AppColors.darkWarningTint,
+    onTertiaryContainer: AppColors.darkWarningText,
     surface: AppColors.darkSurface,
     onSurface: AppColors.darkOnSurface,
     onSurfaceVariant: AppColors.darkSubtle,
@@ -128,6 +147,7 @@ ThemeData darkTheme() {
   return ThemeData(
     useMaterial3: true,
     colorScheme: cs,
+    extensions: const [AppStatusColors.dark],
     scaffoldBackgroundColor: AppColors.darkBackground,
     textTheme: _buildTextTheme(AppColors.darkOnSurface, AppColors.darkSubtle),
     appBarTheme: AppBarTheme(

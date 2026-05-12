@@ -226,6 +226,10 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
 
   Widget _buildAccountStatusSection(ThemeData theme) {
     final scheme = theme.colorScheme;
+    final statusColors = theme.extension<AppStatusColors>() ??
+        (theme.brightness == Brightness.dark
+            ? AppStatusColors.dark
+            : AppStatusColors.light);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -267,26 +271,26 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
           OutlinedButton.icon(
             onPressed: _isTogglingStatus ? null : _toggleStatus,
             icon: _isTogglingStatus
-                ? const SizedBox(
+                ? SizedBox(
                     width: 14,
                     height: 14,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: AppColors.successText,
+                      color: statusColors.onSuccessContainer,
                     ),
                   )
-                : const Icon(
+                : Icon(
                     Icons.check_circle_outline,
                     size: 14,
-                    color: AppColors.successText,
+                    color: statusColors.onSuccessContainer,
                   ),
             label: Text(
               context.l10n.reEnableAccount,
-              style: const TextStyle(color: AppColors.successText),
+              style: TextStyle(color: statusColors.onSuccessContainer),
             ),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 44),
-              side: const BorderSide(color: AppColors.success),
+              side: BorderSide(color: statusColors.onSuccessContainer),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppRadius.r8),
               ),
@@ -296,26 +300,26 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
           OutlinedButton.icon(
             onPressed: _isTogglingStatus ? null : _toggleStatus,
             icon: _isTogglingStatus
-                ? const SizedBox(
+                ? SizedBox(
                     width: 14,
                     height: 14,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: AppColors.warningText,
+                      color: statusColors.onWarningContainer,
                     ),
                   )
-                : const Icon(
+                : Icon(
                     Icons.block_outlined,
                     size: 14,
-                    color: AppColors.warningText,
+                    color: statusColors.onWarningContainer,
                   ),
             label: Text(
               context.l10n.disableAccount,
-              style: const TextStyle(color: AppColors.warningText),
+              style: TextStyle(color: statusColors.onWarningContainer),
             ),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 44),
-              side: const BorderSide(color: AppColors.warning),
+              side: BorderSide(color: statusColors.onWarningContainer),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppRadius.r8),
               ),

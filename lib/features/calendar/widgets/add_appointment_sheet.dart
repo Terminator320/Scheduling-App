@@ -149,45 +149,35 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
   }
 
   Future<void> _submit() async {
-    final outcome = await _notifier.submit(
-      title: _titleController.text,
-      address: _addressController.text,
-      notes: _notesController.text,
-      materialsNeeded: _materialsController.text,
-    );
-    if (!mounted) return;
-    switch (outcome) {
-      case AddEventInvalid():
-        return;
-      case AddEventBusyEmployees(
-        :final busyEmployees,
-        :final start,
-        :final end,
-      ):
-        final confirmed = await showBusyConflictDialog(
-          context,
-          busyEmployees: busyEmployees,
-          start: start,
-          end: end,
-        );
-        if (!confirmed || !mounted) return;
-        final retry = await _notifier.submit(
+    Future<AddEventSubmitOutcome> attempt({bool forceBusy = false}) =>
+        _notifier.submit(
           title: _titleController.text,
           address: _addressController.text,
           notes: _notesController.text,
           materialsNeeded: _materialsController.text,
-          forceBusy: true,
+          forceBusy: forceBusy,
         );
-        if (!mounted) return;
-        if (retry is AddEventSubmitted) {
-          Navigator.pop(context, retry.appointment);
-        } else if (retry is AddEventFailed) {
-          _showFailedSnack();
-        }
+
+    var outcome = await attempt();
+    if (!mounted) return;
+    if (outcome is AddEventBusyEmployees) {
+      final confirmed = await showBusyConflictDialog(
+        context,
+        busyEmployees: outcome.busyEmployees,
+        start: outcome.start,
+        end: outcome.end,
+      );
+      if (!confirmed || !mounted) return;
+      outcome = await attempt(forceBusy: true);
+      if (!mounted) return;
+    }
+    switch (outcome) {
       case AddEventSubmitted(:final appointment):
         Navigator.pop(context, appointment);
       case AddEventFailed():
         _showFailedSnack();
+      case AddEventInvalid() || AddEventBusyEmployees():
+        break;
     }
   }
 
@@ -401,4 +391,3 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     );
   }
 }
-

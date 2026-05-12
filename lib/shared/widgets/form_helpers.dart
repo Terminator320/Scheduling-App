@@ -12,7 +12,9 @@ Widget formLabel(BuildContext context, String text, {bool optional = false, bool
         if (required)
           Text(
             ' *',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.error),
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: Theme.of(context).colorScheme.error,
+            ),
           ),
         if (optional)
           Text(

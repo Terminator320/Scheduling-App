@@ -20,7 +20,7 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sp16,
@@ -31,17 +31,17 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
         focusNode: focusNode,
         onChanged: onChanged,
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: Theme.of(context).colorScheme.onSurface,
+          color: scheme.onSurface,
         ),
         decoration: InputDecoration(
           hintText: hintText,
           prefixIcon: Icon(
             Icons.search,
             size: 18,
-            color: isDark ? AppColors.darkMuted : AppColors.muted,
+            color: scheme.onSurfaceVariant,
           ),
           filled: true,
-          fillColor: isDark ? AppColors.darkSurfaceAlt : AppColors.surfaceAlt,
+          fillColor: scheme.surfaceContainerHighest,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.r12),
             borderSide: BorderSide.none,
