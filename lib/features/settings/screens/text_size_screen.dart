@@ -31,12 +31,10 @@ class _TextSizeScreenState extends State<TextSizeScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final notifier = ThemeNotifier.of(context);
-    final isDark = notifier.isDark;
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
+        backgroundColor: scheme.primary,
         foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
@@ -48,7 +46,7 @@ class _TextSizeScreenState extends State<TextSizeScreen> {
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
         ),
       ),
-      backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.sp16),
         children: [
@@ -129,7 +127,7 @@ class _TextSizeScreenState extends State<TextSizeScreen> {
 
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: scheme.primary,
               foregroundColor: Colors.white,
               minimumSize: const Size.fromHeight(48),
               shape: RoundedRectangleBorder(
@@ -161,13 +159,14 @@ class _Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = ThemeNotifier.of(context).isDark;
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(AppRadius.r12),
         boxShadow: isDark ? null : AppShadow.card,
-        border: isDark ? Border.all(color: AppColors.darkSurfaceAlt) : null,
+        border: isDark ? Border.all(color: scheme.outlineVariant) : null,
       ),
       padding: padding ?? const EdgeInsets.all(14),
       child: child,
@@ -194,9 +193,6 @@ class _SizeRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final isDark = ThemeNotifier.of(context).isDark;
-    final selectedBg =
-        isDark ? AppColors.darkPrimaryTint : AppColors.primarySurface;
 
     return InkWell(
       onTap: onTap,
@@ -205,7 +201,7 @@ class _SizeRow extends StatelessWidget {
         duration: AppDuration.fast,
         padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 6),
         decoration: BoxDecoration(
-          color: isSelected ? selectedBg : Colors.transparent,
+          color: isSelected ? scheme.primaryContainer : Colors.transparent,
           borderRadius: BorderRadius.circular(AppRadius.r8),
         ),
         child: Row(
@@ -219,7 +215,7 @@ class _SizeRow extends StatelessWidget {
                     fontSize: 11 + (scale - 0.8) * 16,
                     fontWeight: FontWeight.w800,
                     color: isSelected
-                        ? AppColors.primary
+                        ? scheme.primary
                         : scheme.onSurfaceVariant,
                     height: 1,
                   ),
@@ -233,7 +229,7 @@ class _SizeRow extends StatelessWidget {
                 style: theme.textTheme.bodyLarge?.copyWith(
                   fontWeight:
                       isSelected ? FontWeight.w600 : FontWeight.w500,
-                  color: isSelected ? AppColors.primary : null,
+                  color: isSelected ? scheme.primary : null,
                   fontSize: 15,
                 ),
               ),
@@ -243,7 +239,7 @@ class _SizeRow extends StatelessWidget {
                   ? Icons.radio_button_checked_rounded
                   : Icons.radio_button_unchecked_rounded,
               size: 20,
-              color: isSelected ? AppColors.primary : scheme.onSurfaceVariant,
+              color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
             ),
           ],
         ),

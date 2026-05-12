@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
 class LabeledTextField extends StatelessWidget {
@@ -70,17 +69,18 @@ class _FieldError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final error = Theme.of(context).colorScheme.error;
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline_rounded, size: 11, color: AppColors.error),
+          Icon(Icons.info_outline_rounded, size: 11, color: error),
           const SizedBox(width: 4),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(fontSize: 11, color: AppColors.error, height: 1.3),
+              style: TextStyle(fontSize: 11, color: error, height: 1.3),
             ),
           ),
         ],

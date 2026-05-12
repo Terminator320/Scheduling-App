@@ -10,8 +10,13 @@ class StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final (label, bg, fg) = _resolve(isDark);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final statusColors = theme.extension<AppStatusColors>() ??
+        (theme.brightness == Brightness.dark
+            ? AppStatusColors.dark
+            : AppStatusColors.light);
+    final (label, bg, fg) = _resolve(scheme, statusColors);
     return Container(
       // 10px horizontal: sp8 (8) + 2px optical correction for pill label
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp8 + 2, vertical: 3),
@@ -29,46 +34,50 @@ class StatusChip extends StatelessWidget {
     );
   }
 
-  (String, Color, Color) _resolve(bool isDark) => switch (status) {
-    AppointmentStatus.confirmed => (
-      'Confirmed',
-      isDark ? AppColors.darkPrimaryTint : AppColors.primaryTint,
-      isDark ? AppColors.darkPrimaryOnDark : AppColors.primaryDark,
-    ),
-    AppointmentStatus.done => (
-      'Done',
-      isDark ? AppColors.darkSuccessTint : AppColors.successTint,
-      isDark ? AppColors.darkSuccessText : AppColors.successText,
-    ),
-    AppointmentStatus.pending => (
-      'Pending',
-      isDark ? AppColors.darkWarningTint : AppColors.warningTint,
-      isDark ? AppColors.darkWarningText : AppColors.warningText,
-    ),
-    AppointmentStatus.cancelled => (
-      'Cancelled',
-      isDark ? AppColors.darkErrorTint : AppColors.errorTint,
-      isDark ? AppColors.darkErrorText : AppColors.errorText,
-    ),
-    AppointmentStatus.active => (
-      'Active',
-      isDark ? AppColors.darkSuccessTint : AppColors.successTint,
-      isDark ? AppColors.darkSuccessText : AppColors.successText,
-    ),
-    AppointmentStatus.invited => (
-      'Invited',
-      isDark ? AppColors.darkInvitedTint : AppColors.invitedTint,
-      isDark ? AppColors.darkInvitedText : AppColors.invitedText,
-    ),
-    AppointmentStatus.disabled => (
-      'Disabled',
-      isDark ? AppColors.darkDisabled : AppColors.disabled,
-      isDark ? AppColors.darkMuted : AppColors.subtle,
-    ),
-    AppointmentStatus.inProgress => (
-      'In Progress',
-      isDark ? const Color(0xFF0C4A6E) : const Color(0xFFE0F2FE),
-      isDark ? const Color(0xFF7DD3FC) : const Color(0xFF0369A1),
-    ),
-  };
+  (String, Color, Color) _resolve(
+    ColorScheme scheme,
+    AppStatusColors statusColors,
+  ) =>
+      switch (status) {
+        AppointmentStatus.confirmed => (
+          'Confirmed',
+          scheme.primaryContainer,
+          scheme.onPrimaryContainer,
+        ),
+        AppointmentStatus.done => (
+          'Done',
+          statusColors.successContainer,
+          statusColors.onSuccessContainer,
+        ),
+        AppointmentStatus.pending => (
+          'Pending',
+          statusColors.warningContainer,
+          statusColors.onWarningContainer,
+        ),
+        AppointmentStatus.cancelled => (
+          'Cancelled',
+          scheme.errorContainer,
+          scheme.onErrorContainer,
+        ),
+        AppointmentStatus.active => (
+          'Active',
+          statusColors.successContainer,
+          statusColors.onSuccessContainer,
+        ),
+        AppointmentStatus.invited => (
+          'Invited',
+          statusColors.invitedContainer,
+          statusColors.onInvitedContainer,
+        ),
+        AppointmentStatus.disabled => (
+          'Disabled',
+          scheme.surfaceContainerHighest,
+          scheme.onSurfaceVariant,
+        ),
+        AppointmentStatus.inProgress => (
+          'In Progress',
+          statusColors.inProgressContainer,
+          statusColors.onInProgressContainer,
+        ),
+      };
 }

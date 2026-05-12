@@ -29,7 +29,7 @@ class EmployeeCard extends StatelessWidget {
           children: [
             AppAvatar(
               name: employee.name.isEmpty ? '?' : employee.name,
-              color: employee.isDisabled ? AppColors.disabled : employee.color,
+              color: employee.isDisabled ? scheme.outlineVariant : employee.color,
             ),
             const SizedBox(width: AppSpacing.sp12),
             Expanded(

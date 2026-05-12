@@ -37,8 +37,8 @@ class DetailsActionBar extends StatelessWidget {
           FilledButton.icon(
             style: FilledButton.styleFrom(
               minimumSize: const Size(double.infinity, 48),
-              backgroundColor: scheme.tertiary,
-              foregroundColor: scheme.onTertiary,
+              backgroundColor: scheme.secondary,
+              foregroundColor: scheme.onSecondary,
             ),
             onPressed: isSaving ? null : onMarkDone,
             icon: isSaving
@@ -47,7 +47,7 @@ class DetailsActionBar extends StatelessWidget {
                     width: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: scheme.onTertiary,
+                      color: scheme.onSecondary,
                     ),
                   )
                 : const Icon(Icons.check, size: 18),
@@ -58,8 +58,8 @@ class DetailsActionBar extends StatelessWidget {
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 44),
-              foregroundColor: scheme.tertiary,
-              side: BorderSide(color: scheme.tertiary),
+              foregroundColor: scheme.secondary,
+              side: BorderSide(color: scheme.secondary),
             ),
             onPressed: null,
             icon: const Icon(Icons.check_circle_outline, size: 18),

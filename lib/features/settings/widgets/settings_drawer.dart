@@ -91,16 +91,21 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
   }
 
   Widget _buildHeader(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final statusBarHeight = MediaQuery.of(context).padding.top;
-    final roleLabel =
-        widget.isAdmin ? context.l10n.admin : context.l10n.employeeRoleValue;
+    final roleLabel = widget.isAdmin
+        ? context.l10n.admin
+        : context.l10n.employeeRoleValue;
 
     return Container(
       width: double.infinity,
       padding: EdgeInsets.fromLTRB(20, statusBarHeight + 24, 20, 22),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryDark],
+          colors: [
+            scheme.primary,
+            Color.alphaBlend(Colors.black.withValues(alpha: 0.2), scheme.primary),
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -117,7 +122,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             ),
             child: AppAvatar(
               name: _displayName,
-              color: AppColors.primaryDark,
+              color: scheme.onPrimaryContainer,
               size: AvatarSize.lg,
             ),
           ),
@@ -139,8 +144,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
           Row(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.22),
                   borderRadius: BorderRadius.circular(AppRadius.rFull),
@@ -177,6 +181,12 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
   }
 
   Widget _buildNav(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final statusColors = theme.extension<AppStatusColors>() ??
+        (theme.brightness == Brightness.dark
+            ? AppStatusColors.dark
+            : AppStatusColors.light);
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Padding(
@@ -186,31 +196,30 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
           // ── Main navigation ─────────────────────────────────────────
           _NavItem(
             icon: Icons.calendar_today_rounded,
-            iconColor: AppColors.primary,
+            iconColor: scheme.primary,
             label: context.l10n.calendar,
             onTap: () => _goToCalendar(context),
           ),
           if (widget.isAdmin) ...[
             _NavItem(
               icon: Icons.people_rounded,
-              iconColor: AppColors.success,
+              iconColor: statusColors.success,
               label: context.l10n.clients,
               onTap: () => _goToClients(context),
             ),
             _NavItem(
               icon: Icons.badge_rounded,
-              iconColor: AppColors.accent,
+              iconColor: statusColors.accent,
               label: context.l10n.employees,
               onTap: () => _goToEmployees(context),
             ),
+            _NavItem(
+              icon: Icons.history_rounded,
+              iconColor: statusColors.warning,
+              label: context.l10n.history,
+              onTap: () => _goToHistory(context),
+            ),
           ],
-          _NavItem(
-            icon: Icons.history_rounded,
-            iconColor: AppColors.warning,
-            label: context.l10n.history,
-            onTap: () => _goToHistory(context),
-          ),
-
           const Spacer(),
 
           // ── Settings pinned at bottom ───────────────────────────────
@@ -218,7 +227,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
           const SizedBox(height: 4),
           _NavItem(
             icon: Icons.settings_rounded,
-            iconColor: AppColors.subtle,
+            iconColor: scheme.onSurfaceVariant,
             label: context.l10n.settings,
             onTap: () => _goToSettings(context),
           ),
@@ -233,8 +242,10 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
     Navigator.pushReplacementNamed(
       context,
       AppRoutes.mainCalendar,
-      arguments:
-          MainCalendarArgs(isAdmin: widget.isAdmin, employeeId: widget.employeeId),
+      arguments: MainCalendarArgs(
+        isAdmin: widget.isAdmin,
+        employeeId: widget.employeeId,
+      ),
     );
   }
 
@@ -256,8 +267,10 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
     Navigator.pushNamed(
       context,
       AppRoutes.employees,
-      arguments:
-          MainCalendarArgs(isAdmin: widget.isAdmin, employeeId: widget.employeeId),
+      arguments: MainCalendarArgs(
+        isAdmin: widget.isAdmin,
+        employeeId: widget.employeeId,
+      ),
     );
   }
 

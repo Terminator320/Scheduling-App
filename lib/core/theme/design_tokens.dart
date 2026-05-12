@@ -38,7 +38,9 @@ class AppColors {
   static const Color darkOnSurface = Color(0xFFF1F5F9);
   static const Color darkSubtle = Color(0xFF64748B);
   static const Color darkMuted = Color(0xFF475569);
-  static const Color darkOutline = Color(0xFF1E293B);
+  // Was Color(0xFF1E293B) which matched darkSurface exactly, so dividers and
+  // text-field borders were invisible against the dark surface.
+  static const Color darkOutline = Color(0xFF475569);
   static const Color darkDisabled = Color(0xFF334155);
 
   // Status — dark
@@ -106,4 +108,120 @@ class AppDuration {
   static const Duration normal = Duration(milliseconds: 250);
   static const Duration slow = Duration(milliseconds: 400);
   static const Duration shimmer = Duration(milliseconds: 1200);
+}
+
+/// Status hues with no clean Material 3 ColorScheme analog (invited = purple,
+/// inProgress = sky blue). Exposed via `Theme.of(context).extension<AppStatusColors>()`
+/// so widget `build()` methods stay free of static `AppColors.*` references.
+@immutable
+class AppStatusColors extends ThemeExtension<AppStatusColors> {
+  const AppStatusColors({
+    required this.success,
+    required this.successContainer,
+    required this.onSuccessContainer,
+    required this.warning,
+    required this.warningContainer,
+    required this.onWarningContainer,
+    required this.invitedContainer,
+    required this.onInvitedContainer,
+    required this.inProgressContainer,
+    required this.onInProgressContainer,
+    required this.accent,
+  });
+
+  final Color success;
+  final Color successContainer;
+  final Color onSuccessContainer;
+  final Color warning;
+  final Color warningContainer;
+  final Color onWarningContainer;
+  final Color invitedContainer;
+  final Color onInvitedContainer;
+  final Color inProgressContainer;
+  final Color onInProgressContainer;
+  final Color accent;
+
+  static const light = AppStatusColors(
+    success: AppColors.success,
+    successContainer: AppColors.successTint,
+    onSuccessContainer: AppColors.successText,
+    warning: AppColors.warning,
+    warningContainer: AppColors.warningTint,
+    onWarningContainer: AppColors.warningText,
+    invitedContainer: AppColors.invitedTint,
+    onInvitedContainer: AppColors.invitedText,
+    inProgressContainer: Color(0xFFE0F2FE),
+    onInProgressContainer: Color(0xFF0369A1),
+    accent: AppColors.accent,
+  );
+
+  static const dark = AppStatusColors(
+    success: AppColors.success,
+    successContainer: AppColors.darkSuccessTint,
+    onSuccessContainer: AppColors.darkSuccessText,
+    warning: AppColors.warning,
+    warningContainer: AppColors.darkWarningTint,
+    onWarningContainer: AppColors.darkWarningText,
+    invitedContainer: AppColors.darkInvitedTint,
+    onInvitedContainer: AppColors.darkInvitedText,
+    inProgressContainer: Color(0xFF0C4A6E),
+    onInProgressContainer: Color(0xFF7DD3FC),
+    accent: AppColors.darkAccent,
+  );
+
+  @override
+  AppStatusColors copyWith({
+    Color? success,
+    Color? successContainer,
+    Color? onSuccessContainer,
+    Color? warning,
+    Color? warningContainer,
+    Color? onWarningContainer,
+    Color? invitedContainer,
+    Color? onInvitedContainer,
+    Color? inProgressContainer,
+    Color? onInProgressContainer,
+    Color? accent,
+  }) {
+    return AppStatusColors(
+      success: success ?? this.success,
+      successContainer: successContainer ?? this.successContainer,
+      onSuccessContainer: onSuccessContainer ?? this.onSuccessContainer,
+      warning: warning ?? this.warning,
+      warningContainer: warningContainer ?? this.warningContainer,
+      onWarningContainer: onWarningContainer ?? this.onWarningContainer,
+      invitedContainer: invitedContainer ?? this.invitedContainer,
+      onInvitedContainer: onInvitedContainer ?? this.onInvitedContainer,
+      inProgressContainer: inProgressContainer ?? this.inProgressContainer,
+      onInProgressContainer:
+          onInProgressContainer ?? this.onInProgressContainer,
+      accent: accent ?? this.accent,
+    );
+  }
+
+  @override
+  AppStatusColors lerp(ThemeExtension<AppStatusColors>? other, double t) {
+    if (other is! AppStatusColors) return this;
+    return AppStatusColors(
+      success: Color.lerp(success, other.success, t)!,
+      successContainer:
+          Color.lerp(successContainer, other.successContainer, t)!,
+      onSuccessContainer:
+          Color.lerp(onSuccessContainer, other.onSuccessContainer, t)!,
+      warning: Color.lerp(warning, other.warning, t)!,
+      warningContainer:
+          Color.lerp(warningContainer, other.warningContainer, t)!,
+      onWarningContainer:
+          Color.lerp(onWarningContainer, other.onWarningContainer, t)!,
+      invitedContainer:
+          Color.lerp(invitedContainer, other.invitedContainer, t)!,
+      onInvitedContainer:
+          Color.lerp(onInvitedContainer, other.onInvitedContainer, t)!,
+      inProgressContainer:
+          Color.lerp(inProgressContainer, other.inProgressContainer, t)!,
+      onInProgressContainer:
+          Color.lerp(onInProgressContainer, other.onInProgressContainer, t)!,
+      accent: Color.lerp(accent, other.accent, t)!,
+    );
+  }
 }

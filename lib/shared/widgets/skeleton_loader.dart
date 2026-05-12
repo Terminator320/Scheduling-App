@@ -31,9 +31,9 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final base = isDark ? AppColors.darkSurfaceAlt : AppColors.surfaceAlt;
-    final highlight = isDark ? AppColors.darkOutline : AppColors.outline;
+    final scheme = Theme.of(context).colorScheme;
+    final base = scheme.surfaceContainerHighest;
+    final highlight = scheme.outline;
     return AnimatedBuilder(
       animation: _anim,
       builder: (_, __) => Container(
