@@ -226,10 +226,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
 
   Widget _buildAccountStatusSection(ThemeData theme) {
     final scheme = theme.colorScheme;
-    final statusColors = theme.extension<AppStatusColors>() ??
-        (theme.brightness == Brightness.dark
-            ? AppStatusColors.dark
-            : AppStatusColors.light);
+    final statusColors = theme.statusColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -290,7 +287,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
             ),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 44),
-              side: BorderSide(color: statusColors.onSuccessContainer),
+              side: BorderSide(color: statusColors.success),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppRadius.r8),
               ),
@@ -319,7 +316,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
             ),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 44),
-              side: BorderSide(color: statusColors.onWarningContainer),
+              side: BorderSide(color: statusColors.warning),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppRadius.r8),
               ),
