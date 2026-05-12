@@ -1,19 +1,62 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'; // TODO(pre-ship): Remove (only needed for delete)
 
 import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/features/employees/application/employees_providers.dart'; // TODO(pre-ship): Remove (only needed for delete)
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';
 
-class EmployeeDetailsSheet extends StatefulWidget {
+// TODO(pre-ship): Revert to StatefulWidget / State once delete is removed.
+class EmployeeDetailsSheet extends ConsumerStatefulWidget {
   const EmployeeDetailsSheet({required this.employee, super.key});
   final EmployeeRecord employee;
 
   @override
-  State<EmployeeDetailsSheet> createState() => _EmployeeDetailsSheetState();
+  ConsumerState<EmployeeDetailsSheet> createState() =>
+      _EmployeeDetailsSheetState();
 }
 
-class _EmployeeDetailsSheetState extends State<EmployeeDetailsSheet> {
+class _EmployeeDetailsSheetState extends ConsumerState<EmployeeDetailsSheet> {
+  // TODO(pre-ship): Remove _isDeleting, _confirmDelete, and the delete button below.
+  bool _isDeleting = false;
+
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(ctx.l10n.deleteEmployee),
+        content: Text(ctx.l10n.areYouSureYouWantToDeleteThisEmployee),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(ctx.l10n.cancel),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(ctx.l10n.delete),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    setState(() => _isDeleting = true);
+    try {
+      await ref
+          .read(employeesRepositoryProvider)
+          .deleteEmployee(widget.employee.id);
+      if (!mounted) return;
+      Navigator.pop(context, 'deleted');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isDeleting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -124,20 +167,27 @@ class _EmployeeDetailsSheetState extends State<EmployeeDetailsSheet> {
                 minimumSize: const Size(double.infinity, 48),
               ),
             ),
-
-            //Deleting Account (Apple maybe needs this)
-            // OutlinedButton.icon(
-            //   onPressed: _isLoading ? null : _confirmDelete,
-            //   icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
-            //   label: Text(context.l10n.delete, style: const TextStyle(color: AppColors.error)),
-            //   style: OutlinedButton.styleFrom(
-            //     minimumSize: const Size(double.infinity, 48),
-            //     side: const BorderSide(color: AppColors.error),
-            //     shape: RoundedRectangleBorder(
-            //       borderRadius: BorderRadius.circular(AppRadius.r8),
-            //     ),
-            //   ),
-            // ),
+            // TODO(pre-ship): Remove the SizedBox and OutlinedButton below — testing only.
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _isDeleting ? null : _confirmDelete,
+              icon: _isDeleting
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: theme.colorScheme.error,
+                      ),
+                    )
+                  : const Icon(Icons.delete_outline, size: 18),
+              label: Text(context.l10n.deleteEmployee),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+                foregroundColor: theme.colorScheme.error,
+                side: BorderSide(color: theme.colorScheme.error),
+              ),
+            ),
           ],
         );
       },

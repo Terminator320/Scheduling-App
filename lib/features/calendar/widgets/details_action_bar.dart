@@ -17,12 +17,14 @@ class DetailsActionBar extends StatelessWidget {
     required this.onMarkDone,
     required this.onCancel,
     super.key,
+    this.showCancel = true,
   });
 
   final bool isToday;
   final bool isDone;
   final bool isCancelled;
   final bool isSaving;
+  final bool showCancel;
   final VoidCallback onMarkDone;
   final VoidCallback onCancel;
 
@@ -66,7 +68,7 @@ class DetailsActionBar extends StatelessWidget {
             label: Text(context.l10n.completed),
           ),
         ],
-        if (!isCancelled) ...[
+        if (showCancel && !isCancelled) ...[
           if (isToday && !isDone) const SizedBox(height: AppSpacing.sp8),
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
