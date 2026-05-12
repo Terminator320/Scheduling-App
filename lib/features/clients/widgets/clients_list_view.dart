@@ -12,6 +12,7 @@ import 'package:scheduling/features/clients/widgets/add_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/client_detail_sheet.dart';
 import 'package:scheduling/features/clients/widgets/client_tile.dart';
 import 'package:scheduling/shared/widgets/app_empty_state.dart';
+import 'package:scheduling/shared/widgets/fade_in_item.dart';
 import 'package:scheduling/shared/widgets/skeleton_loader.dart';
 
 /// Body of the clients list mode: skeleton → list + search → empty state.
@@ -61,6 +62,11 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 280),
+        reverseDuration: Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      ),
       builder: (_) => const AddClientSheet(),
     );
   }
@@ -73,6 +79,11 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 280),
+        reverseDuration: Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      ),
       builder: (_) => ClientDetailSheet(client: client),
     );
 
@@ -132,9 +143,13 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
           itemCount: displayed.length,
           separatorBuilder: (context, index) =>
               const Divider(height: 1, indent: 64),
-          itemBuilder: (context, index) => ClientTile(
-            client: displayed[index],
-            onOpen: () => _openClient(displayed[index]),
+          itemBuilder: (context, index) => FadeInItem(
+            key: ValueKey(displayed[index].id),
+            index: index,
+            child: ClientTile(
+              client: displayed[index],
+              onOpen: () => _openClient(displayed[index]),
+            ),
           ),
         );
       },

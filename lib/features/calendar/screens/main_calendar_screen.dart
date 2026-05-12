@@ -85,7 +85,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
                 .read(appointmentsRepositoryProvider)
                 .getAppointmentById(appointmentId);
             if (!mounted || appointment == null) return;
-            showEventDetails(context, appointment);
+            showEventDetails(context, appointment, showActions: widget.isAdmin);
           },
         ),
       ),

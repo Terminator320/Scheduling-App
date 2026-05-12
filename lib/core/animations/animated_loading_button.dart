@@ -31,6 +31,15 @@ class AnimatedLoadingButton extends StatelessWidget {
     // different widgets so it plays the crossfade when isLoading changes.
     final child = AnimatedSwitcher(
       duration: AppAnimationDurations.switcher,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.85, end: 1.0).animate(
+            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+          ),
+          child: child,
+        ),
+      ),
       child: isLoading
           ? SizedBox(
               key: const ValueKey('spinner'),

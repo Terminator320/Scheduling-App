@@ -122,6 +122,7 @@ class _SwatchButton extends StatelessWidget {
         onTap: onTap,
         child: AnimatedContainer(
           duration: AppDuration.fast,
+          curve: Curves.easeOut,
           width: 32,
           height: 32,
           decoration: BoxDecoration(

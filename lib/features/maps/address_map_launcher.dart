@@ -44,6 +44,11 @@ class AddressMapLauncher {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 280),
+        reverseDuration: Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      ),
       builder: (sheetContext) {
         final theme = Theme.of(sheetContext);
 

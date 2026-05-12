@@ -4,6 +4,12 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/widgets/add_appointment_sheet.dart';
 import 'package:scheduling/features/calendar/widgets/details_edit_sheet.dart';
 
+const _sheetStyle = AnimationStyle(
+  duration: Duration(milliseconds: 280),
+  reverseDuration: Duration(milliseconds: 220),
+  curve: Curves.easeOutCubic,
+);
+
 Future<AppointmentRecord?> showAddEventPopup(
   BuildContext context, {
   DateTime? initialDate,
@@ -12,6 +18,7 @@ Future<AppointmentRecord?> showAddEventPopup(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
+    sheetAnimationStyle: _sheetStyle,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
@@ -28,6 +35,7 @@ Future<void> showEventDetails(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
+    sheetAnimationStyle: _sheetStyle,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
