@@ -57,6 +57,10 @@ abstract class EmployeesRepository {
   Future<void> reactivateEmployee(String docId);
 
   Stream<String> loggedInUserNameStream();
+
+  /// Streams the raw `status` string for the user with the given [uid].
+  /// Emits an empty string if the doc doesn't exist.
+  Stream<String> watchUserStatus(String uid);
 }
 
 /// Result of looking up an `invited` employee by email.
