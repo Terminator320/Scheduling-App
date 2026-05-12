@@ -5,6 +5,7 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
+// Controller bundle for one additional-contact card; the owner must dispose it.
 class ContactFields {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
@@ -60,6 +61,7 @@ class AdditionalContactsSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // --- Header & helper text ---
           Row(
             children: [
               Expanded(
@@ -86,6 +88,7 @@ class AdditionalContactsSection extends StatelessWidget {
               color: scheme.onSurfaceVariant,
             ),
           ),
+          // --- Empty state ---
           if (contacts.isEmpty) ...[
             const SizedBox(height: 12),
             OutlinedButton.icon(
@@ -94,6 +97,7 @@ class AdditionalContactsSection extends StatelessWidget {
               label: Text(context.l10n.clients_addAnotherContact),
             ),
           ],
+          // --- Contact cards ---
           for (var i = 0; i < contacts.length; i++) ...[
             const SizedBox(height: 16),
             _AdditionalContactCard(
@@ -140,9 +144,11 @@ class _AdditionalContactCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // --- Card header ---
           Row(
             children: [
               Expanded(
+                // +2: the main contact above the section is "Contact 1".
                 child: Text(
                   '${context.l10n.clients_contact} ${index + 2}',
                   style: theme.textTheme.titleSmall?.copyWith(
@@ -158,6 +164,7 @@ class _AdditionalContactCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
+          // --- Name, phone & email fields ---
           SheetFocusScroll(
             child: LabeledTextField(
               label: context.l10n.clients_contactName,

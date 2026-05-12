@@ -207,6 +207,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
                 MediaQuery.of(sheetContext).viewInsets.bottom + AppSpacing.sp24,
           ),
           children: [
+            // --- Header ---
             const SheetHandle(),
             const SizedBox(height: AppSpacing.sp16),
             Text(
@@ -216,6 +217,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
             const SizedBox(height: AppSpacing.sp16),
             const Divider(height: 1),
             const SizedBox(height: AppSpacing.sp16),
+            // --- Service title ---
             SheetFocusScroll(
               child: LabeledTextField(
                 label: sheetContext.l10n.calendar_serviceTitle,
@@ -227,6 +229,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
               ),
             ),
             const SizedBox(height: AppSpacing.sp16),
+            // --- Client ---
             formLabel(
               sheetContext,
               sheetContext.l10n.calendar_client,
@@ -245,6 +248,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
               ),
             ),
             const SizedBox(height: AppSpacing.sp16),
+            // --- Employees ---
             formLabel(
               sheetContext,
               sheetContext.l10n.calendar_assignEmployee,
@@ -268,6 +272,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
                 ),
               ),
             const SizedBox(height: AppSpacing.sp16),
+            // --- Date & time ---
             SheetFocusScroll(
               child: LabeledTextField(
                 label: sheetContext.l10n.calendar_date,
@@ -314,6 +319,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
               ],
             ),
             const SizedBox(height: AppSpacing.sp16),
+            // --- Address ---
             AppointmentAddressField(
               selectedClient: state.selectedClient,
               useCustomAddress: state.useCustomAddress,
@@ -321,6 +327,19 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
               onSwitchToCustom: () =>
                   _notifier.setUseCustomAddress(value: true),
               onUseClientAddress: _useClientAddress,
+            ),
+            const SizedBox(height: AppSpacing.sp16),
+            // --- Notes & materials ---
+            SheetFocusScroll(
+              child: LabeledTextField(
+                label: sheetContext.l10n.calendar_notes,
+                hint: sheetContext.l10n.calendar_typeTheNoteHere,
+                controller: _notesController,
+                optional: true,
+                maxLines: 2,
+                maxLength: TextLimits.appointmentNotes,
+                showCounter: true,
+              ),
             ),
             const SizedBox(height: AppSpacing.sp16),
             SheetFocusScroll(
@@ -334,17 +353,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
               ),
             ),
             const SizedBox(height: AppSpacing.sp16),
-            SheetFocusScroll(
-              child: LabeledTextField(
-                label: sheetContext.l10n.calendar_notes,
-                hint: sheetContext.l10n.calendar_typeTheNoteHere,
-                controller: _notesController,
-                optional: true,
-                maxLines: 2,
-                maxLength: TextLimits.appointmentNotes,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sp16),
+            // --- Photos ---
             formLabel(
               sheetContext,
               sheetContext.l10n.calendar_pictures,
@@ -359,6 +368,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
               onRemoveNew: _notifier.removeImage,
             ),
             const SizedBox(height: AppSpacing.sp24),
+            // --- Save ---
             FilledButton(
               style: FilledButton.styleFrom(
                 minimumSize: const Size(double.infinity, 48),

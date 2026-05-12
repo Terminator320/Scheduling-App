@@ -123,9 +123,13 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         .limit(500)
         .snapshots()
         .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
-              .toList(),
+          // Sorted Dart-side: a Firestore orderBy alongside the whereIn
+          // would require a composite index.
+          (snapshot) =>
+              snapshot.docs
+                  .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
+                  .toList()
+                ..sort((a, b) => b.startTime.compareTo(a.startTime)),
         );
   }
 
@@ -159,15 +163,23 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     if (candidates.isEmpty) return const [];
 
     final ids = candidates.map((e) => e.id).toList();
-    final busyIds = <String>{};
 
+    // The 30-ID batches (whereArrayContainsAny limit) are independent —
+    // query them in parallel.
+    final queries = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
     for (var i = 0; i < ids.length; i += 30) {
       final batch = ids.sublist(i, i + 30 < ids.length ? i + 30 : ids.length);
-      final snapshot = await _appointments
-          .where('employeeIds', arrayContainsAny: batch)
-          .where('startTime', isLessThan: Timestamp.fromDate(end))
-          .where('endTime', isGreaterThan: Timestamp.fromDate(start))
-          .get();
+      queries.add(
+        _appointments
+            .where('employeeIds', arrayContainsAny: batch)
+            .where('startTime', isLessThan: Timestamp.fromDate(end))
+            .where('endTime', isGreaterThan: Timestamp.fromDate(start))
+            .get(),
+      );
+    }
+
+    final busyIds = <String>{};
+    for (final snapshot in await Future.wait(queries)) {
       for (final doc in snapshot.docs) {
         final empIds = doc.data()['employeeIds'] as List<dynamic>? ?? const [];
         busyIds.addAll(empIds.whereType<String>());

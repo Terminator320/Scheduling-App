@@ -3,6 +3,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 Future<bool> showBusyConflictDialog(
   BuildContext context, {
@@ -135,27 +136,10 @@ class _BusyEmployeeRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpacing.sp8),
       child: Row(
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: employee.color,
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                employee.initials,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color:
-                      ThemeData.estimateBrightnessForColor(employee.color) ==
-                          Brightness.dark
-                      ? Colors.white
-                      : Colors.black,
-                ),
-              ),
-            ),
+          AppAvatar(
+            name: employee.name,
+            color: employee.color,
+            size: AvatarSize.sm,
           ),
           const SizedBox(width: AppSpacing.sp12),
           Expanded(

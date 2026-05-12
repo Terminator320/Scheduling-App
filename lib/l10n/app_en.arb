@@ -376,6 +376,10 @@
   "@validation_pleaseSelectAClient": {
     "description": "Please select a client"
   },
+  "validation_maximumCharacterLimitReached": "Maximum character limit reached",
+  "@validation_maximumCharacterLimitReached": {
+    "description": "Warning under a text field when its character limit is hit"
+  },
   "error_somethingWentWrongCreatingTheAppointment": "Something went wrong creating the appointment",
   "@error_somethingWentWrongCreatingTheAppointment": {
     "description": "Something went wrong creating the appointment"

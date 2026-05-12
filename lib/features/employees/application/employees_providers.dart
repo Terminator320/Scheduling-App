@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/providers/firebase_providers.dart';
@@ -11,13 +12,24 @@ final employeesRepositoryProvider = Provider<EmployeesRepository>((ref) {
   return FirebaseEmployeesRepository(firestore);
 });
 
-
 final allUsersStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
   if (ref.authUid == null) return Stream.value(const []);
   final repo = ref.watch(employeesRepositoryProvider);
   final role = ref.watch(userRoleProvider).value;
   if (role == 'admin') return repo.watchAllUsers();
   return repo.watchAssignableUsers();
+});
+
+// Derived lookup maps, memoized so build() callers don't re-allocate them on
+// every rebuild; they recompute only when the users stream emits.
+final employeeColorMapProvider = Provider<Map<String, Color>>((ref) {
+  final employees = ref.watch(allUsersStreamProvider).asData?.value ?? const [];
+  return {for (final e in employees) e.id: e.color};
+});
+
+final employeeNameMapProvider = Provider<Map<String, String>>((ref) {
+  final employees = ref.watch(allUsersStreamProvider).asData?.value ?? const [];
+  return {for (final e in employees) e.id: e.name};
 });
 
 final employeesStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
@@ -27,7 +39,6 @@ final employeesStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
 
 final filteredEmployeesProvider = Provider.family<List<EmployeeRecord>, String>(
   (ref, query) {
-
     final list = ref.watch(allUsersStreamProvider).asData?.value ?? const [];
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return list;

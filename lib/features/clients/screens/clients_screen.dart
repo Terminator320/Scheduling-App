@@ -140,8 +140,7 @@ class _ListInformationState extends State<ListInformation> {
           child: TextField(
             controller: _appointmentSearchController,
             onChanged: (_) => setState(() {}),
-            // NOTE: source size 13 sits between bodySmall (12) and bodyMedium
-            // (14); bodyMedium is the nearest input-text role.
+
             style: theme.textTheme.bodyMedium?.copyWith(
               color: scheme.onPrimary,
             ),

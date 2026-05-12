@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
 class LabeledTextField extends StatelessWidget {
@@ -13,6 +14,7 @@ class LabeledTextField extends StatelessWidget {
     this.autofillHints,
     this.maxLines = 1,
     this.maxLength,
+    this.showCounter = false,
     this.readOnly = false,
     this.onTap,
     this.onChanged,
@@ -32,6 +34,7 @@ class LabeledTextField extends StatelessWidget {
   final int maxLines;
 
   final int? maxLength;
+  final bool showCounter;
   final bool readOnly;
   final VoidCallback? onTap;
   final ValueChanged<String>? onChanged;
@@ -53,7 +56,10 @@ class LabeledTextField extends StatelessWidget {
           keyboardType: keyboard,
           autofillHints: autofillHints,
           maxLines: maxLines,
-          inputFormatters: maxLength == null
+          // With showCounter, TextField.maxLength enforces the cap and
+          // renders the live "x/y" counter; otherwise enforce silently.
+          maxLength: showCounter ? maxLength : null,
+          inputFormatters: maxLength == null || showCounter
               ? null
               : [LengthLimitingTextInputFormatter(maxLength)],
           readOnly: readOnly,
@@ -66,8 +72,32 @@ class LabeledTextField extends StatelessWidget {
             prefixIcon: prefixIcon,
           ),
         ),
+        if (showCounter && maxLength != null)
+          _MaxLengthWarning(controller: controller, maxLength: maxLength!),
         if (errorText != null) _FieldError(errorText!),
       ],
+    );
+  }
+}
+
+class _MaxLengthWarning extends StatelessWidget {
+  const _MaxLengthWarning({required this.controller, required this.maxLength});
+  final TextEditingController controller;
+  final int maxLength;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, _) {
+        // Grapheme count matches what TextField.maxLength enforces.
+        if (value.text.characters.length < maxLength) {
+          return const SizedBox.shrink();
+        }
+        return _FieldError(
+          context.l10n.validation_maximumCharacterLimitReached,
+        );
+      },
     );
   }
 }

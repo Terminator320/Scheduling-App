@@ -10,7 +10,16 @@ enum AppointmentStatus {
   invited,
   active,
   disabled,
-  inProgress,
+  inProgress;
+
+  /// Canonical mapping from a stored appointment status string.
+  static AppointmentStatus fromRaw(String raw) => switch (raw.toLowerCase()) {
+    'confirmed' => confirmed,
+    'done' || 'completed' => done,
+    'cancelled' => cancelled,
+    'in_progress' || 'inprogress' => inProgress,
+    _ => pending,
+  };
 }
 
 class StatusChip extends StatelessWidget {

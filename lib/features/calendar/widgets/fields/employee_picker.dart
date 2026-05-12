@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 class EmployeePicker extends StatelessWidget {
   const EmployeePicker({
@@ -64,29 +65,10 @@ class EmployeePicker extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: employee.color,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Text(
-                      employee.initials,
-                      style: TextStyle(
-                        fontSize: 8,
-                        fontWeight: FontWeight.w700,
-                        color:
-                            ThemeData.estimateBrightnessForColor(
-                                  employee.color,
-                                ) ==
-                                Brightness.dark
-                            ? Colors.white
-                            : Colors.black,
-                      ),
-                    ),
-                  ),
+                AppAvatar(
+                  name: employee.name,
+                  color: employee.color,
+                  size: AvatarSize.xs,
                 ),
                 const SizedBox(width: 6),
                 Text(

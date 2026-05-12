@@ -14,6 +14,7 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 
 class DetailsViewBody extends ConsumerWidget {
   const DetailsViewBody({
@@ -374,29 +375,24 @@ class _EmployeesView extends ConsumerWidget {
         appointment,
       ).select((s) => s.selectedEmployees),
     );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          context.l10n.common_employees.toUpperCase(),
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: scheme.onSurfaceVariant,
-            letterSpacing: 0.7,
-          ),
-        ),
-        const SizedBox(height: 8),
-        if (selectedEmployees.isEmpty)
-          Text(
-            context.l10n.calendar_noEmployeesAssigned,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: scheme.onSurfaceVariant,
+    return DetailsSectionRow(
+      label: context.l10n.common_employees,
+      value: '',
+      customValue: selectedEmployees.isEmpty
+          ? Text(
+              context.l10n.calendar_noEmployeesAssigned,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ...selectedEmployees.map(
+                  (e) => DetailsEmployeePill(employee: e),
+                ),
+              ],
             ),
-          )
-        else
-          ...selectedEmployees.map((e) => DetailsEmployeePill(employee: e)),
-      ],
     );
   }
 }
@@ -422,64 +418,37 @@ class _PhotosView extends ConsumerWidget {
     final failure = appointmentId != null
         ? notifier.failureFor(appointmentId)
         : null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          context.l10n.calendar_pictures.toUpperCase(),
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-            letterSpacing: 0.7,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp8),
-        PhotoPickerSection(
-          existingImages: existingImages,
-          newImages: newImages,
-          isEditing: false,
-          onPickImages: () {},
-          onRemoveExisting: (_) {},
-          onRemoveNew: (_) {},
-          failedCount: failure?.failedCount ?? 0,
-          tooLargeFileNames: failure?.tooLargeFileNames ?? const [],
-          onRetry: (failure?.failedCount ?? 0) > 0 && !isCancelled
-              ? () {
-                  if (appointmentId != null) {
-                    notifier.clearFailure(appointmentId);
-                  }
-                  onRetry();
+    return DetailsSectionRow(
+      label: context.l10n.calendar_pictures,
+      value: '',
+      customValue: PhotoPickerSection(
+        existingImages: existingImages,
+        newImages: newImages,
+        isEditing: false,
+        onPickImages: () {},
+        onRemoveExisting: (_) {},
+        onRemoveNew: (_) {},
+        failedCount: failure?.failedCount ?? 0,
+        tooLargeFileNames: failure?.tooLargeFileNames ?? const [],
+        onRetry: (failure?.failedCount ?? 0) > 0 && !isCancelled
+            ? () {
+                if (appointmentId != null) {
+                  notifier.clearFailure(appointmentId);
                 }
-              : null,
-        ),
-      ],
+                onRetry();
+              }
+            : null,
+      ),
     );
   }
 }
 
 // TODO(pre-ship): Remove this entire function — used only by the testing delete button above.
-Future<bool> _confirmDeleteDialog(BuildContext context) async {
-  final result = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(ctx.l10n.calendar_deleteAppointment),
-      content: Text(ctx.l10n.calendar_areYouSureYouWantToDeleteThisJob),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: Text(ctx.l10n.common_cancel),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: Theme.of(ctx).colorScheme.error,
-            foregroundColor: Theme.of(ctx).colorScheme.onError,
-          ),
-          onPressed: () => Navigator.pop(ctx, true),
-          child: Text(ctx.l10n.common_delete),
-        ),
-      ],
-    ),
+Future<bool> _confirmDeleteDialog(BuildContext context) {
+  return showConfirmDialog(
+    context,
+    title: context.l10n.calendar_deleteAppointment,
+    message: context.l10n.calendar_areYouSureYouWantToDeleteThisJob,
+    confirmLabel: context.l10n.common_delete,
   );
-  return result ?? false;
 }

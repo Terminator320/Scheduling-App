@@ -21,6 +21,7 @@ import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dial
 import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
+import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 
 enum _SettingsDetail { textSize }
 
@@ -326,11 +327,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _confirmDeleteAccount() async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => DeleteAccountDialog(isAdmin: _isAdmin),
+    final result = await showConfirmDialog(
+      context,
+      title: context.l10n.settings_deleteAccountConfirmTitle,
+      confirmLabel: context.l10n.settings_deletePermanently,
+      content: DeleteAccountWarningContent(isAdmin: _isAdmin),
     );
-    if (result != true || !mounted) return;
+    if (!result || !mounted) return;
 
     final password = await showDialog<String>(
       context: context,

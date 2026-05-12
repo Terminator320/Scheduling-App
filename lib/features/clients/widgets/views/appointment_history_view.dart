@@ -8,11 +8,11 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
-import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
+import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
 class AppointmentHistoryView extends ConsumerWidget {
   const AppointmentHistoryView({required this.searchQuery, super.key});
@@ -24,10 +24,7 @@ class AppointmentHistoryView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final query = searchQuery.trim().toLowerCase();
-    final employees =
-        ref.watch(allUsersStreamProvider).asData?.value ??
-        const <EmployeeRecord>[];
-    final colorMap = buildEmployeeColorMap(employees);
+    final colorMap = ref.watch(employeeColorMapProvider);
     final historyAsync = ref.watch(appointmentHistoryProvider);
 
     return ColoredBox(
@@ -48,8 +45,9 @@ class AppointmentHistoryView extends ConsumerWidget {
           return Center(child: Text(context.l10n.error_somethingWentWrong));
         },
         data: (appointments) {
+          // Already sorted newest-first by watchHistory.
           final filtered = query.isEmpty
-              ? appointments.toList()
+              ? appointments
               : appointments.where((a) {
                   final matchesClient = a.clientName.toLowerCase().contains(
                     query,
@@ -73,8 +71,6 @@ class AppointmentHistoryView extends ConsumerWidget {
                   : context.l10n.common_tryADifferentSearchTerm,
             );
           }
-
-          filtered.sort((a, b) => b.startTime.compareTo(a.startTime));
 
           final locale = Intl.defaultLocale ?? 'en_CA';
           final dateHeaderFormat = DateFormat('EEEE, MMMM d', locale);
@@ -102,15 +98,7 @@ class AppointmentHistoryView extends ConsumerWidget {
               return switch (row) {
                 _HistoryHeader(:final label) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
+                  child: SectionLabel(label),
                 ),
                 _HistoryCardRow(:final appointment) => Padding(
                   padding: EdgeInsets.only(
@@ -144,15 +132,6 @@ class _HistoryCardRow extends _HistoryRow {
   final AppointmentRecord appointment;
 }
 
-AppointmentStatus _mapHistoryStatus(String status) =>
-    switch (status.toLowerCase()) {
-      'confirmed' => AppointmentStatus.confirmed,
-      'done' || 'completed' => AppointmentStatus.done,
-      'cancelled' => AppointmentStatus.cancelled,
-      'in_progress' || 'inprogress' => AppointmentStatus.inProgress,
-      _ => AppointmentStatus.pending,
-    };
-
 class _HistoryCard extends StatelessWidget {
   const _HistoryCard({
     required this.appointment,
@@ -169,7 +148,7 @@ class _HistoryCard extends StatelessWidget {
     final isCancelled = appointment.status.toLowerCase() == 'cancelled';
     final accent =
         colorFromMap(appointment, employeeColorMap) ?? scheme.primary;
-    final status = _mapHistoryStatus(appointment.displayStatus);
+    final status = AppointmentStatus.fromRaw(appointment.displayStatus);
 
     final employeeName = appointment.employeeNames.isNotEmpty
         ? appointment.employeeNames.first
