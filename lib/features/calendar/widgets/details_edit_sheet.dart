@@ -44,6 +44,18 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
   @override
   void initState() {
     super.initState();
+    _initControllers();
+    if (widget.initialEditing) {
+      Future.microtask(() {
+        if (!mounted) return;
+        ref
+            .read(eventDetailsControllerProvider(widget.appointment).notifier)
+            .enterEditing();
+      });
+    }
+  }
+
+  void _initControllers() {
     final a = widget.appointment;
     _titleController = TextEditingController(text: a.title);
     _dateController =
@@ -56,7 +68,6 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
     _addressController = TextEditingController(text: a.address);
     _notesController = TextEditingController(text: a.notes);
     _materialsController = TextEditingController(text: a.materialsNeeded);
-
     _editControllers = DetailsEditControllers(
       title: _titleController,
       date: _dateController,
@@ -67,17 +78,6 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
       notes: _notesController,
       materials: _materialsController,
     );
-
-    if (widget.initialEditing) {
-      Future.microtask(() {
-        if (!mounted) return;
-        ref
-            .read(
-              eventDetailsControllerProvider(widget.appointment).notifier,
-            )
-            .enterEditing();
-      });
-    }
   }
 
   @override

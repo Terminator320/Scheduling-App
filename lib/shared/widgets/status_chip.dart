@@ -12,10 +12,7 @@ class StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final statusColors = theme.extension<AppStatusColors>() ??
-        (theme.brightness == Brightness.dark
-            ? AppStatusColors.dark
-            : AppStatusColors.light);
+    final statusColors = theme.statusColors;
     final (label, bg, fg) = _resolve(scheme, statusColors);
     return Container(
       // 10px horizontal: sp8 (8) + 2px optical correction for pill label
@@ -26,7 +23,7 @@ class StatusChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        style: theme.textTheme.labelSmall?.copyWith(
           color: fg,
           fontWeight: FontWeight.w600,
         ),

@@ -183,10 +183,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
   Widget _buildNav(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final statusColors = theme.extension<AppStatusColors>() ??
-        (theme.brightness == Brightness.dark
-            ? AppStatusColors.dark
-            : AppStatusColors.light);
+    final statusColors = theme.statusColors;
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Padding(

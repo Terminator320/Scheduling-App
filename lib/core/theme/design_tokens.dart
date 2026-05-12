@@ -225,3 +225,9 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     );
   }
 }
+
+extension AppStatusColorsX on ThemeData {
+  AppStatusColors get statusColors =>
+      extension<AppStatusColors>() ??
+      (brightness == Brightness.dark ? AppStatusColors.dark : AppStatusColors.light);
+}

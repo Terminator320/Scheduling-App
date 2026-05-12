@@ -50,7 +50,10 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     super.initState();
     _selectedDay = _focusedDay;
     _appointmentRange = AppointmentDateRange.visibleMonth(_focusedDay);
+    _initStreams();
+  }
 
+  void _initStreams() {
     final repo = ref.read(employeesRepositoryProvider);
     _nameSub = repo.loggedInUserNameStream().listen((name) {
       if (mounted) setState(() => _userName = name);
