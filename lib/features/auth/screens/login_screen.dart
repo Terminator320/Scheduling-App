@@ -134,6 +134,17 @@ class _LoginState extends ConsumerState<Login>
       }
 
       final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
+
+      if (employee.isDisabled) {
+        await _authService.signOut();
+        if (!mounted) return;
+        setState(() {
+          _bannerError = context.l10n.thisAccountHasBeenDisabled;
+          _isLoading = false;
+        });
+        return;
+      }
+
       unawaited(AuthCache().save(employee));
 
       Navigator.pushReplacementNamed(
