@@ -103,6 +103,11 @@ Future<Widget> _resolveHome() async {
   }
 
   final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
+  if (employee.isDisabled) {
+    await FirebaseAuth.instance.signOut();
+    await AuthCache().clear();
+    return const SplashScreen();
+  }
   unawaited(AuthCache().save(employee));
   return MainCalendar(isAdmin: employee.isAdmin, employeeId: employee.id);
 }
