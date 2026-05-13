@@ -80,6 +80,7 @@ void main() {
       final result = await container.read(splashDestinationProvider.future);
 
       expect(result, isA<SplashGoToCalendar>());
+      verifyNever(() => mockAuth.signOut());
     });
   });
 }
