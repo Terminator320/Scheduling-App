@@ -59,7 +59,7 @@ abstract class EmployeesRepository {
   Stream<String> loggedInUserNameStream();
 
   /// Streams the raw `status` string for the user with the given [uid].
-  /// Emits an empty string if the doc doesn't exist.
+  /// Emits an empty string immediately if [uid] is empty or the doc doesn't exist.
   Stream<String> watchUserStatus(String uid);
 }
 
