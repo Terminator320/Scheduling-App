@@ -13,10 +13,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
-import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/core/utils/app_language.dart';
+import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/features/auth/application/account_status_provider.dart';
+import 'package:scheduling/features/auth/data/auth_cache.dart';
+import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -112,17 +115,18 @@ Future<Widget> _resolveHome() async {
   return MainCalendar(isAdmin: employee.isAdmin, employeeId: employee.id);
 }
 
-class PaulApp extends StatefulWidget {
+class PaulApp extends ConsumerStatefulWidget {
   const PaulApp({required this.settings, required this.home, super.key});
 
   final AppSettings settings;
   final Widget home;
 
   @override
-  State<PaulApp> createState() => _PaulAppState();
+  ConsumerState<PaulApp> createState() => _PaulAppState();
 }
 
-class _PaulAppState extends State<PaulApp> {
+class _PaulAppState extends ConsumerState<PaulApp> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
   final SharedPrefsSettingsRepository _settingsRepository =
       SharedPrefsSettingsRepository();
   final SettingsSaveDebouncer _settingsSaveDebouncer = SettingsSaveDebouncer();
@@ -165,8 +169,32 @@ class _PaulAppState extends State<PaulApp> {
     _settingsRepository.save(language: code);
   }
 
+  Future<void> _handleAccountDisabled() async {
+    await AuthService().signOut();
+    unawaited(
+      _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+            AppRoutes.login,
+            (_) => false,
+          ) ??
+          Future.value(),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _navigatorKey.currentContext;
+      if (ctx == null) return;
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        SnackBar(content: Text(ctx.l10n.thisAccountHasBeenDisabled)),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    ref.listen<AsyncValue<bool>>(accountDisabledProvider, (prev, next) {
+      if ((prev?.valueOrNull ?? false) != true &&
+          (next.valueOrNull ?? false)) {
+        _handleAccountDisabled();
+      }
+    });
     return AppLanguageScope(
       controller: _languageController,
       child: ThemeNotifier(
@@ -180,6 +208,7 @@ class _PaulAppState extends State<PaulApp> {
           builder: (context, languageCode, _) {
             final locale = Locale(languageCode, 'CA');
             return MaterialApp(
+              navigatorKey: _navigatorKey,
               debugShowCheckedModeBanner: false,
               locale: locale,
               supportedLocales: AppLocalizations.supportedLocales,
