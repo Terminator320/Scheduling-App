@@ -183,20 +183,13 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   Stream<String> loggedInUserNameStream() {
     final user = _auth.currentUser;
     if (user == null) return Stream.value('');
-
-    return _users
-        .where('uid', isEqualTo: user.uid)
-        .limit(1)
-        .snapshots()
-        .map((snapshot) {
-          if (snapshot.docs.isEmpty) return '';
-          final data = snapshot.docs.first.data();
-          return (data['name'] ?? '').toString().trim();
-        });
+    return _watchUserField(user.uid, 'name');
   }
 
   @override
-  Stream<String> watchUserStatus(String uid) {
+  Stream<String> watchUserStatus(String uid) => _watchUserField(uid, 'status');
+
+  Stream<String> _watchUserField(String uid, String field) {
     if (uid.isEmpty) return Stream.value('');
     return _users
         .where('uid', isEqualTo: uid)
@@ -204,7 +197,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
         .snapshots()
         .map((snapshot) {
           if (snapshot.docs.isEmpty) return '';
-          return (snapshot.docs.first.data()['status'] ?? '').toString().trim();
+          return (snapshot.docs.first.data()[field] ?? '').toString().trim();
         });
   }
 }

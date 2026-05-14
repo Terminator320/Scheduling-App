@@ -102,16 +102,13 @@ class _EmployeeDetailsSheetState extends ConsumerState<EmployeeDetailsSheet> {
     setState(() => _isDisabling = true);
     try {
       final repo = ref.read(employeesRepositoryProvider);
-      if (widget.employee.isDisabled) {
+      if (isDisabled) {
         await repo.reactivateEmployee(widget.employee.id);
       } else {
         await repo.deactivateEmployee(widget.employee.id);
       }
       if (!mounted) return;
-      Navigator.pop(
-        context,
-        widget.employee.isDisabled ? 'enabled' : 'disabled',
-      );
+      Navigator.pop(context, isDisabled ? 'enabled' : 'disabled');
     } catch (_) {
       if (!mounted) return;
       setState(() => _isDisabling = false);
@@ -241,30 +238,28 @@ class _EmployeeDetailsSheetState extends ConsumerState<EmployeeDetailsSheet> {
                         height: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: widget.employee.isDisabled
+                          color: isDisabled
                               ? theme.colorScheme.onPrimary
                               : theme.colorScheme.onError,
                         ),
                       )
                     : Icon(
-                        widget.employee.isDisabled
+                        isDisabled
                             ? Icons.lock_open_outlined
                             : Icons.block_outlined,
                         size: 18,
                       ),
                 label: Text(
-                  widget.employee.isDisabled
+                  isDisabled
                       ? context.l10n.enableEmployee
                       : context.l10n.disableEmployee,
                 ),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(double.infinity, 48),
-                  backgroundColor: widget.employee.isDisabled
-                      ? null
-                      : theme.colorScheme.error,
-                  foregroundColor: widget.employee.isDisabled
-                      ? null
-                      : theme.colorScheme.onError,
+                  backgroundColor:
+                      isDisabled ? null : theme.colorScheme.error,
+                  foregroundColor:
+                      isDisabled ? null : theme.colorScheme.onError,
                 ),
               ),
             ],
