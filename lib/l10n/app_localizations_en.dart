@@ -681,6 +681,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get employeeDeleted => 'Employee deleted';
 
   @override
+  String get employeeDisabledSuccessfully => 'Employee disabled';
+
+  @override
+  String get employeeEnabledSuccessfully => 'Employee enabled';
+
+  @override
   String get employeeAddedSuccessfully => 'Employee added successfully';
 
   @override
@@ -952,6 +958,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get enableEmployee => 'Enable employee';
+
+  @override
+  String get disableEmployeeConfirmBody => 'This employee will be signed out immediately and won\'t be able to log back in.';
+
+  @override
+  String get enableEmployeeConfirmBody => 'This employee will be able to log back in.';
 
   @override
   String get newAppointment => 'New Appointment';

@@ -90,7 +90,10 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         reverseDuration: Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
       ),
-      builder: (_) => EmployeeDetailsSheet(employee: employee),
+      builder: (_) => EmployeeDetailsSheet(
+        employee: employee,
+        isCurrentUserAdmin: widget.isAdmin,
+      ),
     );
 
     if (!mounted) return;
@@ -100,6 +103,14 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
       await _openEmployeeSheet(employee: employee);
     } else if (result == 'deleted') {
       ref.read(noticeServiceProvider).success(context.l10n.employeeDeleted);
+    } else if (result == 'disabled') {
+      ref
+          .read(noticeServiceProvider)
+          .success(context.l10n.employeeDisabledSuccessfully);
+    } else if (result == 'enabled') {
+      ref
+          .read(noticeServiceProvider)
+          .success(context.l10n.employeeEnabledSuccessfully);
     }
   }
 
