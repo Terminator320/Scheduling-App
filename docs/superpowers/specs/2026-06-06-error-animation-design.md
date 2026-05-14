@@ -27,7 +27,7 @@ Two goals:
 `lib/shared/widgets/fields/labeled_text_field.dart`:
 
 - Wrap the internal `TextField` in the existing `AnimatedFormFieldWrapper` (`lib/core/animations/animated_form_field_wrapper.dart`) with `hasError: errorText != null`. Every `LabeledTextField` call site gains the shake with zero call-site changes; new forms get it for free.
-- **Fix in the wrapper (pre-existing bug):** `flutter_animate`'s `.animate()` autoplays on first build, so a field that mounts with `_shakeTick == 0` plays a shake at mount. Guard it: return the bare child until the first error *transition* (`_shakeTick > 0`). Auth screens benefit from the same fix.
+- **Required fix in the wrapper (pre-existing bug, explicit work item):** `flutter_animate`'s `.animate()` autoplays on first build, so a field that mounts with `_shakeTick == 0` plays a shake at mount. Guard it: return the bare child until the first error *transition* (`_shakeTick > 0`). Auth screens (the wrapper's existing users) get the fix too; covered by the no-shake-on-first-build widget test below.
 - `_FieldError` (and `_MaxLengthWarning`, which reuses it) animates per style A:
   - Entrance: fade 0→1 + translateY(-4px → 0), `AppAnimationDurations.quick` (180ms), `AppAnimationCurves.entrance`.
   - Exit: same reversed.
@@ -69,7 +69,9 @@ A core helper used by exception-driven catch sites:
 | HIST-LOAD | `appointment_history_view.dart` (error branch) | history stream error |
 | CLI-LIST | `clients_list_view.dart` (first-page error state) | clients page load error |
 
-Untouched: typed-failure paths that already produce specific messages (e.g. `AuthFailure.toLocalizedMessage` flows, `employee_form_sheet`'s email-specific error), and non-exception notices (`error_colorAlreadyUsed`, `settings_appLockUnavailable`). The `APPT-SAVE` site receives an outcome object rather than the exception; the controller must carry the original error (or its precomputed cause) in `EventDetailsFailed` so the view can compose the message.
+Untouched: typed-failure paths that already produce specific messages (e.g. `AuthFailure.toLocalizedMessage` flows, `employee_form_sheet`'s email-specific error), and non-exception notices (`error_colorAlreadyUsed`, `settings_appLockUnavailable`).
+
+**Required controller change (APPT-SAVE):** the save-changes view receives an `EventDetailsFailed` outcome object, not the exception. Add the original error to `EventDetailsFailed` (e.g. an `Object error` field set in the controller's catch block) so the view can run `composeErrorNotice` on it. This is an explicit work item, not an optional note.
 
 ### 5. Localization
 
@@ -84,6 +86,7 @@ Run `flutter gen-l10n`; check `untranslated.json` stays empty.
 ## Testing
 
 - Plain `test()`s for `classifyError` (each Firebase code, `SocketException`, `TimeoutException`, unknown fallback) and for `composeErrorNotice` formatting via `lookupAppLocalizations`.
+- Controller test: a failing save produces an `EventDetailsFailed` carrying the original error.
 - Widget tests for `LabeledTextField`: error row appears after animation settles; errorText null→set triggers exactly one shake; no shake on first build with a pre-set error; `disableAnimations: true` renders instantly; `tester.takeException()` null throughout (l10n delegates per testing.md harness rules).
 - Full `flutter test` + `flutter analyze` (must stay 0 issues) before completion.
 
