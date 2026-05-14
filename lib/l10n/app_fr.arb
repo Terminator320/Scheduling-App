@@ -224,6 +224,8 @@
   "giveAdminModeAccess": "Donner accès au mode admin",
   "nameAndEmailAreRequired": "Le nom et le courriel sont obligatoires",
   "employeeDeleted": "Employé supprimé",
+  "employeeDisabledSuccessfully": "Employé désactivé",
+  "employeeEnabledSuccessfully": "Employé réactivé",
   "employeeAddedSuccessfully": "Employé ajouté avec succès",
   "employeeUpdatedSuccessfully": "Employé mis à jour avec succès",
   "anEmployeeWithThisEmailAlreadyExists": "Un employé avec ce courriel existe déjà",
