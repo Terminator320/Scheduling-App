@@ -170,28 +170,27 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _settingsRepository.save(language: code);
   }
 
-  Future<void> _handleAccountDisabled() async {
+  Future<void> _handleAccountDisabled(String message) async {
+    if (FirebaseAuth.instance.currentUser == null) return;
     await AuthService().signOut();
-    unawaited(_navigatorKey.currentState?.pushNamedAndRemoveUntil(
-          AppRoutes.login,
-          (_) => false,
-        ) ??
-        Future.value());
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = _navigatorKey.currentContext;
-      if (ctx == null) return;
-      _scaffoldMessengerKey.currentState?.showSnackBar(
-        SnackBar(content: Text(ctx.l10n.thisAccountHasBeenDisabled)),
-      );
-    });
+    unawaited(
+      _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+            AppRoutes.login,
+            (_) => false,
+          ) ??
+          Future.value(),
+    );
+    _scaffoldMessengerKey.currentState?.showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     ref.listen<AsyncValue<bool>>(accountDisabledProvider, (prev, next) {
       if ((prev?.valueOrNull ?? false) != true &&
-          (next.valueOrNull ?? false)) {
-        _handleAccountDisabled();
+          (next.valueOrNull ?? false) == true) {
+        _handleAccountDisabled(context.l10n.thisAccountHasBeenDisabled);
       }
     });
     return AppLanguageScope(
