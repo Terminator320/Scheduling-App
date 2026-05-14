@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
@@ -21,6 +22,7 @@ void main() {
     late _MockRepo mockRepo;
 
     setUp(() {
+      SharedPreferences.setMockInitialValues({});
       mockAuth = _MockFirebaseAuth();
       mockUser = _MockUser();
       mockRepo = _MockRepo();

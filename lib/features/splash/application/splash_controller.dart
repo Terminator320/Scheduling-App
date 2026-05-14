@@ -43,6 +43,7 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((ref) async 
   final employee = EmployeeRecord.fromMap(match.id, match.data);
   if (employee.isDisabled) {
     await auth.signOut();
+    await AuthCache().clear();
     return const SplashGoToLogin();
   }
   unawaited(AuthCache().save(employee));
