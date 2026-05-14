@@ -681,6 +681,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get employeeDeleted => 'Employé supprimé';
 
   @override
+  String get employeeDisabledSuccessfully => 'Employé désactivé';
+
+  @override
+  String get employeeEnabledSuccessfully => 'Employé réactivé';
+
+  @override
   String get employeeAddedSuccessfully => 'Employé ajouté avec succès';
 
   @override
@@ -952,6 +958,12 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get enableEmployee => 'Activer l\'employé';
+
+  @override
+  String get disableEmployeeConfirmBody => 'Cet employé sera déconnecté immédiatement et ne pourra plus se connecter.';
+
+  @override
+  String get enableEmployeeConfirmBody => 'Cet employé pourra à nouveau se connecter.';
 
   @override
   String get newAppointment => 'Nouveau rendez-vous';

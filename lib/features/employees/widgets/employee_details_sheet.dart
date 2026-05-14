@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // TODO(pre-ship): Remove (only needed for delete)
 
+import 'package:scheduling/core/notices/notice_service.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart'; // TODO(pre-ship): Remove (only needed for delete)
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -106,10 +108,16 @@ class _EmployeeDetailsSheetState extends ConsumerState<EmployeeDetailsSheet> {
         await repo.deactivateEmployee(widget.employee.id);
       }
       if (!mounted) return;
-      Navigator.pop(context);
+      Navigator.pop(
+        context,
+        widget.employee.isDisabled ? 'enabled' : 'disabled',
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() => _isDisabling = false);
+      ref
+          .read(noticeServiceProvider)
+          .error(context.l10n.somethingWentWrong);
     }
   }
 
@@ -224,7 +232,7 @@ class _EmployeeDetailsSheetState extends ConsumerState<EmployeeDetailsSheet> {
               ),
             ),
             if (widget.isCurrentUserAdmin) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sp8),
               FilledButton.icon(
                 onPressed: _isDisabling ? null : _confirmDisable,
                 icon: _isDisabling
@@ -234,8 +242,8 @@ class _EmployeeDetailsSheetState extends ConsumerState<EmployeeDetailsSheet> {
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: widget.employee.isDisabled
-                              ? Theme.of(context).colorScheme.onPrimary
-                              : Theme.of(context).colorScheme.onError,
+                              ? theme.colorScheme.onPrimary
+                              : theme.colorScheme.onError,
                         ),
                       )
                     : Icon(
@@ -253,10 +261,10 @@ class _EmployeeDetailsSheetState extends ConsumerState<EmployeeDetailsSheet> {
                   minimumSize: const Size(double.infinity, 48),
                   backgroundColor: widget.employee.isDisabled
                       ? null
-                      : Theme.of(context).colorScheme.error,
+                      : theme.colorScheme.error,
                   foregroundColor: widget.employee.isDisabled
                       ? null
-                      : Theme.of(context).colorScheme.onError,
+                      : theme.colorScheme.onError,
                 ),
               ),
             ],
