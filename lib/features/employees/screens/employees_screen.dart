@@ -90,7 +90,10 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         reverseDuration: Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
       ),
-      builder: (_) => EmployeeDetailsSheet(employee: employee),
+      builder: (_) => EmployeeDetailsSheet(
+        employee: employee,
+        isCurrentUserAdmin: widget.isAdmin,
+      ),
     );
 
     if (!mounted) return;
