@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // TODO(pre-ship): Remove (only needed for delete)
 
+import 'package:scheduling/core/notices/notice_service.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart'; // TODO(pre-ship): Remove (only needed for delete)
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -9,8 +11,13 @@ import 'package:scheduling/shared/widgets/status_chip.dart';
 
 // TODO(pre-ship): Revert to StatefulWidget / State once delete is removed.
 class EmployeeDetailsSheet extends ConsumerStatefulWidget {
-  const EmployeeDetailsSheet({required this.employee, super.key});
+  const EmployeeDetailsSheet({
+    required this.employee,
+    required this.isCurrentUserAdmin,
+    super.key,
+  });
   final EmployeeRecord employee;
+  final bool isCurrentUserAdmin;
 
   @override
   ConsumerState<EmployeeDetailsSheet> createState() =>
@@ -20,6 +27,7 @@ class EmployeeDetailsSheet extends ConsumerStatefulWidget {
 class _EmployeeDetailsSheetState extends ConsumerState<EmployeeDetailsSheet> {
   // TODO(pre-ship): Remove _isDeleting, _confirmDelete, and the delete button below.
   bool _isDeleting = false;
+  bool _isDisabling = false;
 
   Future<void> _confirmDelete() async {
     final confirmed = await showDialog<bool>(
@@ -54,6 +62,62 @@ class _EmployeeDetailsSheetState extends ConsumerState<EmployeeDetailsSheet> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _isDeleting = false);
+    }
+  }
+
+  Future<void> _confirmDisable() async {
+    final isDisabled = widget.employee.isDisabled;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          isDisabled ? ctx.l10n.enableEmployee : ctx.l10n.disableEmployee,
+        ),
+        content: Text(
+          isDisabled
+              ? ctx.l10n.enableEmployeeConfirmBody
+              : ctx.l10n.disableEmployeeConfirmBody,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(ctx.l10n.cancel),
+          ),
+          FilledButton(
+            style: isDisabled
+                ? null
+                : FilledButton.styleFrom(
+                    backgroundColor: Theme.of(ctx).colorScheme.error,
+                    foregroundColor: Theme.of(ctx).colorScheme.onError,
+                  ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              isDisabled ? ctx.l10n.enableEmployee : ctx.l10n.disableEmployee,
+            ),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    setState(() => _isDisabling = true);
+    try {
+      final repo = ref.read(employeesRepositoryProvider);
+      if (widget.employee.isDisabled) {
+        await repo.reactivateEmployee(widget.employee.id);
+      } else {
+        await repo.deactivateEmployee(widget.employee.id);
+      }
+      if (!mounted) return;
+      Navigator.pop(
+        context,
+        widget.employee.isDisabled ? 'enabled' : 'disabled',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isDisabling = false);
+      ref
+          .read(noticeServiceProvider)
+          .error(context.l10n.somethingWentWrong);
     }
   }
 
@@ -167,6 +231,43 @@ class _EmployeeDetailsSheetState extends ConsumerState<EmployeeDetailsSheet> {
                 minimumSize: const Size(double.infinity, 48),
               ),
             ),
+            if (widget.isCurrentUserAdmin) ...[
+              const SizedBox(height: AppSpacing.sp8),
+              FilledButton.icon(
+                onPressed: _isDisabling ? null : _confirmDisable,
+                icon: _isDisabling
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: widget.employee.isDisabled
+                              ? theme.colorScheme.onPrimary
+                              : theme.colorScheme.onError,
+                        ),
+                      )
+                    : Icon(
+                        widget.employee.isDisabled
+                            ? Icons.lock_open_outlined
+                            : Icons.block_outlined,
+                        size: 18,
+                      ),
+                label: Text(
+                  widget.employee.isDisabled
+                      ? context.l10n.enableEmployee
+                      : context.l10n.disableEmployee,
+                ),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                  backgroundColor: widget.employee.isDisabled
+                      ? null
+                      : theme.colorScheme.error,
+                  foregroundColor: widget.employee.isDisabled
+                      ? null
+                      : theme.colorScheme.onError,
+                ),
+              ),
+            ],
             // TODO(pre-ship): Remove the SizedBox and OutlinedButton below — testing only.
             const SizedBox(height: 8),
             OutlinedButton.icon(

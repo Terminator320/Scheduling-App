@@ -1439,6 +1439,18 @@ abstract class AppLocalizations {
   /// **'Employee deleted'**
   String get employeeDeleted;
 
+  /// No description provided for @employeeDisabledSuccessfully.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee disabled'**
+  String get employeeDisabledSuccessfully;
+
+  /// No description provided for @employeeEnabledSuccessfully.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee enabled'**
+  String get employeeEnabledSuccessfully;
+
   /// No description provided for @employeeAddedSuccessfully.
   ///
   /// In en, this message translates to:
@@ -1984,6 +1996,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enable employee'**
   String get enableEmployee;
+
+  /// No description provided for @disableEmployeeConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This employee will be signed out immediately and won\'t be able to log back in.'**
+  String get disableEmployeeConfirmBody;
+
+  /// No description provided for @enableEmployeeConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This employee will be able to log back in.'**
+  String get enableEmployeeConfirmBody;
 
   /// No description provided for @newAppointment.
   ///
