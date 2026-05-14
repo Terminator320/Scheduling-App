@@ -127,6 +127,7 @@ class PaulApp extends ConsumerStatefulWidget {
 
 class _PaulAppState extends ConsumerState<PaulApp> {
   final _navigatorKey = GlobalKey<NavigatorState>();
+  final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   final SharedPrefsSettingsRepository _settingsRepository =
       SharedPrefsSettingsRepository();
   final SettingsSaveDebouncer _settingsSaveDebouncer = SettingsSaveDebouncer();
@@ -171,17 +172,15 @@ class _PaulAppState extends ConsumerState<PaulApp> {
 
   Future<void> _handleAccountDisabled() async {
     await AuthService().signOut();
-    unawaited(
-      _navigatorKey.currentState?.pushNamedAndRemoveUntil(
-            AppRoutes.login,
-            (_) => false,
-          ) ??
-          Future.value(),
-    );
+    unawaited(_navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          AppRoutes.login,
+          (_) => false,
+        ) ??
+        Future.value());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ctx = _navigatorKey.currentContext;
       if (ctx == null) return;
-      ScaffoldMessenger.of(ctx).showSnackBar(
+      _scaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(content: Text(ctx.l10n.thisAccountHasBeenDisabled)),
       );
     });
@@ -209,6 +208,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
             final locale = Locale(languageCode, 'CA');
             return MaterialApp(
               navigatorKey: _navigatorKey,
+              scaffoldMessengerKey: _scaffoldMessengerKey,
               debugShowCheckedModeBanner: false,
               locale: locale,
               supportedLocales: AppLocalizations.supportedLocales,
