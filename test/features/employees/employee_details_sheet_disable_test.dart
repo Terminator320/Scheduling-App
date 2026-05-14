@@ -33,8 +33,7 @@ Widget _wrap(Widget child, {EmployeesRepository? repo}) {
   final mockRepo = repo ?? _MockRepo();
   return ProviderScope(
     overrides: [
-      if (repo != null)
-        employeesRepositoryProvider.overrideWithValue(mockRepo),
+      employeesRepositoryProvider.overrideWithValue(mockRepo),
     ],
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
