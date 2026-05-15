@@ -136,9 +136,12 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   Future<InvitedEmployeeMatch?> findInvitedEmployeeByEmail(String email) async {
     final normalizedEmail = email.trim().toLowerCase();
 
+    // Admins can also be invited (e.g. admin onboarding), so the query has to
+    // include both roles. Status stays 'invited' — that's the gate that
+    // distinguishes a still-pending row from one already activated.
     final result = await _users
         .where('email', isEqualTo: normalizedEmail)
-        .where('role', isEqualTo: 'employee')
+        .where('role', whereIn: ['employee', 'admin'])
         .where('status', isEqualTo: 'invited')
         .limit(1)
         .get();

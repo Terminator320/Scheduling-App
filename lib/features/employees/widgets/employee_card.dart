@@ -6,9 +6,7 @@ import 'package:scheduling/shared/widgets/app_avatar.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';
 
 class EmployeeCard extends StatelessWidget {
-  const EmployeeCard({
-    required this.employee, required this.onTap, super.key,
-  });
+  const EmployeeCard({required this.employee, required this.onTap, super.key});
 
   final EmployeeRecord employee;
   final VoidCallback onTap;
@@ -29,7 +27,9 @@ class EmployeeCard extends StatelessWidget {
           children: [
             AppAvatar(
               name: employee.name.isEmpty ? '?' : employee.name,
-              color: employee.isDisabled ? scheme.outlineVariant : employee.color,
+              color: employee.isDisabled
+                  ? scheme.outlineVariant
+                  : employee.color,
             ),
             const SizedBox(width: AppSpacing.sp12),
             Expanded(
@@ -60,24 +60,17 @@ class EmployeeCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.sp8),
-            MediaQuery(
-              data: MediaQuery.of(context).copyWith(
-                textScaler: TextScaler.noScaling,
-              ),
-              child: StatusChip(
-                status: employee.isActive
-                    ? AppointmentStatus.active
-                    : employee.isDisabled
-                        ? AppointmentStatus.disabled
-                        : AppointmentStatus.invited,
-              ),
+            // StatusChip caps its own text scaling internally so we don't
+            // need a MediaQuery clamp here.
+            StatusChip(
+              status: employee.isActive
+                  ? AppointmentStatus.active
+                  : employee.isDisabled
+                  ? AppointmentStatus.disabled
+                  : AppointmentStatus.invited,
             ),
             const SizedBox(width: AppSpacing.sp8),
-            Icon(
-              Icons.chevron_right,
-              size: 18,
-              color: scheme.onSurfaceVariant,
-            ),
+            Icon(Icons.chevron_right, size: 18, color: scheme.onSurfaceVariant),
           ],
         ),
       ),
