@@ -190,6 +190,8 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   Stream<String> watchUserStatus(String uid) => _watchUserField(uid, 'status');
 
   Stream<String> _watchUserField(String uid, String field) {
+    // Invited employees (created by admin before they register) have uid: ''
+    // in Firestore. An empty uid would match all invited docs, so guard early.
     if (uid.isEmpty) return Stream.value('');
     return _users
         .where('uid', isEqualTo: uid)

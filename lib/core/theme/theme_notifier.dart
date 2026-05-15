@@ -21,6 +21,8 @@ class ThemeNotifier extends InheritedWidget {
 
   @override
   bool updateShouldNotify(ThemeNotifier oldWidget) {
+    // setLanguage is intentionally excluded — language changes propagate via
+    // AppLanguageController (a ValueListenable) to avoid double-rebuilds.
     return themeMode != oldWidget.themeMode ||
         textScale != oldWidget.textScale;
   }

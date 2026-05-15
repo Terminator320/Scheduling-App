@@ -77,6 +77,8 @@ class EventDetailsController
     extends AutoDisposeFamilyNotifier<EventDetailsState, AppointmentRecord> {
   @override
   EventDetailsState build(AppointmentRecord appointment) {
+    // Seed async state after build() returns — direct awaits here would throw
+    // because state mutations are illegal mid-build in Riverpod.
     Future.microtask(() => _loadClientIfNeeded(appointment.clientId));
     Future.microtask(() => _seedSelectedEmployees(appointment.employeeIds));
     return EventDetailsState(
@@ -273,6 +275,8 @@ class EventDetailsController
     required String notes,
     required String materialsNeeded,
   }) async {
+    // If the user hasn't re-selected a client, reconstruct one from the stored
+    // appointment fields so the validator has something to check against.
     final clientForValidation = state.selectedClient ??
         (appointment.clientId.trim().isNotEmpty
             ? state.client ?? _placeholderClient(appointment)

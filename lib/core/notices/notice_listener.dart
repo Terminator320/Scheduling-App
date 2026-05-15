@@ -65,6 +65,7 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
         SnackBar(
           backgroundColor: bg,
           behavior: SnackBarBehavior.floating,
+          // Double duration for accessibility: screen readers need more time to announce.
           duration: Duration(seconds: accessible ? 6 : 3),
           content: Semantics(
             liveRegion: true,
