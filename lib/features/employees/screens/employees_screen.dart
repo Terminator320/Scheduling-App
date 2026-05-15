@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
@@ -175,8 +176,15 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
             SkeletonListTile(),
           ],
         ),
-        error: (_, _) =>
-            Center(child: Text(context.l10n.errorLoadingEmployees)),
+        error: (err, stack) {
+          // TODO(george): remove once the "error loading employees" rules
+          // regression is pinned down — keeps the FirebaseException code
+          // surfaced in logs so we can diagnose remaining permission denials.
+          ref
+              .read(loggerProvider)
+              .warn('employeesStreamProvider error', err, stack);
+          return Center(child: Text(context.l10n.errorLoadingEmployees));
+        },
         data: (_) {
           final filtered = ref.watch(
             filteredEmployeesProvider(_searchController.text),
@@ -213,7 +221,9 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
                     _clearSearch();
                     // Let the search focus state settle before opening the sheet;
                     // without this the keyboard fights the sheet's drag animation.
-                    await Future<void>.delayed(const Duration(milliseconds: 80));
+                    await Future<void>.delayed(
+                      const Duration(milliseconds: 80),
+                    );
                     if (!mounted) return;
                     await _showEmployeeDetails(employee);
                   },

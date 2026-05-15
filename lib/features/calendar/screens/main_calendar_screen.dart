@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
@@ -134,20 +135,31 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final appointmentsAsync = ref.watch(
-      appointmentsInRangeProvider(_appointmentRange),
-    );
+    // Employees query by `employeeIds arrayContains theirId` + the same
+    // startTime range so the Firestore `isAssignedEmployee` rule accepts the
+    // listener and the query stays bounded to the visible month.
+    final appointmentsAsync = widget.isAdmin
+        ? ref.watch(appointmentsInRangeProvider(_appointmentRange))
+        : ref.watch(
+            myAppointmentsProvider((
+              employeeId: widget.employeeId,
+              range: _appointmentRange,
+            )),
+          );
     final employees =
         ref.watch(allUsersStreamProvider).asData?.value ?? const [];
     final colorMap = buildEmployeeColorMap(employees);
 
-    final visibleAppointments = appointmentsAsync.maybeWhen(
-      data: (data) => widget.isAdmin
-          ? data
-          : data
-                .where((a) => a.employeeIds.contains(widget.employeeId))
-                .toList(),
-      orElse: () => const <AppointmentRecord>[],
+    // TODO(george): remove the error branch's log once the bounded-query
+    // index has been verified live; currently the calendar silently empties
+    // on permission-denied / failed-precondition, which is hard to debug.
+    final visibleAppointments = appointmentsAsync.when(
+      data: (data) => data,
+      loading: () => const <AppointmentRecord>[],
+      error: (err, stack) {
+        ref.read(loggerProvider).warn('appointments stream error', err, stack);
+        return const <AppointmentRecord>[];
+      },
     );
 
     final selectedDay = _selectedDay ?? _focusedDay;

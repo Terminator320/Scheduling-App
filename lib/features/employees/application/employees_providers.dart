@@ -13,35 +13,39 @@ final employeesRepositoryProvider = Provider<EmployeesRepository>((ref) {
 
 /// Streams every user doc (no role filter). Used by appointment views that
 /// need the full employee colour map.
+///
+/// The `ref.authUid` gate forces a fresh Firestore subscription on
+/// logout/login — without it the listener errors when auth drops and Riverpod
+/// keeps the error state across the next sign-in.
 final allUsersStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
-  final repo = ref.watch(employeesRepositoryProvider);
-  return repo.watchAllUsers();
+  if (ref.authUid == null) return Stream.value(const []);
+  return ref.watch(employeesRepositoryProvider).watchAllUsers();
 });
 
 /// Employees + admins (`role in {employee, admin}`).
 final employeesStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
-  final repo = ref.watch(employeesRepositoryProvider);
-  return repo.watchEmployees();
+  if (ref.authUid == null) return Stream.value(const []);
+  return ref.watch(employeesRepositoryProvider).watchEmployees();
 });
 
 /// Active users only (assignment-eligible).
 final assignableUsersStreamProvider = StreamProvider<List<EmployeeRecord>>((
   ref,
 ) {
-  final repo = ref.watch(employeesRepositoryProvider);
-  return repo.watchAssignableUsers();
+  if (ref.authUid == null) return Stream.value(const []);
+  return ref.watch(employeesRepositoryProvider).watchAssignableUsers();
 });
 
 /// Filters the watched employees list locally by name/email/phone.
-final filteredEmployeesProvider =
-    Provider.family<List<EmployeeRecord>, String>((ref, query) {
-      final list =
-          ref.watch(employeesStreamProvider).asData?.value ?? const [];
-      final q = query.trim().toLowerCase();
-      if (q.isEmpty) return list;
-      return list.where((e) {
-        return e.name.toLowerCase().contains(q) ||
-            e.email.toLowerCase().contains(q) ||
-            e.phone.toLowerCase().contains(q);
-      }).toList();
-    });
+final filteredEmployeesProvider = Provider.family<List<EmployeeRecord>, String>(
+  (ref, query) {
+    final list = ref.watch(employeesStreamProvider).asData?.value ?? const [];
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return list;
+    return list.where((e) {
+      return e.name.toLowerCase().contains(q) ||
+          e.email.toLowerCase().contains(q) ||
+          e.phone.toLowerCase().contains(q);
+    }).toList();
+  },
+);

@@ -111,9 +111,18 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }
 
   @override
-  Stream<List<AppointmentRecord>> watchForEmployee(String employeeId) {
+  Stream<List<AppointmentRecord>> watchForEmployeeInRange(
+    String employeeId,
+    AppointmentDateRange range,
+  ) {
     return _appointments
         .where('employeeIds', arrayContains: employeeId)
+        .where(
+          'startTime',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(range.start),
+        )
+        .where('startTime', isLessThan: Timestamp.fromDate(range.end))
+        .orderBy('startTime')
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
@@ -147,9 +156,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     final base = Map<String, dynamic>.from(appointment.toMap());
     base['startTime'] = Timestamp.fromDate(appointment.startTime);
     base['endTime'] = Timestamp.fromDate(appointment.endTime);
-    base['pictures'] = appointment.pictures
-        .map(_imageToFirestoreMap)
-        .toList();
+    base['pictures'] = appointment.pictures.map(_imageToFirestoreMap).toList();
     return base;
   }
 
