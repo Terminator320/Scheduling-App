@@ -176,8 +176,18 @@ class AddEventController
     );
   }
 
+  /// Cap on attached images per appointment. Prevents memory pressure on
+  /// the compression/upload pipeline (each compressed image is held in RAM
+  /// during `Future.wait` over `compressImages`).
+  static const int maxImagesPerAppointment = 10;
+
   void addImages(List<File> files) {
-    state = state.copyWith(selectedImages: [...state.selectedImages, ...files]);
+    final remaining = maxImagesPerAppointment - state.selectedImages.length;
+    if (remaining <= 0) return;
+    final accepted = files.take(remaining).toList();
+    state = state.copyWith(
+      selectedImages: [...state.selectedImages, ...accepted],
+    );
   }
 
   void removeImage(int index) {

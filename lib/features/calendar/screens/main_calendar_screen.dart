@@ -77,7 +77,10 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     final failure = _uploadNotifier?.latestFailure.value;
     if (failure == null || !mounted) return;
     final appointmentId = failure.appointmentId;
-    ScaffoldMessenger.of(context).showSnackBar(
+    // `maybeOf` matches notice_listener.dart — if no ScaffoldMessenger is in
+    // the tree (e.g. mid-route transition), silently drop the SnackBar
+    // rather than throwing.
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(
         content: Text(context.l10n.photoUploadFailedSnackbar),
         action: SnackBarAction(
