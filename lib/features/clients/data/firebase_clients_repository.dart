@@ -9,6 +9,7 @@ class FirebaseClientsRepository implements ClientsRepository {
     : _clients = firestore.collection('clients');
 
   final CollectionReference<Map<String, dynamic>> _clients;
+  // In-memory only — cleared on app restart, reducing Firestore reads within a session.
   final Map<String, List<ClientRecord>> _searchCache = {};
 
   @override

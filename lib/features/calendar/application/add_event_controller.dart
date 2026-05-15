@@ -262,6 +262,7 @@ class AddEventController
         employeeNames: state.selectedEmployees.map((e) => e.name).toList(),
         notes: notes.trim(),
         materialsNeeded: materialsNeeded.trim(),
+        // New appointments are pre-confirmed by the creator, not pending review.
         status: 'booked',
       );
 
@@ -301,6 +302,8 @@ Map<String, AppointmentFormError> _withoutKey(
   return next;
 }
 
+// Wraps at the 24-hour boundary so appointments that start late at night
+// can still auto-advance to the next hour without overflowing.
 TimeOfDay _addOneHour(TimeOfDay time) {
   final totalMinutes = time.hour * 60 + time.minute + 60;
   final wrapped = totalMinutes % (24 * 60);

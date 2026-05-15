@@ -211,6 +211,8 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
                   employee: employee,
                   onTap: () async {
                     _clearSearch();
+                    // Let the search focus state settle before opening the sheet;
+                    // without this the keyboard fights the sheet's drag animation.
                     await Future<void>.delayed(const Duration(milliseconds: 80));
                     if (!mounted) return;
                     await _showEmployeeDetails(employee);

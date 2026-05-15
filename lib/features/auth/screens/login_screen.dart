@@ -145,6 +145,8 @@ class _LoginState extends ConsumerState<Login>
         return;
       }
 
+      // Fire-and-forget: cache miss on the next cold start just falls through
+      // to SplashScreen, so we don't block navigation on a write failure.
       unawaited(AuthCache().save(employee));
 
       Navigator.pushReplacementNamed(

@@ -42,6 +42,8 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((ref) async 
 
   final employee = EmployeeRecord.fromMap(match.id, match.data);
   if (employee.isDisabled) {
+    // Clear cache so the next cold start doesn't attempt a Firestore lookup
+    // for a user whose access has been revoked (avoids a stale-cache cycle).
     await auth.signOut();
     await AuthCache().clear();
     return const SplashGoToLogin();
