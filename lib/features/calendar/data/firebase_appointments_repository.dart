@@ -23,14 +23,21 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   @override
   Future<void> addAppointment(AppointmentRecord appointment) async {
-    final ref = appointment.id != null
-        ? _appointments.doc(appointment.id)
-        : _appointments.doc();
-    await ref.set({
+    final data = {
       ..._toFirestoreMap(appointment),
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+    };
+    if (appointment.id != null) {
+      // Explicit id — caller chose the doc, so a full set() is intended.
+      await _appointments.doc(appointment.id).set(data);
+    } else {
+      // New doc — let Firestore generate the id via .add() so we never risk
+      // an inadvertent .set() on a pre-existing doc with the same generated
+      // id (collision is astronomically unlikely but .add() makes intent
+      // explicit and future-proofs against defaults added to .toMap()).
+      await _appointments.add(data);
+    }
   }
 
   @override
