@@ -7,7 +7,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, kReleaseMode;
+import 'package:flutter/foundation.dart'
+    show debugPrint, debugPrintStack, kDebugMode, kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -23,6 +24,7 @@ import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
+import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/settings/application/settings_providers.dart';
 import 'package:scheduling/features/settings/data/shared_prefs_settings_repository.dart';
@@ -125,9 +127,19 @@ Future<Widget> _resolveHome() async {
   final cached = await AuthCache().loadIfMatch(user.uid);
   if (cached == null) return const SplashScreen();
 
-  final userDoc = await FirebaseEmployeesRepository(
-    FirebaseFirestore.instance,
-  ).findUserByUid(user.uid);
+  // Transient errors (network, Firestore unavailable) shouldn't sign the user
+  // out — fall through to SplashScreen so its own controller can retry once
+  // the SDK comes back online.
+  final UserUidMatch? userDoc;
+  try {
+    userDoc = await FirebaseEmployeesRepository(
+      FirebaseFirestore.instance,
+    ).findUserByUid(user.uid);
+  } catch (e, st) {
+    debugPrint('[_resolveHome] findUserByUid failed: $e');
+    debugPrintStack(stackTrace: st);
+    return const SplashScreen();
+  }
   if (userDoc == null) return _signOutToSplash();
 
   final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);

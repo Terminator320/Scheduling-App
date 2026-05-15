@@ -216,8 +216,17 @@ class EventDetailsController
     );
   }
 
+  /// Cap on attached images per appointment (existing + queued). Matches
+  /// `AddEventController.maxImagesPerAppointment` so the cap is consistent
+  /// across the create + edit paths.
+  static const int maxImagesPerAppointment = 10;
+
   void addImages(List<File> files) {
-    state = state.copyWith(newImages: [...state.newImages, ...files]);
+    final used = state.existingImages.length + state.newImages.length;
+    final remaining = maxImagesPerAppointment - used;
+    if (remaining <= 0) return;
+    final accepted = files.take(remaining).toList();
+    state = state.copyWith(newImages: [...state.newImages, ...accepted]);
   }
 
   void removeNewImage(int index) {

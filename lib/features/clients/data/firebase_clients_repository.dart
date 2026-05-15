@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -65,10 +66,20 @@ class FirebaseClientsRepository implements ClientsRepository {
     final normalizedQuery = ClientSearchPolicy.normalize(q);
     final queryDigits = ClientSearchPolicy.digitsOnly(q);
 
-    final snapshot = await _clients
-        .orderBy('createdAt', descending: true)
-        .limit(ClientSearchPolicy.serverReadLimit)
-        .get();
+    final QuerySnapshot<Map<String, dynamic>> snapshot;
+    try {
+      snapshot = await _clients
+          .orderBy('createdAt', descending: true)
+          .limit(ClientSearchPolicy.serverReadLimit)
+          .get();
+    } on FirebaseException catch (e, st) {
+      // Permission-denied is the most likely outcome when an employee tries
+      // to search clients (rules are admin-only). Return empty so the UI
+      // shows "no results" rather than crashing the picker.
+      debugPrint('[FirebaseClientsRepository] searchClients failed: $e');
+      debugPrintStack(stackTrace: st);
+      return const [];
+    }
 
     final scoredClients = <MapEntry<int, ClientRecord>>[];
 
