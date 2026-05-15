@@ -26,19 +26,13 @@ class GooglePlacesRepository implements PlacesRepository {
 
     final response = await _client.post(
       _autocompleteUri,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': _apiKey,
-      },
+      headers: {'Content-Type': 'application/json', 'X-Goog-Api-Key': _apiKey},
       body: jsonEncode({
         'input': input,
         'includedRegionCodes': ['ca'],
         'locationBias': {
           'circle': {
-            'center': {
-              'latitude': 45.5017,
-              'longitude': -73.5673,
-            }, // Montreal
+            'center': {'latitude': 45.5017, 'longitude': -73.5673}, // Montreal
             'radius': 50000.0,
           },
         },
@@ -54,8 +48,11 @@ class GooglePlacesRepository implements PlacesRepository {
       return (data['suggestions'] as List? ?? [])
           .map((e) => AddressSuggestion.fromJson(e as Map<String, dynamic>))
           .toList();
-    } catch (_) {
-      throw Exception('Autocomplete failed: ${response.body}');
+    } on FormatException catch (e) {
+      // Don't echo `response.body` back into the exception message — it can
+      // include API noise and balloons logs. The original FormatException
+      // carries the position info already.
+      throw Exception('Autocomplete response was not valid JSON: $e');
     }
   }
 

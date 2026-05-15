@@ -135,7 +135,10 @@ class _LoginState extends ConsumerState<Login>
 
       final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
 
-      if (employee.isDisabled) {
+      // CLAUDE.md invariant: only `status == 'active'` users sign in. Anything
+      // else (disabled, invited, malformed) is rejected with the same UX as a
+      // disabled account.
+      if (!employee.isActive) {
         await _authService.signOut();
         if (!mounted) return;
         setState(() {
@@ -174,9 +177,8 @@ class _LoginState extends ConsumerState<Login>
     final prefill = _emailController.text.trim();
     final result = await Navigator.of(context).push<CreateAccountResult>(
       MaterialPageRoute(
-        builder: (_) => CreateAccountScreen(
-          initialEmail: prefill.isEmpty ? null : prefill,
-        ),
+        builder: (_) =>
+            CreateAccountScreen(initialEmail: prefill.isEmpty ? null : prefill),
       ),
     );
 
@@ -368,16 +370,17 @@ class _LoginState extends ConsumerState<Login>
                       enabled: !_isLoading,
                       onSubmitted: (_) => _passwordFocus.requestFocus(),
                       onChanged: (_) => _onFieldChanged(),
-                      decoration: formInputDecoration(
-                        context,
-                        context.l10n.email,
-                      ).copyWith(
-                        errorText: _submitted ? _emailError : null,
-                        prefixIcon: const Icon(
-                          Icons.email_outlined,
-                          size: 20,
-                        ),
-                      ),
+                      decoration:
+                          formInputDecoration(
+                            context,
+                            context.l10n.email,
+                          ).copyWith(
+                            errorText: _submitted ? _emailError : null,
+                            prefixIcon: const Icon(
+                              Icons.email_outlined,
+                              size: 20,
+                            ),
+                          ),
                     ),
                   ),
                 ),
@@ -396,45 +399,46 @@ class _LoginState extends ConsumerState<Login>
                       enabled: !_isLoading,
                       onSubmitted: (_) => _signIn(),
                       onChanged: (_) => _onFieldChanged(),
-                      decoration: formInputDecoration(
-                        context,
-                        context.l10n.password,
-                      ).copyWith(
-                        errorText: _submitted ? _passwordError : null,
-                        prefixIcon: const Icon(
-                          Icons.lock_outlined,
-                          size: 20,
-                        ),
-                        suffixIcon: AnimatedSwitcher(
-                          duration: AppAnimationDurations.quick,
-                          transitionBuilder: (child, animation) =>
-                              FadeTransition(
-                                opacity: animation,
-                                child: ScaleTransition(
-                                  scale: Tween<double>(
-                                    begin: 0.7,
-                                    end: 1,
-                                  ).animate(animation),
-                                  child: child,
-                                ),
-                              ),
-                          child: IconButton(
-                            key: ValueKey(_isObscured),
-                            icon: Icon(
-                              _isObscured
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
+                      decoration:
+                          formInputDecoration(
+                            context,
+                            context.l10n.password,
+                          ).copyWith(
+                            errorText: _submitted ? _passwordError : null,
+                            prefixIcon: const Icon(
+                              Icons.lock_outlined,
                               size: 20,
-                              color: scheme.onSurfaceVariant,
                             ),
-                            tooltip: _isObscured
-                                ? context.l10n.showPassword
-                                : context.l10n.hidePassword,
-                            onPressed: () =>
-                                setState(() => _isObscured = !_isObscured),
+                            suffixIcon: AnimatedSwitcher(
+                              duration: AppAnimationDurations.quick,
+                              transitionBuilder: (child, animation) =>
+                                  FadeTransition(
+                                    opacity: animation,
+                                    child: ScaleTransition(
+                                      scale: Tween<double>(
+                                        begin: 0.7,
+                                        end: 1,
+                                      ).animate(animation),
+                                      child: child,
+                                    ),
+                                  ),
+                              child: IconButton(
+                                key: ValueKey(_isObscured),
+                                icon: Icon(
+                                  _isObscured
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  size: 20,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                                tooltip: _isObscured
+                                    ? context.l10n.showPassword
+                                    : context.l10n.hidePassword,
+                                onPressed: () =>
+                                    setState(() => _isObscured = !_isObscured),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
                     ),
                   ),
                 ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -103,9 +104,7 @@ class AddEventController
     final auto = !state.endTimeWasPickedManually;
     state = state.copyWith(
       selectedStartTime: time,
-      selectedEndTime: auto
-          ? _addOneHour(time)
-          : state.selectedEndTime,
+      selectedEndTime: auto ? _addOneHour(time) : state.selectedEndTime,
       errors: _withoutKey(
         _withoutKey(state.errors, 'startTime'),
         auto ? 'endTime' : '_',
@@ -132,11 +131,9 @@ class AddEventController
       final results = await ref
           .read(clientsRepositoryProvider)
           .searchClients(trimmed);
-      state = state.copyWith(
-        clientResults: results,
-        isSearchingClient: false,
-      );
-    } catch (_) {
+      state = state.copyWith(clientResults: results, isSearchingClient: false);
+    } catch (e, st) {
+      ref.read(loggerProvider).warn('searchClients failed', e, st);
       state = state.copyWith(isSearchingClient: false);
     }
   }
@@ -180,9 +177,7 @@ class AddEventController
   }
 
   void addImages(List<File> files) {
-    state = state.copyWith(
-      selectedImages: [...state.selectedImages, ...files],
-    );
+    state = state.copyWith(selectedImages: [...state.selectedImages, ...files]);
   }
 
   void removeImage(int index) {
@@ -285,11 +280,12 @@ class AddEventController
   }
 }
 
-final addEventControllerProvider = AutoDisposeNotifierProviderFamily<
-  AddEventController,
-  AddEventState,
-  DateTime?
->(AddEventController.new);
+final addEventControllerProvider =
+    AutoDisposeNotifierProviderFamily<
+      AddEventController,
+      AddEventState,
+      DateTime?
+    >(AddEventController.new);
 
 // ── helpers ─────────────────────────────────────────────────────────────
 

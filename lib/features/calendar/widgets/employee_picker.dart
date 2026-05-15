@@ -4,9 +4,10 @@ import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 class EmployeePicker extends StatelessWidget {
-
   const EmployeePicker({
-    required this.allEmployees, required this.selectedEmployees, super.key,
+    required this.allEmployees,
+    required this.selectedEmployees,
+    super.key,
     this.selectable = true,
     this.hasError = false,
     this.onToggle,
@@ -46,13 +47,15 @@ class EmployeePicker extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.fromLTRB(6, 4, 10, 4),
             decoration: BoxDecoration(
-              color: isSelected ? scheme.primaryContainer : scheme.surfaceContainerHighest,
+              color: isSelected
+                  ? scheme.primaryContainer
+                  : scheme.surfaceContainerHighest,
               border: Border.all(
                 color: hasError && !isSelected
                     ? scheme.error
                     : isSelected
-                        ? scheme.primary
-                        : scheme.outlineVariant,
+                    ? scheme.primary
+                    : scheme.outlineVariant,
                 width: 1.5,
               ),
               borderRadius: BorderRadius.circular(AppRadius.rFull),
@@ -70,10 +73,18 @@ class EmployeePicker extends StatelessWidget {
                   child: Center(
                     child: Text(
                       employee.initials,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 8,
                         fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                        // Choose initials contrast from the employee color so
+                        // light/yellow swatches stay readable.
+                        color:
+                            ThemeData.estimateBrightnessForColor(
+                                  employee.color,
+                                ) ==
+                                Brightness.dark
+                            ? Colors.white
+                            : Colors.black,
                       ),
                     ),
                   ),
@@ -84,7 +95,9 @@ class EmployeePicker extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                    color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
+                    color: isSelected
+                        ? scheme.primary
+                        : scheme.onSurfaceVariant,
                   ),
                 ),
               ],

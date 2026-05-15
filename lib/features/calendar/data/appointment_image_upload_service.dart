@@ -67,10 +67,7 @@ class AppointmentImageUploadService {
       }
       debugPrint('[AppointmentImageUpload] done for $appointmentId');
     } catch (e, st) {
-      _notifier.reportFailure(
-        appointmentId,
-        failedCount: newImages.length,
-      );
+      _notifier.reportFailure(appointmentId, failedCount: newImages.length);
       debugPrint('[AppointmentImageUpload] FAILED for $appointmentId: $e');
       debugPrintStack(stackTrace: st);
     }
@@ -83,28 +80,42 @@ class AppointmentImageUploadService {
   ) async {
     final compressed = await _compress.compressImages(newImages);
 
-    final sizes = await Future.wait(compressed.map((f) => f.length()));
+    try {
+      final sizes = await Future.wait(compressed.map((f) => f.length()));
 
-    final uploadable = <File>[];
-    final tooLargeNames = <String>[];
+      final uploadable = <File>[];
+      final tooLargeNames = <String>[];
 
-    for (var i = 0; i < compressed.length; i++) {
-      if (sizes[i] > ImageStorageService.maxUploadBytes) {
-        tooLargeNames.add(_fileName(newImages[i]));
-      } else {
-        uploadable.add(compressed[i]);
+      for (var i = 0; i < compressed.length; i++) {
+        if (sizes[i] > ImageStorageService.maxUploadBytes) {
+          tooLargeNames.add(_fileName(newImages[i]));
+        } else {
+          uploadable.add(compressed[i]);
+        }
+      }
+
+      if (uploadable.isNotEmpty) {
+        final uploaded = await _storage.uploadImages(appointmentId, uploadable);
+        await _appointments.updateAppointmentPictures(appointmentId, [
+          ...existingImages,
+          ...uploaded,
+        ]);
+      }
+
+      return tooLargeNames;
+    } finally {
+      // Compressed files live in the OS temp dir; clean them up regardless of
+      // upload outcome so failures don't accumulate on-device.
+      for (final f in compressed) {
+        try {
+          if (await f.exists()) await f.delete();
+        } catch (e) {
+          debugPrint(
+            '[AppointmentImageUpload] temp-cleanup failed for ${f.path}: $e',
+          );
+        }
       }
     }
-
-    if (uploadable.isNotEmpty) {
-      final uploaded = await _storage.uploadImages(appointmentId, uploadable);
-      await _appointments.updateAppointmentPictures(
-        appointmentId,
-        [...existingImages, ...uploaded],
-      );
-    }
-
-    return tooLargeNames;
   }
 
   static String _fileName(File file) {
@@ -113,11 +124,11 @@ class AppointmentImageUploadService {
   }
 }
 
-final appointmentImageUploadProvider = Provider<AppointmentImageUploadService>(
-  (ref) {
-    return AppointmentImageUploadService(
-      appointments: ref.watch(appointmentsRepositoryProvider),
-      notifier: ref.watch(photoUploadNotifierProvider),
-    );
-  },
-);
+final appointmentImageUploadProvider = Provider<AppointmentImageUploadService>((
+  ref,
+) {
+  return AppointmentImageUploadService(
+    appointments: ref.watch(appointmentsRepositoryProvider),
+    notifier: ref.watch(photoUploadNotifierProvider),
+  );
+});

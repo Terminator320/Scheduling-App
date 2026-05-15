@@ -104,7 +104,10 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
         gradient: LinearGradient(
           colors: [
             scheme.primary,
-            Color.alphaBlend(Colors.black.withValues(alpha: 0.2), scheme.primary),
+            Color.alphaBlend(
+              Colors.black.withValues(alpha: 0.2),
+              scheme.primary,
+            ),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -117,7 +120,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
           Container(
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.25),
+              color: scheme.onPrimary.withValues(alpha: 0.25),
               shape: BoxShape.circle,
             ),
             child: AppAvatar(
@@ -130,8 +133,8 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
           // Name
           Text(
             _displayName.isNotEmpty ? _displayName : ' ',
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: scheme.onPrimary,
               fontSize: 16,
               fontWeight: FontWeight.w700,
               height: 1.2,
@@ -146,13 +149,13 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.22),
+                  color: scheme.onPrimary.withValues(alpha: 0.22),
                   borderRadius: BorderRadius.circular(AppRadius.rFull),
                 ),
                 child: Text(
                   roleLabel,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: scheme.onPrimary,
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.3,
@@ -167,7 +170,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.75),
+                      color: scheme.onPrimary.withValues(alpha: 0.75),
                       fontSize: 11,
                     ),
                   ),

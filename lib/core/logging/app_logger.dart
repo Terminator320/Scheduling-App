@@ -6,10 +6,15 @@ import 'package:logger/logger.dart';
 class AppLogger {
   AppLogger({Logger? logger, FirebaseCrashlytics? crashlytics})
     : _logger = logger ?? Logger(printer: PrettyPrinter(methodCount: 0)),
-      _crashlytics = crashlytics ?? FirebaseCrashlytics.instance;
+      _crashlyticsOverride = crashlytics;
 
   final Logger _logger;
-  final FirebaseCrashlytics _crashlytics;
+  final FirebaseCrashlytics? _crashlyticsOverride;
+
+  // Lazy lookup so tests that never enter release branches don't have to
+  // initialize Firebase just to instantiate the logger.
+  FirebaseCrashlytics get _crashlytics =>
+      _crashlyticsOverride ?? FirebaseCrashlytics.instance;
 
   void debug(String message) {
     if (kDebugMode) _logger.d(message);

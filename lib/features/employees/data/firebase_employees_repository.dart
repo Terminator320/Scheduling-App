@@ -5,18 +5,21 @@ import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 class FirebaseEmployeesRepository implements EmployeesRepository {
-  FirebaseEmployeesRepository(
-    FirebaseFirestore firestore, {
-    FirebaseAuth? auth,
-  }) : _users = firestore.collection('users'),
-       _auth = auth ?? FirebaseAuth.instance;
+  FirebaseEmployeesRepository(FirebaseFirestore firestore, {FirebaseAuth? auth})
+    : _users = firestore.collection('users'),
+      _auth = auth ?? FirebaseAuth.instance;
 
   final CollectionReference<Map<String, dynamic>> _users;
   final FirebaseAuth _auth;
 
   @override
   Stream<List<EmployeeRecord>> watchAllUsers() {
+    // Powers the appointment colour map — must include historic users (incl.
+    // disabled), so no status filter. The limit caps bandwidth on large teams;
+    // single-field orderBy uses Firestore's auto-built index.
     return _users
+        .orderBy('name')
+        .limit(500)
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
@@ -193,13 +196,11 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     // Invited employees (created by admin before they register) have uid: ''
     // in Firestore. An empty uid would match all invited docs, so guard early.
     if (uid.isEmpty) return Stream.value('');
-    return _users
-        .where('uid', isEqualTo: uid)
-        .limit(1)
-        .snapshots()
-        .map((snapshot) {
-          if (snapshot.docs.isEmpty) return '';
-          return (snapshot.docs.first.data()[field] ?? '').toString().trim();
-        });
+    return _users.where('uid', isEqualTo: uid).limit(1).snapshots().map((
+      snapshot,
+    ) {
+      if (snapshot.docs.isEmpty) return '';
+      return (snapshot.docs.first.data()[field] ?? '').toString().trim();
+    });
   }
 }

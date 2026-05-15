@@ -67,9 +67,7 @@ Future<bool> showBusyConflictDialog(
                 ),
               ),
               const SizedBox(height: AppSpacing.sp12),
-              ...busyEmployees.map(
-                (e) => _BusyEmployeeRow(employee: e),
-              ),
+              ...busyEmployees.map((e) => _BusyEmployeeRow(employee: e)),
               const Divider(height: AppSpacing.sp24),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -151,10 +149,16 @@ class _BusyEmployeeRow extends StatelessWidget {
             child: Center(
               child: Text(
                 employee.initials,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
-                  color: Colors.white,
+                  // Pick from the employee color's luminance so light swatches
+                  // stay readable.
+                  color:
+                      ThemeData.estimateBrightnessForColor(employee.color) ==
+                          Brightness.dark
+                      ? Colors.white
+                      : Colors.black,
                 ),
               ),
             ),

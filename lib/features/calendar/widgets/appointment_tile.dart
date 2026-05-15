@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
@@ -8,9 +7,10 @@ import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';
 
 class AppointmentTile extends StatelessWidget {
-
   const AppointmentTile({
-    required this.appointment, required this.employeeColorMap, super.key,
+    required this.appointment,
+    required this.employeeColorMap,
+    super.key,
     this.showActions = true,
     this.onOpen,
   });
@@ -46,8 +46,11 @@ class AppointmentTile extends StatelessWidget {
             await onOpen!();
             return;
           }
-          await showEventDetails(context, appointment,
-              showActions: showActions);
+          await showEventDetails(
+            context,
+            appointment,
+            showActions: showActions,
+          );
         },
         child: IntrinsicHeight(
           child: Row(

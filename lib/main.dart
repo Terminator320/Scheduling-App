@@ -73,8 +73,9 @@ Future<void> main() async {
       if (_useFirebaseEmulator) {
         await _wireFirebaseEmulator();
       } else {
-        await FirebaseCrashlytics.instance
-            .setCrashlyticsCollectionEnabled(kReleaseMode);
+        await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
+          kReleaseMode,
+        );
         FlutterError.onError =
             FirebaseCrashlytics.instance.recordFlutterFatalError;
         PlatformDispatcher.instance.onError = (error, stack) {
@@ -102,8 +103,7 @@ Future<void> main() async {
       );
     },
     (error, stack) {
-      FirebaseCrashlytics.instance
-          .recordError(error, stack, fatal: true);
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
     },
   );
 }
@@ -131,7 +131,10 @@ Future<Widget> _resolveHome() async {
   if (userDoc == null) return _signOutToSplash();
 
   final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
-  if (employee.isDisabled) return _signOutToSplash();
+  // CLAUDE.md invariant: only `status == 'active'` may enter the app. Any
+  // other status (disabled, invited, empty, future values) bounces back to
+  // SplashScreen so a single source of truth handles re-auth or sign-out.
+  if (!employee.isActive) return _signOutToSplash();
 
   unawaited(AuthCache().save(employee));
   return MainCalendar(isAdmin: employee.isAdmin, employeeId: employee.id);
@@ -179,8 +182,9 @@ class _PaulAppState extends ConsumerState<PaulApp> {
 
   void toggleTheme() {
     setState(() {
-      _themeMode =
-          _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+      _themeMode = _themeMode == ThemeMode.dark
+          ? ThemeMode.light
+          : ThemeMode.dark;
     });
     _settingsRepository.save(themeMode: _themeMode);
   }
@@ -189,7 +193,9 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     setState(() {
       _textScale = value;
     });
-    _settingsSaveDebouncer.run(() => _settingsRepository.save(textScale: value));
+    _settingsSaveDebouncer.run(
+      () => _settingsRepository.save(textScale: value),
+    );
   }
 
   void setLanguage(String code) {
@@ -248,9 +254,9 @@ class _PaulAppState extends ConsumerState<PaulApp> {
               onGenerateRoute: AppRoutes.onGenerateRoute,
               builder: (context, child) {
                 return MediaQuery(
-                  data: MediaQuery.of(context).copyWith(
-                    textScaler: TextScaler.linear(_textScale),
-                  ),
+                  data: MediaQuery.of(
+                    context,
+                  ).copyWith(textScaler: TextScaler.linear(_textScale)),
                   child: NoticeListener(
                     child: child ?? const SizedBox.shrink(),
                   ),

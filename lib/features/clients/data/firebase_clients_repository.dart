@@ -14,10 +14,7 @@ class FirebaseClientsRepository implements ClientsRepository {
 
   @override
   Stream<List<ClientRecord>> watchClients({int? limit}) {
-    var query = _clients.orderBy(
-      'createdAt',
-      descending: true,
-    );
+    var query = _clients.orderBy('createdAt', descending: true);
     if (limit != null) query = query.limit(limit);
 
     return query.snapshots().map(
@@ -108,9 +105,7 @@ class FirebaseClientsRepository implements ClientsRepository {
       );
 
       final displayName = ClientSearchPolicy.normalize(client.displayName);
-      final name = ClientSearchPolicy.normalize(
-        data['name']?.toString() ?? '',
-      );
+      final name = ClientSearchPolicy.normalize(data['name']?.toString() ?? '');
       final businessName = ClientSearchPolicy.normalize(
         data['businessName']?.toString() ?? '',
       );
@@ -176,15 +171,12 @@ class FirebaseClientsRepository implements ClientsRepository {
     final email = (base['email'] as String? ?? '').trim().toLowerCase();
     base['email'] = email;
     final contacts = base['contacts'] as List? ?? const [];
-    base['contacts'] = contacts
-        .whereType<Map>()
-        .map((c) {
-          final m = Map<String, dynamic>.from(c);
-          final ce = (m['email'] as String? ?? '').trim().toLowerCase();
-          m['email'] = ce;
-          return m;
-        })
-        .toList();
+    base['contacts'] = contacts.whereType<Map<Object?, Object?>>().map((c) {
+      final m = Map<String, dynamic>.from(c);
+      final ce = (m['email'] as String? ?? '').trim().toLowerCase();
+      m['email'] = ce;
+      return m;
+    }).toList();
     return base;
   }
 }

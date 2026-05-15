@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'package:scheduling/core/images/images_providers.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
@@ -33,8 +34,7 @@ abstract class EventDetailsState with _$EventDetailsState {
     @Default(false) bool isEditing,
     @Default(<EmployeeRecord>[]) List<EmployeeRecord> selectedEmployees,
     @Default(<AppointmentImage>[]) List<AppointmentImage> existingImages,
-    @Default(<AppointmentImage>[])
-    List<AppointmentImage> removedExistingImages,
+    @Default(<AppointmentImage>[]) List<AppointmentImage> removedExistingImages,
     @Default(<File>[]) List<File> newImages,
     @Default(false) bool isSaving,
     ClientRecord? client,
@@ -97,14 +97,15 @@ class EventDetailsController
           .read(employeesRepositoryProvider)
           .watchEmployees()
           .first;
-      final selected =
-          all.where((e) => employeeIds.contains(e.id)).toList();
+      final selected = all.where((e) => employeeIds.contains(e.id)).toList();
       // Don't overwrite if the user has already toggled something.
       if (state.selectedEmployees.isEmpty) {
         state = state.copyWith(selectedEmployees: selected);
       }
-    } catch (_) {
-      // Sheet stays usable even if the employees stream errors out.
+    } catch (e, st) {
+      // Sheet stays usable even if the employees stream errors out — log so
+      // the silent fallback is visible in Crashlytics.
+      ref.read(loggerProvider).warn('seedSelectedEmployees failed', e, st);
     }
   }
 
@@ -112,7 +113,9 @@ class EventDetailsController
     final id = clientId.trim();
     if (id.isEmpty || state.client != null) return;
     try {
-      final client = await ref.read(clientsRepositoryProvider).getClientById(id);
+      final client = await ref
+          .read(clientsRepositoryProvider)
+          .getClientById(id);
       if (client == null) return;
       // Don't overwrite a freshly-picked client mid-edit.
       if (state.selectedClient == null) {
@@ -120,15 +123,15 @@ class EventDetailsController
       } else {
         state = state.copyWith(client: client);
       }
-    } catch (_) {
-      // Keep the sheet usable even if the client doc fails to load.
+    } catch (e, st) {
+      // Keep the sheet usable even if the client doc fails to load — log so
+      // the silent fallback is visible in Crashlytics.
+      ref.read(loggerProvider).warn('loadClientIfNeeded failed', e, st);
     }
   }
 
-  void enterEditing() => state = state.copyWith(
-        isEditing: true,
-        errors: const {},
-      );
+  void enterEditing() =>
+      state = state.copyWith(isEditing: true, errors: const {});
 
   void exitEditing() => state = state.copyWith(isEditing: false);
 
@@ -164,10 +167,7 @@ class EventDetailsController
   Future<void> searchClients(String query) async {
     final trimmed = query.trim();
     if (!ClientSearchPolicy.shouldSearch(trimmed)) {
-      state = state.copyWith(
-        clientResults: const [],
-        isSearchingClient: false,
-      );
+      state = state.copyWith(clientResults: const [], isSearchingClient: false);
       return;
     }
     state = state.copyWith(isSearchingClient: true);
@@ -175,11 +175,9 @@ class EventDetailsController
       final results = await ref
           .read(clientsRepositoryProvider)
           .searchClients(trimmed);
-      state = state.copyWith(
-        clientResults: results,
-        isSearchingClient: false,
-      );
-    } catch (_) {
+      state = state.copyWith(clientResults: results, isSearchingClient: false);
+    } catch (e, st) {
+      ref.read(loggerProvider).warn('searchClients failed', e, st);
       state = state.copyWith(isSearchingClient: false);
     }
   }
@@ -259,7 +257,10 @@ class EventDetailsController
           .read(appointmentsRepositoryProvider)
           .updateAppointmentStatus(id: id, status: status);
       return true;
-    } catch (_) {
+    } catch (e, st) {
+      ref
+          .read(loggerProvider)
+          .warn('updateAppointmentStatus($status) failed', e, st);
       state = state.copyWith(isSaving: false);
       return false;
     }
@@ -277,7 +278,8 @@ class EventDetailsController
   }) async {
     // If the user hasn't re-selected a client, reconstruct one from the stored
     // appointment fields so the validator has something to check against.
-    final clientForValidation = state.selectedClient ??
+    final clientForValidation =
+        state.selectedClient ??
         (appointment.clientId.trim().isNotEmpty
             ? state.client ?? _placeholderClient(appointment)
             : null);
@@ -339,12 +341,12 @@ class EventDetailsController
         status: state.editingStatus,
       );
 
-      await ref
-          .read(appointmentsRepositoryProvider)
-          .updateAppointment(updated);
+      await ref.read(appointmentsRepositoryProvider).updateAppointment(updated);
 
       if (state.newImages.isNotEmpty) {
-        ref.read(appointmentImageUploadProvider).uploadInBackground(
+        ref
+            .read(appointmentImageUploadProvider)
+            .uploadInBackground(
               appointmentId: id,
               newImages: state.newImages,
               existingImages: state.existingImages,
@@ -365,11 +367,10 @@ class EventDetailsController
     if (id == null) return false;
     state = state.copyWith(isSaving: true);
     try {
-      await ref
-          .read(appointmentsRepositoryProvider)
-          .deleteAppointment(id);
+      await ref.read(appointmentsRepositoryProvider).deleteAppointment(id);
       return true;
-    } catch (_) {
+    } catch (e, st) {
+      ref.read(loggerProvider).warn('deleteAppointment failed', e, st);
       state = state.copyWith(isSaving: false);
       return false;
     }
@@ -379,17 +380,18 @@ class EventDetailsController
 /// View-mode use only. Edit-mode flips `selectedClient` so the validator
 /// always sees a real record for the client field.
 ClientRecord _placeholderClient(AppointmentRecord a) => ClientRecord(
-      id: a.clientId,
-      name: a.clientName,
-      phone: a.clientPhone,
-      address: a.address,
-    );
+  id: a.clientId,
+  name: a.clientName,
+  phone: a.clientPhone,
+  address: a.address,
+);
 
-final eventDetailsControllerProvider = AutoDisposeNotifierProviderFamily<
-  EventDetailsController,
-  EventDetailsState,
-  AppointmentRecord
->(EventDetailsController.new);
+final eventDetailsControllerProvider =
+    AutoDisposeNotifierProviderFamily<
+      EventDetailsController,
+      EventDetailsState,
+      AppointmentRecord
+    >(EventDetailsController.new);
 
 Map<String, AppointmentFormError> _withoutKey(
   Map<String, AppointmentFormError> errors,
