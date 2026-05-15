@@ -35,7 +35,7 @@ class _TextSizeScreenState extends State<TextSizeScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: scheme.primary,
-        foregroundColor: Colors.white,
+        foregroundColor: scheme.onPrimary,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
@@ -65,9 +65,9 @@ class _TextSizeScreenState extends State<TextSizeScreen> {
                 ),
                 const SizedBox(height: AppSpacing.sp12),
                 MediaQuery(
-                  data: MediaQuery.of(context).copyWith(
-                    textScaler: TextScaler.linear(_selected),
-                  ),
+                  data: MediaQuery.of(
+                    context,
+                  ).copyWith(textScaler: TextScaler.linear(_selected)),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -228,8 +228,7 @@ class _SizeRow extends StatelessWidget {
               child: Text(
                 label,
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  fontWeight:
-                      isSelected ? FontWeight.w600 : FontWeight.w500,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                   color: isSelected ? scheme.primary : null,
                   fontSize: 15,
                 ),

@@ -100,8 +100,12 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   @override
   Stream<List<AppointmentRecord>> watchHistory() {
+    // Admin-only view (see Firestore rules + settings_drawer gating). Cap the
+    // listener so a multi-year archive doesn't pull thousands of docs into
+    // memory on every history-screen open.
     return _appointments
         .where('status', whereIn: ['done', 'cancelled'])
+        .limit(500)
         .snapshots()
         .map(
           (snapshot) => snapshot.docs

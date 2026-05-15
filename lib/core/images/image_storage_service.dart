@@ -1,5 +1,7 @@
 import 'dart:io';
+
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 
@@ -83,16 +85,21 @@ class ImageStorageService {
       if (parts.length < 2) return '';
       final encoded = parts[1].split('?').first;
       return Uri.decodeComponent(encoded);
-    } catch (_) {
+    } catch (e) {
+      // A malformed URL means we can't delete the underlying Storage object
+      // by-path; callers fall through to a no-op delete. Log so we know an
+      // orphan happened instead of silently leaking blobs.
+      debugPrint('[ImageStorageService] _pathFromUrl failed for "$url": $e');
       return '';
     }
   }
 
+  // Storage rules and the magic-byte guard above both restrict uploads to
+  // JPEG/PNG. Returning anything else here would race the rules and surface as
+  // an opaque 403 to the user.
   String _contentTypeFor(String fileName) {
     final lower = fileName.toLowerCase();
     if (lower.endsWith('.png')) return 'image/png';
-    if (lower.endsWith('.webp')) return 'image/webp';
-    if (lower.endsWith('.heic') || lower.endsWith('.heif')) return 'image/heic';
     return 'image/jpeg';
   }
 }

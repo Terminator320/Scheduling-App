@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
@@ -167,7 +168,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     _selectedEvents.value = selectedEvents;
 
     final isLoading = appointmentsAsync.isLoading;
-    final monthLabel = '${_monthName()} ${_focusedDay.year}';
+    final locale = Localizations.localeOf(context).toString();
+    final monthLabel = DateFormat.yMMMM(locale).format(_focusedDay);
     final jobLabel = '${selectedEvents.length} ${context.l10n.appointments}';
 
     return Scaffold(
@@ -304,23 +306,5 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         ),
       ],
     );
-  }
-
-  String _monthName() {
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    return months[_focusedDay.month - 1];
   }
 }

@@ -156,10 +156,16 @@ class DetailsEmployeePill extends StatelessWidget {
             child: Center(
               child: Text(
                 employee.initials,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
-                  color: Colors.white,
+                  // Pick from the employee color's luminance so light swatches
+                  // (yellow/light green) stay readable.
+                  color:
+                      ThemeData.estimateBrightnessForColor(employee.color) ==
+                          Brightness.dark
+                      ? Colors.white
+                      : Colors.black,
                 ),
               ),
             ),

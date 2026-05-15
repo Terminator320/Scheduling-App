@@ -88,7 +88,13 @@ class AuthService {
   }
 
   Future<void> signOut() async {
-    await AuthCache().clear();
-    await _auth.signOut();
+    // Sign out remote first; the local cache is only useful when it matches a
+    // signed-in `uid`, so clearing it unconditionally in `finally` is safe and
+    // prevents a desynced "no remote user, cached uid" state on next launch.
+    try {
+      await _auth.signOut();
+    } finally {
+      await AuthCache().clear();
+    }
   }
 }

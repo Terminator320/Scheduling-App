@@ -3,7 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 
-Widget formLabel(BuildContext context, String text, {bool optional = false, bool required = false}) {
+Widget formLabel(
+  BuildContext context,
+  String text, {
+  bool optional = false,
+  bool required = false,
+}) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 6),
     child: Row(
@@ -51,7 +56,9 @@ Widget formRemoveButton(BuildContext context) {
   return Container(
     padding: const EdgeInsets.all(2),
     decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.scrim.withOpacity(0.54),
+      // `scrim` is spec'd as a darkening overlay in both light and dark
+      // themes, so a white foreground icon stays readable on top.
+      color: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.54),
       shape: BoxShape.circle,
     ),
     child: const Icon(Icons.close, size: 14, color: Colors.white),

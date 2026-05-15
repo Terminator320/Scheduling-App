@@ -5,7 +5,9 @@ import 'package:scheduling/core/utils/l10n_extensions.dart';
 
 class EmployeeColorGrid extends StatelessWidget {
   const EmployeeColorGrid({
-    required this.selectedColor, required this.onColorSelected, super.key,
+    required this.selectedColor,
+    required this.onColorSelected,
+    super.key,
     this.usedColors = const {},
   });
 
@@ -17,8 +19,9 @@ class EmployeeColorGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isCustomColor =
-        !_quickPicks.any((c) => c.toARGB32() == selectedColor);
+    final isCustomColor = !_quickPicks.any(
+      (c) => c.toARGB32() == selectedColor,
+    );
 
     return Wrap(
       spacing: 10,
@@ -92,9 +95,9 @@ class EmployeeColorGrid extends StatelessWidget {
     );
     if (!context.mounted) return;
     if (usedColors.contains(picked.toARGB32())) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.colorAlreadyUsed)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.colorAlreadyUsed)));
       return;
     }
     onColorSelected(picked.toARGB32());
@@ -136,7 +139,17 @@ class _SwatchButton extends StatelessWidget {
                 : Border.all(color: Colors.transparent, width: 2.5),
           ),
           child: isSelected
-              ? const Icon(Icons.check, color: Colors.white, size: 16)
+              ? Icon(
+                  Icons.check,
+                  // Pick from the swatch luminance so light colors don't
+                  // disappear (yellow, light green, white).
+                  color:
+                      ThemeData.estimateBrightnessForColor(color) ==
+                          Brightness.dark
+                      ? Colors.white
+                      : Colors.black,
+                  size: 16,
+                )
               : null,
         ),
       ),
