@@ -55,20 +55,29 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    final invitedEmployee = await _employees.findInvitedEmployeeByEmail(email);
+    // /users is gated by isSignedIn() — register first, look up the invite
+    // after auth, and roll back the auth account if no invite is found so it
+    // doesn't orphan and block re-signup with the same email.
+    final credential = await register(
+      email: email.trim().toLowerCase(),
+      password: password.trim(),
+    );
 
-    // Employees must be pre-invited by an admin; reject unknown emails up front.
+    InvitedEmployeeMatch? invitedEmployee;
+    try {
+      invitedEmployee = await _employees.findInvitedEmployeeByEmail(email);
+    } catch (e) {
+      await credential.user?.delete();
+      rethrow;
+    }
+
     if (invitedEmployee == null) {
+      await credential.user?.delete();
       throw FirebaseAuthException(
         code: 'not-authorized',
         message: 'This email was not added by the admin.',
       );
     }
-
-    final credential = await register(
-      email: email.trim().toLowerCase(),
-      password: password.trim(),
-    );
 
     await _employees.activateEmployee(
       docId: invitedEmployee.docId,

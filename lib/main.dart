@@ -6,6 +6,7 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -38,6 +39,20 @@ const _kLocalizationsDelegates = <LocalizationsDelegate<dynamic>>[
   GlobalCupertinoLocalizations.delegate,
 ];
 
+const bool _useFirebaseEmulator = bool.fromEnvironment('USE_FIREBASE_EMULATOR');
+// Android emulator can't reach the host's loopback at 127.0.0.1 — 10.0.2.2 is
+// the special alias for the host. iOS simulator and desktop builds use 127.0.0.1.
+const String _emulatorHost = String.fromEnvironment(
+  'EMULATOR_HOST',
+  defaultValue: '10.0.2.2',
+);
+
+Future<void> _wireFirebaseEmulator() async {
+  FirebaseAuth.instance.useAuthEmulator(_emulatorHost, 9099);
+  FirebaseFirestore.instance.useFirestoreEmulator(_emulatorHost, 8080);
+  await FirebaseStorage.instance.useStorageEmulator(_emulatorHost, 9199);
+}
+
 Future<void> main() async {
   await runZonedGuarded<Future<void>>(
     () async {
@@ -52,23 +67,30 @@ Future<void> main() async {
       // `flutterfire configure` has been run on a Mac to add iOS values.
       await Firebase.initializeApp(options: DefaultFirebaseOptions.android);
 
-      await FirebaseCrashlytics.instance
-          .setCrashlyticsCollectionEnabled(kReleaseMode);
-      FlutterError.onError =
-          FirebaseCrashlytics.instance.recordFlutterFatalError;
-      PlatformDispatcher.instance.onError = (error, stack) {
-        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-        return true;
-      };
+      // Emulator-only path: wire SDKs to localhost before any reads/writes,
+      // and skip Crashlytics + App Check (they call prod endpoints). Toggled
+      // by `flutter run --dart-define=USE_FIREBASE_EMULATOR=true`.
+      if (_useFirebaseEmulator) {
+        await _wireFirebaseEmulator();
+      } else {
+        await FirebaseCrashlytics.instance
+            .setCrashlyticsCollectionEnabled(kReleaseMode);
+        FlutterError.onError =
+            FirebaseCrashlytics.instance.recordFlutterFatalError;
+        PlatformDispatcher.instance.onError = (error, stack) {
+          FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+          return true;
+        };
 
-      await FirebaseAppCheck.instance.activate(
-        providerAndroid: kDebugMode
-            ? const AndroidDebugProvider()
-            : const AndroidPlayIntegrityProvider(),
-        providerApple: kDebugMode
-            ? const AppleDebugProvider()
-            : const AppleDeviceCheckProvider(),
-      );
+        await FirebaseAppCheck.instance.activate(
+          providerAndroid: kDebugMode
+              ? const AndroidDebugProvider()
+              : const AndroidPlayIntegrityProvider(),
+          providerApple: kDebugMode
+              ? const AppleDebugProvider()
+              : const AppleDeviceCheckProvider(),
+        );
+      }
 
       final settings = await SharedPrefsSettingsRepository().load();
       final home = await _resolveHome();

@@ -37,7 +37,13 @@ abstract class AppointmentsRepository {
 
   Stream<List<AppointmentRecord>> watchHistory();
 
-  Stream<List<AppointmentRecord>> watchForEmployee(String employeeId);
+  /// Same as [watchInRange] but scoped to one employee via
+  /// `employeeIds arrayContains employeeId`. Required for the Firestore
+  /// `isAssignedEmployee` rule to accept the listener.
+  Stream<List<AppointmentRecord>> watchForEmployeeInRange(
+    String employeeId,
+    AppointmentDateRange range,
+  );
 
   /// Returns the subset of `candidates` who already have a conflicting
   /// appointment in `[start, end)`. Used by the assignment picker.
