@@ -31,6 +31,13 @@ import 'package:scheduling/firebase_options.dart';
 import 'package:scheduling/l10n/app_localizations.dart';
 import 'package:scheduling/routes/app_routes.dart';
 
+const _kLocalizationsDelegates = <LocalizationsDelegate<dynamic>>[
+  AppLocalizations.delegate,
+  GlobalMaterialLocalizations.delegate,
+  GlobalWidgetsLocalizations.delegate,
+  GlobalCupertinoLocalizations.delegate,
+];
+
 Future<void> main() async {
   await runZonedGuarded<Future<void>>(
     () async {
@@ -99,20 +106,19 @@ Future<Widget> _resolveHome() async {
   final userDoc = await FirebaseEmployeesRepository(
     FirebaseFirestore.instance,
   ).findUserByUid(user.uid);
-  if (userDoc == null) {
-    await FirebaseAuth.instance.signOut();
-    await AuthCache().clear();
-    return const SplashScreen();
-  }
+  if (userDoc == null) return _signOutToSplash();
 
   final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
-  if (employee.isDisabled) {
-    await FirebaseAuth.instance.signOut();
-    await AuthCache().clear();
-    return const SplashScreen();
-  }
+  if (employee.isDisabled) return _signOutToSplash();
+
   unawaited(AuthCache().save(employee));
   return MainCalendar(isAdmin: employee.isAdmin, employeeId: employee.id);
+}
+
+Future<Widget> _signOutToSplash() async {
+  await FirebaseAuth.instance.signOut();
+  await AuthCache().clear();
+  return const SplashScreen();
 }
 
 class PaulApp extends ConsumerStatefulWidget {
@@ -128,9 +134,8 @@ class PaulApp extends ConsumerStatefulWidget {
 class _PaulAppState extends ConsumerState<PaulApp> {
   final _navigatorKey = GlobalKey<NavigatorState>();
   final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
-  final SharedPrefsSettingsRepository _settingsRepository =
-      SharedPrefsSettingsRepository();
-  final SettingsSaveDebouncer _settingsSaveDebouncer = SettingsSaveDebouncer();
+  final _settingsRepository = SharedPrefsSettingsRepository();
+  final _settingsSaveDebouncer = SettingsSaveDebouncer();
   late ThemeMode _themeMode;
   late double _textScale;
   late AppLanguageController _languageController;
@@ -182,8 +187,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
+  void _listenForAccountDisabled(BuildContext context) {
     ref.listen<AsyncValue<bool>>(accountDisabledProvider, (prev, next) {
       final wasDisabled = prev?.valueOrNull ?? false;
       final isDisabled = next.valueOrNull ?? false;
@@ -191,6 +195,11 @@ class _PaulAppState extends ConsumerState<PaulApp> {
         _handleAccountDisabled(context.l10n.thisAccountHasBeenDisabled);
       }
     });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _listenForAccountDisabled(context);
     return AppLanguageScope(
       controller: _languageController,
       child: ThemeNotifier(
@@ -209,12 +218,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
               debugShowCheckedModeBanner: false,
               locale: locale,
               supportedLocales: AppLocalizations.supportedLocales,
-              localizationsDelegates: const [
-                AppLocalizations.delegate,
-                GlobalMaterialLocalizations.delegate,
-                GlobalWidgetsLocalizations.delegate,
-                GlobalCupertinoLocalizations.delegate,
-              ],
+              localizationsDelegates: _kLocalizationsDelegates,
               theme: lightTheme(),
               darkTheme: darkTheme(),
               themeMode: _themeMode,
