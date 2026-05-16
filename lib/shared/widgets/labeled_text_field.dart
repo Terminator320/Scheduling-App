@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
 class LabeledTextField extends StatelessWidget {
   const LabeledTextField({
-    required this.label, required this.controller, super.key,
+    required this.label,
+    required this.controller,
+    super.key,
     this.required = false,
     this.optional = false,
     this.keyboard = TextInputType.text,
     this.autofillHints,
     this.maxLines = 1,
+    this.maxLength,
     this.readOnly = false,
     this.onTap,
     this.onChanged,
@@ -26,6 +30,10 @@ class LabeledTextField extends StatelessWidget {
   final TextInputType keyboard;
   final Iterable<String>? autofillHints;
   final int maxLines;
+
+  /// Hard cap on input length. Enforced via an input formatter so paste
+  /// operations are truncated rather than rejected; no visible counter.
+  final int? maxLength;
   final bool readOnly;
   final VoidCallback? onTap;
   final ValueChanged<String>? onChanged;
@@ -47,6 +55,9 @@ class LabeledTextField extends StatelessWidget {
           keyboardType: keyboard,
           autofillHints: autofillHints,
           maxLines: maxLines,
+          inputFormatters: maxLength == null
+              ? null
+              : [LengthLimitingTextInputFormatter(maxLength)],
           readOnly: readOnly,
           onTap: onTap,
           onChanged: onChanged,

@@ -2,13 +2,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/maps/data/google_places_repository.dart';
 import 'package:scheduling/features/maps/domain/models/address_suggestion.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 
 class AddressAutocompleteField extends StatefulWidget {
   const AddressAutocompleteField({
-    required this.controller, super.key,
+    required this.controller,
+    super.key,
     this.label,
     this.required = false,
     this.optional = false,
@@ -127,6 +129,7 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
           optional: widget.optional,
           keyboard: TextInputType.streetAddress,
           autofillHints: const [AutofillHints.fullStreetAddress],
+          maxLength: TextLimits.appointmentAddress,
           errorText: widget.errorText,
           onChanged: _onTextChanged,
           suffixIcon: _isLoading
@@ -138,8 +141,11 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 )
-              : Icon(Icons.location_on_outlined, size: 18,
-                  color: scheme.onSurfaceVariant),
+              : Icon(
+                  Icons.location_on_outlined,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
+                ),
         ),
         if (_suggestions.isNotEmpty)
           Container(
@@ -173,9 +179,9 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
             padding: const EdgeInsets.only(top: 6, left: 4),
             child: Text(
               _serviceError!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.error,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: scheme.error),
             ),
           ),
       ],

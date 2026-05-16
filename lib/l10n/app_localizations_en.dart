@@ -807,6 +807,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get passwordIsTooWeakUseAtLeast6Characters => 'Password is too weak. Use at least 6 characters';
 
   @override
+  String get passwordMustBeAtLeast8Characters => 'Password must be at least 8 characters';
+
+  @override
   String get signInIsTemporarilyUnavailable => 'Sign-in is temporarily unavailable';
 
   @override

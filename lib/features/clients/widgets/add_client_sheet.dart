@@ -5,6 +5,7 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
+import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/additional_contacts_section.dart';
@@ -261,6 +262,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
                 controller: _businessNameController,
                 optional: true,
                 autofillHints: const [AutofillHints.organizationName],
+                maxLength: TextLimits.personName,
                 errorText: _errors['businessName'],
                 onChanged: (_) {
                   _clearError('businessName');
@@ -278,6 +280,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
                 required: !_isBusiness,
                 optional: _isBusiness,
                 autofillHints: const [AutofillHints.name],
+                maxLength: TextLimits.personName,
                 errorText: _errors['name'],
                 onChanged: (_) {
                   _clearError('name');
@@ -298,6 +301,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
                       keyboard: TextInputType.phone,
                       required: true,
                       autofillHints: const [AutofillHints.telephoneNumber],
+                      maxLength: TextLimits.phone,
                       errorText: _errors['phone'],
                       onChanged: (_) {
                         _clearError('phone');
@@ -315,6 +319,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
                       keyboard: TextInputType.emailAddress,
                       optional: true,
                       autofillHints: const [AutofillHints.email],
+                      maxLength: TextLimits.email,
                       errorText: _errors['email'],
                       onChanged: (_) {
                         _clearError('email');
@@ -354,6 +359,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
                 label: context.l10n.aptUnit,
                 controller: _aptController,
                 optional: true,
+                maxLength: TextLimits.aptUnit,
               ),
             ),
             const SizedBox(height: 16),
@@ -365,6 +371,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
                       label: context.l10n.city,
                       controller: _cityController,
                       autofillHints: const [AutofillHints.addressCity],
+                      maxLength: TextLimits.city,
                     ),
                   ),
                 ),
@@ -375,6 +382,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
                       label: context.l10n.province,
                       controller: _provinceController,
                       autofillHints: const [AutofillHints.addressState],
+                      maxLength: TextLimits.province,
                     ),
                   ),
                 ),
@@ -389,6 +397,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
                       label: context.l10n.postalCode,
                       controller: _postalCodeController,
                       autofillHints: const [AutofillHints.postalCode],
+                      maxLength: TextLimits.postalCode,
                     ),
                   ),
                 ),
@@ -399,6 +408,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
                       label: context.l10n.country,
                       controller: _countryController,
                       autofillHints: const [AutofillHints.countryName],
+                      maxLength: TextLimits.country,
                     ),
                   ),
                 ),

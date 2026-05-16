@@ -60,13 +60,31 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     });
   }
 
+  /// Mirrors the allowlist in firestore.rules — rejecting locally produces
+  /// a clearer error than the opaque permission-denied the rules would throw.
+  static const _allowedStatuses = {
+    'pending',
+    'confirmed',
+    'in_progress',
+    'done',
+    'cancelled',
+  };
+
   @override
   Future<void> updateAppointmentStatus({
     required String id,
     required String status,
   }) async {
+    final trimmed = status.trim();
+    if (!_allowedStatuses.contains(trimmed)) {
+      throw ArgumentError.value(
+        status,
+        'status',
+        'must be one of $_allowedStatuses',
+      );
+    }
     await _appointments.doc(id).update({
-      'status': status.trim(),
+      'status': trimmed,
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }

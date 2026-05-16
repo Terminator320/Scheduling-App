@@ -1,0 +1,135 @@
+rules_version = '2';
+
+// Role resolution depends on the `usersByUid/{uid}` bridge collection, which is
+// maintained by the `syncUsersByUid` Cloud Function in `functions/index.js`.
+// Rules can only `get` documents by full path, and `users` docs use Firestore-
+// generated IDs — the bridge translates auth uid → users-doc-id + role + status.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Auth helpers ─────────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userByUid() {
+      return get(/databases/$(database)/documents/usersByUid/$(request.auth.uid));
+    }
+
+    function userByUidExists() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/usersByUid/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return userByUidExists()
+        && userByUid().data.role == 'admin'
+        && userByUid().data.status == 'active';
+    }
+
+    // Returns the Firestore doc ID for the current user (via the bridge doc).
+    // Used to check whether a UID is in appointment.employeeIds.
+    function myDocId() {
+      return userByUid().data.docId;
+    }
+
+    function isAssignedEmployee(appointmentData) {
+      return userByUidExists()
+        && myDocId() in appointmentData.employeeIds;
+    }
+
+    // Firestore's default is deny-everything-not-explicitly-allowed, so no
+    // catch-all deny-rule is needed. Adding one at this level OR's with the
+    // specific matches and has been observed to interact oddly with list
+    // queries; relying on the default is simpler and equally restrictive.
+
+    // ── usersByUid (bridge collection) ───────────────────────────────────────
+    // Written only by the syncUsersByUid Cloud Function via Admin SDK. Clients
+    // can read their own doc; no client writes allowed.
+    match /usersByUid/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // ── users ─────────────────────────────────────────────────────────────────
+    // Read: any signed-in user (employee pickers, names on appointments).
+    // Write: admin from the admin UI, plus a narrow self-activation path used
+    // by the sign-up flow — an invited user claims their pre-seeded doc by
+    // writing their auth uid into it. Activation only flips ['uid','status']
+    // and only when the doc's email matches the caller's verified-by-Auth email.
+    match /users/{userId} {
+      allow read: if isSignedIn();
+
+      allow create, delete: if isAdmin();
+
+      // `colorValue` is stored as a stringified int in the user doc. Reject
+      // writes that don't parse as an integer so a malformed write can't
+      // make the client fall back to the default blue.
+      function isValidColorValue(s) {
+        return s is string && s.matches('^-?[0-9]+$');
+      }
+
+      // Self-activation path is intentionally restricted to role=='employee'.
+      // Invited admins cannot self-activate here — that would let anyone who
+      // knows an invited admin's email claim full admin privileges by signing
+      // up with that email (Firebase Auth doesn't verify email ownership).
+      // Admin activation must be done out-of-band (Firestore Console, or a
+      // dedicated Cloud Function with stronger checks).
+      allow update: if (isAdmin()
+            && (!('colorValue' in request.resource.data.keys())
+                || isValidColorValue(request.resource.data.colorValue)))
+        || (isSignedIn()
+            && resource.data.status == 'invited'
+            && resource.data.uid == ''
+            && resource.data.role == 'employee'
+            && resource.data.email == request.auth.token.email
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.status == 'active'
+            && request.resource.data.role == resource.data.role
+            && request.resource.data.email == resource.data.email
+            && request.resource.data.diff(resource.data)
+               .affectedKeys()
+               .hasOnly(['uid', 'status']));
+    }
+
+    // ── appointments ──────────────────────────────────────────────────────────
+    // Allowed status values (admin writes are validated; employee writes are
+    // additionally restricted to 'done' only, see below).
+    function isValidAppointmentStatus(s) {
+      return s in ['pending', 'confirmed', 'in_progress', 'done', 'cancelled'];
+    }
+
+    match /appointments/{appointmentId} {
+      // Read: admin sees all; assigned employee sees their appointments.
+      allow read: if isAdmin() || isAssignedEmployee(resource.data);
+
+      // Create: admin only (employees don't create appointments). Reject
+      // unknown status values from the client.
+      allow create: if isAdmin()
+        && isValidAppointmentStatus(request.resource.data.status);
+
+      // Update: admin full access (status allowlist enforced); employees can
+      // ONLY mark an assigned appointment as 'done'. They cannot cancel,
+      // edit metadata, or replace pictures — the UI gates these to admins,
+      // these rules are the defence-in-depth.
+      allow update: if (isAdmin()
+            && isValidAppointmentStatus(request.resource.data.status))
+        || (isAssignedEmployee(resource.data)
+            && request.resource.data.diff(resource.data)
+               .affectedKeys()
+               .hasOnly(['status', 'updatedAt'])
+            && request.resource.data.status == 'done');
+
+      // Delete: admin only.
+      allow delete: if isAdmin();
+    }
+
+    // ── clients ───────────────────────────────────────────────────────────────
+    // Client PII — admin-only. Employees never need direct access.
+    match /clients/{clientId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

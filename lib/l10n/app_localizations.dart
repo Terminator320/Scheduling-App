@@ -1691,6 +1691,12 @@ abstract class AppLocalizations {
   /// **'Password is too weak. Use at least 6 characters'**
   String get passwordIsTooWeakUseAtLeast6Characters;
 
+  /// No description provided for @passwordMustBeAtLeast8Characters.
+  ///
+  /// In en, this message translates to:
+  /// **'Password must be at least 8 characters'**
+  String get passwordMustBeAtLeast8Characters;
+
   /// No description provided for @signInIsTemporarilyUnavailable.
   ///
   /// In en, this message translates to:

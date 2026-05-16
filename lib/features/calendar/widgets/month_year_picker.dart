@@ -29,7 +29,6 @@ class MonthYearPicker {
 }
 
 class _MonthYearPickerContent extends StatefulWidget {
-
   const _MonthYearPickerContent({required this.focusedDay});
   final DateTime focusedDay;
 
@@ -52,6 +51,10 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
   @override
   Widget build(BuildContext context) {
     final locale = Localizations.localeOf(context).toString();
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final bodyLarge = theme.textTheme.bodyLarge;
+    final monthFormat = DateFormat.MMMM(locale);
 
     return SizedBox(
       height: 300,
@@ -66,9 +69,7 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                   padding: EdgeInsets.zero,
                   child: Text(
                     context.l10n.cancel,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
+                    style: TextStyle(color: scheme.primary),
                   ),
                   onPressed: () => Navigator.pop(context),
                 ),
@@ -78,7 +79,7 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                     context.l10n.done,
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.primary,
+                      color: scheme.primary,
                     ),
                   ),
                   onPressed: () => Navigator.pop(
@@ -107,8 +108,8 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                       12,
                       (i) => Center(
                         child: Text(
-                          DateFormat.MMMM(locale).format(DateTime(0, i + 1)),
-                          style: Theme.of(context).textTheme.bodyLarge,
+                          monthFormat.format(DateTime(0, i + 1)),
+                          style: bodyLarge,
                         ),
                       ),
                     ),
@@ -130,7 +131,7 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                       (i) => Center(
                         child: Text(
                           '${MonthYearPicker._startYear + i}',
-                          style: Theme.of(context).textTheme.bodyLarge,
+                          style: bodyLarge,
                         ),
                       ),
                     ),
