@@ -58,7 +58,6 @@ dependencies:
   cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1
   animations: ^2.2.0
-  adaptive_theme: ^3.7.2
   flex_color_picker: ^3.8.0
 
 dev_dependencies:
