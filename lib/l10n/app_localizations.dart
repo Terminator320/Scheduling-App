@@ -1703,6 +1703,42 @@ abstract class AppLocalizations {
   /// **'Could not load appointments. Check your connection and try again.'**
   String get couldNotLoadAppointments;
 
+  /// No description provided for @clientAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Client added'**
+  String get clientAdded;
+
+  /// No description provided for @appointmentCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Appointment created'**
+  String get appointmentCreated;
+
+  /// No description provided for @appointmentChangesSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes saved'**
+  String get appointmentChangesSaved;
+
+  /// No description provided for @appointmentDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Appointment deleted'**
+  String get appointmentDeleted;
+
+  /// No description provided for @appointmentMarkedAsDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Marked as done'**
+  String get appointmentMarkedAsDone;
+
+  /// No description provided for @appointmentCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Appointment cancelled'**
+  String get appointmentCancelled;
+
   /// No description provided for @signInIsTemporarilyUnavailable.
   ///
   /// In en, this message translates to:

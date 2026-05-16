@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/images/images_providers.dart';
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
@@ -179,20 +180,17 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     }
     switch (outcome) {
       case AddEventSubmitted(:final appointment):
+        ref
+            .read(noticeServiceProvider)
+            .success(context.l10n.appointmentCreated);
         Navigator.pop(context, appointment);
       case AddEventFailed():
-        _showFailedSnack();
+        ref
+            .read(noticeServiceProvider)
+            .error(context.l10n.somethingWentWrongCreatingTheAppointment);
       case AddEventInvalid() || AddEventBusyEmployees():
         break;
     }
-  }
-
-  void _showFailedSnack() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(context.l10n.somethingWentWrongCreatingTheAppointment),
-      ),
-    );
   }
 
   String _errorText(AppointmentFormError key) {

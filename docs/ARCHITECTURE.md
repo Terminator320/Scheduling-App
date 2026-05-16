@@ -99,7 +99,26 @@ All Firebase instances (Auth, Firestore, Storage) come from `lib/core/providers/
 
 ### Error Handling
 
-Domain-layer `Failure` subtypes (sealed, one per feature) carry localised messages. Auth failures: `AuthFailureWrongPassword`, `AuthFailureUserDisabled`, `AuthFailureNotInvited`, etc. UI catches `FirebaseAuthException` → maps via `AuthErrorMapper` → shows via `NoticeService` or a banner.
+Domain-layer `Failure` subtypes (sealed, one per feature) carry localised messages. Each family lives at `lib/features/<f>/domain/<f>_failure.dart` and implements `toLocalizedMessage(BuildContext)`:
+
+- **`AuthFailure`** — `AuthFailureWrongPassword`, `AuthFailureUserDisabled`, `AuthFailureNotInvited`, etc. Mapped from `FirebaseAuthException` via `AuthErrorMapper`.
+- **`EmployeesFailure`** — `EmployeesFailureEmailAlreadyExists` (raised by `firebase_employees_repository` on duplicate-email writes). Surfaced as both a field-level error under the email input and a banner notice in `employee_form_sheet`.
+- **`MapsFailure`** — `MapsFailureNetwork` and `MapsFailureParse` (raised by `google_places_repository`). The `cause` field captures the underlying error for Crashlytics, but `toLocalizedMessage` never echoes it back to the user (response bodies and HTTP error payloads stay out of the UI surface).
+
+UI catches the typed failure, calls `failure.toLocalizedMessage(context)`, and passes the result to `noticeServiceProvider.error(...)`. Repositories must not throw raw `Exception('...')` — the string would leak into the notice surface and Crashlytics.
+
+**Stream errors** go through `AsyncValue.error` in Riverpod's `StreamProvider`. Consumers handle in two complementary places:
+1. The `.when(error: ...)` branch logs via `loggerProvider.warn` and renders an empty / placeholder UI.
+2. A `ref.listen(provider, (prev, next) {...})` next to the `.watch` call detects `data → error` and `loading → error` transitions and fires a one-shot `noticeServiceProvider.error(...)` notice. The `main_calendar_screen` appointments-stream wiring is the canonical example — putting the notice inside `.when` would re-toast on every rebuild.
+
+### Validation
+
+Free-text input length caps live in `lib/core/validators/text_limits.dart`. The constants (`TextLimits.appointmentTitle`, `TextLimits.personName`, `TextLimits.phone`, etc.) are applied at three layers:
+1. `LabeledTextField(maxLength: TextLimits.x)` — uses `LengthLimitingTextInputFormatter` to cap input as the user types.
+2. Form validators (`AppointmentFormValidator`) — defensive backup.
+3. Firestore rules (where applicable) — defense in depth.
+
+Status enums (`AppointmentStatus` written by `updateAppointmentStatus`) are allowlisted at both the repository (`{pending, confirmed, in_progress, done, cancelled}`) and `firestore.rules`. Employees can only write `status='done'`.
 
 ### Theming
 

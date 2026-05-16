@@ -1,9 +1,11 @@
 import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 
-class EmployeeColorGrid extends StatelessWidget {
+class EmployeeColorGrid extends ConsumerWidget {
   const EmployeeColorGrid({
     required this.selectedColor,
     required this.onColorSelected,
@@ -18,7 +20,7 @@ class EmployeeColorGrid extends StatelessWidget {
   static final _quickPicks = AppColors.employeePalette.take(8).toList();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isCustomColor = !_quickPicks.any(
       (c) => c.toARGB32() == selectedColor,
     );
@@ -44,7 +46,7 @@ class EmployeeColorGrid extends StatelessWidget {
             onTap: null,
           ),
         GestureDetector(
-          onTap: () => _openCustomPicker(context),
+          onTap: () => _openCustomPicker(context, ref),
           child: Container(
             width: 32,
             height: 32,
@@ -67,7 +69,7 @@ class EmployeeColorGrid extends StatelessWidget {
     );
   }
 
-  Future<void> _openCustomPicker(BuildContext context) async {
+  Future<void> _openCustomPicker(BuildContext context, WidgetRef ref) async {
     final picked = await showColorPickerDialog(
       context,
       Color(selectedColor),
@@ -95,9 +97,7 @@ class EmployeeColorGrid extends StatelessWidget {
     );
     if (!context.mounted) return;
     if (usedColors.contains(picked.toARGB32())) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.l10n.colorAlreadyUsed)));
+      ref.read(noticeServiceProvider).error(context.l10n.colorAlreadyUsed);
       return;
     }
     onColorSelected(picked.toARGB32());
