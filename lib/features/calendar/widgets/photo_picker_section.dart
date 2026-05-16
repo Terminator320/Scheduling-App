@@ -10,9 +10,14 @@ import 'package:scheduling/features/calendar/widgets/image_viewer.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
 class PhotoPickerSection extends StatelessWidget {
-
   const PhotoPickerSection({
-    required this.existingImages, required this.newImages, required this.isEditing, required this.onPickImages, required this.onRemoveExisting, required this.onRemoveNew, super.key,
+    required this.existingImages,
+    required this.newImages,
+    required this.isEditing,
+    required this.onPickImages,
+    required this.onRemoveExisting,
+    required this.onRemoveNew,
+    super.key,
     this.failedCount = 0,
     this.tooLargeFileNames = const [],
     this.onRetry,
@@ -38,7 +43,8 @@ class PhotoPickerSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasPhotos = existingImages.isNotEmpty || newImages.isNotEmpty || failedCount > 0;
+    final hasPhotos =
+        existingImages.isNotEmpty || newImages.isNotEmpty || failedCount > 0;
     final scheme = Theme.of(context).colorScheme;
 
     return Column(
@@ -65,6 +71,8 @@ class PhotoPickerSection extends StatelessWidget {
                               width: 90,
                               height: 90,
                               fit: BoxFit.cover,
+                              placeholder: (ctx, _) => _photoPlaceholder(ctx),
+                              errorWidget: (ctx, _, _) => _photoErrorTile(ctx),
                             ),
                           ),
                         ),
@@ -114,10 +122,13 @@ class PhotoPickerSection extends StatelessWidget {
                   );
                 }),
                 // failed upload placeholders
-                ...List.generate(failedCount, (_) => const Padding(
-                  padding: EdgeInsets.only(right: 8),
-                  child: _FailedPhotoThumb(),
-                )),
+                ...List.generate(
+                  failedCount,
+                  (_) => const Padding(
+                    padding: EdgeInsets.only(right: 8),
+                    child: _FailedPhotoThumb(),
+                  ),
+                ),
                 // add more tile (edit mode only)
                 if (isEditing)
                   GestureDetector(
@@ -135,7 +146,10 @@ class PhotoPickerSection extends StatelessWidget {
                           Icon(Icons.add, color: scheme.onSurfaceVariant),
                           Text(
                             context.l10n.addMore,
-                            style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: scheme.onSurfaceVariant,
+                            ),
                           ),
                         ],
                       ),
@@ -161,7 +175,10 @@ class PhotoPickerSection extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       context.l10n.tapToAddPhotos,
-                      style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -180,11 +197,18 @@ class PhotoPickerSection extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.photo_library_outlined, color: scheme.onSurfaceVariant, size: 24),
+                  Icon(
+                    Icons.photo_library_outlined,
+                    color: scheme.onSurfaceVariant,
+                    size: 24,
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     context.l10n.noPhotos,
-                    style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -277,6 +301,49 @@ class _UploadFailedRow extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Skeleton-style placeholder shown while a `CachedNetworkImage` is loading.
+/// Keeps the 90x90 thumb slot stable so the row doesn't shift when an image
+/// resolves.
+Widget _photoPlaceholder(BuildContext context) {
+  final scheme = Theme.of(context).colorScheme;
+  return Container(
+    width: 90,
+    height: 90,
+    color: scheme.surfaceContainerHighest,
+    alignment: Alignment.center,
+    child: SizedBox(
+      width: 18,
+      height: 18,
+      child: CircularProgressIndicator(
+        strokeWidth: 2,
+        valueColor: AlwaysStoppedAnimation<Color>(scheme.outline),
+      ),
+    ),
+  );
+}
+
+/// Fallback when an existing-image URL fails to load (Storage object deleted
+/// out-of-band, network 404, etc.). Renders a distinct broken-image icon
+/// instead of `CachedNetworkImage`'s default so the user sees an intentional
+/// placeholder rather than a generic broken-asset glyph.
+Widget _photoErrorTile(BuildContext context) {
+  final scheme = Theme.of(context).colorScheme;
+  return Container(
+    width: 90,
+    height: 90,
+    decoration: BoxDecoration(
+      color: scheme.errorContainer.withValues(alpha: 0.3),
+      border: Border.all(color: scheme.outlineVariant),
+    ),
+    alignment: Alignment.center,
+    child: Icon(
+      Icons.broken_image_outlined,
+      size: 28,
+      color: scheme.onErrorContainer,
+    ),
+  );
 }
 
 class _TooLargeBanner extends StatelessWidget {

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
@@ -155,25 +156,45 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     // Employees query by `employeeIds arrayContains theirId` + the same
     // startTime range so the Firestore `isAssignedEmployee` rule accepts the
     // listener and the query stays bounded to the visible month.
+    final myAppointmentsKey = (
+      employeeId: widget.employeeId,
+      range: _appointmentRange,
+    );
     final appointmentsAsync = widget.isAdmin
         ? ref.watch(appointmentsInRangeProvider(_appointmentRange))
-        : ref.watch(
-            myAppointmentsProvider((
-              employeeId: widget.employeeId,
-              range: _appointmentRange,
-            )),
-          );
+        : ref.watch(myAppointmentsProvider(myAppointmentsKey));
+
+    // Surface stream errors via a one-shot notice on the transition into
+    // error (rather than firing on every rebuild). Loading→error and
+    // data→error both qualify; error→error doesn't (would re-notify on
+    // every retry frame).
+    void onAsyncChange(
+      AsyncValue<List<AppointmentRecord>>? previous,
+      AsyncValue<List<AppointmentRecord>> next,
+    ) {
+      if (next is AsyncError && previous is! AsyncError) {
+        ref
+            .read(noticeServiceProvider)
+            .error(context.l10n.couldNotLoadAppointments);
+      }
+    }
+
+    if (widget.isAdmin) {
+      ref.listen(appointmentsInRangeProvider(_appointmentRange), onAsyncChange);
+    } else {
+      ref.listen(myAppointmentsProvider(myAppointmentsKey), onAsyncChange);
+    }
+
     final employees =
         ref.watch(allUsersStreamProvider).asData?.value ?? const [];
     final colorMap = buildEmployeeColorMap(employees);
 
-    // TODO(george): remove the error branch's log once the bounded-query
-    // index has been verified live; currently the calendar silently empties
-    // on permission-denied / failed-precondition, which is hard to debug.
     final visibleAppointments = appointmentsAsync.when(
       data: (data) => data,
       loading: () => const <AppointmentRecord>[],
       error: (err, stack) {
+        // The user-facing notice is fired via `ref.listen` above. Keep the
+        // Crashlytics log here so backend observability still has a trail.
         ref.read(loggerProvider).warn('appointments stream error', err, stack);
         return const <AppointmentRecord>[];
       },

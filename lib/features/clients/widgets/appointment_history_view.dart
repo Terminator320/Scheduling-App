@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
@@ -46,7 +47,10 @@ class AppointmentHistoryView extends ConsumerWidget {
             SkeletonListTile(),
           ],
         ),
-        error: (_, _) => Center(child: Text(context.l10n.somethingWentWrong)),
+        error: (err, st) {
+          ref.read(loggerProvider).warn('history stream error', err, st);
+          return Center(child: Text(context.l10n.somethingWentWrong));
+        },
         data: (appointments) {
           final filtered = query.isEmpty
               ? appointments.toList()

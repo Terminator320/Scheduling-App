@@ -6,6 +6,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/widgets/employee_color_picker_row.dart';
 import 'package:scheduling/shared/widgets/app_avatar.dart';
@@ -115,18 +116,13 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      final isDuplicate = e.toString().contains(
-        'Employee email already exists',
-      );
+      final isDuplicate = e is EmployeesFailureEmailAlreadyExists;
       if (isDuplicate) {
-        setState(
-          () => _errors['email'] =
-              context.l10n.anEmployeeWithThisEmailAlreadyExists,
-        );
+        setState(() => _errors['email'] = e.toLocalizedMessage(context));
       }
       notices.error(
         isDuplicate
-            ? context.l10n.anEmployeeWithThisEmailAlreadyExists
+            ? e.toLocalizedMessage(context)
             : context.l10n.couldNotCreateEmployee,
       );
     } finally {

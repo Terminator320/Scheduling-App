@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
@@ -75,7 +76,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
         .get();
 
     if (existing.docs.isNotEmpty) {
-      throw Exception('Employee email already exists');
+      throw const EmployeesFailureEmailAlreadyExists();
     }
 
     await _users.add({
@@ -110,7 +111,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     );
 
     if (emailUsedByAnotherEmployee) {
-      throw Exception('Employee email already exists');
+      throw const EmployeesFailureEmailAlreadyExists();
     }
 
     final updateData = <String, dynamic>{

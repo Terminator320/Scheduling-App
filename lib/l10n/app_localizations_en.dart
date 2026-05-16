@@ -810,6 +810,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get passwordMustBeAtLeast8Characters => 'Password must be at least 8 characters';
 
   @override
+  String get couldNotLoadAppointments => 'Could not load appointments. Check your connection and try again.';
+
+  @override
   String get signInIsTemporarilyUnavailable => 'Sign-in is temporarily unavailable';
 
   @override
