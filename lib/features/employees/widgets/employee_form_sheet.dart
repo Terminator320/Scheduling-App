@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/widgets/employee_color_picker_row.dart';
@@ -50,7 +51,8 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
     _phoneController = TextEditingController(text: e?.phone ?? '');
     _isAdmin = e?.isAdmin ?? false;
     _isDisabled = e?.isDisabled ?? false;
-    _selectedColor = e?.color.toARGB32() ?? AppColors.employeePalette.first.toARGB32();
+    _selectedColor =
+        e?.color.toARGB32() ?? AppColors.employeePalette.first.toARGB32();
   }
 
   @override
@@ -113,8 +115,9 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      final isDuplicate =
-          e.toString().contains('Employee email already exists');
+      final isDuplicate = e.toString().contains(
+        'Employee email already exists',
+      );
       if (isDuplicate) {
         setState(
           () => _errors['email'] =
@@ -339,8 +342,12 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final title = _isEdit ? context.l10n.editEmployee : context.l10n.inviteEmployee;
-    final submitLabel = _isEdit ? context.l10n.saveChanges : context.l10n.sendInvite;
+    final title = _isEdit
+        ? context.l10n.editEmployee
+        : context.l10n.inviteEmployee;
+    final submitLabel = _isEdit
+        ? context.l10n.saveChanges
+        : context.l10n.sendInvite;
 
     return DraggableSheetFrame(
       builder: (sheetContext, scrollController) {
@@ -369,9 +376,11 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
                 label: context.l10n.name2,
                 controller: _nameController,
                 required: !_isEdit,
+                maxLength: TextLimits.personName,
                 errorText: _errors['name'],
                 onChanged: (_) {
-                  if (_errors['name'] != null) setState(() => _errors['name'] = null);
+                  if (_errors['name'] != null)
+                    setState(() => _errors['name'] = null);
                 },
               ),
             ),
@@ -382,9 +391,11 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
                 controller: _emailController,
                 keyboard: TextInputType.emailAddress,
                 required: !_isEdit,
+                maxLength: TextLimits.email,
                 errorText: _errors['email'],
                 onChanged: (_) {
-                  if (_errors['email'] != null) setState(() => _errors['email'] = null);
+                  if (_errors['email'] != null)
+                    setState(() => _errors['email'] = null);
                 },
               ),
             ),
@@ -395,6 +406,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
                 controller: _phoneController,
                 keyboard: TextInputType.phone,
                 optional: true,
+                maxLength: TextLimits.phone,
               ),
             ),
             const SizedBox(height: 16),

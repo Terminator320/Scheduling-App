@@ -7,6 +7,7 @@ import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
@@ -248,6 +249,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
                 hint: sheetContext.l10n.eGPlumbingRepair,
                 controller: _titleController,
                 required: true,
+                maxLength: TextLimits.appointmentTitle,
                 errorText: _errorFor(state.errors, 'title'),
               ),
             ),
@@ -296,8 +298,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
                 controller: _dateController,
                 required: true,
                 readOnly: true,
-                suffixIcon:
-                    const Icon(Icons.calendar_today_outlined, size: 18),
+                suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
                 errorText: _errorFor(state.errors, 'date'),
                 onTap: _pickDate,
               ),
@@ -351,6 +352,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
                 controller: _materialsController,
                 optional: true,
                 maxLines: 2,
+                maxLength: TextLimits.appointmentMaterials,
               ),
             ),
             const SizedBox(height: AppSpacing.sp16),
@@ -361,6 +363,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
                 controller: _notesController,
                 optional: true,
                 maxLines: 2,
+                maxLength: TextLimits.appointmentNotes,
               ),
             ),
             const SizedBox(height: AppSpacing.sp16),

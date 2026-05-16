@@ -807,6 +807,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get passwordIsTooWeakUseAtLeast6Characters => 'Mot de passe trop faible. Utilisez au moins 6 caractères';
 
   @override
+  String get passwordMustBeAtLeast8Characters => 'Le mot de passe doit comporter au moins 8 caractères';
+
+  @override
   String get signInIsTemporarilyUnavailable => 'La connexion est temporairement indisponible';
 
   @override

@@ -24,7 +24,6 @@ part 'employee_record.freezed.dart';
 /// the freezed migration so existing documents keep working without backfill.
 @freezed
 abstract class EmployeeRecord with _$EmployeeRecord {
-
   const factory EmployeeRecord({
     required String id,
     @Default('') String name,
@@ -65,11 +64,20 @@ abstract class EmployeeRecord with _$EmployeeRecord {
   };
 
   String get initials {
-    final parts = name.trim().split(' ');
+    // Split on any run of whitespace and discard empties so inputs like
+    // 'Jane  Doe' or '  Jane' don't trip a RangeError on `parts[1][0]`.
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
     if (parts.length >= 2) {
       return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     }
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
+    if (parts.length == 1) {
+      return parts[0][0].toUpperCase();
+    }
+    return '?';
   }
 
   bool get isAdmin => role == 'admin';

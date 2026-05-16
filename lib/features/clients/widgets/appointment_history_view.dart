@@ -20,6 +20,10 @@ class AppointmentHistoryView extends ConsumerWidget {
 
   final String searchQuery;
 
+  // Stable across rebuilds. `dateHeaderFormat` depends on locale so it's
+  // built per build but only when there's at least one item to render.
+  static final _dateKeyFormat = DateFormat('yyyy-MM-dd');
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final query = searchQuery.trim().toLowerCase();
@@ -45,7 +49,7 @@ class AppointmentHistoryView extends ConsumerWidget {
         error: (_, _) => Center(child: Text(context.l10n.somethingWentWrong)),
         data: (appointments) {
           final filtered = query.isEmpty
-              ? appointments
+              ? appointments.toList()
               : appointments.where((a) {
                   final matchesClient = a.clientName.toLowerCase().contains(
                     query,
@@ -73,58 +77,75 @@ class AppointmentHistoryView extends ConsumerWidget {
           filtered.sort((a, b) => b.startTime.compareTo(a.startTime));
 
           final locale = Intl.defaultLocale ?? 'en_CA';
-          final dateKeyFormat = DateFormat('yyyy-MM-dd');
           final dateHeaderFormat = DateFormat('EEEE, MMMM d', locale);
 
-          final grouped = <String, List<AppointmentRecord>>{};
+          // Flatten the grouped history into a list of header / card rows so
+          // a single ListView.builder renders lazily. Beats the previous
+          // `ListView(children: [...all of them...])` which eagerly built
+          // every widget on every rebuild.
+          final rows = <_HistoryRow>[];
+          String? currentKey;
           for (final app in filtered) {
-            final key = dateKeyFormat.format(app.startTime);
-            grouped.putIfAbsent(key, () => []).add(app);
+            final key = _dateKeyFormat.format(app.startTime);
+            if (key != currentKey) {
+              final label = dateHeaderFormat
+                  .format(DateTime.parse(key))
+                  .toUpperCase();
+              rows.add(_HistoryHeader(label));
+              currentKey = key;
+            }
+            rows.add(_HistoryCardRow(app));
           }
 
-          final sortedKeys = grouped.keys.toList()
-            ..sort((a, b) => b.compareTo(a));
-
-          final items = <Widget>[];
-          for (final key in sortedKeys) {
-            final group = grouped[key]!;
-            final date = DateTime.parse(key);
-            final label = dateHeaderFormat.format(date).toUpperCase();
-
-            items.add(
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    letterSpacing: 0.6,
+          return ListView.builder(
+            padding: const EdgeInsets.all(12),
+            itemCount: rows.length,
+            itemBuilder: (context, index) {
+              final row = rows[index];
+              final nextRow = index + 1 < rows.length ? rows[index + 1] : null;
+              return switch (row) {
+                _HistoryHeader(:final label) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      letterSpacing: 0.6,
+                    ),
                   ),
                 ),
-              ),
-            );
-
-            for (var i = 0; i < group.length; i++) {
-              items.add(
-                _HistoryCard(
-                  appointment: group[i],
-                  employeeColorMap: colorMap,
+                _HistoryCardRow(:final appointment) => Padding(
+                  padding: EdgeInsets.only(
+                    bottom: nextRow is _HistoryCardRow ? 7 : 8,
+                  ),
+                  child: _HistoryCard(
+                    appointment: appointment,
+                    employeeColorMap: colorMap,
+                  ),
                 ),
-              );
-              if (i < group.length - 1) {
-                items.add(const SizedBox(height: 7));
-              }
-            }
-            items.add(const SizedBox(height: 8));
-          }
-
-          return ListView(padding: const EdgeInsets.all(12), children: items);
+              };
+            },
+          );
         },
       ),
     );
   }
+}
+
+sealed class _HistoryRow {
+  const _HistoryRow();
+}
+
+class _HistoryHeader extends _HistoryRow {
+  const _HistoryHeader(this.label);
+  final String label;
+}
+
+class _HistoryCardRow extends _HistoryRow {
+  const _HistoryCardRow(this.appointment);
+  final AppointmentRecord appointment;
 }
 
 AppointmentStatus _mapHistoryStatus(String status) =>

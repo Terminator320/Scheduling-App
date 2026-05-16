@@ -5,6 +5,7 @@ import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
@@ -69,8 +70,9 @@ class DetailsEditBody extends ConsumerWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final state = ref.watch(eventDetailsControllerProvider(appointment));
-    final notifier =
-        ref.read(eventDetailsControllerProvider(appointment).notifier);
+    final notifier = ref.read(
+      eventDetailsControllerProvider(appointment).notifier,
+    );
     final allEmployees =
         ref.watch(employeesStreamProvider).asData?.value ?? const [];
 
@@ -79,7 +81,10 @@ class DetailsEditBody extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(context.l10n.editAppointment, style: theme.textTheme.headlineLarge),
+        Text(
+          context.l10n.editAppointment,
+          style: theme.textTheme.headlineLarge,
+        ),
         const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
         const SizedBox(height: AppSpacing.sp16),
@@ -89,6 +94,7 @@ class DetailsEditBody extends ConsumerWidget {
             hint: context.l10n.eGPlumbingRepair,
             controller: controllers.title,
             required: true,
+            maxLength: TextLimits.appointmentTitle,
             errorText: err('title'),
           ),
         ),
@@ -199,6 +205,7 @@ class DetailsEditBody extends ConsumerWidget {
             controller: controllers.materials,
             optional: true,
             maxLines: 2,
+            maxLength: TextLimits.appointmentMaterials,
           ),
         ),
         const SizedBox(height: AppSpacing.sp16),
@@ -209,6 +216,7 @@ class DetailsEditBody extends ConsumerWidget {
             controller: controllers.notes,
             optional: true,
             maxLines: 2,
+            maxLength: TextLimits.appointmentNotes,
           ),
         ),
         const SizedBox(height: AppSpacing.sp16),
@@ -249,8 +257,7 @@ class DetailsEditBody extends ConsumerWidget {
             foregroundColor: scheme.error,
             side: BorderSide(color: scheme.error),
           ),
-          onPressed:
-              state.isSaving ? null : () => _confirmDelete(context, ref),
+          onPressed: state.isSaving ? null : () => _confirmDelete(context, ref),
           child: Text(context.l10n.deleteAppointment),
         ),
       ],
@@ -302,8 +309,9 @@ class DetailsEditBody extends ConsumerWidget {
   }
 
   Future<void> _save(BuildContext context, WidgetRef ref) async {
-    final notifier =
-        ref.read(eventDetailsControllerProvider(appointment).notifier);
+    final notifier = ref.read(
+      eventDetailsControllerProvider(appointment).notifier,
+    );
     final outcome = await notifier.save(
       appointment,
       title: controllers.title.text,
@@ -346,16 +354,17 @@ class DetailsEditBody extends ConsumerWidget {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    final notifier =
-        ref.read(eventDetailsControllerProvider(appointment).notifier);
+    final notifier = ref.read(
+      eventDetailsControllerProvider(appointment).notifier,
+    );
     final ok = await notifier.deleteAppointment(appointment);
     if (!context.mounted) return;
     if (ok) {
       onClose();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.somethingWentWrong)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.somethingWentWrong)));
     }
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
@@ -170,6 +171,7 @@ class _AdditionalContactCard extends StatelessWidget {
               controller: contact.nameController,
               required: true,
               autofillHints: const [AutofillHints.name],
+              maxLength: TextLimits.personName,
               errorText: errors['contact_${index}_name'],
               onChanged: (_) => onClearError('contact_${index}_name'),
             ),
@@ -181,6 +183,7 @@ class _AdditionalContactCard extends StatelessWidget {
               controller: contact.phoneController,
               keyboard: TextInputType.phone,
               autofillHints: const [AutofillHints.telephoneNumber],
+              maxLength: TextLimits.phone,
               errorText: errors['contact_${index}_phone'],
               onChanged: (_) => onClearError('contact_${index}_phone'),
             ),
@@ -192,6 +195,7 @@ class _AdditionalContactCard extends StatelessWidget {
               controller: contact.emailController,
               keyboard: TextInputType.emailAddress,
               autofillHints: const [AutofillHints.email],
+              maxLength: TextLimits.email,
               errorText: errors['contact_${index}_email'],
               onChanged: (_) {
                 onClearError('contact_${index}_email');

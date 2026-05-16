@@ -12,8 +12,7 @@ class AuthValidators {
   /// Pure-format check (no l10n / context). Useful for forms where the
   /// email is optional but must be valid when non-empty (e.g. client
   /// records). Always trim before calling.
-  static bool isValidEmailFormat(String email) =>
-      _emailPattern.hasMatch(email);
+  static bool isValidEmailFormat(String email) => _emailPattern.hasMatch(email);
 
   static String? email(BuildContext context, String value) {
     final trimmed = value.trim();
@@ -26,9 +25,17 @@ class AuthValidators {
     return null;
   }
 
+  /// Minimum password length at the client boundary. Firebase Auth enforces
+  /// its own 6-char minimum on the server, but matching the org's stance
+  /// requires checking here too.
+  static const int minPasswordLength = 8;
+
   static String? password(BuildContext context, String value) {
     if (value.trim().isEmpty) {
       return context.l10n.pleaseEnterYourPassword;
+    }
+    if (value.length < minPasswordLength) {
+      return context.l10n.passwordMustBeAtLeast8Characters;
     }
     return null;
   }

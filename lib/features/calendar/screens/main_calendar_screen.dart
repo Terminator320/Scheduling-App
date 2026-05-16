@@ -114,15 +114,28 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     });
   }
 
-  List<AppointmentRecord> _getEventsForDay(
-    DateTime day,
+  /// Precomputed once per `build()` (see `_buildDayIndex`); each calendar
+  /// `eventLoader` lookup is then O(1) instead of O(appointments × cells).
+  Map<DateTime, List<AppointmentRecord>>? _dayIndex;
+
+  Map<DateTime, List<AppointmentRecord>> _buildDayIndex(
     List<AppointmentRecord> source,
   ) {
-    final events = source
-        .where((app) => isSameDay(app.startTime, day))
-        .toList();
-    events.sort((a, b) => a.startTime.compareTo(b.startTime));
-    return events;
+    final index = <DateTime, List<AppointmentRecord>>{};
+    for (final app in source) {
+      final start = app.startTime;
+      final key = DateTime(start.year, start.month, start.day);
+      (index[key] ??= <AppointmentRecord>[]).add(app);
+    }
+    for (final list in index.values) {
+      list.sort((a, b) => a.startTime.compareTo(b.startTime));
+    }
+    return index;
+  }
+
+  List<AppointmentRecord> _getEventsForDay(DateTime day) {
+    final key = DateTime(day.year, day.month, day.day);
+    return _dayIndex?[key] ?? const <AppointmentRecord>[];
   }
 
   void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
@@ -166,8 +179,10 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       },
     );
 
+    _dayIndex = _buildDayIndex(visibleAppointments);
+
     final selectedDay = _selectedDay ?? _focusedDay;
-    final selectedEvents = _getEventsForDay(selectedDay, visibleAppointments);
+    final selectedEvents = _getEventsForDay(selectedDay);
     _selectedEvents.value = selectedEvents;
 
     final isLoading = appointmentsAsync.isLoading;
@@ -265,11 +280,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         userName: _userName,
       ),
       body: SafeArea(
-        child: _content(
-          isLoading: isLoading,
-          colorMap: colorMap,
-          source: visibleAppointments,
-        ),
+        child: _content(isLoading: isLoading, colorMap: colorMap),
       ),
     );
   }
@@ -277,11 +288,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   Widget _content({
     required bool isLoading,
     required Map<String, Color> colorMap,
-    required List<AppointmentRecord> source,
   }) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isTablet = screenWidth > 600;
+    final screenSize = MediaQuery.sizeOf(context);
+    final isTablet = screenSize.width > 600;
 
     final employees =
         ref.watch(allUsersStreamProvider).asData?.value ?? const [];
@@ -292,8 +301,10 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           focusedDay: _focusedDay,
           selectedDay: _selectedDay,
           onDaySelected: _onDaySelected,
-          rowHeight: isTablet ? screenHeight * 0.08 : screenHeight * 0.065,
-          eventLoader: (day) => _getEventsForDay(day, source),
+          rowHeight: isTablet
+              ? screenSize.height * 0.08
+              : screenSize.height * 0.065,
+          eventLoader: _getEventsForDay,
           onCalendarCreated: (_) {},
           onPageChanged: _setFocusedDay,
           employees: employees,
