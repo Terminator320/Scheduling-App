@@ -34,10 +34,13 @@ class DetailsViewBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(eventDetailsControllerProvider(appointment));
-    final notifier = ref.read(
-      eventDetailsControllerProvider(appointment).notifier,
-    );
+    // Narrow the watch to the fields this body reads directly. Child widgets
+    // (_EmployeesView, _PhotosView, ClientContactsSection) watch their own
+    // slices below — passing full `state` down would resurrect the broad watch.
+    final provider = eventDetailsControllerProvider(appointment);
+    final client = ref.watch(provider.select((s) => s.client));
+    final isSaving = ref.watch(provider.select((s) => s.isSaving));
+    final notifier = ref.read(provider.notifier);
 
     final isCancelled = appointment.status.toLowerCase() == 'cancelled';
     final isDone =
@@ -63,13 +66,13 @@ class DetailsViewBody extends ConsumerWidget {
         const SizedBox(height: AppSpacing.sp16),
         DetailsSectionRow(
           label: context.l10n.client,
-          value: state.client?.displayName ?? appointment.clientName,
+          value: client?.displayName ?? appointment.clientName,
           subtitle: appointment.clientPhone.isNotEmpty
               ? appointment.clientPhone
               : context.l10n.noNumber,
         ),
-        if ((state.client?.contacts ?? const <ClientContact>[]).isNotEmpty)
-          ClientContactsSection(contacts: state.client!.contacts),
+        if ((client?.contacts ?? const <ClientContact>[]).isNotEmpty)
+          ClientContactsSection(contacts: client!.contacts),
         const SizedBox(height: AppSpacing.sp16),
         DetailsAddressRow(
           label: context.l10n.address,
@@ -93,11 +96,10 @@ class DetailsViewBody extends ConsumerWidget {
         const SizedBox(height: AppSpacing.sp16),
         _MaterialsRow(materials: appointment.materialsNeeded),
         const SizedBox(height: AppSpacing.sp16),
-        _EmployeesView(state: state),
+        _EmployeesView(appointment: appointment),
         const SizedBox(height: AppSpacing.sp16),
         _PhotosView(
-          state: state,
-          appointmentId: appointment.id,
+          appointment: appointment,
           isCancelled: isCancelled,
           onRetry: notifier.enterEditing,
         ),
@@ -105,7 +107,7 @@ class DetailsViewBody extends ConsumerWidget {
           isToday: isToday,
           isDone: isDone,
           isCancelled: isCancelled,
-          isSaving: state.isSaving,
+          isSaving: isSaving,
           showCancel: showActions,
           onMarkDone: () async {
             if (await notifier.markAsDone(appointment)) {
@@ -135,7 +137,7 @@ class DetailsViewBody extends ConsumerWidget {
               foregroundColor: Theme.of(context).colorScheme.error,
               side: BorderSide(color: Theme.of(context).colorScheme.error),
             ),
-            onPressed: state.isSaving
+            onPressed: isSaving
                 ? null
                 : () async {
                     final confirmed = await _confirmDeleteDialog(context);
@@ -319,15 +321,20 @@ class _MaterialsRow extends StatelessWidget {
   }
 }
 
-class _EmployeesView extends StatelessWidget {
-  const _EmployeesView({required this.state});
+class _EmployeesView extends ConsumerWidget {
+  const _EmployeesView({required this.appointment});
 
-  final EventDetailsState state;
+  final AppointmentRecord appointment;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final selectedEmployees = ref.watch(
+      eventDetailsControllerProvider(
+        appointment,
+      ).select((s) => s.selectedEmployees),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -341,7 +348,7 @@ class _EmployeesView extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        if (state.selectedEmployees.isEmpty)
+        if (selectedEmployees.isEmpty)
           Text(
             context.l10n.noEmployeesAssigned,
             style: theme.textTheme.bodyMedium?.copyWith(
@@ -349,9 +356,7 @@ class _EmployeesView extends StatelessWidget {
             ),
           )
         else
-          ...state.selectedEmployees.map(
-            (e) => DetailsEmployeePill(employee: e),
-          ),
+          ...selectedEmployees.map((e) => DetailsEmployeePill(employee: e)),
       ],
     );
   }
@@ -359,22 +364,24 @@ class _EmployeesView extends StatelessWidget {
 
 class _PhotosView extends ConsumerWidget {
   const _PhotosView({
-    required this.state,
-    required this.appointmentId,
+    required this.appointment,
     required this.isCancelled,
     required this.onRetry,
   });
 
-  final EventDetailsState state;
-  final String? appointmentId;
+  final AppointmentRecord appointment;
   final bool isCancelled;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final provider = eventDetailsControllerProvider(appointment);
+    final existingImages = ref.watch(provider.select((s) => s.existingImages));
+    final newImages = ref.watch(provider.select((s) => s.newImages));
     final notifier = ref.watch(photoUploadNotifierProvider);
+    final appointmentId = appointment.id;
     final failure = appointmentId != null
-        ? notifier.failureFor(appointmentId!)
+        ? notifier.failureFor(appointmentId)
         : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,8 +397,8 @@ class _PhotosView extends ConsumerWidget {
         ),
         const SizedBox(height: AppSpacing.sp8),
         PhotoPickerSection(
-          existingImages: state.existingImages,
-          newImages: state.newImages,
+          existingImages: existingImages,
+          newImages: newImages,
           isEditing: false,
           onPickImages: () {},
           onRemoveExisting: (_) {},
@@ -401,7 +408,7 @@ class _PhotosView extends ConsumerWidget {
           onRetry: (failure?.failedCount ?? 0) > 0 && !isCancelled
               ? () {
                   if (appointmentId != null) {
-                    notifier.clearFailure(appointmentId!);
+                    notifier.clearFailure(appointmentId);
                   }
                   onRetry();
                 }

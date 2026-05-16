@@ -16,6 +16,7 @@ import 'package:scheduling/features/calendar/widgets/app_calendar_view.dart';
 import 'package:scheduling/features/calendar/widgets/event_list.dart';
 import 'package:scheduling/features/calendar/widgets/month_year_picker.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/settings/widgets/settings_drawer.dart';
 import 'package:table_calendar/table_calendar.dart';
 
@@ -301,7 +302,11 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         userName: _userName,
       ),
       body: SafeArea(
-        child: _content(isLoading: isLoading, colorMap: colorMap),
+        child: _content(
+          isLoading: isLoading,
+          colorMap: colorMap,
+          employees: employees,
+        ),
       ),
     );
   }
@@ -309,12 +314,10 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   Widget _content({
     required bool isLoading,
     required Map<String, Color> colorMap,
+    required List<EmployeeRecord> employees,
   }) {
     final screenSize = MediaQuery.sizeOf(context);
     final isTablet = screenSize.width > 600;
-
-    final employees =
-        ref.watch(allUsersStreamProvider).asData?.value ?? const [];
 
     return Column(
       children: [
