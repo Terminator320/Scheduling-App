@@ -54,11 +54,30 @@ class ImageStorageService {
     );
   }
 
-  Future<List<AppointmentImage>> uploadImages(
+  /// Uploads each file independently. Per-file failures are logged and
+  /// counted instead of aborting the whole batch — one bad input shouldn't
+  /// orphan the other successful uploads (the appointment would otherwise
+  /// be patched with nothing and the user would see "all failed").
+  Future<ImageUploadBatchResult> uploadImages(
     String appointmentId,
     List<File> files,
   ) async {
-    return Future.wait(files.map((f) => uploadImage(appointmentId, f)));
+    final results = await Future.wait(
+      files.map((f) async {
+        try {
+          return await uploadImage(appointmentId, f);
+        } catch (e, st) {
+          debugPrint('[ImageStorageService] upload failed for ${f.path}: $e');
+          debugPrintStack(stackTrace: st);
+          return null;
+        }
+      }),
+    );
+    final uploaded = results.whereType<AppointmentImage>().toList();
+    return ImageUploadBatchResult(
+      uploaded: uploaded,
+      failedCount: results.length - uploaded.length,
+    );
   }
 
   Future<void> deleteImage(AppointmentImage image) async {
@@ -74,8 +93,23 @@ class ImageStorageService {
     }
   }
 
+  /// Best-effort batch delete. Per-file failures are logged but never
+  /// rethrown — an orphan blob is preferable to blocking the user's save
+  /// flow, and the dispatcher would otherwise mis-report a delete failure
+  /// as a photo-upload failure.
   Future<void> deleteImages(List<AppointmentImage> images) async {
-    await Future.wait(images.map(deleteImage));
+    await Future.wait(
+      images.map((img) async {
+        try {
+          await deleteImage(img);
+        } catch (e, st) {
+          debugPrint(
+            '[ImageStorageService] delete failed for ${img.storagePath}: $e',
+          );
+          debugPrintStack(stackTrace: st);
+        }
+      }),
+    );
   }
 
   static String _pathFromUrl(String url) {
@@ -102,4 +136,14 @@ class ImageStorageService {
     if (lower.endsWith('.png')) return 'image/png';
     return 'image/jpeg';
   }
+}
+
+class ImageUploadBatchResult {
+  const ImageUploadBatchResult({
+    required this.uploaded,
+    required this.failedCount,
+  });
+
+  final List<AppointmentImage> uploaded;
+  final int failedCount;
 }
