@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:scheduling/features/maps/domain/maps_failure.dart';
 import 'package:scheduling/features/maps/domain/models/address_suggestion.dart';
 import 'package:scheduling/features/maps/domain/models/parsed_address.dart';
 import 'package:scheduling/features/maps/domain/places_repository.dart';
@@ -22,25 +23,42 @@ class GooglePlacesRepository implements PlacesRepository {
   @override
   Future<List<AddressSuggestion>> autocomplete(String input) async {
     if (input.trim().isEmpty) return const [];
-    if (_apiKey.isEmpty) throw Exception('Google Maps API key is missing');
+    if (_apiKey.isEmpty) {
+      throw const MapsFailureNetwork(cause: 'Google Maps API key is missing');
+    }
 
-    final response = await _client.post(
-      _autocompleteUri,
-      headers: {'Content-Type': 'application/json', 'X-Goog-Api-Key': _apiKey},
-      body: jsonEncode({
-        'input': input,
-        'includedRegionCodes': ['ca'],
-        'locationBias': {
-          'circle': {
-            'center': {'latitude': 45.5017, 'longitude': -73.5673}, // Montreal
-            'radius': 50000.0,
-          },
+    final http.Response response;
+    try {
+      response = await _client.post(
+        _autocompleteUri,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': _apiKey,
         },
-      }),
-    );
+        body: jsonEncode({
+          'input': input,
+          'includedRegionCodes': ['ca'],
+          'locationBias': {
+            'circle': {
+              'center': {
+                'latitude': 45.5017,
+                'longitude': -73.5673,
+              }, // Montreal
+              'radius': 50000.0,
+            },
+          },
+        }),
+      );
+    } catch (e, st) {
+      throw MapsFailureNetwork(cause: e, stackTrace: st);
+    }
 
     if (response.statusCode != 200) {
-      throw Exception('Autocomplete failed: ${response.body}');
+      // Body is intentionally NOT included — Google's error payloads can
+      // contain API noise that we don't want in logs or banners.
+      throw MapsFailureNetwork(
+        cause: 'autocomplete HTTP ${response.statusCode}',
+      );
     }
 
     try {
@@ -48,31 +66,42 @@ class GooglePlacesRepository implements PlacesRepository {
       return (data['suggestions'] as List? ?? [])
           .map((e) => AddressSuggestion.fromJson(e as Map<String, dynamic>))
           .toList();
-    } on FormatException catch (e) {
-      // Don't echo `response.body` back into the exception message — it can
-      // include API noise and balloons logs. The original FormatException
-      // carries the position info already.
-      throw Exception('Autocomplete response was not valid JSON: $e');
+    } catch (e, st) {
+      throw MapsFailureParse(cause: e, stackTrace: st);
     }
   }
 
   @override
   Future<ParsedAddress> getPlaceDetails(String placeId) async {
-    if (_apiKey.isEmpty) throw Exception('Google Maps API key is missing');
-
-    final response = await _client.get(
-      Uri.parse('https://places.googleapis.com/v1/places/$placeId'),
-      headers: {
-        'X-Goog-Api-Key': _apiKey,
-        'X-Goog-FieldMask': 'formattedAddress,addressComponents',
-      },
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception('Place details failed: ${response.body}');
+    if (_apiKey.isEmpty) {
+      throw const MapsFailureNetwork(cause: 'Google Maps API key is missing');
     }
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final http.Response response;
+    try {
+      response = await _client.get(
+        Uri.parse('https://places.googleapis.com/v1/places/$placeId'),
+        headers: {
+          'X-Goog-Api-Key': _apiKey,
+          'X-Goog-FieldMask': 'formattedAddress,addressComponents',
+        },
+      );
+    } catch (e, st) {
+      throw MapsFailureNetwork(cause: e, stackTrace: st);
+    }
+
+    if (response.statusCode != 200) {
+      throw MapsFailureNetwork(
+        cause: 'placeDetails HTTP ${response.statusCode}',
+      );
+    }
+
+    final Map<String, dynamic> data;
+    try {
+      data = jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (e, st) {
+      throw MapsFailureParse(cause: e, stackTrace: st);
+    }
     final components = (data['addressComponents'] as List? ?? [])
         .cast<Map<String, dynamic>>();
 

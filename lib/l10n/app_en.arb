@@ -267,6 +267,7 @@
   "anAccountWithThisEmailAlreadyExists": "An account with this email already exists",
   "passwordIsTooWeakUseAtLeast6Characters": "Password is too weak. Use at least 6 characters",
   "passwordMustBeAtLeast8Characters": "Password must be at least 8 characters",
+  "couldNotLoadAppointments": "Could not load appointments. Check your connection and try again.",
   "signInIsTemporarilyUnavailable": "Sign-in is temporarily unavailable",
   "thisEmailIsNotAuthorizedToSignUp": "This email is not authorized to sign up",
   "accountCreatedYouCanNowSignIn": "Account created. You can now sign in.",

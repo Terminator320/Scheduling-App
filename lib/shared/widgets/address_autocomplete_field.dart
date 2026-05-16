@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/errors/failure.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/maps/data/google_places_repository.dart';
@@ -66,6 +67,18 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
     _debounce = Timer(const Duration(milliseconds: 300), () => _fetch(value));
   }
 
+  /// Resolves a thrown error to the user-facing string. `MapsFailure` carries
+  /// its own localized message; anything else falls back to a generic
+  /// address-lookup message — we never echo raw error text to the field.
+  String _localizedErrorFor(
+    Object error,
+    BuildContext context,
+    String fallback,
+  ) {
+    if (error is Failure) return error.toLocalizedMessage(context);
+    return fallback;
+  }
+
   Future<void> _fetch(String query) async {
     setState(() {
       _isLoading = true;
@@ -83,7 +96,11 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
       setState(() {
         _suggestions = [];
         _isLoading = false;
-        _serviceError = context.l10n.addressLookupFailed;
+        _serviceError = _localizedErrorFor(
+          e,
+          context,
+          context.l10n.addressLookupFailed,
+        );
       });
     }
   }
@@ -105,11 +122,15 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
           : s.description;
       setState(() => _isLoading = false);
       widget.onAddressSelected?.call(widget.controller.text);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _serviceError = context.l10n.couldNotLoadAddressDetails;
+        _serviceError = _localizedErrorFor(
+          e,
+          context,
+          context.l10n.couldNotLoadAddressDetails,
+        );
       });
       widget.onAddressSelected?.call(widget.controller.text);
     }

@@ -1697,6 +1697,12 @@ abstract class AppLocalizations {
   /// **'Password must be at least 8 characters'**
   String get passwordMustBeAtLeast8Characters;
 
+  /// No description provided for @couldNotLoadAppointments.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load appointments. Check your connection and try again.'**
+  String get couldNotLoadAppointments;
+
   /// No description provided for @signInIsTemporarilyUnavailable.
   ///
   /// In en, this message translates to:

@@ -267,6 +267,7 @@
   "anAccountWithThisEmailAlreadyExists": "Un compte avec ce courriel existe déjà",
   "passwordIsTooWeakUseAtLeast6Characters": "Mot de passe trop faible. Utilisez au moins 6 caractères",
   "passwordMustBeAtLeast8Characters": "Le mot de passe doit comporter au moins 8 caractères",
+  "couldNotLoadAppointments": "Impossible de charger les rendez-vous. Vérifiez votre connexion et réessayez.",
   "signInIsTemporarilyUnavailable": "La connexion est temporairement indisponible",
   "thisEmailIsNotAuthorizedToSignUp": "Ce courriel n’est pas autorisé à créer un compte",
   "accountCreatedYouCanNowSignIn": "Compte créé. Vous pouvez maintenant vous connecter.",

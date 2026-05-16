@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/utils/sheet_focus.dart';
@@ -108,7 +109,10 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
           SkeletonListTile(),
         ],
       ),
-      error: (_, _) => Center(child: Text(context.l10n.somethingWentWrong)),
+      error: (err, st) {
+        ref.read(loggerProvider).warn('clients stream error', err, st);
+        return Center(child: Text(context.l10n.somethingWentWrong));
+      },
       data: (_) {
         // ref.watch the family provider so the filter recomputes when the
         // underlying list or query changes — single source of truth.

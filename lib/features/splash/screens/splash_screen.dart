@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
@@ -53,7 +54,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               MainCalendar(isAdmin: isAdmin, employeeId: employeeId),
           };
         })
-        .catchError((Object _) {});
+        .catchError((Object e, StackTrace st) {
+          // Documented fall-through: any unexpected failure routes the user
+          // to Login. Log first so the failure surfaces in Crashlytics —
+          // otherwise transient Firestore errors silently sign people out.
+          ref.read(loggerProvider).warn('splash resolution failed', e, st);
+        });
 
     await Future.wait<void>([
       Future<void>.delayed(SplashScreen.displayDuration),
