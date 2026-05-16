@@ -222,18 +222,7 @@ class DetailsEditBody extends ConsumerWidget {
         ),
         const SizedBox(height: AppSpacing.sp16),
         formLabel(context, context.l10n.pictures, optional: true),
-        PhotoPickerSection(
-          existingImages: state.existingImages,
-          newImages: state.newImages,
-          isEditing: true,
-          onPickImages: () async {
-            final picker = ref.read(imagePickerProvider);
-            final picked = await picker.pickMultiImages();
-            if (picked.isNotEmpty) notifier.addImages(picked);
-          },
-          onRemoveExisting: notifier.removeExistingImage,
-          onRemoveNew: notifier.removeNewImage,
-        ),
+        _EditPhotosSection(appointment: appointment),
         const SizedBox(height: AppSpacing.sp24),
         FilledButton(
           style: FilledButton.styleFrom(
@@ -369,6 +358,36 @@ class DetailsEditBody extends ConsumerWidget {
     } else {
       ref.read(noticeServiceProvider).error(context.l10n.somethingWentWrong);
     }
+  }
+}
+
+/// Slice-watching child so photo add/remove (which churns `existingImages` /
+/// `newImages` repeatedly) doesn't rebuild the entire form. The rest of the
+/// edit body legitimately reads almost every state field so the parent's
+/// broad watch stays — see commit history for the analysis.
+class _EditPhotosSection extends ConsumerWidget {
+  const _EditPhotosSection({required this.appointment});
+
+  final AppointmentRecord appointment;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final provider = eventDetailsControllerProvider(appointment);
+    final existingImages = ref.watch(provider.select((s) => s.existingImages));
+    final newImages = ref.watch(provider.select((s) => s.newImages));
+    final notifier = ref.read(provider.notifier);
+    return PhotoPickerSection(
+      existingImages: existingImages,
+      newImages: newImages,
+      isEditing: true,
+      onPickImages: () async {
+        final picker = ref.read(imagePickerProvider);
+        final picked = await picker.pickMultiImages();
+        if (picked.isNotEmpty) notifier.addImages(picked);
+      },
+      onRemoveExisting: notifier.removeExistingImage,
+      onRemoveNew: notifier.removeNewImage,
+    );
   }
 }
 
