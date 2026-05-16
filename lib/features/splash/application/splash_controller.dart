@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
+import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
@@ -38,13 +39,20 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
   if (user == null) return const SplashGoToLogin();
 
   final employeesRepo = ref.watch(employeesRepositoryProvider);
+  final logger = ref.read(loggerProvider);
   final UserUidMatch? match;
   try {
-    match = await employeesRepo.findUserByUid(user.uid);
+    // Silent retry on transient Firestore errors. On final failure, let the
+    // FutureProvider surface an error UI; SplashScreen catches it and falls
+    // through to Login rather than wedging the user on splash.
+    match = await retryAsync(
+      () => employeesRepo.findUserByUid(user.uid),
+      delays: const [Duration(milliseconds: 500), Duration(milliseconds: 1500)],
+      onRetry: (attempt, e, st) =>
+          logger.warn('splash findUserByUid retry $attempt', e, st),
+    );
   } catch (e, st) {
-    // Don't sign the user out on a transient Firestore failure — propagate
-    // so the FutureProvider surfaces an error UI and the user can retry.
-    ref.read(loggerProvider).warn('splash findUserByUid failed', e, st);
+    logger.warn('splash findUserByUid failed after retries', e, st);
     rethrow;
   }
   if (match == null) {
