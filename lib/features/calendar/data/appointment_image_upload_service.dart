@@ -47,21 +47,23 @@ class AppointmentImageUploadService {
     required List<AppointmentImage> toDelete,
   }) async {
     try {
+      var failedCount = 0;
       final tooLargeNames = <String>[];
       if (newImages.isNotEmpty) {
-        tooLargeNames.addAll(
-          await _compressUploadAndPatch(
-            appointmentId,
-            newImages,
-            existingImages,
-          ),
+        final result = await _compressUploadAndPatch(
+          appointmentId,
+          newImages,
+          existingImages,
         );
+        tooLargeNames.addAll(result.tooLargeNames);
+        failedCount += result.failedCount;
       }
       if (toDelete.isNotEmpty) await _storage.deleteImages(toDelete);
 
-      if (tooLargeNames.isNotEmpty) {
+      if (failedCount > 0 || tooLargeNames.isNotEmpty) {
         _notifier.reportFailure(
           appointmentId,
+          failedCount: failedCount,
           tooLargeFileNames: tooLargeNames,
         );
       }
@@ -73,7 +75,7 @@ class AppointmentImageUploadService {
     }
   }
 
-  Future<List<String>> _compressUploadAndPatch(
+  Future<_CompressUploadOutcome> _compressUploadAndPatch(
     String appointmentId,
     List<File> newImages,
     List<AppointmentImage> existingImages,
@@ -94,15 +96,20 @@ class AppointmentImageUploadService {
         }
       }
 
+      var failedCount = 0;
       if (uploadable.isNotEmpty) {
-        final uploaded = await _storage.uploadImages(appointmentId, uploadable);
+        final result = await _storage.uploadImages(appointmentId, uploadable);
         await _appointments.updateAppointmentPictures(appointmentId, [
           ...existingImages,
-          ...uploaded,
+          ...result.uploaded,
         ]);
+        failedCount = result.failedCount;
       }
 
-      return tooLargeNames;
+      return _CompressUploadOutcome(
+        tooLargeNames: tooLargeNames,
+        failedCount: failedCount,
+      );
     } finally {
       // Compressed files live in the OS temp dir; clean them up regardless of
       // upload outcome so failures don't accumulate on-device.
@@ -122,6 +129,16 @@ class AppointmentImageUploadService {
     final segments = file.uri.pathSegments;
     return segments.isNotEmpty ? segments.last : file.path;
   }
+}
+
+class _CompressUploadOutcome {
+  const _CompressUploadOutcome({
+    required this.tooLargeNames,
+    required this.failedCount,
+  });
+
+  final List<String> tooLargeNames;
+  final int failedCount;
 }
 
 final appointmentImageUploadProvider = Provider<AppointmentImageUploadService>((

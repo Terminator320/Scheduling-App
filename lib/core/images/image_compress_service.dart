@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
@@ -36,8 +37,21 @@ class ImageCompressService {
   }
 
   Future<List<File>> compressImages(List<File> files) async {
-    final compressed = await Future.wait(files.map(compressImage));
-
-    return compressed;
+    // Per-file try/catch so one bad input (IO error, plugin failure) doesn't
+    // sink the whole batch. Falls back to the original file — the upload
+    // service will filter it out if it exceeds the size cap.
+    return Future.wait(
+      files.map((f) async {
+        try {
+          return await compressImage(f);
+        } catch (e, st) {
+          debugPrint(
+            '[ImageCompressService] compress failed for ${f.path}: $e',
+          );
+          debugPrintStack(stackTrace: st);
+          return f;
+        }
+      }),
+    );
   }
 }

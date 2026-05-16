@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
@@ -44,8 +44,7 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
   } catch (e, st) {
     // Don't sign the user out on a transient Firestore failure — propagate
     // so the FutureProvider surfaces an error UI and the user can retry.
-    debugPrint('[splashDestinationProvider] findUserByUid failed: $e');
-    debugPrintStack(stackTrace: st);
+    ref.read(loggerProvider).warn('splash findUserByUid failed', e, st);
     rethrow;
   }
   if (match == null) {
