@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
+import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/core/utils/app_language.dart';
@@ -128,15 +129,20 @@ Future<Widget> _resolveHome() async {
   if (cached == null) return const SplashScreen();
 
   // Transient errors (network, Firestore unavailable) shouldn't sign the user
-  // out — fall through to SplashScreen so its own controller can retry once
-  // the SDK comes back online.
+  // out — silent retry with bounded backoff before falling through to
+  // SplashScreen, which has its own resolution path as a last resort.
+  final repo = FirebaseEmployeesRepository(FirebaseFirestore.instance);
+  final logger = AppLogger();
   final UserUidMatch? userDoc;
   try {
-    userDoc = await FirebaseEmployeesRepository(
-      FirebaseFirestore.instance,
-    ).findUserByUid(user.uid);
+    userDoc = await retryAsync(
+      () => repo.findUserByUid(user.uid),
+      delays: const [Duration(milliseconds: 500), Duration(milliseconds: 1500)],
+      onRetry: (attempt, e, st) =>
+          logger.warn('_resolveHome findUserByUid retry $attempt', e, st),
+    );
   } catch (e, st) {
-    AppLogger().warn('_resolveHome findUserByUid failed', e, st);
+    logger.warn('_resolveHome findUserByUid failed after retries', e, st);
     return const SplashScreen();
   }
   if (userDoc == null) return _signOutToSplash();
