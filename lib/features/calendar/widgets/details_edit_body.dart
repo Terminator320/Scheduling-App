@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/images/images_providers.dart';
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
@@ -324,11 +325,14 @@ class DetailsEditBody extends ConsumerWidget {
       case EventDetailsInvalid():
         return;
       case EventDetailsSaved(:final appointment):
+        ref
+            .read(noticeServiceProvider)
+            .success(context.l10n.appointmentChangesSaved);
         onSaved(appointment);
       case EventDetailsFailed():
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.somethingWentWrongSavingChanges)),
-        );
+        ref
+            .read(noticeServiceProvider)
+            .error(context.l10n.somethingWentWrongSavingChanges);
     }
   }
 
@@ -360,11 +364,10 @@ class DetailsEditBody extends ConsumerWidget {
     final ok = await notifier.deleteAppointment(appointment);
     if (!context.mounted) return;
     if (ok) {
+      ref.read(noticeServiceProvider).success(context.l10n.appointmentDeleted);
       onClose();
     } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.l10n.somethingWentWrong)));
+      ref.read(noticeServiceProvider).error(context.l10n.somethingWentWrong);
     }
   }
 }

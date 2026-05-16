@@ -223,7 +223,12 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
 
     try {
       await ref.read(clientsRepositoryProvider).addClient(newClient);
-      if (mounted) Navigator.pop(context);
+      if (!mounted) return;
+      // Read the service before popping so the broadcast lands on the
+      // parent screen; calling `.success` after pop is harmless but the
+      // NoticeListener is rooted above the sheet so order doesn't matter.
+      ref.read(noticeServiceProvider).success(context.l10n.clientAdded);
+      Navigator.pop(context);
     } catch (e, st) {
       ref.read(loggerProvider).warn('addClient failed', e, st);
       if (!mounted) return;

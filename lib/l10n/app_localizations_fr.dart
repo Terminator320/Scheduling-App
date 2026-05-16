@@ -813,6 +813,24 @@ class AppLocalizationsFr extends AppLocalizations {
   String get couldNotLoadAppointments => 'Impossible de charger les rendez-vous. Vérifiez votre connexion et réessayez.';
 
   @override
+  String get clientAdded => 'Client ajouté';
+
+  @override
+  String get appointmentCreated => 'Rendez-vous créé';
+
+  @override
+  String get appointmentChangesSaved => 'Modifications enregistrées';
+
+  @override
+  String get appointmentDeleted => 'Rendez-vous supprimé';
+
+  @override
+  String get appointmentMarkedAsDone => 'Marqué comme terminé';
+
+  @override
+  String get appointmentCancelled => 'Rendez-vous annulé';
+
+  @override
   String get signInIsTemporarilyUnavailable => 'La connexion est temporairement indisponible';
 
   @override

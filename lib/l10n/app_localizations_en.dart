@@ -813,6 +813,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get couldNotLoadAppointments => 'Could not load appointments. Check your connection and try again.';
 
   @override
+  String get clientAdded => 'Client added';
+
+  @override
+  String get appointmentCreated => 'Appointment created';
+
+  @override
+  String get appointmentChangesSaved => 'Changes saved';
+
+  @override
+  String get appointmentDeleted => 'Appointment deleted';
+
+  @override
+  String get appointmentMarkedAsDone => 'Marked as done';
+
+  @override
+  String get appointmentCancelled => 'Appointment cancelled';
+
+  @override
   String get signInIsTemporarilyUnavailable => 'Sign-in is temporarily unavailable';
 
   @override

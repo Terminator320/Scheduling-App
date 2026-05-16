@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
@@ -34,14 +35,17 @@ class DetailsViewBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(eventDetailsControllerProvider(appointment));
-    final notifier =
-        ref.read(eventDetailsControllerProvider(appointment).notifier);
+    final notifier = ref.read(
+      eventDetailsControllerProvider(appointment).notifier,
+    );
 
     final isCancelled = appointment.status.toLowerCase() == 'cancelled';
-    final isDone = appointment.status.toLowerCase() == 'done' ||
+    final isDone =
+        appointment.status.toLowerCase() == 'done' ||
         appointment.status.toLowerCase() == 'completed';
     final now = DateTime.now();
-    final isToday = appointment.startTime.year == now.year &&
+    final isToday =
+        appointment.startTime.year == now.year &&
         appointment.startTime.month == now.month &&
         appointment.startTime.day == now.day;
 
@@ -74,9 +78,9 @@ class DetailsViewBody extends ConsumerWidget {
               : context.l10n.noAddress,
           onTap: appointment.address.isNotEmpty
               ? () => AddressMapLauncher.showMapChoices(
-                    context,
-                    address: appointment.address,
-                  )
+                  context,
+                  address: appointment.address,
+                )
               : null,
         ),
         const SizedBox(height: AppSpacing.sp16),
@@ -104,10 +108,22 @@ class DetailsViewBody extends ConsumerWidget {
           isSaving: state.isSaving,
           showCancel: showActions,
           onMarkDone: () async {
-            if (await notifier.markAsDone(appointment)) onClose();
+            if (await notifier.markAsDone(appointment)) {
+              if (!context.mounted) return;
+              ref
+                  .read(noticeServiceProvider)
+                  .success(context.l10n.appointmentMarkedAsDone);
+              onClose();
+            }
           },
           onCancel: () async {
-            if (await notifier.cancelAppointment(appointment)) onClose();
+            if (await notifier.cancelAppointment(appointment)) {
+              if (!context.mounted) return;
+              ref
+                  .read(noticeServiceProvider)
+                  .success(context.l10n.appointmentCancelled);
+              onClose();
+            }
           },
         ),
         if (showActions) ...[
@@ -125,6 +141,10 @@ class DetailsViewBody extends ConsumerWidget {
                     final confirmed = await _confirmDeleteDialog(context);
                     if (!context.mounted || !confirmed) return;
                     if (await notifier.deleteAppointment(appointment)) {
+                      if (!context.mounted) return;
+                      ref
+                          .read(noticeServiceProvider)
+                          .success(context.l10n.appointmentDeleted);
                       onClose();
                     }
                   },
@@ -206,7 +226,8 @@ class _Header extends StatelessWidget {
               ),
               _IconLabel(
                 icon: Icons.access_time_outlined,
-                text: '${DateUtilsHelper.formatTime(appointment.startTime)}'
+                text:
+                    '${DateUtilsHelper.formatTime(appointment.startTime)}'
                     ' – ${DateUtilsHelper.formatTime(appointment.endTime)}',
                 scheme: scheme,
                 theme: theme,
@@ -323,12 +344,14 @@ class _EmployeesView extends StatelessWidget {
         if (state.selectedEmployees.isEmpty)
           Text(
             context.l10n.noEmployeesAssigned,
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(color: scheme.onSurfaceVariant),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
           )
         else
-          ...state.selectedEmployees
-              .map((e) => DetailsEmployeePill(employee: e)),
+          ...state.selectedEmployees.map(
+            (e) => DetailsEmployeePill(employee: e),
+          ),
       ],
     );
   }
@@ -350,8 +373,9 @@ class _PhotosView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.watch(photoUploadNotifierProvider);
-    final failure =
-        appointmentId != null ? notifier.failureFor(appointmentId!) : null;
+    final failure = appointmentId != null
+        ? notifier.failureFor(appointmentId!)
+        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -413,4 +437,3 @@ Future<bool> _confirmDeleteDialog(BuildContext context) async {
   );
   return result ?? false;
 }
-
