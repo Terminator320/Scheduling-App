@@ -382,5 +382,14 @@
   "scheduleConflict": "Schedule Conflict",
   "alreadyBookedThisSlot": "Already booked during this time:",
   "doubleBookingWarning": "Scheduling them anyway will create a double booking.",
-  "scheduleAnyway": "Schedule Anyway"
+  "scheduleAnyway": "Schedule Anyway",
+  "deleteAccount": "Delete account",
+  "deleteAccountConfirmTitle": "Delete account?",
+  "deleteAccountConfirmBody": "This permanently deletes your account and profile. You will be signed out and cannot recover this account.",
+  "deleteAccountAdminWarning": "You are signed in as admin. Deleting your account will revoke your access to the business data shared with this account.",
+  "deletePermanently": "Delete permanently",
+  "confirmYourPassword": "Confirm your password",
+  "confirmYourPasswordToDelete": "Re-enter your password to confirm account deletion.",
+  "accountDeleted": "Your account has been deleted.",
+  "couldNotDeleteAccount": "Could not delete your account. Please try again."
 }

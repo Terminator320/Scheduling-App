@@ -1,0 +1,102 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:scheduling/features/settings/widgets/delete_account_dialog.dart';
+import 'package:scheduling/l10n/app_localizations.dart';
+
+Future<bool?> _showConfirm(WidgetTester tester, {required bool isAdmin}) async {
+  bool? result;
+  await tester.pumpWidget(
+    MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: ElevatedButton(
+              onPressed: () async {
+                result = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => DeleteAccountDialog(isAdmin: isAdmin),
+                );
+              },
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.tap(find.text('open'));
+  await tester.pumpAndSettle();
+  return result;
+}
+
+void main() {
+  group('DeleteAccountDialog', () {
+    testWidgets('shows admin warning when isAdmin = true', (tester) async {
+      await _showConfirm(tester, isAdmin: true);
+      expect(find.text('Delete account?'), findsOneWidget);
+      expect(
+        find.textContaining('admin', findRichText: false),
+        findsWidgets,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('hides admin warning when isAdmin = false', (tester) async {
+      await _showConfirm(tester, isAdmin: false);
+      expect(find.text('Delete account?'), findsOneWidget);
+      expect(
+        find.textContaining('admin', findRichText: false),
+        findsNothing,
+      );
+    });
+
+    testWidgets('Cancel returns false', (tester) async {
+      await _showConfirm(tester, isAdmin: false);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete account?'), findsNothing);
+    });
+
+    testWidgets('Delete permanently button is present', (tester) async {
+      await _showConfirm(tester, isAdmin: false);
+      expect(find.text('Delete permanently'), findsOneWidget);
+    });
+  });
+
+  group('DeleteAccountReauthDialog', () {
+    testWidgets('shows password field with obscured text by default',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    await showDialog<String>(
+                      context: context,
+                      builder: (_) => const DeleteAccountReauthDialog(),
+                    );
+                  },
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.obscureText, isTrue);
+      expect(find.text('Confirm your password'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+}

@@ -1136,4 +1136,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scheduleAnyway => 'Schedule Anyway';
+
+  @override
+  String get deleteAccount => 'Delete account';
+
+  @override
+  String get deleteAccountConfirmTitle => 'Delete account?';
+
+  @override
+  String get deleteAccountConfirmBody => 'This permanently deletes your account and profile. You will be signed out and cannot recover this account.';
+
+  @override
+  String get deleteAccountAdminWarning => 'You are signed in as admin. Deleting your account will revoke your access to the business data shared with this account.';
+
+  @override
+  String get deletePermanently => 'Delete permanently';
+
+  @override
+  String get confirmYourPassword => 'Confirm your password';
+
+  @override
+  String get confirmYourPasswordToDelete => 'Re-enter your password to confirm account deletion.';
+
+  @override
+  String get accountDeleted => 'Your account has been deleted.';
+
+  @override
+  String get couldNotDeleteAccount => 'Could not delete your account. Please try again.';
 }

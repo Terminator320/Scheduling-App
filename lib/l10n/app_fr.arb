@@ -382,5 +382,14 @@
   "scheduleConflict": "Conflit d'horaire",
   "alreadyBookedThisSlot": "Déjà réservé pendant ce créneau :",
   "doubleBookingWarning": "Les planifier quand même créera un double rendez-vous.",
-  "scheduleAnyway": "Planifier quand même"
+  "scheduleAnyway": "Planifier quand même",
+  "deleteAccount": "Supprimer le compte",
+  "deleteAccountConfirmTitle": "Supprimer le compte ?",
+  "deleteAccountConfirmBody": "Cette action supprime définitivement votre compte et votre profil. Vous serez déconnecté et ne pourrez pas récupérer ce compte.",
+  "deleteAccountAdminWarning": "Vous êtes connecté en tant qu'administrateur. La suppression de votre compte vous retirera l'accès aux données de l'entreprise associées à ce compte.",
+  "deletePermanently": "Supprimer définitivement",
+  "confirmYourPassword": "Confirmez votre mot de passe",
+  "confirmYourPasswordToDelete": "Saisissez à nouveau votre mot de passe pour confirmer la suppression du compte.",
+  "accountDeleted": "Votre compte a été supprimé.",
+  "couldNotDeleteAccount": "Impossible de supprimer votre compte. Veuillez réessayer."
 }
