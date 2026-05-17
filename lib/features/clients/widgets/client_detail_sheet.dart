@@ -323,7 +323,7 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
                 if (c.address.isNotEmpty)
                   _ViewContactRow(
                     icon: Icons.location_on_outlined,
-                    text: c.address,
+                    text: AddressParser.canonicalToDisplay(c.address),
                     onTap: () => AddressMapLauncher.showMapChoices(
                       context,
                       address: c.address,

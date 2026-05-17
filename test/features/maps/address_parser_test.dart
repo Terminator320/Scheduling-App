@@ -9,7 +9,10 @@ void main() {
     });
 
     test('returns null when no apt indicator is present', () {
-      expect(AddressParser.splitApt('1245 Rue de Bleury, Montréal, QC'), isNull);
+      expect(
+        AddressParser.splitApt('1245 Rue de Bleury, Montréal, QC'),
+        isNull,
+      );
     });
 
     test('parses canonical "Apt 12 - 1245 Main" form', () {
@@ -38,7 +41,9 @@ void main() {
     });
 
     test('parses trailing-unit form', () {
-      final r = AddressParser.splitApt('1245 Rue de Bleury #3406, Montréal, QC');
+      final r = AddressParser.splitApt(
+        '1245 Rue de Bleury #3406, Montréal, QC',
+      );
       expect(r?.apt, '3406');
       expect(r?.street, '1245 Rue de Bleury, Montréal, QC');
     });
@@ -60,15 +65,18 @@ void main() {
       );
     });
 
-    test('inserts apt before the first comma when street has trailing parts', () {
-      expect(
-        AddressParser.combineAptAndStreet(
-          '1245 Rue de Bleury, Montréal, QC H3B 0A8',
-          '12',
-        ),
-        '12-1245 Rue de Bleury, Montréal, QC H3B 0A8',
-      );
-    });
+    test(
+      'inserts apt before the first comma when street has trailing parts',
+      () {
+        expect(
+          AddressParser.combineAptAndStreet(
+            '1245 Rue de Bleury, Montréal, QC H3B 0A8',
+            '12',
+          ),
+          '12-1245 Rue de Bleury, Montréal, QC H3B 0A8',
+        );
+      },
+    );
 
     test('strips an embedded unit token from the street first', () {
       expect(
@@ -82,6 +90,130 @@ void main() {
         AddressParser.combineAptAndStreet('1245 Main', '#12'),
         '12-1245 Main',
       );
+    });
+  });
+
+  group('AddressParser.formatForDisplay', () {
+    test('returns street unchanged when apt is empty', () {
+      expect(AddressParser.formatForDisplay('1234 Main', ''), '1234 Main');
+    });
+
+    test('returns empty when both inputs are empty', () {
+      expect(AddressParser.formatForDisplay('', ''), '');
+    });
+
+    test('appends #apt to single-line street', () {
+      expect(AddressParser.formatForDisplay('1234 Main', '5'), '1234 Main #5');
+    });
+
+    test(
+      'inserts #apt before the first comma when street has trailing parts',
+      () {
+        expect(
+          AddressParser.formatForDisplay(
+            '1234 Rue Saint-Denis, Montréal, QC H2X 3J5',
+            '5',
+          ),
+          '1234 Rue Saint-Denis #5, Montréal, QC H2X 3J5',
+        );
+      },
+    );
+
+    test('strips an embedded unit token from the street first', () {
+      expect(
+        AddressParser.formatForDisplay('1234 Main #99, Montréal', '5'),
+        '1234 Main #5, Montréal',
+      );
+    });
+
+    test('strips leading # from apt', () {
+      expect(AddressParser.formatForDisplay('1234 Main', '#5'), '1234 Main #5');
+    });
+  });
+
+  group('AddressParser.canonicalToDisplay', () {
+    test('returns stored value unchanged when no apt prefix is present', () {
+      expect(
+        AddressParser.canonicalToDisplay('1234 Main, Montréal, QC'),
+        '1234 Main, Montréal, QC',
+      );
+    });
+
+    test('converts canonical apt-prefix to display form', () {
+      expect(
+        AddressParser.canonicalToDisplay(
+          '5-1234 Rue Saint-Denis, Montréal, QC',
+        ),
+        '1234 Rue Saint-Denis #5, Montréal, QC',
+      );
+    });
+
+    test('converts single-line canonical form to display form', () {
+      expect(AddressParser.canonicalToDisplay('12-1245 Main'), '1245 Main #12');
+    });
+  });
+
+  group('AddressParser.toCanonical', () {
+    test('returns trimmed input unchanged when no apt is present', () {
+      expect(
+        AddressParser.toCanonical('  1234 Main, Montréal, QC  '),
+        '1234 Main, Montréal, QC',
+      );
+    });
+
+    test('canonicalizes a display-form address', () {
+      expect(
+        AddressParser.toCanonical('1234 Rue Saint-Denis #5, Montréal, QC'),
+        '5-1234 Rue Saint-Denis, Montréal, QC',
+      );
+    });
+
+    test('is idempotent on canonical input', () {
+      const stored = '5-1234 Rue Saint-Denis, Montréal, QC';
+      expect(AddressParser.toCanonical(stored), stored);
+    });
+  });
+
+  group('AddressParser canonical ↔ display round-trip', () {
+    // Canonical is the source of truth in Firestore; display is what shows in
+    // the field after selection or load. A round-trip must be lossless so
+    // editing an existing record doesn't silently rewrite the stored string.
+    test('canonical → display → canonical is lossless', () {
+      for (final stored in const [
+        '5-1234 Main',
+        '12-1245 Rue de Bleury, Montréal, QC H3B 0A8',
+        '4B-1245 Main St, Montréal',
+      ]) {
+        final display = AddressParser.canonicalToDisplay(stored);
+        final parts = AddressParser.splitApt(display);
+        expect(parts, isNotNull, reason: stored);
+        expect(
+          AddressParser.combineAptAndStreet(parts!.street, parts.apt),
+          stored,
+          reason: stored,
+        );
+      }
+    });
+  });
+
+  group('map-launcher apt stripping (AddressParser.splitApt contract)', () {
+    test(
+      'display and canonical forms of the same address strip to identical nav street',
+      () {
+        const canonical = '5-1234 Rue Saint-Denis, Montréal, QC H2X 3J5';
+        const display = '1234 Rue Saint-Denis #5, Montréal, QC H2X 3J5';
+        final navFromCanonical =
+            AddressParser.splitApt(canonical)?.street ?? canonical;
+        final navFromDisplay =
+            AddressParser.splitApt(display)?.street ?? display;
+        expect(navFromCanonical, navFromDisplay);
+      },
+    );
+
+    test('plain street with no apt passes through splitApt unchanged', () {
+      const plain = '1234 Rue Saint-Denis, Montréal, QC H2X 3J5';
+      final nav = AddressParser.splitApt(plain)?.street ?? plain;
+      expect(nav, plain);
     });
   });
 

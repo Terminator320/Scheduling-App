@@ -20,6 +20,7 @@ import 'package:scheduling/features/calendar/widgets/photo_picker_section.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/client_search_field.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
@@ -88,7 +89,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
 
   void _selectClient(ClientRecord client) {
     _clientSearchController.text = client.displayName;
-    _addressController.text = client.address;
+    _addressController.text = AddressParser.canonicalToDisplay(client.address);
     _notifier.selectClient(client);
   }
 
@@ -148,7 +149,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
   void _useClientAddress() {
     final client = ref.read(_provider).selectedClient;
     if (client == null) return;
-    _addressController.text = client.address;
+    _addressController.text = AddressParser.canonicalToDisplay(client.address);
     _notifier.setUseCustomAddress(false);
   }
 
@@ -159,7 +160,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     Future<AddEventSubmitOutcome> attempt({bool forceBusy = false}) =>
         _notifier.submit(
           title: _titleController.text,
-          address: _addressController.text,
+          address: AddressParser.toCanonical(_addressController.text),
           notes: _notesController.text,
           materialsNeeded: _materialsController.text,
           forceBusy: forceBusy,

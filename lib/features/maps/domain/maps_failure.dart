@@ -37,3 +37,35 @@ class MapsFailureParse extends MapsFailure {
   String toLocalizedMessage(BuildContext context) =>
       context.l10n.couldNotLoadAddressDetails;
 }
+
+/// Server-side per-uid rate limit was hit. Reuses the existing generic
+/// "too many attempts" string so we don't introduce a new copy variant.
+class MapsFailureRateLimit extends MapsFailure {
+  const MapsFailureRateLimit({super.cause, super.stackTrace});
+
+  @override
+  String toLocalizedMessage(BuildContext context) =>
+      context.l10n.tooManyAttemptsPleaseTryAgainLater2;
+}
+
+/// App Check failed or the caller was not authenticated. Surfaced as a
+/// generic retry message — the underlying cause (debug token expired, App
+/// Check provider misconfigured) is not actionable by the user.
+class MapsFailureUnauthorized extends MapsFailure {
+  const MapsFailureUnauthorized({super.cause, super.stackTrace});
+
+  @override
+  String toLocalizedMessage(BuildContext context) =>
+      context.l10n.somethingWentWrongPleaseTryAgain;
+}
+
+/// Defensive guard: server rejected the payload (empty input, oversize,
+/// malformed placeId). The autocomplete field already filters these client
+/// side, so this is a last-resort fallback.
+class MapsFailureInvalidInput extends MapsFailure {
+  const MapsFailureInvalidInput({super.cause, super.stackTrace});
+
+  @override
+  String toLocalizedMessage(BuildContext context) =>
+      context.l10n.somethingWentWrong;
+}

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -54,6 +55,7 @@ Future<void> _wireFirebaseEmulator() async {
   FirebaseAuth.instance.useAuthEmulator(_emulatorHost, 9099);
   FirebaseFirestore.instance.useFirestoreEmulator(_emulatorHost, 8080);
   await FirebaseStorage.instance.useStorageEmulator(_emulatorHost, 9199);
+  FirebaseFunctions.instance.useFunctionsEmulator(_emulatorHost, 5001);
 }
 
 Future<void> main() async {
@@ -148,9 +150,7 @@ Future<Widget> _resolveHome() async {
   if (userDoc == null) return _signOutToSplash();
 
   final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
-  // CLAUDE.md invariant: only `status == 'active'` may enter the app. Any
-  // other status (disabled, invited, empty, future values) bounces back to
-  // SplashScreen so a single source of truth handles re-auth or sign-out.
+
   if (!employee.isActive) return _signOutToSplash();
 
   unawaited(AuthCache().save(employee));

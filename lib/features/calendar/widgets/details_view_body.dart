@@ -14,6 +14,7 @@ import 'package:scheduling/features/calendar/widgets/details_view_widgets.dart';
 import 'package:scheduling/features/calendar/widgets/photo_picker_section.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
+import 'package:scheduling/features/maps/domain/address_parser.dart';
 
 /// Read-only body of `EventDetailsSheet`. Reads everything from the
 /// controller; dispatches edit/mark-as-done/cancel actions back through it.
@@ -77,7 +78,7 @@ class DetailsViewBody extends ConsumerWidget {
         DetailsAddressRow(
           label: context.l10n.address,
           address: appointment.address.isNotEmpty
-              ? appointment.address
+              ? AddressParser.canonicalToDisplay(appointment.address)
               : context.l10n.noAddress,
           onTap: appointment.address.isNotEmpty
               ? () => AddressMapLauncher.showMapChoices(

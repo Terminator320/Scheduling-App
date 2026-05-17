@@ -53,6 +53,39 @@ void main() {
     );
   });
 
+  testWidgets('MapsFailureRateLimit resolves to tooManyAttempts copy', (
+    tester,
+  ) async {
+    final context = await harness(tester);
+    const failure = MapsFailureRateLimit();
+    expect(
+      failure.toLocalizedMessage(context),
+      AppLocalizations.of(context)!.tooManyAttemptsPleaseTryAgainLater2,
+    );
+  });
+
+  testWidgets('MapsFailureUnauthorized resolves to retry copy', (
+    tester,
+  ) async {
+    final context = await harness(tester);
+    const failure = MapsFailureUnauthorized();
+    expect(
+      failure.toLocalizedMessage(context),
+      AppLocalizations.of(context)!.somethingWentWrongPleaseTryAgain,
+    );
+  });
+
+  testWidgets('MapsFailureInvalidInput resolves to generic copy', (
+    tester,
+  ) async {
+    final context = await harness(tester);
+    const failure = MapsFailureInvalidInput();
+    expect(
+      failure.toLocalizedMessage(context),
+      AppLocalizations.of(context)!.somethingWentWrong,
+    );
+  });
+
   testWidgets('localized message never leaks the raw cause string', (
     tester,
   ) async {
@@ -62,12 +95,19 @@ void main() {
     // where `throw Exception('Autocomplete failed: ${response.body}')`
     // could surface API payloads to users / logs.
     const sentinel = '!!SENSITIVE_RESPONSE_BODY!!';
-    const networkFailure = MapsFailureNetwork(cause: sentinel);
-    const parseFailure = MapsFailureParse(cause: sentinel);
-    expect(
-      networkFailure.toLocalizedMessage(context),
-      isNot(contains(sentinel)),
-    );
-    expect(parseFailure.toLocalizedMessage(context), isNot(contains(sentinel)));
+    const failures = <MapsFailure>[
+      MapsFailureNetwork(cause: sentinel),
+      MapsFailureParse(cause: sentinel),
+      MapsFailureRateLimit(cause: sentinel),
+      MapsFailureUnauthorized(cause: sentinel),
+      MapsFailureInvalidInput(cause: sentinel),
+    ];
+    for (final f in failures) {
+      expect(
+        f.toLocalizedMessage(context),
+        isNot(contains(sentinel)),
+        reason: f.runtimeType.toString(),
+      );
+    }
   });
 }

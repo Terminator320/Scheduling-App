@@ -7,6 +7,7 @@ import 'package:scheduling/features/calendar/application/event_details_controlle
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/details_edit_body.dart';
 import 'package:scheduling/features/calendar/widgets/details_view_body.dart';
+import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
 /// Sheet wrapper around the appointment-details flow. Holds the
@@ -65,7 +66,9 @@ class _EventDetailsSheetState extends ConsumerState<EventDetailsSheet> {
     _endTimeController =
         TextEditingController(text: DateUtilsHelper.formatTime(a.endTime));
     _clientSearchController = TextEditingController(text: a.clientName);
-    _addressController = TextEditingController(text: a.address);
+    _addressController = TextEditingController(
+      text: AddressParser.canonicalToDisplay(a.address),
+    );
     _notesController = TextEditingController(text: a.notes);
     _materialsController = TextEditingController(text: a.materialsNeeded);
     _editControllers = DetailsEditControllers(
