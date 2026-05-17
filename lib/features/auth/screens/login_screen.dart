@@ -21,7 +21,11 @@ import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
 class Login extends ConsumerStatefulWidget {
-  const Login({super.key});
+  const Login({super.key, this.authService});
+
+  // Optional injection for widget tests. Production wiring still defaults to
+  // `AuthService()` so call sites don't change.
+  final AuthService? authService;
 
   @override
   ConsumerState<Login> createState() => _LoginState();
@@ -31,7 +35,7 @@ class _LoginState extends ConsumerState<Login>
     with SingleTickerProviderStateMixin {
   static const int _itemCount = 7;
 
-  final AuthService _authService = AuthService();
+  late final AuthService _authService = widget.authService ?? AuthService();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _emailFocus = FocusNode();
