@@ -1101,5 +1101,48 @@
   "error_couldNotDeleteAccount": "Could not delete your account. Please try again.",
   "@error_couldNotDeleteAccount": {
     "description": "Could not delete your account. Please try again."
-  }
+  },
+  "error_noticeWithCause": "{intro} — {cause}. ({tag})",
+  "@error_noticeWithCause": {
+    "description": "Error-notice template: operation intro, sanitized cause, short tag matching the Crashlytics log label",
+    "placeholders": {
+      "intro": {"type": "String"},
+      "cause": {"type": "String"},
+      "tag": {"type": "String"}
+    }
+  },
+  "error_causeOffline": "you appear to be offline",
+  "@error_causeOffline": {"description": "Sanitized error cause: network/offline"},
+  "error_causePermissionDenied": "you don't have permission to do this",
+  "@error_causePermissionDenied": {"description": "Sanitized error cause: permission denied"},
+  "error_causeNotFound": "it no longer exists",
+  "@error_causeNotFound": {"description": "Sanitized error cause: document not found"},
+  "error_causeUnknown": "something went wrong",
+  "@error_causeUnknown": {"description": "Sanitized error cause: fallback"},
+  "error_introDeleteEmployee": "Couldn't delete the employee",
+  "@error_introDeleteEmployee": {"description": "Error intro for EMP-DEL"},
+  "error_introChangeEmployeeStatus": "Couldn't update the employee's account status",
+  "@error_introChangeEmployeeStatus": {"description": "Error intro for EMP-STATUS"},
+  "error_introSaveEmployee": "Couldn't save the employee",
+  "@error_introSaveEmployee": {"description": "Error intro for EMP-CREATE (covers create and edit)"},
+  "error_introCreateAppointment": "Couldn't create the appointment",
+  "@error_introCreateAppointment": {"description": "Error intro for APPT-CREATE"},
+  "error_introSaveAppointment": "Couldn't save the appointment changes",
+  "@error_introSaveAppointment": {"description": "Error intro for APPT-SAVE"},
+  "error_introDeleteAppointment": "Couldn't delete the appointment",
+  "@error_introDeleteAppointment": {"description": "Error intro for APPT-DEL"},
+  "error_introLoadAppointments": "Couldn't load appointments",
+  "@error_introLoadAppointments": {"description": "Error intro for APPT-LOAD"},
+  "error_introDeleteAccount": "Couldn't delete your account",
+  "@error_introDeleteAccount": {"description": "Error intro for ACCT-DEL"},
+  "error_introAddClient": "Couldn't add the client",
+  "@error_introAddClient": {"description": "Error intro for CLI-ADD"},
+  "error_introSaveClient": "Couldn't save the client changes",
+  "@error_introSaveClient": {"description": "Error intro for CLI-SAVE"},
+  "error_introDeleteClient": "Couldn't delete the client",
+  "@error_introDeleteClient": {"description": "Error intro for CLI-DEL"},
+  "error_introLoadHistory": "Couldn't load the appointment history",
+  "@error_introLoadHistory": {"description": "Error intro for HIST-LOAD"},
+  "error_introLoadClients": "Couldn't load clients",
+  "@error_introLoadClients": {"description": "Error intro for CLI-LIST"}
 }
