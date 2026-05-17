@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
-/// Section header + value used by the read-only details panel.
 class DetailsSectionRow extends StatelessWidget {
   const DetailsSectionRow({
     required this.label,
@@ -54,8 +53,6 @@ class DetailsSectionRow extends StatelessWidget {
   }
 }
 
-/// Address row with optional tap-to-open-maps affordance. Used in the
-/// read-only details panel.
 class DetailsAddressRow extends StatelessWidget {
   const DetailsAddressRow({
     required this.label,
@@ -126,8 +123,6 @@ class DetailsAddressRow extends StatelessWidget {
   }
 }
 
-/// Read-only employee chip rendering an avatar + name + email. Used by the
-/// details panel's employees section.
 class DetailsEmployeePill extends StatelessWidget {
   const DetailsEmployeePill({required this.employee, super.key});
 
@@ -159,8 +154,6 @@ class DetailsEmployeePill extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
-                  // Pick from the employee color's luminance so light swatches
-                  // (yellow/light green) stay readable.
                   color:
                       ThemeData.estimateBrightnessForColor(employee.color) ==
                           Brightness.dark

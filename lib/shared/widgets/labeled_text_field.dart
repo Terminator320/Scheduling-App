@@ -31,8 +31,6 @@ class LabeledTextField extends StatelessWidget {
   final Iterable<String>? autofillHints;
   final int maxLines;
 
-  /// Hard cap on input length. Enforced via an input formatter so paste
-  /// operations are truncated rather than rejected; no visible counter.
   final int? maxLength;
   final bool readOnly;
   final VoidCallback? onTap;

@@ -10,10 +10,6 @@ import 'package:scheduling/features/calendar/widgets/details_view_body.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
-/// Sheet wrapper around the appointment-details flow. Holds the
-/// `TextEditingController`s + sheet padding; switches between
-/// [DetailsViewBody] and [DetailsEditBody] based on
-/// `EventDetailsController.state.isEditing`.
 class EventDetailsSheet extends ConsumerStatefulWidget {
   const EventDetailsSheet({
     required this.appointment,

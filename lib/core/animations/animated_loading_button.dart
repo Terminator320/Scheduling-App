@@ -27,8 +27,6 @@ class AnimatedLoadingButton extends StatelessWidget {
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(12),
     );
-    // ValueKeys force AnimatedSwitcher to treat the spinner and label as
-    // different widgets so it plays the crossfade when isLoading changes.
     final child = AnimatedSwitcher(
       duration: AppAnimationDurations.switcher,
       transitionBuilder: (child, animation) => FadeTransition(
@@ -64,7 +62,6 @@ class AnimatedLoadingButton extends StatelessWidget {
             ),
     );
 
-    // TapScale adds a subtle press shrink; disabled when the button is blocked.
     return TapScale(
       enabled: effectiveOnPressed != null,
       child: SizedBox(

@@ -191,6 +191,66 @@ abstract class AppLocalizations {
   /// **'Invited'**
   String get invited;
 
+  /// No description provided for @confirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed'**
+  String get confirmed;
+
+  /// No description provided for @pending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get pending;
+
+  /// No description provided for @cancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get cancelled;
+
+  /// No description provided for @disabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get disabled;
+
+  /// No description provided for @inProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'In Progress'**
+  String get inProgress;
+
+  /// No description provided for @textScaleSmall.
+  ///
+  /// In en, this message translates to:
+  /// **'Small'**
+  String get textScaleSmall;
+
+  /// No description provided for @textScaleMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get textScaleMedium;
+
+  /// No description provided for @textScaleLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Large'**
+  String get textScaleLarge;
+
+  /// No description provided for @textScaleXL.
+  ///
+  /// In en, this message translates to:
+  /// **'Extra Large'**
+  String get textScaleXL;
+
+  /// No description provided for @textSizeAppliesAppWide.
+  ///
+  /// In en, this message translates to:
+  /// **'Applies across the entire app'**
+  String get textSizeAppliesAppWide;
+
   /// No description provided for @settings.
   ///
   /// In en, this message translates to:

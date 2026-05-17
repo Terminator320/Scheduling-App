@@ -19,8 +19,6 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen> {
-  // Drives FadeScaleTransition for each splash element. Flipped from 0→1 on
-  // first frame; flipped back to 0 just before navigating away.
   final ValueNotifier<bool> _show = ValueNotifier(false);
 
   Widget? _destination;
@@ -42,9 +40,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   Future<void> _init() async {
     Widget destination = const Login();
 
-    // Run auth resolution and the minimum display time in parallel; whichever
-    // finishes last unblocks navigation. On any unexpected failure, fall
-    // through to the login screen rather than wedging on the splash.
     final resolution = ref
         .read(splashDestinationProvider.future)
         .then<void>((d) {
@@ -55,9 +50,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
           };
         })
         .catchError((Object e, StackTrace st) {
-          // Documented fall-through: any unexpected failure routes the user
-          // to Login. Log first so the failure surfaces in Crashlytics —
-          // otherwise transient Firestore errors silently sign people out.
           ref.read(loggerProvider).warn('splash resolution failed', e, st);
         });
 
@@ -185,8 +177,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 }
 
-/// Wraps a child in `FadeScaleTransition` (Material "appears in place" motion)
-/// driven by an `AnimationController`, with a per-item start delay for stagger.
 class _Stagger extends StatefulWidget {
   const _Stagger({
     required this.show,

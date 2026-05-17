@@ -60,8 +60,6 @@ class EmployeeCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.sp8),
-            // StatusChip caps its own text scaling internally so we don't
-            // need a MediaQuery clamp here.
             StatusChip(
               status: employee.isActive
                   ? AppointmentStatus.active

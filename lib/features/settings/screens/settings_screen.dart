@@ -29,11 +29,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ? widget.email
       : FirebaseAuth.instance.currentUser?.email ?? '';
 
-  static String _textScaleLabel(double scale) {
-    if (scale <= 0.85) return 'Small';
-    if (scale <= 1.05) return 'Medium';
-    if (scale <= 1.25) return 'Large';
-    return 'XL';
+  String _textScaleLabel(BuildContext context, double scale) {
+    if (scale <= 0.85) return context.l10n.textScaleSmall;
+    if (scale <= 1.05) return context.l10n.textScaleMedium;
+    if (scale <= 1.25) return context.l10n.textScaleLarge;
+    return context.l10n.textScaleXL;
   }
 
   @override
@@ -95,7 +95,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       SettingsTrailingPill(
-                        label: _textScaleLabel(notifier.textScale),
+                        label: _textScaleLabel(context, notifier.textScale),
                       ),
                       const SizedBox(width: 4),
                       Icon(
@@ -108,9 +108,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () async {
                     await Navigator.push<void>(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => const TextSizeScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const TextSizeScreen()),
                     );
                     if (mounted) setState(() {});
                   },

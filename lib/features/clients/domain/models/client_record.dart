@@ -2,28 +2,6 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'client_record.freezed.dart';
 
-/// Firestore collection: `clients`
-///
-/// Example doc shape:
-/// ```json
-/// {
-///   "businessName": "Acme Inc",
-///   "name": "Jane Doe",
-///   "address": "12-1245 Rue de Bleury, Montréal, QC",
-///   "apt": "12",
-///   "city": "Montréal",
-///   "province": "QC",
-///   "country": "Canada",
-///   "postalCode": "H3B 0A8",
-///   "phone": "+1-514-555-0101",
-///   "email": "jane@acme.com",
-///   "contacts": [
-///     { "name": "Bob", "phone": "+1-514-555-0102", "email": "bob@acme.com" }
-///   ],
-///   "createdAt": Timestamp,
-///   "updatedAt": Timestamp
-/// }
-/// ```
 @freezed
 abstract class ClientContact with _$ClientContact {
 

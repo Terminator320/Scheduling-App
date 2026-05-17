@@ -4,9 +4,6 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 
-/// Read-only section listing a client's `contacts` (name / phone / email).
-/// Used by the appointment-details view body when the loaded client has
-/// any contacts.
 class ClientContactsSection extends StatelessWidget {
   const ClientContactsSection({required this.contacts, super.key});
 

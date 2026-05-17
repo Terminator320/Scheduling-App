@@ -2,9 +2,6 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'appointment_image.freezed.dart';
 
-/// One image attached to an appointment. Stored under the `pictures` array
-/// of the parent appointment doc; binary lives in Firebase Storage at
-/// `storagePath`.
 @freezed
 abstract class AppointmentImage with _$AppointmentImage {
 
@@ -34,7 +31,6 @@ abstract class AppointmentImage with _$AppointmentImage {
 
   static DateTime? _parseDateTime(dynamic value) {
     if (value == null) return null;
-    // Avoid importing cloud_firestore in the domain layer; check by name.
     final type = value.runtimeType.toString();
     if (type == 'Timestamp') {
       // ignore: avoid_dynamic_calls

@@ -10,7 +10,6 @@ class FirebaseClientsRepository implements ClientsRepository {
     : _clients = firestore.collection('clients');
 
   final CollectionReference<Map<String, dynamic>> _clients;
-  // In-memory only — cleared on app restart, reducing Firestore reads within a session.
   final Map<String, List<ClientRecord>> _searchCache = {};
 
   @override
@@ -73,9 +72,6 @@ class FirebaseClientsRepository implements ClientsRepository {
           .limit(ClientSearchPolicy.serverReadLimit)
           .get();
     } on FirebaseException catch (e, st) {
-      // Permission-denied is the most likely outcome when an employee tries
-      // to search clients (rules are admin-only). Return empty so the UI
-      // shows "no results" rather than crashing the picker.
       debugPrint('[FirebaseClientsRepository] searchClients failed: $e');
       debugPrintStack(stackTrace: st);
       return const [];
@@ -174,9 +170,6 @@ class FirebaseClientsRepository implements ClientsRepository {
     return results;
   }
 
-  /// Normalizes the model on its way to Firestore: emails lower-cased +
-  /// trimmed (CLAUDE.md invariant). All other string fields are already
-  /// trimmed inside `ClientRecord.toMap()`.
   Map<String, dynamic> _normalizedMap(ClientRecord client) {
     final base = Map<String, dynamic>.from(client.toMap());
     final email = (base['email'] as String? ?? '').trim().toLowerCase();

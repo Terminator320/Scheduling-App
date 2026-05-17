@@ -4,9 +4,6 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/shared/widgets/app_avatar.dart';
 
-/// A surface card grouping a set of `SettingsTile`s. Picks a soft shadow in
-/// light mode and a tinted border in dark mode so the card retains shape
-/// against the dark background.
 class SettingsSectionCard extends StatelessWidget {
   const SettingsSectionCard({required this.child, super.key});
 
@@ -29,7 +26,6 @@ class SettingsSectionCard extends StatelessWidget {
   }
 }
 
-/// Section header (the small all-caps label above each section card).
 class SettingsSectionHeader extends StatelessWidget {
   const SettingsSectionHeader({required this.label, super.key});
 
@@ -64,7 +60,6 @@ class SettingsTileDivider extends StatelessWidget {
   }
 }
 
-/// Pill-shaped trailing label (e.g. the current text-size label).
 class SettingsTrailingPill extends StatelessWidget {
   const SettingsTrailingPill({required this.label, super.key});
 
@@ -91,8 +86,6 @@ class SettingsTrailingPill extends StatelessWidget {
   }
 }
 
-/// One row inside a `SettingsSectionCard` — leading icon block, label, and
-/// optional trailing widget.
 class SettingsTile extends StatelessWidget {
   const SettingsTile({
     required this.label,
@@ -156,7 +149,6 @@ class SettingsTile extends StatelessWidget {
   }
 }
 
-/// Compact EN/FR segmented switch.
 class LanguageToggle extends StatelessWidget {
   const LanguageToggle({
     required this.currentCode,
@@ -240,7 +232,6 @@ class _LangBtn extends StatelessWidget {
   }
 }
 
-/// Profile card at the top of the settings screen.
 class SettingsProfileCard extends StatelessWidget {
   const SettingsProfileCard({
     required this.name,

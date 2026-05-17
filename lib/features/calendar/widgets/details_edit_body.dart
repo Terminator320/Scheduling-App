@@ -22,9 +22,6 @@ import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
-/// Bundle of `TextEditingController`s the shell owns and forwards to the
-/// edit body. Keeping these in the shell means the body can be a stateless
-/// `ConsumerWidget` while the lifecycle stays tied to the sheet's mount.
 class DetailsEditControllers {
   const DetailsEditControllers({
     required this.title,
@@ -47,12 +44,6 @@ class DetailsEditControllers {
   final TextEditingController materials;
 }
 
-/// Editable body of `EventDetailsSheet`. Stateless w.r.t. UI primitives —
-/// receives the shell's controllers via [controllers] and dispatches every
-/// other change through [eventDetailsControllerProvider].
-///
-/// `onClose` is wired by the shell to `Navigator.pop`. `onSaved` receives
-/// the saved record so the shell can pop with it as the result.
 class DetailsEditBody extends ConsumerWidget {
   const DetailsEditBody({
     required this.appointment,
@@ -364,10 +355,6 @@ class DetailsEditBody extends ConsumerWidget {
   }
 }
 
-/// Slice-watching child so photo add/remove (which churns `existingImages` /
-/// `newImages` repeatedly) doesn't rebuild the entire form. The rest of the
-/// edit body legitimately reads almost every state field so the parent's
-/// broad watch stays — see commit history for the analysis.
 class _EditPhotosSection extends ConsumerWidget {
   const _EditPhotosSection({required this.appointment});
 

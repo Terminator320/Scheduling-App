@@ -3,9 +3,6 @@ import 'package:flutter/widgets.dart';
 import 'package:scheduling/core/errors/failure.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 
-/// Where in the auth flow a failure surfaced. Affects messaging — for example
-/// a `userNotFound` during reauthentication should ask the user to log in
-/// again, while during login it should say "no account with this email."
 enum AuthErrorContext {
   login,
   register,
@@ -15,13 +12,6 @@ enum AuthErrorContext {
   general,
 }
 
-/// Sealed family of typed auth failures. Each variant maps 1:1 to a
-/// `FirebaseAuthException.code` (see `AuthErrorMapper`).
-///
-/// Extends `Failure` so the same value can flow through `AppErrorListener`
-/// and through screen-level banner state. Screens that need context-specific
-/// strings call `toLocalizedMessageInContext`; the default
-/// `toLocalizedMessage` (general context) is what `AppErrorListener` uses.
 sealed class AuthFailure extends Failure {
   const AuthFailure();
 
@@ -60,8 +50,6 @@ class AuthFailureUserNotFound extends AuthFailure {
       : c.l10n.noAccountFoundWithThisEmail;
 }
 
-/// Covers Firebase's three "bad password" codes:
-/// `wrong-password`, `invalid-credential`, `INVALID_LOGIN_CREDENTIALS`.
 class AuthFailureWrongCredentials extends AuthFailure {
   const AuthFailureWrongCredentials();
   @override
@@ -129,11 +117,6 @@ class AuthFailureUnknown extends AuthFailure {
       c.l10n.somethingWentWrongPleaseTryAgain;
 }
 
-/// Account-enumeration neutralization for the password-reset flow:
-/// returns `null` for "this email isn't registered" style failures so the UI
-/// shows the same neutral "check your inbox" message regardless of whether
-/// the account exists. Mirrors the original
-/// `AuthErrorHandler.getPasswordResetRequestMessage` behavior verbatim.
 extension AuthFailureForgotPassword on AuthFailure {
   String? toForgotPasswordMessage(BuildContext context) {
     return switch (this) {

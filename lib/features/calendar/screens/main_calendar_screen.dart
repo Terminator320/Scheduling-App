@@ -79,14 +79,25 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     final failure = _uploadNotifier?.latestFailure.value;
     if (failure == null || !mounted) return;
     final appointmentId = failure.appointmentId;
-    // `maybeOf` matches notice_listener.dart — if no ScaffoldMessenger is in
-    // the tree (e.g. mid-route transition), silently drop the SnackBar
-    // rather than throwing.
+    final scheme = Theme.of(context).colorScheme;
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(
-        content: Text(context.l10n.photoUploadFailedSnackbar),
+        backgroundColor: scheme.errorContainer,
+        content: Row(
+          children: [
+            Icon(Icons.error_outline, color: scheme.onErrorContainer, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                context.l10n.photoUploadFailedSnackbar,
+                style: TextStyle(color: scheme.onErrorContainer),
+              ),
+            ),
+          ],
+        ),
         action: SnackBarAction(
           label: context.l10n.open,
+          textColor: scheme.onErrorContainer,
           onPressed: () async {
             final appointment = await ref
                 .read(appointmentsRepositoryProvider)
@@ -116,8 +127,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     });
   }
 
-  /// Precomputed once per `build()` (see `_buildDayIndex`); each calendar
-  /// `eventLoader` lookup is then O(1) instead of O(appointments × cells).
   Map<DateTime, List<AppointmentRecord>>? _dayIndex;
 
   Map<DateTime, List<AppointmentRecord>> _buildDayIndex(
@@ -154,9 +163,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    // Employees query by `employeeIds arrayContains theirId` + the same
-    // startTime range so the Firestore `isAssignedEmployee` rule accepts the
-    // listener and the query stays bounded to the visible month.
     final myAppointmentsKey = (
       employeeId: widget.employeeId,
       range: _appointmentRange,
@@ -165,10 +171,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         ? ref.watch(appointmentsInRangeProvider(_appointmentRange))
         : ref.watch(myAppointmentsProvider(myAppointmentsKey));
 
-    // Surface stream errors via a one-shot notice on the transition into
-    // error (rather than firing on every rebuild). Loading→error and
-    // data→error both qualify; error→error doesn't (would re-notify on
-    // every retry frame).
     void onAsyncChange(
       AsyncValue<List<AppointmentRecord>>? previous,
       AsyncValue<List<AppointmentRecord>> next,
@@ -194,8 +196,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       data: (data) => data,
       loading: () => const <AppointmentRecord>[],
       error: (err, stack) {
-        // The user-facing notice is fired via `ref.listen` above. Keep the
-        // Crashlytics log here so backend observability still has a trail.
         ref.read(loggerProvider).warn('appointments stream error', err, stack);
         return const <AppointmentRecord>[];
       },

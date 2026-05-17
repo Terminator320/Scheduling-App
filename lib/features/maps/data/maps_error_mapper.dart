@@ -4,9 +4,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 import 'package:scheduling/features/maps/domain/maps_failure.dart';
 
-/// Maps anything thrown by a `cloud_functions` callable into the typed
-/// `MapsFailure` family so consumers can route through
-/// `noticeServiceProvider.error(failure.toLocalizedMessage(context))`.
 class MapsErrorMapper {
   const MapsErrorMapper._();
 

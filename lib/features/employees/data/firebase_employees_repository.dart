@@ -15,9 +15,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
 
   @override
   Stream<List<EmployeeRecord>> watchAllUsers() {
-    // Powers the appointment colour map — must include historic users (incl.
-    // disabled), so no status filter. The limit caps bandwidth on large teams;
-    // single-field orderBy uses Firestore's auto-built index.
     return _users
         .orderBy('name')
         .limit(500)
@@ -119,6 +116,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       'email': normalizedEmail,
       'phone': phone.trim(),
       'colorValue': colorValue,
+      'updatedAt': FieldValue.serverTimestamp(),
     };
 
     if (isAdmin != null) {
@@ -137,9 +135,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   Future<InvitedEmployeeMatch?> findInvitedEmployeeByEmail(String email) async {
     final normalizedEmail = email.trim().toLowerCase();
 
-    // Admins can also be invited (e.g. admin onboarding), so the query has to
-    // include both roles. Status stays 'invited' — that's the gate that
-    // distinguishes a still-pending row from one already activated.
     final result = await _users
         .where('email', isEqualTo: normalizedEmail)
         .where('role', whereIn: ['employee', 'admin'])
@@ -173,17 +168,27 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     required String docId,
     required String uid,
   }) async {
-    await _users.doc(docId).update({'uid': uid, 'status': 'active'});
+    await _users.doc(docId).update({
+      'uid': uid,
+      'status': 'active',
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   @override
   Future<void> deactivateEmployee(String docId) async {
-    await _users.doc(docId).update({'status': 'disabled'});
+    await _users.doc(docId).update({
+      'status': 'disabled',
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   @override
   Future<void> reactivateEmployee(String docId) async {
-    await _users.doc(docId).update({'status': 'active'});
+    await _users.doc(docId).update({
+      'status': 'active',
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   @override
@@ -197,8 +202,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   Stream<String> watchUserStatus(String uid) => _watchUserField(uid, 'status');
 
   Stream<String> _watchUserField(String uid, String field) {
-    // Invited employees (created by admin before they register) have uid: ''
-    // in Firestore. An empty uid would match all invited docs, so guard early.
     if (uid.isEmpty) return Stream.value('');
     return _users.where('uid', isEqualTo: uid).limit(1).snapshots().map((
       snapshot,

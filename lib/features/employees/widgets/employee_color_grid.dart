@@ -141,8 +141,6 @@ class _SwatchButton extends StatelessWidget {
           child: isSelected
               ? Icon(
                   Icons.check,
-                  // Pick from the swatch luminance so light colors don't
-                  // disappear (yellow, light green, white).
                   color:
                       ThemeData.estimateBrightnessForColor(color) ==
                           Brightness.dark

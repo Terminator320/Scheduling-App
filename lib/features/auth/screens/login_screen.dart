@@ -23,8 +23,6 @@ import 'package:scheduling/shared/widgets/form_helpers.dart';
 class Login extends ConsumerStatefulWidget {
   const Login({super.key, this.authService});
 
-  // Optional injection for widget tests. Production wiring still defaults to
-  // `AuthService()` so call sites don't change.
   final AuthService? authService;
 
   @override
@@ -85,8 +83,6 @@ class _LoginState extends ConsumerState<Login>
   }
 
   void _onFieldChanged() {
-    // Only re-validate on every keystroke after the first submit attempt,
-    // so errors don't flash before the user has had a chance to fill the form.
     if (_submitted) _validate();
     if (_bannerError != null || _bannerSuccess != null) {
       setState(() {
@@ -139,9 +135,6 @@ class _LoginState extends ConsumerState<Login>
 
       final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
 
-      // CLAUDE.md invariant: only `status == 'active'` users sign in. Anything
-      // else (disabled, invited, malformed) is rejected with the same UX as a
-      // disabled account.
       if (!employee.isActive) {
         await _authService.signOut();
         if (!mounted) return;
@@ -152,8 +145,6 @@ class _LoginState extends ConsumerState<Login>
         return;
       }
 
-      // Fire-and-forget: cache miss on the next cold start just falls through
-      // to SplashScreen, so we don't block navigation on a write failure.
       unawaited(AuthCache().save(employee));
 
       Navigator.pushReplacementNamed(
@@ -309,7 +300,6 @@ class _LoginState extends ConsumerState<Login>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Logo
                 FadeSlideEntrance(
                   animation: animations[0],
                   child: Container(
@@ -358,7 +348,6 @@ class _LoginState extends ConsumerState<Login>
                   child: _buildBanner(textTheme),
                 ),
                 const SizedBox(height: AppSpacing.sp16),
-                // Email field
                 FadeSlideEntrance(
                   animation: animations[2],
                   child: AnimatedFormFieldWrapper(
@@ -389,7 +378,6 @@ class _LoginState extends ConsumerState<Login>
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sp16),
-                // Password field
                 FadeSlideEntrance(
                   animation: animations[3],
                   child: AnimatedFormFieldWrapper(
@@ -447,7 +435,6 @@ class _LoginState extends ConsumerState<Login>
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sp24),
-                // Sign In button
                 FadeSlideEntrance(
                   animation: animations[5],
                   child: AnimatedLoadingButton(
@@ -457,7 +444,6 @@ class _LoginState extends ConsumerState<Login>
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sp16),
-                // Bottom links row
                 FadeSlideEntrance(
                   animation: animations[6],
                   child: Row(

@@ -2,11 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:scheduling/features/auth/data/auth_cache.dart';
+import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 
 class AuthService {
-  // Optional injection allows tests to pass fakes without hitting Firebase.
   AuthService({
     FirebaseAuth? firebaseAuth,
     EmployeesRepository? employeesRepository,
@@ -46,7 +46,6 @@ class AuthService {
     return _auth.sendPasswordResetEmail(email: email.trim().toLowerCase());
   }
 
-  // Kept for backwards compatibility with existing call sites.
   Future<void> sendResetPassword(String email) {
     return sendPasswordResetEmail(email);
   }
@@ -55,9 +54,6 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    // /users is gated by isSignedIn() — register first, look up the invite
-    // after auth, and roll back the auth account if no invite is found so it
-    // doesn't orphan and block re-signup with the same email.
     final credential = await register(
       email: email.trim().toLowerCase(),
       password: password.trim(),
@@ -73,10 +69,7 @@ class AuthService {
 
     if (invitedEmployee == null) {
       await credential.user?.delete();
-      throw FirebaseAuthException(
-        code: 'not-authorized',
-        message: 'This email was not added by the admin.',
-      );
+      throw const AuthFailureNotAuthorized();
     }
 
     await _employees.activateEmployee(
@@ -88,9 +81,6 @@ class AuthService {
   }
 
   Future<void> signOut() async {
-    // Sign out remote first; the local cache is only useful when it matches a
-    // signed-in `uid`, so clearing it unconditionally in `finally` is safe and
-    // prevents a desynced "no remote user, cached uid" state on next launch.
     try {
       await _auth.signOut();
     } finally {

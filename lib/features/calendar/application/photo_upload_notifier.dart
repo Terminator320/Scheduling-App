@@ -15,13 +15,9 @@ class PhotoUploadFailure {
   bool get hasErrors => failedCount > 0 || tooLargeFileNames.isNotEmpty;
 }
 
-/// Tracks background photo-upload failures across the app. Held as a single
-/// instance via Riverpod so the upload pipeline can report from anywhere
-/// while the calendar screen listens via `latestFailure` for the snackbar.
 class PhotoUploadNotifier {
   PhotoUploadNotifier();
 
-  /// Fires whenever a new failure arrives.
   final ValueNotifier<PhotoUploadFailure?> latestFailure = ValueNotifier(null);
 
   final Map<String, PhotoUploadFailure> _failures = {};

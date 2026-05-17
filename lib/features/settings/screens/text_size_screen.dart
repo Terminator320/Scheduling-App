@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/l10n/app_localizations.dart';
 
 class TextSizeScreen extends StatefulWidget {
   const TextSizeScreen({super.key});
@@ -12,11 +13,11 @@ class TextSizeScreen extends StatefulWidget {
 }
 
 class _TextSizeScreenState extends State<TextSizeScreen> {
-  static const _options = [
-    ('Small', 0.8),
-    ('Medium', 1.0),
-    ('Large', 1.2),
-    ('Extra Large', 1.4),
+  List<(String, double)> _buildOptions(AppLocalizations l10n) => [
+    (l10n.textScaleSmall, 0.8),
+    (l10n.textScaleMedium, 1.0),
+    (l10n.textScaleLarge, 1.2),
+    (l10n.textScaleXL, 1.4),
   ];
 
   late double _selected;
@@ -50,13 +51,12 @@ class _TextSizeScreenState extends State<TextSizeScreen> {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.sp16),
         children: [
-          // Preview card
           _Card(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'PREVIEW',
+                  context.l10n.previewText.toUpperCase(),
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                     letterSpacing: 1,
@@ -97,27 +97,31 @@ class _TextSizeScreenState extends State<TextSizeScreen> {
           ),
           const SizedBox(height: AppSpacing.sp12),
 
-          // Size options
-          _Card(
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-            child: Column(
-              children: [
-                for (int i = 0; i < _options.length; i++) ...[
-                  _SizeRow(
-                    label: _options[i].$1,
-                    scale: _options[i].$2,
-                    isSelected: (_selected - _options[i].$2).abs() < 0.01,
-                    onTap: () => setState(() => _selected = _options[i].$2),
-                  ),
-                  if (i < _options.length - 1)
-                    const Divider(height: 1, indent: 52),
-                ],
-              ],
-            ),
+          Builder(
+            builder: (context) {
+              final options = _buildOptions(context.l10n);
+              return _Card(
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                child: Column(
+                  children: [
+                    for (int i = 0; i < options.length; i++) ...[
+                      _SizeRow(
+                        label: options[i].$1,
+                        scale: options[i].$2,
+                        isSelected: (_selected - options[i].$2).abs() < 0.01,
+                        onTap: () => setState(() => _selected = options[i].$2),
+                      ),
+                      if (i < options.length - 1)
+                        const Divider(height: 1, indent: 52),
+                    ],
+                  ],
+                ),
+              );
+            },
           ),
           const SizedBox(height: 6),
           Text(
-            'Applies across the entire app',
+            context.l10n.textSizeAppliesAppWide,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall?.copyWith(
               color: scheme.onSurfaceVariant,
@@ -149,8 +153,6 @@ class _TextSizeScreenState extends State<TextSizeScreen> {
   }
 }
 
-// ── Card ──────────────────────────────────────────────────────────────────────
-
 class _Card extends StatelessWidget {
   const _Card({required this.child, this.padding});
 
@@ -174,8 +176,6 @@ class _Card extends StatelessWidget {
     );
   }
 }
-
-// ── Size Row ──────────────────────────────────────────────────────────────────
 
 class _SizeRow extends StatelessWidget {
   const _SizeRow({

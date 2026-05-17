@@ -3,11 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 
-/// View-mode action bar at the bottom of the appointment-details sheet.
-/// Shows "Mark as Done" (only for today's bookings), a "Completed" indicator
-/// when already done, and "Cancel Appointment" with the cancellation hint
-/// — except when the appointment is already cancelled, in which case the
-/// whole bar collapses to nothing.
 class DetailsActionBar extends StatelessWidget {
   const DetailsActionBar({
     required this.isToday,

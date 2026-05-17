@@ -76,8 +76,6 @@ class EmployeePicker extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 8,
                         fontWeight: FontWeight.w700,
-                        // Choose initials contrast from the employee color so
-                        // light/yellow swatches stay readable.
                         color:
                             ThemeData.estimateBrightnessForColor(
                                   employee.color,

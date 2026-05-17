@@ -7,12 +7,6 @@ import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
-/// Pill-vs-field address input used by the appointment sheets.
-///
-/// When a client is selected and the user hasn't switched to a custom
-/// address, render the read-only "client's address" pill with a
-/// "Change address" button. Otherwise render the autocomplete field with
-/// an optional "Use client's address" link to revert.
 class AppointmentAddressField extends StatelessWidget {
   const AppointmentAddressField({
     required this.selectedClient,

@@ -2,8 +2,6 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'address_suggestion.freezed.dart';
 
-/// One Google Places autocomplete suggestion. The `placeId` is what we
-/// pass back to `getPlaceDetails` to fetch the full address breakdown.
 @freezed
 abstract class AddressSuggestion with _$AddressSuggestion {
   const factory AddressSuggestion({

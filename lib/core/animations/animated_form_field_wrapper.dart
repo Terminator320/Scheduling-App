@@ -48,7 +48,6 @@ class _AnimatedFormFieldWrapperState extends State<AnimatedFormFieldWrapper>
     return AnimatedBuilder(
       animation: _shake,
       builder: (context, child) {
-        // Damped sine: a small left-right nudge that fades out quickly.
         final t = _shake.value;
         final dx = t == 0
             ? 0.0

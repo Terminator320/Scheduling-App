@@ -95,14 +95,14 @@ All Firebase instances (Auth, Firestore, Storage) come from `lib/core/providers/
 
 - **Repositories** speak Firestore. They take and return domain models. All Firestore reads/writes go through a repository.
 - **Services** wrap non-CRUD async work: `AuthService` (account creation with invitation enforcement), `AppointmentImageUploadService` (multi-image Firebase Storage), `ImagePickerService` / `ImageCompressService`.
-- **NoticeService** is a broadcast stream of `AppNotice` events. Any code that needs to show a toast calls `ref.read(noticeServiceProvider).success(...)` or `.error(...)`. `NoticeListener` (inside `MaterialApp.builder`) renders them.
+- **NoticeService** is a broadcast stream of `AppNotice` events. Any code that needs to show a toast calls `ref.read(noticeServiceProvider).success(...)` or `.error(...)`. `NoticeListener` (inside `MaterialApp.builder`) renders them as animated notices that slide in from the **top** of the screen via `Overlay`, auto-dismiss after a timeout, and can be manually dismissed with ×.
 
 ### Error Handling
 
 Domain-layer `Failure` subtypes (sealed, one per feature) carry localised messages. Each family lives at `lib/features/<f>/domain/<f>_failure.dart` and implements `toLocalizedMessage(BuildContext)`:
 
 - **`AuthFailure`** — `AuthFailureWrongPassword`, `AuthFailureUserDisabled`, `AuthFailureNotInvited`, etc. Mapped from `FirebaseAuthException` via `AuthErrorMapper`.
-- **`EmployeesFailure`** — `EmployeesFailureEmailAlreadyExists` (raised by `firebase_employees_repository` on duplicate-email writes). Surfaced as both a field-level error under the email input and a banner notice in `employee_form_sheet`.
+- **`EmployeesFailure`** — `EmployeesFailureEmailAlreadyExists` (raised by `firebase_employees_repository` on duplicate-email writes). Surfaced as a field-level error under the email input only — no banner notice, since the field error already describes the problem precisely.
 - **`MapsFailure`** — `MapsFailureNetwork` and `MapsFailureParse` (raised by `google_places_repository`). The `cause` field captures the underlying error for Crashlytics, but `toLocalizedMessage` never echoes it back to the user (response bodies and HTTP error payloads stay out of the UI surface).
 
 UI catches the typed failure, calls `failure.toLocalizedMessage(context)`, and passes the result to `noticeServiceProvider.error(...)`. Repositories must not throw raw `Exception('...')` — the string would leak into the notice surface and Crashlytics.
@@ -254,4 +254,6 @@ Delete scaffolding exists for testing only — **not production-ready**:
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (196 tests as of 2026-05-11).
+Run: `flutter test` (306 tests as of 2026-05-18).
+
+Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.

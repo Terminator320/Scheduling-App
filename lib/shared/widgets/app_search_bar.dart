@@ -1,4 +1,3 @@
-// lib/shared/widgets/app_search_bar.dart
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 

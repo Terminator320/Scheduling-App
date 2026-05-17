@@ -2,10 +2,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 
-/// Translates a `FirebaseAuthException` (or any `Object` from a `try/catch`)
-/// into an `AuthFailure`. Centralizes every Firebase code → typed-failure
-/// mapping the auth feature cares about. Anything unrecognised becomes
-/// `AuthFailureUnknown`.
 class AuthErrorMapper {
   const AuthErrorMapper._();
 
@@ -24,7 +20,6 @@ class AuthErrorMapper {
         return const AuthFailureUserDisabled();
       case 'user-not-found':
         return const AuthFailureUserNotFound();
-      // Firebase may return any of these three for a wrong password.
       case 'wrong-password':
       case 'invalid-credential':
       case 'INVALID_LOGIN_CREDENTIALS':

@@ -1,4 +1,3 @@
-// lib/shared/widgets/skeleton_loader.dart
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 

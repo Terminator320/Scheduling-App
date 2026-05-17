@@ -18,8 +18,6 @@ class ForgotPassword extends StatefulWidget {
 
   final String? initialEmail;
 
-  // Optional injection for widget tests. Production wiring still defaults to
-  // `AuthService()` so call sites don't change.
   final AuthService? authService;
 
   @override
@@ -86,10 +84,6 @@ class _ForgotPasswordState extends State<ForgotPassword>
       await _authService.sendPasswordResetEmail(email);
     } catch (error) {
       if (!mounted) return;
-      // Keep account-existence errors private while still surfacing request
-      // throttling / network errors. AuthFailureForgotPassword returns null
-      // for "this email isn't registered" cases so the UI shows the same
-      // neutral "check your inbox" success message regardless.
       final failure = AuthErrorMapper.map(error);
       systemError = failure.toForgotPasswordMessage(context);
     }
@@ -105,7 +99,6 @@ class _ForgotPasswordState extends State<ForgotPassword>
         shouldReplayEntrance = true;
       }
     });
-    // Replay the stagger so the success view animates in fresh.
     if (shouldReplayEntrance) {
       _entrance.controller.forward(from: 0);
     }
@@ -116,7 +109,6 @@ class _ForgotPasswordState extends State<ForgotPassword>
       _emailSent = false;
       _errorMessage = '';
     });
-    // Replay entrance so the form animates back in when switching views.
     _entrance.controller.forward(from: 0);
   }
 

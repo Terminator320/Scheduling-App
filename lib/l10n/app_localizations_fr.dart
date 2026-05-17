@@ -57,6 +57,36 @@ class AppLocalizationsFr extends AppLocalizations {
   String get invited => 'Invité';
 
   @override
+  String get confirmed => 'Confirmé';
+
+  @override
+  String get pending => 'En attente';
+
+  @override
+  String get cancelled => 'Annulé';
+
+  @override
+  String get disabled => 'Désactivé';
+
+  @override
+  String get inProgress => 'En cours';
+
+  @override
+  String get textScaleSmall => 'Petit';
+
+  @override
+  String get textScaleMedium => 'Moyen';
+
+  @override
+  String get textScaleLarge => 'Grand';
+
+  @override
+  String get textScaleXL => 'Très grand';
+
+  @override
+  String get textSizeAppliesAppWide => 'S\'applique à toute l\'application';
+
+  @override
   String get settings => 'Paramètres';
 
   @override

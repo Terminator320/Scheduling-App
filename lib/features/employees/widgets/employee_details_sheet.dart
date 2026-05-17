@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // TODO(pre-ship): Remove (only needed for delete)
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
@@ -59,9 +60,11 @@ class _EmployeeDetailsSheetState extends ConsumerState<EmployeeDetailsSheet> {
           .deleteEmployee(widget.employee.id);
       if (!mounted) return;
       Navigator.pop(context, 'deleted');
-    } catch (_) {
+    } catch (e, st) {
+      ref.read(loggerProvider).warn('deleteEmployee failed', e, st);
       if (!mounted) return;
       setState(() => _isDeleting = false);
+      ref.read(noticeServiceProvider).error(context.l10n.somethingWentWrong);
     }
   }
 
@@ -109,12 +112,11 @@ class _EmployeeDetailsSheetState extends ConsumerState<EmployeeDetailsSheet> {
       }
       if (!mounted) return;
       Navigator.pop(context, isDisabled ? 'enabled' : 'disabled');
-    } catch (_) {
+    } catch (e, st) {
+      ref.read(loggerProvider).warn('toggleEmployeeStatus failed', e, st);
       if (!mounted) return;
       setState(() => _isDisabling = false);
-      ref
-          .read(noticeServiceProvider)
-          .error(context.l10n.somethingWentWrong);
+      ref.read(noticeServiceProvider).error(context.l10n.somethingWentWrong);
     }
   }
 
@@ -170,7 +172,9 @@ class _EmployeeDetailsSheetState extends ConsumerState<EmployeeDetailsSheet> {
             _DetailField(
               icon: Icons.phone_outlined,
               label: context.l10n.phoneNumber,
-              value: widget.employee.phone.isEmpty ? '-' : widget.employee.phone,
+              value: widget.employee.phone.isEmpty
+                  ? '-'
+                  : widget.employee.phone,
             ),
             const SizedBox(height: 12),
             _DetailField(
@@ -256,10 +260,10 @@ class _EmployeeDetailsSheetState extends ConsumerState<EmployeeDetailsSheet> {
                 ),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(double.infinity, 48),
-                  backgroundColor:
-                      isDisabled ? null : theme.colorScheme.error,
-                  foregroundColor:
-                      isDisabled ? null : theme.colorScheme.onError,
+                  backgroundColor: isDisabled ? null : theme.colorScheme.error,
+                  foregroundColor: isDisabled
+                      ? null
+                      : theme.colorScheme.onError,
                 ),
               ),
             ],

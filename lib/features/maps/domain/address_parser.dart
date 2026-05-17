@@ -1,17 +1,6 @@
-/// Pure-Dart helpers for splitting an address string into structured
-/// pieces and stitching them back together. No Flutter / Firebase imports
-/// — exercised directly by `test/features/maps/address_parser_test.dart`.
 class AddressParser {
   const AddressParser._();
 
-  /// Splits a raw address into apt + street parts when an apt/unit/suite
-  /// marker is detected. Returns `null` if no apt portion is found.
-  ///
-  /// Recognized shapes (case-insensitive):
-  /// 1. `"Apt 12 - 1245 Main St"` (saved canonical form)
-  /// 2. `"apt|apartment|unit|suite|ste|# 12, 1245 Main"` (labeled prefix)
-  /// 3. `"12 - 1245 Main"` (bare-dash)
-  /// 4. `"1245 Rue de Bleury #3406, Montréal, QC"` (trailing unit)
   static AptAddress? splitApt(String rawAddress) {
     final value = rawAddress.trim();
     if (value.isEmpty) return null;
@@ -65,9 +54,6 @@ class AddressParser {
     return null;
   }
 
-  /// Re-formats an address with the apt prefixed in the "12-1245 Main, ..."
-  /// canonical form. Strips any embedded "apt/unit/#" tokens already inside
-  /// `street` so the apt isn't duplicated when the user edits the field.
   static String combineAptAndStreet(String street, String apt) {
     final cleanStreet = _stripEmbeddedAptToken(street);
     final cleanApt = apt.trim().replaceAll(RegExp('^#+'), '');
@@ -81,10 +67,6 @@ class AddressParser {
     return '$cleanApt-$firstLine$rest';
   }
 
-  /// Re-formats an address as "1245 Main #12, Montréal, QC" — the display
-  /// form shown inside the autocomplete field after a Places selection and
-  /// when loading an existing stored value. Maps and screen readers handle
-  /// this layout more naturally than the canonical apt-prefix form.
   static String formatForDisplay(String street, String apt) {
     final cleanStreet = _stripEmbeddedAptToken(street);
     final cleanApt = apt.trim().replaceAll(RegExp('^#+'), '');
@@ -98,19 +80,12 @@ class AddressParser {
     return '$firstLine #$cleanApt$rest';
   }
 
-  /// Convenience for converting a stored canonical address ("12-1245 Main")
-  /// to the display form ("1245 Main #12"). Returns the input unchanged when
-  /// no apt prefix is detected.
   static String canonicalToDisplay(String stored) {
     final parts = splitApt(stored);
     if (parts == null) return stored;
     return formatForDisplay(parts.street, parts.apt);
   }
 
-  /// Inverse of [canonicalToDisplay]: converts a free-form field value
-  /// (display form, canonical, or untouched user text) to the canonical
-  /// apt-prefix form used in Firestore. Returns the trimmed input unchanged
-  /// when no apt is detected.
   static String toCanonical(String text) {
     final trimmed = text.trim();
     final parts = splitApt(trimmed);
@@ -130,9 +105,6 @@ class AddressParser {
         .trim();
   }
 
-  /// Parses a free-form address string into the structured fields the
-  /// client form populates. All fields are nullable — `null` means "no
-  /// value extracted, leave the existing controller value alone".
   static ParsedAddressFields parse(String rawAddress) {
     final apt = splitApt(rawAddress);
     final value = (apt?.street ?? rawAddress).trim();
@@ -195,15 +167,12 @@ class AddressParser {
   }
 }
 
-/// Apt + street pair returned by `AddressParser.splitApt`.
 class AptAddress {
   const AptAddress({required this.apt, required this.street});
   final String apt;
   final String street;
 }
 
-/// Inferred pieces of a free-form address. Null means "couldn't extract,
-/// leave the caller's existing value alone".
 class ParsedAddressFields {
   const ParsedAddressFields({
     this.apt,

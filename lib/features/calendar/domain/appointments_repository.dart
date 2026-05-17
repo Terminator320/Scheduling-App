@@ -2,13 +2,7 @@ import 'package:scheduling/features/calendar/domain/models/appointment_image.dar
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
-/// Repository contract for the `appointments` collection. Pure Dart.
-///
-/// `add` and `update` MUST set `createdAt` / `updatedAt` to server timestamps
-/// at the implementation boundary (CLAUDE.md invariant).
 abstract class AppointmentsRepository {
-  /// Mints a new doc ID without writing — used so the photo uploader can
-  /// patch a freshly-created appointment in the background.
   String newDocId();
 
   Future<AppointmentRecord?> getAppointmentById(String id);
@@ -31,22 +25,15 @@ abstract class AppointmentsRepository {
 
   Stream<List<AppointmentRecord>> watchAll();
 
-  /// Streams only the appointments whose `startTime` falls inside `range`.
-  /// Used by the calendar so we never page the entire collection.
   Stream<List<AppointmentRecord>> watchInRange(AppointmentDateRange range);
 
   Stream<List<AppointmentRecord>> watchHistory();
 
-  /// Same as [watchInRange] but scoped to one employee via
-  /// `employeeIds arrayContains employeeId`. Required for the Firestore
-  /// `isAssignedEmployee` rule to accept the listener.
   Stream<List<AppointmentRecord>> watchForEmployeeInRange(
     String employeeId,
     AppointmentDateRange range,
   );
 
-  /// Returns the subset of `candidates` who already have a conflicting
-  /// appointment in `[start, end)`. Used by the assignment picker.
   Future<List<EmployeeRecord>> findBusyEmployees({
     required List<EmployeeRecord> candidates,
     required DateTime start,

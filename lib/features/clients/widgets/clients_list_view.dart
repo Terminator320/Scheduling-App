@@ -16,9 +16,6 @@ import 'package:scheduling/shared/widgets/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/fade_in_item.dart';
 import 'package:scheduling/shared/widgets/skeleton_loader.dart';
 
-/// Body of the clients list mode: skeleton → list + search → empty state.
-/// Watches `clientsStreamProvider` so the same Firestore listener serves
-/// every screen that watches it (perf #1, dedup listeners).
 class ClientsListView extends ConsumerStatefulWidget {
   const ClientsListView({
     required this.searchQuery,
@@ -114,8 +111,6 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
         return Center(child: Text(context.l10n.somethingWentWrong));
       },
       data: (_) {
-        // ref.watch the family provider so the filter recomputes when the
-        // underlying list or query changes — single source of truth.
         final filtered = ref.watch(filteredClientsProvider(widget.searchQuery));
         final query = widget.searchQuery.trim();
 

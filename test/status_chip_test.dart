@@ -1,9 +1,19 @@
 // test/status_chip_test.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scheduling/l10n/app_localizations.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';
 
-Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
+Widget _wrap(Widget child) => MaterialApp(
+  localizationsDelegates: const [
+    AppLocalizations.delegate,
+    GlobalMaterialLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+  ],
+  supportedLocales: AppLocalizations.supportedLocales,
+  home: Scaffold(body: child),
+);
 
 void main() {
   testWidgets('StatusChip renders Confirmed label', (tester) async {
@@ -50,9 +60,7 @@ void main() {
 
   testWidgets('StatusChip renders Disabled label', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(body: StatusChip(status: AppointmentStatus.disabled)),
-      ),
+      _wrap(const StatusChip(status: AppointmentStatus.disabled)),
     );
     expect(find.text('Disabled'), findsOneWidget);
   });
@@ -73,6 +81,12 @@ void main() {
     // the pill width by setting a large textScaler.
 
     Widget chipAt(double scale) => MaterialApp(
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
       home: MediaQuery(
         data: MediaQueryData(textScaler: TextScaler.linear(scale)),
         child: const Scaffold(

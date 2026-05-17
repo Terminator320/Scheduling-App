@@ -67,8 +67,6 @@ class _ImageViewerState extends State<ImageViewer> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Backdrop is always the dark scrim, so foreground stays light in both
-    // light and dark themes.
     const foreground = Colors.white;
 
     return Scaffold(
