@@ -4,31 +4,6 @@ import 'package:scheduling/features/calendar/domain/models/appointment_image.dar
 
 part 'appointment_record.freezed.dart';
 
-/// Firestore collection: `appointments`
-///
-/// Example doc shape:
-/// ```json
-/// {
-///   "title": "Kitchen sink leak",
-///   "startTime": Timestamp,
-///   "endTime": Timestamp,
-///   "clientId": "<clients/{id}>",
-///   "clientName": "Acme Inc",
-///   "clientPhone": "+1-514-555-0101",
-///   "employeeIds": ["<users/{id}>", ...],
-///   "employeeNames": ["Jane Doe", ...],
-///   "address": "12-1245 Rue de Bleury, Montréal, QC",
-///   "notes": "Bring 1/2 inch wrench",
-///   "materialsNeeded": "PVC fittings",
-///   "status": "pending",  // 'pending' | 'confirmed' | 'in_progress' | 'done' | 'cancelled'
-///   "pictures": [ AppointmentImage, ... ],
-///   "createdAt": Timestamp,
-///   "updatedAt": Timestamp
-/// }
-/// ```
-///
-/// Employees see only docs where `employeeIds` contains their user doc id —
-/// CLAUDE.md invariant enforced both client-side and in `firestore.rules`.
 @freezed
 abstract class AppointmentRecord with _$AppointmentRecord {
 
@@ -71,8 +46,6 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     );
   }
 
-  /// Serializes for a Firestore `update`. The repository injects
-  /// `createdAt`/`updatedAt` server timestamps where appropriate.
   Map<String, dynamic> toMap() => {
     'title': title,
     'startTime': startTime,
@@ -89,9 +62,6 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     'status': status,
   };
 
-  /// `pending`/`confirmed` get auto-promoted to `in_progress` once the start
-  /// time has passed. Terminal statuses (`done`, `completed`, `cancelled`) are
-  /// always returned verbatim.
   String get displayStatus {
     final s = status.toLowerCase();
     if (s == 'done' || s == 'completed' || s == 'cancelled') return status;
@@ -103,7 +73,6 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     if (value == null) return null;
     if (value is DateTime) return value;
     if (value is String) return DateTime.tryParse(value);
-    // Avoid importing cloud_firestore — check Firestore Timestamp by type name.
     final typeName = value.runtimeType.toString();
     if (typeName == 'Timestamp') {
       // ignore: avoid_dynamic_calls
@@ -127,8 +96,6 @@ abstract class AppointmentRecord with _$AppointmentRecord {
   }
 }
 
-/// Date window used by the calendar to load only the visible month plus a
-/// one-week buffer. Pure Dart so it's testable without Firestore.
 @immutable
 class AppointmentDateRange {
   const AppointmentDateRange({required this.start, required this.end});

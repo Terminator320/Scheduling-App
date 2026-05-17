@@ -56,8 +56,6 @@ Widget formRemoveButton(BuildContext context) {
   return Container(
     padding: const EdgeInsets.all(2),
     decoration: BoxDecoration(
-      // `scrim` is spec'd as a darkening overlay in both light and dark
-      // themes, so a white foreground icon stays readable on top.
       color: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.54),
       shape: BoxShape.circle,
     ),

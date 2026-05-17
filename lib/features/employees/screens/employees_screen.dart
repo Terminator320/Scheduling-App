@@ -177,13 +177,23 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
           ],
         ),
         error: (err, stack) {
-          // TODO(george): remove once the "error loading employees" rules
-          // regression is pinned down — keeps the FirebaseException code
-          // surfaced in logs so we can diagnose remaining permission denials.
           ref
               .read(loggerProvider)
               .warn('employeesStreamProvider error', err, stack);
-          return Center(child: Text(context.l10n.errorLoadingEmployees));
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(context.l10n.errorLoadingEmployees),
+                const SizedBox(height: AppSpacing.sp16),
+                TextButton.icon(
+                  onPressed: () => ref.invalidate(employeesStreamProvider),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: Text(context.l10n.retry),
+                ),
+              ],
+            ),
+          );
         },
         data: (_) {
           final filtered = ref.watch(
@@ -219,8 +229,6 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
                   employee: employee,
                   onTap: () async {
                     _clearSearch();
-                    // Let the search focus state settle before opening the sheet;
-                    // without this the keyboard fights the sheet's drag animation.
                     await Future<void>.delayed(
                       const Duration(milliseconds: 80),
                     );

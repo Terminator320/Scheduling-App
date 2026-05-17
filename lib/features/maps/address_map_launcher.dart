@@ -15,9 +15,6 @@ class AddressMapLauncher {
     final cleanAddress = address.trim();
     if (cleanAddress.isEmpty) return;
 
-    // Maps don't navigate to apartments — strip the apt portion so the route
-    // resolves to the building. The sheet subtitle uses the display form so
-    // the user still sees the apt in "1234 Main #5" shape.
     final navAddress = _stripAptForNav(cleanAddress);
     final navEncoded = Uri.encodeComponent(navAddress);
     final displayAddress = AddressParser.canonicalToDisplay(cleanAddress);
@@ -90,9 +87,28 @@ class AddressMapLauncher {
                       );
 
                       if (!opened && context.mounted) {
+                        final scheme = Theme.of(context).colorScheme;
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text(context.l10n.couldNotOpenMapApp),
+                            backgroundColor: scheme.errorContainer,
+                            content: Row(
+                              children: [
+                                Icon(
+                                  Icons.error_outline,
+                                  color: scheme.onErrorContainer,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    context.l10n.couldNotOpenMapApp,
+                                    style: TextStyle(
+                                      color: scheme.onErrorContainer,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         );
                       }
@@ -108,10 +124,6 @@ class AddressMapLauncher {
   }
 }
 
-/// Returns [address] with any apt/unit prefix stripped — works on both the
-/// canonical storage form (`"5-1234 Main, Montréal"`) and the display form
-/// (`"1234 Main #5, Montréal"`). Returns [address] untouched when no apt is
-/// detected so plain street strings pass through.
 String _stripAptForNav(String address) {
   final parts = AddressParser.splitApt(address);
   return parts?.street ?? address;

@@ -9,9 +9,6 @@ import 'package:scheduling/features/settings/widgets/settings_drawer.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_search_bar.dart';
 
-/// Route entry-point for `/clients`. Dispatches to the appropriate body
-/// widget based on `mode`. Keeps the AppBar + drawer + FAB in one place
-/// while delegating list rendering to feature-specific widgets.
 class ListInformation extends StatefulWidget {
   const ListInformation({
     required this.mode,

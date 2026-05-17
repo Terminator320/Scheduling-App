@@ -44,8 +44,6 @@ const _kLocalizationsDelegates = <LocalizationsDelegate<dynamic>>[
 ];
 
 const bool _useFirebaseEmulator = bool.fromEnvironment('USE_FIREBASE_EMULATOR');
-// Android emulator can't reach the host's loopback at 127.0.0.1 — 10.0.2.2 is
-// the special alias for the host. iOS simulator and desktop builds use 127.0.0.1.
 const String _emulatorHost = String.fromEnvironment(
   'EMULATOR_HOST',
   defaultValue: '10.0.2.2',
@@ -68,13 +66,9 @@ Future<void> main() async {
 
       await dotenv.load(fileName: 'dev/.env');
 
-      // TODO(restructure): swap to DefaultFirebaseOptions.currentPlatform once
-      // `flutterfire configure` has been run on a Mac to add iOS values.
+      // TODO(restructure): swap to DefaultFirebaseOptions.currentPlatform once `flutterfire configure` has been run on a Mac to add iOS values.
       await Firebase.initializeApp(options: DefaultFirebaseOptions.android);
 
-      // Emulator-only path: wire SDKs to localhost before any reads/writes,
-      // and skip Crashlytics + App Check (they call prod endpoints). Toggled
-      // by `flutter run --dart-define=USE_FIREBASE_EMULATOR=true`.
       if (_useFirebaseEmulator) {
         await _wireFirebaseEmulator();
       } else {
@@ -113,16 +107,6 @@ Future<void> main() async {
   );
 }
 
-/// Determines the first screen to show.
-/// - Logged-in user with a valid cache → skip the 3-second splash, verify role
-///   from Firestore (fast — SDK serves from local cache when offline), then go
-///   straight to MainCalendar.
-/// - Otherwise → SplashScreen handles auth resolution as before.
-///
-/// isAdmin is never read from the local cache. The local cache only tells us
-/// whether a Firestore lookup is worth attempting (uid match). The role always
-/// comes from Firestore so that role changes and deactivations take effect on
-/// the very next launch.
 Future<Widget> _resolveHome() async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return const SplashScreen();
@@ -130,9 +114,6 @@ Future<Widget> _resolveHome() async {
   final cached = await AuthCache().loadIfMatch(user.uid);
   if (cached == null) return const SplashScreen();
 
-  // Transient errors (network, Firestore unavailable) shouldn't sign the user
-  // out — silent retry with bounded backoff before falling through to
-  // SplashScreen, which has its own resolution path as a last resort.
   final repo = FirebaseEmployeesRepository(FirebaseFirestore.instance);
   final logger = AppLogger();
   final UserUidMatch? userDoc;
@@ -220,15 +201,33 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _settingsRepository.save(language: code);
   }
 
-  Future<void> _handleAccountDisabled(String message) async {
+  Future<void> _handleAccountDisabled(
+    BuildContext context,
+    String message,
+  ) async {
     if (FirebaseAuth.instance.currentUser == null) return;
+    final scheme = Theme.of(context).colorScheme;
     await AuthService().signOut();
     final nav = _navigatorKey.currentState;
     if (nav != null) {
       unawaited(nav.pushNamedAndRemoveUntil(AppRoutes.login, (_) => false));
     }
     _scaffoldMessengerKey.currentState?.showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(
+        backgroundColor: scheme.errorContainer,
+        content: Row(
+          children: [
+            Icon(Icons.error_outline, color: scheme.onErrorContainer),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(color: scheme.onErrorContainer),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -237,7 +236,10 @@ class _PaulAppState extends ConsumerState<PaulApp> {
       final wasDisabled = prev?.valueOrNull ?? false;
       final isDisabled = next.valueOrNull ?? false;
       if (!wasDisabled && isDisabled) {
-        _handleAccountDisabled(context.l10n.thisAccountHasBeenDisabled);
+        _handleAccountDisabled(
+          context,
+          context.l10n.thisAccountHasBeenDisabled,
+        );
       }
     });
   }

@@ -27,8 +27,6 @@ class _TapScaleState extends State<TapScale> {
 
   @override
   Widget build(BuildContext context) {
-    // Listener is used instead of GestureDetector so the press state is tracked
-    // without consuming the tap gesture from the wrapped button.
     return Listener(
       onPointerDown: (_) => _setPressed(true),
       onPointerUp: (_) => _setPressed(false),

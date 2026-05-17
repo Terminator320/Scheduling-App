@@ -29,13 +29,8 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     };
     if (appointment.id != null) {
-      // Explicit id — caller chose the doc, so a full set() is intended.
       await _appointments.doc(appointment.id).set(data);
     } else {
-      // New doc — let Firestore generate the id via .add() so we never risk
-      // an inadvertent .set() on a pre-existing doc with the same generated
-      // id (collision is astronomically unlikely but .add() makes intent
-      // explicit and future-proofs against defaults added to .toMap()).
       await _appointments.add(data);
     }
   }
@@ -60,8 +55,6 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     });
   }
 
-  /// Mirrors the allowlist in firestore.rules — rejecting locally produces
-  /// a clearer error than the opaque permission-denied the rules would throw.
   static const _allowedStatuses = {
     'pending',
     'confirmed',
@@ -125,9 +118,6 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   @override
   Stream<List<AppointmentRecord>> watchHistory() {
-    // Admin-only view (see Firestore rules + settings_drawer gating). Cap the
-    // listener so a multi-year archive doesn't pull thousands of docs into
-    // memory on every history-screen open.
     return _appointments
         .where('status', whereIn: ['done', 'cancelled'])
         .limit(500)
@@ -166,21 +156,29 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     required DateTime start,
     required DateTime end,
   }) async {
-    final busy = <EmployeeRecord>[];
-    for (final employee in candidates) {
+    if (candidates.isEmpty) return const [];
+
+    final ids = candidates.map((e) => e.id).toList();
+    final busyIds = <String>{};
+
+    for (var i = 0; i < ids.length; i += 30) {
+      final batch = ids.sublist(i, i + 30 < ids.length ? i + 30 : ids.length);
       final snapshot = await _appointments
-          .where('employeeIds', arrayContains: employee.id)
+          .where('employeeIds', arrayContainsAny: batch)
           .where('startTime', isLessThan: Timestamp.fromDate(end))
           .where('endTime', isGreaterThan: Timestamp.fromDate(start))
           .get();
-      if (snapshot.docs.isNotEmpty) busy.add(employee);
+      for (final doc in snapshot.docs) {
+        final empIds = doc.data()['employeeIds'] as List<dynamic>? ?? const [];
+        for (final id in empIds) {
+          if (id is String) busyIds.add(id);
+        }
+      }
     }
-    return busy;
+
+    return candidates.where((e) => busyIds.contains(e.id)).toList();
   }
 
-  /// Converts a domain `AppointmentRecord` into a Firestore-friendly map by
-  /// rewriting `DateTime` fields to `Timestamp` and embedded picture
-  /// `DateTime?` to `Timestamp?`. Domain layer stays pure-Dart.
   Map<String, dynamic> _toFirestoreMap(AppointmentRecord appointment) {
     final base = Map<String, dynamic>.from(appointment.toMap());
     base['startTime'] = Timestamp.fromDate(appointment.startTime);

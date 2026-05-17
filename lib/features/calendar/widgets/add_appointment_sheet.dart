@@ -25,10 +25,6 @@ import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
-/// New-appointment sheet. Thin shell over [AddEventController]: holds the
-/// `TextEditingController`s and the search-debounce `Timer` (UI primitives
-/// whose lifecycle ties to the widget mount/unmount), and reads/dispatches
-/// everything else through the controller.
 class AddEventSheet extends ConsumerStatefulWidget {
   const AddEventSheet({super.key, this.initialDate});
 
@@ -120,8 +116,6 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     );
     if (picked == null || !mounted) return;
     _startTimeController.text = picked.format(context);
-    // Only auto-advance end time if the user hasn't explicitly set it yet,
-    // so a manual end-time choice is never silently overwritten.
     if (!stateBefore.endTimeWasPickedManually) {
       final autoEnd = AppointmentDraftDefaults.defaultEndTime(picked);
       _endTimeController.text = autoEnd.format(context);
@@ -154,9 +148,6 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
   }
 
   Future<void> _submit() async {
-    // Two-pass submit: first attempt checks for busy employees. If a conflict
-    // is found the user confirms, then a second attempt with forceBusy=true
-    // bypasses the conflict check and books over the overlap.
     Future<AddEventSubmitOutcome> attempt({bool forceBusy = false}) =>
         _notifier.submit(
           title: _titleController.text,

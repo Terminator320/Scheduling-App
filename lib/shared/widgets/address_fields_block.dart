@@ -9,8 +9,6 @@ import 'package:scheduling/features/maps/domain/models/address_suggestion.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 
-/// Address search bar plus structured fields (street, city, province, postal
-/// code). Tapping a suggestion fills the four fields from Google Places.
 class AddressFieldsBlock extends StatefulWidget {
   const AddressFieldsBlock({
     required this.streetController, required this.cityController, required this.provinceController, required this.postalCodeController, super.key,
@@ -45,9 +43,6 @@ class _AddressFieldsBlockState extends State<AddressFieldsBlock> {
   List<AddressSuggestion> _suggestions = [];
   bool _isLoading = false;
   String? _serviceError;
-  // Lifecycle mirrors AddressAutocompleteField: lazily generated on first
-  // fetch, discarded after getPlaceDetails so each editing session bills as
-  // one Places session.
   String? _sessionToken;
 
   @override
@@ -155,7 +150,6 @@ class _AddressFieldsBlockState extends State<AddressFieldsBlock> {
           controller: _searchController,
           onChanged: _onSearchChanged,
           textInputAction: TextInputAction.search,
-          // Close the keyboard after the user submits an address search.
           onSubmitted: (_) => FocusScope.of(context).unfocus(),
           decoration: formInputDecoration(
             context,

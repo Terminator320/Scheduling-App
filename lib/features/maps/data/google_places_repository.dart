@@ -7,9 +7,6 @@ import 'package:scheduling/features/maps/domain/models/address_suggestion.dart';
 import 'package:scheduling/features/maps/domain/models/parsed_address.dart';
 import 'package:scheduling/features/maps/domain/places_repository.dart';
 
-/// Talks to the Google Places API via two Cloud Functions callables:
-/// `placesAutocomplete` and `placesGetDetails`. The Maps API key lives in
-/// Secret Manager server-side and never ships in the Flutter binary.
 class GooglePlacesRepository implements PlacesRepository {
   GooglePlacesRepository({FirebaseFunctions? functions})
     : _functions = functions ?? FirebaseFunctions.instance;
@@ -23,9 +20,6 @@ class GooglePlacesRepository implements PlacesRepository {
   }) async {
     if (input.trim().isEmpty) return const [];
 
-    // Places can't autocomplete on apt prefixes — strip the Quebec-style
-    // "5-1234 …" or trailing "#5" before searching. The caller is responsible
-    // for combining the apt back into the display value.
     final stripped = AddressParser.splitApt(input)?.street ?? input;
 
     final HttpsCallableResult<dynamic> result;

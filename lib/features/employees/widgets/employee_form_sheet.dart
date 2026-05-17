@@ -116,15 +116,11 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      final isDuplicate = e is EmployeesFailureEmailAlreadyExists;
-      if (isDuplicate) {
+      if (e is EmployeesFailureEmailAlreadyExists) {
         setState(() => _errors['email'] = e.toLocalizedMessage(context));
+      } else {
+        notices.error(context.l10n.couldNotCreateEmployee);
       }
-      notices.error(
-        isDuplicate
-            ? e.toLocalizedMessage(context)
-            : context.l10n.couldNotCreateEmployee,
-      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

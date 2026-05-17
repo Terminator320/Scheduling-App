@@ -19,11 +19,6 @@ import 'package:scheduling/features/employees/domain/models/employee_record.dart
 
 part 'event_details_controller.freezed.dart';
 
-/// Form + view state for the appointment-details sheet. Owned by
-/// `EventDetailsController` and watched from the widget shell + bodies.
-///
-/// `TextEditingController`s and `FocusNode`s stay in the widget — their
-/// lifecycle ties to the widget's mount/unmount, not to this state.
 @freezed
 abstract class EventDetailsState with _$EventDetailsState {
   const factory EventDetailsState({
@@ -46,39 +41,28 @@ abstract class EventDetailsState with _$EventDetailsState {
   }) = _EventDetailsState;
 }
 
-/// Result of `EventDetailsController.save` — encodes the three terminal
-/// states the widget needs to react to.
 sealed class EventDetailsSaveOutcome {
   const EventDetailsSaveOutcome();
 }
 
-/// Validation failed; `EventDetailsState.errors` holds per-field details.
 class EventDetailsInvalid extends EventDetailsSaveOutcome {
   const EventDetailsInvalid();
 }
 
-/// Save succeeded. Widget should `Navigator.pop` with `appointment`.
-/// Background photo upload has already been kicked off when relevant.
 class EventDetailsSaved extends EventDetailsSaveOutcome {
   const EventDetailsSaved(this.appointment);
   final AppointmentRecord appointment;
 }
 
-/// Repo call threw. Widget should surface a SnackBar; controller has
-/// already reset `isSaving` to false.
 class EventDetailsFailed extends EventDetailsSaveOutcome {
   const EventDetailsFailed(this.error);
   final Object error;
 }
 
-/// State + actions for `details_edit_sheet`. Family-keyed by the
-/// `AppointmentRecord` so each appointment opens with its own state slot.
 class EventDetailsController
     extends AutoDisposeFamilyNotifier<EventDetailsState, AppointmentRecord> {
   @override
   EventDetailsState build(AppointmentRecord appointment) {
-    // Seed async state after build() returns — direct awaits here would throw
-    // because state mutations are illegal mid-build in Riverpod.
     Future.microtask(() => _loadClientIfNeeded(appointment.clientId));
     Future.microtask(() => _seedSelectedEmployees(appointment.employeeIds));
     return EventDetailsState(
@@ -98,13 +82,10 @@ class EventDetailsController
           .watchEmployees()
           .first;
       final selected = all.where((e) => employeeIds.contains(e.id)).toList();
-      // Don't overwrite if the user has already toggled something.
       if (state.selectedEmployees.isEmpty) {
         state = state.copyWith(selectedEmployees: selected);
       }
     } catch (e, st) {
-      // Sheet stays usable even if the employees stream errors out — log so
-      // the silent fallback is visible in Crashlytics.
       ref.read(loggerProvider).warn('seedSelectedEmployees failed', e, st);
     }
   }
@@ -117,15 +98,12 @@ class EventDetailsController
           .read(clientsRepositoryProvider)
           .getClientById(id);
       if (client == null) return;
-      // Don't overwrite a freshly-picked client mid-edit.
       if (state.selectedClient == null) {
         state = state.copyWith(client: client, selectedClient: client);
       } else {
         state = state.copyWith(client: client);
       }
     } catch (e, st) {
-      // Keep the sheet usable even if the client doc fails to load — log so
-      // the silent fallback is visible in Crashlytics.
       ref.read(loggerProvider).warn('loadClientIfNeeded failed', e, st);
     }
   }
@@ -216,9 +194,6 @@ class EventDetailsController
     );
   }
 
-  /// Cap on attached images per appointment (existing + queued). Matches
-  /// `AddEventController.maxImagesPerAppointment` so the cap is consistent
-  /// across the create + edit paths.
   static const int maxImagesPerAppointment = 10;
 
   void addImages(List<File> files) {
@@ -243,13 +218,10 @@ class EventDetailsController
     );
   }
 
-  /// Marks the appointment as `done`. Returns true on success so the widget
-  /// can `Navigator.pop`. On failure the widget shows a SnackBar.
   Future<bool> markAsDone(AppointmentRecord appointment) async {
     return _setStatusOnRepo(appointment, 'done');
   }
 
-  /// Cancels the appointment (status = `cancelled`). Returns true on success.
   Future<bool> cancelAppointment(AppointmentRecord appointment) async {
     return _setStatusOnRepo(appointment, 'cancelled');
   }
@@ -275,9 +247,6 @@ class EventDetailsController
     }
   }
 
-  /// Validates the form, updates Firestore, and (if applicable) deletes
-  /// removed existing images and kicks off background upload of new ones.
-  /// Pass the in-progress `TextEditingController` values from the widget.
   Future<EventDetailsSaveOutcome> save(
     AppointmentRecord appointment, {
     required String title,
@@ -285,8 +254,6 @@ class EventDetailsController
     required String notes,
     required String materialsNeeded,
   }) async {
-    // If the user hasn't re-selected a client, reconstruct one from the stored
-    // appointment fields so the validator has something to check against.
     final clientForValidation =
         state.selectedClient ??
         (appointment.clientId.trim().isNotEmpty
@@ -369,8 +336,6 @@ class EventDetailsController
     }
   }
 
-  /// Deletes the appointment. Returns true on success so the widget can
-  /// `Navigator.pop`.
   Future<bool> deleteAppointment(AppointmentRecord appointment) async {
     final id = appointment.id;
     if (id == null) return false;
@@ -386,8 +351,6 @@ class EventDetailsController
   }
 }
 
-/// View-mode use only. Edit-mode flips `selectedClient` so the validator
-/// always sees a real record for the client field.
 ClientRecord _placeholderClient(AppointmentRecord a) => ClientRecord(
   id: a.clientId,
   name: a.clientName,

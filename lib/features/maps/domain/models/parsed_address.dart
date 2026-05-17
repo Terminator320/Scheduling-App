@@ -2,8 +2,6 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'parsed_address.freezed.dart';
 
-/// Structured address parsed from a Google Places `places.get` response.
-/// Stored on `ClientRecord` as nested fields.
 @freezed
 abstract class ParsedAddress with _$ParsedAddress {
 

@@ -25,8 +25,6 @@ class CreateAccountScreen extends StatefulWidget {
 
   final String? initialEmail;
 
-  // Optional injection for widget tests. Production wiring still defaults to
-  // `AuthService()` so call sites don't change.
   final AuthService? authService;
 
   @override

@@ -11,8 +11,6 @@ class AppLogger {
   final Logger _logger;
   final FirebaseCrashlytics? _crashlyticsOverride;
 
-  // Lazy lookup so tests that never enter release branches don't have to
-  // initialize Firebase just to instantiate the logger.
   FirebaseCrashlytics get _crashlytics =>
       _crashlyticsOverride ?? FirebaseCrashlytics.instance;
 

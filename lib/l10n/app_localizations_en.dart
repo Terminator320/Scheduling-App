@@ -57,6 +57,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get invited => 'Invited';
 
   @override
+  String get confirmed => 'Confirmed';
+
+  @override
+  String get pending => 'Pending';
+
+  @override
+  String get cancelled => 'Cancelled';
+
+  @override
+  String get disabled => 'Disabled';
+
+  @override
+  String get inProgress => 'In Progress';
+
+  @override
+  String get textScaleSmall => 'Small';
+
+  @override
+  String get textScaleMedium => 'Medium';
+
+  @override
+  String get textScaleLarge => 'Large';
+
+  @override
+  String get textScaleXL => 'Extra Large';
+
+  @override
+  String get textSizeAppliesAppWide => 'Applies across the entire app';
+
+  @override
   String get settings => 'Settings';
 
   @override

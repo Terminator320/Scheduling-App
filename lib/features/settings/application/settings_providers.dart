@@ -9,9 +9,6 @@ final settingsRepositoryProvider = Provider<SettingsRepository>(
   (ref) => SharedPrefsSettingsRepository(),
 );
 
-/// Coalesces fast-firing settings writes (e.g. dragging the text-size slider)
-/// into a single trailing save. Lives in the UI layer because debounce is a
-/// UI / interaction concern, not a persistence concern.
 class SettingsSaveDebouncer {
   SettingsSaveDebouncer({this.delay = const Duration(milliseconds: 250)});
 

@@ -3,25 +3,6 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'employee_record.freezed.dart';
 
-/// Firestore collection: `users` (employees + admins live in the same
-/// collection, distinguished by `role`).
-///
-/// Example doc shape:
-/// ```json
-/// {
-///   "name": "Jane Doe",
-///   "email": "jane@example.com",
-///   "phone": "+1-514-555-0101",
-///   "colorValue": "4280391411",
-///   "role": "employee",        // 'admin' | 'employee'
-///   "status": "active",        // 'invited' | 'active' | 'disabled'
-///   "uid": "<firebase auth uid, blank until activated>",
-///   "createdAt": Timestamp
-/// }
-/// ```
-///
-/// `colorValue` is stored as a stringified `int` — preserved verbatim across
-/// the freezed migration so existing documents keep working without backfill.
 @freezed
 abstract class EmployeeRecord with _$EmployeeRecord {
   const factory EmployeeRecord({
@@ -64,8 +45,6 @@ abstract class EmployeeRecord with _$EmployeeRecord {
   };
 
   String get initials {
-    // Split on any run of whitespace and discard empties so inputs like
-    // 'Jane  Doe' or '  Jane' don't trip a RangeError on `parts[1][0]`.
     final parts = name
         .trim()
         .split(RegExp(r'\s+'))

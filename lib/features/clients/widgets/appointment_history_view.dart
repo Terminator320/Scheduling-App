@@ -15,14 +15,11 @@ import 'package:scheduling/shared/widgets/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/skeleton_loader.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';
 
-/// Body of the appointment-history mode (route: `/clients` with mode = history).
 class AppointmentHistoryView extends ConsumerWidget {
   const AppointmentHistoryView({required this.searchQuery, super.key});
 
   final String searchQuery;
 
-  // Stable across rebuilds. `dateHeaderFormat` depends on locale so it's
-  // built per build but only when there's at least one item to render.
   static final _dateKeyFormat = DateFormat('yyyy-MM-dd');
 
   @override
@@ -83,10 +80,6 @@ class AppointmentHistoryView extends ConsumerWidget {
           final locale = Intl.defaultLocale ?? 'en_CA';
           final dateHeaderFormat = DateFormat('EEEE, MMMM d', locale);
 
-          // Flatten the grouped history into a list of header / card rows so
-          // a single ListView.builder renders lazily. Beats the previous
-          // `ListView(children: [...all of them...])` which eagerly built
-          // every widget on every rebuild.
           final rows = <_HistoryRow>[];
           String? currentKey;
           for (final app in filtered) {

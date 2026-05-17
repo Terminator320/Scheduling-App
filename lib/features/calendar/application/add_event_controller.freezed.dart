@@ -1,33 +1,20 @@
-// GENERATED CODE - DO NOT MODIFY BY HAND
-// coverage:ignore-file
 // ignore_for_file: type=lint
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'add_event_controller.dart';
 
-// **************************************************************************
-// FreezedGenerator
-// **************************************************************************
-
-// dart format off
 T _$identity<T>(T value) => value;
-/// @nodoc
 mixin _$AddEventState {
 
  DateTime? get selectedDate; TimeOfDay? get selectedStartTime; TimeOfDay? get selectedEndTime; bool get endTimeWasPickedManually; ClientRecord? get selectedClient; List<ClientRecord> get clientResults; bool get isSearchingClient; bool get useCustomAddress; List<EmployeeRecord> get selectedEmployees; List<File> get selectedImages; bool get isSubmitting; Map<String, AppointmentFormError> get errors;
-/// Create a copy of AddEventState
-/// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
 @pragma('vm:prefer-inline')
 $AddEventStateCopyWith<AddEventState> get copyWith => _$AddEventStateCopyWithImpl<AddEventState>(this as AddEventState, _$identity);
-
-
 
 @override
 bool operator ==(Object other) {
   return identical(this, other) || (other.runtimeType == runtimeType&&other is AddEventState&&(identical(other.selectedDate, selectedDate) || other.selectedDate == selectedDate)&&(identical(other.selectedStartTime, selectedStartTime) || other.selectedStartTime == selectedStartTime)&&(identical(other.selectedEndTime, selectedEndTime) || other.selectedEndTime == selectedEndTime)&&(identical(other.endTimeWasPickedManually, endTimeWasPickedManually) || other.endTimeWasPickedManually == endTimeWasPickedManually)&&(identical(other.selectedClient, selectedClient) || other.selectedClient == selectedClient)&&const DeepCollectionEquality().equals(other.clientResults, clientResults)&&(identical(other.isSearchingClient, isSearchingClient) || other.isSearchingClient == isSearchingClient)&&(identical(other.useCustomAddress, useCustomAddress) || other.useCustomAddress == useCustomAddress)&&const DeepCollectionEquality().equals(other.selectedEmployees, selectedEmployees)&&const DeepCollectionEquality().equals(other.selectedImages, selectedImages)&&(identical(other.isSubmitting, isSubmitting) || other.isSubmitting == isSubmitting)&&const DeepCollectionEquality().equals(other.errors, errors));
 }
-
 
 @override
 int get hashCode => Object.hash(runtimeType,selectedDate,selectedStartTime,selectedEndTime,endTimeWasPickedManually,selectedClient,const DeepCollectionEquality().hash(clientResults),isSearchingClient,useCustomAddress,const DeepCollectionEquality().hash(selectedEmployees),const DeepCollectionEquality().hash(selectedImages),isSubmitting,const DeepCollectionEquality().hash(errors));
@@ -37,10 +24,8 @@ String toString() {
   return 'AddEventState(selectedDate: $selectedDate, selectedStartTime: $selectedStartTime, selectedEndTime: $selectedEndTime, endTimeWasPickedManually: $endTimeWasPickedManually, selectedClient: $selectedClient, clientResults: $clientResults, isSearchingClient: $isSearchingClient, useCustomAddress: $useCustomAddress, selectedEmployees: $selectedEmployees, selectedImages: $selectedImages, isSubmitting: $isSubmitting, errors: $errors)';
 }
 
-
 }
 
-/// @nodoc
 abstract mixin class $AddEventStateCopyWith<$Res>  {
   factory $AddEventStateCopyWith(AddEventState value, $Res Function(AddEventState) _then) = _$AddEventStateCopyWithImpl;
 @useResult
@@ -48,11 +33,9 @@ $Res call({
  DateTime? selectedDate, TimeOfDay? selectedStartTime, TimeOfDay? selectedEndTime, bool endTimeWasPickedManually, ClientRecord? selectedClient, List<ClientRecord> clientResults, bool isSearchingClient, bool useCustomAddress, List<EmployeeRecord> selectedEmployees, List<File> selectedImages, bool isSubmitting, Map<String, AppointmentFormError> errors
 });
 
-
 $ClientRecordCopyWith<$Res>? get selectedClient;
 
 }
-/// @nodoc
 class _$AddEventStateCopyWithImpl<$Res>
     implements $AddEventStateCopyWith<$Res> {
   _$AddEventStateCopyWithImpl(this._self, this._then);
@@ -60,8 +43,6 @@ class _$AddEventStateCopyWithImpl<$Res>
   final AddEventState _self;
   final $Res Function(AddEventState) _then;
 
-/// Create a copy of AddEventState
-/// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? selectedDate = freezed,Object? selectedStartTime = freezed,Object? selectedEndTime = freezed,Object? endTimeWasPickedManually = null,Object? selectedClient = freezed,Object? clientResults = null,Object? isSearchingClient = null,Object? useCustomAddress = null,Object? selectedEmployees = null,Object? selectedImages = null,Object? isSubmitting = null,Object? errors = null,}) {
   return _then(_self.copyWith(
 selectedDate: freezed == selectedDate ? _self.selectedDate : selectedDate // ignore: cast_nullable_to_non_nullable
@@ -79,8 +60,6 @@ as bool,errors: null == errors ? _self.errors : errors // ignore: cast_nullable_
 as Map<String, AppointmentFormError>,
   ));
 }
-/// Create a copy of AddEventState
-/// with the given fields replaced by the non-null parameter values.
 @override
 @pragma('vm:prefer-inline')
 $ClientRecordCopyWith<$Res>? get selectedClient {
@@ -94,20 +73,7 @@ $ClientRecordCopyWith<$Res>? get selectedClient {
 }
 }
 
-
-/// Adds pattern-matching-related methods to [AddEventState].
 extension AddEventStatePatterns on AddEventState {
-/// A variant of `map` that fallback to returning `orElse`.
-///
-/// It is equivalent to doing:
-/// ```dart
-/// switch (sealedClass) {
-///   case final Subclass value:
-///     return ...;
-///   case _:
-///     return orElse();
-/// }
-/// ```
 
 @optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _AddEventState value)?  $default,{required TResult orElse(),}){
 final _that = this;
@@ -118,18 +84,6 @@ return $default(_that);case _:
 
 }
 }
-/// A `switch`-like method, using callbacks.
-///
-/// Callbacks receives the raw object, upcasted.
-/// It is equivalent to doing:
-/// ```dart
-/// switch (sealedClass) {
-///   case final Subclass value:
-///     return ...;
-///   case final Subclass2 value:
-///     return ...;
-/// }
-/// ```
 
 @optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _AddEventState value)  $default,){
 final _that = this;
@@ -140,17 +94,6 @@ return $default(_that);case _:
 
 }
 }
-/// A variant of `map` that fallback to returning `null`.
-///
-/// It is equivalent to doing:
-/// ```dart
-/// switch (sealedClass) {
-///   case final Subclass value:
-///     return ...;
-///   case _:
-///     return null;
-/// }
-/// ```
 
 @optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _AddEventState value)?  $default,){
 final _that = this;
@@ -161,17 +104,6 @@ return $default(_that);case _:
 
 }
 }
-/// A variant of `when` that fallback to an `orElse` callback.
-///
-/// It is equivalent to doing:
-/// ```dart
-/// switch (sealedClass) {
-///   case Subclass(:final field):
-///     return ...;
-///   case _:
-///     return orElse();
-/// }
-/// ```
 
 @optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( DateTime? selectedDate,  TimeOfDay? selectedStartTime,  TimeOfDay? selectedEndTime,  bool endTimeWasPickedManually,  ClientRecord? selectedClient,  List<ClientRecord> clientResults,  bool isSearchingClient,  bool useCustomAddress,  List<EmployeeRecord> selectedEmployees,  List<File> selectedImages,  bool isSubmitting,  Map<String, AppointmentFormError> errors)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
@@ -181,18 +113,6 @@ return $default(_that.selectedDate,_that.selectedStartTime,_that.selectedEndTime
 
 }
 }
-/// A `switch`-like method, using callbacks.
-///
-/// As opposed to `map`, this offers destructuring.
-/// It is equivalent to doing:
-/// ```dart
-/// switch (sealedClass) {
-///   case Subclass(:final field):
-///     return ...;
-///   case Subclass2(:final field2):
-///     return ...;
-/// }
-/// ```
 
 @optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( DateTime? selectedDate,  TimeOfDay? selectedStartTime,  TimeOfDay? selectedEndTime,  bool endTimeWasPickedManually,  ClientRecord? selectedClient,  List<ClientRecord> clientResults,  bool isSearchingClient,  bool useCustomAddress,  List<EmployeeRecord> selectedEmployees,  List<File> selectedImages,  bool isSubmitting,  Map<String, AppointmentFormError> errors)  $default,) {final _that = this;
 switch (_that) {
@@ -202,17 +122,6 @@ return $default(_that.selectedDate,_that.selectedStartTime,_that.selectedEndTime
 
 }
 }
-/// A variant of `when` that fallback to returning `null`
-///
-/// It is equivalent to doing:
-/// ```dart
-/// switch (sealedClass) {
-///   case Subclass(:final field):
-///     return ...;
-///   case _:
-///     return null;
-/// }
-/// ```
 
 @optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( DateTime? selectedDate,  TimeOfDay? selectedStartTime,  TimeOfDay? selectedEndTime,  bool endTimeWasPickedManually,  ClientRecord? selectedClient,  List<ClientRecord> clientResults,  bool isSearchingClient,  bool useCustomAddress,  List<EmployeeRecord> selectedEmployees,  List<File> selectedImages,  bool isSubmitting,  Map<String, AppointmentFormError> errors)?  $default,) {final _that = this;
 switch (_that) {
@@ -225,13 +134,9 @@ return $default(_that.selectedDate,_that.selectedStartTime,_that.selectedEndTime
 
 }
 
-/// @nodoc
-
-
 class _AddEventState implements AddEventState {
   const _AddEventState({this.selectedDate, this.selectedStartTime, this.selectedEndTime, this.endTimeWasPickedManually = false, this.selectedClient, final  List<ClientRecord> clientResults = const <ClientRecord>[], this.isSearchingClient = false, this.useCustomAddress = false, final  List<EmployeeRecord> selectedEmployees = const <EmployeeRecord>[], final  List<File> selectedImages = const <File>[], this.isSubmitting = false, final  Map<String, AppointmentFormError> errors = const <String, AppointmentFormError>{}}): _clientResults = clientResults,_selectedEmployees = selectedEmployees,_selectedImages = selectedImages,_errors = errors;
   
-
 @override final  DateTime? selectedDate;
 @override final  TimeOfDay? selectedStartTime;
 @override final  TimeOfDay? selectedEndTime;
@@ -268,20 +173,14 @@ class _AddEventState implements AddEventState {
   return EqualUnmodifiableMapView(_errors);
 }
 
-
-/// Create a copy of AddEventState
-/// with the given fields replaced by the non-null parameter values.
 @override @JsonKey(includeFromJson: false, includeToJson: false)
 @pragma('vm:prefer-inline')
 _$AddEventStateCopyWith<_AddEventState> get copyWith => __$AddEventStateCopyWithImpl<_AddEventState>(this, _$identity);
-
-
 
 @override
 bool operator ==(Object other) {
   return identical(this, other) || (other.runtimeType == runtimeType&&other is _AddEventState&&(identical(other.selectedDate, selectedDate) || other.selectedDate == selectedDate)&&(identical(other.selectedStartTime, selectedStartTime) || other.selectedStartTime == selectedStartTime)&&(identical(other.selectedEndTime, selectedEndTime) || other.selectedEndTime == selectedEndTime)&&(identical(other.endTimeWasPickedManually, endTimeWasPickedManually) || other.endTimeWasPickedManually == endTimeWasPickedManually)&&(identical(other.selectedClient, selectedClient) || other.selectedClient == selectedClient)&&const DeepCollectionEquality().equals(other._clientResults, _clientResults)&&(identical(other.isSearchingClient, isSearchingClient) || other.isSearchingClient == isSearchingClient)&&(identical(other.useCustomAddress, useCustomAddress) || other.useCustomAddress == useCustomAddress)&&const DeepCollectionEquality().equals(other._selectedEmployees, _selectedEmployees)&&const DeepCollectionEquality().equals(other._selectedImages, _selectedImages)&&(identical(other.isSubmitting, isSubmitting) || other.isSubmitting == isSubmitting)&&const DeepCollectionEquality().equals(other._errors, _errors));
 }
-
 
 @override
 int get hashCode => Object.hash(runtimeType,selectedDate,selectedStartTime,selectedEndTime,endTimeWasPickedManually,selectedClient,const DeepCollectionEquality().hash(_clientResults),isSearchingClient,useCustomAddress,const DeepCollectionEquality().hash(_selectedEmployees),const DeepCollectionEquality().hash(_selectedImages),isSubmitting,const DeepCollectionEquality().hash(_errors));
@@ -291,10 +190,8 @@ String toString() {
   return 'AddEventState(selectedDate: $selectedDate, selectedStartTime: $selectedStartTime, selectedEndTime: $selectedEndTime, endTimeWasPickedManually: $endTimeWasPickedManually, selectedClient: $selectedClient, clientResults: $clientResults, isSearchingClient: $isSearchingClient, useCustomAddress: $useCustomAddress, selectedEmployees: $selectedEmployees, selectedImages: $selectedImages, isSubmitting: $isSubmitting, errors: $errors)';
 }
 
-
 }
 
-/// @nodoc
 abstract mixin class _$AddEventStateCopyWith<$Res> implements $AddEventStateCopyWith<$Res> {
   factory _$AddEventStateCopyWith(_AddEventState value, $Res Function(_AddEventState) _then) = __$AddEventStateCopyWithImpl;
 @override @useResult
@@ -302,11 +199,9 @@ $Res call({
  DateTime? selectedDate, TimeOfDay? selectedStartTime, TimeOfDay? selectedEndTime, bool endTimeWasPickedManually, ClientRecord? selectedClient, List<ClientRecord> clientResults, bool isSearchingClient, bool useCustomAddress, List<EmployeeRecord> selectedEmployees, List<File> selectedImages, bool isSubmitting, Map<String, AppointmentFormError> errors
 });
 
-
 @override $ClientRecordCopyWith<$Res>? get selectedClient;
 
 }
-/// @nodoc
 class __$AddEventStateCopyWithImpl<$Res>
     implements _$AddEventStateCopyWith<$Res> {
   __$AddEventStateCopyWithImpl(this._self, this._then);
@@ -314,8 +209,6 @@ class __$AddEventStateCopyWithImpl<$Res>
   final _AddEventState _self;
   final $Res Function(_AddEventState) _then;
 
-/// Create a copy of AddEventState
-/// with the given fields replaced by the non-null parameter values.
 @override @pragma('vm:prefer-inline') $Res call({Object? selectedDate = freezed,Object? selectedStartTime = freezed,Object? selectedEndTime = freezed,Object? endTimeWasPickedManually = null,Object? selectedClient = freezed,Object? clientResults = null,Object? isSearchingClient = null,Object? useCustomAddress = null,Object? selectedEmployees = null,Object? selectedImages = null,Object? isSubmitting = null,Object? errors = null,}) {
   return _then(_AddEventState(
 selectedDate: freezed == selectedDate ? _self.selectedDate : selectedDate // ignore: cast_nullable_to_non_nullable
@@ -334,8 +227,6 @@ as Map<String, AppointmentFormError>,
   ));
 }
 
-/// Create a copy of AddEventState
-/// with the given fields replaced by the non-null parameter values.
 @override
 @pragma('vm:prefer-inline')
 $ClientRecordCopyWith<$Res>? get selectedClient {
@@ -349,4 +240,3 @@ $ClientRecordCopyWith<$Res>? get selectedClient {
 }
 }
 
-// dart format on

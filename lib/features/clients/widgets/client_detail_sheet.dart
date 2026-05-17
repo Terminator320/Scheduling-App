@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
+import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
@@ -15,7 +17,6 @@ import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
 class ClientDetailSheet extends ConsumerStatefulWidget {
-
   const ClientDetailSheet({required this.client, super.key});
   final ClientRecord client;
 
@@ -109,7 +110,8 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
       _postalCodeController.text = fields.postalCode!;
     }
     if (fields.country != null &&
-        (fields.country != 'Canada' || _countryController.text.trim().isEmpty)) {
+        (fields.country != 'Canada' ||
+            _countryController.text.trim().isEmpty)) {
       _countryController.text = fields.country!;
     }
     if (fields.province != null) _provinceController.text = fields.province!;
@@ -125,7 +127,6 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
       });
     });
   }
-
 
   Future<void> _save() async {
     final businessName = _businessNameController.text.trim();
@@ -175,7 +176,8 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
     try {
       await ref.read(clientsRepositoryProvider).updateClient(updated);
       if (mounted) setState(() => _isEditing = false);
-    } catch (_) {
+    } catch (e, st) {
+      ref.read(loggerProvider).warn('updateClient failed', e, st);
       if (!mounted) return;
       ref
           .read(noticeServiceProvider)
@@ -249,10 +251,13 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
           children: [
             const SheetHandle(),
             const SizedBox(height: 16),
-            if (_isEditing) Text(
-                    context.l10n.editClient,
-                    style: theme.textTheme.headlineLarge,
-                  ) else _buildViewHeader(theme),
+            if (_isEditing)
+              Text(
+                context.l10n.editClient,
+                style: theme.textTheme.headlineLarge,
+              )
+            else
+              _buildViewHeader(theme),
             const SizedBox(height: 20),
             const Divider(height: 1),
             const SizedBox(height: 20),
@@ -277,14 +282,18 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
         const SizedBox(height: 12),
         Text(
           c.displayName,
-          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
           textAlign: TextAlign.center,
         ),
         if (c.name.isNotEmpty && c.name != c.displayName) ...[
           const SizedBox(height: 3),
           Text(
             c.name,
-            style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
             textAlign: TextAlign.center,
           ),
         ],
@@ -370,7 +379,8 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
             ],
             if (contact.phone.isNotEmpty) ...[
               _ViewContactRow(icon: Icons.phone_outlined, text: contact.phone),
-              if (contact.email.isNotEmpty) const Divider(height: 1, indent: 48),
+              if (contact.email.isNotEmpty)
+                const Divider(height: 1, indent: 48),
             ],
             if (contact.email.isNotEmpty)
               _ViewContactRow(icon: Icons.email_outlined, text: contact.email),
@@ -383,7 +393,6 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
   List<Widget> _buildEditFields() {
     final theme = Theme.of(context);
     return [
-      // Avatar header
       Row(
         children: [
           AppAvatar(name: widget.client.displayName, size: AvatarSize.lg),
@@ -391,7 +400,9 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
           Expanded(
             child: Text(
               widget.client.displayName,
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -406,6 +417,7 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
           controller: _businessNameController,
           optional: true,
           autofillHints: const [AutofillHints.organizationName],
+          maxLength: TextLimits.personName,
           errorText: _errors['businessName'],
           onChanged: (_) {
             _clearError('businessName');
@@ -423,6 +435,7 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
           required: _businessNameController.text.trim().isEmpty,
           optional: _businessNameController.text.trim().isNotEmpty,
           autofillHints: const [AutofillHints.name],
+          maxLength: TextLimits.personName,
           errorText: _errors['name'],
           onChanged: (_) {
             _clearError('name');
@@ -442,6 +455,7 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
                 controller: _phoneController,
                 keyboard: TextInputType.phone,
                 autofillHints: const [AutofillHints.telephoneNumber],
+                maxLength: TextLimits.phone,
                 errorText: _errors['phone'],
                 onChanged: (_) {
                   _clearError('phone');
@@ -458,6 +472,7 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
                 controller: _emailController,
                 keyboard: TextInputType.emailAddress,
                 autofillHints: const [AutofillHints.email],
+                maxLength: TextLimits.email,
                 errorText: _errors['email'],
                 onChanged: (_) {
                   _clearError('email');
@@ -474,10 +489,7 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
           controller: _addressController,
           required: _businessNameController.text.trim().isEmpty,
           errorText: _errors['address'],
-          onChanged: (value) {
-            _clearError('address');
-            _fillAddressPartsFromText(value);
-          },
+          onChanged: (_) => _clearError('address'),
           onAddressSelected: (_) => _handleAddressSelected(),
         ),
       ),
@@ -487,6 +499,7 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
           label: context.l10n.aptUnit,
           controller: _aptController,
           optional: true,
+          maxLength: TextLimits.aptUnit,
         ),
       ),
       const SizedBox(height: 16),
@@ -498,6 +511,7 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
                 label: context.l10n.city,
                 controller: _cityController,
                 autofillHints: const [AutofillHints.addressCity],
+                maxLength: TextLimits.city,
               ),
             ),
           ),
@@ -508,6 +522,7 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
                 label: context.l10n.province,
                 controller: _provinceController,
                 autofillHints: const [AutofillHints.addressState],
+                maxLength: TextLimits.province,
               ),
             ),
           ),
@@ -522,6 +537,7 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
                 label: context.l10n.postalCode,
                 controller: _postalCodeController,
                 autofillHints: const [AutofillHints.postalCode],
+                maxLength: TextLimits.postalCode,
               ),
             ),
           ),
@@ -532,6 +548,7 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
                 label: context.l10n.country,
                 controller: _countryController,
                 autofillHints: const [AutofillHints.countryName],
+                maxLength: TextLimits.country,
               ),
             ),
           ),
@@ -603,7 +620,12 @@ class _ClientDetailSheetState extends ConsumerState<ClientDetailSheet> {
 }
 
 class _ViewContactRow extends StatelessWidget {
-  const _ViewContactRow({required this.icon, required this.text, this.onTap, this.color});
+  const _ViewContactRow({
+    required this.icon,
+    required this.text,
+    this.onTap,
+    this.color,
+  });
 
   final IconData icon;
   final String text;
@@ -642,11 +664,7 @@ class _ViewContactRow extends StatelessWidget {
               const SizedBox(width: 8),
               Padding(
                 padding: const EdgeInsets.only(top: 2),
-                child: Icon(
-                  Icons.open_in_new,
-                  size: 14,
-                  color: scheme.primary,
-                ),
+                child: Icon(Icons.open_in_new, size: 14, color: scheme.primary),
               ),
             ],
           ],

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-// Shared duration tokens — change here to retime the whole app.
 class AppAnimationDurations {
   const AppAnimationDurations._();
 
@@ -21,8 +20,6 @@ class AppAnimationCurves {
 class AppStagger {
   const AppStagger._();
 
-  // Each item plays for 52% of the total timeline; items overlap because
-  // delay (8%) < itemDuration (52%), giving a cascading feel.
   static const double itemDuration = 0.52;
   static const double delay = 0.08;
 }

@@ -16,11 +16,6 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 
-/// Read-only body of `EventDetailsSheet`. Reads everything from the
-/// controller; dispatches edit/mark-as-done/cancel actions back through it.
-///
-/// `onClose` is wired by the shell to `Navigator.pop` so the body never
-/// touches the navigator directly.
 class DetailsViewBody extends ConsumerWidget {
   const DetailsViewBody({
     required this.appointment,
@@ -35,9 +30,6 @@ class DetailsViewBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Narrow the watch to the fields this body reads directly. Child widgets
-    // (_EmployeesView, _PhotosView, ClientContactsSection) watch their own
-    // slices below — passing full `state` down would resurrect the broad watch.
     final provider = eventDetailsControllerProvider(appointment);
     final client = ref.watch(provider.select((s) => s.client));
     final isSaving = ref.watch(provider.select((s) => s.isSaving));
@@ -283,17 +275,19 @@ class _MaterialsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final items = materials
+        .split(',')
+        .map((m) => m.trim())
+        .where((m) => m.isNotEmpty)
+        .toList();
     return DetailsSectionRow(
       label: context.l10n.materialsNeeded,
-      value: materials.isEmpty ? context.l10n.noMaterials : '',
-      customValue: materials.isNotEmpty
+      value: items.isEmpty ? context.l10n.noMaterials : '',
+      customValue: items.isNotEmpty
           ? Wrap(
               spacing: 6,
               runSpacing: 6,
-              children: materials
-                  .split(',')
-                  .map((m) => m.trim())
-                  .where((m) => m.isNotEmpty)
+              children: items
                   .map(
                     (m) => Container(
                       padding: const EdgeInsets.symmetric(

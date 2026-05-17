@@ -54,10 +54,6 @@ class ImageStorageService {
     );
   }
 
-  /// Uploads each file independently. Per-file failures are logged and
-  /// counted instead of aborting the whole batch — one bad input shouldn't
-  /// orphan the other successful uploads (the appointment would otherwise
-  /// be patched with nothing and the user would see "all failed").
   Future<ImageUploadBatchResult> uploadImages(
     String appointmentId,
     List<File> files,
@@ -93,10 +89,6 @@ class ImageStorageService {
     }
   }
 
-  /// Best-effort batch delete. Per-file failures are logged but never
-  /// rethrown — an orphan blob is preferable to blocking the user's save
-  /// flow, and the dispatcher would otherwise mis-report a delete failure
-  /// as a photo-upload failure.
   Future<void> deleteImages(List<AppointmentImage> images) async {
     await Future.wait(
       images.map((img) async {
@@ -120,17 +112,11 @@ class ImageStorageService {
       final encoded = parts[1].split('?').first;
       return Uri.decodeComponent(encoded);
     } catch (e) {
-      // A malformed URL means we can't delete the underlying Storage object
-      // by-path; callers fall through to a no-op delete. Log so we know an
-      // orphan happened instead of silently leaking blobs.
       debugPrint('[ImageStorageService] _pathFromUrl failed for "$url": $e');
       return '';
     }
   }
 
-  // Storage rules and the magic-byte guard above both restrict uploads to
-  // JPEG/PNG. Returning anything else here would race the rules and surface as
-  // an opaque 403 to the user.
   String _contentTypeFor(String fileName) {
     final lower = fileName.toLowerCase();
     if (lower.endsWith('.png')) return 'image/png';

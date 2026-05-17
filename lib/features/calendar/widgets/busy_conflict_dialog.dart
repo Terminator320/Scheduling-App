@@ -5,9 +5,6 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
-/// Confirmation dialog shown when assigning employees who already have a
-/// conflicting appointment in the chosen window. Returns `true` if the user
-/// chooses to schedule anyway, `false` (or `null`) on cancel.
 Future<bool> showBusyConflictDialog(
   BuildContext context, {
   required List<EmployeeRecord> busyEmployees,
@@ -152,8 +149,6 @@ class _BusyEmployeeRow extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
-                  // Pick from the employee color's luminance so light swatches
-                  // stay readable.
                   color:
                       ThemeData.estimateBrightnessForColor(employee.color) ==
                           Brightness.dark

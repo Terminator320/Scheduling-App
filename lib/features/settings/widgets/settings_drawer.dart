@@ -38,7 +38,6 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
   }
 
   Future<void> _resolveUser() async {
-    // Short-circuit when both values are already injected via props.
     if (widget.userName != null && widget.email != null) {
       if (mounted) {
         setState(() {
@@ -52,10 +51,8 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Email is always available from Auth
     final email = widget.email ?? user.email ?? '';
 
-    // Name: prefer the passed-in value, then Auth displayName, then Firestore
     var name = widget.userName ?? user.displayName ?? '';
     if (name.isEmpty) {
       final doc = await ref
@@ -116,7 +113,6 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Avatar with translucent ring
           Container(
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
@@ -130,7 +126,6 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             ),
           ),
           const SizedBox(height: 12),
-          // Name
           Text(
             _displayName.isNotEmpty ? _displayName : ' ',
             style: TextStyle(
@@ -143,7 +138,6 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 7),
-          // Role badge + email
           Row(
             children: [
               Container(
@@ -193,7 +187,6 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Column(
         children: [
-          // ── Main navigation ─────────────────────────────────────────
           _NavItem(
             icon: Icons.calendar_today_rounded,
             iconColor: scheme.primary,
@@ -222,7 +215,6 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
           ],
           const Spacer(),
 
-          // ── Settings pinned at bottom ───────────────────────────────
           const Divider(height: 1),
           const SizedBox(height: 4),
           _NavItem(
@@ -300,8 +292,6 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
     );
   }
 }
-
-// ── Nav Item ──────────────────────────────────────────────────────────────────
 
 class _NavItem extends StatelessWidget {
   const _NavItem({

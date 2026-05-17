@@ -6,9 +6,6 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
-/// Bag of `TextEditingController`s for one editable additional contact in
-/// the new-client form. Lives outside the section widget so the parent
-/// state can own its lifecycle (dispose with the form).
 class ContactFields {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
@@ -32,9 +29,6 @@ class ContactFields {
   }
 }
 
-/// Card wrapping zero or more `AdditionalContactCard`s with a header and an
-/// "Add another contact" affordance. Used in the new-client form when the
-/// business name field is non-empty.
 class AdditionalContactsSection extends StatelessWidget {
   const AdditionalContactsSection({
     required this.contacts,

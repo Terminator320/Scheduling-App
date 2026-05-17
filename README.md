@@ -32,7 +32,7 @@ Employees can attach photos directly to any appointment from their device camera
 Two distinct roles — **Admin** and **Employee** — enforce data boundaries at every layer of the application. Admins have full read/write access across all records. Employees operate within a scoped view limited to their own assigned work.
 
 ### Personalization & Accessibility
-Users can switch between light and dark display modes, adjust text scaling for readability, and select their preferred language. All preferences are persisted across sessions.
+Users can switch between light and dark display modes, adjust text scaling for readability, and select their preferred language. All preferences are persisted across sessions. Status labels, text-size option names, and in-app notices are fully localized in English and French.
 
 ---
 

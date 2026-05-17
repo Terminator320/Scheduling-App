@@ -3,7 +3,6 @@ import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/widgets/employee_color_grid.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
-/// Color selector row: quick-pick swatches + custom color wheel button.
 class EmployeeColorPickerRow extends StatelessWidget {
   const EmployeeColorPickerRow({
     required this.selectedColor, required this.onColorChanged, super.key,

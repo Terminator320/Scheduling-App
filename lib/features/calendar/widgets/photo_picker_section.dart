@@ -56,7 +56,6 @@ class PhotoPickerSection extends StatelessWidget {
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
-                // existing network images
                 ...existingImages.asMap().entries.map((entry) {
                   return Stack(
                     children: [
@@ -89,7 +88,6 @@ class PhotoPickerSection extends StatelessWidget {
                     ],
                   );
                 }),
-                // new local images
                 ...newImages.asMap().entries.map((entry) {
                   final viewerIndex = existingImages.length + entry.key;
                   return Stack(
@@ -121,7 +119,6 @@ class PhotoPickerSection extends StatelessWidget {
                     ],
                   );
                 }),
-                // failed upload placeholders
                 ...List.generate(
                   failedCount,
                   (_) => const Padding(
@@ -129,7 +126,6 @@ class PhotoPickerSection extends StatelessWidget {
                     child: _FailedPhotoThumb(),
                   ),
                 ),
-                // add more tile (edit mode only)
                 if (isEditing)
                   GestureDetector(
                     onTap: onPickImages,
@@ -215,13 +211,11 @@ class PhotoPickerSection extends StatelessWidget {
             ),
           ),
 
-        // Inline upload-failure message
         if (failedCount > 0) ...[
           const SizedBox(height: 6),
           _UploadFailedRow(count: failedCount, onRetry: onRetry),
         ],
 
-        // Too-large warning banners
         for (final name in tooLargeFileNames) ...[
           const SizedBox(height: 6),
           _TooLargeBanner(fileName: name),
@@ -303,9 +297,6 @@ class _UploadFailedRow extends StatelessWidget {
   }
 }
 
-/// Skeleton-style placeholder shown while a `CachedNetworkImage` is loading.
-/// Keeps the 90x90 thumb slot stable so the row doesn't shift when an image
-/// resolves.
 Widget _photoPlaceholder(BuildContext context) {
   final scheme = Theme.of(context).colorScheme;
   return Container(
@@ -324,10 +315,6 @@ Widget _photoPlaceholder(BuildContext context) {
   );
 }
 
-/// Fallback when an existing-image URL fails to load (Storage object deleted
-/// out-of-band, network 404, etc.). Renders a distinct broken-image icon
-/// instead of `CachedNetworkImage`'s default so the user sees an intentional
-/// placeholder rather than a generic broken-asset glyph.
 Widget _photoErrorTile(BuildContext context) {
   final scheme = Theme.of(context).colorScheme;
   return Container(
@@ -352,9 +339,6 @@ class _TooLargeBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Material 3 ColorScheme has no semantic warning slot; map to the
-    // tertiary container which Flex renders as a soft amber in the default
-    // seed theme and adapts cleanly to dark mode.
     final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),

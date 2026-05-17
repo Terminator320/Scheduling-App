@@ -2,12 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 
-/// Wrap of pill-shaped status options used in the edit mode of the
-/// appointment-details sheet.
-///
-/// Stateless: callers pass the current selection and react to changes via
-/// `onChanged`. The status string mirrors what the repository writes
-/// ('confirmed', 'in_progress', 'pending', 'done', 'cancelled').
 class AppointmentStatusPicker extends StatelessWidget {
   const AppointmentStatusPicker({
     required this.currentStatus,

@@ -3,13 +3,11 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  // Primary — cyan-blue matched to Plombier Eau Secours! logo (#1E82C8)
   static const Color primary = Color(0xFF1E82C8);
   static const Color primaryDark = Color(0xFF155E8E);
   static const Color primaryTint = Color(0xFFC5E6F6);
   static const Color primarySurface = Color(0xFFE8F5FC);
 
-  // Light surfaces
   static const Color background = Color(0xFFF8FAFC);
   static const Color surface = Color(0xFFFFFFFF);
   static const Color surfaceAlt = Color(0xFFF1F5F9);
@@ -19,7 +17,6 @@ class AppColors {
   static const Color outline = Color(0xFFE2E8F0);
   static const Color disabled = Color(0xFFCBD5E1);
 
-  // Status — light
   static const Color success = Color(0xFF22C55E);
   static const Color successTint = Color(0xFFDCFCE7);
   static const Color successText = Color(0xFF166534);
@@ -31,19 +28,15 @@ class AppColors {
   static const Color errorText = Color(0xFF991B1B);
   static const Color accent = Color(0xFF8B5CF6);
 
-  // Dark surfaces
   static const Color darkBackground = Color(0xFF0F172A);
   static const Color darkSurface = Color(0xFF1E293B);
   static const Color darkSurfaceAlt = Color(0xFF334155);
   static const Color darkOnSurface = Color(0xFFF1F5F9);
   static const Color darkSubtle = Color(0xFF64748B);
   static const Color darkMuted = Color(0xFF475569);
-  // Was Color(0xFF1E293B) which matched darkSurface exactly, so dividers and
-  // text-field borders were invisible against the dark surface.
   static const Color darkOutline = Color(0xFF475569);
   static const Color darkDisabled = Color(0xFF334155);
 
-  // Status — dark
   static const Color darkPrimaryTint = Color(0xFF0C3A52);
   static const Color darkPrimaryOnDark = Color(0xFF93C5FD);
   static const Color darkSuccessTint = Color(0xFF14532D);
@@ -58,7 +51,6 @@ class AppColors {
   static const Color darkInvitedTint = Color(0xFF3B0764);
   static const Color darkInvitedText = Color(0xFFD8B4FE);
 
-  // Employee color palette (used by AppAvatar auto-color + EmployeeColorGrid)
   static const List<Color> employeePalette = [
     Color(0xFF6366F1), // indigo
     Color(0xFFEC4899), // pink
@@ -110,9 +102,6 @@ class AppDuration {
   static const Duration shimmer = Duration(milliseconds: 1200);
 }
 
-/// Status hues with no clean Material 3 ColorScheme analog (invited = purple,
-/// inProgress = sky blue). Exposed via `Theme.of(context).extension<AppStatusColors>()`
-/// so widget `build()` methods stay free of static `AppColors.*` references.
 @immutable
 class AppStatusColors extends ThemeExtension<AppStatusColors> {
   const AppStatusColors({

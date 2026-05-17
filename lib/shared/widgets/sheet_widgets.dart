@@ -79,7 +79,6 @@ class SheetFrame extends StatelessWidget {
   }
 }
 
-// Scrolls sheet form fields into view when the keyboard would otherwise cover them.
 class SheetFocusScroll extends StatefulWidget {
   const SheetFocusScroll({required this.child, super.key});
 
@@ -93,11 +92,9 @@ class _SheetFocusScrollState extends State<SheetFocusScroll> {
   int _focusRequest = 0;
 
   Future<void> _ensureVisible(int request) async {
-    // Let the keyboard animation start before calculating the field position.
     await Future<void>.delayed(const Duration(milliseconds: 280));
     if (!mounted || request != _focusRequest) return;
 
-    // Keep the focused field comfortably above the keyboard.
     await Scrollable.ensureVisible(
       context,
       duration: const Duration(milliseconds: 360),
@@ -110,7 +107,6 @@ class _SheetFocusScrollState extends State<SheetFocusScroll> {
   Widget build(BuildContext context) {
     return Focus(
       onFocusChange: (hasFocus) {
-        // Ignore older scroll requests if the user quickly taps another field.
         if (hasFocus) _ensureVisible(++_focusRequest);
       },
       child: widget.child,

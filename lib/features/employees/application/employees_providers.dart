@@ -11,24 +11,16 @@ final employeesRepositoryProvider = Provider<EmployeesRepository>((ref) {
   return FirebaseEmployeesRepository(firestore, auth: auth);
 });
 
-/// Streams every user doc (no role filter). Used by appointment views that
-/// need the full employee colour map.
-///
-/// The `ref.authUid` gate forces a fresh Firestore subscription on
-/// logout/login — without it the listener errors when auth drops and Riverpod
-/// keeps the error state across the next sign-in.
 final allUsersStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
   if (ref.authUid == null) return Stream.value(const []);
   return ref.watch(employeesRepositoryProvider).watchAllUsers();
 });
 
-/// Employees + admins (`role in {employee, admin}`).
 final employeesStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
   if (ref.authUid == null) return Stream.value(const []);
   return ref.watch(employeesRepositoryProvider).watchEmployees();
 });
 
-/// Active users only (assignment-eligible).
 final assignableUsersStreamProvider = StreamProvider<List<EmployeeRecord>>((
   ref,
 ) {
@@ -36,7 +28,6 @@ final assignableUsersStreamProvider = StreamProvider<List<EmployeeRecord>>((
   return ref.watch(employeesRepositoryProvider).watchAssignableUsers();
 });
 
-/// Filters the watched employees list locally by name/email/phone.
 final filteredEmployeesProvider = Provider.family<List<EmployeeRecord>, String>(
   (ref, query) {
     final list = ref.watch(employeesStreamProvider).asData?.value ?? const [];

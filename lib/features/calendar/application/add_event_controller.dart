@@ -16,12 +16,6 @@ import 'package:scheduling/features/employees/domain/models/employee_record.dart
 
 part 'add_event_controller.freezed.dart';
 
-/// Form state for the new-appointment sheet. Owned by `AddEventController`
-/// and watched from the widget shell.
-///
-/// `TextEditingController`s, `FocusNode`s, and the search-debounce timer
-/// stay in the widget — they're UI primitives whose lifecycle ties to the
-/// widget's mount/unmount, not to this state.
 @freezed
 abstract class AddEventState with _$AddEventState {
   const factory AddEventState({
@@ -41,20 +35,14 @@ abstract class AddEventState with _$AddEventState {
   }) = _AddEventState;
 }
 
-/// Result of `AddEventController.submit` — encodes the three terminal
-/// states the widget needs to react to.
 sealed class AddEventSubmitOutcome {
   const AddEventSubmitOutcome();
 }
 
-/// Validation failed; `AddEventState.errors` holds the per-field details.
 class AddEventInvalid extends AddEventSubmitOutcome {
   const AddEventInvalid();
 }
 
-/// One or more selected employees already have a conflicting appointment in
-/// the chosen window. The widget should show `showBusyConflictDialog` and
-/// re-call `submit(forceBusy: true)` if the user confirms.
 class AddEventBusyEmployees extends AddEventSubmitOutcome {
   const AddEventBusyEmployees({
     required this.busyEmployees,
@@ -66,24 +54,16 @@ class AddEventBusyEmployees extends AddEventSubmitOutcome {
   final DateTime end;
 }
 
-/// Appointment was written to Firestore. The widget should `Navigator.pop`
-/// with the returned `AppointmentRecord`. Background photo upload has
-/// already been kicked off when relevant.
 class AddEventSubmitted extends AddEventSubmitOutcome {
   const AddEventSubmitted(this.appointment);
   final AppointmentRecord appointment;
 }
 
-/// Repository call threw. Widget should surface a SnackBar and let the user
-/// retry; controller has already reset `isSubmitting` to false.
 class AddEventFailed extends AddEventSubmitOutcome {
   const AddEventFailed(this.error);
   final Object error;
 }
 
-/// State + actions for `add_appointment_sheet`. Family-keyed by the initial
-/// date passed in by the caller so opening the sheet on different days
-/// starts each form fresh (autoDispose tears state down on close).
 class AddEventController
     extends AutoDisposeFamilyNotifier<AddEventState, DateTime?> {
   @override
@@ -98,8 +78,6 @@ class AddEventController
     );
   }
 
-  /// Picking a start time auto-advances the end time by one hour, but only
-  /// when the user hasn't manually picked the end yet.
   void selectStartTime(TimeOfDay time) {
     final auto = !state.endTimeWasPickedManually;
     state = state.copyWith(
@@ -176,9 +154,6 @@ class AddEventController
     );
   }
 
-  /// Cap on attached images per appointment. Prevents memory pressure on
-  /// the compression/upload pipeline (each compressed image is held in RAM
-  /// during `Future.wait` over `compressImages`).
   static const int maxImagesPerAppointment = 10;
 
   void addImages(List<File> files) {
@@ -195,13 +170,6 @@ class AddEventController
     state = state.copyWith(selectedImages: next);
   }
 
-  /// Validates the form, checks for busy employees, and (if everything
-  /// passes) writes the appointment to Firestore. Pass the in-progress
-  /// values from the `TextEditingController`s as parameters — they live in
-  /// the widget, not in state.
-  ///
-  /// `forceBusy: true` skips the busy-employees pre-check, which is what
-  /// the widget passes after the user confirms `showBusyConflictDialog`.
   Future<AddEventSubmitOutcome> submit({
     required String title,
     required String address,
@@ -267,7 +235,6 @@ class AddEventController
         employeeNames: state.selectedEmployees.map((e) => e.name).toList(),
         notes: notes.trim(),
         materialsNeeded: materialsNeeded.trim(),
-        // New appointments are pre-confirmed by the creator, not pending review.
         status: 'booked',
       );
 
@@ -298,8 +265,6 @@ final addEventControllerProvider =
       DateTime?
     >(AddEventController.new);
 
-// ── helpers ─────────────────────────────────────────────────────────────
-
 Map<String, AppointmentFormError> _withoutKey(
   Map<String, AppointmentFormError> errors,
   String key,
@@ -309,8 +274,6 @@ Map<String, AppointmentFormError> _withoutKey(
   return next;
 }
 
-// Wraps at the 24-hour boundary so appointments that start late at night
-// can still auto-advance to the next hour without overflowing.
 TimeOfDay _addOneHour(TimeOfDay time) {
   final totalMinutes = time.hour * 60 + time.minute + 60;
   final wrapped = totalMinutes % (24 * 60);

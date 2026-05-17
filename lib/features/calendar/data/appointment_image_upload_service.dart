@@ -111,8 +111,6 @@ class AppointmentImageUploadService {
         failedCount: failedCount,
       );
     } finally {
-      // Compressed files live in the OS temp dir; clean them up regardless of
-      // upload outcome so failures don't accumulate on-device.
       for (final f in compressed) {
         try {
           if (await f.exists()) await f.delete();

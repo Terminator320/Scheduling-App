@@ -43,13 +43,7 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
   bool _isLoading = false;
   String? _serviceError;
   bool _suppressFetch = false;
-  // Lifecycle: generated lazily on the first fetch and discarded after
-  // getPlaceDetails so the autocomplete + details round-trip is billed by
-  // Places as a single session.
   String? _sessionToken;
-  // Cached so the user's typed apt prefix ("5-1234 Main") survives across
-  // the Places call (which is sent street-only) and gets re-applied to the
-  // display format after selection.
   String _lastTypedApt = '';
 
   @override
@@ -80,9 +74,6 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
     _debounce = Timer(const Duration(milliseconds: 300), () => _fetch(value));
   }
 
-  /// Resolves a thrown error to the user-facing string. `MapsFailure` carries
-  /// its own localized message; anything else falls back to a generic
-  /// address-lookup message — we never echo raw error text to the field.
   String _localizedErrorFor(
     Object error,
     BuildContext context,
@@ -97,9 +88,6 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
       _isLoading = true;
       _serviceError = null;
     });
-    // Capture the apt portion the user typed (if any) before we strip it
-    // for the Places query — Places can't autocomplete on "5-1234 …", and
-    // we'll need the apt again when formatting the post-selection display.
     _lastTypedApt = AddressParser.splitApt(query)?.apt ?? '';
     try {
       final results = await _service.autocomplete(
@@ -161,8 +149,6 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
       });
       widget.onAddressSelected?.call(widget.controller.text);
     } finally {
-      // The Places session ends after details (success OR failure). The next
-      // edit starts a new billing session.
       _sessionToken = null;
       _lastTypedApt = '';
     }
