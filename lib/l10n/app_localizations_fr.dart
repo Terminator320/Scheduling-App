@@ -873,13 +873,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get accountCreated => 'Compte créé';
 
   @override
-  String get youCanNowSignInWithThisEmailAndPassword => 'Vous pouvez maintenant vous connecter avec ce courriel et ce mot de passe.';
+  String get youCanNowSignInWithThisEmailAndPassword => 'Vérifiez votre boîte de réception et confirmez votre courriel, puis connectez-vous.';
 
   @override
   String get useTheEmailYourAdminAddedToTheEmployeeList => 'Utilisez le courriel que votre administrateur a ajouté à la liste des employés.';
 
   @override
   String get noUserProfileFoundForThisAccount => 'Aucun profil utilisateur trouvé pour ce compte';
+
+  @override
+  String get pleaseVerifyYourEmailBeforeSigningIn => 'Veuillez vérifier votre courriel avant de vous connecter.';
 
   @override
   String get pleaseLogInAgainAndRetry => 'Veuillez vous reconnecter et réessayer';

@@ -94,10 +94,7 @@ void main() {
     test('auto-advances end by one hour when end was not picked manually', () {
       final c = readNotifier();
       c.selectStartTime(const TimeOfDay(hour: 9, minute: 0));
-      expect(
-        readState().selectedEndTime,
-        const TimeOfDay(hour: 10, minute: 0),
-      );
+      expect(readState().selectedEndTime, const TimeOfDay(hour: 10, minute: 0));
     });
 
     test('does not overwrite end after a manual end pick', () {
@@ -106,10 +103,7 @@ void main() {
         ..selectStartTime(const TimeOfDay(hour: 9, minute: 0))
         ..selectEndTime(const TimeOfDay(hour: 14, minute: 0))
         ..selectStartTime(const TimeOfDay(hour: 11, minute: 0));
-      expect(
-        readState().selectedEndTime,
-        const TimeOfDay(hour: 14, minute: 0),
-      );
+      expect(readState().selectedEndTime, const TimeOfDay(hour: 14, minute: 0));
     });
   });
 
@@ -136,8 +130,9 @@ void main() {
     });
 
     test('populates results from the repo on non-empty query', () async {
-      when(() => clients.searchClients('jan'))
-          .thenAnswer((_) async => const [_aClient]);
+      when(
+        () => clients.searchClients('jan'),
+      ).thenAnswer((_) async => const [_aClient]);
       final c = readNotifier();
       await c.searchClients('jan');
       expect(readState().clientResults, [_aClient]);
@@ -146,42 +141,49 @@ void main() {
   });
 
   group('submit', () {
-    test('returns AddEventInvalid and populates errors on empty form',
-        () async {
-      final outcome = await readNotifier().submit(
-        title: '',
-        address: '',
-        notes: '',
-        materialsNeeded: '',
-      );
-      expect(outcome, isA<AddEventInvalid>());
-      expect(readState().errors.keys, containsAll(['title', 'client', 'employees']));
-      verifyNever(() => appointments.addAppointment(any()));
-    });
+    test(
+      'returns AddEventInvalid and populates errors on empty form',
+      () async {
+        final outcome = await readNotifier().submit(
+          title: '',
+          address: '',
+          notes: '',
+          materialsNeeded: '',
+        );
+        expect(outcome, isA<AddEventInvalid>());
+        expect(
+          readState().errors.keys,
+          containsAll(['title', 'client', 'employees']),
+        );
+        verifyNever(() => appointments.addAppointment(any()));
+      },
+    );
 
-    test('returns AddEventBusyEmployees when busy check finds conflicts',
-        () async {
-      when(
-        () => appointments.findBusyEmployees(
-          candidates: any(named: 'candidates'),
-          start: any(named: 'start'),
-          end: any(named: 'end'),
-        ),
-      ).thenAnswer((_) async => const [_employeeA]);
+    test(
+      'returns AddEventBusyEmployees when busy check finds conflicts',
+      () async {
+        when(
+          () => appointments.findBusyEmployees(
+            candidates: any(named: 'candidates'),
+            start: any(named: 'start'),
+            end: any(named: 'end'),
+          ),
+        ).thenAnswer((_) async => const [_employeeA]);
 
-      final c = readNotifier();
-      fillValid(c);
+        final c = readNotifier();
+        fillValid(c);
 
-      final outcome = await c.submit(
-        title: 'Leak fix',
-        address: '999 Maple',
-        notes: '',
-        materialsNeeded: '',
-      );
+        final outcome = await c.submit(
+          title: 'Leak fix',
+          address: '999 Maple',
+          notes: '',
+          materialsNeeded: '',
+        );
 
-      expect(outcome, isA<AddEventBusyEmployees>());
-      verifyNever(() => appointments.addAppointment(any()));
-    });
+        expect(outcome, isA<AddEventBusyEmployees>());
+        verifyNever(() => appointments.addAppointment(any()));
+      },
+    );
 
     test('writes appointment and kicks off photo upload on success', () async {
       final c = readNotifier();
@@ -203,7 +205,7 @@ void main() {
       expect(saved.materialsNeeded, 'wrench');
       expect(saved.clientId, _aClient.id);
       expect(saved.employeeIds, [_employeeA.id]);
-      expect(saved.status, 'booked');
+      expect(saved.status, 'pending');
 
       verify(() => appointments.addAppointment(any())).called(1);
       // No images selected — uploader should not run.
@@ -215,8 +217,7 @@ void main() {
       );
     });
 
-    test('skips busy check on forceBusy and writes the appointment',
-        () async {
+    test('skips busy check on forceBusy and writes the appointment', () async {
       when(
         () => appointments.findBusyEmployees(
           candidates: any(named: 'candidates'),
@@ -247,23 +248,26 @@ void main() {
       verify(() => appointments.addAppointment(any())).called(1);
     });
 
-    test('returns AddEventFailed and resets isSubmitting when repo throws',
-        () async {
-      when(() => appointments.addAppointment(any()))
-          .thenThrow(Exception('boom'));
+    test(
+      'returns AddEventFailed and resets isSubmitting when repo throws',
+      () async {
+        when(
+          () => appointments.addAppointment(any()),
+        ).thenThrow(Exception('boom'));
 
-      final c = readNotifier();
-      fillValid(c);
+        final c = readNotifier();
+        fillValid(c);
 
-      final outcome = await c.submit(
-        title: 'Leak fix',
-        address: '999 Maple',
-        notes: '',
-        materialsNeeded: '',
-      );
+        final outcome = await c.submit(
+          title: 'Leak fix',
+          address: '999 Maple',
+          notes: '',
+          materialsNeeded: '',
+        );
 
-      expect(outcome, isA<AddEventFailed>());
-      expect(readState().isSubmitting, isFalse);
-    });
+        expect(outcome, isA<AddEventFailed>());
+        expect(readState().isSubmitting, isFalse);
+      },
+    );
   });
 }

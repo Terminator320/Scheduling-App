@@ -9,9 +9,10 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 
 class NoticeListener extends ConsumerStatefulWidget {
-  const NoticeListener({required this.child, super.key});
+  const NoticeListener({required this.child, this.navigatorKey, super.key});
 
   final Widget child;
+  final GlobalKey<NavigatorState>? navigatorKey;
 
   @override
   ConsumerState<NoticeListener> createState() => _NoticeListenerState();
@@ -37,7 +38,8 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
 
   void _show(AppNotice notice) {
     if (!mounted) return;
-    final overlay = Overlay.maybeOf(context);
+    final overlay =
+        widget.navigatorKey?.currentState?.overlay ?? Overlay.maybeOf(context);
     if (overlay == null) return;
 
     final accessible =

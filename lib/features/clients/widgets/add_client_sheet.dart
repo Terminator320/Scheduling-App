@@ -292,46 +292,39 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: SheetFocusScroll(
-                    child: LabeledTextField(
-                      label: context.l10n.phone,
-                      controller: _phoneController,
-                      keyboard: TextInputType.phone,
-                      required: true,
-                      autofillHints: const [AutofillHints.telephoneNumber],
-                      maxLength: TextLimits.phone,
-                      errorText: _errors['phone'],
-                      onChanged: (_) {
-                        _clearError('phone');
-                        _clearError('email');
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: SheetFocusScroll(
-                    child: LabeledTextField(
-                      label: context.l10n.email,
-                      controller: _emailController,
-                      keyboard: TextInputType.emailAddress,
-                      optional: true,
-                      autofillHints: const [AutofillHints.email],
-                      maxLength: TextLimits.email,
-                      errorText: _errors['email'],
-                      onChanged: (_) {
-                        _clearError('email');
-                        _clearError('phone');
-                      },
-                    ),
-                  ),
-                ),
-              ],
+            SheetFocusScroll(
+              child: LabeledTextField(
+                label: context.l10n.email,
+                controller: _emailController,
+                keyboard: TextInputType.emailAddress,
+                optional: true,
+                autofillHints: const [AutofillHints.email],
+                maxLength: TextLimits.email,
+                errorText: _errors['email'],
+                onChanged: (_) {
+                  _clearError('email');
+                  _clearError('phone');
+                },
+              ),
             ),
+
+            const SizedBox(height: 16),
+            SheetFocusScroll(
+              child: LabeledTextField(
+                label: context.l10n.phone,
+                controller: _phoneController,
+                keyboard: TextInputType.phone,
+                required: true,
+                autofillHints: const [AutofillHints.telephoneNumber],
+                maxLength: TextLimits.phone,
+                errorText: _errors['phone'],
+                onChanged: (_) {
+                  _clearError('phone');
+                  _clearError('email');
+                },
+              ),
+            ),
+
             if (_isBusiness) ...[
               const SizedBox(height: 8),
               AdditionalContactsSection(

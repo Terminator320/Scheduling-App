@@ -1,0 +1,62 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Helper functions ──────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Reads the bridge doc maintained by the syncUsersByUid Cloud Function
+    // (see functions/index.js). Returns true when the caller is an active admin.
+    function isAdmin() {
+      let bridge = firestore.get(
+        /databases/(default)/documents/usersByUid/$(request.auth.uid)
+      );
+      return isSignedIn()
+        && bridge != null
+        && bridge.data.role == 'admin'
+        && bridge.data.status == 'active';
+    }
+
+    // Returns true when the current user's Firestore doc ID appears in the
+    // appointment's employeeIds array.
+    function isAssignedToAppointment(appointmentId) {
+      let bridge = firestore.get(
+        /databases/(default)/documents/usersByUid/$(request.auth.uid)
+      );
+      let appt = firestore.get(
+        /databases/(default)/documents/appointments/$(appointmentId)
+      );
+      return isSignedIn()
+        && bridge != null
+        && appt != null
+        && bridge.data.docId in appt.data.employeeIds;
+    }
+
+    // ── Appointment images ────────────────────────────────────────────────────
+    match /appointments/{appointmentId}/images/{fileName} {
+
+      // Read: admin sees all; assigned employees see their appointments' images.
+      allow read: if isAdmin() || isAssignedToAppointment(appointmentId);
+
+      // Write: same access control as read, plus content-type and size limits.
+      // Content-type is set by the client and forgeable — the real defense is
+      // the client-side magic-byte check (FF D8 FF / 89 50 4E) in
+      // ImageCompressService. This regex is defense in depth.
+      allow write: if (isAdmin() || isAssignedToAppointment(appointmentId))
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png)');
+
+      // Delete: admin or assigned employee only.
+      allow delete: if isAdmin() || isAssignedToAppointment(appointmentId);
+    }
+
+    // ── Deny everything else ──────────────────────────────────────────────────
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

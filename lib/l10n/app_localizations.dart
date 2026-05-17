@@ -1826,7 +1826,7 @@ abstract class AppLocalizations {
   /// No description provided for @youCanNowSignInWithThisEmailAndPassword.
   ///
   /// In en, this message translates to:
-  /// **'You can now sign in with this email and password.'**
+  /// **'Check your inbox and verify your email, then sign in.'**
   String get youCanNowSignInWithThisEmailAndPassword;
 
   /// No description provided for @useTheEmailYourAdminAddedToTheEmployeeList.
@@ -1840,6 +1840,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No user profile found for this account'**
   String get noUserProfileFoundForThisAccount;
+
+  /// No description provided for @pleaseVerifyYourEmailBeforeSigningIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Please verify your email before signing in.'**
+  String get pleaseVerifyYourEmailBeforeSigningIn;
 
   /// No description provided for @pleaseLogInAgainAndRetry.
   ///

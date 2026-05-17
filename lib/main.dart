@@ -277,6 +277,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
                     context,
                   ).copyWith(textScaler: TextScaler.linear(_textScale)),
                   child: NoticeListener(
+                    navigatorKey: _navigatorKey,
                     child: child ?? const SizedBox.shrink(),
                   ),
                 );

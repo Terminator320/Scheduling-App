@@ -72,12 +72,23 @@ class AuthService {
       throw const AuthFailureNotAuthorized();
     }
 
-    await _employees.activateEmployee(
-      docId: invitedEmployee.docId,
-      uid: credential.user!.uid,
-    );
+    await credential.user!.sendEmailVerification();
 
     return credential;
+  }
+
+  // Called from the login screen after a successful sign-in. Reloads the user
+  // to pick up the latest email_verified flag, then activates any pending
+  // invite whose email matches. This defers Firestore activation until after
+  // the user proves ownership of the address by clicking the verification link.
+  Future<void> tryActivateInvitedEmployee(User user) async {
+    await user.reload();
+    if (!user.emailVerified) return;
+    final email = user.email;
+    if (email == null) return;
+    final invite = await _employees.findInvitedEmployeeByEmail(email);
+    if (invite == null) return;
+    await _employees.activateEmployee(docId: invite.docId, uid: user.uid);
   }
 
   Future<void> signOut() async {
