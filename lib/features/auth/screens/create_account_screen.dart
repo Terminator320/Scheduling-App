@@ -21,9 +21,13 @@ class CreateAccountResult {
 }
 
 class CreateAccountScreen extends StatefulWidget {
-  const CreateAccountScreen({super.key, this.initialEmail});
+  const CreateAccountScreen({super.key, this.initialEmail, this.authService});
 
   final String? initialEmail;
+
+  // Optional injection for widget tests. Production wiring still defaults to
+  // `AuthService()` so call sites don't change.
+  final AuthService? authService;
 
   @override
   State<CreateAccountScreen> createState() => _CreateAccountScreenState();
@@ -33,7 +37,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
     with SingleTickerProviderStateMixin {
   static const int _itemCount = 8;
 
-  final AuthService _authService = AuthService();
+  late final AuthService _authService = widget.authService ?? AuthService();
   late final TextEditingController _emailController;
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
@@ -228,10 +232,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                context.l10n.createAccount2,
-                style: textTheme.headlineLarge,
-              ),
+              Text(context.l10n.createAccount2, style: textTheme.headlineLarge),
               const SizedBox(height: 4),
               Text(
                 context.l10n.useTheEmailYourAdminAddedToTheEmployeeList,
@@ -256,13 +257,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               enabled: !_isLoading,
               onSubmitted: (_) => _passwordFocus.requestFocus(),
               onChanged: (_) => _onFieldChanged(),
-              decoration: formInputDecoration(
-                context,
-                context.l10n.email,
-              ).copyWith(
-                errorText: _emailError,
-                prefixIcon: const Icon(Icons.email_outlined, size: 20),
-              ),
+              decoration: formInputDecoration(context, context.l10n.email)
+                  .copyWith(
+                    errorText: _emailError,
+                    prefixIcon: const Icon(Icons.email_outlined, size: 20),
+                  ),
             ),
           ),
         ),
@@ -280,26 +279,25 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               enabled: !_isLoading,
               onSubmitted: (_) => _confirmPasswordFocus.requestFocus(),
               onChanged: (_) => _onFieldChanged(),
-              decoration: formInputDecoration(
-                context,
-                context.l10n.password,
-              ).copyWith(
-                errorText: _passwordError,
-                prefixIcon: const Icon(Icons.lock_outlined, size: 20),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _isObscured
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    size: 20,
-                    color: scheme.onSurfaceVariant,
+              decoration: formInputDecoration(context, context.l10n.password)
+                  .copyWith(
+                    errorText: _passwordError,
+                    prefixIcon: const Icon(Icons.lock_outlined, size: 20),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _isObscured
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        size: 20,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      tooltip: _isObscured
+                          ? context.l10n.showPassword
+                          : context.l10n.hidePassword,
+                      onPressed: () =>
+                          setState(() => _isObscured = !_isObscured),
+                    ),
                   ),
-                  tooltip: _isObscured
-                      ? context.l10n.showPassword
-                      : context.l10n.hidePassword,
-                  onPressed: () => setState(() => _isObscured = !_isObscured),
-                ),
-              ),
             ),
           ),
         ),
@@ -317,27 +315,29 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               enabled: !_isLoading,
               onSubmitted: (_) => _createAccount(),
               onChanged: (_) => _onFieldChanged(),
-              decoration: formInputDecoration(
-                context,
-                context.l10n.confirmPassword,
-              ).copyWith(
-                errorText: _confirmPasswordError,
-                prefixIcon: const Icon(Icons.lock_reset_outlined, size: 20),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _isConfirmObscured
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    size: 20,
-                    color: scheme.onSurfaceVariant,
+              decoration:
+                  formInputDecoration(
+                    context,
+                    context.l10n.confirmPassword,
+                  ).copyWith(
+                    errorText: _confirmPasswordError,
+                    prefixIcon: const Icon(Icons.lock_reset_outlined, size: 20),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _isConfirmObscured
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        size: 20,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      tooltip: _isConfirmObscured
+                          ? context.l10n.showPassword
+                          : context.l10n.hidePassword,
+                      onPressed: () => setState(
+                        () => _isConfirmObscured = !_isConfirmObscured,
+                      ),
+                    ),
                   ),
-                  tooltip: _isConfirmObscured
-                      ? context.l10n.showPassword
-                      : context.l10n.hidePassword,
-                  onPressed: () =>
-                      setState(() => _isConfirmObscured = !_isConfirmObscured),
-                ),
-              ),
             ),
           ),
         ),
@@ -400,9 +400,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               onPressed: _isLoading ? null : _backToSignIn,
               child: Text(
                 context.l10n.backToSignIn,
-                style: textTheme.bodySmall?.copyWith(
-                  color: scheme.primary,
-                ),
+                style: textTheme.bodySmall?.copyWith(color: scheme.primary),
               ),
             ),
           ),

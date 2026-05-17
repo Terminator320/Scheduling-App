@@ -14,23 +14,31 @@ import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
 class ForgotPassword extends StatefulWidget {
-  const ForgotPassword({super.key, this.initialEmail});
+  const ForgotPassword({super.key, this.initialEmail, this.authService});
 
   final String? initialEmail;
+
+  // Optional injection for widget tests. Production wiring still defaults to
+  // `AuthService()` so call sites don't change.
+  final AuthService? authService;
 
   @override
   State<ForgotPassword> createState() => _ForgotPasswordState();
 }
 
 class ForgotPasswordScreen extends ForgotPassword {
-  const ForgotPasswordScreen({super.key, super.initialEmail});
+  const ForgotPasswordScreen({
+    super.key,
+    super.initialEmail,
+    super.authService,
+  });
 }
 
 class _ForgotPasswordState extends State<ForgotPassword>
     with SingleTickerProviderStateMixin {
   static const int _itemCount = 6;
 
-  final AuthService _authService = AuthService();
+  late final AuthService _authService = widget.authService ?? AuthService();
   late final TextEditingController _emailController;
   late final StaggeredEntranceController _entrance;
 
@@ -221,13 +229,14 @@ class _ForgotPasswordState extends State<ForgotPassword>
                   });
                 }
               },
-              decoration: formInputDecoration(
-                context,
-                context.l10n.youExampleCom,
-              ).copyWith(
-                errorText: _emailError,
-                prefixIcon: const Icon(Icons.email_outlined, size: 20),
-              ),
+              decoration:
+                  formInputDecoration(
+                    context,
+                    context.l10n.youExampleCom,
+                  ).copyWith(
+                    errorText: _emailError,
+                    prefixIcon: const Icon(Icons.email_outlined, size: 20),
+                  ),
             ),
           ),
         ),
@@ -290,9 +299,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
               onPressed: _isLoading ? null : _backToSignIn,
               child: Text(
                 context.l10n.backToSignIn,
-                style: textTheme.bodySmall?.copyWith(
-                  color: scheme.primary,
-                ),
+                style: textTheme.bodySmall?.copyWith(color: scheme.primary),
               ),
             ),
           ),
@@ -342,7 +349,9 @@ class _ForgotPasswordState extends State<ForgotPassword>
         FadeSlideEntrance(
           animation: animations[2],
           child: Text(
-            context.l10n.ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent,
+            context
+                .l10n
+                .ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent,
             style: textTheme.bodyMedium,
           ),
         ),
@@ -354,9 +363,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
             decoration: BoxDecoration(
               color: scheme.tertiaryContainer,
               borderRadius: BorderRadius.circular(AppRadius.r8),
-              border: Border.all(
-                color: scheme.tertiary.withValues(alpha: 0.4),
-              ),
+              border: Border.all(color: scheme.tertiary.withValues(alpha: 0.4)),
             ),
             child: Row(
               children: [
@@ -396,9 +403,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
               onPressed: _resendEmail,
               child: Text(
                 context.l10n.didnTReceiveTheEmailTryAgain,
-                style: textTheme.bodySmall?.copyWith(
-                  color: scheme.primary,
-                ),
+                style: textTheme.bodySmall?.copyWith(color: scheme.primary),
               ),
             ),
           ),
