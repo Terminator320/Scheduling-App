@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/sheet_widgets.dart';
 
@@ -70,8 +71,9 @@ class _AddressPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final address =
-        client.address.isNotEmpty ? client.address : context.l10n.noAddress;
+    final address = client.address.isNotEmpty
+        ? AddressParser.canonicalToDisplay(client.address)
+        : context.l10n.noAddress;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),

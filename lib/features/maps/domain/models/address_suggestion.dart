@@ -6,7 +6,6 @@ part 'address_suggestion.freezed.dart';
 /// pass back to `getPlaceDetails` to fetch the full address breakdown.
 @freezed
 abstract class AddressSuggestion with _$AddressSuggestion {
-
   const factory AddressSuggestion({
     @Default('') String placeId,
     @Default('') String description,
@@ -15,8 +14,8 @@ abstract class AddressSuggestion with _$AddressSuggestion {
 
   factory AddressSuggestion.fromJson(Map<String, dynamic> json) {
     final placePrediction =
-        json['placePrediction'] as Map<String, dynamic>? ?? {};
-    final text = placePrediction['text'] as Map<String, dynamic>?;
+        (json['placePrediction'] as Map?)?.cast<String, dynamic>() ?? {};
+    final text = (placePrediction['text'] as Map?)?.cast<String, dynamic>();
 
     return AddressSuggestion(
       placeId: (placePrediction['placeId'] as String?) ?? '',

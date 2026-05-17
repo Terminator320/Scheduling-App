@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AddressMapLauncher {
@@ -14,28 +15,31 @@ class AddressMapLauncher {
     final cleanAddress = address.trim();
     if (cleanAddress.isEmpty) return;
 
+    // Maps don't navigate to apartments — strip the apt portion so the route
+    // resolves to the building. The sheet subtitle uses the display form so
+    // the user still sees the apt in "1234 Main #5" shape.
+    final navAddress = _stripAptForNav(cleanAddress);
+    final navEncoded = Uri.encodeComponent(navAddress);
+    final displayAddress = AddressParser.canonicalToDisplay(cleanAddress);
+
     final options = <_MapOption>[
       if (Platform.isIOS)
         _MapOption(
           label: context.l10n.appleMaps,
           icon: Icons.map_outlined,
-          uri: Uri.parse(
-            'http://maps.apple.com/?q=${Uri.encodeComponent(cleanAddress)}',
-          ),
+          uri: Uri.parse('http://maps.apple.com/?q=$navEncoded'),
         ),
       _MapOption(
         label: context.l10n.googleMaps,
         icon: Icons.map_outlined,
         uri: Uri.parse(
-          'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(cleanAddress)}',
+          'https://www.google.com/maps/search/?api=1&query=$navEncoded',
         ),
       ),
       _MapOption(
         label: context.l10n.waze,
         icon: Icons.navigation_outlined,
-        uri: Uri.parse(
-          'https://waze.com/ul?q=${Uri.encodeComponent(cleanAddress)}&navigate=yes',
-        ),
+        uri: Uri.parse('https://waze.com/ul?q=$navEncoded&navigate=yes'),
       ),
     ];
 
@@ -67,7 +71,7 @@ class AddressMapLauncher {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  cleanAddress,
+                  displayAddress,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -104,8 +108,16 @@ class AddressMapLauncher {
   }
 }
 
-class _MapOption {
+/// Returns [address] with any apt/unit prefix stripped — works on both the
+/// canonical storage form (`"5-1234 Main, Montréal"`) and the display form
+/// (`"1234 Main #5, Montréal"`). Returns [address] untouched when no apt is
+/// detected so plain street strings pass through.
+String _stripAptForNav(String address) {
+  final parts = AddressParser.splitApt(address);
+  return parts?.street ?? address;
+}
 
+class _MapOption {
   const _MapOption({
     required this.label,
     required this.icon,

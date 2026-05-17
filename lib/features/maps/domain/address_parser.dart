@@ -69,16 +69,7 @@ class AddressParser {
   /// canonical form. Strips any embedded "apt/unit/#" tokens already inside
   /// `street` so the apt isn't duplicated when the user edits the field.
   static String combineAptAndStreet(String street, String apt) {
-    var cleanStreet = street
-        .replaceAll(
-          RegExp(
-            r'\s+(#|apt\.?|apartment|unit|suite|ste\.?)\s*[-#: ]*\s*[A-Za-z0-9 /]+',
-            caseSensitive: false,
-          ),
-          '',
-        )
-        .trim();
-
+    final cleanStreet = _stripEmbeddedAptToken(street);
     final cleanApt = apt.trim().replaceAll(RegExp('^#+'), '');
     if (cleanStreet.isEmpty || cleanApt.isEmpty) return cleanStreet;
 
@@ -88,6 +79,55 @@ class AddressParser {
     final firstLine = cleanStreet.substring(0, commaIndex).trim();
     final rest = cleanStreet.substring(commaIndex);
     return '$cleanApt-$firstLine$rest';
+  }
+
+  /// Re-formats an address as "1245 Main #12, Montréal, QC" — the display
+  /// form shown inside the autocomplete field after a Places selection and
+  /// when loading an existing stored value. Maps and screen readers handle
+  /// this layout more naturally than the canonical apt-prefix form.
+  static String formatForDisplay(String street, String apt) {
+    final cleanStreet = _stripEmbeddedAptToken(street);
+    final cleanApt = apt.trim().replaceAll(RegExp('^#+'), '');
+    if (cleanStreet.isEmpty || cleanApt.isEmpty) return cleanStreet;
+
+    final commaIndex = cleanStreet.indexOf(',');
+    if (commaIndex == -1) return '$cleanStreet #$cleanApt';
+
+    final firstLine = cleanStreet.substring(0, commaIndex).trim();
+    final rest = cleanStreet.substring(commaIndex);
+    return '$firstLine #$cleanApt$rest';
+  }
+
+  /// Convenience for converting a stored canonical address ("12-1245 Main")
+  /// to the display form ("1245 Main #12"). Returns the input unchanged when
+  /// no apt prefix is detected.
+  static String canonicalToDisplay(String stored) {
+    final parts = splitApt(stored);
+    if (parts == null) return stored;
+    return formatForDisplay(parts.street, parts.apt);
+  }
+
+  /// Inverse of [canonicalToDisplay]: converts a free-form field value
+  /// (display form, canonical, or untouched user text) to the canonical
+  /// apt-prefix form used in Firestore. Returns the trimmed input unchanged
+  /// when no apt is detected.
+  static String toCanonical(String text) {
+    final trimmed = text.trim();
+    final parts = splitApt(trimmed);
+    if (parts == null) return trimmed;
+    return combineAptAndStreet(parts.street, parts.apt);
+  }
+
+  static String _stripEmbeddedAptToken(String street) {
+    return street
+        .replaceAll(
+          RegExp(
+            r'\s+(#|apt\.?|apartment|unit|suite|ste\.?)\s*[-#: ]*\s*[A-Za-z0-9 /]+',
+            caseSensitive: false,
+          ),
+          '',
+        )
+        .trim();
   }
 
   /// Parses a free-form address string into the structured fields the

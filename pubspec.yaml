@@ -21,6 +21,7 @@ dependencies:
   firebase_storage: ^13.3.0
   firebase_app_check: ^0.4.3
   firebase_crashlytics: ^5.0.0
+  cloud_functions: ^6.0.0
 
   # Calendar / dates / i18n
   table_calendar: ^3.2.0
@@ -50,6 +51,9 @@ dependencies:
   # Network / external launches
   url_launcher: ^6.3.2
   http: ^1.6.0
+
+  # IDs
+  uuid: ^4.5.1
 
   # Config
   flutter_dotenv: ^6.0.1

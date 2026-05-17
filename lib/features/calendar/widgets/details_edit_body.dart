@@ -16,6 +16,7 @@ import 'package:scheduling/features/calendar/widgets/employee_picker.dart';
 import 'package:scheduling/features/calendar/widgets/photo_picker_section.dart';
 import 'package:scheduling/features/clients/widgets/client_search_field.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/shared/widgets/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
@@ -110,7 +111,9 @@ class DetailsEditBody extends ConsumerWidget {
             onChanged: notifier.searchClients,
             onSelect: (c) {
               controllers.clientSearch.text = c.displayName;
-              controllers.address.text = c.address;
+              controllers.address.text = AddressParser.canonicalToDisplay(
+                c.address,
+              );
               notifier.selectClient(c);
             },
             onClear: () {
@@ -305,7 +308,7 @@ class DetailsEditBody extends ConsumerWidget {
     final outcome = await notifier.save(
       appointment,
       title: controllers.title.text,
-      address: controllers.address.text,
+      address: AddressParser.toCanonical(controllers.address.text),
       notes: controllers.notes.text,
       materialsNeeded: controllers.materials.text,
     );

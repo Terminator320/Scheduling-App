@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 
+import 'package:scheduling/core/errors/failure.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/maps/data/google_places_repository.dart';
 import 'package:scheduling/features/maps/domain/models/address_suggestion.dart';
@@ -38,16 +40,28 @@ class AddressFieldsBlock extends StatefulWidget {
 class _AddressFieldsBlockState extends State<AddressFieldsBlock> {
   final _service = GooglePlacesRepository();
   final _searchController = TextEditingController();
+  static const _uuid = Uuid();
   Timer? _debounce;
   List<AddressSuggestion> _suggestions = [];
   bool _isLoading = false;
   String? _serviceError;
+  // Lifecycle mirrors AddressAutocompleteField: lazily generated on first
+  // fetch, discarded after getPlaceDetails so each editing session bills as
+  // one Places session.
+  String? _sessionToken;
 
   @override
   void dispose() {
     _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  String _ensureSessionToken() => _sessionToken ??= _uuid.v4();
+
+  String _localizedErrorFor(Object error, String fallback) {
+    if (error is Failure) return error.toLocalizedMessage(context);
+    return fallback;
   }
 
   void _onSearchChanged(String value) {
@@ -69,18 +83,24 @@ class _AddressFieldsBlockState extends State<AddressFieldsBlock> {
       _serviceError = null;
     });
     try {
-      final results = await _service.autocomplete(query);
+      final results = await _service.autocomplete(
+        query,
+        sessionToken: _ensureSessionToken(),
+      );
       if (!mounted) return;
       setState(() {
         _suggestions = results;
         _isLoading = false;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         _suggestions = [];
         _isLoading = false;
-        _serviceError = context.l10n.addressLookupFailed;
+        _serviceError = _localizedErrorFor(
+          e,
+          context.l10n.addressLookupFailed,
+        );
       });
     }
   }
@@ -93,24 +113,33 @@ class _AddressFieldsBlockState extends State<AddressFieldsBlock> {
     });
     FocusScope.of(context).unfocus();
     try {
-      final details = await _service.getPlaceDetails(s.placeId);
+      final details = await _service.getPlaceDetails(
+        s.placeId,
+        sessionToken: _ensureSessionToken(),
+      );
       if (!mounted) return;
       setState(() {
         widget.streetController.text = details.street;
         widget.cityController.text = details.city;
-        widget.provinceController.text =
-            details.province.isNotEmpty ? details.province : 'QC';
+        widget.provinceController.text = details.province.isNotEmpty
+            ? details.province
+            : 'QC';
         widget.postalCodeController.text = details.postalCode;
         _searchController.clear();
         _isLoading = false;
       });
       widget.onChanged?.call();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _serviceError = context.l10n.couldNotLoadAddressDetails;
+        _serviceError = _localizedErrorFor(
+          e,
+          context.l10n.couldNotLoadAddressDetails,
+        );
       });
+    } finally {
+      _sessionToken = null;
     }
   }
 

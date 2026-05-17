@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:scheduling/core/errors/failure.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/maps/data/google_places_repository.dart';
+import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/features/maps/domain/models/address_suggestion.dart';
 import 'package:scheduling/shared/widgets/labeled_text_field.dart';
 
@@ -35,17 +37,28 @@ class AddressAutocompleteField extends StatefulWidget {
 
 class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
   final _service = GooglePlacesRepository();
+  static const _uuid = Uuid();
   Timer? _debounce;
   List<AddressSuggestion> _suggestions = [];
   bool _isLoading = false;
   String? _serviceError;
   bool _suppressFetch = false;
+  // Lifecycle: generated lazily on the first fetch and discarded after
+  // getPlaceDetails so the autocomplete + details round-trip is billed by
+  // Places as a single session.
+  String? _sessionToken;
+  // Cached so the user's typed apt prefix ("5-1234 Main") survives across
+  // the Places call (which is sent street-only) and gets re-applied to the
+  // display format after selection.
+  String _lastTypedApt = '';
 
   @override
   void dispose() {
     _debounce?.cancel();
     super.dispose();
   }
+
+  String _ensureSessionToken() => _sessionToken ??= _uuid.v4();
 
   void _onTextChanged(String value) {
     widget.onChanged?.call(value);
@@ -84,8 +97,15 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
       _isLoading = true;
       _serviceError = null;
     });
+    // Capture the apt portion the user typed (if any) before we strip it
+    // for the Places query — Places can't autocomplete on "5-1234 …", and
+    // we'll need the apt again when formatting the post-selection display.
+    _lastTypedApt = AddressParser.splitApt(query)?.apt ?? '';
     try {
-      final results = await _service.autocomplete(query);
+      final results = await _service.autocomplete(
+        query,
+        sessionToken: _ensureSessionToken(),
+      );
       if (!mounted) return;
       setState(() {
         _suggestions = results;
@@ -114,12 +134,19 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
     });
 
     try {
-      final details = await _service.getPlaceDetails(s.placeId);
+      final details = await _service.getPlaceDetails(
+        s.placeId,
+        sessionToken: _ensureSessionToken(),
+      );
       if (!mounted) return;
       _suppressFetch = true;
-      widget.controller.text = details.fullAddress.isNotEmpty
+      final base = details.fullAddress.isNotEmpty
           ? details.fullAddress
           : s.description;
+      widget.controller.text = AddressParser.formatForDisplay(
+        base,
+        _lastTypedApt,
+      );
       setState(() => _isLoading = false);
       widget.onAddressSelected?.call(widget.controller.text);
     } catch (e) {
@@ -133,6 +160,11 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
         );
       });
       widget.onAddressSelected?.call(widget.controller.text);
+    } finally {
+      // The Places session ends after details (success OR failure). The next
+      // edit starts a new billing session.
+      _sessionToken = null;
+      _lastTypedApt = '';
     }
   }
 
