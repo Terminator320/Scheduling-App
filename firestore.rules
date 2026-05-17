@@ -54,13 +54,19 @@ service cloud.firestore {
     }
 
     // ── users ─────────────────────────────────────────────────────────────────
-    // Read: any signed-in user (employee pickers, names on appointments).
+    // Read: admins see all; active employees see active peers (picker/display);
+    // a registering user can find their own invited doc by email match.
     // Write: admin from the admin UI, plus a narrow self-activation path used
     // by the sign-up flow — an invited user claims their pre-seeded doc by
     // writing their auth uid into it. Activation only flips ['uid','status']
-    // and only when the doc's email matches the caller's verified-by-Auth email.
+    // and requires the caller's email to be verified by Firebase Auth.
     match /users/{userId} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.status == 'active')
+        || (isSignedIn() && resource.data.uid == request.auth.uid)
+        || (isSignedIn()
+            && resource.data.status == 'invited'
+            && resource.data.email == request.auth.token.email);
 
       allow create, delete: if isAdmin();
 
@@ -74,13 +80,16 @@ service cloud.firestore {
       // Self-activation path is intentionally restricted to role=='employee'.
       // Invited admins cannot self-activate here — that would let anyone who
       // knows an invited admin's email claim full admin privileges by signing
-      // up with that email (Firebase Auth doesn't verify email ownership).
-      // Admin activation must be done out-of-band (Firestore Console, or a
-      // dedicated Cloud Function with stronger checks).
+      // up with that email. Admin activation must be done out-of-band.
+      // email_verified == true is required: Firebase Auth allows registering
+      // with any email without proof of ownership, so without this check an
+      // attacker who creates an account with a victim's email could steal their
+      // invite. Verification forces the real email owner to complete the flow.
       allow update: if (isAdmin()
             && (!('colorValue' in request.resource.data.keys())
                 || isValidColorValue(request.resource.data.colorValue)))
         || (isSignedIn()
+            && request.auth.token.email_verified == true
             && resource.data.status == 'invited'
             && resource.data.uid == ''
             && resource.data.role == 'employee'
@@ -91,7 +100,7 @@ service cloud.firestore {
             && request.resource.data.email == resource.data.email
             && request.resource.data.diff(resource.data)
                .affectedKeys()
-               .hasOnly(['uid', 'status']));
+               .hasOnly(['uid', 'status', 'updatedAt']));
     }
 
     // ── appointments ──────────────────────────────────────────────────────────
@@ -128,8 +137,17 @@ service cloud.firestore {
 
     // ── clients ───────────────────────────────────────────────────────────────
     // Client PII — admin-only. Employees never need direct access.
+    function isValidClientData(data) {
+      return (!('name' in data) || (data.name is string && data.name.size() <= 200))
+        && (!('businessName' in data) || (data.businessName is string && data.businessName.size() <= 200))
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 32))
+        && (!('email' in data) || (data.email is string && data.email.size() <= 320));
+    }
+
     match /clients/{clientId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow create, update: if isAdmin() && isValidClientData(request.resource.data);
+      allow delete: if isAdmin();
     }
   }
 }

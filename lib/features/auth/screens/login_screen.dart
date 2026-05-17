@@ -120,14 +120,22 @@ class _LoginState extends ConsumerState<Login>
         return;
       }
 
+      // Reload to pick up email_verified status, then auto-activate the
+      // invite if the user has verified their email since registering.
+      await _authService.tryActivateInvitedEmployee(user);
+
       final userDoc = await ref
           .read(employeesRepositoryProvider)
           .findUserByUid(user.uid);
       if (!mounted) return;
 
       if (userDoc == null) {
+        await _authService.signOut();
+        if (!mounted) return;
         setState(() {
-          _bannerError = context.l10n.noUserProfileFoundForThisAccount;
+          _bannerError = (user.emailVerified)
+              ? context.l10n.noUserProfileFoundForThisAccount
+              : context.l10n.pleaseVerifyYourEmailBeforeSigningIn;
           _isLoading = false;
         });
         return;

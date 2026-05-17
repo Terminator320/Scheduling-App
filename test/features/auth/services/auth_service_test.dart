@@ -7,7 +7,6 @@ import 'package:mocktail/mocktail.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
-import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 class _MockFirebaseAuth extends Mock implements FirebaseAuth {}
 
@@ -42,6 +41,7 @@ void main() {
         password: any(named: 'password'),
       ),
     ).thenAnswer((_) async => credential);
+    when(() => user.sendEmailVerification()).thenAnswer((_) async {});
   }
 
   group('createEmployeeAccount', () {
@@ -53,12 +53,6 @@ void main() {
           data: const {'uid': '', 'status': 'invited'},
         ),
       );
-      when(
-        () => employees.activateEmployee(
-          docId: any(named: 'docId'),
-          uid: any(named: 'uid'),
-        ),
-      ).thenAnswer((_) async {});
 
       await service.createEmployeeAccount(
         email: '  INVITE@EXAMPLE.COM  ',
@@ -92,7 +86,7 @@ void main() {
       },
     );
 
-    test('activates the invited employee on success', () async {
+    test('sends email verification after finding invite', () async {
       stubRegister();
       when(() => employees.findInvitedEmployeeByEmail(any())).thenAnswer(
         (_) async => InvitedEmployeeMatch(
@@ -100,21 +94,19 @@ void main() {
           data: const {'uid': '', 'status': 'invited'},
         ),
       );
-      when(
-        () => employees.activateEmployee(
-          docId: any(named: 'docId'),
-          uid: any(named: 'uid'),
-        ),
-      ).thenAnswer((_) async {});
 
       await service.createEmployeeAccount(
         email: 'invited@example.com',
         password: 'pass',
       );
 
-      verify(
-        () => employees.activateEmployee(docId: 'doc-xyz', uid: 'uid-001'),
-      ).called(1);
+      verify(() => user.sendEmailVerification()).called(1);
+      verifyNever(
+        () => employees.activateEmployee(
+          docId: any(named: 'docId'),
+          uid: any(named: 'uid'),
+        ),
+      );
     });
 
     test(
@@ -135,5 +127,66 @@ void main() {
         verify(() => user.delete()).called(1);
       },
     );
+  });
+
+  group('tryActivateInvitedEmployee', () {
+    setUp(() {
+      when(() => user.reload()).thenAnswer((_) async {});
+      when(() => user.email).thenReturn('invited@example.com');
+    });
+
+    test('does nothing when email is not verified', () async {
+      when(() => user.emailVerified).thenReturn(false);
+
+      await service.tryActivateInvitedEmployee(user);
+
+      verifyNever(() => employees.findInvitedEmployeeByEmail(any()));
+      verifyNever(
+        () => employees.activateEmployee(
+          docId: any(named: 'docId'),
+          uid: any(named: 'uid'),
+        ),
+      );
+    });
+
+    test('activates when email is verified and invite exists', () async {
+      when(() => user.emailVerified).thenReturn(true);
+      when(
+        () => employees.findInvitedEmployeeByEmail('invited@example.com'),
+      ).thenAnswer(
+        (_) async => InvitedEmployeeMatch(
+          docId: 'doc-xyz',
+          data: const {'uid': '', 'status': 'invited'},
+        ),
+      );
+      when(
+        () => employees.activateEmployee(
+          docId: any(named: 'docId'),
+          uid: any(named: 'uid'),
+        ),
+      ).thenAnswer((_) async {});
+
+      await service.tryActivateInvitedEmployee(user);
+
+      verify(
+        () => employees.activateEmployee(docId: 'doc-xyz', uid: 'uid-001'),
+      ).called(1);
+    });
+
+    test('does nothing when no invite exists for the verified email', () async {
+      when(() => user.emailVerified).thenReturn(true);
+      when(
+        () => employees.findInvitedEmployeeByEmail(any()),
+      ).thenAnswer((_) async => null);
+
+      await service.tryActivateInvitedEmployee(user);
+
+      verifyNever(
+        () => employees.activateEmployee(
+          docId: any(named: 'docId'),
+          uid: any(named: 'uid'),
+        ),
+      );
+    });
   });
 }

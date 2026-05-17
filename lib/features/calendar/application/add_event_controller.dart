@@ -235,7 +235,7 @@ class AddEventController
         employeeNames: state.selectedEmployees.map((e) => e.name).toList(),
         notes: notes.trim(),
         materialsNeeded: materialsNeeded.trim(),
-        status: 'booked',
+        status: 'pending',
       );
 
       await repo.addAppointment(appointment);

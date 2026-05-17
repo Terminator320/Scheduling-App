@@ -30,6 +30,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   Stream<List<EmployeeRecord>> watchEmployees() {
     return _users
         .where('role', whereIn: ['employee', 'admin'])
+        .where('status', isEqualTo: 'active')
         .snapshots()
         .map(
           (snapshot) => snapshot.docs

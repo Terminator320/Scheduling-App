@@ -873,13 +873,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get accountCreated => 'Account created';
 
   @override
-  String get youCanNowSignInWithThisEmailAndPassword => 'You can now sign in with this email and password.';
+  String get youCanNowSignInWithThisEmailAndPassword => 'Check your inbox and verify your email, then sign in.';
 
   @override
   String get useTheEmailYourAdminAddedToTheEmployeeList => 'Use the email your admin added to the employee list.';
 
   @override
   String get noUserProfileFoundForThisAccount => 'No user profile found for this account';
+
+  @override
+  String get pleaseVerifyYourEmailBeforeSigningIn => 'Please verify your email before signing in.';
 
   @override
   String get pleaseLogInAgainAndRetry => 'Please log in again and retry';
