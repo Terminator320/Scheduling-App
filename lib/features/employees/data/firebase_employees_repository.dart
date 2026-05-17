@@ -202,6 +202,9 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   @override
   Stream<String> watchUserStatus(String uid) => _watchUserField(uid, 'status');
 
+  @override
+  Stream<String> watchUserRole(String uid) => _watchUserField(uid, 'role');
+
   Stream<String> _watchUserField(String uid, String field) {
     if (uid.isEmpty) return Stream.value('');
     return _users.where('uid', isEqualTo: uid).limit(1).snapshots().map((

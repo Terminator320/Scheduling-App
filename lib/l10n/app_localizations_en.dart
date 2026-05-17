@@ -831,6 +831,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get thisAccountHasBeenDisabled => 'This account has been disabled';
 
   @override
+  String get yourAdminAccessWasRevoked => 'Your admin access was revoked. Please sign in again.';
+
+  @override
   String get anAccountWithThisEmailAlreadyExists => 'An account with this email already exists';
 
   @override

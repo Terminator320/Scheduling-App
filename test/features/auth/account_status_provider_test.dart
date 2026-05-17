@@ -124,4 +124,91 @@ void main() {
       expect(emissions, contains(true));
     });
   });
+
+  group('userRoleProvider', () {
+    late _MockFirebaseAuth mockAuth;
+    late _MockUser mockUser;
+    late _MockRepo mockRepo;
+
+    setUp(() {
+      mockAuth = _MockFirebaseAuth();
+      mockUser = _MockUser();
+      mockRepo = _MockRepo();
+    });
+
+    ProviderContainer _container() => ProviderContainer(
+      overrides: [
+        firebaseAuthProvider.overrideWithValue(mockAuth),
+        employeesRepositoryProvider.overrideWithValue(mockRepo),
+      ],
+    );
+
+    Future<String> firstRoleValue(ProviderContainer container) {
+      final completer = Completer<String>();
+      final sub = container.listen<AsyncValue<String>>(
+        userRoleProvider,
+        (_, next) {
+          if (next.hasValue && !completer.isCompleted) {
+            completer.complete(next.value!);
+          }
+        },
+        fireImmediately: true,
+      );
+      return completer.future.whenComplete(sub.close);
+    }
+
+    test('emits empty string when no user is logged in', () async {
+      when(() => mockAuth.authStateChanges())
+          .thenAnswer((_) => Stream.value(null));
+
+      final container = _container();
+      addTearDown(container.dispose);
+
+      final result = await firstRoleValue(container);
+      expect(result, isEmpty);
+    });
+
+    test('emits "admin" when watchUserRole returns admin', () async {
+      when(() => mockUser.uid).thenReturn('uid1');
+      when(() => mockRepo.watchUserRole('uid1'))
+          .thenAnswer((_) => Stream.value('admin'));
+      when(() => mockAuth.authStateChanges())
+          .thenAnswer((_) => Stream.value(mockUser));
+
+      final container = _container();
+      addTearDown(container.dispose);
+
+      final result = await firstRoleValue(container);
+      expect(result, 'admin');
+    });
+
+    test('emits "admin" then "employee" when role is demoted', () async {
+      when(() => mockUser.uid).thenReturn('uid1');
+
+      final roleController = StreamController<String>();
+      when(() => mockRepo.watchUserRole('uid1'))
+          .thenAnswer((_) => roleController.stream);
+      when(() => mockAuth.authStateChanges())
+          .thenAnswer((_) => Stream.value(mockUser));
+
+      final container = _container();
+      addTearDown(container.dispose);
+      addTearDown(roleController.close);
+
+      final emissions = <String>[];
+      final sub = container.listen(userRoleProvider, (_, next) {
+        if (next.hasValue) emissions.add(next.value!);
+      });
+      addTearDown(sub.close);
+
+      roleController.add('admin');
+      await Future<void>.delayed(Duration.zero);
+      roleController.add('employee');
+      await Future<void>.delayed(Duration.zero);
+
+      // Sequencing matters: admin must appear before employee, otherwise the
+      // main.dart listener can't detect the admin → employee demotion.
+      expect(emissions, containsAllInOrder(['admin', 'employee']));
+    });
+  });
 }
