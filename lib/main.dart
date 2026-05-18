@@ -244,9 +244,25 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     });
   }
 
+  // H3: defense-in-depth — if an admin is demoted mid-session, force sign-out
+  // so stale admin UI can't trigger permission-denied from Firestore rules.
+  void _listenForRoleRevocation(BuildContext context) {
+    ref.listen<AsyncValue<String>>(userRoleProvider, (prev, next) {
+      final prevRole = prev?.valueOrNull;
+      final nextRole = next.valueOrNull;
+      if (prevRole == 'admin' && nextRole != null && nextRole != 'admin') {
+        _handleAccountDisabled(
+          context,
+          context.l10n.yourAdminAccessWasRevoked,
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     _listenForAccountDisabled(context);
+    _listenForRoleRevocation(context);
     return AppLanguageScope(
       controller: _languageController,
       child: ThemeNotifier(

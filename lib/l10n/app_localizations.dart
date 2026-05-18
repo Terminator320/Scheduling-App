@@ -1739,6 +1739,12 @@ abstract class AppLocalizations {
   /// **'This account has been disabled'**
   String get thisAccountHasBeenDisabled;
 
+  /// No description provided for @yourAdminAccessWasRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Your admin access was revoked. Please sign in again.'**
+  String get yourAdminAccessWasRevoked;
+
   /// No description provided for @anAccountWithThisEmailAlreadyExists.
   ///
   /// In en, this message translates to:
