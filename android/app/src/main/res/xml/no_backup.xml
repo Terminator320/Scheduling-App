@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Intentionally empty: allowBackup=false above already excludes
+         everything from Auto-Backup. This file is the belt-and-braces
+         declaration referenced by android:fullBackupContent. -->
+</full-backup-content>

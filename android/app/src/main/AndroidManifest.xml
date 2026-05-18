@@ -2,7 +2,9 @@
     <application
         android:label="scheduling"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/no_backup">
         <activity
             android:name=".MainActivity"
             android:exported="true"
