@@ -57,5 +57,12 @@
 		<string>maps</string>
 		<string>comgooglemaps</string>
 	</array>
+	<!-- TODO(ios): keep NSAllowsArbitraryLoads false; do not relax ATS without a documented exception. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+	</dict>
+	<!-- TODO(ios): add ITSAppUsesNonExemptEncryption=false if app does not implement custom crypto (Firebase TLS is exempt). -->
 </dict>
 </plist>
