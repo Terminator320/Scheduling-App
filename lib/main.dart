@@ -66,7 +66,7 @@ Future<void> main() async {
 
       await dotenv.load(fileName: 'dev/.env');
 
-      // TODO(restructure): swap to DefaultFirebaseOptions.currentPlatform once `flutterfire configure` has been run on a Mac to add iOS values.
+      // TODO(ios): On Mac run `flutterfire configure` to populate iOS fields in firebase_options.dart, then swap DefaultFirebaseOptions.android -> DefaultFirebaseOptions.currentPlatform.
       await Firebase.initializeApp(options: DefaultFirebaseOptions.android);
 
       if (_useFirebaseEmulator) {
@@ -251,10 +251,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
       final prevRole = prev?.valueOrNull;
       final nextRole = next.valueOrNull;
       if (prevRole == 'admin' && nextRole != null && nextRole != 'admin') {
-        _handleAccountDisabled(
-          context,
-          context.l10n.yourAdminAccessWasRevoked,
-        );
+        _handleAccountDisabled(context, context.l10n.yourAdminAccessWasRevoked);
       }
     });
   }
