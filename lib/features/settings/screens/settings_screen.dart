@@ -1,26 +1,42 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/features/auth/domain/auth_failure.dart';
+import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/settings/screens/text_size_screen.dart';
+import 'package:scheduling/features/settings/widgets/delete_account_dialog.dart';
 import 'package:scheduling/features/settings/widgets/settings_tiles.dart';
 import 'package:scheduling/routes/app_routes.dart';
 
-class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, this.name = '', this.email = '', this.role});
+class SettingsScreen extends ConsumerStatefulWidget {
+  const SettingsScreen({
+    super.key,
+    this.name = '',
+    this.email = '',
+    this.role,
+    this.accountDeletionService,
+  });
 
   final String name;
   final String email;
   final String? role;
+  final AccountDeletionService? accountDeletionService;
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  late final AccountDeletionService _deletionService =
+      widget.accountDeletionService ?? AccountDeletionService();
+
   String get _displayName => widget.name.isNotEmpty
       ? widget.name
       : FirebaseAuth.instance.currentUser?.displayName ?? '';
@@ -131,14 +147,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: AppSpacing.sp24),
           SettingsSectionHeader(label: context.l10n.account.toUpperCase()),
           SettingsSectionCard(
-            child: SettingsTile(
-              iconBg: scheme.errorContainer,
-              icon: Icons.logout_rounded,
-              iconColor: scheme.error,
-              label: context.l10n.logOut,
-              labelColor: scheme.error,
-              isLast: true,
-              onTap: _signOut,
+            child: Column(
+              children: [
+                SettingsTile(
+                  iconBg: scheme.errorContainer,
+                  icon: Icons.logout_rounded,
+                  iconColor: scheme.error,
+                  label: context.l10n.logOut,
+                  labelColor: scheme.error,
+                  onTap: _signOut,
+                ),
+                const SettingsTileDivider(),
+                SettingsTile(
+                  iconBg: scheme.errorContainer,
+                  icon: Icons.delete_forever_rounded,
+                  iconColor: scheme.error,
+                  label: context.l10n.deleteAccount,
+                  labelColor: scheme.error,
+                  isLast: true,
+                  onTap: _confirmDeleteAccount,
+                ),
+              ],
             ),
           ),
           const SizedBox(height: AppSpacing.sp32),
@@ -151,5 +180,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await AuthService().signOut();
     if (!mounted) return;
     Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (_) => false);
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) =>
+          DeleteAccountDialog(isAdmin: widget.role == 'admin'),
+    );
+    if (result != true || !mounted) return;
+
+    final password = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => const DeleteAccountReauthDialog(),
+    );
+    if (password == null || password.isEmpty || !mounted) return;
+
+    await _runDeletion(password);
+  }
+
+  Future<void> _runDeletion(String password) async {
+    final notices = ref.read(noticeServiceProvider);
+    final logger = ref.read(loggerProvider);
+    try {
+      await _deletionService.reauthenticateWithPassword(password);
+      await _deletionService.deleteAccount();
+    } on AuthFailure catch (e) {
+      if (!mounted) return;
+      notices.error(e.toLocalizedMessage(context));
+      return;
+    } catch (e, st) {
+      logger.warn('settings.delete_account', e, st);
+      if (!mounted) return;
+      notices.error(context.l10n.couldNotDeleteAccount);
+      return;
+    }
+    if (!mounted) return;
+    final message = context.l10n.accountDeleted;
+    Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (_) => false);
+    notices.success(message);
   }
 }

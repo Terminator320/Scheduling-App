@@ -6,6 +6,7 @@ const {getStorage} = require("firebase-admin/storage");
 const {defineSecret} = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const {initializeApp} = require("firebase-admin/app");
+const {getAuth} = require("firebase-admin/auth");
 const {getFirestore} = require("firebase-admin/firestore");
 
 setGlobalOptions({maxInstances: 10});
@@ -349,10 +350,16 @@ exports.validateUploadedImage = onObjectFinalized(async (event) => {
     });
     buffer = Buffer.concat(chunks);
   } catch (err) {
-    logger.warn("validateUploadedImage: read failed", {
+    logger.warn("validateUploadedImage: read failed — deleting", {
       filePath,
       err: err.message,
     });
+    await file.delete().catch((delErr) =>
+      logger.error("validateUploadedImage: delete after read-fail failed", {
+        filePath,
+        err: delErr.message,
+      }),
+    );
     return;
   }
 
@@ -373,3 +380,76 @@ exports.validateUploadedImage = onObjectFinalized(async (event) => {
     );
   }
 });
+
+// ----- deleteAccount callable ------------------------------------------------
+//
+// Implements C6 from the production-readiness plan and satisfies the in-app
+// deletion requirement from Apple App Store Guideline 5.1.1(v) and the Google
+// Play Account Deletion policy. The Flutter client re-authenticates the user
+// immediately before invoking this, so requires-recent-login is enforced at the
+// SDK layer; this function trusts req.auth.uid (App Check + auth required).
+//
+// Scope of deletion (intentionally narrow — see plan §C6):
+//   1. The caller's `users/{docId}` Firestore document. The syncUsersByUid
+//      Firestore trigger then clears `usersByUid/{uid}` automatically.
+//   2. The Firebase Auth user.
+// We do NOT touch shared business data (appointments, clients, appointment
+// images): those are owned by the business, not the individual account.
+exports.deleteAccount = onCall(
+    {enforceAppCheck: true},
+    async (req) => {
+      if (!req.auth || !req.auth.uid) {
+        throw new HttpsError("unauthenticated", "auth-required");
+      }
+      const uid = req.auth.uid;
+      const db = getFirestore();
+
+      const bridgeSnap = await db
+          .collection("usersByUid")
+          .doc(uid)
+          .get()
+          .catch((err) => {
+            logger.warn("deleteAccount: bridge read failed", {
+              uid,
+              err: err.message,
+            });
+            return null;
+          });
+
+      const docId = bridgeSnap && bridgeSnap.exists ?
+        bridgeSnap.data().docId :
+        null;
+
+      if (docId) {
+        try {
+          await db.collection("users").doc(docId).delete();
+        } catch (err) {
+          logger.error("deleteAccount: users doc delete failed", {
+            uid,
+            docId,
+            err: err.message,
+          });
+          throw new HttpsError("internal", "delete-user-doc-failed");
+        }
+      } else {
+        // No bridge row found — best-effort cleanup of an orphan auth account.
+        // We still try to delete the Auth user below so the caller can recover.
+        logger.warn("deleteAccount: no bridge for uid; auth-only delete", {
+          uid,
+        });
+      }
+
+      try {
+        await getAuth().deleteUser(uid);
+      } catch (err) {
+        logger.error("deleteAccount: auth delete failed", {
+          uid,
+          err: err.message,
+        });
+        throw new HttpsError("internal", "delete-auth-user-failed");
+      }
+
+      logger.info("deleteAccount: user account deleted", {uid, docId});
+      return {deleted: true};
+    },
+);

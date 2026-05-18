@@ -2338,6 +2338,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Schedule Anyway'**
   String get scheduleAnyway;
+
+  /// No description provided for @deleteAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account'**
+  String get deleteAccount;
+
+  /// No description provided for @deleteAccountConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account?'**
+  String get deleteAccountConfirmTitle;
+
+  /// No description provided for @deleteAccountConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This permanently deletes your account and profile. You will be signed out and cannot recover this account.'**
+  String get deleteAccountConfirmBody;
+
+  /// No description provided for @deleteAccountAdminWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'You are signed in as admin. Deleting your account will revoke your access to the business data shared with this account.'**
+  String get deleteAccountAdminWarning;
+
+  /// No description provided for @deletePermanently.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete permanently'**
+  String get deletePermanently;
+
+  /// No description provided for @confirmYourPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm your password'**
+  String get confirmYourPassword;
+
+  /// No description provided for @confirmYourPasswordToDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-enter your password to confirm account deletion.'**
+  String get confirmYourPasswordToDelete;
+
+  /// No description provided for @accountDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account has been deleted.'**
+  String get accountDeleted;
+
+  /// No description provided for @couldNotDeleteAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not delete your account. Please try again.'**
+  String get couldNotDeleteAccount;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

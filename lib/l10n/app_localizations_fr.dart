@@ -1139,4 +1139,31 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get scheduleAnyway => 'Planifier quand même';
+
+  @override
+  String get deleteAccount => 'Supprimer le compte';
+
+  @override
+  String get deleteAccountConfirmTitle => 'Supprimer le compte ?';
+
+  @override
+  String get deleteAccountConfirmBody => 'Cette action supprime définitivement votre compte et votre profil. Vous serez déconnecté et ne pourrez pas récupérer ce compte.';
+
+  @override
+  String get deleteAccountAdminWarning => 'Vous êtes connecté en tant qu\'administrateur. La suppression de votre compte vous retirera l\'accès aux données de l\'entreprise associées à ce compte.';
+
+  @override
+  String get deletePermanently => 'Supprimer définitivement';
+
+  @override
+  String get confirmYourPassword => 'Confirmez votre mot de passe';
+
+  @override
+  String get confirmYourPasswordToDelete => 'Saisissez à nouveau votre mot de passe pour confirmer la suppression du compte.';
+
+  @override
+  String get accountDeleted => 'Votre compte a été supprimé.';
+
+  @override
+  String get couldNotDeleteAccount => 'Impossible de supprimer votre compte. Veuillez réessayer.';
 }
