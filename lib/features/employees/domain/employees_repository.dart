@@ -43,6 +43,8 @@ abstract class EmployeesRepository {
   Stream<String> loggedInUserNameStream();
 
   Stream<String> watchUserStatus(String uid);
+
+  Stream<String> watchUserRole(String uid);
 }
 
 class InvitedEmployeeMatch {

@@ -274,6 +274,7 @@
   "tooManyAttemptsPleaseTryAgainLater2": "Trop de tentatives. Veuillez réessayer plus tard",
   "somethingWentWrongPleaseTryAgain": "Une erreur s’est produite. Veuillez réessayer",
   "thisAccountHasBeenDisabled": "Ce compte a été désactivé",
+  "yourAdminAccessWasRevoked": "Votre accès administrateur a été révoqué. Veuillez vous reconnecter.",
   "anAccountWithThisEmailAlreadyExists": "Un compte avec ce courriel existe déjà",
   "passwordIsTooWeakUseAtLeast6Characters": "Mot de passe trop faible. Utilisez au moins 6 caractères",
   "passwordMustBeAtLeast8Characters": "Le mot de passe doit comporter au moins 8 caractères",

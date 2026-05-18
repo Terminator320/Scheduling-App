@@ -274,6 +274,7 @@
   "tooManyAttemptsPleaseTryAgainLater2": "Too many attempts, please try again later",
   "somethingWentWrongPleaseTryAgain": "Something went wrong, please try again",
   "thisAccountHasBeenDisabled": "This account has been disabled",
+  "yourAdminAccessWasRevoked": "Your admin access was revoked. Please sign in again.",
   "anAccountWithThisEmailAlreadyExists": "An account with this email already exists",
   "passwordIsTooWeakUseAtLeast6Characters": "Password is too weak. Use at least 6 characters",
   "passwordMustBeAtLeast8Characters": "Password must be at least 8 characters",
