@@ -124,3 +124,13 @@ app.*.symbols
 !/dev/ci/**/Gemfile.lock
 
 .worktrees/
+
+# Local tool artifacts (Cygwin/MSYS, Ruflo, Ruvector, MCP scratch)
+bash.exe.stackdump
+agentdb.rvf
+ruvector.db
+*.stackdump
+.playwright-mcp/
+clean.md
+design-preview.html
+UsersGeorgeVogasAppDataLocalTempvibe-security-skill/
