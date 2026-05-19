@@ -7,7 +7,9 @@ enum AnimatedLoadingButtonVariant { filled, outlined }
 
 class AnimatedLoadingButton extends StatelessWidget {
   const AnimatedLoadingButton({
-    required this.label, required this.onPressed, super.key,
+    required this.label,
+    required this.onPressed,
+    super.key,
     this.isLoading = false,
     this.variant = AnimatedLoadingButtonVariant.filled,
     this.height = 52,
@@ -62,19 +64,29 @@ class AnimatedLoadingButton extends StatelessWidget {
             ),
     );
 
+    // Use minHeight (not fixed height) so the label can grow with the user's
+    // text scale instead of being clipped. At 1.4×/2.0× the scaled label
+    // height ends up taller than the default 52, and a hard SizedBox(height:)
+    // visually crops the text without raising a RenderFlex overflow.
     return TapScale(
       enabled: effectiveOnPressed != null,
-      child: SizedBox(
-        height: height,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: height),
         child: variant == AnimatedLoadingButtonVariant.filled
             ? FilledButton(
                 onPressed: effectiveOnPressed,
-                style: FilledButton.styleFrom(shape: shape),
+                style: FilledButton.styleFrom(
+                  shape: shape,
+                  minimumSize: Size.fromHeight(height),
+                ),
                 child: child,
               )
             : OutlinedButton(
                 onPressed: effectiveOnPressed,
-                style: OutlinedButton.styleFrom(shape: shape),
+                style: OutlinedButton.styleFrom(
+                  shape: shape,
+                  minimumSize: Size.fromHeight(height),
+                ),
                 child: child,
               ),
       ),

@@ -454,8 +454,13 @@ class _LoginState extends ConsumerState<Login>
                 const SizedBox(height: AppSpacing.sp16),
                 FadeSlideEntrance(
                   animation: animations[6],
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  // Wrap so the two action labels can flow to a second line
+                  // at 1.4× / 2.0× text scale instead of overflowing the row.
+                  // alignment: spaceBetween keeps the original single-line
+                  // visual at normal scale.
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       TextButton(
                         onPressed: _isLoading ? null : _openForgotPassword,
