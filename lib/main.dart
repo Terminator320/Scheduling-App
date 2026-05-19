@@ -8,26 +8,19 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, kReleaseMode;
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
-import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
-import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
-import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
-import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
-import 'package:scheduling/features/employees/domain/employees_repository.dart';
-import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/settings/application/settings_providers.dart';
 import 'package:scheduling/features/settings/data/shared_prefs_settings_repository.dart';
 import 'package:scheduling/features/settings/domain/models/app_settings.dart';
@@ -72,8 +65,10 @@ Future<void> main() async {
       if (_useFirebaseEmulator) {
         await _wireFirebaseEmulator();
       } else {
+        // M3: collect crashes in profile/release builds (anything not debug).
+        // Staging/QA builds run as profile and otherwise wouldn't report.
         await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
-          kReleaseMode,
+          !kDebugMode,
         );
         FlutterError.onError =
             FirebaseCrashlytics.instance.recordFlutterFatalError;
@@ -92,14 +87,12 @@ Future<void> main() async {
         );
       }
 
+      // M1: don't block runApp on a Firestore round-trip. SplashScreen
+      // owns the destination resolution (splashDestinationProvider) and
+      // surfaces transient failures via the standard notice surface.
       final settings = await SharedPrefsSettingsRepository().load();
-      final home = await _resolveHome();
 
-      runApp(
-        ProviderScope(
-          child: PaulApp(settings: settings, home: home),
-        ),
-      );
+      runApp(ProviderScope(child: PaulApp(settings: settings)));
     },
     (error, stack) {
       FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
@@ -107,48 +100,10 @@ Future<void> main() async {
   );
 }
 
-Future<Widget> _resolveHome() async {
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) return const SplashScreen();
-
-  final cached = await AuthCache().loadIfMatch(user.uid);
-  if (cached == null) return const SplashScreen();
-
-  final repo = FirebaseEmployeesRepository(FirebaseFirestore.instance);
-  final logger = AppLogger();
-  final UserUidMatch? userDoc;
-  try {
-    userDoc = await retryAsync(
-      () => repo.findUserByUid(user.uid),
-      delays: const [Duration(milliseconds: 500), Duration(milliseconds: 1500)],
-      onRetry: (attempt, e, st) =>
-          logger.warn('_resolveHome findUserByUid retry $attempt', e, st),
-    );
-  } catch (e, st) {
-    logger.warn('_resolveHome findUserByUid failed after retries', e, st);
-    return const SplashScreen();
-  }
-  if (userDoc == null) return _signOutToSplash();
-
-  final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
-
-  if (!employee.isActive) return _signOutToSplash();
-
-  unawaited(AuthCache().save(employee));
-  return MainCalendar(isAdmin: employee.isAdmin, employeeId: employee.id);
-}
-
-Future<Widget> _signOutToSplash() async {
-  await FirebaseAuth.instance.signOut();
-  await AuthCache().clear();
-  return const SplashScreen();
-}
-
 class PaulApp extends ConsumerStatefulWidget {
-  const PaulApp({required this.settings, required this.home, super.key});
+  const PaulApp({required this.settings, super.key});
 
   final AppSettings settings;
-  final Widget home;
 
   @override
   ConsumerState<PaulApp> createState() => _PaulAppState();
@@ -282,7 +237,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
               theme: lightTheme(),
               darkTheme: darkTheme(),
               themeMode: _themeMode,
-              home: widget.home,
+              home: const SplashScreen(),
               onGenerateRoute: AppRoutes.onGenerateRoute,
               builder: (context, child) {
                 return MediaQuery(
