@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -11,6 +14,19 @@ plugins {
     // stack traces symbolicate in the Firebase Crashlytics console.
     id("com.google.firebase.crashlytics")
 }
+
+// C2: release signing reads from android/key.properties when present.
+// If the file is absent (dev machines that haven't generated a keystore),
+// release builds fall back to the debug keystore — `flutter run --release`
+// keeps working. See HANDOFF.md for the keytool command + backup procedure.
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        load(FileInputStream(keystorePropertiesFile))
+    }
+}
+val hasReleaseKeystore = keystorePropertiesFile.exists() &&
+    keystoreProperties.getProperty("storeFile")?.isNotBlank() == true
 
 android {
     namespace = "com.example.scheduling"
@@ -37,11 +53,36 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // C2: use real signing config when key.properties is present;
+            // fall back to debug keystore so dev `flutter run --release` works.
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
+            // C3: R8 + resource shrinking. Keep rules in proguard-rules.pro
+            // cover Firebase, Crashlytics, image_picker, flutter_image_compress,
+            // and Kotlin reflection — anything reached via reflection that R8
+            // can't trace from a call site.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
