@@ -195,53 +195,57 @@ class _SizeRow extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return InkWell(
-      onTap: onTap,
+    // Use Material+Ink so the InkWell splash renders on the same layer as
+    // the row background. Without this the splash from a fast row-to-row tap
+    // can flicker on the previously selected row while the AnimatedContainer
+    // background and the (un-animated) icon/text colors fall out of sync,
+    // making the prior selection look like it briefly flashes.
+    return Material(
+      color: isSelected ? scheme.primaryContainer : Colors.transparent,
       borderRadius: BorderRadius.circular(AppRadius.r8),
-      child: AnimatedContainer(
-        duration: AppDuration.fast,
-        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? scheme.primaryContainer : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppRadius.r8),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 40,
-              child: Center(
-                child: Text(
-                  'A',
-                  style: TextStyle(
-                    fontSize: 11 + (scale - 0.8) * 16,
-                    fontWeight: FontWeight.w800,
-                    color: isSelected
-                        ? scheme.primary
-                        : scheme.onSurfaceVariant,
-                    height: 1,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.r8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 6),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 40,
+                child: Center(
+                  child: Text(
+                    'A',
+                    style: TextStyle(
+                      fontSize: 11 + (scale - 0.8) * 16,
+                      fontWeight: FontWeight.w800,
+                      color: isSelected
+                          ? scheme.primary
+                          : scheme.onSurfaceVariant,
+                      height: 1,
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                label,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  color: isSelected ? scheme.primary : null,
-                  fontSize: 15,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    color: isSelected ? scheme.primary : null,
+                    fontSize: 15,
+                  ),
                 ),
               ),
-            ),
-            Icon(
-              isSelected
-                  ? Icons.radio_button_checked_rounded
-                  : Icons.radio_button_unchecked_rounded,
-              size: 20,
-              color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
-            ),
-          ],
+              Icon(
+                isSelected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                size: 20,
+                color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -30,7 +30,11 @@ final assignableUsersStreamProvider = StreamProvider<List<EmployeeRecord>>((
 
 final filteredEmployeesProvider = Provider.family<List<EmployeeRecord>, String>(
   (ref, query) {
-    final list = ref.watch(employeesStreamProvider).asData?.value ?? const [];
+    // Admin employees list shows all users (active + disabled + invited) so
+    // a disabled employee remains reachable for re-enable. EmployeeCard
+    // already renders a StatusChip for each, so the visual distinction is
+    // handled in the tile, not by hiding the row.
+    final list = ref.watch(allUsersStreamProvider).asData?.value ?? const [];
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return list;
     return list.where((e) {

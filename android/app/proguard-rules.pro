@@ -54,3 +54,8 @@
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
+# Flutter framework references Google Play Core's split-install API for
+# deferred components / dynamic feature modules. We don't use those, so the
+# code path is dead — tell R8 to stop failing on the missing classes instead
+# of adding the unused com.google.android.play:feature-delivery dep.
+-dontwarn com.google.android.play.core.**

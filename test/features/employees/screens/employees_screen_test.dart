@@ -25,9 +25,17 @@ const _bob = EmployeeRecord(
   role: 'employee',
 );
 
-Widget _wrap({required Stream<List<EmployeeRecord>> employees}) {
+Widget _wrap({required Stream<List<EmployeeRecord>> Function() employees}) {
+  // The admin list now reads from allUsersStreamProvider (so disabled and
+  // invited users stay reachable for re-enable); the screen still watches
+  // employeesStreamProvider for loading/error state. Override both. Each
+  // call to employees() must return a fresh single-subscription stream
+  // because the two providers subscribe independently.
   return ProviderScope(
-    overrides: [employeesStreamProvider.overrideWith((_) => employees)],
+    overrides: [
+      employeesStreamProvider.overrideWith((_) => employees()),
+      allUsersStreamProvider.overrideWith((_) => employees()),
+    ],
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
       toggleTheme: () {},
@@ -47,7 +55,7 @@ Widget _wrap({required Stream<List<EmployeeRecord>> employees}) {
 void main() {
   testWidgets('renders employee cards from the stream', (tester) async {
     await tester.pumpWidget(
-      _wrap(employees: Stream.value(const [_jane, _bob])),
+      _wrap(employees: () => Stream.value(const [_jane, _bob])),
     );
     await tester.pumpAndSettle();
 
@@ -57,7 +65,7 @@ void main() {
   });
 
   testWidgets('shows empty-state copy when the list is empty', (tester) async {
-    await tester.pumpWidget(_wrap(employees: Stream.value(const [])));
+    await tester.pumpWidget(_wrap(employees: () => Stream.value(const [])));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('No employees'), findsOneWidget);
@@ -65,7 +73,9 @@ void main() {
   });
 
   testWidgets('shows error copy when the stream errors', (tester) async {
-    await tester.pumpWidget(_wrap(employees: Stream.error(StateError('boom'))));
+    await tester.pumpWidget(
+      _wrap(employees: () => Stream.error(StateError('boom'))),
+    );
     await tester.pumpAndSettle();
 
     expect(find.textContaining('rror'), findsWidgets);

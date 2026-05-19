@@ -100,4 +100,11 @@ dependencies {
     // this dep is what makes Android native (JNI/NDK) crashes surface
     // and produces symbolicated R8 stack traces in the Firebase console.
     implementation("com.google.firebase:firebase-crashlytics")
+
+    // Firebase Analytics — auto-collects first_open, screen_view (when the
+    // Dart firebase_analytics plugin is added), session start, in-app
+    // purchase events. Crashlytics also uses Analytics for user attribution
+    // on crash events, so keeping it present improves Crashlytics fidelity
+    // even without explicit Dart-side tracking.
+    implementation("com.google.firebase:firebase-analytics")
 }
