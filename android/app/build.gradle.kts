@@ -6,6 +6,10 @@ plugins {
 
     // Add the Google services Gradle plugin
     id("com.google.gms.google-services")
+    // Crashlytics gradle plugin — uploads mapping files and the NDK
+    // symbols bundle on release assemble tasks, so native + obfuscated
+    // stack traces symbolicate in the Firebase Crashlytics console.
+    id("com.google.firebase.crashlytics")
 }
 
 android {
@@ -50,10 +54,10 @@ dependencies {
     // Import the Firebase BoM
     implementation(platform("com.google.firebase:firebase-bom:34.10.0"))
 
-
-    // TODO: Add the dependencies for Firebase products you want to use
-    // When using the BoM, don't specify versions in Firebase dependencies
-
-    // Add the dependencies for any other desired Firebase products
-    // https://firebase.google.com/docs/android/setup#available-libraries
+    // Firebase Crashlytics — native crash reporting + mapping-file
+    // uploads. The Dart-side firebase_crashlytics plugin still owns
+    // Flutter error capture (see FlutterError.onError wiring in main.dart);
+    // this dep is what makes Android native (JNI/NDK) crashes surface
+    // and produces symbolicated R8 stack traces in the Firebase console.
+    implementation("com.google.firebase:firebase-crashlytics")
 }
