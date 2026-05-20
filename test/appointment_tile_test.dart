@@ -1,9 +1,9 @@
-// test/appointment_tile_test.dart
+﻿// test/appointment_tile_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:scheduling/l10n/app_localizations.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/appointment_tile.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';

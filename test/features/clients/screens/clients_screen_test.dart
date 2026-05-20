@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -7,7 +7,7 @@ import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/screens/clients_screen.dart';
-import 'package:scheduling/l10n/app_localizations.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 const _alice = ClientRecord(
   id: 'c1',

@@ -1,7 +1,7 @@
-import 'package:flutter/widgets.dart';
+﻿import 'package:flutter/widgets.dart';
 
 import 'package:scheduling/core/errors/failure.dart';
-import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 enum AuthErrorContext {
   login,

@@ -1,10 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
-import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';

@@ -1,9 +1,9 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:scheduling/core/errors/failure.dart';
-import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/features/maps/data/google_places_repository.dart';
 import 'package:scheduling/features/maps/domain/models/address_suggestion.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';

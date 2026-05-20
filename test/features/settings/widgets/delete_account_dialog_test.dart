@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:scheduling/features/settings/widgets/delete_account_dialog.dart';
-import 'package:scheduling/l10n/app_localizations.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 Future<bool?> _showConfirm(WidgetTester tester, {required bool isAdmin}) async {
   bool? result;

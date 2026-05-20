@@ -1,9 +1,9 @@
-import 'package:flutter/widgets.dart';
+﻿import 'package:flutter/widgets.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:scheduling/features/maps/domain/maps_failure.dart';
-import 'package:scheduling/l10n/app_localizations.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 /// E3: typed `MapsFailure` family must hold its raw cause for logs but
 /// must NOT expose response-body / API noise via `toLocalizedMessage`.
@@ -38,7 +38,7 @@ void main() {
     const failure = MapsFailureNetwork(cause: 'autocomplete HTTP 500');
     expect(
       failure.toLocalizedMessage(context),
-      AppLocalizations.of(context)!.addressLookupFailed,
+      AppLocalizations.of(context).addressLookupFailed,
     );
   });
 
@@ -49,7 +49,7 @@ void main() {
     const failure = MapsFailureParse();
     expect(
       failure.toLocalizedMessage(context),
-      AppLocalizations.of(context)!.couldNotLoadAddressDetails,
+      AppLocalizations.of(context).couldNotLoadAddressDetails,
     );
   });
 
@@ -60,7 +60,7 @@ void main() {
     const failure = MapsFailureRateLimit();
     expect(
       failure.toLocalizedMessage(context),
-      AppLocalizations.of(context)!.tooManyAttemptsPleaseTryAgainLater2,
+      AppLocalizations.of(context).tooManyAttemptsPleaseTryAgainLater2,
     );
   });
 
@@ -71,7 +71,7 @@ void main() {
     const failure = MapsFailureUnauthorized();
     expect(
       failure.toLocalizedMessage(context),
-      AppLocalizations.of(context)!.somethingWentWrongPleaseTryAgain,
+      AppLocalizations.of(context).somethingWentWrongPleaseTryAgain,
     );
   });
 
@@ -82,7 +82,7 @@ void main() {
     const failure = MapsFailureInvalidInput();
     expect(
       failure.toLocalizedMessage(context),
-      AppLocalizations.of(context)!.somethingWentWrong,
+      AppLocalizations.of(context).somethingWentWrong,
     );
   });
 

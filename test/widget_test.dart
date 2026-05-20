@@ -1,8 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scheduling/core/utils/l10n_extensions.dart';
-import 'package:scheduling/l10n/app_localizations.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 void main() {
   testWidgets('French localizations load', (WidgetTester tester) async {

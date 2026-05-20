@@ -1,6 +1,6 @@
-
+﻿
 import 'package:flutter/material.dart';
-import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
 class TimeRangeRow extends StatelessWidget {

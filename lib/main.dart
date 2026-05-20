@@ -11,7 +11,6 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -19,7 +18,6 @@ import 'package:scheduling/core/notices/notice_listener.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/core/utils/app_language.dart';
-import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/settings/application/settings_providers.dart';
@@ -27,15 +25,8 @@ import 'package:scheduling/features/settings/data/shared_prefs_settings_reposito
 import 'package:scheduling/features/settings/domain/models/app_settings.dart';
 import 'package:scheduling/features/splash/screens/splash_screen.dart';
 import 'package:scheduling/firebase_options.dart';
-import 'package:scheduling/l10n/app_localizations.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
-
-const _kLocalizationsDelegates = <LocalizationsDelegate<dynamic>>[
-  AppLocalizations.delegate,
-  GlobalMaterialLocalizations.delegate,
-  GlobalWidgetsLocalizations.delegate,
-  GlobalCupertinoLocalizations.delegate,
-];
 
 const bool _useFirebaseEmulator = bool.fromEnvironment('USE_FIREBASE_EMULATOR');
 const String _emulatorHost = String.fromEnvironment(
@@ -235,7 +226,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
               debugShowCheckedModeBanner: false,
               locale: locale,
               supportedLocales: AppLocalizations.supportedLocales,
-              localizationsDelegates: _kLocalizationsDelegates,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
               theme: lightTheme(),
               darkTheme: darkTheme(),
               themeMode: _themeMode,

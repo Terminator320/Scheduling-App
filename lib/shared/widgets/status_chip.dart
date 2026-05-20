@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/core/utils/l10n_extensions.dart';
-import 'package:scheduling/l10n/app_localizations.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 enum AppointmentStatus {
   confirmed,

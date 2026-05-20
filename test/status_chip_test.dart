@@ -1,8 +1,8 @@
-// test/status_chip_test.dart
+﻿// test/status_chip_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scheduling/l10n/app_localizations.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/status_chip.dart';
 
 Widget _wrap(Widget child) => MaterialApp(

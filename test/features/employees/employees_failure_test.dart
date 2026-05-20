@@ -1,9 +1,9 @@
-import 'package:flutter/widgets.dart';
+﻿import 'package:flutter/widgets.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
-import 'package:scheduling/l10n/app_localizations.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 /// E3: typed `EmployeesFailure` family must surface a localized string —
 /// never a raw "Employee email already exists" leaking from the repo.
@@ -36,7 +36,7 @@ void main() {
     const failure = EmployeesFailureEmailAlreadyExists();
     expect(
       failure.toLocalizedMessage(context),
-      AppLocalizations.of(context)!.anEmployeeWithThisEmailAlreadyExists,
+      AppLocalizations.of(context).anEmployeeWithThisEmailAlreadyExists,
     );
   });
 
@@ -45,7 +45,7 @@ void main() {
     const failure = EmployeesFailureEmailAlreadyExists();
     expect(
       failure.toLocalizedMessage(context),
-      AppLocalizations.of(context)!.anEmployeeWithThisEmailAlreadyExists,
+      AppLocalizations.of(context).anEmployeeWithThisEmailAlreadyExists,
     );
   });
 }
