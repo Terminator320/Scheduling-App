@@ -85,6 +85,9 @@ dev_dependencies:
   # Import behind `if (kDebugMode)` if added to main.dart.
   device_preview: ^1.3.1
 
+  # Launcher icon generator (run: `dart run flutter_launcher_icons`)
+  flutter_launcher_icons: ^0.14.4
+
 flutter:
   generate: true
   uses-material-design: true
@@ -95,3 +98,12 @@ flutter:
     - assets/images/logo.jpg
     - assets/images/logo1.png
   # TODO(ios): bump bundle id from com.example.scheduling once Android applicationId is finalized; keep both in sync.
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  remove_alpha_ios: true
+  image_path: "assets/images/icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/icon.png"
