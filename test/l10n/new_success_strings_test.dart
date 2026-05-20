@@ -1,8 +1,8 @@
-import 'package:flutter/widgets.dart';
+﻿import 'package:flutter/widgets.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:scheduling/l10n/app_localizations.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 /// N1: new success-notice l10n keys must resolve in both locales (smoke
 /// catches a forgotten `gen-l10n` regeneration).
@@ -20,7 +20,7 @@ void main() {
         ],
         child: Builder(
           builder: (ctx) {
-            l = AppLocalizations.of(ctx)!;
+            l = AppLocalizations.of(ctx);
             return const SizedBox.shrink();
           },
         ),

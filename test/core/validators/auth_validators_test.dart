@@ -1,9 +1,9 @@
-import 'package:flutter/widgets.dart';
+﻿import 'package:flutter/widgets.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:scheduling/core/validators/auth_validators.dart';
-import 'package:scheduling/l10n/app_localizations.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 /// S3: password validator requires at least 8 characters.
 ///
@@ -50,7 +50,7 @@ void main() {
     // "please enter" empty-field message.
     expect(
       AuthValidators.password(context, '1234567'),
-      AppLocalizations.of(context)!.passwordMustBeAtLeast8Characters,
+      AppLocalizations.of(context).passwordMustBeAtLeast8Characters,
     );
   });
 

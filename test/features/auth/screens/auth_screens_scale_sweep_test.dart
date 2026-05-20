@@ -1,4 +1,4 @@
-// Sweeps every auth screen at every supported text scale on a small-phone
+﻿// Sweeps every auth screen at every supported text scale on a small-phone
 // viewport (375×667 — Pixel 4a / iPhone SE class) and asserts no
 // RenderFlex overflow exceptions fire. Catches "render problem at Extra
 // Large" regressions on the auth flow before they reach a device.
@@ -16,7 +16,7 @@ import 'package:scheduling/features/auth/screens/login_screen.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
-import 'package:scheduling/l10n/app_localizations.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 class _MockAuthService extends Mock implements AuthService {}
 
