@@ -64,6 +64,9 @@ dependencies:
   animations: ^2.2.0
   flex_color_picker: ^3.8.0
 
+  # Native splash (preserve/remove API used in main.dart)
+  flutter_native_splash: ^2.4.7
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -94,4 +97,25 @@ flutter:
     - assets/images/george.JPG
     - assets/images/logo.jpg
     - assets/images/logo1.png
+    - assets/images/logo_splash.png
   # TODO(ios): bump bundle id from com.example.scheduling once Android applicationId is finalized; keep both in sync.
+
+# Native splash config — consumed by `dart run flutter_native_splash:create`.
+# Brand color #1E82C8 matches AppColors.primary (lib/core/theme/design_tokens.dart).
+flutter_native_splash:
+  color: "#1E82C8"
+  image: assets/images/logo_splash.png
+  color_dark: "#155E8E"
+  image_dark: assets/images/logo_splash.png
+
+  android_12:
+    color: "#1E82C8"
+    image: assets/images/logo_splash.png
+    color_dark: "#155E8E"
+    image_dark: assets/images/logo_splash.png
+
+  android: true
+  ios: true
+  web: false
+
+  ios_content_mode: center
