@@ -65,7 +65,7 @@ class AuthFailureTooManyRequests extends AuthFailure {
   const AuthFailureTooManyRequests();
   @override
   String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
-      c.l10n.tooManyAttemptsPleaseTryAgainLater2;
+      c.l10n.tooManyAttemptsPleaseTryAgainLater;
 }
 
 class AuthFailureNetwork extends AuthFailure {

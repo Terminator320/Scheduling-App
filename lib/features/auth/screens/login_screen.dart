@@ -465,7 +465,7 @@ class _LoginState extends ConsumerState<Login>
                       TextButton(
                         onPressed: _isLoading ? null : _openForgotPassword,
                         child: Text(
-                          context.l10n.forgotPassword3,
+                          context.l10n.forgotPassword,
                           style: textTheme.bodySmall?.copyWith(
                             color: scheme.primary,
                             fontWeight: FontWeight.w500,

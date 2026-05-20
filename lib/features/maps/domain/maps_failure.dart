@@ -31,7 +31,7 @@ class MapsFailureRateLimit extends MapsFailure {
 
   @override
   String toLocalizedMessage(BuildContext context) =>
-      context.l10n.tooManyAttemptsPleaseTryAgainLater2;
+      context.l10n.tooManyAttemptsPleaseTryAgainLater;
 }
 
 class MapsFailureUnauthorized extends MapsFailure {

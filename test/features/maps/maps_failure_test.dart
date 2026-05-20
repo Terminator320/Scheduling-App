@@ -60,7 +60,7 @@ void main() {
     const failure = MapsFailureRateLimit();
     expect(
       failure.toLocalizedMessage(context),
-      AppLocalizations.of(context).tooManyAttemptsPleaseTryAgainLater2,
+      AppLocalizations.of(context).tooManyAttemptsPleaseTryAgainLater,
     );
   });
 

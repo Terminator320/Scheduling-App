@@ -167,7 +167,7 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
         const SizedBox(height: 20),
         _DetailField(
           icon: Icons.person_outline,
-          label: context.l10n.name2,
+          label: context.l10n.name,
           value: widget.employee.name,
         ),
         const SizedBox(height: 12),
@@ -205,7 +205,7 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  context.l10n.employeeColor2,
+                  context.l10n.employeeColor,
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
