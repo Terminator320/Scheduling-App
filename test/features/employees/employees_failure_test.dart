@@ -1,4 +1,4 @@
-﻿import 'package:flutter/widgets.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -36,7 +36,7 @@ void main() {
     const failure = EmployeesFailureEmailAlreadyExists();
     expect(
       failure.toLocalizedMessage(context),
-      AppLocalizations.of(context).anEmployeeWithThisEmailAlreadyExists,
+      AppLocalizations.of(context).error_anEmployeeWithThisEmailAlreadyExists,
     );
   });
 
@@ -45,7 +45,7 @@ void main() {
     const failure = EmployeesFailureEmailAlreadyExists();
     expect(
       failure.toLocalizedMessage(context),
-      AppLocalizations.of(context).anEmployeeWithThisEmailAlreadyExists,
+      AppLocalizations.of(context).error_anEmployeeWithThisEmailAlreadyExists,
     );
   });
 }

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -11,16 +11,16 @@ class DeleteAccountDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return AlertDialog(
-      title: Text(context.l10n.deleteAccountConfirmTitle),
+      title: Text(context.l10n.settings_deleteAccountConfirmTitle),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(context.l10n.deleteAccountConfirmBody),
+          Text(context.l10n.settings_deleteAccountConfirmBody),
           if (isAdmin) ...[
             const SizedBox(height: 12),
             Text(
-              context.l10n.deleteAccountAdminWarning,
+              context.l10n.settings_deleteAccountAdminWarning,
               style: TextStyle(color: scheme.error),
             ),
           ],
@@ -29,7 +29,7 @@ class DeleteAccountDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: Text(context.l10n.cancel),
+          child: Text(context.l10n.common_cancel),
         ),
         FilledButton(
           style: FilledButton.styleFrom(
@@ -37,7 +37,7 @@ class DeleteAccountDialog extends StatelessWidget {
             foregroundColor: scheme.onError,
           ),
           onPressed: () => Navigator.of(context).pop(true),
-          child: Text(context.l10n.deletePermanently),
+          child: Text(context.l10n.settings_deletePermanently),
         ),
       ],
     );
@@ -66,19 +66,19 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return AlertDialog(
-      title: Text(context.l10n.confirmYourPassword),
+      title: Text(context.l10n.settings_confirmYourPassword),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(context.l10n.confirmYourPasswordToDelete),
+          Text(context.l10n.settings_confirmYourPasswordToDelete),
           const SizedBox(height: 12),
           TextField(
             controller: _controller,
             obscureText: _obscure,
             autofocus: true,
             decoration: InputDecoration(
-              labelText: context.l10n.password,
+              labelText: context.l10n.common_password,
               border: const OutlineInputBorder(),
               suffixIcon: IconButton(
                 icon: Icon(
@@ -96,7 +96,7 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(context.l10n.cancel),
+          child: Text(context.l10n.common_cancel),
         ),
         FilledButton(
           style: FilledButton.styleFrom(
@@ -104,7 +104,7 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
             foregroundColor: scheme.onError,
           ),
           onPressed: () => Navigator.of(context).pop(_controller.text),
-          child: Text(context.l10n.deletePermanently),
+          child: Text(context.l10n.settings_deletePermanently),
         ),
       ],
     );

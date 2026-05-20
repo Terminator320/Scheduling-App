@@ -1,4 +1,4 @@
-﻿import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -91,8 +91,8 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
     final scheme = Theme.of(context).colorScheme;
     final statusBarHeight = MediaQuery.of(context).padding.top;
     final roleLabel = widget.isAdmin
-        ? context.l10n.admin
-        : context.l10n.employeeRoleValue;
+        ? context.l10n.common_admin
+        : context.l10n.common_employeeRoleValue;
 
     return Container(
       width: double.infinity,
@@ -190,26 +190,26 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
           _NavItem(
             icon: Icons.calendar_today_rounded,
             iconColor: scheme.primary,
-            label: context.l10n.calendar,
+            label: context.l10n.common_calendar,
             onTap: () => _goToCalendar(context),
           ),
           if (widget.isAdmin) ...[
             _NavItem(
               icon: Icons.people_rounded,
               iconColor: statusColors.success,
-              label: context.l10n.clients,
+              label: context.l10n.common_clients,
               onTap: () => _goToClients(context),
             ),
             _NavItem(
               icon: Icons.badge_rounded,
               iconColor: statusColors.accent,
-              label: context.l10n.employees,
+              label: context.l10n.common_employees,
               onTap: () => _goToEmployees(context),
             ),
             _NavItem(
               icon: Icons.history_rounded,
               iconColor: statusColors.warning,
-              label: context.l10n.history,
+              label: context.l10n.common_history,
               onTap: () => _goToHistory(context),
             ),
           ],
@@ -220,7 +220,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
           _NavItem(
             icon: Icons.settings_rounded,
             iconColor: scheme.onSurfaceVariant,
-            label: context.l10n.settings,
+            label: context.l10n.common_settings,
             onTap: () => _goToSettings(context),
           ),
           SizedBox(height: bottomPadding + 4),

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -49,7 +49,7 @@ class CalendarHeader extends StatelessWidget {
           Row(
             children: [
               if (!isCurrent)
-                TextButton(onPressed: onToday, child: Text(context.l10n.today)),
+                TextButton(onPressed: onToday, child: Text(context.l10n.calendar_today)),
               IconButton(
                 icon: const Icon(Icons.chevron_right),
                 onPressed: onRight,

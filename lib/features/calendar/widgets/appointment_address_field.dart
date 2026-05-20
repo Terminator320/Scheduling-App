@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -42,7 +42,7 @@ class AppointmentAddressField extends StatelessWidget {
             GestureDetector(
               onTap: onUseClientAddress,
               child: Text(
-                context.l10n.useClientsAddress,
+                context.l10n.calendar_useClientsAddress,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: scheme.primary,
                   fontWeight: FontWeight.w500,
@@ -67,7 +67,7 @@ class _AddressPill extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final address = client.address.isNotEmpty
         ? AddressParser.canonicalToDisplay(client.address)
-        : context.l10n.noAddress;
+        : context.l10n.calendar_noAddress;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
@@ -97,7 +97,7 @@ class _AddressPill extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  context.l10n.clientSAddress,
+                  context.l10n.calendar_clientSAddress,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),
@@ -122,7 +122,7 @@ class _AddressPill extends StatelessWidget {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             child: Text(
-              context.l10n.changeAddress,
+              context.l10n.calendar_changeAddress,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: scheme.primary,
                 fontWeight: FontWeight.w600,

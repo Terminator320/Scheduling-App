@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/features/settings/widgets/text_size_view.dart';
@@ -19,7 +19,7 @@ class TextSizeScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          context.l10n.textSize,
+          context.l10n.settings_textSize,
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
         ),
       ),

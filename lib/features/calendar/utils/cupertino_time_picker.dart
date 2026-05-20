@@ -1,4 +1,4 @@
-﻿import 'package:flutter/cupertino.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -40,7 +40,7 @@ Future<TimeOfDay?> showCupertinoTimePicker(
                   CupertinoButton(
                     padding: EdgeInsets.zero,
                     child: Text(
-                      ctx.l10n.cancel,
+                      ctx.l10n.common_cancel,
                       style: TextStyle(
                         color: Theme.of(ctx).colorScheme.primary,
                       ),
@@ -50,7 +50,7 @@ Future<TimeOfDay?> showCupertinoTimePicker(
                   CupertinoButton(
                     padding: EdgeInsets.zero,
                     child: Text(
-                      ctx.l10n.done,
+                      ctx.l10n.status_done,
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: Theme.of(ctx).colorScheme.primary,

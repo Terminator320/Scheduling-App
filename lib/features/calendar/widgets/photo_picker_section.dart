@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -141,7 +141,7 @@ class PhotoPickerSection extends StatelessWidget {
                         children: [
                           Icon(Icons.add, color: scheme.onSurfaceVariant),
                           Text(
-                            context.l10n.addMore,
+                            context.l10n.calendar_addMore,
                             style: TextStyle(
                               fontSize: 10,
                               color: scheme.onSurfaceVariant,
@@ -170,7 +170,7 @@ class PhotoPickerSection extends StatelessWidget {
                     Icon(Icons.image_outlined, color: scheme.onSurfaceVariant),
                     const SizedBox(height: 4),
                     Text(
-                      context.l10n.tapToAddPhotos,
+                      context.l10n.calendar_tapToAddPhotos,
                       style: TextStyle(
                         fontSize: 13,
                         color: scheme.onSurfaceVariant,
@@ -200,7 +200,7 @@ class PhotoPickerSection extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    context.l10n.noPhotos,
+                    context.l10n.calendar_noPhotos,
                     style: TextStyle(
                       fontSize: 12,
                       color: scheme.onSurfaceVariant,
@@ -245,7 +245,7 @@ class _FailedPhotoThumb extends StatelessWidget {
           Icon(Icons.info_outline_rounded, size: 22, color: scheme.error),
           const SizedBox(height: 4),
           Text(
-            'Failed',
+            context.l10n.calendar_photoFailedBadge,
             style: TextStyle(
               fontSize: 9,
               fontWeight: FontWeight.w700,
@@ -271,7 +271,7 @@ class _UploadFailedRow extends StatelessWidget {
         Icon(Icons.info_outline_rounded, size: 13, color: scheme.error),
         const SizedBox(width: 5),
         Text(
-          context.l10n.nPhotosFailedToUpload(count),
+          context.l10n.calendar_nPhotosFailedToUpload(count),
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -283,7 +283,7 @@ class _UploadFailedRow extends StatelessWidget {
           GestureDetector(
             onTap: onRetry,
             child: Text(
-              context.l10n.retry,
+              context.l10n.common_retry,
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
@@ -358,7 +358,7 @@ class _TooLargeBanner extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              context.l10n.fileTooLargeWarning(fileName),
+              context.l10n.calendar_fileTooLargeWarning(fileName),
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,

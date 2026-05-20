@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -58,20 +58,20 @@ class DetailsViewBody extends ConsumerWidget {
         const Divider(height: 1),
         const SizedBox(height: AppSpacing.sp16),
         DetailsSectionRow(
-          label: context.l10n.client,
+          label: context.l10n.calendar_client,
           value: client?.displayName ?? appointment.clientName,
           subtitle: appointment.clientPhone.isNotEmpty
               ? appointment.clientPhone
-              : context.l10n.noNumber,
+              : context.l10n.calendar_noNumber,
         ),
         if ((client?.contacts ?? const <ClientContact>[]).isNotEmpty)
           ClientContactsSection(contacts: client!.contacts),
         const SizedBox(height: AppSpacing.sp16),
         DetailsAddressRow(
-          label: context.l10n.address,
+          label: context.l10n.common_address,
           address: appointment.address.isNotEmpty
               ? AddressParser.canonicalToDisplay(appointment.address)
-              : context.l10n.noAddress,
+              : context.l10n.calendar_noAddress,
           onTap: appointment.address.isNotEmpty
               ? () => AddressMapLauncher.showMapChoices(
                   context,
@@ -81,10 +81,10 @@ class DetailsViewBody extends ConsumerWidget {
         ),
         const SizedBox(height: AppSpacing.sp16),
         DetailsSectionRow(
-          label: context.l10n.notes,
+          label: context.l10n.calendar_notes,
           value: appointment.notes.isNotEmpty
               ? appointment.notes
-              : context.l10n.noNotes,
+              : context.l10n.calendar_noNotes,
         ),
         const SizedBox(height: AppSpacing.sp16),
         _MaterialsRow(materials: appointment.materialsNeeded),
@@ -107,7 +107,7 @@ class DetailsViewBody extends ConsumerWidget {
               if (!context.mounted) return;
               ref
                   .read(noticeServiceProvider)
-                  .success(context.l10n.appointmentMarkedAsDone);
+                  .success(context.l10n.common_appointmentMarkedAsDone);
               onClose();
             }
           },
@@ -116,7 +116,7 @@ class DetailsViewBody extends ConsumerWidget {
               if (!context.mounted) return;
               ref
                   .read(noticeServiceProvider)
-                  .success(context.l10n.appointmentCancelled);
+                  .success(context.l10n.common_appointmentCancelled);
               onClose();
             }
           },
@@ -139,12 +139,12 @@ class DetailsViewBody extends ConsumerWidget {
                       if (!context.mounted) return;
                       ref
                           .read(noticeServiceProvider)
-                          .success(context.l10n.appointmentDeleted);
+                          .success(context.l10n.common_appointmentDeleted);
                       onClose();
                     }
                   },
             icon: const Icon(Icons.delete_outline, size: 15),
-            label: Text(context.l10n.deleteAppointment),
+            label: Text(context.l10n.calendar_deleteAppointment),
           ),
         ],
       ],
@@ -176,7 +176,7 @@ class _EditChip extends StatelessWidget {
             Icon(Icons.edit_outlined, size: 13, color: scheme.onSurface),
             const SizedBox(width: 5),
             Text(
-              context.l10n.edit,
+              context.l10n.common_edit,
               style: theme.textTheme.labelSmall?.copyWith(
                 fontWeight: FontWeight.w600,
                 color: scheme.onSurface,
@@ -281,8 +281,8 @@ class _MaterialsRow extends StatelessWidget {
         .where((m) => m.isNotEmpty)
         .toList();
     return DetailsSectionRow(
-      label: context.l10n.materialsNeeded,
-      value: items.isEmpty ? context.l10n.noMaterials : '',
+      label: context.l10n.calendar_materialsNeeded,
+      value: items.isEmpty ? context.l10n.calendar_noMaterials : '',
       customValue: items.isNotEmpty
           ? Wrap(
               spacing: 6,
@@ -334,7 +334,7 @@ class _EmployeesView extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          context.l10n.employees.toUpperCase(),
+          context.l10n.common_employees.toUpperCase(),
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w700,
@@ -345,7 +345,7 @@ class _EmployeesView extends ConsumerWidget {
         const SizedBox(height: 8),
         if (selectedEmployees.isEmpty)
           Text(
-            context.l10n.noEmployeesAssigned,
+            context.l10n.calendar_noEmployeesAssigned,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: scheme.onSurfaceVariant,
             ),
@@ -382,7 +382,7 @@ class _PhotosView extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          context.l10n.pictures.toUpperCase(),
+          context.l10n.calendar_pictures.toUpperCase(),
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w700,
@@ -419,12 +419,12 @@ Future<bool> _confirmDeleteDialog(BuildContext context) async {
   final result = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: Text(ctx.l10n.deleteAppointment),
-      content: Text(ctx.l10n.areYouSureYouWantToDeleteThisJob),
+      title: Text(ctx.l10n.calendar_deleteAppointment),
+      content: Text(ctx.l10n.calendar_areYouSureYouWantToDeleteThisJob),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx, false),
-          child: Text(ctx.l10n.cancel),
+          child: Text(ctx.l10n.common_cancel),
         ),
         FilledButton(
           style: FilledButton.styleFrom(
@@ -432,7 +432,7 @@ Future<bool> _confirmDeleteDialog(BuildContext context) async {
             foregroundColor: Theme.of(ctx).colorScheme.onError,
           ),
           onPressed: () => Navigator.pop(ctx, true),
-          child: Text(ctx.l10n.delete),
+          child: Text(ctx.l10n.common_delete),
         ),
       ],
     ),

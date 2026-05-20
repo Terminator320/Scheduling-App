@@ -1,4 +1,4 @@
-﻿import 'package:flutter/widgets.dart';
+import 'package:flutter/widgets.dart';
 
 import 'package:scheduling/core/errors/failure.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -15,7 +15,7 @@ class MapsFailureNetwork extends MapsFailure {
 
   @override
   String toLocalizedMessage(BuildContext context) =>
-      context.l10n.addressLookupFailed;
+      context.l10n.error_addressLookupFailed;
 }
 
 class MapsFailureParse extends MapsFailure {
@@ -23,7 +23,7 @@ class MapsFailureParse extends MapsFailure {
 
   @override
   String toLocalizedMessage(BuildContext context) =>
-      context.l10n.couldNotLoadAddressDetails;
+      context.l10n.error_couldNotLoadAddressDetails;
 }
 
 class MapsFailureRateLimit extends MapsFailure {
@@ -31,7 +31,7 @@ class MapsFailureRateLimit extends MapsFailure {
 
   @override
   String toLocalizedMessage(BuildContext context) =>
-      context.l10n.tooManyAttemptsPleaseTryAgainLater;
+      context.l10n.error_tooManyAttemptsPleaseTryAgainLater;
 }
 
 class MapsFailureUnauthorized extends MapsFailure {
@@ -39,7 +39,7 @@ class MapsFailureUnauthorized extends MapsFailure {
 
   @override
   String toLocalizedMessage(BuildContext context) =>
-      context.l10n.somethingWentWrongPleaseTryAgain;
+      context.l10n.error_somethingWentWrongPleaseTryAgain;
 }
 
 class MapsFailureInvalidInput extends MapsFailure {
@@ -47,5 +47,5 @@ class MapsFailureInvalidInput extends MapsFailure {
 
   @override
   String toLocalizedMessage(BuildContext context) =>
-      context.l10n.somethingWentWrong;
+      context.l10n.error_somethingWentWrong;
 }

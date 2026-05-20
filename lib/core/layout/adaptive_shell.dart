@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
@@ -116,33 +116,33 @@ class AdaptiveShell extends StatelessWidget {
         destination: AdaptiveDestination.calendar,
         icon: Icons.calendar_today_outlined,
         selectedIcon: Icons.calendar_today_rounded,
-        label: l.calendar,
+        label: l.common_calendar,
       ),
       if (isAdmin) ...[
         _RailEntry(
           destination: AdaptiveDestination.clients,
           icon: Icons.people_outline_rounded,
           selectedIcon: Icons.people_rounded,
-          label: l.clients,
+          label: l.common_clients,
         ),
         _RailEntry(
           destination: AdaptiveDestination.employees,
           icon: Icons.badge_outlined,
           selectedIcon: Icons.badge_rounded,
-          label: l.employees,
+          label: l.common_employees,
         ),
         _RailEntry(
           destination: AdaptiveDestination.history,
           icon: Icons.history_rounded,
           selectedIcon: Icons.history_rounded,
-          label: l.history,
+          label: l.common_history,
         ),
       ],
       _RailEntry(
         destination: AdaptiveDestination.settings,
         icon: Icons.settings_outlined,
         selectedIcon: Icons.settings_rounded,
-        label: l.settings,
+        label: l.common_settings,
       ),
     ];
   }

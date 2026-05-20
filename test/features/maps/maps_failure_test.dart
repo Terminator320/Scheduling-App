@@ -1,4 +1,4 @@
-﻿import 'package:flutter/widgets.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -38,7 +38,7 @@ void main() {
     const failure = MapsFailureNetwork(cause: 'autocomplete HTTP 500');
     expect(
       failure.toLocalizedMessage(context),
-      AppLocalizations.of(context).addressLookupFailed,
+      AppLocalizations.of(context).error_addressLookupFailed,
     );
   });
 
@@ -49,7 +49,7 @@ void main() {
     const failure = MapsFailureParse();
     expect(
       failure.toLocalizedMessage(context),
-      AppLocalizations.of(context).couldNotLoadAddressDetails,
+      AppLocalizations.of(context).error_couldNotLoadAddressDetails,
     );
   });
 
@@ -60,7 +60,7 @@ void main() {
     const failure = MapsFailureRateLimit();
     expect(
       failure.toLocalizedMessage(context),
-      AppLocalizations.of(context).tooManyAttemptsPleaseTryAgainLater,
+      AppLocalizations.of(context).error_tooManyAttemptsPleaseTryAgainLater,
     );
   });
 
@@ -71,7 +71,7 @@ void main() {
     const failure = MapsFailureUnauthorized();
     expect(
       failure.toLocalizedMessage(context),
-      AppLocalizations.of(context).somethingWentWrongPleaseTryAgain,
+      AppLocalizations.of(context).error_somethingWentWrongPleaseTryAgain,
     );
   });
 
@@ -82,7 +82,7 @@ void main() {
     const failure = MapsFailureInvalidInput();
     expect(
       failure.toLocalizedMessage(context),
-      AppLocalizations.of(context).somethingWentWrong,
+      AppLocalizations.of(context).error_somethingWentWrong,
     );
   });
 

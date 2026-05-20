@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -67,10 +67,10 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
   bool _validate() {
     final errors = <String, String?>{};
     if (_nameController.text.trim().isEmpty) {
-      errors['name'] = context.l10n.nameAndEmailAreRequired;
+      errors['name'] = context.l10n.error_nameAndEmailAreRequired;
     }
     if (_emailController.text.trim().isEmpty) {
-      errors['email'] = context.l10n.nameAndEmailAreRequired;
+      errors['email'] = context.l10n.error_nameAndEmailAreRequired;
     }
     setState(() {
       _errors
@@ -119,7 +119,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
       if (e is EmployeesFailureEmailAlreadyExists) {
         setState(() => _errors['email'] = e.toLocalizedMessage(context));
       } else {
-        notices.error(context.l10n.couldNotCreateEmployee);
+        notices.error(context.l10n.error_couldNotCreateEmployee);
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -179,7 +179,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        formLabel(context, context.l10n.permissions),
+        formLabel(context, context.l10n.employees_permissions),
         Container(
           decoration: BoxDecoration(
             color: theme.colorScheme.surfaceContainerHighest,
@@ -193,14 +193,14 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      context.l10n.adminAccess,
+                      context.l10n.employees_adminAccess,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      context.l10n.adminAccessDescription,
+                      context.l10n.employees_adminAccessDescription,
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -234,7 +234,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    context.l10n.accountStatus,
+                    context.l10n.employees_accountStatus,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
@@ -242,7 +242,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    context.l10n.accountStatusDescription,
+                    context.l10n.employees_accountStatusDescription,
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
@@ -277,7 +277,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
                     color: statusColors.onSuccessContainer,
                   ),
             label: Text(
-              context.l10n.reEnableAccount,
+              context.l10n.employees_reEnableAccount,
               style: TextStyle(color: statusColors.onSuccessContainer),
             ),
             style: OutlinedButton.styleFrom(
@@ -306,7 +306,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
                     color: statusColors.onWarningContainer,
                   ),
             label: Text(
-              context.l10n.disableAccount,
+              context.l10n.employees_disableAccount,
               style: TextStyle(color: statusColors.onWarningContainer),
             ),
             style: OutlinedButton.styleFrom(
@@ -320,8 +320,8 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
         const SizedBox(height: 8),
         Text(
           _isDisabled
-              ? context.l10n.reEnableAccountNote
-              : context.l10n.disableAccountNote,
+              ? context.l10n.employees_reEnableAccountNote
+              : context.l10n.employees_disableAccountNote,
           textAlign: TextAlign.center,
           style: theme.textTheme.labelSmall?.copyWith(
             color: scheme.onSurfaceVariant,
@@ -335,11 +335,11 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final title = _isEdit
-        ? context.l10n.editEmployee
-        : context.l10n.inviteEmployee;
+        ? context.l10n.employees_editEmployee
+        : context.l10n.employees_inviteEmployee;
     final submitLabel = _isEdit
-        ? context.l10n.saveChanges
-        : context.l10n.sendInvite;
+        ? context.l10n.common_saveChanges
+        : context.l10n.employees_sendInvite;
 
     return DraggableSheetFrame(
       builder: (sheetContext, scrollController) {
@@ -365,7 +365,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
               const SizedBox(height: 20),
             SheetFocusScroll(
               child: LabeledTextField(
-                label: context.l10n.name,
+                label: context.l10n.employees_name,
                 controller: _nameController,
                 required: !_isEdit,
                 maxLength: TextLimits.personName,
@@ -379,7 +379,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
             const SizedBox(height: 12),
             SheetFocusScroll(
               child: LabeledTextField(
-                label: context.l10n.email,
+                label: context.l10n.common_email,
                 controller: _emailController,
                 keyboard: TextInputType.emailAddress,
                 required: !_isEdit,
@@ -394,7 +394,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
             const SizedBox(height: 12),
             SheetFocusScroll(
               child: LabeledTextField(
-                label: context.l10n.phoneNumber,
+                label: context.l10n.employees_phoneNumber,
                 controller: _phoneController,
                 keyboard: TextInputType.phone,
                 optional: true,

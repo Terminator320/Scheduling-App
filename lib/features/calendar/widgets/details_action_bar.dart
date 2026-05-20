@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -48,7 +48,7 @@ class DetailsActionBar extends StatelessWidget {
                     ),
                   )
                 : const Icon(Icons.check, size: 18),
-            label: Text(context.l10n.markAsDone),
+            label: Text(context.l10n.calendar_markAsDone),
           ),
         if (isDone) ...[
           const SizedBox(height: AppSpacing.sp8),
@@ -60,7 +60,7 @@ class DetailsActionBar extends StatelessWidget {
             ),
             onPressed: null,
             icon: const Icon(Icons.check_circle_outline, size: 18),
-            label: Text(context.l10n.completed),
+            label: Text(context.l10n.calendar_completed),
           ),
         ],
         if (showCancel && !isCancelled) ...[
@@ -73,12 +73,12 @@ class DetailsActionBar extends StatelessWidget {
             ),
             onPressed: isSaving ? null : onCancel,
             icon: const Icon(Icons.close, size: 15),
-            label: Text(context.l10n.cancelAppointment),
+            label: Text(context.l10n.calendar_cancelAppointment),
           ),
           const SizedBox(height: 5),
           Center(
             child: Text(
-              context.l10n.cancelledJobsAreSavedToHistory,
+              context.l10n.calendar_cancelledJobsAreSavedToHistory,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),

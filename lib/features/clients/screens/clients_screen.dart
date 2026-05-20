@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
@@ -103,13 +103,13 @@ class _ListInformationState extends State<ListInformation> {
         ),
       ),
       title: Text(
-        context.l10n.clients,
+        context.l10n.common_clients,
         style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
       ),
       bottom: AppSearchBar(
         controller: _searchController,
         onChanged: (_) => setState(() {}),
-        hintText: context.l10n.searchByNameOrPhone,
+        hintText: context.l10n.clients_searchByNameOrPhone,
       ),
     );
   }
@@ -131,7 +131,7 @@ class _ListInformationState extends State<ListInformation> {
         ),
       ),
       title: Text(
-        context.l10n.history,
+        context.l10n.common_history,
         style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
       ),
       bottom: PreferredSize(
@@ -143,7 +143,7 @@ class _ListInformationState extends State<ListInformation> {
             onChanged: (_) => setState(() {}),
             style: TextStyle(color: scheme.onPrimary, fontSize: 13),
             decoration: InputDecoration(
-              hintText: context.l10n.searchByClientOrEmployee,
+              hintText: context.l10n.clients_searchByClientOrEmployee,
               hintStyle: TextStyle(
                 color: scheme.onPrimary.withValues(alpha: 0.6),
                 fontSize: 13,
@@ -202,8 +202,8 @@ class _ListInformationState extends State<ListInformation> {
             const SizedBox(height: 12),
             Text(
               _isClients
-                  ? context.l10n.selectAClientToViewDetails
-                  : context.l10n.noClientsYet,
+                  ? context.l10n.clients_selectAClientToViewDetails
+                  : context.l10n.clients_noClientsYet,
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),

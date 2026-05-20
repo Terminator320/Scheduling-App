@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -60,8 +60,8 @@ class EventList extends StatelessWidget {
                 if (value.isEmpty) {
                   return AppEmptyState(
                     icon: Icons.event_outlined,
-                    title: context.l10n.noAppointmentsFound,
-                    body: context.l10n.tapToScheduleAnAppointment,
+                    title: context.l10n.common_noAppointmentsFound,
+                    body: context.l10n.common_tapToScheduleAnAppointment,
                   );
                 }
 

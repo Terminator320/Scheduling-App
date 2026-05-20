@@ -186,7 +186,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
       if (!wasDisabled && isDisabled) {
         _handleAccountDisabled(
           context,
-          context.l10n.thisAccountHasBeenDisabled,
+          context.l10n.error_thisAccountHasBeenDisabled,
         );
       }
     });
@@ -199,7 +199,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
       final prevRole = prev?.valueOrNull;
       final nextRole = next.valueOrNull;
       if (prevRole == 'admin' && nextRole != null && nextRole != 'admin') {
-        _handleAccountDisabled(context, context.l10n.yourAdminAccessWasRevoked);
+        _handleAccountDisabled(context, context.l10n.error_yourAdminAccessWasRevoked);
       }
     });
   }

@@ -1,4 +1,4 @@
-﻿import 'dart:io' show Platform;
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -22,19 +22,19 @@ class AddressMapLauncher {
     final options = <_MapOption>[
       if (Platform.isIOS)
         _MapOption(
-          label: context.l10n.appleMaps,
+          label: context.l10n.maps_appleMaps,
           icon: Icons.map_outlined,
           uri: Uri.parse('http://maps.apple.com/?q=$navEncoded'),
         ),
       _MapOption(
-        label: context.l10n.googleMaps,
+        label: context.l10n.maps_googleMaps,
         icon: Icons.map_outlined,
         uri: Uri.parse(
           'https://www.google.com/maps/search/?api=1&query=$navEncoded',
         ),
       ),
       _MapOption(
-        label: context.l10n.waze,
+        label: context.l10n.maps_waze,
         icon: Icons.navigation_outlined,
         uri: Uri.parse('https://waze.com/ul?q=$navEncoded&navigate=yes'),
       ),
@@ -61,7 +61,7 @@ class AddressMapLauncher {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  context.l10n.openAddressWith,
+                  context.l10n.maps_openAddressWith,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -101,7 +101,7 @@ class AddressMapLauncher {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
-                                    context.l10n.couldNotOpenMapApp,
+                                    context.l10n.error_couldNotOpenMapApp,
                                     style: TextStyle(
                                       color: scheme.onErrorContainer,
                                     ),

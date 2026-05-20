@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -94,14 +94,14 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                context.l10n.photoUploadFailedSnackbar,
+                context.l10n.calendar_photoUploadFailedSnackbar,
                 style: TextStyle(color: scheme.onErrorContainer),
               ),
             ),
           ],
         ),
         action: SnackBarAction(
-          label: context.l10n.open,
+          label: context.l10n.calendar_open,
           textColor: scheme.onErrorContainer,
           onPressed: () async {
             final appointment = await ref
@@ -183,7 +183,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       if (next is AsyncError && previous is! AsyncError) {
         ref
             .read(noticeServiceProvider)
-            .error(context.l10n.couldNotLoadAppointments);
+            .error(context.l10n.error_couldNotLoadAppointments);
       }
     }
 
@@ -215,7 +215,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     final isLoading = appointmentsAsync.isLoading;
     final locale = Localizations.localeOf(context).toString();
     final monthLabel = DateFormat.yMMMM(locale).format(_focusedDay);
-    final jobLabel = '${selectedEvents.length} ${context.l10n.appointments}';
+    final jobLabel = '${selectedEvents.length} ${context.l10n.calendar_appointments}';
 
     return Scaffold(
       key: _scaffoldKey,
@@ -224,7 +224,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         foregroundColor: scheme.onPrimary,
         automaticallyImplyLeading: false,
         title: Text(
-          context.l10n.calendar,
+          context.l10n.common_calendar,
           style: TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w700,
@@ -235,7 +235,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           TextButton(
             onPressed: _goToToday,
             child: Text(
-              context.l10n.today,
+              context.l10n.calendar_today,
               style: TextStyle(
                 color: scheme.onPrimary,
                 fontSize: 13,
@@ -351,7 +351,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
             ),
             const SizedBox(height: 12),
             Text(
-              context.l10n.selectAnAppointmentToViewDetails,
+              context.l10n.calendar_selectAnAppointmentToViewDetails,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),

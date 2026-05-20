@@ -1,4 +1,4 @@
-﻿import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -56,10 +56,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       : FirebaseAuth.instance.currentUser?.email ?? '';
 
   String _textScaleLabel(BuildContext context, double scale) {
-    if (scale <= 0.85) return context.l10n.textScaleSmall;
-    if (scale <= 1.05) return context.l10n.textScaleMedium;
-    if (scale <= 1.25) return context.l10n.textScaleLarge;
-    return context.l10n.textScaleXL;
+    if (scale <= 0.85) return context.l10n.settings_textScaleSmall;
+    if (scale <= 1.05) return context.l10n.settings_textScaleMedium;
+    if (scale <= 1.25) return context.l10n.settings_textScaleLarge;
+    return context.l10n.settings_textScaleXL;
   }
 
   bool get _isAdmin => widget.role == 'admin';
@@ -92,7 +92,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           role: widget.role,
         ),
         const SizedBox(height: AppSpacing.sp24),
-        SettingsSectionHeader(label: context.l10n.appearance.toUpperCase()),
+        SettingsSectionHeader(label: context.l10n.settings_appearance.toUpperCase()),
         SettingsSectionCard(
           child: Column(
             children: [
@@ -102,7 +102,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ? Icons.dark_mode_rounded
                     : Icons.light_mode_rounded,
                 iconColor: scheme.primary,
-                label: context.l10n.darkMode,
+                label: context.l10n.settings_darkMode,
                 trailing: Switch.adaptive(
                   value: isDark,
                   onChanged: (_) => notifier.toggleTheme(),
@@ -115,7 +115,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 iconBg: scheme.tertiaryContainer,
                 icon: Icons.text_fields_rounded,
                 iconColor: scheme.tertiary,
-                label: context.l10n.textSize,
+                label: context.l10n.settings_textSize,
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -137,7 +137,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 iconBg: scheme.secondaryContainer,
                 icon: Icons.language_rounded,
                 iconColor: scheme.secondary,
-                label: context.l10n.language,
+                label: context.l10n.common_language,
                 trailing: LanguageToggle(
                   currentCode: langCode,
                   onChanged: notifier.setLanguage,
@@ -148,7 +148,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
         const SizedBox(height: AppSpacing.sp24),
-        SettingsSectionHeader(label: context.l10n.account.toUpperCase()),
+        SettingsSectionHeader(label: context.l10n.settings_account.toUpperCase()),
         SettingsSectionCard(
           child: Column(
             children: [
@@ -156,7 +156,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 iconBg: scheme.errorContainer,
                 icon: Icons.logout_rounded,
                 iconColor: scheme.error,
-                label: context.l10n.logOut,
+                label: context.l10n.settings_logOut,
                 labelColor: scheme.error,
                 onTap: _signOut,
               ),
@@ -165,7 +165,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 iconBg: scheme.errorContainer,
                 icon: Icons.delete_forever_rounded,
                 iconColor: scheme.error,
-                label: context.l10n.deleteAccount,
+                label: context.l10n.settings_deleteAccount,
                 labelColor: scheme.error,
                 isLast: true,
                 onTap: _confirmDeleteAccount,
@@ -205,7 +205,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             Icon(Icons.tune_rounded, size: 48, color: scheme.onSurfaceVariant),
             const SizedBox(height: 12),
             Text(
-              context.l10n.settings,
+              context.l10n.common_settings,
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
@@ -231,7 +231,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          context.l10n.settings,
+          context.l10n.common_settings,
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
         ),
       ),
@@ -286,11 +286,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     } catch (e, st) {
       logger.warn('settings.delete_account', e, st);
       if (!mounted) return;
-      notices.error(context.l10n.couldNotDeleteAccount);
+      notices.error(context.l10n.error_couldNotDeleteAccount);
       return;
     }
     if (!mounted) return;
-    final message = context.l10n.accountDeleted;
+    final message = context.l10n.settings_accountDeleted;
     Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (_) => false);
     notices.success(message);
   }

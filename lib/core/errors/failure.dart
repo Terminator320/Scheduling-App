@@ -1,4 +1,4 @@
-﻿import 'package:flutter/widgets.dart';
+import 'package:flutter/widgets.dart';
 
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -17,5 +17,5 @@ class UnknownFailure extends Failure {
 
   @override
   String toLocalizedMessage(BuildContext context) =>
-      context.l10n.somethingWentWrongPleaseTryAgain;
+      context.l10n.error_somethingWentWrongPleaseTryAgain;
 }

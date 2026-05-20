@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -117,7 +117,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
       ),
       error: (err, st) {
         ref.read(loggerProvider).warn('clients stream error', err, st);
-        return Center(child: Text(context.l10n.somethingWentWrong));
+        return Center(child: Text(context.l10n.error_somethingWentWrong));
       },
       data: (_) {
         final filtered = ref.watch(filteredClientsProvider(widget.searchQuery));
@@ -133,13 +133,13 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
                 ? Icons.people_outline
                 : Icons.search_off_outlined,
             title: query.isEmpty
-                ? context.l10n.noClientsYet
-                : '${context.l10n.noClientsMatch} "$query"',
+                ? context.l10n.clients_noClientsYet
+                : '${context.l10n.clients_noClientsMatch} "$query"',
             body: query.isEmpty
-                ? context.l10n.tapToAddYourFirstClient
-                : context.l10n.tryADifferentSearchTerm,
+                ? context.l10n.clients_tapToAddYourFirstClient
+                : context.l10n.common_tryADifferentSearchTerm,
             actionLabel: query.isEmpty && widget.isAdmin
-                ? context.l10n.addClient
+                ? context.l10n.clients_addClient
                 : null,
             onAction: query.isEmpty && widget.isAdmin ? _onAddClient : null,
           );
