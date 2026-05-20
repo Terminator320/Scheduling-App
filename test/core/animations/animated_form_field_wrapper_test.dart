@@ -56,4 +56,33 @@ void main() {
     await tester.pump(const Duration(milliseconds: 80));
     expect(_shakeDx(tester), 0);
   });
+
+  testWidgets('keyboard focus survives the shake (no remount)', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+
+    Widget host({required bool hasError}) => MaterialApp(
+      home: Scaffold(
+        body: AnimatedFormFieldWrapper(
+          hasError: hasError,
+          child: TextField(controller: controller, focusNode: focusNode),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(host(hasError: false));
+    focusNode.requestFocus();
+    await tester.pump();
+    expect(focusNode.hasFocus, isTrue);
+
+    await tester.pumpWidget(host(hasError: true));
+    await tester.pumpAndSettle();
+
+    expect(focusNode.hasFocus, isTrue);
+    expect(tester.takeException(), isNull);
+  });
 }
