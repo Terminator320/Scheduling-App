@@ -21,10 +21,14 @@ class ClientsListView extends ConsumerStatefulWidget {
     required this.searchQuery,
     required this.isAdmin,
     super.key,
+    this.onClientTap,
+    this.selectedClientId,
   });
 
   final String searchQuery;
   final bool isAdmin;
+  final void Function(ClientRecord client)? onClientTap;
+  final String? selectedClientId;
 
   @override
   ConsumerState<ClientsListView> createState() => _ClientsListViewState();
@@ -70,6 +74,11 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
   }
 
   Future<void> _openClient(ClientRecord client) async {
+    if (widget.onClientTap != null) {
+      widget.onClientTap!(client);
+      return;
+    }
+
     await SheetFocus.settleBeforeSheet();
     if (!mounted) return;
 
@@ -147,6 +156,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
             index: index,
             child: ClientTile(
               client: displayed[index],
+              selected: widget.selectedClientId == displayed[index].id,
               onOpen: () => _openClient(displayed[index]),
             ),
           ),

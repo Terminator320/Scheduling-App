@@ -7,75 +7,79 @@ import 'package:scheduling/shared/widgets/app_avatar.dart';
 
 class ClientTile extends StatelessWidget {
   const ClientTile({
-    required this.client, super.key,
+    required this.client,
+    super.key,
     this.onOpen,
+    this.selected = false,
   });
 
   final ClientRecord client;
   final Future<void> Function()? onOpen;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return InkWell(
-      onTap: () async {
-        if (onOpen != null) {
-          await onOpen!();
-          return;
-        }
-        await showModalBottomSheet<void>(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (_) => ClientDetailSheet(client: client),
-        );
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sp16,
-          vertical: AppSpacing.sp12,
-        ),
-        child: Row(
-          children: [
-            AppAvatar(
-              name: client.displayName,
-            ),
-            const SizedBox(width: AppSpacing.sp12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    client.displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (client.phone.isNotEmpty) ...[
-                    const SizedBox(height: 2),
+    return Material(
+      color: selected ? scheme.secondaryContainer : Colors.transparent,
+      child: InkWell(
+        onTap: () async {
+          if (onOpen != null) {
+            await onOpen!();
+            return;
+          }
+          await showModalBottomSheet<void>(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => ClientDetailSheet(client: client),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sp16,
+            vertical: AppSpacing.sp12,
+          ),
+          child: Row(
+            children: [
+              AppAvatar(name: client.displayName),
+              const SizedBox(width: AppSpacing.sp12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     Text(
-                      client.phone,
+                      client.displayName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
+                    if (client.phone.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        client.phone,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-            Icon(
-              Icons.chevron_right,
-              size: 18,
-              color: scheme.onSurfaceVariant,
-            ),
-          ],
+              Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: scheme.onSurfaceVariant,
+              ),
+            ],
+          ),
         ),
       ),
     );

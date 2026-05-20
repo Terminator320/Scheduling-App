@@ -8,23 +8,28 @@ import 'package:scheduling/shared/widgets/status_chip.dart';
 
 class AppointmentCard extends StatelessWidget {
   const AppointmentCard({
-    required this.appointment, required this.employeeColor, super.key,
+    required this.appointment,
+    required this.employeeColor,
+    super.key,
     this.employeeName,
     this.onTap,
+    this.selected = false,
   });
 
   final AppointmentRecord appointment;
   final Color employeeColor;
   final String? employeeName;
   final VoidCallback? onTap;
+  final bool selected;
 
-  AppointmentStatus _statusFromString(String status) => switch (status.toLowerCase()) {
-    'done' || 'completed' => AppointmentStatus.done,
-    'cancelled' => AppointmentStatus.cancelled,
-    'pending' => AppointmentStatus.pending,
-    'in_progress' || 'inprogress' => AppointmentStatus.inProgress,
-    _ => AppointmentStatus.confirmed,
-  };
+  AppointmentStatus _statusFromString(String status) =>
+      switch (status.toLowerCase()) {
+        'done' || 'completed' => AppointmentStatus.done,
+        'cancelled' => AppointmentStatus.cancelled,
+        'pending' => AppointmentStatus.pending,
+        'in_progress' || 'inprogress' => AppointmentStatus.inProgress,
+        _ => AppointmentStatus.confirmed,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +40,7 @@ class AppointmentCard extends StatelessWidget {
       child: Card(
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
+        color: selected ? scheme.secondaryContainer : null,
         child: InkWell(
           onTap: onTap,
           child: IntrinsicHeight(
@@ -64,7 +70,11 @@ class AppointmentCard extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: AppSpacing.sp8),
-                            StatusChip(status: _statusFromString(appointment.displayStatus)),
+                            StatusChip(
+                              status: _statusFromString(
+                                appointment.displayStatus,
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: AppSpacing.sp4),

@@ -2,6 +2,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/layout/breakpoints.dart';
+import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -13,7 +16,10 @@ import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/settings/screens/text_size_screen.dart';
 import 'package:scheduling/features/settings/widgets/delete_account_dialog.dart';
 import 'package:scheduling/features/settings/widgets/settings_tiles.dart';
+import 'package:scheduling/features/settings/widgets/text_size_view.dart';
 import 'package:scheduling/routes/app_routes.dart';
+
+enum _SettingsDetail { textSize }
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({
@@ -21,12 +27,14 @@ class SettingsScreen extends ConsumerStatefulWidget {
     this.name = '',
     this.email = '',
     this.role,
+    this.employeeId = '',
     this.accountDeletionService,
   });
 
   final String name;
   final String email;
   final String? role;
+  final String employeeId;
   final AccountDeletionService? accountDeletionService;
 
   @override
@@ -36,6 +44,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final AccountDeletionService _deletionService =
       widget.accountDeletionService ?? AccountDeletionService();
+
+  _SettingsDetail? _selectedDetail;
 
   String get _displayName => widget.name.isNotEmpty
       ? widget.name
@@ -52,13 +62,164 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return context.l10n.textScaleXL;
   }
 
-  @override
-  Widget build(BuildContext context) {
+  bool get _isAdmin => widget.role == 'admin';
+
+  Future<void> _onTextSizeTap() async {
+    if (context.isWide) {
+      setState(() => _selectedDetail = _SettingsDetail.textSize);
+      return;
+    }
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(builder: (_) => const TextSizeScreen()),
+    );
+    if (mounted) setState(() {});
+  }
+
+  Widget _buildMaster() {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final notifier = ThemeNotifier.of(context);
     final isDark = notifier.isDark;
     final langCode = Localizations.localeOf(context).languageCode;
+
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.sp16),
+      children: [
+        SettingsProfileCard(
+          name: _displayName,
+          email: _email,
+          role: widget.role,
+        ),
+        const SizedBox(height: AppSpacing.sp24),
+        SettingsSectionHeader(label: context.l10n.appearance.toUpperCase()),
+        SettingsSectionCard(
+          child: Column(
+            children: [
+              SettingsTile(
+                iconBg: scheme.primaryContainer,
+                icon: isDark
+                    ? Icons.dark_mode_rounded
+                    : Icons.light_mode_rounded,
+                iconColor: scheme.primary,
+                label: context.l10n.darkMode,
+                trailing: Switch.adaptive(
+                  value: isDark,
+                  onChanged: (_) => notifier.toggleTheme(),
+                  activeTrackColor: scheme.primary,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+              const SettingsTileDivider(),
+              SettingsTile(
+                iconBg: scheme.tertiaryContainer,
+                icon: Icons.text_fields_rounded,
+                iconColor: scheme.tertiary,
+                label: context.l10n.textSize,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SettingsTrailingPill(
+                      label: _textScaleLabel(context, notifier.textScale),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+                onTap: _onTextSizeTap,
+              ),
+              const SettingsTileDivider(),
+              SettingsTile(
+                iconBg: scheme.secondaryContainer,
+                icon: Icons.language_rounded,
+                iconColor: scheme.secondary,
+                label: context.l10n.language,
+                trailing: LanguageToggle(
+                  currentCode: langCode,
+                  onChanged: notifier.setLanguage,
+                ),
+                isLast: true,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp24),
+        SettingsSectionHeader(label: context.l10n.account.toUpperCase()),
+        SettingsSectionCard(
+          child: Column(
+            children: [
+              SettingsTile(
+                iconBg: scheme.errorContainer,
+                icon: Icons.logout_rounded,
+                iconColor: scheme.error,
+                label: context.l10n.logOut,
+                labelColor: scheme.error,
+                onTap: _signOut,
+              ),
+              const SettingsTileDivider(),
+              SettingsTile(
+                iconBg: scheme.errorContainer,
+                icon: Icons.delete_forever_rounded,
+                iconColor: scheme.error,
+                label: context.l10n.deleteAccount,
+                labelColor: scheme.error,
+                isLast: true,
+                onTap: _confirmDeleteAccount,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp32),
+      ],
+    );
+  }
+
+  Widget? _buildDetail() {
+    switch (_selectedDetail) {
+      case _SettingsDetail.textSize:
+        return TextSizeView(
+          key: const ValueKey('settings-text-size-pane'),
+          onApplied: () {
+            if (mounted) setState(() => _selectedDetail = null);
+          },
+        );
+      case null:
+        return null;
+    }
+  }
+
+  Widget _buildDetailPlaceholder() {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      color: scheme.surface,
+      alignment: Alignment.center,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sp24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.tune_rounded, size: 48, color: scheme.onSurfaceVariant),
+            const SizedBox(height: 12),
+            Text(
+              context.l10n.settings,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -74,104 +235,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.sp16),
-        children: [
-          SettingsProfileCard(
-            name: _displayName,
-            email: _email,
-            role: widget.role,
-          ),
-          const SizedBox(height: AppSpacing.sp24),
-          SettingsSectionHeader(label: context.l10n.appearance.toUpperCase()),
-          SettingsSectionCard(
-            child: Column(
-              children: [
-                SettingsTile(
-                  iconBg: scheme.primaryContainer,
-                  icon: isDark
-                      ? Icons.dark_mode_rounded
-                      : Icons.light_mode_rounded,
-                  iconColor: scheme.primary,
-                  label: context.l10n.darkMode,
-                  trailing: Switch.adaptive(
-                    value: isDark,
-                    onChanged: (_) => notifier.toggleTheme(),
-                    activeTrackColor: scheme.primary,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-                const SettingsTileDivider(),
-                SettingsTile(
-                  iconBg: scheme.tertiaryContainer,
-                  icon: Icons.text_fields_rounded,
-                  iconColor: scheme.tertiary,
-                  label: context.l10n.textSize,
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SettingsTrailingPill(
-                        label: _textScaleLabel(context, notifier.textScale),
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        size: 18,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ],
-                  ),
-                  onTap: () async {
-                    await Navigator.push<void>(
-                      context,
-                      MaterialPageRoute(builder: (_) => const TextSizeScreen()),
-                    );
-                    if (mounted) setState(() {});
-                  },
-                ),
-                const SettingsTileDivider(),
-                SettingsTile(
-                  iconBg: scheme.secondaryContainer,
-                  icon: Icons.language_rounded,
-                  iconColor: scheme.secondary,
-                  label: context.l10n.language,
-                  trailing: LanguageToggle(
-                    currentCode: langCode,
-                    onChanged: notifier.setLanguage,
-                  ),
-                  isLast: true,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sp24),
-          SettingsSectionHeader(label: context.l10n.account.toUpperCase()),
-          SettingsSectionCard(
-            child: Column(
-              children: [
-                SettingsTile(
-                  iconBg: scheme.errorContainer,
-                  icon: Icons.logout_rounded,
-                  iconColor: scheme.error,
-                  label: context.l10n.logOut,
-                  labelColor: scheme.error,
-                  onTap: _signOut,
-                ),
-                const SettingsTileDivider(),
-                SettingsTile(
-                  iconBg: scheme.errorContainer,
-                  icon: Icons.delete_forever_rounded,
-                  iconColor: scheme.error,
-                  label: context.l10n.deleteAccount,
-                  labelColor: scheme.error,
-                  isLast: true,
-                  onTap: _confirmDeleteAccount,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sp32),
-        ],
+      body: AdaptiveShell(
+        currentDestination: AdaptiveDestination.settings,
+        isAdmin: _isAdmin,
+        employeeId: widget.employeeId,
+        userName: _displayName,
+        userEmail: _email,
+        child: MasterDetailScaffold(
+          master: _buildMaster(),
+          detail: _buildDetail(),
+          placeholder: _buildDetailPlaceholder(),
+        ),
       ),
     );
   }

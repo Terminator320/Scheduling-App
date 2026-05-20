@@ -681,6 +681,15 @@ class AppLocalizationsFr extends AppLocalizations {
   String get noEmployeesFound => 'Aucun employé trouvé';
 
   @override
+  String get selectAClientToViewDetails => 'Sélectionner un client pour voir les détails';
+
+  @override
+  String get selectAnEmployeeToViewDetails => 'Sélectionner un employé pour voir les détails';
+
+  @override
+  String get selectAnAppointmentToViewDetails => 'Sélectionner un rendez-vous pour voir les détails';
+
+  @override
   String get noClientsYet => 'Aucun client pour le moment';
 
   @override

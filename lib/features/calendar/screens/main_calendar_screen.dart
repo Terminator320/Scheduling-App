@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/layout/breakpoints.dart';
+import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -13,6 +16,7 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/app_calendar_view.dart';
+import 'package:scheduling/features/calendar/widgets/event_details_view.dart';
 import 'package:scheduling/features/calendar/widgets/event_list.dart';
 import 'package:scheduling/features/calendar/widgets/month_year_picker.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
@@ -46,6 +50,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
+  AppointmentRecord? _selectedAppointment;
   late AppointmentDateRange _appointmentRange;
   PhotoUploadNotifier? _uploadNotifier;
 
@@ -301,14 +306,69 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         employeeId: widget.employeeId,
         userName: _userName,
       ),
-      body: SafeArea(
-        child: _content(
-          isLoading: isLoading,
-          colorMap: colorMap,
-          employees: employees,
+      body: AdaptiveShell(
+        currentDestination: AdaptiveDestination.calendar,
+        isAdmin: widget.isAdmin,
+        employeeId: widget.employeeId,
+        userName: _userName,
+        child: SafeArea(
+          child: MasterDetailScaffold(
+            master: _content(
+              isLoading: isLoading,
+              colorMap: colorMap,
+              employees: employees,
+            ),
+            detail: _selectedAppointment == null
+                ? null
+                : EventDetailsView(
+                    key: ValueKey(_selectedAppointment!.id),
+                    appointment: _selectedAppointment!,
+                    showActions: widget.isAdmin,
+                    onClose: (_) =>
+                        setState(() => _selectedAppointment = null),
+                  ),
+            placeholder: _buildDetailPlaceholder(),
+          ),
         ),
       ),
     );
+  }
+
+  Widget _buildDetailPlaceholder() {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      color: scheme.surface,
+      alignment: Alignment.center,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sp24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.event_outlined,
+              size: 48,
+              color: scheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              context.l10n.selectAnAppointmentToViewDetails,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _onAppointmentTap(AppointmentRecord appointment) {
+    if (context.isWide) {
+      setState(() => _selectedAppointment = appointment);
+    } else {
+      showEventDetails(context, appointment, showActions: widget.isAdmin);
+    }
   }
 
   Widget _content({
@@ -317,7 +377,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     required List<EmployeeRecord> employees,
   }) {
     final screenSize = MediaQuery.sizeOf(context);
-    final isTablet = screenSize.width > 600;
+    final isTablet = context.isWide;
 
     return Column(
       children: [
@@ -341,6 +401,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           employees: employees,
           isLoading: isLoading,
           isAdmin: widget.isAdmin,
+          selectedAppointmentId: _selectedAppointment?.id,
+          onAppointmentTap: _onAppointmentTap,
         ),
       ],
     );
