@@ -1439,6 +1439,24 @@ abstract class AppLocalizations {
   /// **'No employees found'**
   String get noEmployeesFound;
 
+  /// No description provided for @selectAClientToViewDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a client to view details'**
+  String get selectAClientToViewDetails;
+
+  /// No description provided for @selectAnEmployeeToViewDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Select an employee to view details'**
+  String get selectAnEmployeeToViewDetails;
+
+  /// No description provided for @selectAnAppointmentToViewDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Select an appointment to view details'**
+  String get selectAnAppointmentToViewDetails;
+
   /// No description provided for @noClientsYet.
   ///
   /// In en, this message translates to:

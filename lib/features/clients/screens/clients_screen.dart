@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/layout/breakpoints.dart';
+import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
+import 'package:scheduling/core/utils/sheet_focus.dart';
+import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/add_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/appointment_history_view.dart';
+import 'package:scheduling/features/clients/widgets/client_detail_sheet.dart';
+import 'package:scheduling/features/clients/widgets/client_detail_view.dart';
 import 'package:scheduling/features/clients/widgets/clients_list_view.dart';
 import 'package:scheduling/features/settings/widgets/settings_drawer.dart';
 import 'package:scheduling/routes/app_routes.dart';
@@ -29,6 +36,7 @@ class _ListInformationState extends State<ListInformation> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _appointmentSearchController =
       TextEditingController();
+  ClientRecord? _selectedClient;
 
   bool get _isClients => widget.mode == 'Clients';
 
@@ -51,6 +59,31 @@ class _ListInformationState extends State<ListInformation> {
       ),
       builder: (_) => const AddClientSheet(),
     );
+  }
+
+  Future<void> _onClientTap(ClientRecord client) async {
+    if (context.isWide) {
+      setState(() => _selectedClient = client);
+      return;
+    }
+
+    await SheetFocus.settleBeforeSheet();
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 280),
+        reverseDuration: Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      ),
+      builder: (_) => ClientDetailSheet(client: client),
+    );
+
+    if (!mounted) return;
+    await SheetFocus.unfocusAfterSheet();
   }
 
   PreferredSizeWidget _buildClientsAppBar() {
@@ -137,8 +170,64 @@ class _ListInformationState extends State<ListInformation> {
     );
   }
 
+  Widget _buildMaster() {
+    if (!_isClients) {
+      return AppointmentHistoryView(
+        searchQuery: _appointmentSearchController.text,
+      );
+    }
+    return ClientsListView(
+      searchQuery: _searchController.text,
+      isAdmin: widget.isAdmin,
+      selectedClientId: _selectedClient?.id,
+      onClientTap: _onClientTap,
+    );
+  }
+
+  Widget _buildDetailPlaceholder() {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      color: scheme.surface,
+      alignment: Alignment.center,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sp24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.people_outline_rounded,
+              size: 48,
+              color: scheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _isClients
+                  ? context.l10n.selectAClientToViewDetails
+                  : context.l10n.noClientsYet,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final body = MasterDetailScaffold(
+      master: _buildMaster(),
+      detail: _isClients && _selectedClient != null
+          ? ClientDetailView(
+              key: ValueKey(_selectedClient!.id),
+              client: _selectedClient!,
+            )
+          : null,
+      placeholder: _buildDetailPlaceholder(),
+    );
+
     return Scaffold(
       appBar: _isClients ? _buildClientsAppBar() : _buildHistoryAppBar(),
       endDrawer: SettingsDrawer(
@@ -151,14 +240,14 @@ class _ListInformationState extends State<ListInformation> {
               child: const Icon(Icons.add),
             )
           : null,
-      body: _isClients
-          ? ClientsListView(
-              searchQuery: _searchController.text,
-              isAdmin: widget.isAdmin,
-            )
-          : AppointmentHistoryView(
-              searchQuery: _appointmentSearchController.text,
-            ),
+      body: AdaptiveShell(
+        currentDestination: _isClients
+            ? AdaptiveDestination.clients
+            : AdaptiveDestination.history,
+        isAdmin: widget.isAdmin,
+        employeeId: widget.employeeId,
+        child: body,
+      ),
     );
   }
 }

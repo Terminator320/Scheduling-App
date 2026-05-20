@@ -73,6 +73,7 @@ class AppRoutes {
             name: args?.name ?? '',
             email: args?.email ?? '',
             role: args?.role,
+            employeeId: args?.employeeId ?? '',
           ),
         );
 
@@ -91,10 +92,7 @@ class AppRoutes {
       reverseTransitionDuration: const Duration(milliseconds: 250),
       pageBuilder: (_, __, ___) => page,
       transitionsBuilder: (_, animation, __, child) => FadeTransition(
-        opacity: CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-        ),
+        opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
         child: child,
       ),
     );
@@ -124,8 +122,14 @@ class ClientsListArgs {
 }
 
 class SettingsArgs {
-  const SettingsArgs({required this.name, required this.email, this.role});
+  const SettingsArgs({
+    required this.name,
+    required this.email,
+    this.role,
+    this.employeeId = '',
+  });
   final String name;
   final String email;
   final String? role;
+  final String employeeId;
 }

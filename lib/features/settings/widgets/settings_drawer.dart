@@ -288,6 +288,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
         name: _displayName,
         email: _displayEmail,
         role: widget.isAdmin ? 'admin' : 'employee',
+        employeeId: widget.employeeId,
       ),
     );
   }
