@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -149,20 +149,20 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
 
     setState(() {
       _errors['businessName'] = !hasBusinessOrName
-          ? context.l10n.businessNameOrContactNameIsRequired
+          ? context.l10n.validation_businessNameOrContactNameIsRequired
           : null;
       _errors['name'] = !hasBusinessOrName
-          ? context.l10n.businessNameOrContactNameIsRequired
+          ? context.l10n.validation_businessNameOrContactNameIsRequired
           : null;
       _errors['phone'] = !hasContactMethod
-          ? context.l10n.phoneOrEmailIsRequired
+          ? context.l10n.validation_phoneOrEmailIsRequired
           : null;
       _errors['email'] =
           email.isNotEmpty && !AuthValidators.isValidEmailFormat(email)
-          ? context.l10n.enterAValidEmail
+          ? context.l10n.validation_enterAValidEmail
           : null;
       _errors['address'] = businessName.isEmpty && address.isEmpty
-          ? context.l10n.addressIsRequired
+          ? context.l10n.validation_addressIsRequired
           : null;
     });
 
@@ -191,28 +191,28 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
       if (!mounted) return;
       ref
           .read(noticeServiceProvider)
-          .error(context.l10n.couldNotSaveChangesTryAgain);
+          .error(context.l10n.error_couldNotSaveChangesTryAgain);
     }
   }
 
   Future<void> _confirmDelete() async {
     final clientName = widget.client.displayName.isNotEmpty
         ? widget.client.displayName
-        : context.l10n.thisClient;
+        : context.l10n.clients_thisClient;
 
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         final scheme = Theme.of(dialogContext).colorScheme;
         return AlertDialog(
-          title: Text(dialogContext.l10n.deleteClient),
+          title: Text(dialogContext.l10n.clients_deleteClient),
           content: Text(
-            '${dialogContext.l10n.areYouSureYouWantToDelete} $clientName? ${dialogContext.l10n.thisCannotBeUndone}',
+            '${dialogContext.l10n.clients_areYouSureYouWantToDelete} $clientName? ${dialogContext.l10n.clients_thisCannotBeUndone}',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: Text(dialogContext.l10n.cancel),
+              child: Text(dialogContext.l10n.common_cancel),
             ),
             FilledButton(
               style: FilledButton.styleFrom(
@@ -220,7 +220,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
                 foregroundColor: scheme.onError,
               ),
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: Text(dialogContext.l10n.delete),
+              child: Text(dialogContext.l10n.common_delete),
             ),
           ],
         );
@@ -238,11 +238,11 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
       if (widget.scrollController != null) {
         Navigator.pop(context);
       }
-      notices.success(context.l10n.clientDeletedSuccessfully);
+      notices.success(context.l10n.clients_clientDeletedSuccessfully);
     } catch (_) {
       if (!mounted) return;
       setState(() => _isDeleting = false);
-      notices.error(context.l10n.couldNotDeleteClientTryAgain);
+      notices.error(context.l10n.error_couldNotDeleteClientTryAgain);
     }
   }
 
@@ -263,7 +263,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
         if (widget.showHandle) const SheetHandle(),
         if (widget.showHandle) const SizedBox(height: 16),
         if (_isEditing)
-          Text(context.l10n.editClient, style: theme.textTheme.headlineLarge)
+          Text(context.l10n.clients_editClient, style: theme.textTheme.headlineLarge)
         else
           _buildViewHeader(theme),
         const SizedBox(height: 20),
@@ -349,7 +349,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
       if (c.contacts.isNotEmpty) ...[
         const SizedBox(height: 24),
         Text(
-          context.l10n.contacts.toUpperCase(),
+          context.l10n.common_contacts.toUpperCase(),
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w700,
@@ -416,7 +416,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
 
       SheetFocusScroll(
         child: LabeledTextField(
-          label: context.l10n.businessName,
+          label: context.l10n.clients_businessName,
           controller: _businessNameController,
           optional: true,
           autofillHints: const [AutofillHints.organizationName],
@@ -433,7 +433,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
       const SizedBox(height: 16),
       SheetFocusScroll(
         child: LabeledTextField(
-          label: context.l10n.contactName,
+          label: context.l10n.clients_contactName,
           controller: _nameController,
           required: _businessNameController.text.trim().isEmpty,
           optional: _businessNameController.text.trim().isNotEmpty,
@@ -450,7 +450,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
       const SizedBox(height: 16),
       SheetFocusScroll(
         child: LabeledTextField(
-          label: context.l10n.phone,
+          label: context.l10n.clients_phone,
           controller: _phoneController,
           keyboard: TextInputType.phone,
           autofillHints: const [AutofillHints.telephoneNumber],
@@ -465,7 +465,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
       const SizedBox(height: 16),
       SheetFocusScroll(
         child: LabeledTextField(
-          label: context.l10n.email,
+          label: context.l10n.common_email,
           controller: _emailController,
           keyboard: TextInputType.emailAddress,
           autofillHints: const [AutofillHints.email],
@@ -491,7 +491,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
       const SizedBox(height: 16),
       SheetFocusScroll(
         child: LabeledTextField(
-          label: context.l10n.aptUnit,
+          label: context.l10n.clients_aptUnit,
           controller: _aptController,
           optional: true,
           maxLength: TextLimits.aptUnit,
@@ -503,7 +503,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
           Expanded(
             child: SheetFocusScroll(
               child: LabeledTextField(
-                label: context.l10n.city,
+                label: context.l10n.common_city,
                 controller: _cityController,
                 autofillHints: const [AutofillHints.addressCity],
                 maxLength: TextLimits.city,
@@ -514,7 +514,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
           Expanded(
             child: SheetFocusScroll(
               child: LabeledTextField(
-                label: context.l10n.province,
+                label: context.l10n.common_province,
                 controller: _provinceController,
                 autofillHints: const [AutofillHints.addressState],
                 maxLength: TextLimits.province,
@@ -529,7 +529,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
           Expanded(
             child: SheetFocusScroll(
               child: LabeledTextField(
-                label: context.l10n.postalCode,
+                label: context.l10n.common_postalCode,
                 controller: _postalCodeController,
                 autofillHints: const [AutofillHints.postalCode],
                 maxLength: TextLimits.postalCode,
@@ -540,7 +540,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
           Expanded(
             child: SheetFocusScroll(
               child: LabeledTextField(
-                label: context.l10n.country,
+                label: context.l10n.clients_country,
                 controller: _countryController,
                 autofillHints: const [AutofillHints.countryName],
                 maxLength: TextLimits.country,
@@ -562,7 +562,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
               minimumSize: const Size(double.infinity, 46),
             ),
             onPressed: _save,
-            child: Text(context.l10n.saveChanges),
+            child: Text(context.l10n.common_saveChanges),
           ),
           const SizedBox(height: 8),
           OutlinedButton(
@@ -572,7 +572,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
               side: BorderSide(color: Theme.of(context).colorScheme.error),
             ),
             onPressed: _isDeleting ? null : _confirmDelete,
-            child: Text(context.l10n.delete),
+            child: Text(context.l10n.common_delete),
           ),
         ],
       );
@@ -586,7 +586,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
                 ? null
                 : () => setState(() => _isEditing = true),
             icon: const Icon(Icons.edit_outlined, size: 18),
-            label: Text(context.l10n.edit),
+            label: Text(context.l10n.common_edit),
           ),
         ),
         const SizedBox(width: 12),
@@ -605,7 +605,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
                   )
                 : const Icon(Icons.delete_outline, size: 18),
             label: Text(
-              _isDeleting ? context.l10n.deleting : context.l10n.delete,
+              _isDeleting ? context.l10n.clients_deleting : context.l10n.common_delete,
             ),
           ),
         ),

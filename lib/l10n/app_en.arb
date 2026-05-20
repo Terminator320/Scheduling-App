@@ -1,1430 +1,939 @@
 {
-  "schedulingApp": "Scheduling App",
-  "@schedulingApp": {
-    "description": "Scheduling App"
-  },
-  "login": "Login",
-  "@login": {
-    "description": "Login"
-  },
-  "enterEmailAndPassword": "Enter email and password",
-  "@enterEmailAndPassword": {
-    "description": "Enter email and password"
-  },
-  "email": "Email",
-  "@email": {
+  "@@locale": "en",
+  "common_email": "Email",
+  "@common_email": {
     "description": "Email"
   },
-  "password": "Password",
-  "@password": {
+  "common_password": "Password",
+  "@common_password": {
     "description": "Password"
   },
-  "confirmPassword": "Confirm Password",
-  "@confirmPassword": {
+  "auth_confirmPassword": "Confirm Password",
+  "@auth_confirmPassword": {
     "description": "Confirm Password"
   },
-  "signIn": "Sign In",
-  "@signIn": {
+  "auth_signIn": "Sign In",
+  "@auth_signIn": {
     "description": "Sign In"
   },
-  "forgotPassword": "Forgot password?",
-  "@forgotPassword": {
+  "auth_forgotPassword": "Forgot password?",
+  "@auth_forgotPassword": {
     "description": "Forgot password?"
   },
-  "or": "or",
-  "@or": {
-    "description": "or"
-  },
-  "createAccount": "Create account",
-  "@createAccount": {
+  "auth_createAccount": "Create account",
+  "@auth_createAccount": {
     "description": "Create account"
   },
-  "admin": "Admin",
-  "@admin": {
+  "common_admin": "Admin",
+  "@common_admin": {
     "description": "Admin"
   },
-  "role": "Role",
-  "@role": {
+  "employees_role": "Role",
+  "@employees_role": {
     "description": "Role"
   },
-  "active": "Active",
-  "@active": {
+  "status_active": "Active",
+  "@status_active": {
     "description": "Active"
   },
-  "invited": "Invited",
-  "@invited": {
+  "status_invited": "Invited",
+  "@status_invited": {
     "description": "Invited"
   },
-  "confirmed": "Confirmed",
-  "@confirmed": {
+  "status_confirmed": "Confirmed",
+  "@status_confirmed": {
     "description": "Confirmed"
   },
-  "pending": "Pending",
-  "@pending": {
+  "status_pending": "Pending",
+  "@status_pending": {
     "description": "Pending"
   },
-  "cancelled": "Cancelled",
-  "@cancelled": {
+  "status_cancelled": "Cancelled",
+  "@status_cancelled": {
     "description": "Cancelled"
   },
-  "disabled": "Disabled",
-  "@disabled": {
+  "status_disabled": "Disabled",
+  "@status_disabled": {
     "description": "Disabled"
   },
-  "inProgress": "In Progress",
-  "@inProgress": {
+  "status_inProgress": "In Progress",
+  "@status_inProgress": {
     "description": "In Progress"
   },
-  "textScaleSmall": "Small",
-  "@textScaleSmall": {
+  "settings_textScaleSmall": "Small",
+  "@settings_textScaleSmall": {
     "description": "Small"
   },
-  "textScaleMedium": "Medium",
-  "@textScaleMedium": {
+  "settings_textScaleMedium": "Medium",
+  "@settings_textScaleMedium": {
     "description": "Medium"
   },
-  "textScaleLarge": "Large",
-  "@textScaleLarge": {
+  "settings_textScaleLarge": "Large",
+  "@settings_textScaleLarge": {
     "description": "Large"
   },
-  "textScaleXL": "Extra Large",
-  "@textScaleXL": {
+  "settings_textScaleXL": "Extra Large",
+  "@settings_textScaleXL": {
     "description": "Extra Large"
   },
-  "textSizeAppliesAppWide": "Applies across the entire app",
-  "@textSizeAppliesAppWide": {
+  "settings_textSizeAppliesAppWide": "Applies across the entire app",
+  "@settings_textSizeAppliesAppWide": {
     "description": "Applies across the entire app"
   },
-  "settings": "Settings",
-  "@settings": {
+  "common_settings": "Settings",
+  "@common_settings": {
     "description": "Settings"
   },
-  "menu": "Menu",
-  "@menu": {
-    "description": "Menu"
-  },
-  "profile": "Profile",
-  "@profile": {
-    "description": "Profile"
-  },
-  "logout": "Logout",
-  "@logout": {
-    "description": "Logout"
-  },
-  "logOut": "Log out",
-  "@logOut": {
+  "settings_logOut": "Log out",
+  "@settings_logOut": {
     "description": "Log out"
   },
-  "reset": "Reset",
-  "@reset": {
-    "description": "Reset"
-  },
-  "cancel": "Cancel",
-  "@cancel": {
+  "common_cancel": "Cancel",
+  "@common_cancel": {
     "description": "Cancel"
   },
-  "apply": "Apply",
-  "@apply": {
+  "settings_apply": "Apply",
+  "@settings_apply": {
     "description": "Apply"
   },
-  "delete": "Delete",
-  "@delete": {
+  "common_delete": "Delete",
+  "@common_delete": {
     "description": "Delete"
   },
-  "edit": "Edit",
-  "@edit": {
+  "common_edit": "Edit",
+  "@common_edit": {
     "description": "Edit"
   },
-  "error": "Error",
-  "@error": {
-    "description": "Error"
-  },
-  "size": "Size",
-  "@size": {
-    "description": "Size"
-  },
-  "done": "Done",
-  "@done": {
+  "status_done": "Done",
+  "@status_done": {
     "description": "Done"
   },
-  "calendar": "Calendar",
-  "@calendar": {
+  "common_calendar": "Calendar",
+  "@common_calendar": {
     "description": "Calendar"
   },
-  "employees": "Employees",
-  "@employees": {
+  "common_employees": "Employees",
+  "@common_employees": {
     "description": "Employees"
   },
-  "clients": "Clients",
-  "@clients": {
+  "common_clients": "Clients",
+  "@common_clients": {
     "description": "Clients"
   },
-  "appointments": "Appointments",
-  "@appointments": {
+  "calendar_appointments": "Appointments",
+  "@calendar_appointments": {
     "description": "Appointments"
   },
-  "changeFontSize": "Change Font Size",
-  "@changeFontSize": {
-    "description": "Change Font Size"
-  },
-  "changeToDarkMode": "Change to Dark Mode",
-  "@changeToDarkMode": {
-    "description": "Change to Dark Mode"
-  },
-  "changeToLightMode": "Change to Light Mode",
-  "@changeToLightMode": {
-    "description": "Change to Light Mode"
-  },
-  "language": "Language",
-  "@language": {
+  "common_language": "Language",
+  "@common_language": {
     "description": "Language"
   },
-  "chooseLanguage": "Choose Language",
-  "@chooseLanguage": {
-    "description": "Choose Language"
-  },
-  "english": "English",
-  "@english": {
-    "description": "English"
-  },
-  "french": "French",
-  "@french": {
-    "description": "French"
-  },
-  "textSize": "Text Size",
-  "@textSize": {
+  "settings_textSize": "Text Size",
+  "@settings_textSize": {
     "description": "Text Size"
   },
-  "previewText": "Preview text",
-  "@previewText": {
+  "settings_previewText": "Preview text",
+  "@settings_previewText": {
     "description": "Preview text"
   },
-  "lightMode": "Light Mode",
-  "@lightMode": {
-    "description": "Light Mode"
-  },
-  "darkMode": "Dark Mode",
-  "@darkMode": {
+  "settings_darkMode": "Dark Mode",
+  "@settings_darkMode": {
     "description": "Dark Mode"
   },
-  "clear": "Clear",
-  "@clear": {
-    "description": "Clear"
-  },
-  "hello": "Hello",
-  "@hello": {
-    "description": "Hello"
-  },
-  "today": "Today",
-  "@today": {
+  "calendar_today": "Today",
+  "@calendar_today": {
     "description": "Today"
   },
-  "start": "Start",
-  "@start": {
+  "calendar_start": "Start",
+  "@calendar_start": {
     "description": "Start"
   },
-  "end": "End",
-  "@end": {
+  "calendar_end": "End",
+  "@calendar_end": {
     "description": "End"
   },
-  "francais": "Français",
-  "@francais": {
-    "description": "Français"
-  },
-  "editEmployees": "Edit Employees",
-  "@editEmployees": {
-    "description": "Edit Employees"
-  },
-  "searchByNameOrPhoneNumber": "Search by name or phone number",
-  "@searchByNameOrPhoneNumber": {
-    "description": "Search by name or phone number"
-  },
-  "createEmployee": "Create Employee",
-  "@createEmployee": {
-    "description": "Create Employee"
-  },
-  "enterUsernameAndEmail": "Enter username and email",
-  "@enterUsernameAndEmail": {
-    "description": "Enter username and email"
-  },
-  "username": "Username",
-  "@username": {
-    "description": "Username"
-  },
-  "value": "Value",
-  "@value": {
-    "description": "Value"
-  },
-  "phoneNumber": "Phone number",
-  "@phoneNumber": {
+  "employees_phoneNumber": "Phone number",
+  "@employees_phoneNumber": {
     "description": "Phone number"
   },
-  "employeeColor": "Employee Color",
-  "@employeeColor": {
+  "employees_employeeColor": "Employee Color",
+  "@employees_employeeColor": {
     "description": "Employee Color"
   },
-  "employeeName": "Employee name",
-  "@employeeName": {
-    "description": "Employee name"
-  },
-  "editEmployee": "Edit Employee",
-  "@editEmployee": {
+  "employees_editEmployee": "Edit Employee",
+  "@employees_editEmployee": {
     "description": "Edit Employee"
   },
-  "updateEmployee": "Update Employee",
-  "@updateEmployee": {
-    "description": "Update Employee"
-  },
-  "employeeDetails": "Employee details",
-  "@employeeDetails": {
+  "employees_employeeDetails": "Employee details",
+  "@employees_employeeDetails": {
     "description": "Employee details"
   },
-  "editClients": "Edit Clients",
-  "@editClients": {
-    "description": "Edit Clients"
-  },
-  "addClient": "Add Client",
-  "@addClient": {
+  "clients_addClient": "Add Client",
+  "@clients_addClient": {
     "description": "Add Client"
   },
-  "clientName": "Client name",
-  "@clientName": {
-    "description": "Client name"
-  },
-  "address": "Address",
-  "@address": {
+  "common_address": "Address",
+  "@common_address": {
     "description": "Address"
   },
-  "businessName": "Business name",
-  "@businessName": {
+  "clients_businessName": "Business name",
+  "@clients_businessName": {
     "description": "Business name"
   },
-  "contactName": "Contact name",
-  "@contactName": {
+  "clients_contactName": "Contact name",
+  "@clients_contactName": {
     "description": "Contact name"
   },
-  "phone": "Phone",
-  "@phone": {
+  "clients_phone": "Phone",
+  "@clients_phone": {
     "description": "Phone"
   },
-  "aptUnit": "Apt / Unit",
-  "@aptUnit": {
+  "clients_aptUnit": "Apt / Unit",
+  "@clients_aptUnit": {
     "description": "Apt / Unit"
   },
-  "city": "City",
-  "@city": {
+  "common_city": "City",
+  "@common_city": {
     "description": "City"
   },
-  "province": "Province",
-  "@province": {
+  "common_province": "Province",
+  "@common_province": {
     "description": "Province"
   },
-  "postalCode": "Postal code",
-  "@postalCode": {
+  "common_postalCode": "Postal code",
+  "@common_postalCode": {
     "description": "Postal code"
   },
-  "country": "Country",
-  "@country": {
+  "clients_country": "Country",
+  "@clients_country": {
     "description": "Country"
   },
-  "editClient": "Edit Client",
-  "@editClient": {
+  "clients_editClient": "Edit Client",
+  "@clients_editClient": {
     "description": "Edit Client"
   },
-  "updateClient": "Update Client",
-  "@updateClient": {
-    "description": "Update Client"
-  },
-  "clientDetails": "Client details",
-  "@clientDetails": {
-    "description": "Client details"
-  },
-  "contacts": "Contacts",
-  "@contacts": {
+  "common_contacts": "Contacts",
+  "@common_contacts": {
     "description": "Contacts"
   },
-  "newClient": "New client",
-  "@newClient": {
+  "clients_newClient": "New client",
+  "@clients_newClient": {
     "description": "New client"
   },
-  "saveChanges": "Save changes",
-  "@saveChanges": {
+  "common_saveChanges": "Save changes",
+  "@common_saveChanges": {
     "description": "Save changes"
   },
-  "deleting": "Deleting...",
-  "@deleting": {
+  "clients_deleting": "Deleting...",
+  "@clients_deleting": {
     "description": "Deleting..."
   },
-  "deleteClient": "Delete client?",
-  "@deleteClient": {
+  "clients_deleteClient": "Delete client?",
+  "@clients_deleteClient": {
     "description": "Delete client?"
   },
-  "areYouSureYouWantToDelete": "Are you sure you want to delete",
-  "@areYouSureYouWantToDelete": {
+  "clients_areYouSureYouWantToDelete": "Are you sure you want to delete",
+  "@clients_areYouSureYouWantToDelete": {
     "description": "Are you sure you want to delete"
   },
-  "thisCannotBeUndone": "This cannot be undone.",
-  "@thisCannotBeUndone": {
+  "clients_thisCannotBeUndone": "This cannot be undone.",
+  "@clients_thisCannotBeUndone": {
     "description": "This cannot be undone."
   },
-  "clientDeletedSuccessfully": "Client deleted successfully.",
-  "@clientDeletedSuccessfully": {
+  "clients_clientDeletedSuccessfully": "Client deleted successfully.",
+  "@clients_clientDeletedSuccessfully": {
     "description": "Client deleted successfully."
   },
-  "couldNotDeleteClientTryAgain": "Could not delete client. Try again.",
-  "@couldNotDeleteClientTryAgain": {
+  "error_couldNotDeleteClientTryAgain": "Could not delete client. Try again.",
+  "@error_couldNotDeleteClientTryAgain": {
     "description": "Could not delete client. Try again."
   },
-  "couldNotSaveChangesTryAgain": "Could not save changes. Try again.",
-  "@couldNotSaveChangesTryAgain": {
+  "error_couldNotSaveChangesTryAgain": "Could not save changes. Try again.",
+  "@error_couldNotSaveChangesTryAgain": {
     "description": "Could not save changes. Try again."
   },
-  "couldNotAddClientTryAgain": "Could not add client. Try again.",
-  "@couldNotAddClientTryAgain": {
+  "error_couldNotAddClientTryAgain": "Could not add client. Try again.",
+  "@error_couldNotAddClientTryAgain": {
     "description": "Could not add client. Try again."
   },
-  "thisClient": "this client",
-  "@thisClient": {
+  "clients_thisClient": "this client",
+  "@clients_thisClient": {
     "description": "this client"
   },
-  "additionalBusinessContacts": "Additional business contacts",
-  "@additionalBusinessContacts": {
+  "clients_additionalBusinessContacts": "Additional business contacts",
+  "@clients_additionalBusinessContacts": {
     "description": "Additional business contacts"
   },
-  "theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded": "The first contact is the main contact above. Add more contacts here if needed.",
-  "@theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded": {
+  "clients_theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded": "The first contact is the main contact above. Add more contacts here if needed.",
+  "@clients_theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded": {
     "description": "The first contact is the main contact above. Add more contacts here if needed."
   },
-  "add": "Add",
-  "@add": {
+  "clients_add": "Add",
+  "@clients_add": {
     "description": "Add"
   },
-  "addAnotherContact": "Add another contact",
-  "@addAnotherContact": {
+  "clients_addAnotherContact": "Add another contact",
+  "@clients_addAnotherContact": {
     "description": "Add another contact"
   },
-  "contact": "Contact",
-  "@contact": {
+  "clients_contact": "Contact",
+  "@clients_contact": {
     "description": "Contact"
   },
-  "removeContact": "Remove contact",
-  "@removeContact": {
+  "clients_removeContact": "Remove contact",
+  "@clients_removeContact": {
     "description": "Remove contact"
   },
-  "contactNameIsRequired": "Contact name is required",
-  "@contactNameIsRequired": {
+  "validation_contactNameIsRequired": "Contact name is required",
+  "@validation_contactNameIsRequired": {
     "description": "Contact name is required"
   },
-  "businessNameOrContactNameIsRequired": "Business name or contact name is required",
-  "@businessNameOrContactNameIsRequired": {
+  "validation_businessNameOrContactNameIsRequired": "Business name or contact name is required",
+  "@validation_businessNameOrContactNameIsRequired": {
     "description": "Business name or contact name is required"
   },
-  "phoneOrEmailIsRequired": "Phone or email is required",
-  "@phoneOrEmailIsRequired": {
+  "validation_phoneOrEmailIsRequired": "Phone or email is required",
+  "@validation_phoneOrEmailIsRequired": {
     "description": "Phone or email is required"
   },
-  "addressIsRequired": "Address is required",
-  "@addressIsRequired": {
+  "validation_addressIsRequired": "Address is required",
+  "@validation_addressIsRequired": {
     "description": "Address is required"
   },
-  "name": "Name",
-  "@name": {
+  "employees_name": "Name",
+  "@employees_name": {
     "description": "Name"
   },
-  "event": "Event",
-  "@event": {
-    "description": "Event"
-  },
-  "eventName": "Event name",
-  "@eventName": {
-    "description": "Event name"
-  },
-  "titleIsRequired": "Title is required",
-  "@titleIsRequired": {
+  "validation_titleIsRequired": "Title is required",
+  "@validation_titleIsRequired": {
     "description": "Title is required"
   },
-  "date": "Date",
-  "@date": {
+  "calendar_date": "Date",
+  "@calendar_date": {
     "description": "Date"
   },
-  "selectDate": "Select date",
-  "@selectDate": {
+  "calendar_selectDate": "Select date",
+  "@calendar_selectDate": {
     "description": "Select date"
   },
-  "startTime": "Start Time",
-  "@startTime": {
+  "calendar_startTime": "Start Time",
+  "@calendar_startTime": {
     "description": "Start Time"
   },
-  "endTime": "End Time",
-  "@endTime": {
+  "calendar_endTime": "End Time",
+  "@calendar_endTime": {
     "description": "End Time"
   },
-  "time": "Time",
-  "@time": {
-    "description": "Time"
-  },
-  "client": "Client",
-  "@client": {
+  "calendar_client": "Client",
+  "@calendar_client": {
     "description": "Client"
   },
-  "clientSearchByNameOrPhoneNumber": "Client (search by name or phone number)",
-  "@clientSearchByNameOrPhoneNumber": {
-    "description": "Client (search by name or phone number)"
-  },
-  "clientNamePhoneNumber": "Client name (phone number)",
-  "@clientNamePhoneNumber": {
-    "description": "Client name (phone number)"
-  },
-  "typeOfJob": "Type of job",
-  "@typeOfJob": {
-    "description": "Type of job"
-  },
-  "notes": "Notes",
-  "@notes": {
+  "calendar_notes": "Notes",
+  "@calendar_notes": {
     "description": "Notes"
   },
-  "materialsNeeded": "Materials needed",
-  "@materialsNeeded": {
+  "calendar_materialsNeeded": "Materials needed",
+  "@calendar_materialsNeeded": {
     "description": "Materials needed"
   },
-  "pictures": "Pictures",
-  "@pictures": {
+  "calendar_pictures": "Pictures",
+  "@calendar_pictures": {
     "description": "Pictures"
   },
-  "addNewEvent": "Add New Event",
-  "@addNewEvent": {
-    "description": "Add New Event"
-  },
-  "addNewJob": "Add New Job",
-  "@addNewJob": {
-    "description": "Add New Job"
-  },
-  "jobTitle": "Job Title",
-  "@jobTitle": {
-    "description": "Job Title"
-  },
-  "createEvent": "Create Event",
-  "@createEvent": {
-    "description": "Create Event"
-  },
-  "editEvent": "Edit Event",
-  "@editEvent": {
-    "description": "Edit Event"
-  },
-  "updateEvent": "Update Event",
-  "@updateEvent": {
-    "description": "Update Event"
-  },
-  "editJob": "Edit job",
-  "@editJob": {
-    "description": "Edit job"
-  },
-  "typeTheNoteHere": "Type the note here...",
-  "@typeTheNoteHere": {
+  "calendar_typeTheNoteHere": "Type the note here...",
+  "@calendar_typeTheNoteHere": {
     "description": "Type the note here..."
   },
-  "typeTheMaterialsHere": "Type the materials here...",
-  "@typeTheMaterialsHere": {
+  "calendar_typeTheMaterialsHere": "Type the materials here...",
+  "@calendar_typeTheMaterialsHere": {
     "description": "Type the materials here..."
   },
-  "eGPlumbingRepair": "e.g. Plumbing repair",
-  "@eGPlumbingRepair": {
+  "calendar_eGPlumbingRepair": "e.g. Plumbing repair",
+  "@calendar_eGPlumbingRepair": {
     "description": "e.g. Plumbing repair"
   },
-  "eGPipeWrenchTapeCommaSeparated": "e.g. Pipe wrench, tape (comma separated)",
-  "@eGPipeWrenchTapeCommaSeparated": {
+  "calendar_eGPipeWrenchTapeCommaSeparated": "e.g. Pipe wrench, tape (comma separated)",
+  "@calendar_eGPipeWrenchTapeCommaSeparated": {
     "description": "e.g. Pipe wrench, tape (comma separated)"
   },
-  "insertPicturesHere": "Insert pictures here...",
-  "@insertPicturesHere": {
-    "description": "Insert pictures here..."
-  },
-  "item1": "Item 1",
-  "@item1": {
-    "description": "Item 1"
-  },
-  "item2": "Item 2",
-  "@item2": {
-    "description": "Item 2"
-  },
-  "item3": "Item 3",
-  "@item3": {
-    "description": "Item 3"
-  },
-  "item4": "Item 4",
-  "@item4": {
-    "description": "Item 4"
-  },
-  "item5": "Item 5",
-  "@item5": {
-    "description": "Item 5"
-  },
-  "noPicturesAdded": "No pictures added",
-  "@noPicturesAdded": {
-    "description": "No pictures added"
-  },
-  "k1PictureAttached": "1 picture attached",
-  "@k1PictureAttached": {
-    "description": "1 picture attached"
-  },
-  "k2PicturesAttached": "2 pictures attached",
-  "@k2PicturesAttached": {
-    "description": "2 pictures attached"
-  },
-  "k3PicturesAttached": "3 pictures attached",
-  "@k3PicturesAttached": {
-    "description": "3 pictures attached"
-  },
-  "eventDone": "Event Done",
-  "@eventDone": {
-    "description": "Event Done"
-  },
-  "busy": "Busy",
-  "@busy": {
-    "description": "Busy"
-  },
-  "pleaseSelectADate": "Please select a date",
-  "@pleaseSelectADate": {
+  "validation_pleaseSelectADate": "Please select a date",
+  "@validation_pleaseSelectADate": {
     "description": "Please select a date"
   },
-  "pleaseSelectAStartTime": "Please select a start time",
-  "@pleaseSelectAStartTime": {
+  "validation_pleaseSelectAStartTime": "Please select a start time",
+  "@validation_pleaseSelectAStartTime": {
     "description": "Please select a start time"
   },
-  "pleaseSelectAnEndTime": "Please select an end time",
-  "@pleaseSelectAnEndTime": {
+  "validation_pleaseSelectAnEndTime": "Please select an end time",
+  "@validation_pleaseSelectAnEndTime": {
     "description": "Please select an end time"
   },
-  "mustBeAfterStartTime": "Must be after start time",
-  "@mustBeAfterStartTime": {
+  "calendar_mustBeAfterStartTime": "Must be after start time",
+  "@calendar_mustBeAfterStartTime": {
     "description": "Must be after start time"
   },
-  "pleaseSelectAClient": "Please select a client",
-  "@pleaseSelectAClient": {
+  "validation_pleaseSelectAClient": "Please select a client",
+  "@validation_pleaseSelectAClient": {
     "description": "Please select a client"
   },
-  "selectEmployees": "Select employees",
-  "@selectEmployees": {
-    "description": "Select employees"
-  },
-  "somethingWentWrongCreatingTheAppointment": "Something went wrong creating the appointment",
-  "@somethingWentWrongCreatingTheAppointment": {
+  "error_somethingWentWrongCreatingTheAppointment": "Something went wrong creating the appointment",
+  "@error_somethingWentWrongCreatingTheAppointment": {
     "description": "Something went wrong creating the appointment"
   },
-  "somethingWentWrongSavingChanges": "Something went wrong saving changes",
-  "@somethingWentWrongSavingChanges": {
+  "error_somethingWentWrongSavingChanges": "Something went wrong saving changes",
+  "@error_somethingWentWrongSavingChanges": {
     "description": "Something went wrong saving changes"
   },
-  "noEmployeesAssigned": "No employees assigned",
-  "@noEmployeesAssigned": {
+  "calendar_noEmployeesAssigned": "No employees assigned",
+  "@calendar_noEmployeesAssigned": {
     "description": "No employees assigned"
   },
-  "addMore": "Add more",
-  "@addMore": {
+  "calendar_addMore": "Add more",
+  "@calendar_addMore": {
     "description": "Add more"
   },
-  "tapToAddPhotos": "Tap to add photos",
-  "@tapToAddPhotos": {
+  "calendar_tapToAddPhotos": "Tap to add photos",
+  "@calendar_tapToAddPhotos": {
     "description": "Tap to add photos"
   },
-  "noPhotos": "No photos",
-  "@noPhotos": {
+  "calendar_noPhotos": "No photos",
+  "@calendar_noPhotos": {
     "description": "No photos"
   },
-  "noNumber": "No number",
-  "@noNumber": {
+  "calendar_noNumber": "No number",
+  "@calendar_noNumber": {
     "description": "No number"
   },
-  "noAddress": "No address",
-  "@noAddress": {
+  "calendar_noAddress": "No address",
+  "@calendar_noAddress": {
     "description": "No address"
   },
-  "noNotes": "No notes",
-  "@noNotes": {
+  "calendar_noNotes": "No notes",
+  "@calendar_noNotes": {
     "description": "No notes"
   },
-  "noMaterials": "No materials",
-  "@noMaterials": {
+  "calendar_noMaterials": "No materials",
+  "@calendar_noMaterials": {
     "description": "No materials"
   },
-  "markAsDone": "Mark as done",
-  "@markAsDone": {
+  "calendar_markAsDone": "Mark as done",
+  "@calendar_markAsDone": {
     "description": "Mark as done"
   },
-  "completed": "Completed",
-  "@completed": {
+  "calendar_completed": "Completed",
+  "@calendar_completed": {
     "description": "Completed"
   },
-  "appointmentUpdated": "Appointment updated",
-  "@appointmentUpdated": {
-    "description": "Appointment updated"
-  },
-  "deleteJob": "Delete job",
-  "@deleteJob": {
-    "description": "Delete job"
-  },
-  "areYouSureYouWantToDeleteThisJob": "Are you sure you want to delete this job?",
-  "@areYouSureYouWantToDeleteThisJob": {
+  "calendar_areYouSureYouWantToDeleteThisJob": "Are you sure you want to delete this job?",
+  "@calendar_areYouSureYouWantToDeleteThisJob": {
     "description": "Are you sure you want to delete this job?"
   },
-  "noEvents": "No events",
-  "@noEvents": {
-    "description": "No events"
-  },
-  "tapTheButtonToAddOneLater": "Tap the + button to add one later.",
-  "@tapTheButtonToAddOneLater": {
-    "description": "Tap the + button to add one later."
-  },
-  "adminName": "(Admin Name)",
-  "@adminName": {
-    "description": "(Admin Name)"
-  },
-  "january": "January",
-  "@january": {
-    "description": "January"
-  },
-  "february": "February",
-  "@february": {
-    "description": "February"
-  },
-  "march": "March",
-  "@march": {
-    "description": "March"
-  },
-  "april": "April",
-  "@april": {
-    "description": "April"
-  },
-  "may": "May",
-  "@may": {
-    "description": "May"
-  },
-  "june": "June",
-  "@june": {
-    "description": "June"
-  },
-  "july": "July",
-  "@july": {
-    "description": "July"
-  },
-  "august": "August",
-  "@august": {
-    "description": "August"
-  },
-  "september": "September",
-  "@september": {
-    "description": "September"
-  },
-  "october": "October",
-  "@october": {
-    "description": "October"
-  },
-  "november": "November",
-  "@november": {
-    "description": "November"
-  },
-  "december": "December",
-  "@december": {
-    "description": "December"
-  },
-  "sun": "Sun",
-  "@sun": {
-    "description": "Sun"
-  },
-  "mon": "Mon",
-  "@mon": {
-    "description": "Mon"
-  },
-  "tue": "Tue",
-  "@tue": {
-    "description": "Tue"
-  },
-  "wed": "Wed",
-  "@wed": {
-    "description": "Wed"
-  },
-  "thu": "Thu",
-  "@thu": {
-    "description": "Thu"
-  },
-  "fri": "Fri",
-  "@fri": {
-    "description": "Fri"
-  },
-  "sat": "Sat",
-  "@sat": {
-    "description": "Sat"
-  },
-  "generalAppointmentNotes": "General appointment notes",
-  "@generalAppointmentNotes": {
-    "description": "General appointment notes"
-  },
-  "standardTools": "Standard tools",
-  "@standardTools": {
-    "description": "Standard tools"
-  },
-  "customerRequestedConfirmationCall": "Customer requested confirmation call",
-  "@customerRequestedConfirmationCall": {
-    "description": "Customer requested confirmation call"
-  },
-  "replacementParts": "Replacement parts",
-  "@replacementParts": {
-    "description": "Replacement parts"
-  },
-  "accessThroughSideEntrance": "Access through side entrance",
-  "@accessThroughSideEntrance": {
-    "description": "Access through side entrance"
-  },
-  "inspectionChecklist": "Inspection checklist",
-  "@inspectionChecklist": {
-    "description": "Inspection checklist"
-  },
-  "callOnArrival": "Call on arrival",
-  "@callOnArrival": {
-    "description": "Call on arrival"
-  },
-  "cleaningSupplies": "Cleaning supplies",
-  "@cleaningSupplies": {
-    "description": "Cleaning supplies"
-  },
-  "bringExtraMaterials": "Bring extra materials",
-  "@bringExtraMaterials": {
-    "description": "Bring extra materials"
-  },
-  "extraFittings": "Extra fittings",
-  "@extraFittings": {
-    "description": "Extra fittings"
-  },
-  "changeEmail": "Change Email",
-  "@changeEmail": {
-    "description": "Change Email"
-  },
-  "openAddressWith": "Open address with",
-  "@openAddressWith": {
+  "maps_openAddressWith": "Open address with",
+  "@maps_openAddressWith": {
     "description": "Open address with"
   },
-  "appleMaps": "Apple Maps",
-  "@appleMaps": {
+  "maps_appleMaps": "Apple Maps",
+  "@maps_appleMaps": {
     "description": "Apple Maps"
   },
-  "googleMaps": "Google Maps",
-  "@googleMaps": {
+  "maps_googleMaps": "Google Maps",
+  "@maps_googleMaps": {
     "description": "Google Maps"
   },
-  "waze": "Waze",
-  "@waze": {
+  "maps_waze": "Waze",
+  "@maps_waze": {
     "description": "Waze"
   },
-  "couldNotOpenMapApp": "Could not open map app",
-  "@couldNotOpenMapApp": {
+  "error_couldNotOpenMapApp": "Could not open map app",
+  "@error_couldNotOpenMapApp": {
     "description": "Could not open map app"
   },
-  "adminOnly": "Admin only",
-  "@adminOnly": {
-    "description": "Admin only"
-  },
-  "newEmail": "New email",
-  "@newEmail": {
-    "description": "New email"
-  },
-  "verificationEmailSentPleaseConfirmTheNewEmailAddress": "Verification email sent. Please confirm the new email address.",
-  "@verificationEmailSentPleaseConfirmTheNewEmailAddress": {
-    "description": "Verification email sent. Please confirm the new email address."
-  },
-  "pleaseLogInAgainBeforeChangingEmail": "Please log in again before changing email",
-  "@pleaseLogInAgainBeforeChangingEmail": {
-    "description": "Please log in again before changing email"
-  },
-  "emailAlreadyInUse": "Email already in use",
-  "@emailAlreadyInUse": {
-    "description": "Email already in use"
-  },
-  "invalidEmail": "Invalid email",
-  "@invalidEmail": {
-    "description": "Invalid email"
-  },
-  "errorUpdatingEmail": "Error updating email",
-  "@errorUpdatingEmail": {
-    "description": "Error updating email"
-  },
-  "noEmployeesFound": "No employees found",
-  "@noEmployeesFound": {
+  "common_noEmployeesFound": "No employees found",
+  "@common_noEmployeesFound": {
     "description": "No employees found"
   },
-  "selectAClientToViewDetails": "Select a client to view details",
-  "@selectAClientToViewDetails": {
+  "clients_selectAClientToViewDetails": "Select a client to view details",
+  "@clients_selectAClientToViewDetails": {
     "description": "Select a client to view details"
   },
-  "selectAnEmployeeToViewDetails": "Select an employee to view details",
-  "@selectAnEmployeeToViewDetails": {
+  "employees_selectAnEmployeeToViewDetails": "Select an employee to view details",
+  "@employees_selectAnEmployeeToViewDetails": {
     "description": "Select an employee to view details"
   },
-  "selectAnAppointmentToViewDetails": "Select an appointment to view details",
-  "@selectAnAppointmentToViewDetails": {
+  "calendar_selectAnAppointmentToViewDetails": "Select an appointment to view details",
+  "@calendar_selectAnAppointmentToViewDetails": {
     "description": "Select an appointment to view details"
   },
-  "noClientsYet": "No clients yet",
-  "@noClientsYet": {
+  "clients_noClientsYet": "No clients yet",
+  "@clients_noClientsYet": {
     "description": "No clients yet"
   },
-  "noClientsMatch": "No clients match",
-  "@noClientsMatch": {
+  "clients_noClientsMatch": "No clients match",
+  "@clients_noClientsMatch": {
     "description": "No clients match"
   },
-  "noAppointmentsFound": "No appointments found",
-  "@noAppointmentsFound": {
+  "common_noAppointmentsFound": "No appointments found",
+  "@common_noAppointmentsFound": {
     "description": "No appointments found"
   },
-  "noAppointmentsMatch": "No appointments match",
-  "@noAppointmentsMatch": {
+  "clients_noAppointmentsMatch": "No appointments match",
+  "@clients_noAppointmentsMatch": {
     "description": "No appointments match"
   },
-  "errorLoadingEmployees": "Error loading employees",
-  "@errorLoadingEmployees": {
+  "error_errorLoadingEmployees": "Error loading employees",
+  "@error_errorLoadingEmployees": {
     "description": "Error loading employees"
   },
-  "searchByNameOrPhone": "Search by name or phone...",
-  "@searchByNameOrPhone": {
+  "clients_searchByNameOrPhone": "Search by name or phone...",
+  "@clients_searchByNameOrPhone": {
     "description": "Search by name or phone..."
   },
-  "searchByClientOrEmployee": "Search by client or employee...",
-  "@searchByClientOrEmployee": {
+  "clients_searchByClientOrEmployee": "Search by client or employee...",
+  "@clients_searchByClientOrEmployee": {
     "description": "Search by client or employee..."
   },
-  "giveAdminModeAccess": "Give admin mode access",
-  "@giveAdminModeAccess": {
-    "description": "Give admin mode access"
-  },
-  "nameAndEmailAreRequired": "Name and email are required",
-  "@nameAndEmailAreRequired": {
+  "error_nameAndEmailAreRequired": "Name and email are required",
+  "@error_nameAndEmailAreRequired": {
     "description": "Name and email are required"
   },
-  "employeeDeleted": "Employee deleted",
-  "@employeeDeleted": {
+  "employees_employeeDeleted": "Employee deleted",
+  "@employees_employeeDeleted": {
     "description": "Employee deleted"
   },
-  "employeeDisabledSuccessfully": "Employee disabled",
-  "@employeeDisabledSuccessfully": {
+  "employees_employeeDisabledSuccessfully": "Employee disabled",
+  "@employees_employeeDisabledSuccessfully": {
     "description": "Employee disabled"
   },
-  "employeeEnabledSuccessfully": "Employee enabled",
-  "@employeeEnabledSuccessfully": {
+  "employees_employeeEnabledSuccessfully": "Employee enabled",
+  "@employees_employeeEnabledSuccessfully": {
     "description": "Employee enabled"
   },
-  "employeeAddedSuccessfully": "Employee added successfully",
-  "@employeeAddedSuccessfully": {
+  "employees_employeeAddedSuccessfully": "Employee added successfully",
+  "@employees_employeeAddedSuccessfully": {
     "description": "Employee added successfully"
   },
-  "employeeUpdatedSuccessfully": "Employee updated successfully",
-  "@employeeUpdatedSuccessfully": {
+  "employees_employeeUpdatedSuccessfully": "Employee updated successfully",
+  "@employees_employeeUpdatedSuccessfully": {
     "description": "Employee updated successfully"
   },
-  "anEmployeeWithThisEmailAlreadyExists": "An employee with this email already exists",
-  "@anEmployeeWithThisEmailAlreadyExists": {
+  "error_anEmployeeWithThisEmailAlreadyExists": "An employee with this email already exists",
+  "@error_anEmployeeWithThisEmailAlreadyExists": {
     "description": "An employee with this email already exists"
   },
-  "couldNotCreateEmployee": "Could not create employee",
-  "@couldNotCreateEmployee": {
+  "error_couldNotCreateEmployee": "Could not create employee",
+  "@error_couldNotCreateEmployee": {
     "description": "Could not create employee"
   },
-  "deleteEmployee": "Delete employee",
-  "@deleteEmployee": {
+  "employees_deleteEmployee": "Delete employee",
+  "@employees_deleteEmployee": {
     "description": "Delete employee"
   },
-  "areYouSureYouWantToDeleteThisEmployee": "Are you sure you want to delete this employee?",
-  "@areYouSureYouWantToDeleteThisEmployee": {
+  "employees_areYouSureYouWantToDeleteThisEmployee": "Are you sure you want to delete this employee?",
+  "@employees_areYouSureYouWantToDeleteThisEmployee": {
     "description": "Are you sure you want to delete this employee?"
   },
-  "back": "Back",
-  "@back": {
-    "description": "Back"
-  },
-  "resetPassword": "Reset Password",
-  "@resetPassword": {
+  "common_resetPassword": "Reset Password",
+  "@common_resetPassword": {
     "description": "Reset Password"
   },
-  "forgotYourPassword": "Forgot your password?",
-  "@forgotYourPassword": {
+  "auth_forgotYourPassword": "Forgot your password?",
+  "@auth_forgotYourPassword": {
     "description": "Forgot your password?"
   },
-  "enterYourAccountEmailAndWeLlSendYouALinkToResetYourPassword": "Enter your account email and we'll send you a link to reset your password.",
-  "@enterYourAccountEmailAndWeLlSendYouALinkToResetYourPassword": {
+  "auth_enterYourAccountEmailAndWeLlSendYouALinkToResetYourPassword": "Enter your account email and we'll send you a link to reset your password.",
+  "@auth_enterYourAccountEmailAndWeLlSendYouALinkToResetYourPassword": {
     "description": "Enter your account email and we'll send you a link to reset your password."
   },
-  "sendResetEmail": "Send Reset Email",
-  "@sendResetEmail": {
+  "auth_sendResetEmail": "Send Reset Email",
+  "@auth_sendResetEmail": {
     "description": "Send Reset Email"
   },
-  "backToSignIn": "Back to Sign In",
-  "@backToSignIn": {
+  "auth_backToSignIn": "Back to Sign In",
+  "@auth_backToSignIn": {
     "description": "Back to Sign In"
   },
-  "youExampleCom": "you@example.com",
-  "@youExampleCom": {
+  "auth_youExampleCom": "you@example.com",
+  "@auth_youExampleCom": {
     "description": "you@example.com"
   },
-  "checkYourEmail": "Check your email",
-  "@checkYourEmail": {
-    "description": "Check your email"
-  },
-  "weVeSentAPasswordResetLinkTo": "We've sent a password reset link to:",
-  "@weVeSentAPasswordResetLinkTo": {
-    "description": "We've sent a password reset link to:"
-  },
-  "pleaseCheckYourEmailThenComeBackToTheAppAndSignInWithYourNewPassword": "Please check your email, then come back to the app and sign in with your new password.",
-  "@pleaseCheckYourEmailThenComeBackToTheAppAndSignInWithYourNewPassword": {
-    "description": "Please check your email, then come back to the app and sign in with your new password."
-  },
-  "didnTReceiveTheEmailTryAgain": "Didn't receive the email? Try again",
-  "@didnTReceiveTheEmailTryAgain": {
+  "auth_didnTReceiveTheEmailTryAgain": "Didn't receive the email? Try again",
+  "@auth_didnTReceiveTheEmailTryAgain": {
     "description": "Didn't receive the email? Try again"
   },
-  "emailIsRequired": "Email is required",
-  "@emailIsRequired": {
-    "description": "Email is required"
-  },
-  "enterAValidEmailAddress": "Enter a valid email address",
-  "@enterAValidEmailAddress": {
-    "description": "Enter a valid email address"
-  },
-  "noAccountFoundForThisEmailAddress": "No account found for this email address",
-  "@noAccountFoundForThisEmailAddress": {
-    "description": "No account found for this email address"
-  },
-  "tooManyAttemptsPleaseTryAgainLater": "Too many attempts. Please try again later.",
-  "@tooManyAttemptsPleaseTryAgainLater": {
+  "error_tooManyAttemptsPleaseTryAgainLater": "Too many attempts. Please try again later.",
+  "@error_tooManyAttemptsPleaseTryAgainLater": {
     "description": "Too many attempts. Please try again later."
   },
-  "networkErrorCheckYourConnectionAndTryAgain": "Network error. Check your connection and try again.",
-  "@networkErrorCheckYourConnectionAndTryAgain": {
+  "error_networkErrorCheckYourConnectionAndTryAgain": "Network error. Check your connection and try again.",
+  "@error_networkErrorCheckYourConnectionAndTryAgain": {
     "description": "Network error. Check your connection and try again."
   },
-  "couldNotSendResetEmail": "Could not send reset email",
-  "@couldNotSendResetEmail": {
-    "description": "Could not send reset email"
-  },
-  "passwordResetEmailSentPleaseCheckYourInbox": "Password reset email sent. Please check your inbox.",
-  "@passwordResetEmailSentPleaseCheckYourInbox": {
-    "description": "Password reset email sent. Please check your inbox."
-  },
-  "checkYourInbox": "Check your inbox",
-  "@checkYourInbox": {
+  "auth_checkYourInbox": "Check your inbox",
+  "@auth_checkYourInbox": {
     "description": "Check your inbox"
   },
-  "ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent": "If an account exists for this email, a password reset link has been sent.",
-  "@ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent": {
+  "auth_ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent": "If an account exists for this email, a password reset link has been sent.",
+  "@auth_ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent": {
     "description": "If an account exists for this email, a password reset link has been sent."
   },
-  "theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder": "The email may take a few minutes to arrive. Remember to check your spam folder.",
-  "@theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder": {
+  "auth_theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder": "The email may take a few minutes to arrive. Remember to check your spam folder.",
+  "@auth_theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder": {
     "description": "The email may take a few minutes to arrive. Remember to check your spam folder."
   },
-  "useADifferentEmail": "Use a different email",
-  "@useADifferentEmail": {
-    "description": "Use a different email"
-  },
-  "somethingWentWrong": "Something went wrong",
-  "@somethingWentWrong": {
+  "error_somethingWentWrong": "Something went wrong",
+  "@error_somethingWentWrong": {
     "description": "Something went wrong"
   },
-  "pleaseEnterYourEmail": "Please enter your email",
-  "@pleaseEnterYourEmail": {
+  "validation_pleaseEnterYourEmail": "Please enter your email",
+  "@validation_pleaseEnterYourEmail": {
     "description": "Please enter your email"
   },
-  "pleaseEnterYourPassword": "Please enter your password",
-  "@pleaseEnterYourPassword": {
+  "validation_pleaseEnterYourPassword": "Please enter your password",
+  "@validation_pleaseEnterYourPassword": {
     "description": "Please enter your password"
   },
-  "pleaseEnterAValidEmailAddress": "Please enter a valid email address",
-  "@pleaseEnterAValidEmailAddress": {
+  "validation_pleaseEnterAValidEmailAddress": "Please enter a valid email address",
+  "@validation_pleaseEnterAValidEmailAddress": {
     "description": "Please enter a valid email address"
   },
-  "invalidEmailOrPassword": "Invalid email or password",
-  "@invalidEmailOrPassword": {
+  "error_invalidEmailOrPassword": "Invalid email or password",
+  "@error_invalidEmailOrPassword": {
     "description": "Invalid email or password"
   },
-  "noAccountFoundWithThisEmail": "No account found with this email",
-  "@noAccountFoundWithThisEmail": {
+  "error_noAccountFoundWithThisEmail": "No account found with this email",
+  "@error_noAccountFoundWithThisEmail": {
     "description": "No account found with this email"
   },
-  "somethingWentWrongPleaseTryAgain": "Something went wrong, please try again",
-  "@somethingWentWrongPleaseTryAgain": {
+  "error_somethingWentWrongPleaseTryAgain": "Something went wrong, please try again",
+  "@error_somethingWentWrongPleaseTryAgain": {
     "description": "Something went wrong, please try again"
   },
-  "thisAccountHasBeenDisabled": "This account has been disabled",
-  "@thisAccountHasBeenDisabled": {
+  "error_thisAccountHasBeenDisabled": "This account has been disabled",
+  "@error_thisAccountHasBeenDisabled": {
     "description": "This account has been disabled"
   },
-  "yourAdminAccessWasRevoked": "Your admin access was revoked. Please sign in again.",
-  "@yourAdminAccessWasRevoked": {
+  "error_yourAdminAccessWasRevoked": "Your admin access was revoked. Please sign in again.",
+  "@error_yourAdminAccessWasRevoked": {
     "description": "Your admin access was revoked. Please sign in again."
   },
-  "anAccountWithThisEmailAlreadyExists": "An account with this email already exists",
-  "@anAccountWithThisEmailAlreadyExists": {
+  "error_anAccountWithThisEmailAlreadyExists": "An account with this email already exists",
+  "@error_anAccountWithThisEmailAlreadyExists": {
     "description": "An account with this email already exists"
   },
-  "passwordIsTooWeakUseAtLeast6Characters": "Password is too weak. Use at least 6 characters",
-  "@passwordIsTooWeakUseAtLeast6Characters": {
+  "validation_passwordIsTooWeakUseAtLeast6Characters": "Password is too weak. Use at least 6 characters",
+  "@validation_passwordIsTooWeakUseAtLeast6Characters": {
     "description": "Password is too weak. Use at least 6 characters"
   },
-  "passwordMustBeAtLeast8Characters": "Password must be at least 8 characters",
-  "@passwordMustBeAtLeast8Characters": {
+  "validation_passwordMustBeAtLeast8Characters": "Password must be at least 8 characters",
+  "@validation_passwordMustBeAtLeast8Characters": {
     "description": "Password must be at least 8 characters"
   },
-  "couldNotLoadAppointments": "Could not load appointments. Check your connection and try again.",
-  "@couldNotLoadAppointments": {
+  "error_couldNotLoadAppointments": "Could not load appointments. Check your connection and try again.",
+  "@error_couldNotLoadAppointments": {
     "description": "Could not load appointments. Check your connection and try again."
   },
-  "clientAdded": "Client added",
-  "@clientAdded": {
+  "common_clientAdded": "Client added",
+  "@common_clientAdded": {
     "description": "Client added"
   },
-  "appointmentCreated": "Appointment created",
-  "@appointmentCreated": {
+  "common_appointmentCreated": "Appointment created",
+  "@common_appointmentCreated": {
     "description": "Appointment created"
   },
-  "appointmentChangesSaved": "Changes saved",
-  "@appointmentChangesSaved": {
+  "common_appointmentChangesSaved": "Changes saved",
+  "@common_appointmentChangesSaved": {
     "description": "Changes saved"
   },
-  "appointmentDeleted": "Appointment deleted",
-  "@appointmentDeleted": {
+  "common_appointmentDeleted": "Appointment deleted",
+  "@common_appointmentDeleted": {
     "description": "Appointment deleted"
   },
-  "appointmentMarkedAsDone": "Marked as done",
-  "@appointmentMarkedAsDone": {
+  "common_appointmentMarkedAsDone": "Marked as done",
+  "@common_appointmentMarkedAsDone": {
     "description": "Marked as done"
   },
-  "appointmentCancelled": "Appointment cancelled",
-  "@appointmentCancelled": {
+  "common_appointmentCancelled": "Appointment cancelled",
+  "@common_appointmentCancelled": {
     "description": "Appointment cancelled"
   },
-  "signInIsTemporarilyUnavailable": "Sign-in is temporarily unavailable",
-  "@signInIsTemporarilyUnavailable": {
+  "error_signInIsTemporarilyUnavailable": "Sign-in is temporarily unavailable",
+  "@error_signInIsTemporarilyUnavailable": {
     "description": "Sign-in is temporarily unavailable"
   },
-  "thisEmailIsNotAuthorizedToSignUp": "This email is not authorized to sign up",
-  "@thisEmailIsNotAuthorizedToSignUp": {
+  "error_thisEmailIsNotAuthorizedToSignUp": "This email is not authorized to sign up",
+  "@error_thisEmailIsNotAuthorizedToSignUp": {
     "description": "This email is not authorized to sign up"
   },
-  "accountCreatedYouCanNowSignIn": "Account created. You can now sign in.",
-  "@accountCreatedYouCanNowSignIn": {
+  "auth_accountCreatedYouCanNowSignIn": "Account created. You can now sign in.",
+  "@auth_accountCreatedYouCanNowSignIn": {
     "description": "Account created. You can now sign in."
   },
-  "accountCreated": "Account created",
-  "@accountCreated": {
+  "auth_accountCreated": "Account created",
+  "@auth_accountCreated": {
     "description": "Account created"
   },
-  "youCanNowSignInWithThisEmailAndPassword": "Check your inbox and verify your email, then sign in.",
-  "@youCanNowSignInWithThisEmailAndPassword": {
+  "auth_youCanNowSignInWithThisEmailAndPassword": "Check your inbox and verify your email, then sign in.",
+  "@auth_youCanNowSignInWithThisEmailAndPassword": {
     "description": "Check your inbox and verify your email, then sign in."
   },
-  "useTheEmailYourAdminAddedToTheEmployeeList": "Use the email your admin added to the employee list.",
-  "@useTheEmailYourAdminAddedToTheEmployeeList": {
+  "auth_useTheEmailYourAdminAddedToTheEmployeeList": "Use the email your admin added to the employee list.",
+  "@auth_useTheEmailYourAdminAddedToTheEmployeeList": {
     "description": "Use the email your admin added to the employee list."
   },
-  "noUserProfileFoundForThisAccount": "No user profile found for this account",
-  "@noUserProfileFoundForThisAccount": {
+  "error_noUserProfileFoundForThisAccount": "No user profile found for this account",
+  "@error_noUserProfileFoundForThisAccount": {
     "description": "No user profile found for this account"
   },
-  "pleaseVerifyYourEmailBeforeSigningIn": "Please verify your email before signing in.",
-  "@pleaseVerifyYourEmailBeforeSigningIn": {
+  "auth_pleaseVerifyYourEmailBeforeSigningIn": "Please verify your email before signing in.",
+  "@auth_pleaseVerifyYourEmailBeforeSigningIn": {
     "description": "Please verify your email before signing in."
   },
-  "pleaseLogInAgainAndRetry": "Please log in again and retry",
-  "@pleaseLogInAgainAndRetry": {
+  "auth_pleaseLogInAgainAndRetry": "Please log in again and retry",
+  "@auth_pleaseLogInAgainAndRetry": {
     "description": "Please log in again and retry"
   },
-  "showPassword": "Show password",
-  "@showPassword": {
+  "auth_showPassword": "Show password",
+  "@auth_showPassword": {
     "description": "Show password"
   },
-  "hidePassword": "Hide password",
-  "@hidePassword": {
+  "auth_hidePassword": "Hide password",
+  "@auth_hidePassword": {
     "description": "Hide password"
   },
-  "pleaseConfirmYourPassword": "Please confirm your password",
-  "@pleaseConfirmYourPassword": {
+  "validation_pleaseConfirmYourPassword": "Please confirm your password",
+  "@validation_pleaseConfirmYourPassword": {
     "description": "Please confirm your password"
   },
-  "passwordsDoNotMatch": "Passwords do not match",
-  "@passwordsDoNotMatch": {
+  "validation_passwordsDoNotMatch": "Passwords do not match",
+  "@validation_passwordsDoNotMatch": {
     "description": "Passwords do not match"
   },
-  "tapToChangeColor": "Tap to change color",
-  "@tapToChangeColor": {
-    "description": "Tap to change color"
-  },
-  "enterAValidEmail": "Enter a valid email",
-  "@enterAValidEmail": {
+  "validation_enterAValidEmail": "Enter a valid email",
+  "@validation_enterAValidEmail": {
     "description": "Enter a valid email"
   },
-  "pleaseSelectAtLeastOneEmployee": "Please select at least one employee",
-  "@pleaseSelectAtLeastOneEmployee": {
+  "validation_pleaseSelectAtLeastOneEmployee": "Please select at least one employee",
+  "@validation_pleaseSelectAtLeastOneEmployee": {
     "description": "Please select at least one employee"
   },
-  "optional": "optional",
-  "@optional": {
+  "common_optional": "optional",
+  "@common_optional": {
     "description": "optional"
   },
-  "noEventsFor": "No events for",
-  "@noEventsFor": {
-    "description": "No events for"
-  },
-  "addressLookupFailed": "Address lookup failed",
-  "@addressLookupFailed": {
+  "error_addressLookupFailed": "Address lookup failed",
+  "@error_addressLookupFailed": {
     "description": "Address lookup failed"
   },
-  "couldNotLoadAddressDetails": "Could not load address details",
-  "@couldNotLoadAddressDetails": {
+  "error_couldNotLoadAddressDetails": "Could not load address details",
+  "@error_couldNotLoadAddressDetails": {
     "description": "Could not load address details"
   },
-  "searchAddress": "Search address",
-  "@searchAddress": {
+  "common_searchAddress": "Search address",
+  "@common_searchAddress": {
     "description": "Search address"
   },
-  "typeToSearchAnAddress": "Type to search an address",
-  "@typeToSearchAnAddress": {
+  "common_typeToSearchAnAddress": "Type to search an address",
+  "@common_typeToSearchAnAddress": {
     "description": "Type to search an address"
   },
-  "street": "Street",
-  "@street": {
+  "common_street": "Street",
+  "@common_street": {
     "description": "Street"
   },
-  "welcomeToSchedulingApp": "Welcome to Scheduling App",
-  "@welcomeToSchedulingApp": {
-    "description": "Welcome to Scheduling App"
-  },
-  "hopeYouAreEnjoyingYourDay": "Hope you are enjoying your day!",
-  "@hopeYouAreEnjoyingYourDay": {
-    "description": "Hope you are enjoying your day!"
-  },
-  "searchByNameBusinessPhoneEmailAddress": "Search by name, business, phone, email, address...",
-  "@searchByNameBusinessPhoneEmailAddress": {
+  "clients_searchByNameBusinessPhoneEmailAddress": "Search by name, business, phone, email, address...",
+  "@clients_searchByNameBusinessPhoneEmailAddress": {
     "description": "Search by name, business, phone, email, address..."
   },
-  "noClientsFound": "No clients found",
-  "@noClientsFound": {
+  "clients_noClientsFound": "No clients found",
+  "@clients_noClientsFound": {
     "description": "No clients found"
   },
-  "user": "User",
-  "@user": {
-    "description": "User"
-  },
-  "employeeRoleValue": "Employee",
-  "@employeeRoleValue": {
+  "common_employeeRoleValue": "Employee",
+  "@common_employeeRoleValue": {
     "description": "Employee"
   },
-  "welcomeBack": "Welcome back",
-  "@welcomeBack": {
+  "auth_welcomeBack": "Welcome back",
+  "@auth_welcomeBack": {
     "description": "Welcome back"
   },
-  "signInToYourAccount": "Sign in to your account",
-  "@signInToYourAccount": {
+  "auth_signInToYourAccount": "Sign in to your account",
+  "@auth_signInToYourAccount": {
     "description": "Sign in to your account"
   },
-  "fillInYourDetailsBelow": "Fill in your details below",
-  "@fillInYourDetailsBelow": {
-    "description": "Fill in your details below"
-  },
-  "alreadyHaveAnAccountSignIn": "Already have an account? Sign in",
-  "@alreadyHaveAnAccountSignIn": {
-    "description": "Already have an account? Sign in"
-  },
-  "weLlSendALinkToYourEmail": "We'll send a link to your email.",
-  "@weLlSendALinkToYourEmail": {
-    "description": "We'll send a link to your email."
-  },
-  "sendResetLink": "Send Reset Link",
-  "@sendResetLink": {
-    "description": "Send Reset Link"
-  },
-  "tapToScheduleAnAppointment": "Tap + to schedule an appointment.",
-  "@tapToScheduleAnAppointment": {
+  "common_tapToScheduleAnAppointment": "Tap + to schedule an appointment.",
+  "@common_tapToScheduleAnAppointment": {
     "description": "Tap + to schedule an appointment."
   },
-  "searchClients": "Search clients…",
-  "@searchClients": {
-    "description": "Search clients…"
-  },
-  "searchEmployees": "Search employees…",
-  "@searchEmployees": {
+  "employees_searchEmployees": "Search employees…",
+  "@employees_searchEmployees": {
     "description": "Search employees…"
   },
-  "searchAppointments": "Search appointments…",
-  "@searchAppointments": {
-    "description": "Search appointments…"
-  },
-  "noResults": "No results",
-  "@noResults": {
-    "description": "No results"
-  },
-  "tapToAddYourFirstClient": "Tap + to add your first client.",
-  "@tapToAddYourFirstClient": {
+  "clients_tapToAddYourFirstClient": "Tap + to add your first client.",
+  "@clients_tapToAddYourFirstClient": {
     "description": "Tap + to add your first client."
   },
-  "tryADifferentSearchTerm": "Try a different search term.",
-  "@tryADifferentSearchTerm": {
+  "common_tryADifferentSearchTerm": "Try a different search term.",
+  "@common_tryADifferentSearchTerm": {
     "description": "Try a different search term."
   },
-  "noEmployeesYet": "No employees yet",
-  "@noEmployeesYet": {
+  "employees_noEmployeesYet": "No employees yet",
+  "@employees_noEmployeesYet": {
     "description": "No employees yet"
   },
-  "tapToInviteYourFirstEmployee": "Tap + to invite your first employee.",
-  "@tapToInviteYourFirstEmployee": {
+  "employees_tapToInviteYourFirstEmployee": "Tap + to invite your first employee.",
+  "@employees_tapToInviteYourFirstEmployee": {
     "description": "Tap + to invite your first employee."
   },
-  "history": "History",
-  "@history": {
+  "common_history": "History",
+  "@common_history": {
     "description": "History"
   },
-  "appearance": "Appearance",
-  "@appearance": {
+  "settings_appearance": "Appearance",
+  "@settings_appearance": {
     "description": "Appearance"
   },
-  "account": "Account",
-  "@account": {
+  "settings_account": "Account",
+  "@settings_account": {
     "description": "Account"
   },
-  "pickAColor": "Pick a Color",
-  "@pickAColor": {
-    "description": "Pick a Color"
-  },
-  "disableEmployee": "Disable employee",
-  "@disableEmployee": {
+  "employees_disableEmployee": "Disable employee",
+  "@employees_disableEmployee": {
     "description": "Disable employee"
   },
-  "enableEmployee": "Enable employee",
-  "@enableEmployee": {
+  "employees_enableEmployee": "Enable employee",
+  "@employees_enableEmployee": {
     "description": "Enable employee"
   },
-  "disableEmployeeConfirmBody": "This employee will be signed out immediately and won't be able to log back in.",
-  "@disableEmployeeConfirmBody": {
+  "employees_disableEmployeeConfirmBody": "This employee will be signed out immediately and won't be able to log back in.",
+  "@employees_disableEmployeeConfirmBody": {
     "description": "This employee will be signed out immediately and won't be able to log back in."
   },
-  "enableEmployeeConfirmBody": "This employee will be able to log back in.",
-  "@enableEmployeeConfirmBody": {
+  "employees_enableEmployeeConfirmBody": "This employee will be able to log back in.",
+  "@employees_enableEmployeeConfirmBody": {
     "description": "This employee will be able to log back in."
   },
-  "newAppointment": "New Appointment",
-  "@newAppointment": {
+  "calendar_newAppointment": "New Appointment",
+  "@calendar_newAppointment": {
     "description": "New Appointment"
   },
-  "saveAppointment": "Save Appointment",
-  "@saveAppointment": {
+  "calendar_saveAppointment": "Save Appointment",
+  "@calendar_saveAppointment": {
     "description": "Save Appointment"
   },
-  "assignEmployee": "Assign Employee",
-  "@assignEmployee": {
+  "calendar_assignEmployee": "Assign Employee",
+  "@calendar_assignEmployee": {
     "description": "Assign Employee"
   },
-  "serviceTitle": "Service / Title",
-  "@serviceTitle": {
+  "calendar_serviceTitle": "Service / Title",
+  "@calendar_serviceTitle": {
     "description": "Service / Title"
   },
-  "changeAddress": "Change",
-  "@changeAddress": {
+  "calendar_changeAddress": "Change",
+  "@calendar_changeAddress": {
     "description": "Change"
   },
-  "clientSAddress": "Client's address",
-  "@clientSAddress": {
+  "calendar_clientSAddress": "Client's address",
+  "@calendar_clientSAddress": {
     "description": "Client's address"
   },
-  "useClientsAddress": "← Use client's address",
-  "@useClientsAddress": {
+  "calendar_useClientsAddress": "← Use client's address",
+  "@calendar_useClientsAddress": {
     "description": "← Use client's address"
   },
-  "editAppointment": "Edit Appointment",
-  "@editAppointment": {
+  "calendar_editAppointment": "Edit Appointment",
+  "@calendar_editAppointment": {
     "description": "Edit Appointment"
   },
-  "deleteAppointment": "Delete Appointment",
-  "@deleteAppointment": {
+  "calendar_deleteAppointment": "Delete Appointment",
+  "@calendar_deleteAppointment": {
     "description": "Delete Appointment"
   },
-  "cancelAppointment": "Cancel Appointment",
-  "@cancelAppointment": {
+  "calendar_cancelAppointment": "Cancel Appointment",
+  "@calendar_cancelAppointment": {
     "description": "Cancel Appointment"
   },
-  "cancelledJobsAreSavedToHistory": "Cancelled jobs are saved to history.",
-  "@cancelledJobsAreSavedToHistory": {
+  "calendar_cancelledJobsAreSavedToHistory": "Cancelled jobs are saved to history.",
+  "@calendar_cancelledJobsAreSavedToHistory": {
     "description": "Cancelled jobs are saved to history."
   },
-  "appointmentStatus": "Appointment Status",
-  "@appointmentStatus": {
+  "calendar_appointmentStatus": "Appointment Status",
+  "@calendar_appointmentStatus": {
     "description": "Appointment Status"
   },
-  "assignedEmployee": "Assigned Employee",
-  "@assignedEmployee": {
+  "calendar_assignedEmployee": "Assigned Employee",
+  "@calendar_assignedEmployee": {
     "description": "Assigned Employee"
   },
-  "saveClient": "Save Client",
-  "@saveClient": {
+  "clients_saveClient": "Save Client",
+  "@clients_saveClient": {
     "description": "Save Client"
   },
-  "inviteEmployee": "Invite Employee",
-  "@inviteEmployee": {
+  "employees_inviteEmployee": "Invite Employee",
+  "@employees_inviteEmployee": {
     "description": "Invite Employee"
   },
-  "sendInvite": "Send Invite",
-  "@sendInvite": {
+  "employees_sendInvite": "Send Invite",
+  "@employees_sendInvite": {
     "description": "Send Invite"
   },
-  "permissions": "Permissions",
-  "@permissions": {
+  "employees_permissions": "Permissions",
+  "@employees_permissions": {
     "description": "Permissions"
   },
-  "adminAccess": "Admin access",
-  "@adminAccess": {
+  "employees_adminAccess": "Admin access",
+  "@employees_adminAccess": {
     "description": "Admin access"
   },
-  "adminAccessDescription": "Can manage all appointments, clients & employees",
-  "@adminAccessDescription": {
+  "employees_adminAccessDescription": "Can manage all appointments, clients & employees",
+  "@employees_adminAccessDescription": {
     "description": "Can manage all appointments, clients & employees"
   },
-  "accountStatus": "Account Status",
-  "@accountStatus": {
+  "employees_accountStatus": "Account Status",
+  "@employees_accountStatus": {
     "description": "Account Status"
   },
-  "accountStatusDescription": "Controls access & job assignment",
-  "@accountStatusDescription": {
+  "employees_accountStatusDescription": "Controls access & job assignment",
+  "@employees_accountStatusDescription": {
     "description": "Controls access & job assignment"
   },
-  "disableAccount": "Disable Account",
-  "@disableAccount": {
+  "employees_disableAccount": "Disable Account",
+  "@employees_disableAccount": {
     "description": "Disable Account"
   },
-  "reEnableAccount": "Re-enable Account",
-  "@reEnableAccount": {
+  "employees_reEnableAccount": "Re-enable Account",
+  "@employees_reEnableAccount": {
     "description": "Re-enable Account"
   },
-  "disableAccountNote": "Disabling removes them from new job assignments. Their past appointments and data are kept.",
-  "@disableAccountNote": {
+  "employees_disableAccountNote": "Disabling removes them from new job assignments. Their past appointments and data are kept.",
+  "@employees_disableAccountNote": {
     "description": "Disabling removes them from new job assignments. Their past appointments and data are kept."
   },
-  "reEnableAccountNote": "Re-enabling restores their access and allows them to be assigned to jobs again.",
-  "@reEnableAccountNote": {
+  "employees_reEnableAccountNote": "Re-enabling restores their access and allows them to be assigned to jobs again.",
+  "@employees_reEnableAccountNote": {
     "description": "Re-enabling restores their access and allows them to be assigned to jobs again."
   },
-  "colorAlreadyUsed": "This color is already used by another employee.",
-  "@colorAlreadyUsed": {
+  "error_colorAlreadyUsed": "This color is already used by another employee.",
+  "@error_colorAlreadyUsed": {
     "description": "This color is already used by another employee."
   },
-  "retry": "Retry",
-  "@retry": {
+  "common_retry": "Retry",
+  "@common_retry": {
     "description": "Retry"
   },
-  "open": "Open",
-  "@open": {
+  "calendar_open": "Open",
+  "@calendar_open": {
     "description": "Open"
   },
-  "photoUploadFailedSnackbar": "Photo upload failed. Open the appointment to retry.",
-  "@photoUploadFailedSnackbar": {
+  "calendar_photoUploadFailedSnackbar": "Photo upload failed. Open the appointment to retry.",
+  "@calendar_photoUploadFailedSnackbar": {
     "description": "Photo upload failed. Open the appointment to retry."
   },
-  "nPhotosFailedToUpload": "{count, plural, =1{1 photo failed to upload.} other{{count} photos failed to upload.}}",
-  "@nPhotosFailedToUpload": {
+  "calendar_photoFailedBadge": "Failed",
+  "@calendar_photoFailedBadge": {
+    "description": "Compact badge overlaid on a photo whose upload failed."
+  },
+  "calendar_nPhotosFailedToUpload": "{count, plural, =1{1 photo failed to upload.} other{{count} photos failed to upload.}}",
+  "@calendar_nPhotosFailedToUpload": {
     "description": "{count, plural, =1{1 photo failed to upload.} other{{count} photos failed to upload.}}",
     "placeholders": {
       "count": {
@@ -1432,8 +941,8 @@
       }
     }
   },
-  "fileTooLargeWarning": "{fileName} is too large to upload. Maximum is 8 MB even after compression. Please use a smaller or lower-resolution image.",
-  "@fileTooLargeWarning": {
+  "calendar_fileTooLargeWarning": "{fileName} is too large to upload. Maximum is 8 MB even after compression. Please use a smaller or lower-resolution image.",
+  "@calendar_fileTooLargeWarning": {
     "description": "{fileName} is too large to upload. Maximum is 8 MB even after compression. Please use a smaller or lower-resolution image.",
     "placeholders": {
       "fileName": {
@@ -1441,56 +950,56 @@
       }
     }
   },
-  "scheduleConflict": "Schedule Conflict",
-  "@scheduleConflict": {
+  "calendar_scheduleConflict": "Schedule Conflict",
+  "@calendar_scheduleConflict": {
     "description": "Schedule Conflict"
   },
-  "alreadyBookedThisSlot": "Already booked during this time:",
-  "@alreadyBookedThisSlot": {
+  "calendar_alreadyBookedThisSlot": "Already booked during this time:",
+  "@calendar_alreadyBookedThisSlot": {
     "description": "Already booked during this time:"
   },
-  "doubleBookingWarning": "Scheduling them anyway will create a double booking.",
-  "@doubleBookingWarning": {
+  "calendar_doubleBookingWarning": "Scheduling them anyway will create a double booking.",
+  "@calendar_doubleBookingWarning": {
     "description": "Scheduling them anyway will create a double booking."
   },
-  "scheduleAnyway": "Schedule Anyway",
-  "@scheduleAnyway": {
+  "calendar_scheduleAnyway": "Schedule Anyway",
+  "@calendar_scheduleAnyway": {
     "description": "Schedule Anyway"
   },
-  "deleteAccount": "Delete account",
-  "@deleteAccount": {
+  "settings_deleteAccount": "Delete account",
+  "@settings_deleteAccount": {
     "description": "Delete account"
   },
-  "deleteAccountConfirmTitle": "Delete account?",
-  "@deleteAccountConfirmTitle": {
+  "settings_deleteAccountConfirmTitle": "Delete account?",
+  "@settings_deleteAccountConfirmTitle": {
     "description": "Delete account?"
   },
-  "deleteAccountConfirmBody": "This permanently deletes your account and profile. You will be signed out and cannot recover this account.",
-  "@deleteAccountConfirmBody": {
+  "settings_deleteAccountConfirmBody": "This permanently deletes your account and profile. You will be signed out and cannot recover this account.",
+  "@settings_deleteAccountConfirmBody": {
     "description": "This permanently deletes your account and profile. You will be signed out and cannot recover this account."
   },
-  "deleteAccountAdminWarning": "You are signed in as admin. Deleting your account will revoke your access to the business data shared with this account.",
-  "@deleteAccountAdminWarning": {
+  "settings_deleteAccountAdminWarning": "You are signed in as admin. Deleting your account will revoke your access to the business data shared with this account.",
+  "@settings_deleteAccountAdminWarning": {
     "description": "You are signed in as admin. Deleting your account will revoke your access to the business data shared with this account."
   },
-  "deletePermanently": "Delete permanently",
-  "@deletePermanently": {
+  "settings_deletePermanently": "Delete permanently",
+  "@settings_deletePermanently": {
     "description": "Delete permanently"
   },
-  "confirmYourPassword": "Confirm your password",
-  "@confirmYourPassword": {
+  "settings_confirmYourPassword": "Confirm your password",
+  "@settings_confirmYourPassword": {
     "description": "Confirm your password"
   },
-  "confirmYourPasswordToDelete": "Re-enter your password to confirm account deletion.",
-  "@confirmYourPasswordToDelete": {
+  "settings_confirmYourPasswordToDelete": "Re-enter your password to confirm account deletion.",
+  "@settings_confirmYourPasswordToDelete": {
     "description": "Re-enter your password to confirm account deletion."
   },
-  "accountDeleted": "Your account has been deleted.",
-  "@accountDeleted": {
+  "settings_accountDeleted": "Your account has been deleted.",
+  "@settings_accountDeleted": {
     "description": "Your account has been deleted."
   },
-  "couldNotDeleteAccount": "Could not delete your account. Please try again.",
-  "@couldNotDeleteAccount": {
+  "error_couldNotDeleteAccount": "Could not delete your account. Please try again.",
+  "@error_couldNotDeleteAccount": {
     "description": "Could not delete your account. Please try again."
   }
 }

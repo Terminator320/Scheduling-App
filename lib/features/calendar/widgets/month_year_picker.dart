@@ -1,4 +1,4 @@
-﻿import 'package:flutter/cupertino.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -68,7 +68,7 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                 CupertinoButton(
                   padding: EdgeInsets.zero,
                   child: Text(
-                    context.l10n.cancel,
+                    context.l10n.common_cancel,
                     style: TextStyle(color: scheme.primary),
                   ),
                   onPressed: () => Navigator.pop(context),
@@ -76,7 +76,7 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                 CupertinoButton(
                   padding: EdgeInsets.zero,
                   child: Text(
-                    context.l10n.done,
+                    context.l10n.status_done,
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       color: scheme.primary,

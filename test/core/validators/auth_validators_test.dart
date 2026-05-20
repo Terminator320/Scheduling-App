@@ -1,4 +1,4 @@
-﻿import 'package:flutter/widgets.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -50,7 +50,7 @@ void main() {
     // "please enter" empty-field message.
     expect(
       AuthValidators.password(context, '1234567'),
-      AppLocalizations.of(context).passwordMustBeAtLeast8Characters,
+      AppLocalizations.of(context).validation_passwordMustBeAtLeast8Characters,
     );
   });
 

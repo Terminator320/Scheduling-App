@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
@@ -65,7 +65,7 @@ class AdditionalContactsSection extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  context.l10n.additionalBusinessContacts,
+                  context.l10n.clients_additionalBusinessContacts,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -74,15 +74,14 @@ class AdditionalContactsSection extends StatelessWidget {
               TextButton.icon(
                 onPressed: onAddContact,
                 icon: const Icon(Icons.add),
-                label: Text(context.l10n.add),
+                label: Text(context.l10n.clients_add),
               ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
             context
-                .l10n
-                .theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded,
+                .l10n.clients_theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded,
             style: theme.textTheme.bodySmall?.copyWith(
               color: scheme.onSurfaceVariant,
             ),
@@ -92,7 +91,7 @@ class AdditionalContactsSection extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: onAddContact,
               icon: const Icon(Icons.person_add_alt_1),
-              label: Text(context.l10n.addAnotherContact),
+              label: Text(context.l10n.clients_addAnotherContact),
             ),
           ],
           for (var i = 0; i < contacts.length; i++) ...[
@@ -145,14 +144,14 @@ class _AdditionalContactCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  '${context.l10n.contact} ${index + 2}',
+                  '${context.l10n.clients_contact} ${index + 2}',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
               IconButton(
-                tooltip: context.l10n.removeContact,
+                tooltip: context.l10n.clients_removeContact,
                 onPressed: onRemove,
                 icon: const Icon(Icons.close),
               ),
@@ -161,7 +160,7 @@ class _AdditionalContactCard extends StatelessWidget {
           const SizedBox(height: 8),
           SheetFocusScroll(
             child: LabeledTextField(
-              label: context.l10n.contactName,
+              label: context.l10n.clients_contactName,
               controller: contact.nameController,
               required: true,
               autofillHints: const [AutofillHints.name],
@@ -173,7 +172,7 @@ class _AdditionalContactCard extends StatelessWidget {
           const SizedBox(height: 12),
           SheetFocusScroll(
             child: LabeledTextField(
-              label: context.l10n.phone,
+              label: context.l10n.clients_phone,
               controller: contact.phoneController,
               keyboard: TextInputType.phone,
               autofillHints: const [AutofillHints.telephoneNumber],
@@ -185,7 +184,7 @@ class _AdditionalContactCard extends StatelessWidget {
           const SizedBox(height: 12),
           SheetFocusScroll(
             child: LabeledTextField(
-              label: context.l10n.email,
+              label: context.l10n.common_email,
               controller: contact.emailController,
               keyboard: TextInputType.emailAddress,
               autofillHints: const [AutofillHints.email],

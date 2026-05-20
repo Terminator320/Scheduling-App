@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/layout/adaptive_shell.dart';
@@ -76,12 +76,12 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
 
     final notices = ref.read(noticeServiceProvider);
     if (result == 'deleted') {
-      notices.success(context.l10n.employeeDeleted);
+      notices.success(context.l10n.employees_employeeDeleted);
     } else if (result == true) {
       notices.success(
         employee == null
-            ? context.l10n.employeeAddedSuccessfully
-            : context.l10n.employeeUpdatedSuccessfully,
+            ? context.l10n.employees_employeeAddedSuccessfully
+            : context.l10n.employees_employeeUpdatedSuccessfully,
       );
     }
   }
@@ -143,13 +143,13 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         ),
       ),
       title: Text(
-        context.l10n.employees,
+        context.l10n.common_employees,
         style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
       ),
       bottom: AppSearchBar(
         controller: _searchController,
         onChanged: (_) => setState(() {}),
-        hintText: context.l10n.searchEmployees,
+        hintText: context.l10n.employees_searchEmployees,
       ),
     );
   }
@@ -175,12 +175,12 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(context.l10n.errorLoadingEmployees),
+              Text(context.l10n.error_errorLoadingEmployees),
               const SizedBox(height: AppSpacing.sp16),
               TextButton.icon(
                 onPressed: () => ref.invalidate(employeesStreamProvider),
                 icon: const Icon(Icons.refresh_rounded),
-                label: Text(context.l10n.retry),
+                label: Text(context.l10n.common_retry),
               ),
             ],
           ),
@@ -198,11 +198,11 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
                 ? Icons.badge_outlined
                 : Icons.search_off_outlined,
             title: query.isEmpty
-                ? context.l10n.noEmployeesYet
-                : context.l10n.noEmployeesFound,
+                ? context.l10n.employees_noEmployeesYet
+                : context.l10n.common_noEmployeesFound,
             body: query.isEmpty
-                ? context.l10n.tapToInviteYourFirstEmployee
-                : context.l10n.tryADifferentSearchTerm,
+                ? context.l10n.employees_tapToInviteYourFirstEmployee
+                : context.l10n.common_tryADifferentSearchTerm,
           );
         }
 
@@ -245,7 +245,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
             ),
             const SizedBox(height: 12),
             Text(
-              context.l10n.selectAnEmployeeToViewDetails,
+              context.l10n.employees_selectAnEmployeeToViewDetails,
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
@@ -264,11 +264,11 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         _openEmployeeSheet(employee: employee);
       case 'deleted':
         setState(() => _selectedEmployee = null);
-        notices.success(context.l10n.employeeDeleted);
+        notices.success(context.l10n.employees_employeeDeleted);
       case 'disabled':
-        notices.success(context.l10n.employeeDisabledSuccessfully);
+        notices.success(context.l10n.employees_employeeDisabledSuccessfully);
       case 'enabled':
-        notices.success(context.l10n.employeeEnabledSuccessfully);
+        notices.success(context.l10n.employees_employeeEnabledSuccessfully);
     }
   }
 

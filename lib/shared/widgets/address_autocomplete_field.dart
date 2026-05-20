@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
@@ -107,7 +107,7 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
         _serviceError = _localizedErrorFor(
           e,
           context,
-          context.l10n.addressLookupFailed,
+          context.l10n.error_addressLookupFailed,
         );
       });
     }
@@ -144,7 +144,7 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
         _serviceError = _localizedErrorFor(
           e,
           context,
-          context.l10n.couldNotLoadAddressDetails,
+          context.l10n.error_couldNotLoadAddressDetails,
         );
       });
       widget.onAddressSelected?.call(widget.controller.text);
@@ -162,7 +162,7 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         LabeledTextField(
-          label: widget.label ?? context.l10n.address,
+          label: widget.label ?? context.l10n.common_address,
           controller: widget.controller,
           required: widget.required,
           optional: widget.optional,

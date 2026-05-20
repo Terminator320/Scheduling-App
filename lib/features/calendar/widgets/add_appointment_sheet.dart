@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -174,12 +174,12 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
       case AddEventSubmitted(:final appointment):
         ref
             .read(noticeServiceProvider)
-            .success(context.l10n.appointmentCreated);
+            .success(context.l10n.common_appointmentCreated);
         Navigator.pop(context, appointment);
       case AddEventFailed():
         ref
             .read(noticeServiceProvider)
-            .error(context.l10n.somethingWentWrongCreatingTheAppointment);
+            .error(context.l10n.error_somethingWentWrongCreatingTheAppointment);
       case AddEventInvalid() || AddEventBusyEmployees():
         break;
     }
@@ -187,17 +187,17 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
 
   String _errorText(AppointmentFormError key) {
     return switch (key) {
-      AppointmentFormError.titleRequired => context.l10n.titleIsRequired,
-      AppointmentFormError.dateRequired => context.l10n.pleaseSelectADate,
+      AppointmentFormError.titleRequired => context.l10n.validation_titleIsRequired,
+      AppointmentFormError.dateRequired => context.l10n.validation_pleaseSelectADate,
       AppointmentFormError.startTimeRequired =>
-        context.l10n.pleaseSelectAStartTime,
+        context.l10n.validation_pleaseSelectAStartTime,
       AppointmentFormError.endTimeRequired =>
-        context.l10n.pleaseSelectAnEndTime,
+        context.l10n.validation_pleaseSelectAnEndTime,
       AppointmentFormError.endTimeMustBeAfterStart =>
-        context.l10n.mustBeAfterStartTime,
-      AppointmentFormError.clientRequired => context.l10n.pleaseSelectAClient,
+        context.l10n.calendar_mustBeAfterStartTime,
+      AppointmentFormError.clientRequired => context.l10n.validation_pleaseSelectAClient,
       AppointmentFormError.employeesRequired =>
-        context.l10n.pleaseSelectAtLeastOneEmployee,
+        context.l10n.validation_pleaseSelectAtLeastOneEmployee,
     };
   }
 
@@ -227,7 +227,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
             const SheetHandle(),
             const SizedBox(height: AppSpacing.sp16),
             Text(
-              sheetContext.l10n.newAppointment,
+              sheetContext.l10n.calendar_newAppointment,
               style: Theme.of(sheetContext).textTheme.headlineLarge,
             ),
             const SizedBox(height: AppSpacing.sp16),
@@ -235,8 +235,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
             const SizedBox(height: AppSpacing.sp16),
             SheetFocusScroll(
               child: LabeledTextField(
-                label: sheetContext.l10n.serviceTitle,
-                hint: sheetContext.l10n.eGPlumbingRepair,
+                label: sheetContext.l10n.calendar_serviceTitle,
+                hint: sheetContext.l10n.calendar_eGPlumbingRepair,
                 controller: _titleController,
                 required: true,
                 maxLength: TextLimits.appointmentTitle,
@@ -244,7 +244,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
               ),
             ),
             const SizedBox(height: AppSpacing.sp16),
-            formLabel(sheetContext, sheetContext.l10n.client, required: true),
+            formLabel(sheetContext, sheetContext.l10n.calendar_client, required: true),
             SheetFocusScroll(
               child: ClientSearchField(
                 controller: _clientSearchController,
@@ -260,7 +260,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
             const SizedBox(height: AppSpacing.sp16),
             formLabel(
               sheetContext,
-              sheetContext.l10n.assignEmployee,
+              sheetContext.l10n.calendar_assignEmployee,
               required: true,
             ),
             const SizedBox(height: 6),
@@ -283,8 +283,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
             const SizedBox(height: AppSpacing.sp16),
             SheetFocusScroll(
               child: LabeledTextField(
-                label: sheetContext.l10n.date,
-                hint: sheetContext.l10n.selectDate,
+                label: sheetContext.l10n.calendar_date,
+                hint: sheetContext.l10n.calendar_selectDate,
                 controller: _dateController,
                 required: true,
                 readOnly: true,
@@ -300,8 +300,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
                 Expanded(
                   child: SheetFocusScroll(
                     child: LabeledTextField(
-                      label: sheetContext.l10n.startTime,
-                      hint: sheetContext.l10n.start,
+                      label: sheetContext.l10n.calendar_startTime,
+                      hint: sheetContext.l10n.calendar_start,
                       controller: _startTimeController,
                       required: true,
                       readOnly: true,
@@ -314,8 +314,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
                 Expanded(
                   child: SheetFocusScroll(
                     child: LabeledTextField(
-                      label: sheetContext.l10n.endTime,
-                      hint: sheetContext.l10n.end,
+                      label: sheetContext.l10n.calendar_endTime,
+                      hint: sheetContext.l10n.calendar_end,
                       controller: _endTimeController,
                       required: true,
                       readOnly: true,
@@ -337,8 +337,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
             const SizedBox(height: AppSpacing.sp16),
             SheetFocusScroll(
               child: LabeledTextField(
-                label: sheetContext.l10n.materialsNeeded,
-                hint: sheetContext.l10n.typeTheMaterialsHere,
+                label: sheetContext.l10n.calendar_materialsNeeded,
+                hint: sheetContext.l10n.calendar_typeTheMaterialsHere,
                 controller: _materialsController,
                 optional: true,
                 maxLines: 2,
@@ -348,8 +348,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
             const SizedBox(height: AppSpacing.sp16),
             SheetFocusScroll(
               child: LabeledTextField(
-                label: sheetContext.l10n.notes,
-                hint: sheetContext.l10n.typeTheNoteHere,
+                label: sheetContext.l10n.calendar_notes,
+                hint: sheetContext.l10n.calendar_typeTheNoteHere,
                 controller: _notesController,
                 optional: true,
                 maxLines: 2,
@@ -357,7 +357,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
               ),
             ),
             const SizedBox(height: AppSpacing.sp16),
-            formLabel(sheetContext, sheetContext.l10n.pictures, optional: true),
+            formLabel(sheetContext, sheetContext.l10n.calendar_pictures, optional: true),
             PhotoPickerSection(
               existingImages: const [],
               newImages: state.selectedImages,
@@ -381,7 +381,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
                         color: Theme.of(sheetContext).colorScheme.onPrimary,
                       ),
                     )
-                  : Text(sheetContext.l10n.saveAppointment),
+                  : Text(sheetContext.l10n.calendar_saveAppointment),
             ),
           ],
         );

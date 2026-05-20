@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
@@ -187,14 +187,13 @@ class _ForgotPasswordState extends State<ForgotPassword>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                context.l10n.forgotYourPassword,
+                context.l10n.auth_forgotYourPassword,
                 style: textTheme.headlineLarge,
               ),
               const SizedBox(height: 4),
               Text(
                 context
-                    .l10n
-                    .enterYourAccountEmailAndWeLlSendYouALinkToResetYourPassword,
+                    .l10n.auth_enterYourAccountEmailAndWeLlSendYouALinkToResetYourPassword,
                 style: textTheme.bodyMedium,
               ),
             ],
@@ -224,7 +223,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
               decoration:
                   formInputDecoration(
                     context,
-                    context.l10n.youExampleCom,
+                    context.l10n.auth_youExampleCom,
                   ).copyWith(
                     errorText: _emailError,
                     prefixIcon: const Icon(Icons.email_outlined, size: 20),
@@ -278,7 +277,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
         FadeSlideEntrance(
           animation: animations[3],
           child: AnimatedLoadingButton(
-            label: context.l10n.sendResetEmail,
+            label: context.l10n.auth_sendResetEmail,
             isLoading: _isLoading,
             onPressed: _sendResetEmail,
           ),
@@ -290,7 +289,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
             child: TextButton(
               onPressed: _isLoading ? null : _backToSignIn,
               child: Text(
-                context.l10n.backToSignIn,
+                context.l10n.auth_backToSignIn,
                 style: textTheme.bodySmall?.copyWith(color: scheme.primary),
               ),
             ),
@@ -333,7 +332,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
         FadeSlideEntrance(
           animation: animations[1],
           child: Text(
-            context.l10n.checkYourInbox,
+            context.l10n.auth_checkYourInbox,
             style: textTheme.headlineLarge,
           ),
         ),
@@ -342,8 +341,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
           animation: animations[2],
           child: Text(
             context
-                .l10n
-                .ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent,
+                .l10n.auth_ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent,
             style: textTheme.bodyMedium,
           ),
         ),
@@ -368,8 +366,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
                 Expanded(
                   child: Text(
                     context
-                        .l10n
-                        .theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder,
+                        .l10n.auth_theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder,
                     style: textTheme.bodySmall?.copyWith(
                       color: scheme.onTertiaryContainer,
                     ),
@@ -383,7 +380,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
         FadeSlideEntrance(
           animation: animations[4],
           child: AnimatedLoadingButton(
-            label: context.l10n.backToSignIn,
+            label: context.l10n.auth_backToSignIn,
             onPressed: _backToSignIn,
           ),
         ),
@@ -394,7 +391,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
             child: TextButton(
               onPressed: _resendEmail,
               child: Text(
-                context.l10n.didnTReceiveTheEmailTryAgain,
+                context.l10n.auth_didnTReceiveTheEmailTryAgain,
                 style: textTheme.bodySmall?.copyWith(color: scheme.primary),
               ),
             ),

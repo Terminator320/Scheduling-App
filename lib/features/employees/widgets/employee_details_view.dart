@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -43,12 +43,12 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(ctx.l10n.deleteEmployee),
-        content: Text(ctx.l10n.areYouSureYouWantToDeleteThisEmployee),
+        title: Text(ctx.l10n.employees_deleteEmployee),
+        content: Text(ctx.l10n.employees_areYouSureYouWantToDeleteThisEmployee),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(ctx.l10n.cancel),
+            child: Text(ctx.l10n.common_cancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
@@ -56,7 +56,7 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
               foregroundColor: Theme.of(ctx).colorScheme.onError,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(ctx.l10n.delete),
+            child: Text(ctx.l10n.common_delete),
           ),
         ],
       ),
@@ -73,7 +73,7 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
       ref.read(loggerProvider).warn('deleteEmployee failed', e, st);
       if (!mounted) return;
       setState(() => _isDeleting = false);
-      ref.read(noticeServiceProvider).error(context.l10n.somethingWentWrong);
+      ref.read(noticeServiceProvider).error(context.l10n.error_somethingWentWrong);
     }
   }
 
@@ -83,17 +83,17 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(
-          isDisabled ? ctx.l10n.enableEmployee : ctx.l10n.disableEmployee,
+          isDisabled ? ctx.l10n.employees_enableEmployee : ctx.l10n.employees_disableEmployee,
         ),
         content: Text(
           isDisabled
-              ? ctx.l10n.enableEmployeeConfirmBody
-              : ctx.l10n.disableEmployeeConfirmBody,
+              ? ctx.l10n.employees_enableEmployeeConfirmBody
+              : ctx.l10n.employees_disableEmployeeConfirmBody,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(ctx.l10n.cancel),
+            child: Text(ctx.l10n.common_cancel),
           ),
           FilledButton(
             style: isDisabled
@@ -104,7 +104,7 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
                   ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(
-              isDisabled ? ctx.l10n.enableEmployee : ctx.l10n.disableEmployee,
+              isDisabled ? ctx.l10n.employees_enableEmployee : ctx.l10n.employees_disableEmployee,
             ),
           ),
         ],
@@ -125,7 +125,7 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
       ref.read(loggerProvider).warn('toggleEmployeeStatus failed', e, st);
       if (!mounted) return;
       setState(() => _isDisabling = false);
-      ref.read(noticeServiceProvider).error(context.l10n.somethingWentWrong);
+      ref.read(noticeServiceProvider).error(context.l10n.error_somethingWentWrong);
     }
   }
 
@@ -150,7 +150,7 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
           children: [
             Expanded(
               child: Text(
-                context.l10n.employeeDetails,
+                context.l10n.employees_employeeDetails,
                 style: theme.textTheme.headlineLarge,
               ),
             ),
@@ -167,28 +167,28 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
         const SizedBox(height: 20),
         _DetailField(
           icon: Icons.person_outline,
-          label: context.l10n.name,
+          label: context.l10n.employees_name,
           value: widget.employee.name,
         ),
         const SizedBox(height: 12),
         _DetailField(
           icon: Icons.email_outlined,
-          label: context.l10n.email,
+          label: context.l10n.common_email,
           value: widget.employee.email,
         ),
         const SizedBox(height: 12),
         _DetailField(
           icon: Icons.phone_outlined,
-          label: context.l10n.phoneNumber,
+          label: context.l10n.employees_phoneNumber,
           value: widget.employee.phone.isEmpty ? '-' : widget.employee.phone,
         ),
         const SizedBox(height: 12),
         _DetailField(
           icon: Icons.shield_outlined,
-          label: context.l10n.role,
+          label: context.l10n.employees_role,
           value: widget.employee.isAdmin
-              ? context.l10n.admin
-              : context.l10n.employeeRoleValue,
+              ? context.l10n.common_admin
+              : context.l10n.common_employeeRoleValue,
         ),
         const SizedBox(height: 12),
         Row(
@@ -205,7 +205,7 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  context.l10n.employeeColor,
+                  context.l10n.employees_employeeColor,
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -231,7 +231,7 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
         FilledButton.icon(
           onPressed: () => widget.onAction('edit'),
           icon: const Icon(Icons.edit_outlined, size: 18),
-          label: Text(context.l10n.edit),
+          label: Text(context.l10n.common_edit),
           style: FilledButton.styleFrom(
             minimumSize: const Size(double.infinity, 48),
           ),
@@ -259,8 +259,8 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
                   ),
             label: Text(
               isDisabled
-                  ? context.l10n.enableEmployee
-                  : context.l10n.disableEmployee,
+                  ? context.l10n.employees_enableEmployee
+                  : context.l10n.employees_disableEmployee,
             ),
             style: FilledButton.styleFrom(
               minimumSize: const Size(double.infinity, 48),
@@ -283,7 +283,7 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
                   ),
                 )
               : const Icon(Icons.delete_outline, size: 18),
-          label: Text(context.l10n.deleteEmployee),
+          label: Text(context.l10n.employees_deleteEmployee),
           style: OutlinedButton.styleFrom(
             minimumSize: const Size(double.infinity, 48),
             foregroundColor: theme.colorScheme.error,

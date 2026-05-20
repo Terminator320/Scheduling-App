@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 class AppointmentStatusPicker extends StatelessWidget {
   const AppointmentStatusPicker({
@@ -20,17 +21,19 @@ class AppointmentStatusPicker extends StatelessWidget {
     'cancelled',
   ];
 
-  static const _labels = <String, String>{
-    'confirmed': 'Confirmed',
-    'in_progress': 'In Progress',
-    'pending': 'Pending',
-    'done': 'Done',
-    'cancelled': 'Cancelled',
+  String _labelFor(AppLocalizations l, String s) => switch (s) {
+    'confirmed' => l.status_confirmed,
+    'in_progress' => l.status_inProgress,
+    'pending' => l.status_pending,
+    'done' => l.status_done,
+    'cancelled' => l.status_cancelled,
+    _ => s,
   };
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final l = context.l10n;
     final selected = currentStatus.toLowerCase();
 
     return Wrap(
@@ -51,7 +54,7 @@ class AppointmentStatusPicker extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppRadius.rFull),
             ),
             child: Text(
-              _labels[s]!,
+              _labelFor(l, s),
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w700,

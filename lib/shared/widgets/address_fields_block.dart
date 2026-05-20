@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
@@ -94,7 +94,7 @@ class _AddressFieldsBlockState extends State<AddressFieldsBlock> {
         _isLoading = false;
         _serviceError = _localizedErrorFor(
           e,
-          context.l10n.addressLookupFailed,
+          context.l10n.error_addressLookupFailed,
         );
       });
     }
@@ -130,7 +130,7 @@ class _AddressFieldsBlockState extends State<AddressFieldsBlock> {
         _isLoading = false;
         _serviceError = _localizedErrorFor(
           e,
-          context.l10n.couldNotLoadAddressDetails,
+          context.l10n.error_couldNotLoadAddressDetails,
         );
       });
     } finally {
@@ -145,7 +145,7 @@ class _AddressFieldsBlockState extends State<AddressFieldsBlock> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        formLabel(context, context.l10n.searchAddress, optional: true),
+        formLabel(context, context.l10n.common_searchAddress, optional: true),
         TextField(
           controller: _searchController,
           onChanged: _onSearchChanged,
@@ -153,7 +153,7 @@ class _AddressFieldsBlockState extends State<AddressFieldsBlock> {
           onSubmitted: (_) => FocusScope.of(context).unfocus(),
           decoration: formInputDecoration(
             context,
-            context.l10n.typeToSearchAnAddress,
+            context.l10n.common_typeToSearchAnAddress,
           ).copyWith(
             prefixIcon: Icon(
               Icons.search,
@@ -211,7 +211,7 @@ class _AddressFieldsBlockState extends State<AddressFieldsBlock> {
           ),
         const SizedBox(height: 16),
         LabeledTextField(
-          label: context.l10n.street,
+          label: context.l10n.common_street,
           controller: widget.streetController,
           required: widget.requireStreet,
           autofillHints: const [AutofillHints.streetAddressLine1],
@@ -220,7 +220,7 @@ class _AddressFieldsBlockState extends State<AddressFieldsBlock> {
         ),
         const SizedBox(height: 12),
         LabeledTextField(
-          label: context.l10n.city,
+          label: context.l10n.common_city,
           controller: widget.cityController,
           autofillHints: const [AutofillHints.addressCity],
           errorText: widget.cityError,
@@ -233,7 +233,7 @@ class _AddressFieldsBlockState extends State<AddressFieldsBlock> {
             Expanded(
               flex: 2,
               child: LabeledTextField(
-                label: context.l10n.province,
+                label: context.l10n.common_province,
                 controller: widget.provinceController,
                 autofillHints: const [AutofillHints.addressState],
                 errorText: widget.provinceError,
@@ -244,7 +244,7 @@ class _AddressFieldsBlockState extends State<AddressFieldsBlock> {
             Expanded(
               flex: 3,
               child: LabeledTextField(
-                label: context.l10n.postalCode,
+                label: context.l10n.common_postalCode,
                 controller: widget.postalCodeController,
                 autofillHints: const [AutofillHints.postalCode],
                 errorText: widget.postalCodeError,

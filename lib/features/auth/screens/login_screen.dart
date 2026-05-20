@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -114,7 +114,7 @@ class _LoginState extends ConsumerState<Login>
       if (user == null) {
         if (!mounted) return;
         setState(() {
-          _bannerError = context.l10n.invalidEmailOrPassword;
+          _bannerError = context.l10n.error_invalidEmailOrPassword;
           _isLoading = false;
         });
         return;
@@ -134,8 +134,8 @@ class _LoginState extends ConsumerState<Login>
         if (!mounted) return;
         setState(() {
           _bannerError = (user.emailVerified)
-              ? context.l10n.noUserProfileFoundForThisAccount
-              : context.l10n.pleaseVerifyYourEmailBeforeSigningIn;
+              ? context.l10n.error_noUserProfileFoundForThisAccount
+              : context.l10n.auth_pleaseVerifyYourEmailBeforeSigningIn;
           _isLoading = false;
         });
         return;
@@ -147,7 +147,7 @@ class _LoginState extends ConsumerState<Login>
         await _authService.signOut();
         if (!mounted) return;
         setState(() {
-          _bannerError = context.l10n.thisAccountHasBeenDisabled;
+          _bannerError = context.l10n.error_thisAccountHasBeenDisabled;
           _isLoading = false;
         });
         return;
@@ -193,7 +193,7 @@ class _LoginState extends ConsumerState<Login>
       _passwordError = null;
       _bannerError = null;
       _bannerSuccess = result?.created ?? false
-          ? context.l10n.accountCreatedYouCanNowSignIn
+          ? context.l10n.auth_accountCreatedYouCanNowSignIn
           : null;
     });
 
@@ -331,12 +331,12 @@ class _LoginState extends ConsumerState<Login>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        context.l10n.welcomeBack,
+                        context.l10n.auth_welcomeBack,
                         style: textTheme.headlineLarge,
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        context.l10n.signInToYourAccount,
+                        context.l10n.auth_signInToYourAccount,
                         style: textTheme.bodyMedium,
                       ),
                     ],
@@ -374,7 +374,7 @@ class _LoginState extends ConsumerState<Login>
                       decoration:
                           formInputDecoration(
                             context,
-                            context.l10n.email,
+                            context.l10n.common_email,
                           ).copyWith(
                             errorText: _submitted ? _emailError : null,
                             prefixIcon: const Icon(
@@ -402,7 +402,7 @@ class _LoginState extends ConsumerState<Login>
                       decoration:
                           formInputDecoration(
                             context,
-                            context.l10n.password,
+                            context.l10n.common_password,
                           ).copyWith(
                             errorText: _submitted ? _passwordError : null,
                             prefixIcon: const Icon(
@@ -432,8 +432,8 @@ class _LoginState extends ConsumerState<Login>
                                   color: scheme.onSurfaceVariant,
                                 ),
                                 tooltip: _isObscured
-                                    ? context.l10n.showPassword
-                                    : context.l10n.hidePassword,
+                                    ? context.l10n.auth_showPassword
+                                    : context.l10n.auth_hidePassword,
                                 onPressed: () =>
                                     setState(() => _isObscured = !_isObscured),
                               ),
@@ -446,7 +446,7 @@ class _LoginState extends ConsumerState<Login>
                 FadeSlideEntrance(
                   animation: animations[5],
                   child: AnimatedLoadingButton(
-                    label: context.l10n.signIn,
+                    label: context.l10n.auth_signIn,
                     isLoading: _isLoading,
                     onPressed: _signIn,
                   ),
@@ -465,7 +465,7 @@ class _LoginState extends ConsumerState<Login>
                       TextButton(
                         onPressed: _isLoading ? null : _openForgotPassword,
                         child: Text(
-                          context.l10n.forgotPassword,
+                          context.l10n.auth_forgotPassword,
                           style: textTheme.bodySmall?.copyWith(
                             color: scheme.primary,
                             fontWeight: FontWeight.w500,
@@ -475,7 +475,7 @@ class _LoginState extends ConsumerState<Login>
                       TextButton(
                         onPressed: _isLoading ? null : _openCreateAccount,
                         child: Text(
-                          context.l10n.createAccount,
+                          context.l10n.auth_createAccount,
                           style: textTheme.bodySmall?.copyWith(
                             color: scheme.primary,
                             fontWeight: FontWeight.w500,

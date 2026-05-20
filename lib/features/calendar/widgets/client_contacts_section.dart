@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -19,7 +19,7 @@ class ClientContactsSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            context.l10n.contacts,
+            context.l10n.common_contacts,
             style: theme.textTheme.labelSmall?.copyWith(
               color: scheme.onSurfaceVariant,
               letterSpacing: 0.7,

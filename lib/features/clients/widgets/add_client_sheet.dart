@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -60,7 +60,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
   String? _validateEmail(String value) {
     if (value.isEmpty) return null;
     if (!AuthValidators.isValidEmailFormat(value)) {
-      return context.l10n.enterAValidEmail;
+      return context.l10n.validation_enterAValidEmail;
     }
     return null;
   }
@@ -155,17 +155,17 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
     final hasBusinessOrName = businessName.isNotEmpty || name.isNotEmpty;
 
     nextErrors['businessName'] = !hasBusinessOrName
-        ? context.l10n.businessNameOrContactNameIsRequired
+        ? context.l10n.validation_businessNameOrContactNameIsRequired
         : null;
     nextErrors['name'] = !hasBusinessOrName
-        ? context.l10n.businessNameOrContactNameIsRequired
+        ? context.l10n.validation_businessNameOrContactNameIsRequired
         : null;
     nextErrors['phone'] = !hasContactMethod
-        ? context.l10n.phoneOrEmailIsRequired
+        ? context.l10n.validation_phoneOrEmailIsRequired
         : null;
     nextErrors['email'] = _validateEmail(email);
     nextErrors['address'] = businessName.isEmpty && address.isEmpty
-        ? context.l10n.addressIsRequired
+        ? context.l10n.validation_addressIsRequired
         : null;
 
     if (businessName.isNotEmpty) {
@@ -180,10 +180,10 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
             contactPhone.isNotEmpty || contactEmail.isNotEmpty;
 
         nextErrors['contact_${i}_name'] = contactName.isEmpty
-            ? context.l10n.contactNameIsRequired
+            ? context.l10n.validation_contactNameIsRequired
             : null;
         nextErrors['contact_${i}_phone'] = !hasAdditionalContactMethod
-            ? context.l10n.phoneOrEmailIsRequired
+            ? context.l10n.validation_phoneOrEmailIsRequired
             : null;
         nextErrors['contact_${i}_email'] = _validateEmail(contactEmail);
       }
@@ -224,7 +224,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
     try {
       await ref.read(clientsRepositoryProvider).addClient(newClient);
       if (!mounted) return;
-      ref.read(noticeServiceProvider).success(context.l10n.clientAdded);
+      ref.read(noticeServiceProvider).success(context.l10n.common_clientAdded);
       Navigator.pop(context);
     } catch (e, st) {
       ref.read(loggerProvider).warn('addClient failed', e, st);
@@ -232,7 +232,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
       setState(() => _isSaving = false);
       ref
           .read(noticeServiceProvider)
-          .error(context.l10n.couldNotAddClientTryAgain);
+          .error(context.l10n.error_couldNotAddClientTryAgain);
     }
   }
 
@@ -254,13 +254,13 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
           children: [
             const SheetHandle(),
             const SizedBox(height: 16),
-            Text(context.l10n.newClient, style: theme.textTheme.headlineLarge),
+            Text(context.l10n.clients_newClient, style: theme.textTheme.headlineLarge),
             const SizedBox(height: 20),
             const Divider(height: 1),
             const SizedBox(height: 20),
             SheetFocusScroll(
               child: LabeledTextField(
-                label: context.l10n.businessName,
+                label: context.l10n.clients_businessName,
                 controller: _businessNameController,
                 optional: true,
                 autofillHints: const [AutofillHints.organizationName],
@@ -277,7 +277,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
             const SizedBox(height: 16),
             SheetFocusScroll(
               child: LabeledTextField(
-                label: context.l10n.contactName,
+                label: context.l10n.clients_contactName,
                 controller: _nameController,
                 required: !_isBusiness,
                 optional: _isBusiness,
@@ -294,7 +294,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
             const SizedBox(height: 16),
             SheetFocusScroll(
               child: LabeledTextField(
-                label: context.l10n.email,
+                label: context.l10n.common_email,
                 controller: _emailController,
                 keyboard: TextInputType.emailAddress,
                 optional: true,
@@ -311,7 +311,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
             const SizedBox(height: 16),
             SheetFocusScroll(
               child: LabeledTextField(
-                label: context.l10n.phone,
+                label: context.l10n.clients_phone,
                 controller: _phoneController,
                 keyboard: TextInputType.phone,
                 required: true,
@@ -348,7 +348,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
             const SizedBox(height: 16),
             SheetFocusScroll(
               child: LabeledTextField(
-                label: context.l10n.aptUnit,
+                label: context.l10n.clients_aptUnit,
                 controller: _aptController,
                 optional: true,
                 maxLength: TextLimits.aptUnit,
@@ -360,7 +360,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
                 Expanded(
                   child: SheetFocusScroll(
                     child: LabeledTextField(
-                      label: context.l10n.city,
+                      label: context.l10n.common_city,
                       controller: _cityController,
                       autofillHints: const [AutofillHints.addressCity],
                       maxLength: TextLimits.city,
@@ -371,7 +371,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
                 Expanded(
                   child: SheetFocusScroll(
                     child: LabeledTextField(
-                      label: context.l10n.province,
+                      label: context.l10n.common_province,
                       controller: _provinceController,
                       autofillHints: const [AutofillHints.addressState],
                       maxLength: TextLimits.province,
@@ -386,7 +386,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
                 Expanded(
                   child: SheetFocusScroll(
                     child: LabeledTextField(
-                      label: context.l10n.postalCode,
+                      label: context.l10n.common_postalCode,
                       controller: _postalCodeController,
                       autofillHints: const [AutofillHints.postalCode],
                       maxLength: TextLimits.postalCode,
@@ -397,7 +397,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
                 Expanded(
                   child: SheetFocusScroll(
                     child: LabeledTextField(
-                      label: context.l10n.country,
+                      label: context.l10n.clients_country,
                       controller: _countryController,
                       autofillHints: const [AutofillHints.countryName],
                       maxLength: TextLimits.country,
@@ -415,7 +415,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
                       minimumSize: const Size(double.infinity, 46),
                     ),
                     onPressed: _isSaving ? null : () => Navigator.pop(context),
-                    child: Text(context.l10n.cancel),
+                    child: Text(context.l10n.common_cancel),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -434,7 +434,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
                               color: scheme.onPrimary,
                             ),
                           )
-                        : Text(context.l10n.saveClient),
+                        : Text(context.l10n.clients_saveClient),
                   ),
                 ),
               ],

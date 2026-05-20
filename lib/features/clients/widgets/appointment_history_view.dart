@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -46,7 +46,7 @@ class AppointmentHistoryView extends ConsumerWidget {
         ),
         error: (err, st) {
           ref.read(loggerProvider).warn('history stream error', err, st);
-          return Center(child: Text(context.l10n.somethingWentWrong));
+          return Center(child: Text(context.l10n.error_somethingWentWrong));
         },
         data: (appointments) {
           final filtered = query.isEmpty
@@ -67,11 +67,11 @@ class AppointmentHistoryView extends ConsumerWidget {
                   ? Icons.history_outlined
                   : Icons.search_off_outlined,
               title: query.isEmpty
-                  ? context.l10n.noAppointmentsFound
-                  : '${context.l10n.noAppointmentsMatch} "$query"',
+                  ? context.l10n.common_noAppointmentsFound
+                  : '${context.l10n.clients_noAppointmentsMatch} "$query"',
               body: query.isEmpty
-                  ? context.l10n.tapToScheduleAnAppointment
-                  : context.l10n.tryADifferentSearchTerm,
+                  ? context.l10n.common_tapToScheduleAnAppointment
+                  : context.l10n.common_tryADifferentSearchTerm,
             );
           }
 

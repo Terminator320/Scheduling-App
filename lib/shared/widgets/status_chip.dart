@@ -58,42 +58,42 @@ class StatusChip extends StatelessWidget {
     AppStatusColors statusColors,
   ) => switch (status) {
     AppointmentStatus.confirmed => (
-      l10n.confirmed,
+      l10n.status_confirmed,
       scheme.primaryContainer,
       scheme.onPrimaryContainer,
     ),
     AppointmentStatus.done => (
-      l10n.done,
+      l10n.status_done,
       statusColors.successContainer,
       statusColors.onSuccessContainer,
     ),
     AppointmentStatus.pending => (
-      l10n.pending,
+      l10n.status_pending,
       statusColors.warningContainer,
       statusColors.onWarningContainer,
     ),
     AppointmentStatus.cancelled => (
-      l10n.cancelled,
+      l10n.status_cancelled,
       scheme.errorContainer,
       scheme.onErrorContainer,
     ),
     AppointmentStatus.active => (
-      l10n.active,
+      l10n.status_active,
       statusColors.successContainer,
       statusColors.onSuccessContainer,
     ),
     AppointmentStatus.invited => (
-      l10n.invited,
+      l10n.status_invited,
       statusColors.invitedContainer,
       statusColors.onInvitedContainer,
     ),
     AppointmentStatus.disabled => (
-      l10n.disabled,
+      l10n.status_disabled,
       scheme.surfaceContainerHighest,
       scheme.onSurfaceVariant,
     ),
     AppointmentStatus.inProgress => (
-      l10n.inProgress,
+      l10n.status_inProgress,
       statusColors.inProgressContainer,
       statusColors.onInProgressContainer,
     ),

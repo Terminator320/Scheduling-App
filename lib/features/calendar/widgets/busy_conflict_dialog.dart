@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
@@ -41,7 +41,7 @@ Future<bool> showBusyConflictDialog(
               ),
               const SizedBox(height: AppSpacing.sp16),
               Text(
-                context.l10n.scheduleConflict,
+                context.l10n.calendar_scheduleConflict,
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
@@ -57,7 +57,7 @@ Future<bool> showBusyConflictDialog(
               ),
               const SizedBox(height: AppSpacing.sp16),
               Text(
-                context.l10n.alreadyBookedThisSlot,
+                context.l10n.calendar_alreadyBookedThisSlot,
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: scheme.onSurfaceVariant,
                   fontWeight: FontWeight.w500,
@@ -80,7 +80,7 @@ Future<bool> showBusyConflictDialog(
                   const SizedBox(width: AppSpacing.sp8),
                   Expanded(
                     child: Text(
-                      context.l10n.doubleBookingWarning,
+                      context.l10n.calendar_doubleBookingWarning,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: scheme.onTertiaryContainer,
                       ),
@@ -97,7 +97,7 @@ Future<bool> showBusyConflictDialog(
                         minimumSize: const Size(double.infinity, 44),
                       ),
                       onPressed: () => Navigator.pop(dialogCtx, false),
-                      child: Text(context.l10n.cancel),
+                      child: Text(context.l10n.common_cancel),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sp12),
@@ -109,7 +109,7 @@ Future<bool> showBusyConflictDialog(
                         foregroundColor: scheme.onTertiary,
                       ),
                       onPressed: () => Navigator.pop(dialogCtx, true),
-                      child: Text(context.l10n.scheduleAnyway),
+                      child: Text(context.l10n.calendar_scheduleAnyway),
                     ),
                   ),
                 ],

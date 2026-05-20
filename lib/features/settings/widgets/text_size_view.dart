@@ -15,10 +15,10 @@ class TextSizeView extends StatefulWidget {
 
 class _TextSizeViewState extends State<TextSizeView> {
   List<(String, double)> _buildOptions(AppLocalizations l10n) => [
-    (l10n.textScaleSmall, 0.8),
-    (l10n.textScaleMedium, 1.0),
-    (l10n.textScaleLarge, 1.2),
-    (l10n.textScaleXL, 1.4),
+    (l10n.settings_textScaleSmall, 0.8),
+    (l10n.settings_textScaleMedium, 1.0),
+    (l10n.settings_textScaleLarge, 1.2),
+    (l10n.settings_textScaleXL, 1.4),
   ];
 
   late double _selected;
@@ -42,7 +42,7 @@ class _TextSizeViewState extends State<TextSizeView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                context.l10n.previewText.toUpperCase(),
+                context.l10n.settings_previewText.toUpperCase(),
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: scheme.onSurfaceVariant,
                   letterSpacing: 1,
@@ -107,7 +107,7 @@ class _TextSizeViewState extends State<TextSizeView> {
         ),
         const SizedBox(height: 6),
         Text(
-          context.l10n.textSizeAppliesAppWide,
+          context.l10n.settings_textSizeAppliesAppWide,
           textAlign: TextAlign.center,
           style: theme.textTheme.bodySmall?.copyWith(
             color: scheme.onSurfaceVariant,
@@ -129,7 +129,7 @@ class _TextSizeViewState extends State<TextSizeView> {
             widget.onApplied?.call();
           },
           child: Text(
-            context.l10n.apply,
+            context.l10n.settings_apply,
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
           ),
         ),

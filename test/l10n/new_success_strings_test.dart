@@ -1,4 +1,4 @@
-﻿import 'package:flutter/widgets.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -33,8 +33,8 @@ void main() {
   testWidgets('appointmentCreated resolves in EN + FR', (tester) async {
     final en = await _resolve(tester, const Locale('en'));
     final fr = await _resolve(tester, const Locale('fr'));
-    expect(en.appointmentCreated, 'Appointment created');
-    expect(fr.appointmentCreated, 'Rendez-vous créé');
+    expect(en.common_appointmentCreated, 'Appointment created');
+    expect(fr.common_appointmentCreated, 'Rendez-vous créé');
   });
 
   testWidgets('all new success keys are non-empty in both locales', (
@@ -43,16 +43,16 @@ void main() {
     final en = await _resolve(tester, const Locale('en'));
     final fr = await _resolve(tester, const Locale('fr'));
     for (final s in [
-      en.clientAdded,
-      fr.clientAdded,
-      en.appointmentChangesSaved,
-      fr.appointmentChangesSaved,
-      en.appointmentDeleted,
-      fr.appointmentDeleted,
-      en.appointmentMarkedAsDone,
-      fr.appointmentMarkedAsDone,
-      en.appointmentCancelled,
-      fr.appointmentCancelled,
+      en.common_clientAdded,
+      fr.common_clientAdded,
+      en.common_appointmentChangesSaved,
+      fr.common_appointmentChangesSaved,
+      en.common_appointmentDeleted,
+      fr.common_appointmentDeleted,
+      en.common_appointmentMarkedAsDone,
+      fr.common_appointmentMarkedAsDone,
+      en.common_appointmentCancelled,
+      fr.common_appointmentCancelled,
     ]) {
       expect(s, isNotEmpty);
     }

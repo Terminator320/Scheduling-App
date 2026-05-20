@@ -1,4 +1,4 @@
-﻿import 'package:flutter/widgets.dart';
+import 'package:flutter/widgets.dart';
 
 import 'package:scheduling/core/errors/failure.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -12,5 +12,5 @@ class EmployeesFailureEmailAlreadyExists extends EmployeesFailure {
 
   @override
   String toLocalizedMessage(BuildContext context) =>
-      context.l10n.anEmployeeWithThisEmailAlreadyExists;
+      context.l10n.error_anEmployeeWithThisEmailAlreadyExists;
 }

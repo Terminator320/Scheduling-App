@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/images/images_providers.dart';
@@ -75,7 +75,7 @@ class DetailsEditBody extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          context.l10n.editAppointment,
+          context.l10n.calendar_editAppointment,
           style: theme.textTheme.headlineLarge,
         ),
         const SizedBox(height: AppSpacing.sp16),
@@ -83,8 +83,8 @@ class DetailsEditBody extends ConsumerWidget {
         const SizedBox(height: AppSpacing.sp16),
         SheetFocusScroll(
           child: LabeledTextField(
-            label: context.l10n.serviceTitle,
-            hint: context.l10n.eGPlumbingRepair,
+            label: context.l10n.calendar_serviceTitle,
+            hint: context.l10n.calendar_eGPlumbingRepair,
             controller: controllers.title,
             required: true,
             maxLength: TextLimits.appointmentTitle,
@@ -92,7 +92,7 @@ class DetailsEditBody extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.sp16),
-        formLabel(context, context.l10n.client, required: true),
+        formLabel(context, context.l10n.calendar_client, required: true),
         SheetFocusScroll(
           child: ClientSearchField(
             controller: controllers.clientSearch,
@@ -116,7 +116,7 @@ class DetailsEditBody extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.sp16),
-        formLabel(context, context.l10n.assignedEmployee),
+        formLabel(context, context.l10n.calendar_assignedEmployee),
         const SizedBox(height: 6),
         EmployeePicker(
           allEmployees: allEmployees,
@@ -135,8 +135,8 @@ class DetailsEditBody extends ConsumerWidget {
         const SizedBox(height: AppSpacing.sp16),
         SheetFocusScroll(
           child: LabeledTextField(
-            label: context.l10n.date,
-            hint: context.l10n.selectDate,
+            label: context.l10n.calendar_date,
+            hint: context.l10n.calendar_selectDate,
             controller: controllers.date,
             required: true,
             readOnly: true,
@@ -152,8 +152,8 @@ class DetailsEditBody extends ConsumerWidget {
             Expanded(
               child: SheetFocusScroll(
                 child: LabeledTextField(
-                  label: context.l10n.startTime,
-                  hint: context.l10n.start,
+                  label: context.l10n.calendar_startTime,
+                  hint: context.l10n.calendar_start,
                   controller: controllers.startTime,
                   required: true,
                   readOnly: true,
@@ -166,8 +166,8 @@ class DetailsEditBody extends ConsumerWidget {
             Expanded(
               child: SheetFocusScroll(
                 child: LabeledTextField(
-                  label: context.l10n.endTime,
-                  hint: context.l10n.end,
+                  label: context.l10n.calendar_endTime,
+                  hint: context.l10n.calendar_end,
                   controller: controllers.endTime,
                   required: true,
                   readOnly: true,
@@ -179,7 +179,7 @@ class DetailsEditBody extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.sp16),
-        formLabel(context, context.l10n.appointmentStatus),
+        formLabel(context, context.l10n.calendar_appointmentStatus),
         const SizedBox(height: 6),
         AppointmentStatusPicker(
           currentStatus: state.editingStatus,
@@ -195,8 +195,8 @@ class DetailsEditBody extends ConsumerWidget {
         const SizedBox(height: AppSpacing.sp16),
         SheetFocusScroll(
           child: LabeledTextField(
-            label: context.l10n.materialsNeeded,
-            hint: context.l10n.eGPipeWrenchTapeCommaSeparated,
+            label: context.l10n.calendar_materialsNeeded,
+            hint: context.l10n.calendar_eGPipeWrenchTapeCommaSeparated,
             controller: controllers.materials,
             optional: true,
             maxLines: 2,
@@ -206,8 +206,8 @@ class DetailsEditBody extends ConsumerWidget {
         const SizedBox(height: AppSpacing.sp16),
         SheetFocusScroll(
           child: LabeledTextField(
-            label: context.l10n.notes,
-            hint: context.l10n.typeTheNoteHere,
+            label: context.l10n.calendar_notes,
+            hint: context.l10n.calendar_typeTheNoteHere,
             controller: controllers.notes,
             optional: true,
             maxLines: 2,
@@ -215,7 +215,7 @@ class DetailsEditBody extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.sp16),
-        formLabel(context, context.l10n.pictures, optional: true),
+        formLabel(context, context.l10n.calendar_pictures, optional: true),
         _EditPhotosSection(appointment: appointment),
         const SizedBox(height: AppSpacing.sp24),
         FilledButton(
@@ -232,7 +232,7 @@ class DetailsEditBody extends ConsumerWidget {
                     color: scheme.onPrimary,
                   ),
                 )
-              : Text(context.l10n.saveChanges),
+              : Text(context.l10n.common_saveChanges),
         ),
         const SizedBox(height: AppSpacing.sp8),
         OutlinedButton(
@@ -242,7 +242,7 @@ class DetailsEditBody extends ConsumerWidget {
             side: BorderSide(color: scheme.error),
           ),
           onPressed: state.isSaving ? null : () => _confirmDelete(context, ref),
-          child: Text(context.l10n.deleteAppointment),
+          child: Text(context.l10n.calendar_deleteAppointment),
         ),
       ],
     );
@@ -310,12 +310,12 @@ class DetailsEditBody extends ConsumerWidget {
       case EventDetailsSaved(:final appointment):
         ref
             .read(noticeServiceProvider)
-            .success(context.l10n.appointmentChangesSaved);
+            .success(context.l10n.common_appointmentChangesSaved);
         onSaved(appointment);
       case EventDetailsFailed():
         ref
             .read(noticeServiceProvider)
-            .error(context.l10n.somethingWentWrongSavingChanges);
+            .error(context.l10n.error_somethingWentWrongSavingChanges);
     }
   }
 
@@ -323,19 +323,19 @@ class DetailsEditBody extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(context.l10n.deleteAppointment),
-        content: Text(context.l10n.areYouSureYouWantToDeleteThisJob),
+        title: Text(context.l10n.calendar_deleteAppointment),
+        content: Text(context.l10n.calendar_areYouSureYouWantToDeleteThisJob),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.l10n.cancel),
+            child: Text(context.l10n.common_cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(
               foregroundColor: Theme.of(ctx).colorScheme.error,
             ),
-            child: Text(context.l10n.delete),
+            child: Text(context.l10n.common_delete),
           ),
         ],
       ),
@@ -347,10 +347,10 @@ class DetailsEditBody extends ConsumerWidget {
     final ok = await notifier.deleteAppointment(appointment);
     if (!context.mounted) return;
     if (ok) {
-      ref.read(noticeServiceProvider).success(context.l10n.appointmentDeleted);
+      ref.read(noticeServiceProvider).success(context.l10n.common_appointmentDeleted);
       onClose();
     } else {
-      ref.read(noticeServiceProvider).error(context.l10n.somethingWentWrong);
+      ref.read(noticeServiceProvider).error(context.l10n.error_somethingWentWrong);
     }
   }
 }
@@ -389,15 +389,15 @@ String? _errorFor(
   final key = errors[field];
   if (key == null) return null;
   return switch (key) {
-    AppointmentFormError.titleRequired => context.l10n.titleIsRequired,
-    AppointmentFormError.dateRequired => context.l10n.pleaseSelectADate,
+    AppointmentFormError.titleRequired => context.l10n.validation_titleIsRequired,
+    AppointmentFormError.dateRequired => context.l10n.validation_pleaseSelectADate,
     AppointmentFormError.startTimeRequired =>
-      context.l10n.pleaseSelectAStartTime,
-    AppointmentFormError.endTimeRequired => context.l10n.pleaseSelectAnEndTime,
+      context.l10n.validation_pleaseSelectAStartTime,
+    AppointmentFormError.endTimeRequired => context.l10n.validation_pleaseSelectAnEndTime,
     AppointmentFormError.endTimeMustBeAfterStart =>
-      context.l10n.mustBeAfterStartTime,
-    AppointmentFormError.clientRequired => context.l10n.pleaseSelectAClient,
+      context.l10n.calendar_mustBeAfterStartTime,
+    AppointmentFormError.clientRequired => context.l10n.validation_pleaseSelectAClient,
     AppointmentFormError.employeesRequired =>
-      context.l10n.pleaseSelectAtLeastOneEmployee,
+      context.l10n.validation_pleaseSelectAtLeastOneEmployee,
   };
 }

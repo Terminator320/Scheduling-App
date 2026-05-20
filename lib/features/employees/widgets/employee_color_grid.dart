@@ -1,4 +1,4 @@
-﻿import 'package:flex_color_picker/flex_color_picker.dart';
+import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -97,7 +97,7 @@ class EmployeeColorGrid extends ConsumerWidget {
     );
     if (!context.mounted) return;
     if (usedColors.contains(picked.toARGB32())) {
-      ref.read(noticeServiceProvider).error(context.l10n.colorAlreadyUsed);
+      ref.read(noticeServiceProvider).error(context.l10n.error_colorAlreadyUsed);
       return;
     }
     onColorSelected(picked.toARGB32());

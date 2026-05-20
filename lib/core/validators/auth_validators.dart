@@ -1,4 +1,4 @@
-﻿import 'package:flutter/widgets.dart';
+import 'package:flutter/widgets.dart';
 
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -12,10 +12,10 @@ class AuthValidators {
   static String? email(BuildContext context, String value) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) {
-      return context.l10n.pleaseEnterYourEmail;
+      return context.l10n.validation_pleaseEnterYourEmail;
     }
     if (!isValidEmailFormat(trimmed)) {
-      return context.l10n.pleaseEnterAValidEmailAddress;
+      return context.l10n.validation_pleaseEnterAValidEmailAddress;
     }
     return null;
   }
@@ -24,10 +24,10 @@ class AuthValidators {
 
   static String? password(BuildContext context, String value) {
     if (value.trim().isEmpty) {
-      return context.l10n.pleaseEnterYourPassword;
+      return context.l10n.validation_pleaseEnterYourPassword;
     }
     if (value.length < minPasswordLength) {
-      return context.l10n.passwordMustBeAtLeast8Characters;
+      return context.l10n.validation_passwordMustBeAtLeast8Characters;
     }
     return null;
   }
