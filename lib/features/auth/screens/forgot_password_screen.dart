@@ -193,7 +193,8 @@ class _ForgotPasswordState extends State<ForgotPassword>
               const SizedBox(height: 4),
               Text(
                 context
-                    .l10n.auth_enterYourAccountEmailAndWeLlSendYouALinkToResetYourPassword,
+                    .l10n
+                    .auth_enterYourAccountEmailAndWeLlSendYouALinkToResetYourPassword,
                 style: textTheme.bodyMedium,
               ),
             ],
@@ -341,7 +342,8 @@ class _ForgotPasswordState extends State<ForgotPassword>
           animation: animations[2],
           child: Text(
             context
-                .l10n.auth_ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent,
+                .l10n
+                .auth_ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent,
             style: textTheme.bodyMedium,
           ),
         ),
@@ -366,7 +368,8 @@ class _ForgotPasswordState extends State<ForgotPassword>
                 Expanded(
                   child: Text(
                     context
-                        .l10n.auth_theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder,
+                        .l10n
+                        .auth_theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder,
                     style: textTheme.bodySmall?.copyWith(
                       color: scheme.onTertiaryContainer,
                     ),
