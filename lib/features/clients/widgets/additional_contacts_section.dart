@@ -81,7 +81,8 @@ class AdditionalContactsSection extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             context
-                .l10n.clients_theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded,
+                .l10n
+                .clients_theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded,
             style: theme.textTheme.bodySmall?.copyWith(
               color: scheme.onSurfaceVariant,
             ),
