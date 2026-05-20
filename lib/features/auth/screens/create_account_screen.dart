@@ -230,7 +230,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(context.l10n.createAccount2, style: textTheme.headlineLarge),
+              Text(context.l10n.createAccount, style: textTheme.headlineLarge),
               const SizedBox(height: 4),
               Text(
                 context.l10n.useTheEmailYourAdminAddedToTheEmployeeList,

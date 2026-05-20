@@ -365,7 +365,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
               const SizedBox(height: 20),
             SheetFocusScroll(
               child: LabeledTextField(
-                label: context.l10n.name2,
+                label: context.l10n.name,
                 controller: _nameController,
                 required: !_isEdit,
                 maxLength: TextLimits.personName,

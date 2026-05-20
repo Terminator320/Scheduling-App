@@ -4,9 +4,6 @@ output-localization-file: app_localizations.dart
 output-dir: lib/l10n/.gen
 output-class: AppLocalizations
 nullable-getter: false
-# TODO(phase-b): flip required-resource-attributes to true once every key in
-# app_en.arb carries its @key metadata block. Turning it on now would break
-# `flutter gen-l10n`.
-# required-resource-attributes: true
+required-resource-attributes: true
 untranslated-messages-file: lib/l10n/.gen/untranslated.json
 header-file: header.txt
