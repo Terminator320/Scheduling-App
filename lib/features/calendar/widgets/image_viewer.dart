@@ -4,11 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 class ImageViewer extends StatefulWidget {
-
-  const ImageViewer({
-    required this.images, super.key,
-    this.initialIndex = 0,
-  });
+  const ImageViewer({required this.images, super.key, this.initialIndex = 0});
   final List<ImageProvider> images;
   final int initialIndex;
 
@@ -24,9 +20,9 @@ class ImageViewer extends StatefulWidget {
         barrierColor: scheme.scrim.withValues(alpha: 0.87),
         transitionDuration: const Duration(milliseconds: 250),
         reverseTransitionDuration: const Duration(milliseconds: 200),
-        pageBuilder: (_, __, ___) =>
+        pageBuilder: (_, _, _) =>
             ImageViewer(images: images, initialIndex: initialIndex),
-        transitionsBuilder: (_, animation, __, child) {
+        transitionsBuilder: (_, animation, _, child) {
           final curved = CurvedAnimation(
             parent: animation,
             curve: Curves.easeOutCubic,
@@ -87,7 +83,7 @@ class _ImageViewerState extends State<ImageViewer> {
                     child: Image(
                       image: widget.images[index],
                       fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => Icon(
+                      errorBuilder: (_, _, _) => Icon(
                         Icons.broken_image_outlined,
                         color: foreground.withValues(alpha: 0.54),
                         size: 64,

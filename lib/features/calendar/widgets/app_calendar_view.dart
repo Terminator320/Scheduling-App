@@ -1,20 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:table_calendar/table_calendar.dart';
+
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
-import 'package:table_calendar/table_calendar.dart';
-
 
 class AppCalendar extends StatelessWidget {
-
   const AppCalendar({
-    required this.focusedDay, required this.selectedDay, required this.onDaySelected, required this.eventLoader, required this.employees, required this.employeeColorMap, super.key,
+    required this.focusedDay,
+    required this.selectedDay,
+    required this.onDaySelected,
+    required this.eventLoader,
+    required this.employees,
+    required this.employeeColorMap,
+    super.key,
     this.onCalendarCreated,
     this.onPageChanged,
     this.rowHeight,
   });
+
   final DateTime focusedDay;
   final DateTime? selectedDay;
   final void Function(DateTime, DateTime) onDaySelected;
@@ -26,18 +32,19 @@ class AppCalendar extends StatelessWidget {
   final List<EmployeeRecord> employees;
   final Map<String, Color> employeeColorMap;
 
-
   Widget _dayCell(
-    BuildContext context,
     DateTime day, {
     required BoxDecoration decoration,
-    required double rowH, TextStyle? textStyle,
+    TextStyle? textStyle,
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxH = constraints.maxHeight;
         const markerSpace = 12.0;
-        final availableHeight = (maxH - markerSpace).clamp(0.0, double.infinity);
+        final availableHeight = (maxH - markerSpace).clamp(
+          0.0,
+          double.infinity,
+        );
         final circleSize = availableHeight < 20
             ? availableHeight
             : availableHeight.clamp(20.0, 36.0);
@@ -60,7 +67,6 @@ class AppCalendar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveRowH = rowHeight ?? 56.0;
     final localeCode = AppLanguageScope.of(context).value == 'fr'
         ? 'fr_CA'
         : 'en_CA';
@@ -73,8 +79,7 @@ class AppCalendar extends StatelessWidget {
       rowHeight: rowHeight ?? 56,
       daysOfWeekHeight: 36,
 
-      selectedDayPredicate: (day) =>
-          isSameDay(selectedDay, day),
+      selectedDayPredicate: (day) => isSameDay(selectedDay, day),
 
       eventLoader: eventLoader,
       headerVisible: false,
@@ -93,7 +98,6 @@ class AppCalendar extends StatelessWidget {
         todayBuilder: (context, day, focusedDay) {
           final scheme = Theme.of(context).colorScheme;
           return _dayCell(
-            context,
             day,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
@@ -103,7 +107,6 @@ class AppCalendar extends StatelessWidget {
               color: scheme.onPrimary,
               fontWeight: FontWeight.w600,
             ),
-            rowH: effectiveRowH,
           );
         },
         selectedBuilder: (context, day, focusedDay) {
@@ -115,7 +118,6 @@ class AppCalendar extends StatelessWidget {
             builder: (context, scale, child) =>
                 Transform.scale(scale: scale, child: child),
             child: _dayCell(
-              context,
               day,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
@@ -125,7 +127,6 @@ class AppCalendar extends StatelessWidget {
                 color: scheme.primary,
                 fontWeight: FontWeight.w600,
               ),
-              rowH: effectiveRowH,
             ),
           );
         },
@@ -138,17 +139,19 @@ class AppCalendar extends StatelessWidget {
             bottom: 2,
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: appointments.take(3).map((appt) {
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 1),
-                  width: 5,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: colorFromMap(appt, employeeColorMap) ?? Colors.grey,
-                    shape: BoxShape.circle,
+              children: [
+                for (final appt in appointments.take(3))
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 1),
+                    width: 5,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color:
+                          colorFromMap(appt, employeeColorMap) ?? Colors.grey,
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                );
-              }).toList(),
+              ],
             ),
           );
         },

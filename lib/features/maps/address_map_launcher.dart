@@ -15,7 +15,8 @@ class AddressMapLauncher {
     final cleanAddress = address.trim();
     if (cleanAddress.isEmpty) return;
 
-    final navAddress = _stripAptForNav(cleanAddress);
+    final navAddress =
+        AddressParser.splitApt(cleanAddress)?.street ?? cleanAddress;
     final navEncoded = Uri.encodeComponent(navAddress);
     final displayAddress = AddressParser.canonicalToDisplay(cleanAddress);
 
@@ -122,11 +123,6 @@ class AddressMapLauncher {
       },
     );
   }
-}
-
-String _stripAptForNav(String address) {
-  final parts = AddressParser.splitApt(address);
-  return parts?.street ?? address;
 }
 
 class _MapOption {

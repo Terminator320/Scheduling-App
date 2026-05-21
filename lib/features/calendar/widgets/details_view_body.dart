@@ -35,10 +35,9 @@ class DetailsViewBody extends ConsumerWidget {
     final isSaving = ref.watch(provider.select((s) => s.isSaving));
     final notifier = ref.read(provider.notifier);
 
-    final isCancelled = appointment.status.toLowerCase() == 'cancelled';
-    final isDone =
-        appointment.status.toLowerCase() == 'done' ||
-        appointment.status.toLowerCase() == 'completed';
+    final status = appointment.status.toLowerCase();
+    final isCancelled = status == 'cancelled';
+    final isDone = status == 'done' || status == 'completed';
     final now = DateTime.now();
     final isToday =
         appointment.startTime.year == now.year &&

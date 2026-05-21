@@ -89,17 +89,15 @@ class _ForgotPasswordState extends State<ForgotPassword>
     }
 
     if (!mounted) return;
-    var shouldReplayEntrance = false;
     setState(() {
       _isLoading = false;
       if (systemError != null) {
         _errorMessage = systemError;
       } else {
         _emailSent = true;
-        shouldReplayEntrance = true;
       }
     });
-    if (shouldReplayEntrance) {
+    if (systemError == null) {
       _entrance.controller.forward(from: 0);
     }
   }

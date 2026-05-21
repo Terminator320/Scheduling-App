@@ -121,7 +121,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     };
 
     if (isAdmin != null) {
-      updateData['role'] = isAdmin == true ? 'admin' : 'employee';
+      updateData['role'] = isAdmin ? 'admin' : 'employee';
     }
 
     await _users.doc(docId).update(updateData);

@@ -1,4 +1,3 @@
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/providers/firebase_providers.dart';
@@ -26,15 +25,16 @@ final filteredClientsProvider = Provider.family<List<ClientRecord>, String>((
   if (q.isEmpty) return list;
   return list
       .where(
-        (c) =>
-            c.displayName.toLowerCase().contains(q) || c.phone.contains(q),
+        (c) => c.displayName.toLowerCase().contains(q) || c.phone.contains(q),
       )
       .toList();
 });
 
-final clientSearchProvider =
-    FutureProvider.family<List<ClientRecord>, String>((ref, query) async {
-      if (!ClientSearchPolicy.shouldSearch(query)) return const [];
-      final repo = ref.watch(clientsRepositoryProvider);
-      return repo.searchClients(query);
-    });
+final clientSearchProvider = FutureProvider.family<List<ClientRecord>, String>((
+  ref,
+  query,
+) async {
+  if (!ClientSearchPolicy.shouldSearch(query)) return const [];
+  final repo = ref.watch(clientsRepositoryProvider);
+  return repo.searchClients(query);
+});

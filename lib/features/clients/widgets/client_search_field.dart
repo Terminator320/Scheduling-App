@@ -5,9 +5,15 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/shared/widgets/form_helpers.dart';
 
 class ClientSearchField extends StatelessWidget {
-
   const ClientSearchField({
-    required this.controller, required this.selectedClient, required this.results, required this.isSearching, required this.onChanged, required this.onSelect, required this.onClear, super.key,
+    required this.controller,
+    required this.selectedClient,
+    required this.results,
+    required this.isSearching,
+    required this.onChanged,
+    required this.onSelect,
+    required this.onClear,
+    super.key,
     this.errorText,
   });
   final TextEditingController controller;
@@ -64,31 +70,33 @@ class ClientSearchField extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(
-              children: results
-                  .map(
-                    (client) => ListTile(
-                      dense: true,
-                      title: Text(
-                        client.displayName,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      subtitle: Text(
-                        client.phone.trim().isNotEmpty
-                            ? client.phone
-                            : client.email.trim().isNotEmpty
-                                ? client.email
-                                : client.address,
-                        style: Theme.of(context).textTheme.labelLarge,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      onTap: () {
-                        FocusScope.of(context).unfocus();
-                        onSelect(client);
-                      },
-                    ),
-                  )
-                  .toList(),
+              children: results.map((client) {
+                final String subtitleText;
+                if (client.phone.trim().isNotEmpty) {
+                  subtitleText = client.phone;
+                } else if (client.email.trim().isNotEmpty) {
+                  subtitleText = client.email;
+                } else {
+                  subtitleText = client.address;
+                }
+                return ListTile(
+                  dense: true,
+                  title: Text(
+                    client.displayName,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  subtitle: Text(
+                    subtitleText,
+                    style: Theme.of(context).textTheme.labelLarge,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () {
+                    FocusScope.of(context).unfocus();
+                    onSelect(client);
+                  },
+                );
+              }).toList(),
             ),
           ),
 

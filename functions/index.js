@@ -52,12 +52,10 @@ exports.syncUsersByUid = onDocumentWritten(
     "users/{userId}",
     async (event) => {
       const userId = event.params.userId;
-      const beforeSnap = event.data && event.data.before;
-      const afterSnap = event.data && event.data.after;
-      const before =
-        beforeSnap && beforeSnap.exists ? beforeSnap.data() : null;
-      const after =
-        afterSnap && afterSnap.exists ? afterSnap.data() : null;
+      const beforeSnap = event.data?.before;
+      const afterSnap = event.data?.after;
+      const before = beforeSnap?.exists ? beforeSnap.data() : null;
+      const after = afterSnap?.exists ? afterSnap.data() : null;
 
       const db = getFirestore();
       const bridge = db.collection("usersByUid");
@@ -416,9 +414,7 @@ exports.deleteAccount = onCall(
             return null;
           });
 
-      const docId = bridgeSnap && bridgeSnap.exists ?
-        bridgeSnap.data().docId :
-        null;
+      const docId = bridgeSnap?.exists ? bridgeSnap.data().docId : null;
 
       if (docId) {
         try {

@@ -138,9 +138,8 @@ class AddEventController
   }
 
   void toggleEmployee(EmployeeRecord employee) {
-    final current = state.selectedEmployees;
-    final idx = current.indexWhere((e) => e.id == employee.id);
-    final next = <EmployeeRecord>[...current];
+    final next = [...state.selectedEmployees];
+    final idx = next.indexWhere((e) => e.id == employee.id);
     if (idx >= 0) {
       next.removeAt(idx);
     } else {
