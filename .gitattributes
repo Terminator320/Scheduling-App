@@ -1,0 +1,22 @@
+# Force LF on text files that have tooling enforcing line-endings.
+# Without this, Windows checkouts get CRLF (core.autocrlf=true default) and
+# the Cloud Functions ESLint config (linebreak-style: unix) hard-fails the
+# predeploy hook, breaking `firebase deploy --only functions`.
+
+# Cloud Functions
+functions/**/*.js   text eol=lf
+functions/**/*.json text eol=lf
+functions/.eslintrc.js text eol=lf
+
+# Firebase / GCP config — keep LF to match Google's tooling expectations.
+firebase.json           text eol=lf
+.firebaserc             text eol=lf
+firestore.rules         text eol=lf
+storage.rules           text eol=lf
+firestore.indexes.json  text eol=lf
+
+# Shell / POSIX scripts should never be CRLF.
+*.sh text eol=lf
+
+# Default: let git decide, normalize at commit time.
+* text=auto

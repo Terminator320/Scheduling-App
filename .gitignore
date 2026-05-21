@@ -10,6 +10,14 @@
 *.env
 *google-services.json
 
+# Node tooling (root + functions/)
+node_modules/
+
+# Local-only project instructions
+CLAUDE.md
+TODO.md
+skills-lock.json
+
 # IntelliJ / Android Studio local project files
 .idea/
 
