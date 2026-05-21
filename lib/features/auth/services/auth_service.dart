@@ -50,10 +50,6 @@ class AuthService {
     return _auth.sendPasswordResetEmail(email: email.trim().toLowerCase());
   }
 
-  Future<void> sendResetPassword(String email) {
-    return sendPasswordResetEmail(email);
-  }
-
   Future<UserCredential> createEmployeeAccount({
     required String email,
     required String password,
@@ -87,10 +83,6 @@ class AuthService {
     return credential;
   }
 
-  // Called from the login screen after a successful sign-in. Reloads the user
-  // to pick up the latest email_verified flag, then activates any pending
-  // invite whose email matches. This defers Firestore activation until after
-  // the user proves ownership of the address by clicking the verification link.
   Future<void> tryActivateInvitedEmployee(User user) async {
     await user.reload();
     if (!user.emailVerified) return;

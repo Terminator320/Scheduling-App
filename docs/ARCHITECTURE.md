@@ -14,7 +14,7 @@ lib/
 │
 ├── core/                            Cross-cutting concerns — nothing feature-specific lives here
 │   ├── animations/                  Shared animation widgets (FadeInItem, TapScale, AnimatedLoadingButton)
-│   ├── errors/                      Base Failure class + AppErrorListener boundary widget
+│   ├── errors/                      Base Failure class
 │   ├── images/                      Image picker, compression, Firebase Storage upload service
 │   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics)
 │   ├── notices/                     In-app toast system: AppNotice types, NoticeService (stream), NoticeListener (widget)

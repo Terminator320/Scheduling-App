@@ -371,8 +371,9 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
                 maxLength: TextLimits.personName,
                 errorText: _errors['name'],
                 onChanged: (_) {
-                  if (_errors['name'] != null)
+                  if (_errors['name'] != null) {
                     setState(() => _errors['name'] = null);
+                  }
                 },
               ),
             ),
@@ -386,8 +387,9 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
                 maxLength: TextLimits.email,
                 errorText: _errors['email'],
                 onChanged: (_) {
-                  if (_errors['email'] != null)
+                  if (_errors['email'] != null) {
                     setState(() => _errors['email'] = null);
+                  }
                 },
               ),
             ),

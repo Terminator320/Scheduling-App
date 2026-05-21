@@ -58,8 +58,6 @@ Future<void> main() async {
       if (_useFirebaseEmulator) {
         await _wireFirebaseEmulator();
       } else {
-        // M3: collect crashes in profile/release builds (anything not debug).
-        // Staging/QA builds run as profile and otherwise wouldn't report.
         await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
           !kDebugMode,
         );
@@ -80,9 +78,6 @@ Future<void> main() async {
         );
       }
 
-      // M1: don't block runApp on a Firestore round-trip. SplashScreen
-      // owns the destination resolution (splashDestinationProvider) and
-      // surfaces transient failures via the standard notice surface.
       final settings = await SharedPrefsSettingsRepository().load();
 
       runApp(ProviderScope(child: PaulApp(settings: settings)));
@@ -192,14 +187,15 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     });
   }
 
-  // H3: defense-in-depth — if an admin is demoted mid-session, force sign-out
-  // so stale admin UI can't trigger permission-denied from Firestore rules.
   void _listenForRoleRevocation(BuildContext context) {
     ref.listen<AsyncValue<String>>(userRoleProvider, (prev, next) {
       final prevRole = prev?.valueOrNull;
       final nextRole = next.valueOrNull;
       if (prevRole == 'admin' && nextRole != null && nextRole != 'admin') {
-        _handleAccountDisabled(context, context.l10n.error_yourAdminAccessWasRevoked);
+        _handleAccountDisabled(
+          context,
+          context.l10n.error_yourAdminAccessWasRevoked,
+        );
       }
     });
   }

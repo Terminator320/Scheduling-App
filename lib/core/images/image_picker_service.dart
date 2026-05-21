@@ -26,8 +26,6 @@ class ImagePickerService {
       imageQuality: imageQuality,
     );
 
-    if (images.isEmpty) return [];
-
     return images.map((x) => File(x.path)).toList();
   }
 }

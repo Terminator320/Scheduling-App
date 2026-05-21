@@ -170,9 +170,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
           .get();
       for (final doc in snapshot.docs) {
         final empIds = doc.data()['employeeIds'] as List<dynamic>? ?? const [];
-        for (final id in empIds) {
-          if (id is String) busyIds.add(id);
-        }
+        busyIds.addAll(empIds.whereType<String>());
       }
     }
 
