@@ -110,6 +110,13 @@ class AuthFailureNotAuthorized extends AuthFailure {
       c.l10n.error_thisEmailIsNotAuthorizedToSignUp;
 }
 
+class AuthFailurePermissionDenied extends AuthFailure {
+  const AuthFailurePermissionDenied();
+  @override
+  String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
+      c.l10n.error_signInIsTemporarilyUnavailable;
+}
+
 class AuthFailureUnknown extends AuthFailure {
   const AuthFailureUnknown();
   @override
@@ -128,7 +135,8 @@ extension AuthFailureForgotPassword on AuthFailure {
         context,
         AuthErrorContext.forgotPassword,
       ),
-      AuthFailureUnknown() => context.l10n.error_somethingWentWrongPleaseTryAgain,
+      AuthFailureUnknown() =>
+        context.l10n.error_somethingWentWrongPleaseTryAgain,
       _ => null,
     };
   }
