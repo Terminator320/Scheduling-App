@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
@@ -6,10 +7,12 @@ class AuthErrorMapper {
   const AuthErrorMapper._();
 
   static AuthFailure map(Object error) {
-    if (error is! FirebaseAuthException) {
-      return const AuthFailureUnknown();
+    if (error is AuthFailure) return error;
+    if (error is FirebaseAuthException) return _fromCode(error.code);
+    if (error is FirebaseException && error.code == 'permission-denied') {
+      return const AuthFailurePermissionDenied();
     }
-    return _fromCode(error.code);
+    return const AuthFailureUnknown();
   }
 
   static AuthFailure _fromCode(String code) {
