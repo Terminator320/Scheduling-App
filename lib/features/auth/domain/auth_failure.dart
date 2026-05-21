@@ -78,8 +78,12 @@ class AuthFailureNetwork extends AuthFailure {
 class AuthFailureEmailAlreadyInUse extends AuthFailure {
   const AuthFailureEmailAlreadyInUse();
   @override
-  String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
-      c.l10n.error_anAccountWithThisEmailAlreadyExists;
+  String toLocalizedMessageInContext(
+    BuildContext c,
+    AuthErrorContext errorContext,
+  ) => errorContext == AuthErrorContext.register
+      ? c.l10n.error_anAccountWithThisEmailAlreadyExistsSignInOrContactAdmin
+      : c.l10n.error_anAccountWithThisEmailAlreadyExists;
 }
 
 class AuthFailureWeakPassword extends AuthFailure {
@@ -122,6 +126,19 @@ class AuthFailureUnknown extends AuthFailure {
   @override
   String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
       c.l10n.error_somethingWentWrongPleaseTryAgain;
+}
+
+// Thrown when createEmployeeAccount succeeded in creating the Firebase Auth
+// user but the follow-up rollback delete failed after the invite lookup
+// returned null (or errored). The Auth account is now orphaned: it has no
+// matching Firestore users doc and can't sign in successfully, but it does
+// block re-registration with the same email. Surface a message that tells
+// the admin what to do (delete the Auth user in console + re-invite).
+class AuthFailureAccountCreationIncomplete extends AuthFailure {
+  const AuthFailureAccountCreationIncomplete();
+  @override
+  String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
+      c.l10n.error_accountCreationIncompleteContactAdmin;
 }
 
 extension AuthFailureForgotPassword on AuthFailure {

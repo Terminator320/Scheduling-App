@@ -620,6 +620,14 @@
   "@error_anAccountWithThisEmailAlreadyExists": {
     "description": "An account with this email already exists"
   },
+  "error_anAccountWithThisEmailAlreadyExistsSignInOrContactAdmin": "An account already exists for this email. Sign in instead, or ask your admin to reset your invitation if you can't access it.",
+  "@error_anAccountWithThisEmailAlreadyExistsSignInOrContactAdmin": {
+    "description": "Register-screen variant of the email-already-in-use error: includes guidance to sign in or contact admin for a reset."
+  },
+  "error_accountCreationIncompleteContactAdmin": "Account creation didn't finish cleanly. An incomplete sign-in entry may exist for this email — please ask your admin to clear it and re-send your invitation, then try again.",
+  "@error_accountCreationIncompleteContactAdmin": {
+    "description": "Shown when the Auth account was created but the post-register rollback failed, leaving an orphan Auth user with no Firestore invite."
+  },
   "validation_passwordIsTooWeakUseAtLeast6Characters": "Password is too weak. Use at least 6 characters",
   "@validation_passwordIsTooWeakUseAtLeast6Characters": {
     "description": "Password is too weak. Use at least 6 characters"

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/providers/firebase_providers.dart';
+import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -11,9 +12,19 @@ final employeesRepositoryProvider = Provider<EmployeesRepository>((ref) {
   return FirebaseEmployeesRepository(firestore, auth: auth);
 });
 
+// Routes by role so non-admin sessions don't fire `watchAllUsers`, which
+// targets the unconstrained `users` query rule and would otherwise log a
+// PERMISSION_DENIED listener error every time a non-admin opens the calendar
+// or appointment history. Admins get the full list (invited + disabled
+// included, needed for the admin employees screen). Non-admins fall back to
+// the assignable (status=='active') stream — sufficient for the calendar's
+// employee color map.
 final allUsersStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
   if (ref.authUid == null) return Stream.value(const []);
-  return ref.watch(employeesRepositoryProvider).watchAllUsers();
+  final repo = ref.watch(employeesRepositoryProvider);
+  final role = ref.watch(userRoleProvider).valueOrNull;
+  if (role == 'admin') return repo.watchAllUsers();
+  return repo.watchAssignableUsers();
 });
 
 final employeesStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
