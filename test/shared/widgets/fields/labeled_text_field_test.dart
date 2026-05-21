@@ -87,4 +87,84 @@ void main() {
     expect(find.text('0/4000'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('error row animates in when errorText is set', (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    String? errorText;
+    late StateSetter setError;
+
+    await tester.pumpWidget(
+      _wrap(
+        StatefulBuilder(
+          builder: (context, setState) {
+            setError = setState;
+            return LabeledTextField(
+              label: 'Phone',
+              controller: controller,
+              errorText: errorText,
+            );
+          },
+        ),
+      ),
+    );
+    expect(find.text('Required'), findsNothing);
+
+    setError(() => errorText = 'Required');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Required'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('error row animates out when errorText clears', (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    String? errorText = 'Required';
+    late StateSetter setError;
+
+    await tester.pumpWidget(
+      _wrap(
+        StatefulBuilder(
+          builder: (context, setState) {
+            setError = setState;
+            return LabeledTextField(
+              label: 'Phone',
+              controller: controller,
+              errorText: errorText,
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Required'), findsOneWidget);
+
+    setError(() => errorText = null);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Required'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('field mounted with an error shows it and does not throw', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _wrap(
+        LabeledTextField(
+          label: 'Phone',
+          controller: controller,
+          errorText: 'Required',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Required'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

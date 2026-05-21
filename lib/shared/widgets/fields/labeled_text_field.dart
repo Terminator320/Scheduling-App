@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
+import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
@@ -50,31 +52,34 @@ class LabeledTextField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         formLabel(context, label, optional: optional, required: required),
-        TextField(
-          controller: controller,
-          focusNode: focusNode,
-          keyboardType: keyboard,
-          autofillHints: autofillHints,
-          maxLines: maxLines,
-          // With showCounter, TextField.maxLength enforces the cap and
-          // renders the live "x/y" counter; otherwise enforce silently.
-          maxLength: showCounter ? maxLength : null,
-          inputFormatters: maxLength == null || showCounter
-              ? null
-              : [LengthLimitingTextInputFormatter(maxLength)],
-          readOnly: readOnly,
-          onTap: onTap,
-          onChanged: onChanged,
-          decoration: formInputDecoration(context, hint ?? label).copyWith(
-            errorText: errorText != null ? '' : null,
-            errorStyle: const TextStyle(fontSize: 0, height: 0),
-            suffixIcon: suffixIcon,
-            prefixIcon: prefixIcon,
+        AnimatedFormFieldWrapper(
+          hasError: errorText != null,
+          child: TextField(
+            controller: controller,
+            focusNode: focusNode,
+            keyboardType: keyboard,
+            autofillHints: autofillHints,
+            maxLines: maxLines,
+            // With showCounter, TextField.maxLength enforces the cap and
+            // renders the live "x/y" counter; otherwise enforce silently.
+            maxLength: showCounter ? maxLength : null,
+            inputFormatters: maxLength == null || showCounter
+                ? null
+                : [LengthLimitingTextInputFormatter(maxLength)],
+            readOnly: readOnly,
+            onTap: onTap,
+            onChanged: onChanged,
+            decoration: formInputDecoration(context, hint ?? label).copyWith(
+              errorText: errorText != null ? '' : null,
+              errorStyle: const TextStyle(fontSize: 0, height: 0),
+              suffixIcon: suffixIcon,
+              prefixIcon: prefixIcon,
+            ),
           ),
         ),
         if (showCounter && maxLength != null)
           _MaxLengthWarning(controller: controller, maxLength: maxLength!),
-        if (errorText != null) _FieldError(errorText!),
+        _AnimatedFieldError(message: errorText),
       ],
     );
   }
@@ -89,21 +94,56 @@ class _MaxLengthWarning extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: controller,
-      builder: (context, value, _) {
+      builder: (context, value, _) => _AnimatedFieldError(
         // Grapheme count matches what TextField.maxLength enforces.
-        if (value.text.characters.length < maxLength) {
-          return const SizedBox.shrink();
-        }
-        return _FieldError(
-          context.l10n.validation_maximumCharacterLimitReached,
-        );
-      },
+        message: value.text.characters.length < maxLength
+            ? null
+            : context.l10n.validation_maximumCharacterLimitReached,
+      ),
+    );
+  }
+}
+
+// Fade + 4px slide entrance/exit for the error row (style A from the spec);
+// AnimatedSize lets fields below glide instead of jumping.
+class _AnimatedFieldError extends StatelessWidget {
+  const _AnimatedFieldError({required this.message});
+
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : AppAnimationDurations.quick;
+    return AnimatedSize(
+      duration: duration,
+      curve: AppAnimationCurves.entrance,
+      alignment: Alignment.topCenter,
+      child: AnimatedSwitcher(
+        duration: duration,
+        switchInCurve: AppAnimationCurves.entrance,
+        switchOutCurve: AppAnimationCurves.entrance,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, -0.25),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          ),
+        ),
+        child: message == null
+            ? const SizedBox.shrink()
+            : _FieldError(message!, key: ValueKey(message)),
+      ),
     );
   }
 }
 
 class _FieldError extends StatelessWidget {
-  const _FieldError(this.message);
+  const _FieldError(this.message, {super.key});
   final String message;
 
   @override
