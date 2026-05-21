@@ -69,18 +69,43 @@ class AuthService {
         e,
         st,
       );
-      await credential.user?.delete();
+      await _rollbackOrFailLoud(credential, reason: 'invite-lookup-failed');
       rethrow;
     }
 
     if (invitedEmployee == null) {
-      await credential.user?.delete();
+      await _rollbackOrFailLoud(credential, reason: 'no-invite-found');
       throw const AuthFailureNotAuthorized();
     }
 
     await credential.user!.sendEmailVerification();
 
     return credential;
+  }
+
+  // Best-effort cleanup of the Auth user we just registered. When this delete
+  // fails (App Check hiccup, network blip, requires-recent-login edge case)
+  // the user is left orphaned: an Auth identity with no Firestore users doc
+  // backing it, which blocks future Create-Account attempts with the same
+  // email. Log the failure so Crashlytics surfaces it, and throw a distinct
+  // failure so the UI tells the admin how to recover.
+  Future<void> _rollbackOrFailLoud(
+    UserCredential credential, {
+    required String reason,
+  }) async {
+    final user = credential.user;
+    if (user == null) return;
+    try {
+      await user.delete();
+    } catch (e, st) {
+      _logger.warn(
+        'createEmployeeAccount: rollback delete failed ($reason); '
+        'orphan Auth user left for uid=${user.uid}',
+        e,
+        st,
+      );
+      throw const AuthFailureAccountCreationIncomplete();
+    }
   }
 
   Future<void> tryActivateInvitedEmployee(User user) async {

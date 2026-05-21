@@ -155,6 +155,8 @@
   "error_thisAccountHasBeenDisabled": "Ce compte a été désactivé",
   "error_yourAdminAccessWasRevoked": "Votre accès administrateur a été révoqué. Veuillez vous reconnecter.",
   "error_anAccountWithThisEmailAlreadyExists": "Un compte avec ce courriel existe déjà",
+  "error_anAccountWithThisEmailAlreadyExistsSignInOrContactAdmin": "Un compte existe déjà pour ce courriel. Connectez-vous, ou demandez à votre administrateur de réinitialiser votre invitation si vous n'y avez pas accès.",
+  "error_accountCreationIncompleteContactAdmin": "La création du compte ne s'est pas terminée correctement. Une entrée de connexion incomplète peut exister pour ce courriel — demandez à votre administrateur de la supprimer et de renvoyer votre invitation, puis réessayez.",
   "validation_passwordIsTooWeakUseAtLeast6Characters": "Mot de passe trop faible. Utilisez au moins 6 caractères",
   "validation_passwordMustBeAtLeast8Characters": "Le mot de passe doit comporter au moins 8 caractères",
   "error_couldNotLoadAppointments": "Impossible de charger les rendez-vous. Vérifiez votre connexion et réessayez.",

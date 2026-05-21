@@ -127,6 +127,27 @@ void main() {
         verify(() => user.delete()).called(1);
       },
     );
+
+    test(
+      'throws AuthFailureAccountCreationIncomplete when rollback delete fails',
+      () async {
+        stubRegister();
+        when(
+          () => employees.findInvitedEmployeeByEmail(any()),
+        ).thenAnswer((_) async => null);
+        when(
+          () => user.delete(),
+        ).thenThrow(FirebaseAuthException(code: 'requires-recent-login'));
+
+        await expectLater(
+          service.createEmployeeAccount(
+            email: 'nobody@example.com',
+            password: 'pass',
+          ),
+          throwsA(isA<AuthFailureAccountCreationIncomplete>()),
+        );
+      },
+    );
   });
 
   group('tryActivateInvitedEmployee', () {

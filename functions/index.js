@@ -167,6 +167,11 @@ const PLACE_ID_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const SESSION_TOKEN_MAX_LEN = 64;
 const INPUT_MAX_LEN = 200;
 
+// deleteAccount requires the caller to have re-authenticated within this
+// window. Firebase ID tokens are valid ~1 hour, so without this check a
+// stolen-but-not-yet-expired token could trigger irreversible deletion.
+const REAUTH_MAX_AGE_SECONDS = 5 * 60;
+
 /**
  * Validates and returns a trimmed string field from the callable payload.
  * Throws HttpsError("invalid-argument") when missing, wrong type, or out of
@@ -384,8 +389,10 @@ exports.validateUploadedImage = onObjectFinalized(async (event) => {
 // Implements C6 from the production-readiness plan and satisfies the in-app
 // deletion requirement from Apple App Store Guideline 5.1.1(v) and the Google
 // Play Account Deletion policy. The Flutter client re-authenticates the user
-// immediately before invoking this, so requires-recent-login is enforced at the
-// SDK layer; this function trusts req.auth.uid (App Check + auth required).
+// immediately before invoking this; the server also re-checks the ID token's
+// auth_time against REAUTH_MAX_AGE_SECONDS so a live-but-stale token cannot
+// trigger deletion without going through the in-app re-auth flow.
+// App Check + auth are required.
 //
 // Scope of deletion (intentionally narrow — see plan §C6):
 //   1. The caller's `users/{docId}` Firestore document. The syncUsersByUid
@@ -398,6 +405,17 @@ exports.deleteAccount = onCall(
     async (req) => {
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
+      }
+      const authTime = req.auth.token?.auth_time;
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (typeof authTime !== "number" ||
+          nowSec - authTime > REAUTH_MAX_AGE_SECONDS) {
+        logger.warn("deleteAccount: stale auth_time; reauth required", {
+          uid: req.auth.uid,
+          authTime,
+          ageSec: typeof authTime === "number" ? nowSec - authTime : null,
+        });
+        throw new HttpsError("unauthenticated", "stale-auth");
       }
       const uid = req.auth.uid;
       const db = getFirestore();

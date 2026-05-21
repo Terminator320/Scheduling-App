@@ -42,16 +42,21 @@ service firebase.storage {
       // Read: admin sees all; assigned employees see their appointments' images.
       allow read: if isAdmin() || isAssignedToAppointment(appointmentId);
 
-      // Write: same access control as read, plus content-type and size limits.
+      // Write: admin only. Employees are view-only on appointments — the
+      // firestore.rules employee-update path is capped to ['status',
+      // 'updatedAt'] with status=='done' — and the upload flow runs only in
+      // admin sessions (AppointmentImageUploadService -> updateAppointmentPictures).
       // Content-type is set by the client and forgeable — the real defense is
-      // the client-side magic-byte check (FF D8 FF / 89 50 4E) in
-      // ImageCompressService. This regex is defense in depth.
-      allow write: if (isAdmin() || isAssignedToAppointment(appointmentId))
+      // the magic-byte trigger in functions/index.js (validateUploadedImage);
+      // contentType + size checks here are defense in depth.
+      allow write: if isAdmin()
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/(jpeg|png)');
 
-      // Delete: admin or assigned employee only.
-      allow delete: if isAdmin() || isAssignedToAppointment(appointmentId);
+      // Delete: admin only. Employees cannot modify the Firestore `pictures`
+      // array, so allowing them to delete the underlying blob would strand
+      // the appointment doc with broken imageUrls.
+      allow delete: if isAdmin();
     }
 
     // ── Deny everything else ──────────────────────────────────────────────────
