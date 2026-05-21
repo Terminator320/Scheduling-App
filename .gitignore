@@ -138,3 +138,7 @@ UsersGeorgeVogasAppDataLocalTempvibe-security-skill/
 .claude/
 .superpowers/
 superpowers/
+
+# Internal notes — never commit
+CLAUDE.md
+HANDOFF.md
