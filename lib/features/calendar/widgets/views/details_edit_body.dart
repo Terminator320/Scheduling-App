@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
@@ -231,9 +232,9 @@ class DetailsEditBody extends ConsumerWidget {
     final notifier = ref.read(
       eventDetailsControllerProvider(appointment).notifier,
     );
-    final ok = await notifier.deleteAppointment(appointment);
+    final error = await notifier.deleteAppointment(appointment);
     if (!context.mounted) return;
-    if (ok) {
+    if (error == null) {
       ref
           .read(noticeServiceProvider)
           .success(context.l10n.common_appointmentDeleted);
@@ -241,7 +242,14 @@ class DetailsEditBody extends ConsumerWidget {
     } else {
       ref
           .read(noticeServiceProvider)
-          .error(context.l10n.error_somethingWentWrong);
+          .error(
+            composeErrorNotice(
+              context,
+              intro: context.l10n.error_introDeleteAppointment,
+              tag: 'APPT-DEL',
+              error: error,
+            ),
+          );
     }
   }
 }

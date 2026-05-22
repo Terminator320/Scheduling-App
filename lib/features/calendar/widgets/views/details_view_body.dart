@@ -181,7 +181,7 @@ class _DeleteTestButton extends ConsumerWidget {
               : () async {
                   final confirmed = await _confirmDeleteDialog(context);
                   if (!context.mounted || !confirmed) return;
-                  if (await notifier.deleteAppointment(appointment)) {
+                  if (await notifier.deleteAppointment(appointment) == null) {
                     if (!context.mounted) return;
                     ref
                         .read(noticeServiceProvider)
