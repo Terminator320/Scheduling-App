@@ -343,23 +343,27 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       }
 
       return EventDetailsSaved(updated);
-    } catch (e) {
+    } catch (e, st) {
+      ref.read(loggerProvider).warn('APPT-SAVE saveChanges failed', e, st);
       state = state.copyWith(isSaving: false);
       return EventDetailsFailed(e);
     }
   }
 
-  Future<bool> deleteAppointment(AppointmentRecord appointment) async {
+  /// Returns null on success, or the error that caused the failure.
+  Future<Object?> deleteAppointment(AppointmentRecord appointment) async {
     final id = appointment.id;
-    if (id == null) return false;
+    if (id == null) {
+      return StateError('Cannot delete an appointment without an id.');
+    }
     state = state.copyWith(isSaving: true);
     try {
       await ref.read(appointmentsRepositoryProvider).deleteAppointment(id);
-      return true;
+      return null;
     } catch (e, st) {
-      ref.read(loggerProvider).warn('deleteAppointment failed', e, st);
+      ref.read(loggerProvider).warn('APPT-DEL deleteAppointment failed', e, st);
       state = state.copyWith(isSaving: false);
-      return false;
+      return e;
     }
   }
 }

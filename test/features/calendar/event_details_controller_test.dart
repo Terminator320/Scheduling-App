@@ -341,20 +341,20 @@ void main() {
 
   group('deleteAppointment', () {
     test(
-      'returns true on repo success and calls the repo with the doc id',
+      'returns null on repo success and calls the repo with the doc id',
       () async {
-        final ok = await readNotifier().deleteAppointment(_appointment);
-        expect(ok, isTrue);
+        final error = await readNotifier().deleteAppointment(_appointment);
+        expect(error, isNull);
         verify(() => appointments.deleteAppointment('appt-1')).called(1);
       },
     );
 
-    test('returns false and resets isSaving when repo throws', () async {
+    test('returns the error and resets isSaving when repo throws', () async {
       when(
         () => appointments.deleteAppointment(any()),
       ).thenThrow(Exception('boom'));
-      final ok = await readNotifier().deleteAppointment(_appointment);
-      expect(ok, isFalse);
+      final error = await readNotifier().deleteAppointment(_appointment);
+      expect(error, isNotNull);
       expect(readState().isSaving, isFalse);
     });
   });
