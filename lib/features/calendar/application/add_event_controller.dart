@@ -254,7 +254,7 @@ class AddEventController extends Notifier<AddEventState> {
 
       return AddEventSubmitted(appointment);
     } catch (e, st) {
-      ref.read(loggerProvider).warn('AddEventController.submit failed', e, st);
+      ref.read(loggerProvider).warn('APPT-CREATE submit failed', e, st);
       state = state.copyWith(isSubmitting: false);
       return AddEventFailed(e);
     }
