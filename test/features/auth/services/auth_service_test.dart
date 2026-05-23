@@ -47,7 +47,7 @@ void main() {
   group('createEmployeeAccount', () {
     test('normalizes email before creating Auth account', () async {
       stubRegister(email: 'invite@example.com');
-      when(() => employees.findInvitedEmployeeByEmail(any())).thenAnswer(
+      when(() => employees.findInvitedEmployeeForCurrentUser()).thenAnswer(
         (_) async => InvitedEmployeeMatch(
           docId: 'doc1',
           data: const {'uid': '', 'status': 'invited'},
@@ -72,7 +72,7 @@ void main() {
       () async {
         stubRegister();
         when(
-          () => employees.findInvitedEmployeeByEmail(any()),
+          () => employees.findInvitedEmployeeForCurrentUser(),
         ).thenAnswer((_) async => null);
 
         await expectLater(
@@ -88,7 +88,7 @@ void main() {
 
     test('sends email verification after finding invite', () async {
       stubRegister();
-      when(() => employees.findInvitedEmployeeByEmail(any())).thenAnswer(
+      when(() => employees.findInvitedEmployeeForCurrentUser()).thenAnswer(
         (_) async => InvitedEmployeeMatch(
           docId: 'doc-xyz',
           data: const {'uid': '', 'status': 'invited'},
@@ -110,11 +110,11 @@ void main() {
     });
 
     test(
-      'deletes Auth user and rethrows when findInvitedEmployeeByEmail throws',
+      'deletes Auth user and rethrows when findInvitedEmployeeForCurrentUser throws',
       () async {
         stubRegister();
         when(
-          () => employees.findInvitedEmployeeByEmail(any()),
+          () => employees.findInvitedEmployeeForCurrentUser(),
         ).thenThrow(Exception('firestore unavailable'));
 
         await expectLater(
@@ -133,7 +133,7 @@ void main() {
       () async {
         stubRegister();
         when(
-          () => employees.findInvitedEmployeeByEmail(any()),
+          () => employees.findInvitedEmployeeForCurrentUser(),
         ).thenAnswer((_) async => null);
         when(
           () => user.delete(),
@@ -161,7 +161,7 @@ void main() {
 
       await service.tryActivateInvitedEmployee(user);
 
-      verifyNever(() => employees.findInvitedEmployeeByEmail(any()));
+      verifyNever(() => employees.findInvitedEmployeeForCurrentUser());
       verifyNever(
         () => employees.activateEmployee(
           docId: any(named: 'docId'),
@@ -172,9 +172,7 @@ void main() {
 
     test('activates when email is verified and invite exists', () async {
       when(() => user.emailVerified).thenReturn(true);
-      when(
-        () => employees.findInvitedEmployeeByEmail('invited@example.com'),
-      ).thenAnswer(
+      when(() => employees.findInvitedEmployeeForCurrentUser()).thenAnswer(
         (_) async => InvitedEmployeeMatch(
           docId: 'doc-xyz',
           data: const {'uid': '', 'status': 'invited'},
@@ -197,7 +195,7 @@ void main() {
     test('does nothing when no invite exists for the verified email', () async {
       when(() => user.emailVerified).thenReturn(true);
       when(
-        () => employees.findInvitedEmployeeByEmail(any()),
+        () => employees.findInvitedEmployeeForCurrentUser(),
       ).thenAnswer((_) async => null);
 
       await service.tryActivateInvitedEmployee(user);

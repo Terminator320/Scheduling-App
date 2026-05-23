@@ -61,6 +61,13 @@ service cloud.firestore {
     // writing their auth uid into it. Activation only flips ['uid','status']
     // and requires the caller's email to be verified by Firebase Auth.
     match /users/{userId} {
+      // The invited-doc lookup is intentionally NOT exposed as a client-side
+      // list query — Firestore's rules engine cannot prove
+      // `resource.data.email == request.auth.token.email` from a query's
+      // `where('email', '==', X)` constraint, so any client query would be
+      // rejected with permission-denied. The signup/activation flow goes
+      // through the `resolveMyInvite` Cloud Function (Admin SDK), which is
+      // why this clause can stay tight without breaking the app.
       allow read: if isAdmin()
         || (isSignedIn() && resource.data.status == 'active')
         || (isSignedIn() && resource.data.uid == request.auth.uid)
