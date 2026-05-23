@@ -61,7 +61,7 @@ class AuthService {
 
     InvitedEmployeeMatch? invitedEmployee;
     try {
-      invitedEmployee = await _employees.findInvitedEmployeeByEmail(email);
+      invitedEmployee = await _employees.findInvitedEmployeeForCurrentUser();
     } catch (e, st) {
       // TODO(pre-ship): remove once signup failures on release APK are diagnosed.
       _logger.warn(
@@ -111,9 +111,7 @@ class AuthService {
   Future<void> tryActivateInvitedEmployee(User user) async {
     await user.reload();
     if (!user.emailVerified) return;
-    final email = user.email;
-    if (email == null) return;
-    final invite = await _employees.findInvitedEmployeeByEmail(email);
+    final invite = await _employees.findInvitedEmployeeForCurrentUser();
     if (invite == null) return;
     await _employees.activateEmployee(docId: invite.docId, uid: user.uid);
   }

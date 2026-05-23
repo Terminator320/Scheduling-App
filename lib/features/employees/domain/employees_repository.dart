@@ -28,7 +28,7 @@ abstract class EmployeesRepository {
 
   Future<void> deleteEmployee(String docId);
 
-  Future<InvitedEmployeeMatch?> findInvitedEmployeeByEmail(String email);
+  Future<InvitedEmployeeMatch?> findInvitedEmployeeForCurrentUser();
 
   Future<UserUidMatch?> findUserByUid(String uid);
 

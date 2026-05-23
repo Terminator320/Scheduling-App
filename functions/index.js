@@ -467,3 +467,40 @@ exports.deleteAccount = onCall(
       return {deleted: true};
     },
 );
+
+// Server-side resolver for the freshly-registered-user invite lookup.
+// Replaces the client-side Firestore query that hits permission-denied because
+// Firestore's rules engine cannot prove `resource.data.email ==
+// request.auth.token.email` from a list query's email-literal where clause.
+// Admin SDK bypasses rules; authority comes from `auth.token.email`, never
+// from a client-supplied string.
+exports.resolveMyInvite = onCall(
+    {enforceAppCheck: true},
+    async (req) => {
+      if (!req.auth || !req.auth.uid) {
+        throw new HttpsError("unauthenticated", "auth-required");
+      }
+      const tokenEmail = req.auth.token?.email;
+      if (typeof tokenEmail !== "string" || tokenEmail === "") {
+        throw new HttpsError("failed-precondition", "no-email-claim");
+      }
+      const email = tokenEmail.trim().toLowerCase();
+      const db = getFirestore();
+      const snap = await db
+          .collection("users")
+          .where("email", "==", email)
+          .where("status", "==", "invited")
+          .where("role", "in", ["employee", "admin"])
+          .limit(1)
+          .get();
+      if (snap.empty) {
+        return {found: false};
+      }
+      const doc = snap.docs[0];
+      return {
+        found: true,
+        docId: doc.id,
+        data: doc.data(),
+      };
+    },
+);

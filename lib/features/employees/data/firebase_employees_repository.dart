@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
@@ -6,12 +7,17 @@ import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 class FirebaseEmployeesRepository implements EmployeesRepository {
-  FirebaseEmployeesRepository(FirebaseFirestore firestore, {FirebaseAuth? auth})
-    : _users = firestore.collection('users'),
-      _auth = auth ?? FirebaseAuth.instance;
+  FirebaseEmployeesRepository(
+    FirebaseFirestore firestore, {
+    FirebaseAuth? auth,
+    FirebaseFunctions? functions,
+  }) : _users = firestore.collection('users'),
+       _auth = auth ?? FirebaseAuth.instance,
+       _functions = functions ?? FirebaseFunctions.instance;
 
   final CollectionReference<Map<String, dynamic>> _users;
   final FirebaseAuth _auth;
+  final FirebaseFunctions _functions;
 
   @override
   Stream<List<EmployeeRecord>> watchAllUsers() {
@@ -133,19 +139,16 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }
 
   @override
-  Future<InvitedEmployeeMatch?> findInvitedEmployeeByEmail(String email) async {
-    final normalizedEmail = email.trim().toLowerCase();
-
-    final result = await _users
-        .where('email', isEqualTo: normalizedEmail)
-        .where('role', whereIn: ['employee', 'admin'])
-        .where('status', isEqualTo: 'invited')
-        .limit(1)
-        .get();
-
-    if (result.docs.isEmpty) return null;
-    final doc = result.docs.first;
-    return InvitedEmployeeMatch(docId: doc.id, data: doc.data());
+  Future<InvitedEmployeeMatch?> findInvitedEmployeeForCurrentUser() async {
+    final response = await _functions
+        .httpsCallable('resolveMyInvite')
+        .call<dynamic>();
+    final payload = (response.data as Map?)?.cast<String, dynamic>();
+    if (payload == null || payload['found'] != true) return null;
+    final docId = payload['docId'] as String?;
+    final data = (payload['data'] as Map?)?.cast<String, dynamic>();
+    if (docId == null || data == null) return null;
+    return InvitedEmployeeMatch(docId: docId, data: data);
   }
 
   @override
