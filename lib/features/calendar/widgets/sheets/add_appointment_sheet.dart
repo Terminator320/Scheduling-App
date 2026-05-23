@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
@@ -175,10 +176,17 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
             .read(noticeServiceProvider)
             .success(context.l10n.common_appointmentCreated);
         Navigator.pop(context, appointment);
-      case AddEventFailed():
+      case AddEventFailed(:final error):
         ref
             .read(noticeServiceProvider)
-            .error(context.l10n.error_somethingWentWrongCreatingTheAppointment);
+            .error(
+              composeErrorNotice(
+                context,
+                intro: context.l10n.error_introCreateAppointment,
+                tag: 'APPT-CREATE',
+                error: error,
+              ),
+            );
       case AddEventInvalid() || AddEventBusyEmployees():
         break;
     }

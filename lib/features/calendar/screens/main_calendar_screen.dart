@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
@@ -181,7 +182,14 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       if (next is AsyncError && previous is! AsyncError) {
         ref
             .read(noticeServiceProvider)
-            .error(context.l10n.error_couldNotLoadAppointments);
+            .error(
+              composeErrorNotice(
+                context,
+                intro: context.l10n.error_introLoadAppointments,
+                tag: 'APPT-LOAD',
+                error: next.error ?? Exception('unknown'),
+              ),
+            );
       }
     }
 
