@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -23,6 +25,20 @@ void main() async {
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.android,
+  );
+
+  // App Check enforcement is on server-side, so the app must attest before any
+  // auth/Firestore call or requests are rejected. The debug provider can be
+  // forced in a non-debug build (e.g. App Distribution test builds) with
+  // --dart-define=APP_CHECK_DEBUG=true.
+  const useAppCheckDebug = bool.fromEnvironment('APP_CHECK_DEBUG');
+  final useDebugProvider = kDebugMode || useAppCheckDebug;
+
+  await FirebaseAppCheck.instance.activate(
+    androidProvider:
+        useDebugProvider ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+    appleProvider:
+        useDebugProvider ? AppleProvider.debug : AppleProvider.appAttest,
   );
 
   final settings = await SettingsService().load();
