@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
@@ -167,12 +168,19 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
       ref.read(noticeServiceProvider).success(context.l10n.common_clientAdded);
       Navigator.pop(context);
     } catch (e, st) {
-      ref.read(loggerProvider).warn('addClient failed', e, st);
+      ref.read(loggerProvider).warn('CLI-ADD addClient failed', e, st);
       if (!mounted) return;
       setState(() => _isSaving = false);
       ref
           .read(noticeServiceProvider)
-          .error(context.l10n.error_couldNotAddClientTryAgain);
+          .error(
+            composeErrorNotice(
+              context,
+              intro: context.l10n.error_introAddClient,
+              tag: 'CLI-ADD',
+              error: e,
+            ),
+          );
     }
   }
 
