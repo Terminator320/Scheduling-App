@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
+import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/sheet_focus.dart';
@@ -188,8 +189,17 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
                 itemBuilder: (context, client, index) =>
                     _clientTile(client, index),
                 firstPageProgressIndicatorBuilder: (_) => _skeleton(),
-                firstPageErrorIndicatorBuilder: (_) =>
-                    Center(child: Text(context.l10n.error_somethingWentWrong)),
+                firstPageErrorIndicatorBuilder: (_) => Center(
+                  child: Text(
+                    composeErrorNotice(
+                      context,
+                      intro: context.l10n.error_introLoadClients,
+                      tag: 'CLI-LIST',
+                      error:
+                          state.error ?? Exception('clients page load failed'),
+                    ),
+                  ),
+                ),
                 noItemsFoundIndicatorBuilder: (_) => _emptyState(query: ''),
               ),
             ),

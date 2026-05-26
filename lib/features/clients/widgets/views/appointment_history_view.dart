@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
@@ -41,8 +42,19 @@ class AppointmentHistoryView extends ConsumerWidget {
           ],
         ),
         error: (err, st) {
-          ref.read(loggerProvider).warn('history stream error', err, st);
-          return Center(child: Text(context.l10n.error_somethingWentWrong));
+          ref
+              .read(loggerProvider)
+              .warn('HIST-LOAD history stream error', err, st);
+          return Center(
+            child: Text(
+              composeErrorNotice(
+                context,
+                intro: context.l10n.error_introLoadHistory,
+                tag: 'HIST-LOAD',
+                error: err,
+              ),
+            ),
+          );
         },
         data: (appointments) {
           // Already sorted newest-first by watchHistory.

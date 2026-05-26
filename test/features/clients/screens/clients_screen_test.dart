@@ -101,7 +101,7 @@ void main() {
     await tester.pumpWidget(_wrap(repo));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Something went wrong'), findsOneWidget);
+    expect(find.textContaining("Couldn't load clients"), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
