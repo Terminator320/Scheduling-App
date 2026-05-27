@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
@@ -355,9 +356,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       notices.error(e.toLocalizedMessage(context));
       return;
     } catch (e, st) {
-      logger.warn('settings.delete_account', e, st);
+      logger.warn('ACCT-DEL settings.delete_account', e, st);
       if (!mounted) return;
-      notices.error(context.l10n.error_couldNotDeleteAccount);
+      notices.error(
+        composeErrorNotice(
+          context,
+          intro: context.l10n.error_introDeleteAccount,
+          tag: 'ACCT-DEL',
+          error: e,
+        ),
+      );
       return;
     }
     if (!mounted) return;
