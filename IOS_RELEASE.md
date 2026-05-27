@@ -1,6 +1,6 @@
 # iOS Release Checklist
 
-This file lives at the repo root and tracks iOS-only work that is deferred until a Mac is available. Everything here is non-blocking for Android releases. Companion checklist: `HANDOFF.md`.
+This file lives at the repo root and tracks iOS-only work that is deferred until a Mac is available. Everything here is non-blocking for Android releases.
 
 Grep for `TODO(ios)` in the codebase to find inline markers that should be addressed alongside the items below.
 
