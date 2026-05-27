@@ -76,6 +76,8 @@ Three primary collections form the application's data backbone:
 - Role boundaries are enforced at the data layer. Employee-scoped queries filter records server-side, not just in the UI.
 - Sensitive configuration — API keys, project identifiers — is managed through environment variables and is never committed to version control.
 - Firebase App Check prevents unauthorized API access from outside the application binary.
+- Sensitive account actions and server endpoints are rate-limited to deter abuse and brute-force attempts.
+- All requests to server functions are validated and size-limited; malformed or oversized payloads are rejected before processing.
 
 ---
 
