@@ -130,6 +130,9 @@ const GOOGLE_MAP_API_KEY = defineSecret("GOOGLE_MAP_API_KEY");
 // Console — this in-memory limit is per-instance and is not a hard billing cap.
 // With maxInstances: 10, the effective ceiling is RATE_LIMIT_MAX × instance
 // count requests per window. RATE_LIMIT_MAX is kept low to bound that product.
+// This is a cheap, latency-free cost guard appropriate for the high-volume
+// autocomplete path; auth-sensitive routes use the durable Firestore limiter
+// below instead (see enforceDurableRateLimit).
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const rateBuckets = new Map();
@@ -167,15 +170,72 @@ const PLACE_ID_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const SESSION_TOKEN_MAX_LEN = 64;
 const INPUT_MAX_LEN = 200;
 
+// Hard cap on a callable payload once serialized. Every payload here is a
+// couple of short strings; anything larger is malformed or abusive.
+const MAX_PAYLOAD_BYTES = 4 * 1024;
+
+// Auth-sensitive callables (resolveMyInvite, deleteAccount) are capped at
+// AUTH_RATE_MAX attempts per AUTH_RATE_WINDOW_MS. Unlike the in-memory Places
+// limiter above, this is enforced in Firestore so the cap holds across
+// function instances and cold starts — a brute-force caller cannot multiply
+// it by maxInstances.
+const AUTH_RATE_MAX = 5;
+const AUTH_RATE_WINDOW_MS = 15 * 60 * 1000;
+
 // deleteAccount requires the caller to have re-authenticated within this
 // window. Firebase ID tokens are valid ~1 hour, so without this check a
 // stolen-but-not-yet-expired token could trigger irreversible deletion.
 const REAUTH_MAX_AGE_SECONDS = 5 * 60;
 
 /**
+ * True when the string contains a C0 control character (code < 0x20) or DEL
+ * (0x7F). Control characters have no place in a place query, place id, or
+ * session token; rejecting them sanitizes the input against log injection
+ * (these values get logged) and odd upstream behaviour.
+ * @param {string} s value to inspect.
+ * @return {boolean}
+ */
+function hasControlChar(s) {
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x20 || c === 0x7F) return true;
+  }
+  return false;
+}
+
+/**
+ * Rejects malformed, oversized, or unexpected callable payloads. Throws
+ * HttpsError("invalid-argument") when `data` is not a plain object, exceeds
+ * MAX_PAYLOAD_BYTES once serialized, or carries any key outside `allowedKeys`
+ * (mass-assignment defence). A null/undefined payload is treated as empty.
+ * @param {*} data raw callable request data.
+ * @param {!Set<string>} allowedKeys the only keys this endpoint accepts.
+ */
+function assertPayloadShape(data, allowedKeys) {
+  if (data === undefined || data === null) return;
+  if (typeof data !== "object" || Array.isArray(data)) {
+    throw new HttpsError("invalid-argument", "malformed-payload");
+  }
+  let serialized;
+  try {
+    serialized = JSON.stringify(data);
+  } catch {
+    throw new HttpsError("invalid-argument", "malformed-payload");
+  }
+  if (serialized.length > MAX_PAYLOAD_BYTES) {
+    throw new HttpsError("invalid-argument", "payload-too-large");
+  }
+  for (const key of Object.keys(data)) {
+    if (!allowedKeys.has(key)) {
+      throw new HttpsError("invalid-argument", "unexpected-field");
+    }
+  }
+}
+
+/**
  * Validates and returns a trimmed string field from the callable payload.
- * Throws HttpsError("invalid-argument") when missing, wrong type, or out of
- * the [1, maxLen] range.
+ * Throws HttpsError("invalid-argument") when missing, wrong type, out of the
+ * [1, maxLen] range, or containing control characters.
  * @param {object} data callable request data.
  * @param {string} key field name.
  * @param {number} maxLen max length (inclusive).
@@ -183,7 +243,7 @@ const REAUTH_MAX_AGE_SECONDS = 5 * 60;
  */
 function requireString(data, key, maxLen) {
   const value = typeof data?.[key] === "string" ? data[key].trim() : "";
-  if (!value || value.length > maxLen) {
+  if (!value || value.length > maxLen || hasControlChar(value)) {
     throw new HttpsError("invalid-argument", `invalid-${key}`);
   }
   return value;
@@ -191,7 +251,8 @@ function requireString(data, key, maxLen) {
 
 /**
  * Reads an optional sessionToken from the payload. Returns "" if absent;
- * throws HttpsError("invalid-argument") when present but malformed.
+ * throws HttpsError("invalid-argument") when present but malformed (wrong
+ * type, too long, or containing control characters).
  * @param {object} data callable request data.
  * @return {string}
  */
@@ -200,10 +261,57 @@ function readSessionToken(data) {
     return "";
   }
   if (typeof data.sessionToken !== "string" ||
-      data.sessionToken.length > SESSION_TOKEN_MAX_LEN) {
+      data.sessionToken.length > SESSION_TOKEN_MAX_LEN ||
+      hasControlChar(data.sessionToken)) {
     throw new HttpsError("invalid-argument", "invalid-sessionToken");
   }
   return data.sessionToken;
+}
+
+/**
+ * Firestore-backed sliding-window rate limit. Unlike the in-memory limiter, it
+ * holds across function instances and cold starts, so it is the right tool for
+ * auth-sensitive routes — a brute-force caller cannot get maxInstances × max
+ * tries. Counters live in `rateLimits/*`, which firestore.rules denies to all
+ * clients (a client able to reset its own counter would defeat the cap).
+ * Throws HttpsError("resource-exhausted") when the caller exceeds `max`
+ * attempts within `windowMs`.
+ * @param {string} route stable endpoint identifier (part of the doc key).
+ * @param {string} uid Firebase Auth uid of the caller.
+ * @param {number} max max attempts per window.
+ * @param {number} windowMs window length in milliseconds.
+ */
+async function enforceDurableRateLimit(route, uid, max, windowMs) {
+  const db = getFirestore();
+  const ref = db.collection("rateLimits").doc(`${route}__${uid}`);
+  const now = Date.now();
+  let overLimit = false;
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const data = snap.exists ? snap.data() : null;
+    const windowStart = data && typeof data.windowStart === "number" ?
+      data.windowStart : 0;
+    if (!data || now - windowStart >= windowMs) {
+      overLimit = false;
+      tx.set(ref, {
+        route,
+        count: 1,
+        windowStart: now,
+        // Lets an optional Firestore TTL policy on `expiresAt` reap old rows.
+        expiresAt: new Date(now + windowMs),
+      });
+      return;
+    }
+    if (data.count >= max) {
+      overLimit = true;
+      return;
+    }
+    tx.update(ref, {count: data.count + 1});
+  });
+  if (overLimit) {
+    logger.warn("enforceDurableRateLimit: limit exceeded", {route, uid});
+    throw new HttpsError("resource-exhausted", "too-many-attempts");
+  }
 }
 
 exports.placesAutocomplete = onCall(
@@ -215,6 +323,7 @@ exports.placesAutocomplete = onCall(
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
       }
+      assertPayloadShape(req.data, new Set(["input", "sessionToken"]));
       const input = requireString(req.data, "input", INPUT_MAX_LEN);
       const sessionToken = readSessionToken(req.data);
 
@@ -280,6 +389,7 @@ exports.placesGetDetails = onCall(
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
       }
+      assertPayloadShape(req.data, new Set(["placeId", "sessionToken"]));
       const placeId = requireString(req.data, "placeId", 256);
       if (!PLACE_ID_PATTERN.test(placeId)) {
         throw new HttpsError("invalid-argument", "invalid-placeId");
@@ -401,11 +511,22 @@ exports.validateUploadedImage = onObjectFinalized(async (event) => {
 // We do NOT touch shared business data (appointments, clients, appointment
 // images): those are owned by the business, not the individual account.
 exports.deleteAccount = onCall(
-    {enforceAppCheck: true},
+    // TODO(pre-ship): set back to `enforceAppCheck: true` once the app ships
+    // through Play Store and Play Integrity can mint verified App Check
+    // tokens. Temporarily false so testers on Firebase App Distribution
+    // sideloads (UNRECOGNIZED_VERSION verdict) aren't blocked.
+    {enforceAppCheck: false},
     async (req) => {
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
       }
+      assertPayloadShape(req.data, new Set());
+      await enforceDurableRateLimit(
+          "deleteAccount",
+          req.auth.uid,
+          AUTH_RATE_MAX,
+          AUTH_RATE_WINDOW_MS,
+      );
       const authTime = req.auth.token?.auth_time;
       const nowSec = Math.floor(Date.now() / 1000);
       if (typeof authTime !== "number" ||
@@ -475,11 +596,22 @@ exports.deleteAccount = onCall(
 // Admin SDK bypasses rules; authority comes from `auth.token.email`, never
 // from a client-supplied string.
 exports.resolveMyInvite = onCall(
-    {enforceAppCheck: true},
+    // TODO(pre-ship): set back to `enforceAppCheck: true` once the app ships
+    // through Play Store and Play Integrity can mint verified App Check
+    // tokens. Temporarily false so testers on Firebase App Distribution
+    // sideloads (UNRECOGNIZED_VERSION verdict) aren't blocked.
+    {enforceAppCheck: false},
     async (req) => {
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
       }
+      assertPayloadShape(req.data, new Set());
+      await enforceDurableRateLimit(
+          "resolveMyInvite",
+          req.auth.uid,
+          AUTH_RATE_MAX,
+          AUTH_RATE_WINDOW_MS,
+      );
       const tokenEmail = req.auth.token?.email;
       if (typeof tokenEmail !== "string" || tokenEmail === "") {
         throw new HttpsError("failed-precondition", "no-email-claim");
