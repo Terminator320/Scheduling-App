@@ -135,9 +135,10 @@ app.*.symbols
 
 .worktrees/
 
-# Local tool artifacts
+# Local tool artifacts (ruflo / ruvector / agentdb and friends)
 bash.exe.stackdump
 agentdb.rvf
+*.rvf
 ruvector.db
 *.stackdump
 .playwright-mcp/

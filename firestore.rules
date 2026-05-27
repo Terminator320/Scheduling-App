@@ -53,6 +53,16 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ── rateLimits (abuse counters) ──────────────────────────────────────────
+    // Written only by the enforceDurableRateLimit helper in the Cloud Functions
+    // via Admin SDK. No client may read or write: a client that could reset or
+    // read its own counter would defeat the auth-route brute-force cap. The
+    // default-deny would already block this; the explicit rule documents intent
+    // for a security-sensitive collection.
+    match /rateLimits/{id} {
+      allow read, write: if false;
+    }
+
     // ── users ─────────────────────────────────────────────────────────────────
     // Read: admins see all; active employees see active peers (picker/display);
     // a registering user can find their own invited doc by email match.
