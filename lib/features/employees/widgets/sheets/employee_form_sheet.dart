@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/errors/error_cause.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
@@ -113,12 +115,20 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
 
       if (!mounted) return;
       Navigator.pop(context, true);
-    } catch (e) {
+    } catch (e, st) {
       if (!mounted) return;
       if (e is EmployeesFailureEmailAlreadyExists) {
         setState(() => _errors['email'] = e.toLocalizedMessage(context));
       } else {
-        notices.error(context.l10n.error_couldNotCreateEmployee);
+        ref.read(loggerProvider).warn('EMP-CREATE saveEmployee failed', e, st);
+        notices.error(
+          composeErrorNotice(
+            context,
+            intro: context.l10n.error_introSaveEmployee,
+            tag: 'EMP-CREATE',
+            error: e,
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);

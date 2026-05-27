@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -55,12 +56,19 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
       if (!mounted) return;
       widget.onAction('deleted');
     } catch (e, st) {
-      ref.read(loggerProvider).warn('deleteEmployee failed', e, st);
+      ref.read(loggerProvider).warn('EMP-DEL deleteEmployee failed', e, st);
       if (!mounted) return;
       setState(() => _isDeleting = false);
       ref
           .read(noticeServiceProvider)
-          .error(context.l10n.error_somethingWentWrong);
+          .error(
+            composeErrorNotice(
+              context,
+              intro: context.l10n.error_introDeleteEmployee,
+              tag: 'EMP-DEL',
+              error: e,
+            ),
+          );
     }
   }
 
@@ -90,12 +98,21 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
       if (!mounted) return;
       widget.onAction(isDisabled ? 'enabled' : 'disabled');
     } catch (e, st) {
-      ref.read(loggerProvider).warn('toggleEmployeeStatus failed', e, st);
+      ref
+          .read(loggerProvider)
+          .warn('EMP-STATUS toggleEmployeeStatus failed', e, st);
       if (!mounted) return;
       setState(() => _isDisabling = false);
       ref
           .read(noticeServiceProvider)
-          .error(context.l10n.error_somethingWentWrong);
+          .error(
+            composeErrorNotice(
+              context,
+              intro: context.l10n.error_introChangeEmployeeStatus,
+              tag: 'EMP-STATUS',
+              error: e,
+            ),
+          );
     }
   }
 
