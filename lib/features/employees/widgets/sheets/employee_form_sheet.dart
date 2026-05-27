@@ -116,11 +116,12 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e, st) {
-      if (!mounted) return;
       if (e is EmployeesFailureEmailAlreadyExists) {
+        if (!mounted) return;
         setState(() => _errors['email'] = e.toLocalizedMessage(context));
       } else {
         ref.read(loggerProvider).warn('EMP-CREATE saveEmployee failed', e, st);
+        if (!mounted) return;
         notices.error(
           composeErrorNotice(
             context,
