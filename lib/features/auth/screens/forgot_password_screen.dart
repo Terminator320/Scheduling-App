@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/animations/app_animation_constants.dart';
-import 'package:scheduling/core/animations/fade_slide_entrance.dart';
-import 'package:scheduling/core/animations/staggered_entrance_controller.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
@@ -32,30 +31,24 @@ class ForgotPasswordScreen extends ForgotPassword {
   });
 }
 
-class _ForgotPasswordState extends State<ForgotPassword>
-    with SingleTickerProviderStateMixin {
-  static const int _itemCount = 6;
-
+class _ForgotPasswordState extends State<ForgotPassword> {
   late final AuthService _authService = widget.authService ?? AuthService();
   late final TextEditingController _emailController;
-  late final StaggeredEntranceController _entrance;
 
   bool _isLoading = false;
   bool _emailSent = false;
   String? _emailError;
   String _errorMessage = '';
+  int _restartTick = 0;
 
   @override
   void initState() {
     super.initState();
     _emailController = TextEditingController(text: widget.initialEmail ?? '');
-    _entrance = StaggeredEntranceController(vsync: this, itemCount: _itemCount)
-      ..forward();
   }
 
   @override
   void dispose() {
-    _entrance.dispose();
     _emailController.dispose();
     super.dispose();
   }
@@ -95,19 +88,17 @@ class _ForgotPasswordState extends State<ForgotPassword>
         _errorMessage = systemError;
       } else {
         _emailSent = true;
+        _restartTick++;
       }
     });
-    if (systemError == null) {
-      _entrance.controller.forward(from: 0);
-    }
   }
 
   void _resendEmail() {
     setState(() {
       _emailSent = false;
       _errorMessage = '';
+      _restartTick++;
     });
-    _entrance.controller.forward(from: 0);
   }
 
   void _backToSignIn() {
@@ -143,8 +134,8 @@ class _ForgotPasswordState extends State<ForgotPassword>
                 ),
               ),
               child: _emailSent
-                  ? _buildSuccess(key: const ValueKey('success'))
-                  : _buildForm(key: const ValueKey('form')),
+                  ? _buildSuccess(key: ValueKey('success_$_restartTick'))
+                  : _buildForm(key: ValueKey('form_$_restartTick')),
             ),
           ),
         ),
@@ -156,145 +147,142 @@ class _ForgotPasswordState extends State<ForgotPassword>
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
     final scheme = theme.colorScheme;
-    final animations = _entrance.animations;
 
     return Column(
       key: key,
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FadeSlideEntrance(
-          animation: animations[0],
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: scheme.primary,
-              borderRadius: BorderRadius.circular(AppRadius.r12),
-            ),
-            child: Icon(
-              Icons.calendar_today_rounded,
-              color: scheme.onPrimary,
-              size: 22,
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        FadeSlideEntrance(
-          animation: animations[1],
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                context.l10n.auth_forgotYourPassword,
-                style: textTheme.headlineLarge,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                context
-                    .l10n
-                    .auth_enterYourAccountEmailAndWeLlSendYouALinkToResetYourPassword,
-                style: textTheme.bodyMedium,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp32),
-        FadeSlideEntrance(
-          animation: animations[2],
-          child: AnimatedFormFieldWrapper(
-            hasError: _emailError != null,
-            child: TextField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              autofillHints: const [AutofillHints.email],
-              autocorrect: false,
-              textInputAction: TextInputAction.done,
-              enabled: !_isLoading,
-              onSubmitted: (_) => _sendResetEmail(),
-              onChanged: (_) {
-                if (_emailError != null || _errorMessage.isNotEmpty) {
-                  setState(() {
-                    _emailError = null;
-                    _errorMessage = '';
-                  });
-                }
-              },
-              decoration:
-                  formInputDecoration(
-                    context,
-                    context.l10n.auth_youExampleCom,
-                  ).copyWith(
-                    errorText: _emailError,
-                    prefixIcon: const Icon(Icons.email_outlined, size: 20),
+      children:
+          [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: scheme.primary,
+                    borderRadius: BorderRadius.circular(AppRadius.r12),
                   ),
-            ),
-          ),
-        ),
-        AnimatedSwitcher(
-          duration: AppAnimationDurations.banner,
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: animation,
-            child: SizeTransition(
-              sizeFactor: animation,
-              axisAlignment: -1,
-              child: child,
-            ),
-          ),
-          child: _errorMessage.isNotEmpty
-              ? Padding(
-                  key: ValueKey('error_$_errorMessage'),
-                  padding: const EdgeInsets.only(top: AppSpacing.sp12),
-                  child: Container(
-                    padding: const EdgeInsets.all(AppSpacing.sp12),
-                    decoration: BoxDecoration(
-                      color: scheme.errorContainer,
-                      borderRadius: BorderRadius.circular(AppRadius.r8),
+                  child: Icon(
+                    Icons.calendar_today_rounded,
+                    color: scheme.onPrimary,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sp24),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.l10n.auth_forgotYourPassword,
+                      style: textTheme.headlineLarge,
                     ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          color: scheme.error,
-                          size: 16,
-                        ),
-                        const SizedBox(width: AppSpacing.sp8),
-                        Expanded(
-                          child: Text(
-                            _errorMessage,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: scheme.onErrorContainer,
-                            ),
+                    const SizedBox(height: 4),
+                    Text(
+                      context
+                          .l10n
+                          .auth_enterYourAccountEmailAndWeLlSendYouALinkToResetYourPassword,
+                      style: textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sp32),
+                AnimatedFormFieldWrapper(
+                  hasError: _emailError != null,
+                  child: TextField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    autofillHints: const [AutofillHints.email],
+                    autocorrect: false,
+                    textInputAction: TextInputAction.done,
+                    enabled: !_isLoading,
+                    onSubmitted: (_) => _sendResetEmail(),
+                    onChanged: (_) {
+                      if (_emailError != null || _errorMessage.isNotEmpty) {
+                        setState(() {
+                          _emailError = null;
+                          _errorMessage = '';
+                        });
+                      }
+                    },
+                    decoration:
+                        formInputDecoration(
+                          context,
+                          context.l10n.auth_youExampleCom,
+                        ).copyWith(
+                          errorText: _emailError,
+                          prefixIcon: const Icon(
+                            Icons.email_outlined,
+                            size: 20,
                           ),
                         ),
-                      ],
+                  ),
+                ),
+                AnimatedSwitcher(
+                  duration: AppAnimationDurations.banner,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SizeTransition(
+                      sizeFactor: animation,
+                      axisAlignment: -1,
+                      child: child,
                     ),
                   ),
-                )
-              : const SizedBox.shrink(key: ValueKey('error_none')),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        FadeSlideEntrance(
-          animation: animations[3],
-          child: AnimatedLoadingButton(
-            label: context.l10n.auth_sendResetEmail,
-            isLoading: _isLoading,
-            onPressed: _sendResetEmail,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        FadeSlideEntrance(
-          animation: animations[4],
-          child: Center(
-            child: TextButton(
-              onPressed: _isLoading ? null : _backToSignIn,
-              child: Text(
-                context.l10n.auth_backToSignIn,
-                style: textTheme.bodySmall?.copyWith(color: scheme.primary),
+                  child: _errorMessage.isNotEmpty
+                      ? Padding(
+                          key: ValueKey('error_$_errorMessage'),
+                          padding: const EdgeInsets.only(top: AppSpacing.sp12),
+                          child: Container(
+                            padding: const EdgeInsets.all(AppSpacing.sp12),
+                            decoration: BoxDecoration(
+                              color: scheme.errorContainer,
+                              borderRadius: BorderRadius.circular(AppRadius.r8),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.error_outline,
+                                  color: scheme.error,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: AppSpacing.sp8),
+                                Expanded(
+                                  child: Text(
+                                    _errorMessage,
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: scheme.onErrorContainer,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(key: ValueKey('error_none')),
+                ),
+                const SizedBox(height: AppSpacing.sp24),
+                AnimatedLoadingButton(
+                  label: context.l10n.auth_sendResetEmail,
+                  isLoading: _isLoading,
+                  onPressed: _sendResetEmail,
+                ),
+                const SizedBox(height: AppSpacing.sp16),
+                Center(
+                  child: TextButton(
+                    onPressed: _isLoading ? null : _backToSignIn,
+                    child: Text(
+                      context.l10n.auth_backToSignIn,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: scheme.primary,
+                      ),
+                    ),
+                  ),
+                ),
+              ]
+              .animate(interval: 65.ms)
+              .fadeIn(duration: 425.ms, curve: Curves.easeOutCubic)
+              .slideY(
+                begin: 0.28,
+                duration: 425.ms,
+                curve: Curves.easeOutCubic,
               ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -302,103 +290,93 @@ class _ForgotPasswordState extends State<ForgotPassword>
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
     final scheme = theme.colorScheme;
-    final animations = _entrance.animations;
 
     return Column(
       key: key,
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ScaleTransition(
-          scale: Tween<double>(begin: 0.82, end: 1).animate(animations[0]),
-          child: FadeTransition(
-            opacity: animations[0],
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: scheme.tertiaryContainer,
-                borderRadius: BorderRadius.circular(AppRadius.r12),
-              ),
-              child: Icon(
-                Icons.mark_email_read_rounded,
-                size: 22,
-                color: scheme.tertiary,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        FadeSlideEntrance(
-          animation: animations[1],
-          child: Text(
-            context.l10n.auth_checkYourInbox,
-            style: textTheme.headlineLarge,
-          ),
-        ),
-        const SizedBox(height: 4),
-        FadeSlideEntrance(
-          animation: animations[2],
-          child: Text(
-            context
-                .l10n
-                .auth_ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent,
-            style: textTheme.bodyMedium,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        FadeSlideEntrance(
-          animation: animations[3],
-          child: Container(
-            padding: const EdgeInsets.all(AppSpacing.sp12),
-            decoration: BoxDecoration(
-              color: scheme.tertiaryContainer,
-              borderRadius: BorderRadius.circular(AppRadius.r8),
-              border: Border.all(color: scheme.tertiary.withValues(alpha: 0.4)),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.check_circle_outline,
-                  color: scheme.tertiary,
-                  size: 16,
+      children:
+          [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: scheme.tertiaryContainer,
+                    borderRadius: BorderRadius.circular(AppRadius.r12),
+                  ),
+                  child: Icon(
+                    Icons.mark_email_read_rounded,
+                    size: 22,
+                    color: scheme.tertiary,
+                  ),
                 ),
-                const SizedBox(width: AppSpacing.sp8),
-                Expanded(
-                  child: Text(
-                    context
-                        .l10n
-                        .auth_theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder,
-                    style: textTheme.bodySmall?.copyWith(
-                      color: scheme.onTertiaryContainer,
+                const SizedBox(height: AppSpacing.sp24),
+                Text(
+                  context.l10n.auth_checkYourInbox,
+                  style: textTheme.headlineLarge,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  context
+                      .l10n
+                      .auth_ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent,
+                  style: textTheme.bodyMedium,
+                ),
+                const SizedBox(height: AppSpacing.sp16),
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.sp12),
+                  decoration: BoxDecoration(
+                    color: scheme.tertiaryContainer,
+                    borderRadius: BorderRadius.circular(AppRadius.r8),
+                    border: Border.all(
+                      color: scheme.tertiary.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.check_circle_outline,
+                        color: scheme.tertiary,
+                        size: 16,
+                      ),
+                      const SizedBox(width: AppSpacing.sp8),
+                      Expanded(
+                        child: Text(
+                          context
+                              .l10n
+                              .auth_theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: scheme.onTertiaryContainer,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sp24),
+                AnimatedLoadingButton(
+                  label: context.l10n.auth_backToSignIn,
+                  onPressed: _backToSignIn,
+                ),
+                const SizedBox(height: AppSpacing.sp16),
+                Center(
+                  child: TextButton(
+                    onPressed: _resendEmail,
+                    child: Text(
+                      context.l10n.auth_didnTReceiveTheEmailTryAgain,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: scheme.primary,
+                      ),
                     ),
                   ),
                 ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        FadeSlideEntrance(
-          animation: animations[4],
-          child: AnimatedLoadingButton(
-            label: context.l10n.auth_backToSignIn,
-            onPressed: _backToSignIn,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        FadeSlideEntrance(
-          animation: animations[5],
-          child: Center(
-            child: TextButton(
-              onPressed: _resendEmail,
-              child: Text(
-                context.l10n.auth_didnTReceiveTheEmailTryAgain,
-                style: textTheme.bodySmall?.copyWith(color: scheme.primary),
+              ]
+              .animate(interval: 65.ms)
+              .fadeIn(duration: 425.ms, curve: Curves.easeOutCubic)
+              .slideY(
+                begin: 0.28,
+                duration: 425.ms,
+                curve: Curves.easeOutCubic,
               ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

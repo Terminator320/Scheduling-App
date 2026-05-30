@@ -35,10 +35,12 @@ const String _emulatorHost = String.fromEnvironment(
 );
 
 Future<void> _wireFirebaseEmulator() async {
-  FirebaseAuth.instance.useAuthEmulator(_emulatorHost, 9099);
   FirebaseFirestore.instance.useFirestoreEmulator(_emulatorHost, 8080);
-  await FirebaseStorage.instance.useStorageEmulator(_emulatorHost, 9199);
   FirebaseFunctions.instance.useFunctionsEmulator(_emulatorHost, 5001);
+  await Future.wait<void>([
+    FirebaseAuth.instance.useAuthEmulator(_emulatorHost, 9099),
+    FirebaseStorage.instance.useStorageEmulator(_emulatorHost, 9199),
+  ]);
 }
 
 Future<void> main() async {
@@ -47,10 +49,17 @@ Future<void> main() async {
       final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
       FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
-      await initializeDateFormatting('en_CA');
-      await initializeDateFormatting('fr_CA');
+      // SharedPreferences load is independent of dotenv/Firebase; start it
+      // eagerly and await only right before runApp.
+      final settingsFuture = SharedPrefsSettingsRepository().load();
 
-      await dotenv.load(fileName: 'dev/.env');
+      // Locale data and dotenv are mutually independent — run in parallel.
+      // Firebase init must follow dotenv (firebase_options.dart reads env).
+      await Future.wait([
+        initializeDateFormatting('en_CA'),
+        initializeDateFormatting('fr_CA'),
+        dotenv.load(fileName: 'dev/.env'),
+      ]);
 
       // TODO(ios): On Mac run `flutterfire configure` to populate iOS fields in firebase_options.dart, then swap DefaultFirebaseOptions.android -> DefaultFirebaseOptions.currentPlatform.
       await Firebase.initializeApp(options: DefaultFirebaseOptions.android);
@@ -58,27 +67,27 @@ Future<void> main() async {
       if (_useFirebaseEmulator) {
         await _wireFirebaseEmulator();
       } else {
-        await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
-          !kDebugMode,
-        );
-        FlutterError.onError =
-            FirebaseCrashlytics.instance.recordFlutterFatalError;
+        final crashlytics = FirebaseCrashlytics.instance;
+        FlutterError.onError = crashlytics.recordFlutterFatalError;
         PlatformDispatcher.instance.onError = (error, stack) {
-          FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+          crashlytics.recordError(error, stack, fatal: true);
           return true;
         };
 
-        await FirebaseAppCheck.instance.activate(
-          providerAndroid: kDebugMode
-              ? const AndroidDebugProvider()
-              : const AndroidPlayIntegrityProvider(),
-          providerApple: kDebugMode
-              ? const AppleDebugProvider()
-              : const AppleDeviceCheckProvider(),
-        );
+        await Future.wait([
+          crashlytics.setCrashlyticsCollectionEnabled(!kDebugMode),
+          FirebaseAppCheck.instance.activate(
+            providerAndroid: kDebugMode
+                ? const AndroidDebugProvider()
+                : const AndroidPlayIntegrityProvider(),
+            providerApple: kDebugMode
+                ? const AppleDebugProvider()
+                : const AppleDeviceCheckProvider(),
+          ),
+        ]);
       }
 
-      final settings = await SharedPrefsSettingsRepository().load();
+      final settings = await settingsFuture;
 
       runApp(ProviderScope(child: PaulApp(settings: settings)));
     },
@@ -153,7 +162,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     await AuthService().signOut();
     final nav = _navigatorKey.currentState;
     if (nav != null) {
-      unawaited(nav.pushNamedAndRemoveUntil(AppRoutes.login, (_) => false));
+      await nav.pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
     }
     _scaffoldMessengerKey.currentState?.showSnackBar(
       SnackBar(

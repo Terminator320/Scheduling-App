@@ -92,7 +92,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           role: widget.role,
         ),
         const SizedBox(height: AppSpacing.sp24),
-        SettingsSectionHeader(label: context.l10n.settings_appearance.toUpperCase()),
+        SettingsSectionHeader(
+          label: context.l10n.settings_appearance.toUpperCase(),
+        ),
         SettingsSectionCard(
           child: Column(
             children: [
@@ -148,7 +150,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
         const SizedBox(height: AppSpacing.sp24),
-        SettingsSectionHeader(label: context.l10n.settings_account.toUpperCase()),
+        SettingsSectionHeader(
+          label: context.l10n.settings_account.toUpperCase(),
+        ),
         SettingsSectionCard(
           child: Column(
             children: [
@@ -253,7 +257,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _signOut() async {
     await AuthService().signOut();
     if (!mounted) return;
-    Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (_) => false);
+    await Navigator.pushNamedAndRemoveUntil(
+      context,
+      AppRoutes.login,
+      (_) => false,
+    );
   }
 
   Future<void> _confirmDeleteAccount() async {
@@ -291,7 +299,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
     if (!mounted) return;
     final message = context.l10n.settings_accountDeleted;
-    Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (_) => false);
+    await Navigator.pushNamedAndRemoveUntil(
+      context,
+      AppRoutes.login,
+      (_) => false,
+    );
     notices.success(message);
   }
 }

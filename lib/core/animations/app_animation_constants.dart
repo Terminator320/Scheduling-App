@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 class AppAnimationDurations {
   const AppAnimationDurations._();
 
-  static const Duration entrance = Duration(milliseconds: 820);
   static const Duration quick = Duration(milliseconds: 180);
   static const Duration switcher = Duration(milliseconds: 220);
   static const Duration banner = Duration(milliseconds: 280);
@@ -15,11 +14,4 @@ class AppAnimationCurves {
 
   static const Curve entrance = Curves.easeOutCubic;
   static const Curve tap = Curves.easeInOut;
-}
-
-class AppStagger {
-  const AppStagger._();
-
-  static const double itemDuration = 0.52;
-  static const double delay = 0.08;
 }

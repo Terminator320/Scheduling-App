@@ -56,6 +56,10 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
     await AuthCache().clear();
     return const SplashGoToLogin();
   }
-  unawaited(AuthCache().save(employee));
+  unawaited(
+    AuthCache().save(employee).catchError((Object e, StackTrace st) {
+      logger.warn('splash.auth_cache_save', e, st);
+    }),
+  );
   return SplashGoToCalendar(isAdmin: employee.isAdmin, employeeId: employee.id);
 });

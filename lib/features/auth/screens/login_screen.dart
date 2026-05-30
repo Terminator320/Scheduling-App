@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/animations/app_animation_constants.dart';
-import 'package:scheduling/core/animations/fade_slide_entrance.dart';
-import 'package:scheduling/core/animations/staggered_entrance_controller.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -29,10 +29,7 @@ class Login extends ConsumerStatefulWidget {
   ConsumerState<Login> createState() => _LoginState();
 }
 
-class _LoginState extends ConsumerState<Login>
-    with SingleTickerProviderStateMixin {
-  static const int _itemCount = 7;
-
+class _LoginState extends ConsumerState<Login> {
   late final AuthService _authService = widget.authService ?? AuthService();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
@@ -48,18 +45,8 @@ class _LoginState extends ConsumerState<Login>
   String? _bannerError;
   String? _bannerSuccess;
 
-  late final StaggeredEntranceController _entrance;
-
-  @override
-  void initState() {
-    super.initState();
-    _entrance = StaggeredEntranceController(vsync: this, itemCount: _itemCount)
-      ..forward();
-  }
-
   @override
   void dispose() {
-    _entrance.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _emailFocus.dispose();
@@ -153,9 +140,13 @@ class _LoginState extends ConsumerState<Login>
         return;
       }
 
-      unawaited(AuthCache().save(employee));
+      unawaited(
+        AuthCache().save(employee).catchError((Object e, StackTrace st) {
+          ref.read(loggerProvider).warn('login.auth_cache_save', e, st);
+        }),
+      );
 
-      Navigator.pushReplacementNamed(
+      await Navigator.pushReplacementNamed(
         context,
         AppRoutes.mainCalendar,
         arguments: MainCalendarArgs(
@@ -292,7 +283,6 @@ class _LoginState extends ConsumerState<Login>
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
     final scheme = theme.colorScheme;
-    final animations = _entrance.animations;
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
@@ -307,185 +297,179 @@ class _LoginState extends ConsumerState<Login>
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FadeSlideEntrance(
-                  animation: animations[0],
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: scheme.primary,
-                      borderRadius: BorderRadius.circular(AppRadius.r12),
-                    ),
-                    child: Icon(
-                      Icons.calendar_today_rounded,
-                      color: scheme.onPrimary,
-                      size: 22,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sp24),
-                FadeSlideEntrance(
-                  animation: animations[1],
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        context.l10n.auth_welcomeBack,
-                        style: textTheme.headlineLarge,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        context.l10n.auth_signInToYourAccount,
-                        style: textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sp16),
-                AnimatedSwitcher(
-                  duration: AppAnimationDurations.banner,
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: SizeTransition(
-                      sizeFactor: animation,
-                      axisAlignment: -1,
-                      child: child,
-                    ),
-                  ),
-                  child: _buildBanner(textTheme),
-                ),
-                const SizedBox(height: AppSpacing.sp16),
-                FadeSlideEntrance(
-                  animation: animations[2],
-                  child: AnimatedFormFieldWrapper(
-                    hasError: _emailError != null,
-                    child: TextField(
-                      controller: _emailController,
-                      focusNode: _emailFocus,
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      autofillHints: const [AutofillHints.email],
-                      enabled: !_isLoading,
-                      onSubmitted: (_) => _passwordFocus.requestFocus(),
-                      onChanged: (_) => _onFieldChanged(),
-                      decoration:
-                          formInputDecoration(
-                            context,
-                            context.l10n.common_email,
-                          ).copyWith(
-                            errorText: _submitted ? _emailError : null,
-                            prefixIcon: const Icon(
-                              Icons.email_outlined,
-                              size: 20,
-                            ),
+              children:
+                  [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: scheme.primary,
+                            borderRadius: BorderRadius.circular(AppRadius.r12),
                           ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sp16),
-                FadeSlideEntrance(
-                  animation: animations[3],
-                  child: AnimatedFormFieldWrapper(
-                    hasError: _passwordError != null,
-                    child: TextField(
-                      controller: _passwordController,
-                      focusNode: _passwordFocus,
-                      obscureText: _isObscured,
-                      textInputAction: TextInputAction.done,
-                      autofillHints: const [AutofillHints.password],
-                      enabled: !_isLoading,
-                      onSubmitted: (_) => _signIn(),
-                      onChanged: (_) => _onFieldChanged(),
-                      decoration:
-                          formInputDecoration(
-                            context,
-                            context.l10n.common_password,
-                          ).copyWith(
-                            errorText: _submitted ? _passwordError : null,
-                            prefixIcon: const Icon(
-                              Icons.lock_outlined,
-                              size: 20,
+                          child: Icon(
+                            Icons.calendar_today_rounded,
+                            color: scheme.onPrimary,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sp24),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              context.l10n.auth_welcomeBack,
+                              style: textTheme.headlineLarge,
                             ),
-                            suffixIcon: AnimatedSwitcher(
-                              duration: AppAnimationDurations.quick,
-                              transitionBuilder: (child, animation) =>
-                                  FadeTransition(
-                                    opacity: animation,
-                                    child: ScaleTransition(
-                                      scale: Tween<double>(
-                                        begin: 0.7,
-                                        end: 1,
-                                      ).animate(animation),
-                                      child: child,
+                            const SizedBox(height: 4),
+                            Text(
+                              context.l10n.auth_signInToYourAccount,
+                              style: textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.sp16),
+                        AnimatedSwitcher(
+                          duration: AppAnimationDurations.banner,
+                          transitionBuilder: (child, animation) =>
+                              FadeTransition(
+                                opacity: animation,
+                                child: SizeTransition(
+                                  sizeFactor: animation,
+                                  axisAlignment: -1,
+                                  child: child,
+                                ),
+                              ),
+                          child: _buildBanner(textTheme),
+                        ),
+                        const SizedBox(height: AppSpacing.sp16),
+                        AnimatedFormFieldWrapper(
+                          hasError: _emailError != null,
+                          child: TextField(
+                            controller: _emailController,
+                            focusNode: _emailFocus,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            autofillHints: const [AutofillHints.email],
+                            enabled: !_isLoading,
+                            onSubmitted: (_) => _passwordFocus.requestFocus(),
+                            onChanged: (_) => _onFieldChanged(),
+                            decoration:
+                                formInputDecoration(
+                                  context,
+                                  context.l10n.common_email,
+                                ).copyWith(
+                                  errorText: _submitted ? _emailError : null,
+                                  prefixIcon: const Icon(
+                                    Icons.email_outlined,
+                                    size: 20,
+                                  ),
+                                ),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sp16),
+                        AnimatedFormFieldWrapper(
+                          hasError: _passwordError != null,
+                          child: TextField(
+                            controller: _passwordController,
+                            focusNode: _passwordFocus,
+                            obscureText: _isObscured,
+                            textInputAction: TextInputAction.done,
+                            autofillHints: const [AutofillHints.password],
+                            enabled: !_isLoading,
+                            onSubmitted: (_) => _signIn(),
+                            onChanged: (_) => _onFieldChanged(),
+                            decoration:
+                                formInputDecoration(
+                                  context,
+                                  context.l10n.common_password,
+                                ).copyWith(
+                                  errorText: _submitted ? _passwordError : null,
+                                  prefixIcon: const Icon(
+                                    Icons.lock_outlined,
+                                    size: 20,
+                                  ),
+                                  suffixIcon: AnimatedSwitcher(
+                                    duration: AppAnimationDurations.quick,
+                                    transitionBuilder: (child, animation) =>
+                                        FadeTransition(
+                                          opacity: animation,
+                                          child: ScaleTransition(
+                                            scale: Tween<double>(
+                                              begin: 0.7,
+                                              end: 1,
+                                            ).animate(animation),
+                                            child: child,
+                                          ),
+                                        ),
+                                    child: IconButton(
+                                      key: ValueKey(_isObscured),
+                                      icon: Icon(
+                                        _isObscured
+                                            ? Icons.visibility_off_outlined
+                                            : Icons.visibility_outlined,
+                                        size: 20,
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                      tooltip: _isObscured
+                                          ? context.l10n.auth_showPassword
+                                          : context.l10n.auth_hidePassword,
+                                      onPressed: () => setState(
+                                        () => _isObscured = !_isObscured,
+                                      ),
                                     ),
                                   ),
-                              child: IconButton(
-                                key: ValueKey(_isObscured),
-                                icon: Icon(
-                                  _isObscured
-                                      ? Icons.visibility_off_outlined
-                                      : Icons.visibility_outlined,
-                                  size: 20,
-                                  color: scheme.onSurfaceVariant,
                                 ),
-                                tooltip: _isObscured
-                                    ? context.l10n.auth_showPassword
-                                    : context.l10n.auth_hidePassword,
-                                onPressed: () =>
-                                    setState(() => _isObscured = !_isObscured),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sp24),
+                        AnimatedLoadingButton(
+                          label: context.l10n.auth_signIn,
+                          isLoading: _isLoading,
+                          onPressed: _signIn,
+                        ),
+                        const SizedBox(height: AppSpacing.sp16),
+                        // Wrap so the two action labels can flow to a second line
+                        // at 1.4× / 2.0× text scale instead of overflowing the row.
+                        // alignment: spaceBetween keeps the original single-line
+                        // visual at normal scale.
+                        Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            TextButton(
+                              onPressed: _isLoading
+                                  ? null
+                                  : _openForgotPassword,
+                              child: Text(
+                                context.l10n.auth_forgotPassword,
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: scheme.primary,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
-                          ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sp24),
-                FadeSlideEntrance(
-                  animation: animations[5],
-                  child: AnimatedLoadingButton(
-                    label: context.l10n.auth_signIn,
-                    isLoading: _isLoading,
-                    onPressed: _signIn,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sp16),
-                FadeSlideEntrance(
-                  animation: animations[6],
-                  // Wrap so the two action labels can flow to a second line
-                  // at 1.4× / 2.0× text scale instead of overflowing the row.
-                  // alignment: spaceBetween keeps the original single-line
-                  // visual at normal scale.
-                  child: Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      TextButton(
-                        onPressed: _isLoading ? null : _openForgotPassword,
-                        child: Text(
-                          context.l10n.auth_forgotPassword,
-                          style: textTheme.bodySmall?.copyWith(
-                            color: scheme.primary,
-                            fontWeight: FontWeight.w500,
-                          ),
+                            TextButton(
+                              onPressed: _isLoading ? null : _openCreateAccount,
+                              child: Text(
+                                context.l10n.auth_createAccount,
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: scheme.primary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
+                      ]
+                      .animate(interval: 65.ms)
+                      .fadeIn(duration: 425.ms, curve: Curves.easeOutCubic)
+                      .slideY(
+                        begin: 0.28,
+                        duration: 425.ms,
+                        curve: Curves.easeOutCubic,
                       ),
-                      TextButton(
-                        onPressed: _isLoading ? null : _openCreateAccount,
-                        child: Text(
-                          context.l10n.auth_createAccount,
-                          style: textTheme.bodySmall?.copyWith(
-                            color: scheme.primary,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
             ),
           ),
         ),
