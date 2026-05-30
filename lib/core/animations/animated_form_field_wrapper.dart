@@ -1,10 +1,10 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 class AnimatedFormFieldWrapper extends StatefulWidget {
   const AnimatedFormFieldWrapper({
-    required this.child, super.key,
+    required this.child,
+    super.key,
     this.hasError = false,
   });
 
@@ -16,48 +16,21 @@ class AnimatedFormFieldWrapper extends StatefulWidget {
       _AnimatedFormFieldWrapperState();
 }
 
-class _AnimatedFormFieldWrapperState extends State<AnimatedFormFieldWrapper>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _shake;
-
-  @override
-  void initState() {
-    super.initState();
-    _shake = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 320),
-    );
-  }
+class _AnimatedFormFieldWrapperState extends State<AnimatedFormFieldWrapper> {
+  int _shakeTick = 0;
 
   @override
   void didUpdateWidget(covariant AnimatedFormFieldWrapper oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.hasError && !oldWidget.hasError) {
-      _shake.forward(from: 0);
+      _shakeTick++;
     }
   }
 
   @override
-  void dispose() {
-    _shake.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _shake,
-      builder: (context, child) {
-        final t = _shake.value;
-        final dx = t == 0
-            ? 0.0
-            : math.sin(t * math.pi * 3) * 6 * (1 - t);
-        return Transform.translate(
-          offset: Offset(dx, 0),
-          child: child,
-        );
-      },
-      child: widget.child,
-    );
+    return widget.child
+        .animate(key: ValueKey(_shakeTick))
+        .shakeX(duration: 320.ms, hz: 3, amount: 6);
   }
 }

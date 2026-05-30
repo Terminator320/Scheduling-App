@@ -108,7 +108,11 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
                 .read(appointmentsRepositoryProvider)
                 .getAppointmentById(appointmentId);
             if (!mounted || appointment == null) return;
-            showEventDetails(context, appointment, showActions: widget.isAdmin);
+            await showEventDetails(
+              context,
+              appointment,
+              showActions: widget.isAdmin,
+            );
           },
         ),
       ),
@@ -215,7 +219,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     final isLoading = appointmentsAsync.isLoading;
     final locale = Localizations.localeOf(context).toString();
     final monthLabel = DateFormat.yMMMM(locale).format(_focusedDay);
-    final jobLabel = '${selectedEvents.length} ${context.l10n.calendar_appointments}';
+    final jobLabel =
+        '${selectedEvents.length} ${context.l10n.calendar_appointments}';
 
     return Scaffold(
       key: _scaffoldKey,
@@ -324,8 +329,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
                     key: ValueKey(_selectedAppointment!.id),
                     appointment: _selectedAppointment!,
                     showActions: widget.isAdmin,
-                    onClose: (_) =>
-                        setState(() => _selectedAppointment = null),
+                    onClose: (_) => setState(() => _selectedAppointment = null),
                   ),
             placeholder: _buildDetailPlaceholder(),
           ),
@@ -352,9 +356,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
             const SizedBox(height: 12),
             Text(
               context.l10n.calendar_selectAnAppointmentToViewDetails,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
           ],
