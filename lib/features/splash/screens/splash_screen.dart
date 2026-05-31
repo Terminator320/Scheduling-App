@@ -75,22 +75,28 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   void _go(SplashDestination destination) {
     if (_navigated || !mounted) return;
     _navigated = true;
-    final nav = Navigator.of(context);
-    switch (destination) {
-      case SplashGoToLogin():
-        nav.pushReplacementNamed(AppRoutes.login);
-      case SplashGoToCalendar(:final isAdmin, :final employeeId):
-        nav.pushReplacementNamed(
-          AppRoutes.mainCalendar,
-          arguments: MainCalendarArgs(isAdmin: isAdmin, employeeId: employeeId),
-        );
-    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final nav = Navigator.of(context);
+      switch (destination) {
+        case SplashGoToLogin():
+          nav.pushReplacementNamed(AppRoutes.login);
+        case SplashGoToCalendar(:final isAdmin, :final employeeId):
+          nav.pushReplacementNamed(
+            AppRoutes.mainCalendar,
+            arguments: MainCalendarArgs(
+              isAdmin: isAdmin,
+              employeeId: employeeId,
+            ),
+          );
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Only consult the authoritative read on a cache miss. Watching it on the
-    // optimistic path would run its sign-out side effects underneath us.
+
     if (_useAuthoritative) {
       ref.listen<AsyncValue<SplashDestination>>(splashDestinationProvider, (
         _,
