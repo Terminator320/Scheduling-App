@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -278,9 +279,9 @@ class SettingsProfileCard extends StatelessWidget {
                   alignment: Alignment.bottomRight,
                   child: Padding(
                     padding: const EdgeInsets.only(right: 20, bottom: 10),
-                    child: Icon(
-                      Icons.water_drop_outlined,
-                      size: 44,
+                    child: FaIcon(
+                      FontAwesomeIcons.droplet,
+                      size: 40,
                       color: scheme.onPrimary.withValues(alpha: 0.12),
                     ),
                   ),

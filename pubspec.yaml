@@ -63,6 +63,11 @@ dependencies:
   google_fonts: ^6.2.1
   flutter_animate: ^4.5.0
   flex_color_picker: ^3.8.0
+  font_awesome_flutter: ^11.0.0
+  auto_size_text: ^3.0.0
+
+  # App / device info
+  package_info_plus: ^10.1.0
 
   # Native splash (preserve/remove API used in main.dart)
   flutter_native_splash: ^2.4.7
