@@ -73,6 +73,8 @@ dependencies:
   flutter_native_splash: ^2.4.7
   flutter_secure_storage: ^10.3.1
   infinite_scroll_pagination: ^5.1.1
+  smooth_page_indicator: ^2.0.1
+  permission_handler: ^12.0.2
 
 dev_dependencies:
   flutter_test:
