@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class ImageViewer extends StatefulWidget {
   final List<ImageProvider> images;
@@ -77,7 +78,7 @@ class _ImageViewerState extends State<ImageViewer> {
                       image: widget.images[index],
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => Icon(
-                        Icons.broken_image_outlined,
+                        FontAwesomeIcons.image,
                         color: foreground.withValues(alpha: 0.54),
                         size: 64,
                       ),
@@ -93,7 +94,7 @@ class _ImageViewerState extends State<ImageViewer> {
               child: Padding(
                 padding: const EdgeInsets.all(8),
                 child: IconButton(
-                  icon: Icon(Icons.close, color: foreground),
+                  icon: Icon(FontAwesomeIcons.xmark, color: foreground),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ),

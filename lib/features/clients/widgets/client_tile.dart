@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/features/clients/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/client_detail_sheet.dart';
@@ -83,7 +84,7 @@ class ClientTile extends StatelessWidget {
                       Row(
                         children: [
                           Icon(
-                            Icons.phone_outlined,
+                            FontAwesomeIcons.phone,
                             size: 13,
                             color: scheme.onSurfaceVariant,
                           ),
@@ -104,7 +105,7 @@ class ClientTile extends StatelessWidget {
                       Row(
                         children: [
                           Icon(
-                            Icons.location_on_outlined,
+                            FontAwesomeIcons.locationDot,
                             size: 13,
                             color: scheme.onSurfaceVariant,
                           ),
@@ -127,7 +128,8 @@ class ClientTile extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 4, right: 4),
                 child: Center(
                   child: Icon(
-                    Icons.chevron_right,
+                    FontAwesomeIcons.chevronRight,
+                    size: 16,
                     color: scheme.onSurfaceVariant,
                   ),
                 ),
@@ -160,7 +162,7 @@ class _AppointmentCountBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            Icons.event_outlined,
+            FontAwesomeIcons.calendarCheck,
             size: 15,
             color: scheme.onPrimaryContainer,
           ),

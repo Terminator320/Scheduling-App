@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
@@ -122,7 +123,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
+            icon: const Icon(FontAwesomeIcons.arrowLeft),
             tooltip: context.l10n.back,
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -200,7 +201,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  Icons.lock_reset_rounded,
+                  FontAwesomeIcons.unlockKeyhole,
                   size: 36,
                   color: colour.primary,
                 ),
@@ -275,7 +276,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
               )
                   .copyWith(
                     errorText: _emailError,
-                    prefixIcon: const Icon(Icons.email_outlined, size: 20),
+                    prefixIcon: const Icon(FontAwesomeIcons.envelope, size: 20),
                   ),
             ),
           ),
@@ -351,7 +352,7 @@ class _ForgotPasswordState extends State<ForgotPassword>
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  Icons.mark_email_read_rounded,
+                  FontAwesomeIcons.envelopeCircleCheck,
                   size: 44,
                   color: colour.secondary,
                 ),

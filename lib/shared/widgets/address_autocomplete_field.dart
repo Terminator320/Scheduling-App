@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/shared/models/address_suggestion.dart';
@@ -139,7 +140,7 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 )
-              : Icon(Icons.location_on_outlined, size: 18,
+              : Icon(FontAwesomeIcons.locationDot, size: 18,
                   color: scheme.onSurfaceVariant),
         ),
         if (_suggestions.isNotEmpty)
@@ -155,7 +156,7 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
                     (s) => ListTile(
                       dense: true,
                       leading: Icon(
-                        Icons.location_on_outlined,
+                        FontAwesomeIcons.locationDot,
                         size: 18,
                         color: scheme.onSurfaceVariant,
                       ),

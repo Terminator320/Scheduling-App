@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
@@ -286,7 +287,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                                 .copyWith(
                                   errorText: _emailError,
                                   prefixIcon: const Icon(
-                                    Icons.email_outlined,
+                                    FontAwesomeIcons.envelope,
                                     size: 20,
                                   ),
                                 ),
@@ -314,7 +315,7 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                                 .copyWith(
                                   errorText: _passwordError,
                                   prefixIcon: const Icon(
-                                    Icons.lock_outlined,
+                                    FontAwesomeIcons.lock,
                                     size: 20,
                                   ),
                                   suffixIcon: AnimatedSwitcher(
@@ -334,8 +335,8 @@ class _LoginState extends State<Login> with SingleTickerProviderStateMixin {
                                       key: ValueKey(_isObscured),
                                       icon: Icon(
                                         _isObscured
-                                            ? Icons.visibility_off_outlined
-                                            : Icons.visibility_outlined,
+                                            ? FontAwesomeIcons.eyeSlash
+                                            : FontAwesomeIcons.eye,
                                         size: 20,
                                       ),
                                       tooltip: _isObscured

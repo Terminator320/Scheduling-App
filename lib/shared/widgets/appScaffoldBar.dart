@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/routes/app_routes.dart';
 
@@ -16,7 +17,7 @@ PreferredSizeWidget appScaffoldBar(BuildContext context, String title, String em
             employeeId: employeeId,
           ),
         ),
-        icon: Icon(Icons.arrow_back_rounded),
+        icon: const Icon(FontAwesomeIcons.arrowLeft),
       ),
     );
 }

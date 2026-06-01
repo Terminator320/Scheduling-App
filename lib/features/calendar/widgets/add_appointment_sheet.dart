@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/services/image_picker_service.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
@@ -354,7 +355,7 @@ class _AddEventSheetState extends State<AddEventSheet> {
                 hint: sheetContext.l10n.selectDate,
                 controller: _dateController,
                 readOnly: true,
-                suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+                suffixIcon: const Icon(FontAwesomeIcons.calendar, size: 18),
                 errorText: _errors['date'],
                 onTap: _pickDate,
               ),

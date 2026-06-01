@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/utils/app_language.dart';
@@ -59,7 +60,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
           ),
           const SizedBox(height: 24),
           _DrawerItem(
-            icon: Icons.calendar_month_outlined,
+            icon: FontAwesomeIcons.calendarDays,
             label: context.l10n.calendar,
             textTheme: textTheme,
             scheme: scheme,
@@ -77,7 +78,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
           ),
           if (widget.isAdmin) ...[
             _DrawerItem(
-              icon: Icons.badge_outlined,
+              icon: FontAwesomeIcons.idBadge,
               label: context.l10n.employees,
               textTheme: textTheme,
               scheme: scheme,
@@ -94,7 +95,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               },
             ),
             _DrawerItem(
-              icon: Icons.people_outline,
+              icon: FontAwesomeIcons.users,
               label: context.l10n.clients,
               textTheme: textTheme,
               scheme: scheme,
@@ -112,7 +113,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               },
             ),
             _DrawerItem(
-              icon: Icons.assignment_outlined,
+              icon: FontAwesomeIcons.clipboardList,
               label: context.l10n.appointments,
               textTheme: textTheme,
               scheme: scheme,
@@ -131,7 +132,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
             ),
           ],
           _DrawerItem(
-            icon: Icons.settings_outlined,
+            icon: FontAwesomeIcons.gear,
             label: context.l10n.settings,
             textTheme: textTheme,
             scheme: scheme,
@@ -140,7 +141,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
           const Spacer(),
           const Divider(height: 1),
           _DrawerItem(
-            icon: Icons.logout,
+            icon: FontAwesomeIcons.rightFromBracket,
             label: context.l10n.logOut,
             textTheme: textTheme,
             scheme: scheme,
@@ -173,7 +174,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
             child: Row(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                  icon: const Icon(FontAwesomeIcons.chevronLeft, size: 20),
                   onPressed: () => setState(() => _showSettings = false),
                 ),
                 const SizedBox(width: 8),
@@ -189,7 +190,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               final themeNotifier = ThemeNotifier.of(ctx);
 
               return _DrawerItem(
-                icon: Icons.text_fields_outlined,
+                icon: FontAwesomeIcons.font,
                 label: context.l10n.textSize,
                 textTheme: textTheme,
                 scheme: scheme,
@@ -245,8 +246,8 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               final isDark = themeNotifier.isDark;
               return _DrawerItem(
                 icon: isDark
-                    ? Icons.light_mode_outlined
-                    : Icons.dark_mode_outlined,
+                    ? FontAwesomeIcons.sun
+                    : FontAwesomeIcons.moon,
                 label: isDark
                     ? context.l10n.lightMode
                     : context.l10n.darkMode,
@@ -261,7 +262,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               final themeNotifier = ThemeNotifier.of(ctx);
               final langController = AppLanguageScope.of(ctx);
               return _DrawerItem(
-                icon: Icons.language_outlined,
+                icon: FontAwesomeIcons.language,
                 label: context.l10n.language,
                 textTheme: textTheme,
                 scheme: scheme,

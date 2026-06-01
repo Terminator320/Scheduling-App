@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 import 'package:scheduling/core/utils/l10n_extensions.dart';
@@ -114,7 +115,7 @@ class _MainCalendar extends State<MainCalendar> {
                   await service.addAppointment(newEvent);
                 }
               },
-              child: const Icon(Icons.add),
+              child: const Icon(FontAwesomeIcons.plus),
             )
           : null,
       endDrawer: SettingsDrawer(
@@ -143,7 +144,7 @@ class _MainCalendar extends State<MainCalendar> {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               IconButton(
-                icon: const Icon(Icons.menu),
+                icon: const Icon(FontAwesomeIcons.bars),
                 visualDensity: VisualDensity.compact,
                 onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
               ),

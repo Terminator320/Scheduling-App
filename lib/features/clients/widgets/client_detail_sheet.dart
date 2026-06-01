@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/clients/models/client_record.dart';
@@ -469,10 +470,10 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
 
     return [
       if (c.phone.isNotEmpty)
-        InfoRow(icon: Icons.phone_outlined, text: c.phone),
+        InfoRow(icon: FontAwesomeIcons.phone, text: c.phone),
 
       if (c.email.isNotEmpty)
-        InfoRow(icon: Icons.email_outlined, text: c.email),
+        InfoRow(icon: FontAwesomeIcons.envelope, text: c.email),
 
       if (c.address.isNotEmpty)
         InkWell(
@@ -482,7 +483,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: InfoRow(
-              icon: Icons.location_on_outlined,
+              icon: FontAwesomeIcons.locationDot,
               text: c.address,
               iconColor: Theme.of(context).colorScheme.primary.withOpacity(0.9),
               textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -509,11 +510,11 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (contact.name.isNotEmpty)
-                  InfoRow(icon: Icons.person_outline, text: contact.name),
+                  InfoRow(icon: FontAwesomeIcons.user, text: contact.name),
                 if (contact.phone.isNotEmpty)
-                  InfoRow(icon: Icons.phone_outlined, text: contact.phone),
+                  InfoRow(icon: FontAwesomeIcons.phone, text: contact.phone),
                 if (contact.email.isNotEmpty)
-                  InfoRow(icon: Icons.mail_outline, text: contact.email),
+                  InfoRow(icon: FontAwesomeIcons.envelope, text: contact.email),
               ],
             ),
           ),
@@ -695,7 +696,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
                   width: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Icon(Icons.delete_outline, size: 18),
+              : const Icon(FontAwesomeIcons.trashCan, size: 18),
           label: Text(
             _isDeleting ? context.l10n.deleting : context.l10n.delete,
           ),
@@ -708,7 +709,7 @@ class _ClientDetailSheetState extends State<ClientDetailSheet> {
           onPressed: _isDeleting
               ? null
               : () => setState(() => _isEditing = true),
-          icon: const Icon(Icons.edit_outlined, size: 18),
+          icon: const Icon(FontAwesomeIcons.penToSquare, size: 18),
           label: Text(context.l10n.edit),
         ),
       ],

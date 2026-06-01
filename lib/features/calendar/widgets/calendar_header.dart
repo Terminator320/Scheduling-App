@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 
@@ -30,7 +31,7 @@ class CalendarHeader extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          IconButton(icon: const Icon(Icons.chevron_left), onPressed: onLeft),
+          IconButton(icon: const Icon(FontAwesomeIcons.chevronLeft, size: 20), onPressed: onLeft),
 
           GestureDetector(
             onTap: onTapMonth,
@@ -52,7 +53,7 @@ class CalendarHeader extends StatelessWidget {
                   child: Text(context.l10n.today),
                 ),
               IconButton(
-                icon: const Icon(Icons.chevron_right),
+                icon: const Icon(FontAwesomeIcons.chevronRight, size: 20),
                 onPressed: onRight,
               ),
             ],

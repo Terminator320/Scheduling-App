@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
@@ -156,7 +157,7 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _openEmployeeSheet,
-        child: const Icon(Icons.add),
+        child: const Icon(FontAwesomeIcons.plus),
       ),
       body: SafeArea(
         child: Padding(
@@ -173,7 +174,7 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
                 decoration: formInputDecoration(
                   context,
                   context.l10n.searchByNameOrPhoneNumber2,
-                ).copyWith(prefixIcon: const Icon(Icons.search)),
+                ).copyWith(prefixIcon: const Icon(FontAwesomeIcons.magnifyingGlass, size: 18)),
               ),
               const SizedBox(height: 14),
               Expanded(

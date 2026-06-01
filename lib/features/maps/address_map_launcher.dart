@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -18,21 +19,21 @@ class AddressMapLauncher {
       if (Platform.isIOS)
         _MapOption(
           label: context.l10n.appleMaps,
-          icon: Icons.map_outlined,
+          icon: FontAwesomeIcons.apple,
           uri: Uri.parse(
             'http://maps.apple.com/?q=${Uri.encodeComponent(cleanAddress)}',
           ),
         ),
       _MapOption(
         label: context.l10n.googleMaps,
-        icon: Icons.map_outlined,
+        icon: FontAwesomeIcons.google,
         uri: Uri.parse(
           'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(cleanAddress)}',
         ),
       ),
       _MapOption(
         label: context.l10n.waze,
-        icon: Icons.navigation_outlined,
+        icon: FontAwesomeIcons.waze,
         uri: Uri.parse(
           'https://waze.com/ul?q=${Uri.encodeComponent(cleanAddress)}&navigate=yes',
         ),

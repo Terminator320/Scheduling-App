@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 
@@ -65,6 +66,6 @@ Widget formRemoveButton(BuildContext context) {
       color: Theme.of(context).colorScheme.scrim.withOpacity(0.54),
       shape: BoxShape.circle,
     ),
-    child: const Icon(Icons.close, size: 14, color: Colors.white),
+    child: const Icon(FontAwesomeIcons.xmark, size: 14, color: Colors.white),
   );
 }

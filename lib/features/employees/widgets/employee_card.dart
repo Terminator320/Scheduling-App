@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/employees/models/employee_record.dart';
@@ -46,13 +47,13 @@ class EmployeeCard extends StatelessWidget {
                 children: [
                   IconButton(
                     onPressed: onEdit,
-                    icon: const Icon(Icons.edit_outlined, size: 20),
+                    icon: const Icon(FontAwesomeIcons.penToSquare, size: 18),
                   ),
                   IconButton(
                     onPressed: onDelete,
                     icon: Icon(
-                      Icons.delete_outline,
-                      size: 20,
+                      FontAwesomeIcons.trashCan,
+                      size: 18,
                       color: scheme.error,
                     ),
                   ),

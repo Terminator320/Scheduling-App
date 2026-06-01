@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
@@ -165,7 +166,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
         child: Scaffold(
           appBar: AppBar(
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
+              icon: const Icon(FontAwesomeIcons.arrowLeft),
               tooltip: context.l10n.back,
               onPressed: _isLoading ? null : _backToSignIn,
             ),
@@ -244,7 +245,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  Icons.person_add_alt_1_rounded,
+                  FontAwesomeIcons.userPlus,
                   size: 36,
                   color: colour.primary,
                 ),
@@ -296,7 +297,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                 context.l10n.email,
               ).copyWith(
                 errorText: _emailError,
-                prefixIcon: const Icon(Icons.email_outlined, size: 20),
+                prefixIcon: const Icon(FontAwesomeIcons.envelope, size: 20),
               ),
             ),
           ),
@@ -320,12 +321,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                 context.l10n.password,
               ).copyWith(
                 errorText: _passwordError,
-                prefixIcon: const Icon(Icons.lock_outlined, size: 20),
+                prefixIcon: const Icon(FontAwesomeIcons.lock, size: 20),
                 suffixIcon: IconButton(
                   icon: Icon(
                     _isObscured
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
+                        ? FontAwesomeIcons.eyeSlash
+                        : FontAwesomeIcons.eye,
                     size: 20,
                   ),
                   tooltip: _isObscured
@@ -357,12 +358,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               )
                   .copyWith(
                     errorText: _confirmPasswordError,
-                    prefixIcon: const Icon(Icons.lock_reset_outlined, size: 20),
+                    prefixIcon: const Icon(FontAwesomeIcons.lock, size: 20),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _isConfirmObscured
-                            ? Icons.visibility_off_outlined
-                            : Icons.visibility_outlined,
+                            ? FontAwesomeIcons.eyeSlash
+                            : FontAwesomeIcons.eye,
                         size: 20,
                       ),
                       tooltip: _isConfirmObscured
@@ -441,7 +442,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  Icons.check_circle_outline_rounded,
+                  FontAwesomeIcons.circleCheck,
                   size: 42,
                   color: colour.primary,
                 ),

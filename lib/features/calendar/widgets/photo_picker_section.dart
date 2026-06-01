@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/calendar/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/widgets/image_viewer.dart';
@@ -128,7 +129,7 @@ class PhotoPickerSection extends StatelessWidget {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.add, color: scheme.onSurfaceVariant),
+                          Icon(FontAwesomeIcons.plus, color: scheme.onSurfaceVariant),
                           Text(
                             context.l10n.addMore,
                             style: TextStyle(
@@ -156,7 +157,7 @@ class PhotoPickerSection extends StatelessWidget {
               child: Center(
                 child: Column(
                   children: [
-                    Icon(Icons.image_outlined, color: scheme.onSurfaceVariant),
+                    Icon(FontAwesomeIcons.image, color: scheme.onSurfaceVariant),
                     const SizedBox(height: 4),
                     Text(
                       context.l10n.tapToAddPhotos,
@@ -182,7 +183,7 @@ class PhotoPickerSection extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.photo_library_outlined,
+                  Icon(FontAwesomeIcons.images,
                       color: scheme.onSurfaceVariant, size: 24),
                   const SizedBox(height: 4),
                   Text(

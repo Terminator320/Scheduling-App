@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
@@ -175,7 +176,7 @@ class _ListInformationState extends State<ListInformation> {
       floatingActionButton: widget.isAdmin && _isClients
           ? FloatingActionButton(
               onPressed: _onAddClient,
-              child: const Icon(Icons.add),
+              child: const Icon(FontAwesomeIcons.plus),
             )
           : null,
       body: _isClients ? _buildClientList() : _buildAppointmentList(),
@@ -214,14 +215,14 @@ class _ListInformationState extends State<ListInformation> {
                   context.l10n.searchByNameOrPhone,
                 ).copyWith(
                   prefixIcon: Icon(
-                    Icons.search,
-                    size: 20,
+                    FontAwesomeIcons.magnifyingGlass,
+                    size: 18,
                     color: scheme.onSurfaceVariant,
                   ),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
                           icon: Icon(
-                            Icons.close,
+                            FontAwesomeIcons.xmark,
                             size: 18,
                             color: scheme.onSurfaceVariant,
                           ),
@@ -241,8 +242,8 @@ class _ListInformationState extends State<ListInformation> {
                     children: [
                       Icon(
                         query.isEmpty
-                            ? Icons.groups_outlined
-                            : Icons.search_off_outlined,
+                            ? FontAwesomeIcons.userGroup
+                            : FontAwesomeIcons.magnifyingGlassMinus,
                         size: 40,
                         color: scheme.onSurfaceVariant,
                       ),
@@ -297,14 +298,14 @@ class _ListInformationState extends State<ListInformation> {
                   context.l10n.searchByClientOrEmployee,
                 ).copyWith(
                   prefixIcon: Icon(
-                    Icons.search,
-                    size: 20,
+                    FontAwesomeIcons.magnifyingGlass,
+                    size: 18,
                     color: scheme.onSurfaceVariant,
                   ),
                   suffixIcon: _appointmentSearchController.text.isNotEmpty
                       ? IconButton(
                           icon: Icon(
-                            Icons.close,
+                            FontAwesomeIcons.xmark,
                             size: 18,
                             color: scheme.onSurfaceVariant,
                           ),
@@ -358,8 +359,8 @@ class _ListInformationState extends State<ListInformation> {
                     children: [
                       Icon(
                         query.isEmpty
-                            ? Icons.event_busy_outlined
-                            : Icons.search_off_outlined,
+                            ? FontAwesomeIcons.calendarXmark
+                            : FontAwesomeIcons.magnifyingGlassMinus,
                         size: 40,
                         color: scheme.onSurfaceVariant,
                       ),

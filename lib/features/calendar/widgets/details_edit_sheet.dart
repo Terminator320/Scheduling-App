@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/l10n_extensions.dart';
@@ -409,7 +410,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
           runSpacing: 6,
           children: [
             Icon(
-              Icons.calendar_today_outlined,
+              FontAwesomeIcons.calendar,
               size: 13,
               color: scheme.onSurfaceVariant,
             ),
@@ -419,7 +420,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
               style: secondaryStyle,
             ),
             Icon(
-              Icons.access_time_outlined,
+              FontAwesomeIcons.clock,
               size: 13,
               color: scheme.onSurfaceVariant,
             ),
@@ -527,11 +528,11 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (contact.name.trim().isNotEmpty)
-            _contactLine(Icons.person_outline, contact.name.trim()),
+            _contactLine(FontAwesomeIcons.user, contact.name.trim()),
           if (contact.phone.trim().isNotEmpty)
-            _contactLine(Icons.phone_outlined, contact.phone.trim()),
+            _contactLine(FontAwesomeIcons.phone, contact.phone.trim()),
           if (contact.email.trim().isNotEmpty)
-            _contactLine(Icons.mail_outline, contact.email.trim()),
+            _contactLine(FontAwesomeIcons.envelope, contact.email.trim()),
         ],
       ),
     );
@@ -589,7 +590,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
                     children: [
                       Expanded(child: text),
                       const SizedBox(width: 8),
-                      const Icon(Icons.open_in_new, size: 16),
+                      const Icon(FontAwesomeIcons.arrowUpRightFromSquare, size: 14),
                     ],
                   ),
                 ),
@@ -622,7 +623,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
           controller: _dateController,
           readOnly: true,
           errorText: _errors['date'],
-          suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+          suffixIcon: const Icon(FontAwesomeIcons.calendar, size: 18),
           onTap: () async {
             final picked = await showDatePicker(
               context: context,
@@ -844,7 +845,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
                       color: scheme.onPrimary,
                     ),
                   )
-                : const Icon(Icons.check, size: 18),
+                : const Icon(FontAwesomeIcons.check, size: 18),
             label: Text(context.l10n.markAsDone),
           ),
 
@@ -857,7 +858,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
               side: const BorderSide(color: Colors.green),
             ),
             onPressed: null, // désactivé
-            icon: const Icon(Icons.check_circle_outline, size: 18),
+            icon: const Icon(FontAwesomeIcons.circleCheck, size: 18),
             label: Text(context.l10n.completed),
           ),
       ],

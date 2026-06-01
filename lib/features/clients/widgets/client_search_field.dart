@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/clients/models/client_record.dart';
@@ -44,7 +45,7 @@ class ClientSearchField extends StatelessWidget {
                 errorText: errorText,
                 suffixIcon: selectedClient != null
                     ? IconButton(
-                        icon: const Icon(Icons.close, size: 18),
+                        icon: const Icon(FontAwesomeIcons.xmark, size: 18),
                         onPressed: onClear,
                       )
                     : isSearching
@@ -56,7 +57,7 @@ class ClientSearchField extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                       )
-                    : const Icon(Icons.search, size: 18),
+                    : const Icon(FontAwesomeIcons.magnifyingGlass, size: 18),
               ),
 
           onChanged: onChanged,

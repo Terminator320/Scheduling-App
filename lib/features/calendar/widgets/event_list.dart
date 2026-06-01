@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
@@ -85,7 +86,7 @@ class EventList extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons.event_busy_outlined,
+                    FontAwesomeIcons.calendarXmark,
                     size: 40,
                     color: scheme.onSurfaceVariant,
                   ),
@@ -147,7 +148,7 @@ class EventList extends StatelessWidget {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Icon(
-                                        Icons.access_time_outlined,
+                                        FontAwesomeIcons.clock,
                                         size: 13,
                                         color: scheme.onSurfaceVariant,
                                       ),
@@ -172,14 +173,14 @@ class EventList extends StatelessWidget {
                           if (isAdmin) ...[
                             IconButton(
                               onPressed: () => _openEditSheet(context, e),
-                              icon: const Icon(Icons.edit_outlined),
+                              icon: const Icon(FontAwesomeIcons.penToSquare, size: 18),
                               color: scheme.onSurfaceVariant,
                               tooltip: context.l10n.edit,
                               visualDensity: VisualDensity.compact,
                             ),
                             IconButton(
                               onPressed: () => _confirmDelete(context, e),
-                              icon: const Icon(Icons.delete_outline),
+                              icon: const Icon(FontAwesomeIcons.trashCan, size: 18),
                               color: scheme.error,
                               tooltip: context.l10n.delete,
                               visualDensity: VisualDensity.compact,
@@ -190,7 +191,8 @@ class EventList extends StatelessWidget {
                               padding: const EdgeInsets.only(right: 12),
                               child: Center(
                                 child: Icon(
-                                  Icons.chevron_right,
+                                  FontAwesomeIcons.chevronRight,
+                                  size: 16,
                                   color: scheme.onSurfaceVariant,
                                 ),
                               ),

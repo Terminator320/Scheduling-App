@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/features/clients/models/client_record.dart';
@@ -642,7 +643,7 @@ class _AdditionalContactsSection extends StatelessWidget {
               ),
               TextButton.icon(
                 onPressed: onAddContact,
-                icon: const Icon(Icons.add),
+                icon: const Icon(FontAwesomeIcons.plus, size: 16),
                 label: Text(context.l10n.add),
               ),
             ],
@@ -660,7 +661,7 @@ class _AdditionalContactsSection extends StatelessWidget {
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: onAddContact,
-              icon: const Icon(Icons.person_add_alt_1),
+              icon: const Icon(FontAwesomeIcons.userPlus, size: 16),
               label: Text(context.l10n.addAnotherContact),
             ),
           ],
@@ -723,7 +724,7 @@ class _AdditionalContactCard extends StatelessWidget {
               IconButton(
                 tooltip: context.l10n.removeContact,
                 onPressed: onRemove,
-                icon: const Icon(Icons.close),
+                icon: const Icon(FontAwesomeIcons.xmark),
               ),
             ],
           ),

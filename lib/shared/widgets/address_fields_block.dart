@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/utils/l10n_extensions.dart';
 import 'package:scheduling/shared/models/address_suggestion.dart';
@@ -137,7 +138,7 @@ class _AddressFieldsBlockState extends State<AddressFieldsBlock> {
             context.l10n.typeToSearchAnAddress,
           ).copyWith(
             prefixIcon: Icon(
-              Icons.search,
+              FontAwesomeIcons.magnifyingGlass,
               size: 18,
               color: scheme.onSurfaceVariant,
             ),
@@ -166,7 +167,7 @@ class _AddressFieldsBlockState extends State<AddressFieldsBlock> {
                     (s) => ListTile(
                       dense: true,
                       leading: Icon(
-                        Icons.location_on_outlined,
+                        FontAwesomeIcons.locationDot,
                         size: 18,
                         color: scheme.onSurfaceVariant,
                       ),

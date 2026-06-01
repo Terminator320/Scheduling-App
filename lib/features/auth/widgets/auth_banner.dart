@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 enum AuthBannerKind { error, success, info }
 
@@ -23,17 +24,17 @@ class AuthBanner extends StatelessWidget {
       case AuthBannerKind.error:
         accent = scheme.error;
         background = scheme.error.withAlpha(22);
-        icon = Icons.error_outline_rounded;
+        icon = FontAwesomeIcons.circleExclamation;
         break;
       case AuthBannerKind.success:
         accent = scheme.secondary;
         background = scheme.secondary.withAlpha(38);
-        icon = Icons.check_circle_rounded;
+        icon = FontAwesomeIcons.circleCheck;
         break;
       case AuthBannerKind.info:
         accent = scheme.primary;
         background = scheme.primary.withAlpha(22);
-        icon = Icons.info_outline_rounded;
+        icon = FontAwesomeIcons.circleInfo;
         break;
     }
 

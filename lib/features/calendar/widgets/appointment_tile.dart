@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/models/appointment_record.dart';
@@ -69,7 +70,7 @@ class AppointmentTile extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Icon(
-                            Icons.calendar_today_outlined,
+                            FontAwesomeIcons.calendar,
                             size: 13,
                             color: scheme.onSurfaceVariant,
                           ),
@@ -96,7 +97,8 @@ class AppointmentTile extends StatelessWidget {
                 padding: const EdgeInsets.only(right: 12),
                 child: Center(
                   child: Icon(
-                    Icons.chevron_right,
+                    FontAwesomeIcons.chevronRight,
+                    size: 16,
                     color: scheme.onSurfaceVariant,
                   ),
                 ),
