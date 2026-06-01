@@ -8,6 +8,7 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
@@ -29,6 +30,7 @@ abstract class AddEventState with _$AddEventState {
     @Default(false) bool isSearchingClient,
     @Default(false) bool useCustomAddress,
     @Default(<EmployeeRecord>[]) List<EmployeeRecord> selectedEmployees,
+    @Default(RepeatInterval.none) RepeatInterval repeat,
     @Default(<File>[]) List<File> selectedImages,
     @Default(false) bool isSubmitting,
     @Default(<String, AppointmentFormError>{})
@@ -56,8 +58,11 @@ class AddEventBusyEmployees extends AddEventSubmitOutcome {
 }
 
 class AddEventSubmitted extends AddEventSubmitOutcome {
-  const AddEventSubmitted(this.appointment);
+  const AddEventSubmitted(this.appointment, {this.futureBookings = 0});
   final AppointmentRecord appointment;
+
+  /// Pre-booked repeat occurrences created alongside [appointment].
+  final int futureBookings;
 }
 
 class AddEventFailed extends AddEventSubmitOutcome {
@@ -140,6 +145,10 @@ class AddEventController extends Notifier<AddEventState> {
 
   void setUseCustomAddress({required bool value}) {
     state = state.copyWith(useCustomAddress: value);
+  }
+
+  void selectRepeat(RepeatInterval value) {
+    state = state.copyWith(repeat: value);
   }
 
   void toggleEmployee(EmployeeRecord employee) {
@@ -239,9 +248,26 @@ class AddEventController extends Notifier<AddEventState> {
         employeeNames: state.selectedEmployees.map((e) => e.name).toList(),
         notes: notes.trim(),
         materialsNeeded: materialsNeeded.trim(),
+        repeat: state.repeat,
+        seriesId: state.repeat == RepeatInterval.none ? '' : docId,
       );
 
-      await repo.addAppointment(appointment);
+      // Busy check covers only the first occurrence; repeats are months out.
+      // Photos stay on the first visit only.
+      final copies = [
+        for (final copyStart in state.repeat.occurrenceStartsAfter(start))
+          appointment.copyWith(
+            id: repo.newDocId(),
+            startTime: copyStart,
+            endTime: copyStart.add(end.difference(start)),
+          ),
+      ];
+
+      if (copies.isEmpty) {
+        await repo.addAppointment(appointment);
+      } else {
+        await repo.addAppointments([appointment, ...copies]);
+      }
 
       if (state.selectedImages.isNotEmpty) {
         ref
@@ -252,7 +278,7 @@ class AddEventController extends Notifier<AddEventState> {
             );
       }
 
-      return AddEventSubmitted(appointment);
+      return AddEventSubmitted(appointment, futureBookings: copies.length);
     } catch (e, st) {
       ref.read(loggerProvider).warn('APPT-CREATE submit failed', e, st);
       state = state.copyWith(isSubmitting: false);

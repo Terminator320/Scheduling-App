@@ -243,9 +243,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       },
     );
 
-    // Rebuild the index only when the stream emits a new list — otherwise
-    // every setState would regroup and re-sort, and the fresh per-day list
-    // instances would make _selectedEvents notify (rebuilding EventList).
+
     if (!identical(visibleAppointments, _indexedAppointments)) {
       _indexedAppointments = visibleAppointments;
       _dayIndex = _buildDayIndex(visibleAppointments);
@@ -332,8 +330,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton(
               onPressed: () async {
-                // AddEventController.submit() already persists the appointment;
-                // the in-range stream surfaces it. Don't write it again here.
                 await showAddEventPopup(
                   context,
                   initialDate: _selectedDay ?? _focusedDay,

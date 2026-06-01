@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 
 void main() {
   group('AppointmentRecord', () {
@@ -84,6 +85,30 @@ void main() {
       );
       final restored = AppointmentRecord.fromMap('a1', original.toMap());
       expect(restored, equals(original));
+    });
+
+    test('toMap → fromMap roundtrip preserves the repeat rule', () {
+      final original = AppointmentRecord(
+        id: 'a1',
+        startTime: start,
+        endTime: end,
+        repeat: RepeatInterval.sixMonths,
+        seriesId: 'series-1',
+      );
+      final restored = AppointmentRecord.fromMap('a1', original.toMap());
+      expect(restored.repeat, RepeatInterval.sixMonths);
+      expect(restored.seriesId, 'series-1');
+    });
+
+    test('fromMap defaults missing or unknown repeat to none', () {
+      expect(
+        AppointmentRecord.fromMap('a1', const {}).repeat,
+        RepeatInterval.none,
+      );
+      expect(
+        AppointmentRecord.fromMap('a1', const {'repeat': 'weekly'}).repeat,
+        RepeatInterval.none,
+      );
     });
 
     test('fromMap defaults missing required dates to now', () {

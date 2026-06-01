@@ -348,6 +348,65 @@
   "@calendar_typeTheMaterialsHere": {
     "description": "Type the materials here..."
   },
+  "calendar_repeat": "Repeat",
+  "@calendar_repeat": {
+    "description": "Label for the repeat interval picker in the add-appointment form"
+  },
+  "calendar_repeatNone": "None",
+  "@calendar_repeatNone": {
+    "description": "Repeat option: the appointment does not repeat"
+  },
+  "calendar_repeatEvery4Months": "Every 4 months",
+  "@calendar_repeatEvery4Months": {
+    "description": "Repeat option: the appointment repeats every four months"
+  },
+  "calendar_repeatEvery6Months": "Every 6 months",
+  "@calendar_repeatEvery6Months": {
+    "description": "Repeat option: the appointment repeats every six months"
+  },
+  "calendar_repeatEveryYear": "Every year",
+  "@calendar_repeatEveryYear": {
+    "description": "Repeat option: the appointment repeats every year"
+  },
+  "calendar_appointmentCreatedWithRepeats": "{count, plural, =1{Appointment created — 1 future visit booked} other{Appointment created — {count} future visits booked}}",
+  "@calendar_appointmentCreatedWithRepeats": {
+    "description": "Success notice after creating a repeating appointment; count is the number of pre-booked future occurrences",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_changesSavedWithRepeats": "{count, plural, =1{Changes saved — 1 future visit booked} other{Changes saved — {count} future visits booked}}",
+  "@calendar_changesSavedWithRepeats": {
+    "description": "Success notice after saving an appointment edit that also pre-booked repeat occurrences; count is the number of future visits",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_changesSavedWithRemoved": "{count, plural, =1{Changes saved — 1 future visit removed} other{Changes saved — {count} future visits removed}}",
+  "@calendar_changesSavedWithRemoved": {
+    "description": "Success notice after a save that turned off the repeat rule and deleted the previously booked future occurrences; count is the number deleted",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_deleteSeriesMessage": "This appointment is part of a repeating series.",
+  "@calendar_deleteSeriesMessage": {
+    "description": "Body of the delete dialog shown for a repeating appointment, above the this-visit-only / this-and-future choices"
+  },
+  "calendar_deleteThisVisitOnly": "Delete this visit only",
+  "@calendar_deleteThisVisitOnly": {
+    "description": "Delete dialog option: delete only the opened occurrence of a repeating appointment"
+  },
+  "calendar_deleteThisAndFutureVisits": "Delete this and future visits",
+  "@calendar_deleteThisAndFutureVisits": {
+    "description": "Delete dialog option: delete the opened occurrence plus the series' future occurrences"
+  },
   "calendar_eGPlumbingRepair": "e.g. Plumbing repair",
   "@calendar_eGPlumbingRepair": {
     "description": "e.g. Plumbing repair"

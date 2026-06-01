@@ -54,9 +54,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   String get _displayName {
     if (widget.name.isNotEmpty) return widget.name;
-    // The name lives in the Firestore users doc, not Auth's displayName, so
-    // fall back to the live doc when the screen is reached via the nav rail
-    // (which doesn't thread the name through the constructor).
+
     final docName = ref.watch(currentUserNameProvider);
     if (docName.isNotEmpty) return docName;
     return FirebaseAuth.instance.currentUser?.displayName ?? '';

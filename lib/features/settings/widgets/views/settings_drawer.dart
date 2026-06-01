@@ -31,6 +31,8 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
   String _displayName = '';
   String _displayEmail = '';
 
+
+
   String _resolveName() {
     final docName = ref.watch(currentUserNameProvider);
     if (docName.isNotEmpty) return docName;

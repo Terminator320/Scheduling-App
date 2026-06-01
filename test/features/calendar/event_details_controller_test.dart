@@ -11,6 +11,7 @@ import 'package:scheduling/features/calendar/data/appointment_image_upload_servi
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -69,6 +70,8 @@ void main() {
       ),
     );
     registerFallbackValue(<AppointmentImage>[]);
+    registerFallbackValue(<AppointmentRecord>[]);
+    registerFallbackValue(<String>[]);
   });
 
   late _MockAppointmentsRepo appointments;
@@ -318,6 +321,178 @@ void main() {
       );
     });
 
+    test('rewrites the series when the repeat rule changes', () async {
+      var nextId = 0;
+      when(appointments.newDocId).thenAnswer((_) => 'copy-${++nextId}');
+      when(
+        () => appointments.rewriteSeries(
+          updated: any(named: 'updated'),
+          deleteIds: any(named: 'deleteIds'),
+          copies: any(named: 'copies'),
+        ),
+      ).thenAnswer((_) async {});
+
+      readNotifier();
+      await waitForSeed();
+      final c = readNotifier()..selectRepeat(RepeatInterval.sixMonths);
+
+      final outcome = await c.save(
+        _appointment,
+        title: 'Furnace check',
+        address: '99 New St',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      expect(outcome, isA<EventDetailsSaved>());
+      expect((outcome as EventDetailsSaved).futureBookings, 2);
+      expect(outcome.appointment.repeat, RepeatInterval.sixMonths);
+      // A doc without a series gets one keyed by its own id.
+      expect(outcome.appointment.seriesId, 'appt-1');
+
+      final captured = verify(
+        () => appointments.rewriteSeries(
+          updated: captureAny(named: 'updated'),
+          deleteIds: captureAny(named: 'deleteIds'),
+          copies: captureAny(named: 'copies'),
+        ),
+      ).captured;
+      expect((captured[1] as List).cast<String>(), isEmpty);
+      final copies = (captured[2] as List).cast<AppointmentRecord>();
+      expect(copies, hasLength(2));
+      expect(copies.map((a) => a.id), ['copy-1', 'copy-2']);
+      expect(copies[0].startTime, DateTime(2026, 11, 10, 9));
+      expect(copies[1].startTime, DateTime(2027, 5, 10, 9));
+      expect(copies.every((a) => a.status == 'pending'), isTrue);
+      expect(copies.every((a) => a.pictures.isEmpty), isTrue);
+      expect(copies.every((a) => a.seriesId == 'appt-1'), isTrue);
+
+      // The rule is now the baseline — a second save is a plain update.
+      final second = await c.save(
+        _appointment,
+        title: 'Furnace check',
+        address: '99 New St',
+        notes: '',
+        materialsNeeded: '',
+      );
+      expect((second as EventDetailsSaved).futureBookings, 0);
+      verify(() => appointments.updateAppointment(any())).called(1);
+    });
+
+    test('deletes the old future visits when replacing a series', () async {
+      var nextId = 0;
+      when(appointments.newDocId).thenAnswer((_) => 'copy-${++nextId}');
+      when(
+        () => appointments.rewriteSeries(
+          updated: any(named: 'updated'),
+          deleteIds: any(named: 'deleteIds'),
+          copies: any(named: 'copies'),
+        ),
+      ).thenAnswer((_) async {});
+
+      final repeating = _appointment.copyWith(
+        repeat: RepeatInterval.fourMonths,
+        seriesId: 'series-1',
+      );
+      when(() => appointments.getSeries('series-1')).thenAnswer(
+        (_) async => [
+          repeating,
+          repeating.copyWith(id: 'old-1', startTime: DateTime(2026, 9, 10, 9)),
+          repeating.copyWith(id: 'old-2', startTime: DateTime(2027, 1, 10, 9)),
+          repeating.copyWith(
+            id: 'old-done',
+            startTime: DateTime(2027, 5, 10, 9),
+            status: 'done',
+          ),
+        ],
+      );
+
+      container.listen(eventDetailsControllerProvider(repeating), (_, _) {});
+      final c = container.read(
+        eventDetailsControllerProvider(repeating).notifier,
+      );
+      await waitForSeed();
+      c.selectRepeat(RepeatInterval.oneYear);
+
+      final outcome = await c.save(
+        repeating,
+        title: 'x',
+        address: 'y',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      expect((outcome as EventDetailsSaved).futureBookings, 1);
+      expect(outcome.removedBookings, 2);
+
+      final captured = verify(
+        () => appointments.rewriteSeries(
+          updated: captureAny(named: 'updated'),
+          deleteIds: captureAny(named: 'deleteIds'),
+          copies: captureAny(named: 'copies'),
+        ),
+      ).captured;
+      // The edited doc itself and the done visit are preserved.
+      expect((captured[1] as List).cast<String>(), ['old-1', 'old-2']);
+      final copies = (captured[2] as List).cast<AppointmentRecord>();
+      expect(copies, hasLength(1));
+      expect(copies.single.startTime, DateTime(2027, 5, 10, 9));
+      expect(copies.single.seriesId, 'series-1');
+    });
+
+    test('seeds the stored repeat and does not re-book it unchanged', () async {
+      final repeating = _appointment.copyWith(
+        repeat: RepeatInterval.sixMonths,
+      );
+      container.listen(eventDetailsControllerProvider(repeating), (_, _) {});
+      final c = container.read(
+        eventDetailsControllerProvider(repeating).notifier,
+      );
+      await waitForSeed();
+      expect(
+        container.read(eventDetailsControllerProvider(repeating)).repeat,
+        RepeatInterval.sixMonths,
+      );
+
+      final outcome = await c.save(
+        repeating,
+        title: 'x',
+        address: 'y',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      expect((outcome as EventDetailsSaved).futureBookings, 0);
+      // The unchanged rule still persists on the saved doc.
+      expect(outcome.appointment.repeat, RepeatInterval.sixMonths);
+      verifyNever(
+        () => appointments.rewriteSeries(
+          updated: any(named: 'updated'),
+          deleteIds: any(named: 'deleteIds'),
+          copies: any(named: 'copies'),
+        ),
+      );
+    });
+
+    test('does not book copies when repeat stays none', () async {
+      readNotifier();
+      await waitForSeed();
+      await readNotifier().save(
+        _appointment,
+        title: 'x',
+        address: 'y',
+        notes: '',
+        materialsNeeded: '',
+      );
+      verifyNever(
+        () => appointments.rewriteSeries(
+          updated: any(named: 'updated'),
+          deleteIds: any(named: 'deleteIds'),
+          copies: any(named: 'copies'),
+        ),
+      );
+    });
+
     test(
       'returns EventDetailsFailed and resets isSaving when repo throws',
       () async {
@@ -356,6 +531,51 @@ void main() {
       final error = await readNotifier().deleteAppointment(_appointment);
       expect(error, isNotNull);
       expect(readState().isSaving, isFalse);
+    });
+
+    test('includeFuture deletes the series future visits too', () async {
+      when(
+        () => appointments.deleteAppointments(any()),
+      ).thenAnswer((_) async {});
+      final repeating = _appointment.copyWith(
+        repeat: RepeatInterval.fourMonths,
+        seriesId: 'series-1',
+      );
+      when(() => appointments.getSeries('series-1')).thenAnswer(
+        (_) async => [
+          repeating,
+          repeating.copyWith(id: 'past-1', startTime: DateTime(2026, 1, 10, 9)),
+          repeating.copyWith(id: 'old-1', startTime: DateTime(2026, 9, 10, 9)),
+          repeating.copyWith(
+            id: 'old-done',
+            startTime: DateTime(2027, 1, 10, 9),
+            status: 'done',
+          ),
+        ],
+      );
+      container.listen(eventDetailsControllerProvider(repeating), (_, _) {});
+      final c = container.read(
+        eventDetailsControllerProvider(repeating).notifier,
+      );
+
+      final error = await c.deleteAppointment(repeating, includeFuture: true);
+
+      expect(error, isNull);
+      final captured = verify(
+        () => appointments.deleteAppointments(captureAny()),
+      ).captured.single;
+      // Past and done visits stay; itself plus the future pending one go.
+      expect((captured as List).cast<String>(), ['appt-1', 'old-1']);
+      verifyNever(() => appointments.deleteAppointment(any()));
+    });
+
+    test('includeFuture without a series is a single delete', () async {
+      final error = await readNotifier().deleteAppointment(
+        _appointment,
+        includeFuture: true,
+      );
+      expect(error, isNull);
+      verify(() => appointments.deleteAppointment('appt-1')).called(1);
     });
   });
 }
