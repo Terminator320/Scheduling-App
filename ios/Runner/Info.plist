@@ -47,6 +47,8 @@
 		<true/>
 		<key>NSCameraUsageDescription</key>
 		<string>This app uses the camera to take appointment photos and profile pictures.</string>
+		<key>NSFaceIDUsageDescription</key>
+		<string>This app uses Face ID to unlock the app lock you enabled in Settings.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>This app accesses your photo library to attach images to appointments and profiles.</string>
 		<key>LSApplicationQueriesSchemes</key>

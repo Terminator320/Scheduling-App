@@ -820,6 +820,30 @@
   "@settings_account": {
     "description": "Account"
   },
+  "settings_security": "Security",
+  "@settings_security": {
+    "description": "Security settings section header"
+  },
+  "settings_appLock": "App Lock",
+  "@settings_appLock": {
+    "description": "Toggle label for the biometric app lock"
+  },
+  "settings_appLockUnavailable": "Biometric lock isn't available on this device.",
+  "@settings_appLockUnavailable": {
+    "description": "Shown when the user enables App Lock but the device has no biometrics/passcode"
+  },
+  "applock_title": "Locked",
+  "@applock_title": {
+    "description": "Title on the biometric lock overlay"
+  },
+  "applock_unlock": "Unlock",
+  "@applock_unlock": {
+    "description": "Button that triggers biometric authentication on the lock overlay"
+  },
+  "applock_reason": "Authenticate to unlock the app",
+  "@applock_reason": {
+    "description": "Prompt shown by the OS biometric dialog"
+  },
   "settings_version": "Version {version} ({buildNumber})",
   "@settings_version": {
     "description": "App version footer shown in Settings, e.g. Version 1.0.3 (4)",
