@@ -804,6 +804,18 @@
   "@settings_account": {
     "description": "Account"
   },
+  "settings_version": "Version {version} ({buildNumber})",
+  "@settings_version": {
+    "description": "App version footer shown in Settings, e.g. Version 1.0.3 (4)",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "buildNumber": {
+        "type": "String"
+      }
+    }
+  },
   "employees_disableEmployee": "Disable employee",
   "@employees_disableEmployee": {
     "description": "Disable employee"

@@ -11,6 +11,7 @@ import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/settings/application/app_info_provider.dart';
 import 'package:scheduling/features/settings/screens/text_size_screen.dart';
 import 'package:scheduling/features/settings/widgets/cards/settings_tiles.dart';
 import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dialog.dart';
@@ -176,8 +177,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ],
           ),
         ),
+        const SizedBox(height: AppSpacing.sp24),
+        _buildVersionFooter(scheme),
         const SizedBox(height: AppSpacing.sp32),
       ],
+    );
+  }
+
+  Widget _buildVersionFooter(ColorScheme scheme) {
+    final info = ref.watch(appInfoProvider);
+    return Center(
+      child: info.maybeWhen(
+        data: (i) => Text(
+          context.l10n.settings_version(i.version, i.buildNumber),
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+        ),
+        orElse: () => const SizedBox.shrink(),
+      ),
     );
   }
 

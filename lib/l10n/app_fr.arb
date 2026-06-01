@@ -201,6 +201,7 @@
   "common_history": "Historique",
   "settings_appearance": "Apparence",
   "settings_account": "Compte",
+  "settings_version": "Version {version} ({buildNumber})",
   "employees_disableEmployee": "Désactiver l'employé",
   "employees_enableEmployee": "Activer l'employé",
   "employees_disableEmployeeConfirmBody": "Cet employé sera déconnecté immédiatement et ne pourra plus se connecter.",
