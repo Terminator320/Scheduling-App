@@ -2,12 +2,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/splash/application/splash_controller.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _MockFirebaseAuth extends Mock implements FirebaseAuth {}
 
@@ -37,9 +36,9 @@ void main() {
       'returns SplashGoToLogin and signs out for a disabled employee',
       () async {
         when(() => mockRepo.findUserByUid('uid1')).thenAnswer(
-          (_) async => UserUidMatch(
+          (_) async => const UserUidMatch(
             id: 'doc1',
-            data: const {
+            data: {
               'uid': 'uid1',
               'role': 'employee',
               'status': 'disabled',
@@ -68,9 +67,9 @@ void main() {
 
     test('returns SplashGoToCalendar for an active employee', () async {
       when(() => mockRepo.findUserByUid('uid1')).thenAnswer(
-        (_) async => UserUidMatch(
+        (_) async => const UserUidMatch(
           id: 'doc1',
-          data: const {
+          data: {
             'uid': 'uid1',
             'role': 'employee',
             'status': 'active',
@@ -101,9 +100,9 @@ void main() {
       // 'disabled'. Invited users have a Firestore doc but no completed
       // sign-up flow — they must not enter the app.
       when(() => mockRepo.findUserByUid('uid1')).thenAnswer(
-        (_) async => UserUidMatch(
+        (_) async => const UserUidMatch(
           id: 'doc1',
-          data: const {
+          data: {
             'uid': 'uid1',
             'role': 'employee',
             'status': 'invited',
@@ -134,9 +133,9 @@ void main() {
       // fail the gate. Without this, any future status value would slip
       // through if it didn't exactly equal 'disabled'.
       when(() => mockRepo.findUserByUid('uid1')).thenAnswer(
-        (_) async => UserUidMatch(
+        (_) async => const UserUidMatch(
           id: 'doc1',
-          data: const {
+          data: {
             'uid': 'uid1',
             'role': 'employee',
             'status': '',

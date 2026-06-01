@@ -15,9 +15,10 @@ void main() {
     final sub = service.stream.listen(received.add);
     addTearDown(sub.cancel);
 
-    service.success('saved');
-    service.error('oops');
-    service.info('fyi');
+    service
+      ..success('saved')
+      ..error('oops')
+      ..info('fyi');
 
     // Broadcast streams deliver on the next event-loop tick.
     await Future<void>.delayed(Duration.zero);

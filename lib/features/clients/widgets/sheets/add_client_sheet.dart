@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/sections/additional_contacts_section.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
@@ -77,11 +76,11 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
 
   void _removeAdditionalContact(int index) {
     setState(() {
-      final removed = _additionalContacts.removeAt(index);
-      removed.dispose();
-      _errors.remove('contact_${index}_name');
-      _errors.remove('contact_${index}_phone');
-      _errors.remove('contact_${index}_email');
+      _additionalContacts.removeAt(index).dispose();
+      _errors
+        ..remove('contact_${index}_name')
+        ..remove('contact_${index}_phone')
+        ..remove('contact_${index}_email');
     });
   }
 

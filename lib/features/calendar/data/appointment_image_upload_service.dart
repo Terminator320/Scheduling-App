@@ -113,7 +113,7 @@ class AppointmentImageUploadService {
     } finally {
       for (final f in compressed) {
         try {
-          if (await f.exists()) await f.delete();
+          await f.delete();
         } catch (e) {
           debugPrint(
             '[AppointmentImageUpload] temp-cleanup failed for ${f.path}: $e',

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -14,7 +14,7 @@ Widget _wrap(AuthService authService, {String? initialEmail}) {
   return ThemeNotifier(
     themeMode: ThemeMode.light,
     toggleTheme: () {},
-    textScale: 1.0,
+    textScale: 1,
     setTextScale: (_) {},
     setLanguage: (_) {},
     child: MaterialApp(

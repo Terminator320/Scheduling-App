@@ -46,19 +46,19 @@ void main() {
     storage: storage,
   );
 
-  _MockFile _file(String name, {int size = 1024}) {
+  _MockFile file(String name, {int size = 1024}) {
     final f = _MockFile();
     when(() => f.uri).thenReturn(Uri.parse('file:///tmp/$name'));
-    when(() => f.length()).thenAnswer((_) async => size);
-    when(() => f.exists()).thenAnswer((_) async => true);
-    when(() => f.delete()).thenAnswer((_) async => f);
+    when(f.length).thenAnswer((_) async => size);
+    when(f.exists).thenAnswer((_) async => true);
+    when(f.delete).thenAnswer((_) async => f);
     return f;
   }
 
   group('uploadInBackground', () {
     test('reports no failure when all images upload successfully', () async {
-      final src = _file('photo.jpg');
-      final compressed = _file('photo_c.jpg');
+      final src = file('photo.jpg');
+      final compressed = file('photo_c.jpg');
 
       when(
         () => compress.compressImages(any()),
@@ -84,14 +84,14 @@ void main() {
     });
 
     test('reports failedCount when storage upload partially fails', () async {
-      final src = _file('photo.jpg');
-      final compressed = _file('photo_c.jpg');
+      final src = file('photo.jpg');
+      final compressed = file('photo_c.jpg');
 
       when(
         () => compress.compressImages(any()),
       ).thenAnswer((_) async => [compressed]);
       when(() => storage.uploadImages(any(), any())).thenAnswer(
-        (_) async => ImageUploadBatchResult(uploaded: const [], failedCount: 1),
+        (_) async => const ImageUploadBatchResult(uploaded: [], failedCount: 1),
       );
 
       makeService().uploadInBackground(appointmentId: 'a1', newImages: [src]);
@@ -102,9 +102,9 @@ void main() {
     });
 
     test('reports tooLargeFileNames for images over size limit', () async {
-      final overLimit = ImageStorageService.maxUploadBytes + 1;
-      final src = _file('big.jpg');
-      final compressed = _file('big_c.jpg', size: overLimit);
+      const overLimit = ImageStorageService.maxUploadBytes + 1;
+      final src = file('big.jpg');
+      final compressed = file('big_c.jpg', size: overLimit);
 
       when(
         () => compress.compressImages(any()),
@@ -139,7 +139,7 @@ void main() {
     });
 
     test('reports all images as failed when run throws unexpectedly', () async {
-      final src = _file('photo.jpg');
+      final src = file('photo.jpg');
 
       when(
         () => compress.compressImages(any()),

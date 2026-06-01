@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
-import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
+import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
 typedef EmployeeDetailsAction = void Function(String action);
 

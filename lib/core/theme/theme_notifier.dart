@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 
 class ThemeNotifier extends InheritedWidget {
-
   const ThemeNotifier({
-    required this.themeMode, required this.toggleTheme, required this.textScale, required this.setTextScale, required this.setLanguage, required super.child, super.key,
+    required this.themeMode,
+    required this.toggleTheme,
+    required this.textScale,
+    required this.setTextScale,
+    required this.setLanguage,
+    required super.child,
+    super.key,
   });
   final ThemeMode themeMode;
   final VoidCallback toggleTheme;
@@ -21,7 +26,6 @@ class ThemeNotifier extends InheritedWidget {
 
   @override
   bool updateShouldNotify(ThemeNotifier oldWidget) {
-    return themeMode != oldWidget.themeMode ||
-        textScale != oldWidget.textScale;
+    return themeMode != oldWidget.themeMode || textScale != oldWidget.textScale;
   }
 }

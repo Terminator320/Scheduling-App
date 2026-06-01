@@ -69,11 +69,11 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
     _currentEntry = null;
 
     late final OverlayEntry entry;
-    var _dismissed = false;
+    var dismissed = false;
 
     void dismiss() {
-      if (_dismissed) return;
-      _dismissed = true;
+      if (dismissed) return;
+      dismissed = true;
       entry.remove();
       if (_currentEntry == entry) _currentEntry = null;
     }

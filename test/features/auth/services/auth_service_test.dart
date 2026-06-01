@@ -48,9 +48,9 @@ void main() {
     test('normalizes email before creating Auth account', () async {
       stubRegister(email: 'invite@example.com');
       when(() => employees.findInvitedEmployeeForCurrentUser()).thenAnswer(
-        (_) async => InvitedEmployeeMatch(
+        (_) async => const InvitedEmployeeMatch(
           docId: 'doc1',
-          data: const {'uid': '', 'status': 'invited'},
+          data: {'uid': '', 'status': 'invited'},
         ),
       );
 
@@ -89,9 +89,9 @@ void main() {
     test('sends email verification after finding invite', () async {
       stubRegister();
       when(() => employees.findInvitedEmployeeForCurrentUser()).thenAnswer(
-        (_) async => InvitedEmployeeMatch(
+        (_) async => const InvitedEmployeeMatch(
           docId: 'doc-xyz',
-          data: const {'uid': '', 'status': 'invited'},
+          data: {'uid': '', 'status': 'invited'},
         ),
       );
 
@@ -173,9 +173,9 @@ void main() {
     test('activates when email is verified and invite exists', () async {
       when(() => user.emailVerified).thenReturn(true);
       when(() => employees.findInvitedEmployeeForCurrentUser()).thenAnswer(
-        (_) async => InvitedEmployeeMatch(
+        (_) async => const InvitedEmployeeMatch(
           docId: 'doc-xyz',
-          data: const {'uid': '', 'status': 'invited'},
+          data: {'uid': '', 'status': 'invited'},
         ),
       );
       when(

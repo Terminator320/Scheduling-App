@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/features/employees/widgets/fields/employee_color_grid.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
 class EmployeeColorPickerRow extends StatelessWidget {

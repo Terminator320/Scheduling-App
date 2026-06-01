@@ -57,14 +57,12 @@ void main() {
 
   FirebaseClientsRepository repo() => FirebaseClientsRepository(firestore);
 
-  ClientRecord _client({String id = 'c1'}) => ClientRecord(
+  ClientRecord client({String id = 'c1'}) => ClientRecord(
     id: id,
-    businessName: '',
     name: 'Test Client',
     phone: '555-0000',
     email: 'test@example.com',
     address: '1 Main St',
-    apt: '',
     city: 'Montreal',
     province: 'QC',
     country: 'Canada',
@@ -73,7 +71,7 @@ void main() {
 
   group('addClient', () {
     test('writes normalized email with createdAt and updatedAt', () async {
-      await repo().addClient(_client());
+      await repo().addClient(client());
 
       final captured =
           (verify(() => collection.add(captureAny())).captured.single as Map)
@@ -86,7 +84,7 @@ void main() {
 
   group('updateClient', () {
     test('writes normalized email with updatedAt', () async {
-      await repo().updateClient(_client());
+      await repo().updateClient(client());
 
       final raw = verify(() => docRef.update(captureAny())).captured.single;
       final captured = (raw as Map).cast<String, dynamic>();

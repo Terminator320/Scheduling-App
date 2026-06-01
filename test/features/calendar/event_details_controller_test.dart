@@ -85,10 +85,12 @@ void main() {
     uploader = _MockUploader();
     storage = _MockStorage();
 
-    when(() => clients.getClientById(any()))
-        .thenAnswer((_) async => _existingClient);
-    when(employees.watchEmployees)
-        .thenAnswer((_) => Stream.value(const [_employeeA, _employeeB]));
+    when(
+      () => clients.getClientById(any()),
+    ).thenAnswer((_) async => _existingClient);
+    when(
+      employees.watchEmployees,
+    ).thenAnswer((_) => Stream.value(const [_employeeA, _employeeB]));
     when(() => appointments.updateAppointment(any())).thenAnswer((_) async {});
     when(
       () => appointments.updateAppointmentStatus(
@@ -99,21 +101,19 @@ void main() {
     when(() => appointments.deleteAppointment(any())).thenAnswer((_) async {});
     when(() => storage.deleteImages(any())).thenAnswer((_) async {});
 
-    container = ProviderContainer(
-      overrides: [
-        appointmentsRepositoryProvider.overrideWithValue(appointments),
-        clientsRepositoryProvider.overrideWithValue(clients),
-        employeesRepositoryProvider.overrideWithValue(employees),
-        appointmentImageUploadProvider.overrideWithValue(uploader),
-        imageStorageProvider.overrideWithValue(storage),
-      ],
-    );
-    // Keep the provider alive across reads so autoDispose doesn't tear
-    // down the seeded state between assertions.
-    container.listen(
-      eventDetailsControllerProvider(_appointment),
-      (_, __) {},
-    );
+    container =
+        ProviderContainer(
+            overrides: [
+              appointmentsRepositoryProvider.overrideWithValue(appointments),
+              clientsRepositoryProvider.overrideWithValue(clients),
+              employeesRepositoryProvider.overrideWithValue(employees),
+              appointmentImageUploadProvider.overrideWithValue(uploader),
+              imageStorageProvider.overrideWithValue(storage),
+            ],
+          )
+          // Keep the provider alive across reads so autoDispose doesn't tear
+          // down the seeded state between assertions.
+          ..listen(eventDetailsControllerProvider(_appointment), (_, __) {});
     addTearDown(container.dispose);
   });
 
@@ -164,8 +164,7 @@ void main() {
     });
 
     test('exitEditing flips isEditing back', () {
-      final c = readNotifier();
-      c
+      readNotifier()
         ..enterEditing()
         ..exitEditing();
       expect(readState().isEditing, isFalse);
@@ -176,12 +175,8 @@ void main() {
     test('toggles employees idempotently', () async {
       readNotifier();
       await waitForSeed();
-      final c = readNotifier();
-      c.toggleEmployee(_employeeB);
-      expect(
-        readState().selectedEmployees.map((e) => e.id),
-        ['e1', 'e2'],
-      );
+      final c = readNotifier()..toggleEmployee(_employeeB);
+      expect(readState().selectedEmployees.map((e) => e.id), ['e1', 'e2']);
       c.toggleEmployee(_employeeA);
       expect(readState().selectedEmployees.map((e) => e.id), ['e2']);
     });
@@ -199,30 +194,34 @@ void main() {
       ).called(1);
     });
 
-    test('cancelAppointment writes status="cancelled" and returns true',
-        () async {
-      final ok = await readNotifier().cancelAppointment(_appointment);
-      expect(ok, isTrue);
-      verify(
-        () => appointments.updateAppointmentStatus(
-          id: _appointment.id!,
-          status: 'cancelled',
-        ),
-      ).called(1);
-    });
+    test(
+      'cancelAppointment writes status="cancelled" and returns true',
+      () async {
+        final ok = await readNotifier().cancelAppointment(_appointment);
+        expect(ok, isTrue);
+        verify(
+          () => appointments.updateAppointmentStatus(
+            id: _appointment.id!,
+            status: 'cancelled',
+          ),
+        ).called(1);
+      },
+    );
 
-    test('markAsDone returns false and resets isSaving when repo throws',
-        () async {
-      when(
-        () => appointments.updateAppointmentStatus(
-          id: any(named: 'id'),
-          status: any(named: 'status'),
-        ),
-      ).thenThrow(Exception('boom'));
-      final ok = await readNotifier().markAsDone(_appointment);
-      expect(ok, isFalse);
-      expect(readState().isSaving, isFalse);
-    });
+    test(
+      'markAsDone returns false and resets isSaving when repo throws',
+      () async {
+        when(
+          () => appointments.updateAppointmentStatus(
+            id: any(named: 'id'),
+            status: any(named: 'status'),
+          ),
+        ).thenThrow(Exception('boom'));
+        final ok = await readNotifier().markAsDone(_appointment);
+        expect(ok, isFalse);
+        expect(readState().isSaving, isFalse);
+      },
+    );
   });
 
   group('save', () {
@@ -243,8 +242,7 @@ void main() {
     test('writes updated appointment with edited values on success', () async {
       readNotifier();
       await waitForSeed();
-      final c = readNotifier();
-      c
+      final c = readNotifier()
         ..setStatus('done')
         ..selectStartTime(const TimeOfDay(hour: 14, minute: 0))
         ..selectEndTime(const TimeOfDay(hour: 16, minute: 0));
@@ -321,35 +319,41 @@ void main() {
       );
     });
 
-    test('returns EventDetailsFailed and resets isSaving when repo throws',
-        () async {
-      when(() => appointments.updateAppointment(any()))
-          .thenThrow(Exception('boom'));
-      readNotifier();
-      await waitForSeed();
-      final outcome = await readNotifier().save(
-        _appointment,
-        title: 'x',
-        address: 'y',
-        notes: '',
-        materialsNeeded: '',
-      );
-      expect(outcome, isA<EventDetailsFailed>());
-      expect(readState().isSaving, isFalse);
-    });
+    test(
+      'returns EventDetailsFailed and resets isSaving when repo throws',
+      () async {
+        when(
+          () => appointments.updateAppointment(any()),
+        ).thenThrow(Exception('boom'));
+        readNotifier();
+        await waitForSeed();
+        final outcome = await readNotifier().save(
+          _appointment,
+          title: 'x',
+          address: 'y',
+          notes: '',
+          materialsNeeded: '',
+        );
+        expect(outcome, isA<EventDetailsFailed>());
+        expect(readState().isSaving, isFalse);
+      },
+    );
   });
 
   group('deleteAppointment', () {
-    test('returns true on repo success and calls the repo with the doc id',
-        () async {
-      final ok = await readNotifier().deleteAppointment(_appointment);
-      expect(ok, isTrue);
-      verify(() => appointments.deleteAppointment('appt-1')).called(1);
-    });
+    test(
+      'returns true on repo success and calls the repo with the doc id',
+      () async {
+        final ok = await readNotifier().deleteAppointment(_appointment);
+        expect(ok, isTrue);
+        verify(() => appointments.deleteAppointment('appt-1')).called(1);
+      },
+    );
 
     test('returns false and resets isSaving when repo throws', () async {
-      when(() => appointments.deleteAppointment(any()))
-          .thenThrow(Exception('boom'));
+      when(
+        () => appointments.deleteAppointment(any()),
+      ).thenThrow(Exception('boom'));
       final ok = await readNotifier().deleteAppointment(_appointment);
       expect(ok, isFalse);
       expect(readState().isSaving, isFalse);

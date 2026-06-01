@@ -1,14 +1,14 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
 
+import 'package:flutter/material.dart';
 import 'package:scheduling/core/errors/failure.dart';
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/maps/data/google_places_repository.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/features/maps/domain/models/address_suggestion.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
+import 'package:uuid/uuid.dart';
 
 class AddressAutocompleteField extends StatefulWidget {
   const AddressAutocompleteField({

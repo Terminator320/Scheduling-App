@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
@@ -9,14 +8,14 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/settings/screens/text_size_screen.dart';
-import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dialog.dart';
 import 'package:scheduling/features/settings/widgets/cards/settings_tiles.dart';
+import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dialog.dart';
 import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 
 enum _SettingsDetail { textSize }

@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-
 import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
 class CreateAccountResult {
@@ -150,10 +149,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
         _backToSignIn();
-        return false;
       },
       child: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
@@ -208,7 +208,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                     focusNode: _emailFocus,
                     enabled: !_isLoading,
                     errorText: _emailError,
-                    onSubmitted: () => _passwordFocus.requestFocus(),
+                    onSubmitted: _passwordFocus.requestFocus,
                     onChanged: _onFieldChanged,
                   ),
                   const SizedBox(height: AppSpacing.sp16),
@@ -218,7 +218,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                     enabled: !_isLoading,
                     errorText: _passwordError,
                     isObscured: _isObscured,
-                    onSubmitted: () => _confirmPasswordFocus.requestFocus(),
+                    onSubmitted: _confirmPasswordFocus.requestFocus,
                     onChanged: _onFieldChanged,
                     onToggleObscured: () =>
                         setState(() => _isObscured = !_isObscured),

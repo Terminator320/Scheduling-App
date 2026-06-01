@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
 class ClientSearchField extends StatelessWidget {

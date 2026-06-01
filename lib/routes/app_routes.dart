@@ -88,7 +88,6 @@ class AppRoutes {
   ) {
     return PageRouteBuilder<T>(
       settings: settings,
-      transitionDuration: const Duration(milliseconds: 300),
       reverseTransitionDuration: const Duration(milliseconds: 250),
       pageBuilder: (_, __, ___) => page,
       transitionsBuilder: (_, animation, __, child) => FadeTransition(

@@ -91,6 +91,7 @@ dev_dependencies:
   # Launcher icon generator (run: `dart run flutter_launcher_icons`)
   flutter_launcher_icons: ^0.14.4
 
+  fake_async: any
 flutter:
   generate: true
   uses-material-design: true

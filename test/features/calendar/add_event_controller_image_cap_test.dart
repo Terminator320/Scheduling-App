@@ -15,9 +15,8 @@ void main() {
   final provider = addEventControllerProvider(initialDate);
 
   setUp(() {
-    container = ProviderContainer();
     // Keep the autoDispose provider alive across reads.
-    container.listen(provider, (_, _) {});
+    container = ProviderContainer()..listen(provider, (_, _) {});
     addTearDown(container.dispose);
   });
 
@@ -40,9 +39,9 @@ void main() {
   });
 
   test('addImages stays capped across multiple calls', () {
-    final c = readNotifier();
-    c.addImages(stubFiles(7));
-    c.addImages(stubFiles(5));
+    readNotifier()
+      ..addImages(stubFiles(7))
+      ..addImages(stubFiles(5));
     expect(readState().selectedImages.length, 10);
   });
 }

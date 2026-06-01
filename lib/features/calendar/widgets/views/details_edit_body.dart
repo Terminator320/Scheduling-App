@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -18,6 +16,7 @@ import 'package:scheduling/features/clients/widgets/fields/client_search_field.d
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';

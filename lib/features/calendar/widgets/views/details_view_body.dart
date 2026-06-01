@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/sections/client_contacts_section.dart';
+import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_action_bar.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_view_widgets.dart';
-import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 class DetailsViewBody extends ConsumerWidget {
   const DetailsViewBody({

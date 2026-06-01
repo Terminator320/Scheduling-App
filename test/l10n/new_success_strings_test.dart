@@ -7,7 +7,7 @@ import 'package:scheduling/l10n/l10n.dart';
 /// N1: new success-notice l10n keys must resolve in both locales (smoke
 /// catches a forgotten `gen-l10n` regeneration).
 void main() {
-  Future<AppLocalizations> _resolve(WidgetTester tester, Locale locale) async {
+  Future<AppLocalizations> resolve(WidgetTester tester, Locale locale) async {
     late AppLocalizations l;
     await tester.pumpWidget(
       Localizations(
@@ -31,8 +31,8 @@ void main() {
   }
 
   testWidgets('appointmentCreated resolves in EN + FR', (tester) async {
-    final en = await _resolve(tester, const Locale('en'));
-    final fr = await _resolve(tester, const Locale('fr'));
+    final en = await resolve(tester, const Locale('en'));
+    final fr = await resolve(tester, const Locale('fr'));
     expect(en.common_appointmentCreated, 'Appointment created');
     expect(fr.common_appointmentCreated, 'Rendez-vous créé');
   });
@@ -40,8 +40,8 @@ void main() {
   testWidgets('all new success keys are non-empty in both locales', (
     tester,
   ) async {
-    final en = await _resolve(tester, const Locale('en'));
-    final fr = await _resolve(tester, const Locale('fr'));
+    final en = await resolve(tester, const Locale('en'));
+    final fr = await resolve(tester, const Locale('fr'));
     for (final s in [
       en.common_clientAdded,
       fr.common_clientAdded,

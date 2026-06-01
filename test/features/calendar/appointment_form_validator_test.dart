@@ -42,13 +42,13 @@ void main() {
 
     test('reports dateRequired when date is null', () {
       final errors = AppointmentFormValidator.validate(
-        AppointmentFormInput(
+        const AppointmentFormInput(
           title: 't',
           date: null,
-          startTime: const TimeOfDay(hour: 9, minute: 0),
-          endTime: const TimeOfDay(hour: 10, minute: 0),
+          startTime: TimeOfDay(hour: 9, minute: 0),
+          endTime: TimeOfDay(hour: 10, minute: 0),
           client: _aClient,
-          selectedEmployees: const [_anEmployee],
+          selectedEmployees: [_anEmployee],
         ),
       );
       expect(errors['date'], AppointmentFormError.dateRequired);
@@ -111,13 +111,13 @@ void main() {
 
     test('reports multiple errors at once', () {
       final errors = AppointmentFormValidator.validate(
-        AppointmentFormInput(
+        const AppointmentFormInput(
           title: '',
           date: null,
           startTime: null,
           endTime: null,
           client: null,
-          selectedEmployees: const [],
+          selectedEmployees: [],
         ),
       );
       expect(errors.keys.toSet(), {

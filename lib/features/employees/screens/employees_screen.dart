@@ -1,26 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/core/utils/sheet_focus.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/widgets/cards/employee_card.dart';
 import 'package:scheduling/features/employees/widgets/sheets/employee_details_sheet.dart';
-import 'package:scheduling/features/employees/widgets/views/employee_details_view.dart';
 import 'package:scheduling/features/employees/widgets/sheets/employee_form_sheet.dart';
+import 'package:scheduling/features/employees/widgets/views/employee_details_view.dart';
 import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
+import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
 import 'package:scheduling/shared/widgets/primitives/fade_in_item.dart';
-import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 
 class AddEmployeePage extends ConsumerStatefulWidget {
   const AddEmployeePage({
@@ -73,6 +72,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
 
     if (!mounted) return;
     await SheetFocus.unfocusAfterSheet();
+    if (!mounted) return;
 
     final notices = ref.read(noticeServiceProvider);
     if (result == 'deleted') {

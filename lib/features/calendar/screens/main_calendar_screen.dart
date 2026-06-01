@@ -9,19 +9,19 @@ import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
+import 'package:scheduling/features/calendar/widgets/fields/month_year_picker.dart';
 import 'package:scheduling/features/calendar/widgets/views/app_calendar_view.dart';
 import 'package:scheduling/features/calendar/widgets/views/event_details_view.dart';
 import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
-import 'package:scheduling/features/calendar/widgets/fields/month_year_picker.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 class MainCalendar extends ConsumerStatefulWidget {
