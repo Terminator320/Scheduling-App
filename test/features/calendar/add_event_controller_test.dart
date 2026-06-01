@@ -92,14 +92,12 @@ void main() {
 
   group('selectStartTime', () {
     test('auto-advances end by one hour when end was not picked manually', () {
-      final c = readNotifier();
-      c.selectStartTime(const TimeOfDay(hour: 9, minute: 0));
+      readNotifier().selectStartTime(const TimeOfDay(hour: 9, minute: 0));
       expect(readState().selectedEndTime, const TimeOfDay(hour: 10, minute: 0));
     });
 
     test('does not overwrite end after a manual end pick', () {
-      final c = readNotifier();
-      c
+      readNotifier()
         ..selectStartTime(const TimeOfDay(hour: 9, minute: 0))
         ..selectEndTime(const TimeOfDay(hour: 14, minute: 0))
         ..selectStartTime(const TimeOfDay(hour: 11, minute: 0));
@@ -109,8 +107,7 @@ void main() {
 
   group('toggleEmployee', () {
     test('adds employees and removes them idempotently', () {
-      final c = readNotifier();
-      c
+      final c = readNotifier()
         ..toggleEmployee(_employeeA)
         ..toggleEmployee(_employeeB);
       expect(readState().selectedEmployees, [_employeeA, _employeeB]);

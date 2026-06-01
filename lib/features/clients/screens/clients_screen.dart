@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
-
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/core/utils/sheet_focus.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
-import 'package:scheduling/features/clients/widgets/views/appointment_history_view.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
+import 'package:scheduling/features/clients/widgets/views/appointment_history_view.dart';
 import 'package:scheduling/features/clients/widgets/views/client_detail_view.dart';
 import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart';
 import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
 

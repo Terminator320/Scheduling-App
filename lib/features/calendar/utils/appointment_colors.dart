@@ -12,11 +12,13 @@ Color? colorFromMap(AppointmentRecord appt, Map<String, Color> colorMap) {
 }
 
 Color? colorForAppointment(
-    AppointmentRecord appt, List<EmployeeRecord> employees) {
+  AppointmentRecord appt,
+  List<EmployeeRecord> employees,
+) {
   if (appt.employeeIds.length != 1 || employees.isEmpty) return null;
-  try {
-    return employees.firstWhere((e) => e.id == appt.employeeIds.first).color;
-  } on StateError {
-    return null;
+  final id = appt.employeeIds.first;
+  for (final e in employees) {
+    if (e.id == id) return e.color;
   }
+  return null;
 }

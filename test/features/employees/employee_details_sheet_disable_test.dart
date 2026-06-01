@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -18,7 +18,6 @@ const _activeEmployee = EmployeeRecord(
   name: 'Jane Doe',
   email: 'jane@example.com',
   status: 'active',
-  role: 'employee',
 );
 
 const _disabledEmployee = EmployeeRecord(
@@ -26,7 +25,6 @@ const _disabledEmployee = EmployeeRecord(
   name: 'Bob Smith',
   email: 'bob@example.com',
   status: 'disabled',
-  role: 'employee',
 );
 
 Widget _wrap(Widget child, {EmployeesRepository? repo}) {
@@ -38,7 +36,7 @@ Widget _wrap(Widget child, {EmployeesRepository? repo}) {
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
       toggleTheme: () {},
-      textScale: 1.0,
+      textScale: 1,
       setTextScale: (_) {},
       setLanguage: (_) {},
       child: MaterialApp(
@@ -56,7 +54,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(
       _wrap(
-        EmployeeDetailsSheet(
+        const EmployeeDetailsSheet(
           employee: _activeEmployee,
           isCurrentUserAdmin: true,
         ),
@@ -73,7 +71,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(
       _wrap(
-        EmployeeDetailsSheet(
+        const EmployeeDetailsSheet(
           employee: _disabledEmployee,
           isCurrentUserAdmin: true,
         ),
@@ -90,7 +88,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(
       _wrap(
-        EmployeeDetailsSheet(
+        const EmployeeDetailsSheet(
           employee: _activeEmployee,
           isCurrentUserAdmin: false,
         ),
@@ -106,7 +104,7 @@ void main() {
   testWidgets('Disable tap shows confirmation dialog', (tester) async {
     await tester.pumpWidget(
       _wrap(
-        EmployeeDetailsSheet(
+        const EmployeeDetailsSheet(
           employee: _activeEmployee,
           isCurrentUserAdmin: true,
         ),
@@ -131,7 +129,7 @@ void main() {
   testWidgets('Enable tap shows confirmation dialog', (tester) async {
     await tester.pumpWidget(
       _wrap(
-        EmployeeDetailsSheet(
+        const EmployeeDetailsSheet(
           employee: _disabledEmployee,
           isCurrentUserAdmin: true,
         ),

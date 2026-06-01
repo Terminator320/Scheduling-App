@@ -30,7 +30,7 @@ class ImageViewer extends StatefulWidget {
           return FadeTransition(
             opacity: curved,
             child: ScaleTransition(
-              scale: Tween<double>(begin: 0.92, end: 1.0).animate(curved),
+              scale: Tween<double>(begin: 0.92, end: 1).animate(curved),
               child: child,
             ),
           );

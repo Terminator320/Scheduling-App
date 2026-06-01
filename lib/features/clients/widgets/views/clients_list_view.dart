@@ -2,19 +2,18 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/core/utils/sheet_focus.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/widgets/cards/client_tile.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
-import 'package:scheduling/features/clients/widgets/cards/client_tile.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
-import 'package:scheduling/shared/widgets/primitives/fade_in_item.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
+import 'package:scheduling/shared/widgets/primitives/fade_in_item.dart';
 
 class ClientsListView extends ConsumerStatefulWidget {
   const ClientsListView({

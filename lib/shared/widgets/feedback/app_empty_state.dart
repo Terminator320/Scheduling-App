@@ -19,7 +19,7 @@ class AppEmptyState extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
+      tween: Tween(begin: 0, end: 1),
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeOutCubic,
       builder: (context, value, child) => Opacity(

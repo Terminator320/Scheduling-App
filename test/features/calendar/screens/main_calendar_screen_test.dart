@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -20,7 +20,6 @@ const _jane = EmployeeRecord(
   name: 'Jane Doe',
   email: 'jane@example.com',
   status: 'active',
-  role: 'employee',
 );
 
 AppointmentRecord _appointment(int id, DateTime day) => AppointmentRecord(
@@ -49,7 +48,7 @@ Widget _wrap({
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
       toggleTheme: () {},
-      textScale: 1.0,
+      textScale: 1,
       setTextScale: (_) {},
       setLanguage: (_) {},
       child: MaterialApp(
@@ -73,7 +72,7 @@ void main() {
   // The calendar grid lays out at full phone width; the default 800×600
   // test viewport overflows by a couple of pixels. Size up to match a real
   // device so layout assertions don't trip on cosmetic overflow.
-  Future<void> _withPhoneViewport(WidgetTester tester) async {
+  Future<void> withPhoneViewport(WidgetTester tester) async {
     tester.view.physicalSize = const Size(412 * 3, 915 * 3);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.resetPhysicalSize);
@@ -81,7 +80,7 @@ void main() {
   }
 
   testWidgets('renders Calendar AppBar title for an admin', (tester) async {
-    await _withPhoneViewport(tester);
+    await withPhoneViewport(tester);
     final day = DateTime(2026, 5, 16);
     await tester.pumpWidget(
       _wrap(
@@ -99,7 +98,7 @@ void main() {
   testWidgets('survives a stream error without crashing (error branch logs)', (
     tester,
   ) async {
-    await _withPhoneViewport(tester);
+    await withPhoneViewport(tester);
     await tester.pumpWidget(
       _wrap(
         appointments: Stream.error(StateError('boom')),

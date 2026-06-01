@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 class TextSizeScreen extends StatelessWidget {
   const TextSizeScreen({super.key});

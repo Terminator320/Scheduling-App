@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -31,7 +31,7 @@ Widget _wrap({required Stream<List<ClientRecord>> clients}) {
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
       toggleTheme: () {},
-      textScale: 1.0,
+      textScale: 1,
       setTextScale: (_) {},
       setLanguage: (_) {},
       child: MaterialApp(

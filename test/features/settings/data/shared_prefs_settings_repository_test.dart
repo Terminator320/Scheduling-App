@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:scheduling/features/settings/data/shared_prefs_settings_repository.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   setUp(() {
@@ -57,7 +56,7 @@ void main() {
     test('saves all fields independently', () async {
       await repo().save(
         themeMode: ThemeMode.dark,
-        textScale: 2.0,
+        textScale: 2,
         language: 'es',
       );
 

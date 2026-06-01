@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -14,7 +14,6 @@ const _jane = EmployeeRecord(
   name: 'Jane Doe',
   email: 'jane@example.com',
   status: 'active',
-  role: 'employee',
 );
 
 const _bob = EmployeeRecord(
@@ -22,7 +21,6 @@ const _bob = EmployeeRecord(
   name: 'Bob Smith',
   email: 'bob@example.com',
   status: 'active',
-  role: 'employee',
 );
 
 Widget _wrap({required Stream<List<EmployeeRecord>> Function() employees}) {
@@ -39,7 +37,7 @@ Widget _wrap({required Stream<List<EmployeeRecord>> Function() employees}) {
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
       toggleTheme: () {},
-      textScale: 1.0,
+      textScale: 1,
       setTextScale: (_) {},
       setLanguage: (_) {},
       child: MaterialApp(

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 class ClientContactsSection extends StatelessWidget {
   const ClientContactsSection({required this.contacts, super.key});

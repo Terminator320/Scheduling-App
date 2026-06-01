@@ -42,7 +42,6 @@ AppointmentRecord _appointmentWith(int existingCount) => AppointmentRecord(
   title: 'Leak fix',
   startTime: DateTime(2026, 5, 10, 9),
   endTime: DateTime(2026, 5, 10, 10),
-  clientId: '',
   pictures: List.generate(existingCount, _image),
   status: 'booked',
 );
@@ -70,17 +69,18 @@ void main() {
   });
 
   ProviderContainer makeContainer(AppointmentRecord appointment) {
-    final c = ProviderContainer(
-      overrides: [
-        appointmentsRepositoryProvider.overrideWithValue(appointments),
-        clientsRepositoryProvider.overrideWithValue(clients),
-        employeesRepositoryProvider.overrideWithValue(employees),
-        appointmentImageUploadProvider.overrideWithValue(uploader),
-        imageStorageProvider.overrideWithValue(storage),
-      ],
-    );
-    // Keep the AutoDispose family-keyed provider alive across reads.
-    c.listen(eventDetailsControllerProvider(appointment), (_, _) {});
+    final c =
+        ProviderContainer(
+            overrides: [
+              appointmentsRepositoryProvider.overrideWithValue(appointments),
+              clientsRepositoryProvider.overrideWithValue(clients),
+              employeesRepositoryProvider.overrideWithValue(employees),
+              appointmentImageUploadProvider.overrideWithValue(uploader),
+              imageStorageProvider.overrideWithValue(storage),
+            ],
+          )
+          // Keep the AutoDispose family-keyed provider alive across reads.
+          ..listen(eventDetailsControllerProvider(appointment), (_, _) {});
     addTearDown(c.dispose);
     return c;
   }

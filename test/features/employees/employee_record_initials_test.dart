@@ -7,7 +7,7 @@ import 'package:scheduling/features/employees/domain/models/employee_record.dart
 /// `parts[1][0]`.
 void main() {
   test('initials returns "?" for empty name', () {
-    expect(const EmployeeRecord(id: '1', name: '').initials, '?');
+    expect(const EmployeeRecord(id: '1').initials, '?');
   });
 
   test('initials uses single letter for single-word names', () {

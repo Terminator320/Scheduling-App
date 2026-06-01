@@ -12,7 +12,7 @@ import 'package:scheduling/l10n/l10n.dart';
 /// actually sees.
 
 void main() {
-  Future<BuildContext> _buildContext(WidgetTester tester) async {
+  Future<BuildContext> buildContext(WidgetTester tester) async {
     late BuildContext capturedContext;
     await tester.pumpWidget(
       Localizations(
@@ -36,7 +36,7 @@ void main() {
   }
 
   testWidgets('AuthValidators.password rejects empty input', (tester) async {
-    final context = await _buildContext(tester);
+    final context = await buildContext(tester);
     expect(AuthValidators.password(context, ''), isNotNull);
     expect(AuthValidators.password(context, '   '), isNotNull);
   });
@@ -44,7 +44,7 @@ void main() {
   testWidgets('AuthValidators.password rejects passwords shorter than 8', (
     tester,
   ) async {
-    final context = await _buildContext(tester);
+    final context = await buildContext(tester);
     expect(AuthValidators.password(context, '1234567'), isNotNull);
     // The 7-char rejection uses the "must be at least 8" message, not the
     // "please enter" empty-field message.
@@ -57,7 +57,7 @@ void main() {
   testWidgets('AuthValidators.password accepts 8+ char passwords', (
     tester,
   ) async {
-    final context = await _buildContext(tester);
+    final context = await buildContext(tester);
     expect(AuthValidators.password(context, '12345678'), isNull);
     expect(
       AuthValidators.password(context, 'a-perfectly-fine-password'),

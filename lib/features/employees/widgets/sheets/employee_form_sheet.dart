@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/widgets/fields/employee_color_picker_row.dart';
-import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
+import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
+import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 class EmployeeFormSheet extends ConsumerStatefulWidget {
   const EmployeeFormSheet({

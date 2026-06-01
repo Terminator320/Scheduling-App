@@ -36,8 +36,9 @@ class AppLogger {
   void error(String message, [Object? error, StackTrace? stack]) {
     if (kDebugMode) _logger.e(message, error: error, stackTrace: stack);
     if (kReleaseMode) {
-      _crashlytics.log(message);
-      _crashlytics.recordError(error ?? message, stack);
+      _crashlytics
+        ..log(message)
+        ..recordError(error ?? message, stack);
     }
   }
 

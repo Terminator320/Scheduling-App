@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dialog.dart';
@@ -38,7 +38,7 @@ void main() {
       await _showConfirm(tester, isAdmin: true);
       expect(find.text('Delete account?'), findsOneWidget);
       expect(
-        find.textContaining('admin', findRichText: false),
+        find.textContaining('admin'),
         findsWidgets,
       );
       expect(tester.takeException(), isNull);
@@ -48,7 +48,7 @@ void main() {
       await _showConfirm(tester, isAdmin: false);
       expect(find.text('Delete account?'), findsOneWidget);
       expect(
-        find.textContaining('admin', findRichText: false),
+        find.textContaining('admin'),
         findsNothing,
       );
     });

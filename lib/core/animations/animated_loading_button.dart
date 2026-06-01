@@ -34,7 +34,7 @@ class AnimatedLoadingButton extends StatelessWidget {
       transitionBuilder: (child, animation) => FadeTransition(
         opacity: animation,
         child: ScaleTransition(
-          scale: Tween<double>(begin: 0.85, end: 1.0).animate(
+          scale: Tween<double>(begin: 0.85, end: 1).animate(
             CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
           ),
           child: child,

@@ -7,16 +7,16 @@ import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
-import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
+import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/screens/create_account_screen.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
@@ -323,7 +323,7 @@ class _LoginState extends ConsumerState<Login> {
                           enabled: !_isLoading,
                           hasError: _emailError != null,
                           errorText: _submitted ? _emailError : null,
-                          onSubmitted: () => _passwordFocus.requestFocus(),
+                          onSubmitted: _passwordFocus.requestFocus,
                           onChanged: _onFieldChanged,
                         ),
                         const SizedBox(height: AppSpacing.sp16),

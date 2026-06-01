@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:table_calendar/table_calendar.dart';
-
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:table_calendar/table_calendar.dart';
 
 class AppCalendar extends StatelessWidget {
   const AppCalendar({
@@ -115,7 +114,7 @@ class AppCalendar extends StatelessWidget {
         selectedBuilder: (context, day, focusedDay) {
           final scheme = Theme.of(context).colorScheme;
           return TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0.7, end: 1.0),
+            tween: Tween(begin: 0.7, end: 1),
             duration: AppDuration.fast,
             curve: Curves.easeOutCubic,
             builder: (context, scale, child) =>

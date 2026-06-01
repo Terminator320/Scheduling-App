@@ -26,7 +26,7 @@ void main() {
       mockRepo = _MockRepo();
     });
 
-    ProviderContainer _container() => ProviderContainer(
+    ProviderContainer container0() => ProviderContainer(
       overrides: [
         firebaseAuthProvider.overrideWithValue(mockAuth),
         employeesRepositoryProvider.overrideWithValue(mockRepo),
@@ -52,7 +52,7 @@ void main() {
       when(() => mockAuth.authStateChanges())
           .thenAnswer((_) => Stream.value(null));
 
-      final container = _container();
+      final container = container0();
       addTearDown(container.dispose);
 
       final result = await firstValue(container);
@@ -66,7 +66,7 @@ void main() {
       when(() => mockAuth.authStateChanges())
           .thenAnswer((_) => Stream.value(mockUser));
 
-      final container = _container();
+      final container = container0();
       addTearDown(container.dispose);
 
       final result = await firstValue(container);
@@ -80,7 +80,7 @@ void main() {
       when(() => mockAuth.authStateChanges())
           .thenAnswer((_) => Stream.value(mockUser));
 
-      final container = _container();
+      final container = container0();
       addTearDown(container.dispose);
 
       final result = await firstValue(container);
@@ -136,7 +136,7 @@ void main() {
       mockRepo = _MockRepo();
     });
 
-    ProviderContainer _container() => ProviderContainer(
+    ProviderContainer container0() => ProviderContainer(
       overrides: [
         firebaseAuthProvider.overrideWithValue(mockAuth),
         employeesRepositoryProvider.overrideWithValue(mockRepo),
@@ -161,7 +161,7 @@ void main() {
       when(() => mockAuth.authStateChanges())
           .thenAnswer((_) => Stream.value(null));
 
-      final container = _container();
+      final container = container0();
       addTearDown(container.dispose);
 
       final result = await firstRoleValue(container);
@@ -175,7 +175,7 @@ void main() {
       when(() => mockAuth.authStateChanges())
           .thenAnswer((_) => Stream.value(mockUser));
 
-      final container = _container();
+      final container = container0();
       addTearDown(container.dispose);
 
       final result = await firstRoleValue(container);
@@ -191,7 +191,7 @@ void main() {
       when(() => mockAuth.authStateChanges())
           .thenAnswer((_) => Stream.value(mockUser));
 
-      final container = _container();
+      final container = container0();
       addTearDown(container.dispose);
       addTearDown(roleController.close);
 

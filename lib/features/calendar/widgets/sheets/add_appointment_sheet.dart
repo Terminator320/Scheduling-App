@@ -2,25 +2,24 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
-import 'package:scheduling/features/calendar/widgets/fields/appointment_address_field.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
+import 'package:scheduling/features/calendar/widgets/fields/appointment_address_field.dart';
 import 'package:scheduling/features/calendar/widgets/fields/employee_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_search_field.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
@@ -144,7 +143,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     final client = ref.read(_provider).selectedClient;
     if (client == null) return;
     _addressController.text = AddressParser.canonicalToDisplay(client.address);
-    _notifier.setUseCustomAddress(false);
+    _notifier.setUseCustomAddress(value: false);
   }
 
   Future<void> _submit() async {
@@ -187,15 +186,18 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
 
   String _errorText(AppointmentFormError key) {
     return switch (key) {
-      AppointmentFormError.titleRequired => context.l10n.validation_titleIsRequired,
-      AppointmentFormError.dateRequired => context.l10n.validation_pleaseSelectADate,
+      AppointmentFormError.titleRequired =>
+        context.l10n.validation_titleIsRequired,
+      AppointmentFormError.dateRequired =>
+        context.l10n.validation_pleaseSelectADate,
       AppointmentFormError.startTimeRequired =>
         context.l10n.validation_pleaseSelectAStartTime,
       AppointmentFormError.endTimeRequired =>
         context.l10n.validation_pleaseSelectAnEndTime,
       AppointmentFormError.endTimeMustBeAfterStart =>
         context.l10n.calendar_mustBeAfterStartTime,
-      AppointmentFormError.clientRequired => context.l10n.validation_pleaseSelectAClient,
+      AppointmentFormError.clientRequired =>
+        context.l10n.validation_pleaseSelectAClient,
       AppointmentFormError.employeesRequired =>
         context.l10n.validation_pleaseSelectAtLeastOneEmployee,
     };
@@ -244,7 +246,11 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
               ),
             ),
             const SizedBox(height: AppSpacing.sp16),
-            formLabel(sheetContext, sheetContext.l10n.calendar_client, required: true),
+            formLabel(
+              sheetContext,
+              sheetContext.l10n.calendar_client,
+              required: true,
+            ),
             SheetFocusScroll(
               child: ClientSearchField(
                 controller: _clientSearchController,
@@ -331,7 +337,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
               selectedClient: state.selectedClient,
               useCustomAddress: state.useCustomAddress,
               addressController: _addressController,
-              onSwitchToCustom: () => _notifier.setUseCustomAddress(true),
+              onSwitchToCustom: () =>
+                  _notifier.setUseCustomAddress(value: true),
               onUseClientAddress: _useClientAddress,
             ),
             const SizedBox(height: AppSpacing.sp16),
@@ -357,7 +364,11 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
               ),
             ),
             const SizedBox(height: AppSpacing.sp16),
-            formLabel(sheetContext, sheetContext.l10n.calendar_pictures, optional: true),
+            formLabel(
+              sheetContext,
+              sheetContext.l10n.calendar_pictures,
+              optional: true,
+            ),
             PhotoPickerSection(
               existingImages: const [],
               newImages: state.selectedImages,

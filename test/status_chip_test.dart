@@ -1,4 +1,4 @@
-﻿// test/status_chip_test.dart
+// test/status_chip_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -95,10 +95,10 @@ void main() {
       ),
     );
 
-    await tester.pumpWidget(chipAt(1.0));
+    await tester.pumpWidget(chipAt(1));
     final baseline = tester.getSize(find.text('In Progress')).width;
 
-    await tester.pumpWidget(chipAt(3.0));
+    await tester.pumpWidget(chipAt(3));
     final scaled = tester.getSize(find.text('In Progress')).width;
 
     // 1.3× cap + a small epsilon for sub-pixel rounding.

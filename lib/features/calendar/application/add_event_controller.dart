@@ -133,7 +133,7 @@ class AddEventController
     );
   }
 
-  void setUseCustomAddress(bool value) {
+  void setUseCustomAddress({required bool value}) {
     state = state.copyWith(useCustomAddress: value);
   }
 
@@ -234,7 +234,6 @@ class AddEventController
         employeeNames: state.selectedEmployees.map((e) => e.name).toList(),
         notes: notes.trim(),
         materialsNeeded: materialsNeeded.trim(),
-        status: 'pending',
       );
 
       await repo.addAppointment(appointment);

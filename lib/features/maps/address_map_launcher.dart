@@ -1,8 +1,8 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
-import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AddressMapLauncher {
