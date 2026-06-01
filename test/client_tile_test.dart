@@ -2,8 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
-import 'package:scheduling/features/clients/widgets/client_tile.dart';
-import 'package:scheduling/shared/widgets/app_avatar.dart';
+import 'package:scheduling/features/clients/widgets/cards/client_tile.dart';
+import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 ClientRecord _fakeClient({String phone = '514-555-0101'}) => ClientRecord(
       id: 'c1',

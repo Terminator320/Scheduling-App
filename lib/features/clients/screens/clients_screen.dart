@@ -7,14 +7,14 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/core/utils/sheet_focus.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
-import 'package:scheduling/features/clients/widgets/add_client_sheet.dart';
-import 'package:scheduling/features/clients/widgets/appointment_history_view.dart';
-import 'package:scheduling/features/clients/widgets/client_detail_sheet.dart';
-import 'package:scheduling/features/clients/widgets/client_detail_view.dart';
-import 'package:scheduling/features/clients/widgets/clients_list_view.dart';
-import 'package:scheduling/features/settings/widgets/settings_drawer.dart';
+import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
+import 'package:scheduling/features/clients/widgets/views/appointment_history_view.dart';
+import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
+import 'package:scheduling/features/clients/widgets/views/client_detail_view.dart';
+import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart';
+import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
 import 'package:scheduling/routes/app_routes.dart';
-import 'package:scheduling/shared/widgets/app_search_bar.dart';
+import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
 
 class ListInformation extends StatefulWidget {
   const ListInformation({
@@ -87,12 +87,14 @@ class _ListInformationState extends State<ListInformation> {
   }
 
   PreferredSizeWidget _buildClientsAppBar() {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return AppBar(
       backgroundColor: scheme.primary,
       foregroundColor: scheme.onPrimary,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_rounded),
+        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
         onPressed: () => Navigator.pushReplacementNamed(
           context,
           AppRoutes.mainCalendar,
@@ -104,7 +106,9 @@ class _ListInformationState extends State<ListInformation> {
       ),
       title: Text(
         context.l10n.common_clients,
-        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
       ),
       bottom: AppSearchBar(
         controller: _searchController,
@@ -115,12 +119,14 @@ class _ListInformationState extends State<ListInformation> {
   }
 
   PreferredSizeWidget _buildHistoryAppBar() {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return AppBar(
       backgroundColor: scheme.primary,
       foregroundColor: scheme.onPrimary,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_rounded),
+        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
         onPressed: () => Navigator.pushReplacementNamed(
           context,
           AppRoutes.mainCalendar,
@@ -132,7 +138,9 @@ class _ListInformationState extends State<ListInformation> {
       ),
       title: Text(
         context.l10n.common_history,
-        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
       ),
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(52),
@@ -141,12 +149,15 @@ class _ListInformationState extends State<ListInformation> {
           child: TextField(
             controller: _appointmentSearchController,
             onChanged: (_) => setState(() {}),
-            style: TextStyle(color: scheme.onPrimary, fontSize: 13),
+            // NOTE: source size 13 sits between bodySmall (12) and bodyMedium
+            // (14); bodyMedium is the nearest input-text role.
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: scheme.onPrimary,
+            ),
             decoration: InputDecoration(
               hintText: context.l10n.clients_searchByClientOrEmployee,
-              hintStyle: TextStyle(
+              hintStyle: theme.textTheme.bodyMedium?.copyWith(
                 color: scheme.onPrimary.withValues(alpha: 0.6),
-                fontSize: 13,
               ),
               prefixIcon: Icon(
                 Icons.search,

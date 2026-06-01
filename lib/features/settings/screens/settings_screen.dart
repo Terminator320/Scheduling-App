@@ -14,9 +14,9 @@ import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/settings/screens/text_size_screen.dart';
-import 'package:scheduling/features/settings/widgets/delete_account_dialog.dart';
-import 'package:scheduling/features/settings/widgets/settings_tiles.dart';
-import 'package:scheduling/features/settings/widgets/text_size_view.dart';
+import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dialog.dart';
+import 'package:scheduling/features/settings/widgets/cards/settings_tiles.dart';
+import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
 import 'package:scheduling/routes/app_routes.dart';
 
 enum _SettingsDetail { textSize }

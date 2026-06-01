@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
-import 'package:scheduling/features/employees/widgets/employee_card.dart';
+import 'package:scheduling/features/employees/widgets/cards/employee_card.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/app_avatar.dart';
-import 'package:scheduling/shared/widgets/status_chip.dart';
+import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
+import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 EmployeeRecord _fakeEmployee({
   String status = 'active',

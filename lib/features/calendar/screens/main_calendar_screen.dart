@@ -15,13 +15,13 @@ import 'package:scheduling/features/calendar/application/photo_upload_notifier.d
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
-import 'package:scheduling/features/calendar/widgets/app_calendar_view.dart';
-import 'package:scheduling/features/calendar/widgets/event_details_view.dart';
-import 'package:scheduling/features/calendar/widgets/event_list.dart';
-import 'package:scheduling/features/calendar/widgets/month_year_picker.dart';
+import 'package:scheduling/features/calendar/widgets/views/app_calendar_view.dart';
+import 'package:scheduling/features/calendar/widgets/views/event_details_view.dart';
+import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
+import 'package:scheduling/features/calendar/widgets/fields/month_year_picker.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
-import 'package:scheduling/features/settings/widgets/settings_drawer.dart';
+import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 class MainCalendar extends ConsumerStatefulWidget {
@@ -230,8 +230,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         automaticallyImplyLeading: false,
         title: Text(
           context.l10n.common_calendar,
-          style: TextStyle(
-            fontSize: 17,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.w700,
             color: scheme.onPrimary,
           ),
@@ -241,9 +240,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
             onPressed: _goToToday,
             child: Text(
               context.l10n.calendar_today,
-              style: TextStyle(
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
                 color: scheme.onPrimary,
-                fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -260,27 +258,29 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                GestureDetector(
-                  onTap: () async {
-                    final picked = await MonthYearPicker.show(
-                      context,
-                      _focusedDay,
-                    );
-                    if (picked != null) _setFocusedDay(picked);
-                  },
-                  child: Text(
-                    monthLabel,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: scheme.onPrimary.withValues(alpha: 0.82),
+                Semantics(
+                  button: true,
+                  label: context.l10n.calendar_selectDate,
+                  child: GestureDetector(
+                    onTap: () async {
+                      final picked = await MonthYearPicker.show(
+                        context,
+                        _focusedDay,
+                      );
+                      if (picked != null) _setFocusedDay(picked);
+                    },
+                    child: Text(
+                      monthLabel,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: scheme.onPrimary.withValues(alpha: 0.82),
+                      ),
                     ),
                   ),
                 ),
                 Text(
                   jobLabel,
-                  style: TextStyle(
-                    fontSize: 12,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     fontWeight: FontWeight.w500,
                     color: scheme.onPrimary.withValues(alpha: 0.82),
                   ),

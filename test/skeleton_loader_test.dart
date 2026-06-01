@@ -1,7 +1,7 @@
 // test/skeleton_loader_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scheduling/shared/widgets/skeleton_loader.dart';
+import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 
 Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
 

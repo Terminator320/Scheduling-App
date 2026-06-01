@@ -18,7 +18,7 @@ import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/routes/app_routes.dart';
-import 'package:scheduling/shared/widgets/form_helpers.dart';
+import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
 class Login extends ConsumerStatefulWidget {
   const Login({super.key, this.authService});
@@ -299,34 +299,9 @@ class _LoginState extends ConsumerState<Login> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children:
                   [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: scheme.primary,
-                            borderRadius: BorderRadius.circular(AppRadius.r12),
-                          ),
-                          child: Icon(
-                            Icons.calendar_today_rounded,
-                            color: scheme.onPrimary,
-                            size: 22,
-                          ),
-                        ),
+                        const _LoginLogo(),
                         const SizedBox(height: AppSpacing.sp24),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              context.l10n.auth_welcomeBack,
-                              style: textTheme.headlineLarge,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              context.l10n.auth_signInToYourAccount,
-                              style: textTheme.bodyMedium,
-                            ),
-                          ],
-                        ),
+                        const _LoginHeaderText(),
                         const SizedBox(height: AppSpacing.sp16),
                         AnimatedSwitcher(
                           duration: AppAnimationDurations.banner,
@@ -342,86 +317,27 @@ class _LoginState extends ConsumerState<Login> {
                           child: _buildBanner(textTheme),
                         ),
                         const SizedBox(height: AppSpacing.sp16),
-                        AnimatedFormFieldWrapper(
+                        _LoginEmailField(
+                          controller: _emailController,
+                          focusNode: _emailFocus,
+                          enabled: !_isLoading,
                           hasError: _emailError != null,
-                          child: TextField(
-                            controller: _emailController,
-                            focusNode: _emailFocus,
-                            keyboardType: TextInputType.emailAddress,
-                            textInputAction: TextInputAction.next,
-                            autocorrect: false,
-                            enableSuggestions: false,
-                            autofillHints: const [AutofillHints.email],
-                            enabled: !_isLoading,
-                            onSubmitted: (_) => _passwordFocus.requestFocus(),
-                            onChanged: (_) => _onFieldChanged(),
-                            decoration:
-                                formInputDecoration(
-                                  context,
-                                  context.l10n.common_email,
-                                ).copyWith(
-                                  errorText: _submitted ? _emailError : null,
-                                  prefixIcon: const Icon(
-                                    Icons.email_outlined,
-                                    size: 20,
-                                  ),
-                                ),
-                          ),
+                          errorText: _submitted ? _emailError : null,
+                          onSubmitted: () => _passwordFocus.requestFocus(),
+                          onChanged: _onFieldChanged,
                         ),
                         const SizedBox(height: AppSpacing.sp16),
-                        AnimatedFormFieldWrapper(
+                        _LoginPasswordField(
+                          controller: _passwordController,
+                          focusNode: _passwordFocus,
+                          enabled: !_isLoading,
                           hasError: _passwordError != null,
-                          child: TextField(
-                            controller: _passwordController,
-                            focusNode: _passwordFocus,
-                            obscureText: _isObscured,
-                            textInputAction: TextInputAction.done,
-                            autofillHints: const [AutofillHints.password],
-                            enabled: !_isLoading,
-                            onSubmitted: (_) => _signIn(),
-                            onChanged: (_) => _onFieldChanged(),
-                            decoration:
-                                formInputDecoration(
-                                  context,
-                                  context.l10n.common_password,
-                                ).copyWith(
-                                  errorText: _submitted ? _passwordError : null,
-                                  prefixIcon: const Icon(
-                                    Icons.lock_outlined,
-                                    size: 20,
-                                  ),
-                                  suffixIcon: AnimatedSwitcher(
-                                    duration: AppAnimationDurations.quick,
-                                    transitionBuilder: (child, animation) =>
-                                        FadeTransition(
-                                          opacity: animation,
-                                          child: ScaleTransition(
-                                            scale: Tween<double>(
-                                              begin: 0.7,
-                                              end: 1,
-                                            ).animate(animation),
-                                            child: child,
-                                          ),
-                                        ),
-                                    child: IconButton(
-                                      key: ValueKey(_isObscured),
-                                      icon: Icon(
-                                        _isObscured
-                                            ? Icons.visibility_off_outlined
-                                            : Icons.visibility_outlined,
-                                        size: 20,
-                                        color: scheme.onSurfaceVariant,
-                                      ),
-                                      tooltip: _isObscured
-                                          ? context.l10n.auth_showPassword
-                                          : context.l10n.auth_hidePassword,
-                                      onPressed: () => setState(
-                                        () => _isObscured = !_isObscured,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                          ),
+                          errorText: _submitted ? _passwordError : null,
+                          isObscured: _isObscured,
+                          onSubmitted: _signIn,
+                          onChanged: _onFieldChanged,
+                          onToggleObscured: () =>
+                              setState(() => _isObscured = !_isObscured),
                         ),
                         const SizedBox(height: AppSpacing.sp24),
                         AnimatedLoadingButton(
@@ -430,37 +346,10 @@ class _LoginState extends ConsumerState<Login> {
                           onPressed: _signIn,
                         ),
                         const SizedBox(height: AppSpacing.sp16),
-                        // Wrap so the two action labels can flow to a second line
-                        // at 1.4× / 2.0× text scale instead of overflowing the row.
-                        // alignment: spaceBetween keeps the original single-line
-                        // visual at normal scale.
-                        Wrap(
-                          alignment: WrapAlignment.spaceBetween,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            TextButton(
-                              onPressed: _isLoading
-                                  ? null
-                                  : _openForgotPassword,
-                              child: Text(
-                                context.l10n.auth_forgotPassword,
-                                style: textTheme.bodySmall?.copyWith(
-                                  color: scheme.primary,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: _isLoading ? null : _openCreateAccount,
-                              child: Text(
-                                context.l10n.auth_createAccount,
-                                style: textTheme.bodySmall?.copyWith(
-                                  color: scheme.primary,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
+                        _LoginFooterActions(
+                          enabled: !_isLoading,
+                          onForgotPassword: _openForgotPassword,
+                          onCreateAccount: _openCreateAccount,
                         ),
                       ]
                       .animate(interval: 65.ms)
@@ -474,6 +363,212 @@ class _LoginState extends ConsumerState<Login> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _LoginLogo extends StatelessWidget {
+  const _LoginLogo();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: scheme.primary,
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+      ),
+      child: Icon(
+        Icons.calendar_today_rounded,
+        color: scheme.onPrimary,
+        size: 22,
+      ),
+    );
+  }
+}
+
+class _LoginHeaderText extends StatelessWidget {
+  const _LoginHeaderText();
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(context.l10n.auth_welcomeBack, style: textTheme.headlineLarge),
+        const SizedBox(height: 4),
+        Text(
+          context.l10n.auth_signInToYourAccount,
+          style: textTheme.bodyMedium,
+        ),
+      ],
+    );
+  }
+}
+
+class _LoginEmailField extends StatelessWidget {
+  const _LoginEmailField({
+    required this.controller,
+    required this.focusNode,
+    required this.enabled,
+    required this.hasError,
+    required this.errorText,
+    required this.onSubmitted,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool enabled;
+  final bool hasError;
+  final String? errorText;
+  final VoidCallback onSubmitted;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedFormFieldWrapper(
+      hasError: hasError,
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        keyboardType: TextInputType.emailAddress,
+        textInputAction: TextInputAction.next,
+        autocorrect: false,
+        enableSuggestions: false,
+        autofillHints: const [AutofillHints.email],
+        enabled: enabled,
+        onSubmitted: (_) => onSubmitted(),
+        onChanged: (_) => onChanged(),
+        decoration: formInputDecoration(context, context.l10n.common_email)
+            .copyWith(
+              errorText: errorText,
+              prefixIcon: const Icon(Icons.email_outlined, size: 20),
+            ),
+      ),
+    );
+  }
+}
+
+class _LoginPasswordField extends StatelessWidget {
+  const _LoginPasswordField({
+    required this.controller,
+    required this.focusNode,
+    required this.enabled,
+    required this.hasError,
+    required this.errorText,
+    required this.isObscured,
+    required this.onSubmitted,
+    required this.onChanged,
+    required this.onToggleObscured,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool enabled;
+  final bool hasError;
+  final String? errorText;
+  final bool isObscured;
+  final VoidCallback onSubmitted;
+  final VoidCallback onChanged;
+  final VoidCallback onToggleObscured;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AnimatedFormFieldWrapper(
+      hasError: hasError,
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        obscureText: isObscured,
+        textInputAction: TextInputAction.done,
+        autofillHints: const [AutofillHints.password],
+        enabled: enabled,
+        onSubmitted: (_) => onSubmitted(),
+        onChanged: (_) => onChanged(),
+        decoration: formInputDecoration(context, context.l10n.common_password)
+            .copyWith(
+              errorText: errorText,
+              prefixIcon: const Icon(Icons.lock_outlined, size: 20),
+              suffixIcon: AnimatedSwitcher(
+                duration: AppAnimationDurations.quick,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: 0.7, end: 1).animate(animation),
+                    child: child,
+                  ),
+                ),
+                child: IconButton(
+                  key: ValueKey(isObscured),
+                  icon: Icon(
+                    isObscured
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 20,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  tooltip: isObscured
+                      ? context.l10n.auth_showPassword
+                      : context.l10n.auth_hidePassword,
+                  onPressed: onToggleObscured,
+                ),
+              ),
+            ),
+      ),
+    );
+  }
+}
+
+class _LoginFooterActions extends StatelessWidget {
+  const _LoginFooterActions({
+    required this.enabled,
+    required this.onForgotPassword,
+    required this.onCreateAccount,
+  });
+
+  final bool enabled;
+  final VoidCallback onForgotPassword;
+  final VoidCallback onCreateAccount;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+    // Wrap so the two action labels can flow to a second line
+    // at 1.4× / 2.0× text scale instead of overflowing the row.
+    // alignment: spaceBetween keeps the original single-line
+    // visual at normal scale.
+    return Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        TextButton(
+          onPressed: enabled ? onForgotPassword : null,
+          child: Text(
+            context.l10n.auth_forgotPassword,
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.primary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: enabled ? onCreateAccount : null,
+          child: Text(
+            context.l10n.auth_createAccount,
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.primary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
