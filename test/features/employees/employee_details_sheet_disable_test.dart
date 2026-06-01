@@ -8,7 +8,7 @@ import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
-import 'package:scheduling/features/employees/widgets/employee_details_sheet.dart';
+import 'package:scheduling/features/employees/widgets/sheets/employee_details_sheet.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 class _MockRepo extends Mock implements EmployeesRepository {}

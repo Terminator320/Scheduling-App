@@ -10,7 +10,7 @@ import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
-import 'package:scheduling/shared/widgets/form_helpers.dart';
+import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
 class ForgotPassword extends StatefulWidget {
   const ForgotPassword({super.key, this.initialEmail, this.authService});

@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
-import 'package:scheduling/features/settings/widgets/settings_drawer.dart';
+import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/app_avatar.dart';
+import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 Widget _wrap(Widget child) => ThemeNotifier(
       themeMode: ThemeMode.light,

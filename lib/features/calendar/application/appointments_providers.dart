@@ -12,7 +12,6 @@ final appointmentsRepositoryProvider = Provider<AppointmentsRepository>((ref) {
 
 final appointmentsInRangeProvider = StreamProvider.family
     .autoDispose<List<AppointmentRecord>, AppointmentDateRange>((ref, range) {
-      ref.keepAlive();
       if (ref.authUid == null) return Stream.value(const []);
       return ref.watch(appointmentsRepositoryProvider).watchInRange(range);
     });
@@ -21,7 +20,6 @@ typedef MyAppointmentsKey = ({String employeeId, AppointmentDateRange range});
 
 final myAppointmentsProvider = StreamProvider.family
     .autoDispose<List<AppointmentRecord>, MyAppointmentsKey>((ref, key) {
-      ref.keepAlive();
       if (ref.authUid == null) return Stream.value(const []);
       return ref
           .watch(appointmentsRepositoryProvider)

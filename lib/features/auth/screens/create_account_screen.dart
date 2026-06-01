@@ -10,7 +10,7 @@ import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
-import 'package:scheduling/shared/widgets/form_helpers.dart';
+import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
 class CreateAccountResult {
   const CreateAccountResult({required this.created, this.email});
@@ -192,10 +192,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   }
 
   Widget _buildForm({required Key key}) {
-    final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
-    final scheme = theme.colorScheme;
-
     return KeyedSubtree(
       key: key,
       child: Column(
@@ -203,188 +199,44 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children:
             <Widget>[
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: scheme.primary,
-                      borderRadius: BorderRadius.circular(AppRadius.r12),
-                    ),
-                    child: Icon(
-                      Icons.calendar_today_rounded,
-                      color: scheme.onPrimary,
-                      size: 22,
-                    ),
-                  ),
+                  const _CreateAccountLogo(),
                   const SizedBox(height: AppSpacing.sp24),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        context.l10n.auth_createAccount,
-                        style: textTheme.headlineLarge,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        context
-                            .l10n
-                            .auth_useTheEmailYourAdminAddedToTheEmployeeList,
-                        style: textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
+                  const _CreateAccountHeaderText(),
                   const SizedBox(height: AppSpacing.sp32),
-                  AnimatedFormFieldWrapper(
-                    hasError: _emailError != null,
-                    child: TextField(
-                      controller: _emailController,
-                      focusNode: _emailFocus,
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      autofillHints: const [AutofillHints.email],
-                      enabled: !_isLoading,
-                      onSubmitted: (_) => _passwordFocus.requestFocus(),
-                      onChanged: (_) => _onFieldChanged(),
-                      decoration:
-                          formInputDecoration(
-                            context,
-                            context.l10n.common_email,
-                          ).copyWith(
-                            errorText: _emailError,
-                            prefixIcon: const Icon(
-                              Icons.email_outlined,
-                              size: 20,
-                            ),
-                          ),
-                    ),
+                  _CreateAccountEmailField(
+                    controller: _emailController,
+                    focusNode: _emailFocus,
+                    enabled: !_isLoading,
+                    errorText: _emailError,
+                    onSubmitted: () => _passwordFocus.requestFocus(),
+                    onChanged: _onFieldChanged,
                   ),
                   const SizedBox(height: AppSpacing.sp16),
-                  AnimatedFormFieldWrapper(
-                    hasError: _passwordError != null,
-                    child: TextField(
-                      controller: _passwordController,
-                      focusNode: _passwordFocus,
-                      obscureText: _isObscured,
-                      textInputAction: TextInputAction.next,
-                      autofillHints: const [AutofillHints.newPassword],
-                      enabled: !_isLoading,
-                      onSubmitted: (_) => _confirmPasswordFocus.requestFocus(),
-                      onChanged: (_) => _onFieldChanged(),
-                      decoration:
-                          formInputDecoration(
-                            context,
-                            context.l10n.common_password,
-                          ).copyWith(
-                            errorText: _passwordError,
-                            prefixIcon: const Icon(
-                              Icons.lock_outlined,
-                              size: 20,
-                            ),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _isObscured
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                                size: 20,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                              tooltip: _isObscured
-                                  ? context.l10n.auth_showPassword
-                                  : context.l10n.auth_hidePassword,
-                              onPressed: () =>
-                                  setState(() => _isObscured = !_isObscured),
-                            ),
-                          ),
-                    ),
+                  _CreateAccountPasswordField(
+                    controller: _passwordController,
+                    focusNode: _passwordFocus,
+                    enabled: !_isLoading,
+                    errorText: _passwordError,
+                    isObscured: _isObscured,
+                    onSubmitted: () => _confirmPasswordFocus.requestFocus(),
+                    onChanged: _onFieldChanged,
+                    onToggleObscured: () =>
+                        setState(() => _isObscured = !_isObscured),
                   ),
                   const SizedBox(height: AppSpacing.sp16),
-                  AnimatedFormFieldWrapper(
-                    hasError: _confirmPasswordError != null,
-                    child: TextField(
-                      controller: _confirmPasswordController,
-                      focusNode: _confirmPasswordFocus,
-                      obscureText: _isConfirmObscured,
-                      textInputAction: TextInputAction.done,
-                      autofillHints: const [AutofillHints.newPassword],
-                      enabled: !_isLoading,
-                      onSubmitted: (_) => _createAccount(),
-                      onChanged: (_) => _onFieldChanged(),
-                      decoration:
-                          formInputDecoration(
-                            context,
-                            context.l10n.auth_confirmPassword,
-                          ).copyWith(
-                            errorText: _confirmPasswordError,
-                            prefixIcon: const Icon(
-                              Icons.lock_reset_outlined,
-                              size: 20,
-                            ),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _isConfirmObscured
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                                size: 20,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                              tooltip: _isConfirmObscured
-                                  ? context.l10n.auth_showPassword
-                                  : context.l10n.auth_hidePassword,
-                              onPressed: () => setState(
-                                () => _isConfirmObscured = !_isConfirmObscured,
-                              ),
-                            ),
-                          ),
+                  _CreateAccountConfirmField(
+                    controller: _confirmPasswordController,
+                    focusNode: _confirmPasswordFocus,
+                    enabled: !_isLoading,
+                    errorText: _confirmPasswordError,
+                    isObscured: _isConfirmObscured,
+                    onSubmitted: _createAccount,
+                    onChanged: _onFieldChanged,
+                    onToggleObscured: () => setState(
+                      () => _isConfirmObscured = !_isConfirmObscured,
                     ),
                   ),
-                  AnimatedSwitcher(
-                    duration: AppAnimationDurations.banner,
-                    transitionBuilder: (child, animation) => FadeTransition(
-                      opacity: animation,
-                      child: SizeTransition(
-                        sizeFactor: animation,
-                        axisAlignment: -1,
-                        child: child,
-                      ),
-                    ),
-                    child: _bannerError != null
-                        ? Padding(
-                            key: ValueKey('err_$_bannerError'),
-                            padding: const EdgeInsets.only(
-                              top: AppSpacing.sp12,
-                            ),
-                            child: Container(
-                              padding: const EdgeInsets.all(AppSpacing.sp12),
-                              decoration: BoxDecoration(
-                                color: scheme.errorContainer,
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.r8,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.error_outline,
-                                    color: scheme.error,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: AppSpacing.sp8),
-                                  Expanded(
-                                    child: Text(
-                                      _bannerError!,
-                                      style: textTheme.bodySmall?.copyWith(
-                                        color: scheme.onErrorContainer,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                        : const SizedBox.shrink(key: ValueKey('banner_none')),
-                  ),
+                  _CreateAccountErrorBanner(message: _bannerError),
                   const SizedBox(height: AppSpacing.sp24),
                   AnimatedLoadingButton(
                     label: context.l10n.auth_createAccount,
@@ -397,8 +249,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                       onPressed: _isLoading ? null : _backToSignIn,
                       child: Text(
                         context.l10n.auth_backToSignIn,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: scheme.primary,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                     ),
@@ -472,6 +324,260 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   curve: Curves.easeOutCubic,
                 ),
       ),
+    );
+  }
+}
+
+class _CreateAccountLogo extends StatelessWidget {
+  const _CreateAccountLogo();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: scheme.primary,
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+      ),
+      child: Icon(
+        Icons.calendar_today_rounded,
+        color: scheme.onPrimary,
+        size: 22,
+      ),
+    );
+  }
+}
+
+class _CreateAccountHeaderText extends StatelessWidget {
+  const _CreateAccountHeaderText();
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(context.l10n.auth_createAccount, style: textTheme.headlineLarge),
+        const SizedBox(height: 4),
+        Text(
+          context.l10n.auth_useTheEmailYourAdminAddedToTheEmployeeList,
+          style: textTheme.bodyMedium,
+        ),
+      ],
+    );
+  }
+}
+
+class _CreateAccountEmailField extends StatelessWidget {
+  const _CreateAccountEmailField({
+    required this.controller,
+    required this.focusNode,
+    required this.enabled,
+    required this.errorText,
+    required this.onSubmitted,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool enabled;
+  final String? errorText;
+  final VoidCallback onSubmitted;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedFormFieldWrapper(
+      hasError: errorText != null,
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        keyboardType: TextInputType.emailAddress,
+        textInputAction: TextInputAction.next,
+        autocorrect: false,
+        enableSuggestions: false,
+        autofillHints: const [AutofillHints.email],
+        enabled: enabled,
+        onSubmitted: (_) => onSubmitted(),
+        onChanged: (_) => onChanged(),
+        decoration: formInputDecoration(context, context.l10n.common_email)
+            .copyWith(
+              errorText: errorText,
+              prefixIcon: const Icon(Icons.email_outlined, size: 20),
+            ),
+      ),
+    );
+  }
+}
+
+class _CreateAccountPasswordField extends StatelessWidget {
+  const _CreateAccountPasswordField({
+    required this.controller,
+    required this.focusNode,
+    required this.enabled,
+    required this.errorText,
+    required this.isObscured,
+    required this.onSubmitted,
+    required this.onChanged,
+    required this.onToggleObscured,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool enabled;
+  final String? errorText;
+  final bool isObscured;
+  final VoidCallback onSubmitted;
+  final VoidCallback onChanged;
+  final VoidCallback onToggleObscured;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AnimatedFormFieldWrapper(
+      hasError: errorText != null,
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        obscureText: isObscured,
+        textInputAction: TextInputAction.next,
+        autofillHints: const [AutofillHints.newPassword],
+        enabled: enabled,
+        onSubmitted: (_) => onSubmitted(),
+        onChanged: (_) => onChanged(),
+        decoration: formInputDecoration(context, context.l10n.common_password)
+            .copyWith(
+              errorText: errorText,
+              prefixIcon: const Icon(Icons.lock_outlined, size: 20),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  isObscured
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  size: 20,
+                  color: scheme.onSurfaceVariant,
+                ),
+                tooltip: isObscured
+                    ? context.l10n.auth_showPassword
+                    : context.l10n.auth_hidePassword,
+                onPressed: onToggleObscured,
+              ),
+            ),
+      ),
+    );
+  }
+}
+
+class _CreateAccountConfirmField extends StatelessWidget {
+  const _CreateAccountConfirmField({
+    required this.controller,
+    required this.focusNode,
+    required this.enabled,
+    required this.errorText,
+    required this.isObscured,
+    required this.onSubmitted,
+    required this.onChanged,
+    required this.onToggleObscured,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool enabled;
+  final String? errorText;
+  final bool isObscured;
+  final VoidCallback onSubmitted;
+  final VoidCallback onChanged;
+  final VoidCallback onToggleObscured;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AnimatedFormFieldWrapper(
+      hasError: errorText != null,
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        obscureText: isObscured,
+        textInputAction: TextInputAction.done,
+        autofillHints: const [AutofillHints.newPassword],
+        enabled: enabled,
+        onSubmitted: (_) => onSubmitted(),
+        onChanged: (_) => onChanged(),
+        decoration:
+            formInputDecoration(
+              context,
+              context.l10n.auth_confirmPassword,
+            ).copyWith(
+              errorText: errorText,
+              prefixIcon: const Icon(Icons.lock_reset_outlined, size: 20),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  isObscured
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  size: 20,
+                  color: scheme.onSurfaceVariant,
+                ),
+                tooltip: isObscured
+                    ? context.l10n.auth_showPassword
+                    : context.l10n.auth_hidePassword,
+                onPressed: onToggleObscured,
+              ),
+            ),
+      ),
+    );
+  }
+}
+
+class _CreateAccountErrorBanner extends StatelessWidget {
+  const _CreateAccountErrorBanner({required this.message});
+
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+    return AnimatedSwitcher(
+      duration: AppAnimationDurations.banner,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: SizeTransition(
+          sizeFactor: animation,
+          axisAlignment: -1,
+          child: child,
+        ),
+      ),
+      child: message != null
+          ? Padding(
+              key: ValueKey('err_$message'),
+              padding: const EdgeInsets.only(top: AppSpacing.sp12),
+              child: Container(
+                padding: const EdgeInsets.all(AppSpacing.sp12),
+                decoration: BoxDecoration(
+                  color: scheme.errorContainer,
+                  borderRadius: BorderRadius.circular(AppRadius.r8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline, color: scheme.error, size: 16),
+                    const SizedBox(width: AppSpacing.sp8),
+                    Expanded(
+                      child: Text(
+                        message!,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: scheme.onErrorContainer,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : const SizedBox.shrink(key: ValueKey('banner_none')),
     );
   }
 }

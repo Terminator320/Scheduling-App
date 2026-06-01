@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
-import 'package:scheduling/features/calendar/widgets/add_appointment_sheet.dart';
-import 'package:scheduling/features/calendar/widgets/details_edit_sheet.dart';
+import 'package:scheduling/features/calendar/widgets/sheets/add_appointment_sheet.dart';
+import 'package:scheduling/features/calendar/widgets/sheets/details_edit_sheet.dart';
 
 const _sheetStyle = AnimationStyle(
   duration: Duration(milliseconds: 280),

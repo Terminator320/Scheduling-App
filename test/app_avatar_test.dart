@@ -1,7 +1,7 @@
 // test/app_avatar_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scheduling/shared/widgets/app_avatar.dart';
+import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
 

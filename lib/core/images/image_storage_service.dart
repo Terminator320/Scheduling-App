@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
+import 'package:scheduling/core/images/image_upload_failure.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 
 class ImageStorageService {
@@ -25,12 +26,12 @@ class ImageStorageService {
 
   Future<AppointmentImage> uploadImage(String appointmentId, File file) async {
     if (!await _isValidImageFile(file)) {
-      throw StateError('File is not a valid image.');
+      throw const ImageUploadFailureInvalidFormat();
     }
 
     final size = await file.length();
     if (size > maxUploadBytes) {
-      throw StateError('Image is too large to upload after compression.');
+      throw const ImageUploadFailureTooLarge();
     }
 
     final originalName = file.uri.pathSegments.last;
