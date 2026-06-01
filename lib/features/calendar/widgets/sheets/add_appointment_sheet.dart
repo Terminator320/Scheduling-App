@@ -15,6 +15,7 @@ import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/fields/appointment_address_field.dart';
 import 'package:scheduling/features/calendar/widgets/fields/employee_picker.dart';
+import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -171,10 +172,16 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
       if (!mounted) return;
     }
     switch (outcome) {
-      case AddEventSubmitted(:final appointment):
+      case AddEventSubmitted(:final appointment, :final futureBookings):
         ref
             .read(noticeServiceProvider)
-            .success(context.l10n.common_appointmentCreated);
+            .success(
+              futureBookings > 0
+                  ? context.l10n.calendar_appointmentCreatedWithRepeats(
+                      futureBookings,
+                    )
+                  : context.l10n.common_appointmentCreated,
+            );
         Navigator.pop(context, appointment);
       case AddEventFailed(:final error):
         ref
@@ -325,6 +332,17 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: AppSpacing.sp16),
+            // --- Repeat ---
+            formLabel(
+              sheetContext,
+              sheetContext.l10n.calendar_repeat,
+              optional: true,
+            ),
+            RepeatIntervalPicker(
+              current: state.repeat,
+              onChanged: _notifier.selectRepeat,
             ),
             const SizedBox(height: AppSpacing.sp16),
             // --- Address ---

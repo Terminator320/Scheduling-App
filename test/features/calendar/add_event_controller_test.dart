@@ -9,6 +9,7 @@ import 'package:scheduling/features/calendar/data/appointment_image_upload_servi
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -42,6 +43,7 @@ void main() {
     registerFallbackValue(<EmployeeRecord>[]);
     registerFallbackValue(DateTime(2026));
     registerFallbackValue(<AppointmentImage>[]);
+    registerFallbackValue(<AppointmentRecord>[]);
   });
 
   late _MockAppointmentsRepo appointments;
@@ -243,6 +245,45 @@ void main() {
         ),
       );
       verify(() => appointments.addAppointment(any())).called(1);
+    });
+
+    test('books repeat occurrences atomically with the appointment', () async {
+      var nextId = 0;
+      when(appointments.newDocId).thenAnswer((_) => 'appt-${++nextId}');
+      when(() => appointments.addAppointments(any())).thenAnswer((_) async {});
+
+      final c = readNotifier();
+      fillValid(c);
+      c.selectRepeat(RepeatInterval.fourMonths);
+
+      final outcome = await c.submit(
+        title: 'Furnace check',
+        address: '999 Maple',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      expect(outcome, isA<AddEventSubmitted>());
+      expect((outcome as AddEventSubmitted).futureBookings, 3);
+
+      final captured = verify(
+        () => appointments.addAppointments(captureAny()),
+      ).captured.single;
+      final series = (captured as List).cast<AppointmentRecord>();
+      expect(series, hasLength(4));
+      expect(series.map((a) => a.id).toSet(), hasLength(4));
+      expect(series[1].startTime, DateTime(2026, 9, 10, 9));
+      expect(series[3].startTime, DateTime(2027, 5, 10, 9));
+      expect(series[3].endTime, DateTime(2027, 5, 10, 10));
+      expect(series.every((a) => a.status == 'pending'), isTrue);
+      // Every visit in the series stores the rule, like a real calendar.
+      expect(
+        series.every((a) => a.repeat == RepeatInterval.fourMonths),
+        isTrue,
+      );
+      // …and shares the series key (the first visit's doc id).
+      expect(series.every((a) => a.seriesId == 'appt-1'), isTrue);
+      verifyNever(() => appointments.addAppointment(any()));
     });
 
     test(

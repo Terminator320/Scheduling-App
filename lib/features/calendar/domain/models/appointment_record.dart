@@ -1,14 +1,16 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
+import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 
 part 'appointment_record.freezed.dart';
 
 @freezed
 abstract class AppointmentRecord with _$AppointmentRecord {
-
   const factory AppointmentRecord({
-    required DateTime startTime, required DateTime endTime, String? id,
+    required DateTime startTime,
+    required DateTime endTime,
+    String? id,
     @Default('') String title,
     @Default('') String clientId,
     @Default('') String clientName,
@@ -19,6 +21,9 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     @Default('') String notes,
     @Default('') String materialsNeeded,
     @Default('pending') String status,
+    @Default(RepeatInterval.none) RepeatInterval repeat,
+    // Links the occurrences of one repeat series (the first visit's doc id).
+    @Default('') String seriesId,
     DateTime? createdAt,
     DateTime? updatedAt,
     @Default(<AppointmentImage>[]) List<AppointmentImage> pictures,
@@ -40,6 +45,8 @@ abstract class AppointmentRecord with _$AppointmentRecord {
       notes: (data['notes'] ?? '').toString(),
       materialsNeeded: (data['materialsNeeded'] ?? '').toString(),
       status: (data['status'] ?? 'pending').toString(),
+      repeat: RepeatInterval.fromRaw((data['repeat'] ?? '').toString()),
+      seriesId: (data['seriesId'] ?? '').toString(),
       createdAt: _parseDateTime(data['createdAt']),
       updatedAt: _parseDateTime(data['updatedAt']),
       pictures: _parseImageList(data['pictures']),
@@ -60,6 +67,8 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     'pictures': pictures.map((p) => p.toMap()).toList(),
     'materialsNeeded': materialsNeeded,
     'status': status,
+    'repeat': repeat.raw,
+    'seriesId': seriesId,
   };
 
   String get displayStatus {
@@ -90,7 +99,9 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     if (value is! List) return const [];
     return value
         .whereType<Map<Object?, Object?>>()
-        .map((item) => AppointmentImage.fromMap(Map<String, dynamic>.from(item)))
+        .map(
+          (item) => AppointmentImage.fromMap(Map<String, dynamic>.from(item)),
+        )
         .toList();
   }
 }

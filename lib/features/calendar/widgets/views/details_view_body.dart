@@ -6,6 +6,9 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
+import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
+import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sections/client_contacts_section.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_action_bar.dart';
@@ -14,7 +17,6 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 
 class DetailsViewBody extends ConsumerWidget {
   const DetailsViewBody({
@@ -179,9 +181,17 @@ class _DeleteTestButton extends ConsumerWidget {
           onPressed: isSaving
               ? null
               : () async {
-                  final confirmed = await _confirmDeleteDialog(context);
-                  if (!context.mounted || !confirmed) return;
-                  if (await notifier.deleteAppointment(appointment) == null) {
+                  final choice = await showDeleteAppointmentDialog(
+                    context,
+                    isSeries: appointment.seriesId.isNotEmpty,
+                  );
+                  if (!context.mounted || choice == null) return;
+                  final error = await notifier.deleteAppointment(
+                    appointment,
+                    includeFuture:
+                        choice == DeleteAppointmentChoice.thisAndFuture,
+                  );
+                  if (error == null) {
                     if (!context.mounted) return;
                     ref
                         .read(noticeServiceProvider)
@@ -272,6 +282,13 @@ class _Header extends StatelessWidget {
                 scheme: scheme,
                 theme: theme,
               ),
+              if (appointment.repeat != RepeatInterval.none)
+                _IconLabel(
+                  icon: Icons.repeat,
+                  text: repeatIntervalLabel(context.l10n, appointment.repeat),
+                  scheme: scheme,
+                  theme: theme,
+                ),
             ],
           ),
         ],
@@ -441,14 +458,4 @@ class _PhotosView extends ConsumerWidget {
       ),
     );
   }
-}
-
-// TODO(pre-ship): Remove this entire function — used only by the testing delete button above.
-Future<bool> _confirmDeleteDialog(BuildContext context) {
-  return showConfirmDialog(
-    context,
-    title: context.l10n.calendar_deleteAppointment,
-    message: context.l10n.calendar_areYouSureYouWantToDeleteThisJob,
-    confirmLabel: context.l10n.common_delete,
-  );
 }

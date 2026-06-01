@@ -22,17 +22,57 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }
 
   @override
-  Future<void> addAppointment(AppointmentRecord appointment) async {
-    final data = {
-      ..._toFirestoreMap(appointment),
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-    if (appointment.id != null) {
-      await _appointments.doc(appointment.id).set(data);
-    } else {
-      await _appointments.add(data);
+  Future<void> addAppointment(AppointmentRecord appointment) =>
+      addAppointments([appointment]);
+
+  @override
+  Future<void> addAppointments(List<AppointmentRecord> appointments) async {
+    final batch = _appointments.firestore.batch();
+    for (final appointment in appointments) {
+      final doc = appointment.id == null
+          ? _appointments.doc()
+          : _appointments.doc(appointment.id);
+      batch.set(doc, {
+        ..._toFirestoreMap(appointment),
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     }
+    await batch.commit();
+  }
+
+  @override
+  Future<List<AppointmentRecord>> getSeries(String seriesId) async {
+    final snapshot = await _appointments
+        .where('seriesId', isEqualTo: seriesId)
+        .get();
+    return snapshot.docs
+        .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
+        .toList();
+  }
+
+  @override
+  Future<void> rewriteSeries({
+    required AppointmentRecord updated,
+    required List<String> deleteIds,
+    required List<AppointmentRecord> copies,
+  }) async {
+    final batch = _appointments.firestore.batch()
+      ..update(_appointments.doc(updated.id), {
+        ..._toFirestoreMap(updated),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    for (final id in deleteIds) {
+      batch.delete(_appointments.doc(id));
+    }
+    for (final copy in copies) {
+      batch.set(_appointments.doc(copy.id), {
+        ..._toFirestoreMap(copy),
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
   }
 
   @override
@@ -83,8 +123,15 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }
 
   @override
-  Future<void> deleteAppointment(String id) async {
-    await _appointments.doc(id).delete();
+  Future<void> deleteAppointment(String id) => deleteAppointments([id]);
+
+  @override
+  Future<void> deleteAppointments(List<String> ids) async {
+    final batch = _appointments.firestore.batch();
+    for (final id in ids) {
+      batch.delete(_appointments.doc(id));
+    }
+    await batch.commit();
   }
 
   @override

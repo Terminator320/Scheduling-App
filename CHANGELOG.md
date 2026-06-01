@@ -10,9 +10,20 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
-## [Unreleased]
+## [1.2.0+7] - 2026-06-07
 
 ### Added
+- Repeating appointments: the add and edit sheets have a Repeat dropdown
+  (every 4 months / every 6 months / every year). Picking one pre-books the
+  future visits up to a year ahead as their own appointments — same details,
+  status "pending", each one can be marked done on its day like any other
+  booking. Every visit in a series shows its rule next to the date and time.
+- Changing a repeating appointment's Repeat option rewrites the series like a
+  real calendar: the previously booked future visits are deleted and the new
+  cadence is booked from the edited date, in one atomic batch. Past visits and
+  visits already marked done or cancelled are never touched.
+- Deleting a repeating appointment now asks whether to delete this visit only
+  or this and all future visits in the series.
 - Form fields now shake and their error messages animate in when validation
   fails, across every form in the app (respects the OS reduced-motion setting).
 - Error messages now say what failed and why — e.g. "Couldn't delete the

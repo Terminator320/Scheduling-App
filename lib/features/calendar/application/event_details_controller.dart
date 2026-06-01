@@ -10,6 +10,7 @@ import 'package:scheduling/features/calendar/application/appointments_providers.
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -27,6 +28,9 @@ abstract class EventDetailsState with _$EventDetailsState {
     required TimeOfDay selectedEndTime,
     required String editingStatus,
     @Default(false) bool isEditing,
+    @Default(RepeatInterval.none) RepeatInterval repeat,
+    // Repeat currently stored on the doc — booking only fires on a change.
+    @Default(RepeatInterval.none) RepeatInterval savedRepeat,
     @Default(<EmployeeRecord>[]) List<EmployeeRecord> selectedEmployees,
     @Default(<AppointmentImage>[]) List<AppointmentImage> existingImages,
     @Default(<AppointmentImage>[]) List<AppointmentImage> removedExistingImages,
@@ -50,8 +54,18 @@ class EventDetailsInvalid extends EventDetailsSaveOutcome {
 }
 
 class EventDetailsSaved extends EventDetailsSaveOutcome {
-  const EventDetailsSaved(this.appointment);
+  const EventDetailsSaved(
+    this.appointment, {
+    this.futureBookings = 0,
+    this.removedBookings = 0,
+  });
   final AppointmentRecord appointment;
+
+  /// Pre-booked repeat occurrences created alongside the save.
+  final int futureBookings;
+
+  /// Old future occurrences deleted by a series rewrite.
+  final int removedBookings;
 }
 
 class EventDetailsFailed extends EventDetailsSaveOutcome {
@@ -73,6 +87,8 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       selectedStartTime: TimeOfDay.fromDateTime(appointment.startTime),
       selectedEndTime: TimeOfDay.fromDateTime(appointment.endTime),
       editingStatus: appointment.status,
+      repeat: appointment.repeat,
+      savedRepeat: appointment.repeat,
       existingImages: List.of(appointment.pictures),
     );
   }
@@ -143,6 +159,10 @@ class EventDetailsController extends Notifier<EventDetailsState> {
 
   void setStatus(String status) {
     state = state.copyWith(editingStatus: status);
+  }
+
+  void selectRepeat(RepeatInterval value) {
+    state = state.copyWith(repeat: value);
   }
 
   Future<void> searchClients(String query) async {
@@ -297,7 +317,7 @@ class EventDetailsController extends Notifier<EventDetailsState> {
 
     try {
       final pickedClient = state.selectedClient;
-      final updated = AppointmentRecord(
+      var updated = AppointmentRecord(
         id: id,
         title: title.trim(),
         startTime: start,
@@ -312,9 +332,52 @@ class EventDetailsController extends Notifier<EventDetailsState> {
         materialsNeeded: materialsNeeded.trim(),
         pictures: state.existingImages,
         status: state.editingStatus,
+        repeat: state.repeat,
+        seriesId: appointment.seriesId,
       );
 
-      await ref.read(appointmentsRepositoryProvider).updateAppointment(updated);
+      final repo = ref.read(appointmentsRepositoryProvider);
+      var futureBookings = 0;
+      var removedBookings = 0;
+      if (state.repeat == state.savedRepeat) {
+        await repo.updateAppointment(updated);
+      } else {
+        // The rule changed — rewrite the series like a real calendar: drop
+        // the old future visits and book the new cadence in one atomic
+        // batch. Done/cancelled visits are kept as records, and copies
+        // start 'pending' without sharing pictures.
+        final seriesId = appointment.seriesId.isEmpty
+            ? id
+            : appointment.seriesId;
+        updated = updated.copyWith(seriesId: seriesId);
+        final existing = appointment.seriesId.isEmpty
+            ? const <AppointmentRecord>[]
+            : await repo.getSeries(seriesId);
+        final deleteIds = _futureSeriesIds(
+          existing,
+          excludeId: id,
+          after: start,
+        );
+        final copies = [
+          for (final copyStart in state.repeat.occurrenceStartsAfter(start))
+            updated.copyWith(
+              id: repo.newDocId(),
+              startTime: copyStart,
+              endTime: copyStart.add(end.difference(start)),
+              status: 'pending',
+              pictures: const [],
+            ),
+        ];
+        await repo.rewriteSeries(
+          updated: updated,
+          deleteIds: deleteIds,
+          copies: copies,
+        );
+        futureBookings = copies.length;
+        removedBookings = deleteIds.length;
+      }
+      // The doc now stores state.repeat — make it the new baseline.
+      state = state.copyWith(savedRepeat: state.repeat);
 
       // Delete removed images only after the doc (which no longer references
       // them) has committed. A failure here orphans bytes in Storage — harmless
@@ -342,7 +405,11 @@ class EventDetailsController extends Notifier<EventDetailsState> {
             );
       }
 
-      return EventDetailsSaved(updated);
+      return EventDetailsSaved(
+        updated,
+        futureBookings: futureBookings,
+        removedBookings: removedBookings,
+      );
     } catch (e, st) {
       ref.read(loggerProvider).warn('APPT-SAVE saveChanges failed', e, st);
       state = state.copyWith(isSaving: false);
@@ -350,15 +417,31 @@ class EventDetailsController extends Notifier<EventDetailsState> {
     }
   }
 
-  /// Returns null on success, or the error that caused the failure.
-  Future<Object?> deleteAppointment(AppointmentRecord appointment) async {
+  /// Returns null on success, or the error that caused the failure. With
+  /// [includeFuture], also deletes the series' future visits (done/cancelled
+  /// visits are preserved) in one atomic batch.
+  Future<Object?> deleteAppointment(
+    AppointmentRecord appointment, {
+    bool includeFuture = false,
+  }) async {
     final id = appointment.id;
     if (id == null) {
       return StateError('Cannot delete an appointment without an id.');
     }
     state = state.copyWith(isSaving: true);
     try {
-      await ref.read(appointmentsRepositoryProvider).deleteAppointment(id);
+      final repo = ref.read(appointmentsRepositoryProvider);
+      if (includeFuture && appointment.seriesId.isNotEmpty) {
+        final series = await repo.getSeries(appointment.seriesId);
+        final futureIds = _futureSeriesIds(
+          series,
+          excludeId: id,
+          after: appointment.startTime,
+        );
+        await repo.deleteAppointments([id, ...futureIds]);
+      } else {
+        await repo.deleteAppointment(id);
+      }
       return null;
     } catch (e, st) {
       ref.read(loggerProvider).warn('APPT-DEL deleteAppointment failed', e, st);
@@ -367,6 +450,22 @@ class EventDetailsController extends Notifier<EventDetailsState> {
     }
   }
 }
+
+/// Ids of the series visits after [after], skipping [excludeId] and any
+/// visit already done or cancelled (those stay as records).
+List<String> _futureSeriesIds(
+  List<AppointmentRecord> series, {
+  required String excludeId,
+  required DateTime after,
+}) => [
+  for (final a in series)
+    if (a.id != null &&
+        a.id != excludeId &&
+        a.startTime.isAfter(after) &&
+        a.status != 'done' &&
+        a.status != 'cancelled')
+      a.id!,
+];
 
 ClientRecord _placeholderClient(AppointmentRecord a) => ClientRecord(
   id: a.clientId,
