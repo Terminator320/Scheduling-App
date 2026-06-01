@@ -1,29 +1,42 @@
-﻿// test/settings_screen_test.dart
+// test/settings_screen_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/features/settings/screens/settings_screen.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-Widget _wrap({double textScale = 1.0, bool isDark = false}) => ThemeNotifier(
-      themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-      toggleTheme: () {},
-      textScale: textScale,
-      setTextScale: (_) {},
-      setLanguage: (_) {},
-      child: const MaterialApp(
-        localizationsDelegates: [
-          AppLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-        ],
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: SettingsScreen(name: 'Test User', email: 'test@example.com'),
-      ),
-    );
+Widget _wrap({double textScale = 1.0, bool isDark = false}) => ProviderScope(
+  child: ThemeNotifier(
+    themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
+    toggleTheme: () {},
+    textScale: textScale,
+    setTextScale: (_) {},
+    setLanguage: (_) {},
+    child: const MaterialApp(
+      localizationsDelegates: [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: SettingsScreen(name: 'Test User', email: 'test@example.com'),
+    ),
+  ),
+);
 
 void main() {
+  // SettingsScreen now watches appInfoProvider (PackageInfo) during build.
+  PackageInfo.setMockInitialValues(
+    appName: 'Scheduling',
+    packageName: 'net.vogas.scheduling',
+    version: '1.0.3',
+    buildNumber: '4',
+    buildSignature: '',
+  );
+
   testWidgets('shows Appearance section header', (tester) async {
     await tester.pumpWidget(_wrap());
     expect(find.textContaining('APPEARANCE'), findsOneWidget);
@@ -60,7 +73,9 @@ void main() {
     expect(find.byType(Slider), findsNothing);
   });
 
-  testWidgets('shows current text scale label next to Text Size', (tester) async {
+  testWidgets('shows current text scale label next to Text Size', (
+    tester,
+  ) async {
     await tester.pumpWidget(_wrap());
     expect(find.text('Medium'), findsOneWidget);
   });
@@ -70,10 +85,12 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     tester.view.physicalSize = const Size(320 * 3, 640 * 3);
     tester.view.devicePixelRatio = 3;
-    await tester.pumpWidget(MediaQuery(
-      data: const MediaQueryData(textScaler: TextScaler.linear(2)),
-      child: _wrap(),
-    ));
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+        child: _wrap(),
+      ),
+    );
     expect(tester.takeException(), isNull);
   });
 }
