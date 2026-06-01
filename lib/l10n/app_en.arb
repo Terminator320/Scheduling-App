@@ -844,6 +844,42 @@
   "@applock_reason": {
     "description": "Prompt shown by the OS biometric dialog"
   },
+  "onboarding_slide1Title": "Manage Appointments",
+  "@onboarding_slide1Title": {
+    "description": "Onboarding slide 1 title"
+  },
+  "onboarding_slide1Body": "Schedule jobs and track them through to done.",
+  "@onboarding_slide1Body": {
+    "description": "Onboarding slide 1 body"
+  },
+  "onboarding_slide2Title": "Clients in One Place",
+  "@onboarding_slide2Title": {
+    "description": "Onboarding slide 2 title"
+  },
+  "onboarding_slide2Body": "Keep client details, contacts, and history together.",
+  "@onboarding_slide2Body": {
+    "description": "Onboarding slide 2 body"
+  },
+  "onboarding_slide3Title": "Coordinate Your Team",
+  "@onboarding_slide3Title": {
+    "description": "Onboarding slide 3 title"
+  },
+  "onboarding_slide3Body": "Assign employees and see who's booked at a glance.",
+  "@onboarding_slide3Body": {
+    "description": "Onboarding slide 3 body"
+  },
+  "onboarding_skip": "Skip",
+  "@onboarding_skip": {
+    "description": "Skip button on the onboarding flow"
+  },
+  "onboarding_next": "Next",
+  "@onboarding_next": {
+    "description": "Next button on non-final onboarding slides"
+  },
+  "onboarding_getStarted": "Get Started",
+  "@onboarding_getStarted": {
+    "description": "Final-slide button that finishes onboarding"
+  },
   "settings_version": "Version {version} ({buildNumber})",
   "@settings_version": {
     "description": "App version footer shown in Settings, e.g. Version 1.0.3 (4)",
