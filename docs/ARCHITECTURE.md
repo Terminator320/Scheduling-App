@@ -24,15 +24,12 @@ lib/
 │   ├── utils/                       l10n_extensions.dart (context.l10n), date helpers, language controller, sheet focus
 │   └── validators/                  Auth input validators (email format, password rules)
 │
-├── shared/widgets/                  Reusable UI components used across ≥2 features
-│   ├── app_avatar.dart              Circular employee avatar using employee colorValue
-│   ├── app_empty_state.dart         Blank-state placeholder with icon + message
-│   ├── app_search_bar.dart          Debounced search input with animated clear button
-│   ├── skeleton_loader.dart         Shimmer loading placeholder
-│   ├── status_chip.dart             Status badge (active, disabled, pending, done, etc.)
-│   ├── sheet_widgets.dart           DraggableSheetFrame, SheetHandle — used by all bottom sheets
-│   ├── fade_in_item.dart            Staggered fade entrance for list items
-│   └── ...                         address_autocomplete_field, labeled_text_field, form_helpers, info_row
+├── shared/widgets/                  Reusable UI components used across ≥2 features, grouped by type
+│   ├── primitives/                  app_avatar (employee colorValue circle), fade_in_item
+│   ├── feedback/                    app_empty_state, skeleton_loader (shimmer), status_chip
+│   ├── fields/                      address_autocomplete_field, labeled_text_field, app_search_bar, form_helpers
+│   ├── cards/                       list_item_tile (shared row layout behind client/employee tiles)
+│   └── sheets/                      sheet_widgets (DraggableSheetFrame, SheetHandle)
 │
 ├── routes/
 │   └── app_routes.dart              Single onGenerateRoute; typed arg classes per route; page transitions
@@ -71,9 +68,16 @@ features/<name>/
 │   ├── <name>_providers.dart   Riverpod providers that wire repositories into the widget tree.
 │   └── <name>_controller.dart  StateNotifier for form/sheet state (uses Freezed for state shape).
 ├── screens/             Full-page screens — thin, mostly just Scaffold + feature widget.
-├── widgets/             Feature-specific widgets (sheets, cards, pickers).
+├── widgets/             Feature-specific widgets, grouped by type into subfolders:
+│                        sheets/ cards/ fields/ dialogs/ sections/ views/.
 └── services/            (where needed) Non-repository async logic (image upload, auth wrapping).
 ```
+
+**Widget bucket taxonomy** (same names everywhere, so a widget's kind predicts its folder):
+`sheets/` modal bottom sheets · `cards/` row & tile cards · `fields/` inline inputs & pickers ·
+`dialogs/` popup/overlay · `sections/` composed form/detail sections · `views/` larger composed
+view/list/body widgets. `shared/widgets/` additionally uses `primitives/` (atoms) and `feedback/`
+(empty/loading/status). Not every folder uses every bucket.
 
 ---
 
@@ -101,11 +105,12 @@ All Firebase instances (Auth, Firestore, Storage) come from `lib/core/providers/
 
 ### Error Handling
 
-Domain-layer `Failure` subtypes (sealed, one per feature) carry localised messages. Each family lives at `lib/features/<f>/domain/<f>_failure.dart` and implements `toLocalizedMessage(BuildContext)`:
+Domain-layer `Failure` subtypes (sealed, one per feature) carry localised messages. Each family lives at `lib/features/<f>/domain/<f>_failure.dart` and implements `toLocalizedMessage(BuildContext)`. The base `Failure` (`lib/core/errors/failure.dart`) `implements Exception`, so repositories and services can `throw` failures without tripping the `only_throw_errors` lint:
 
 - **`AuthFailure`** — `AuthFailureWrongCredentials`, `AuthFailureUserDisabled`, `AuthFailureUserNotFound`, `AuthFailurePermissionDenied`, etc. Mapped from `FirebaseAuthException` (and `FirebaseException(code: 'permission-denied')`) via `AuthErrorMapper`.
 - **`EmployeesFailure`** — `EmployeesFailureEmailAlreadyExists` (raised by `firebase_employees_repository` on duplicate-email writes). Surfaced as a field-level error under the email input only — no banner notice, since the field error already describes the problem precisely.
 - **`MapsFailure`** — `MapsFailureNetwork`, `MapsFailureParse`, `MapsFailureRateLimit`, `MapsFailureUnauthorized`, `MapsFailureInvalidInput` (raised by `google_places_repository`). The `cause` field captures the underlying error for Crashlytics, but `toLocalizedMessage` never echoes it back to the user (response bodies and HTTP error payloads stay out of the UI surface).
+- **`ImageUploadFailure`** — `ImageUploadFailureInvalidFormat`, `ImageUploadFailureTooLarge` (lives at `lib/core/images/image_upload_failure.dart`, not a feature folder). Thrown by `ImageStorageService` when a file fails magic-byte validation or exceeds the size cap.
 
 UI catches the typed failure, calls `failure.toLocalizedMessage(context)`, and passes the result to `noticeServiceProvider.error(...)`. Repositories must not throw raw `Exception('...')` — the string would leak into the notice surface and Crashlytics.
 
@@ -132,7 +137,7 @@ Status enums (`AppointmentStatus` written by `updateAppointmentStatus`) are allo
 
 ### Responsive Layout
 
-`lib/core/layout/` adapts the UI to screen width. `Breakpoints` defines `tablet` (600) and `expanded` (840); the `context.isWide` extension is `width >= 600`. On narrow phones the normal screens render unchanged; on wide screens `AdaptiveShell` wraps them with a navigation rail over the `AdaptiveDestination` enum (`calendar`, `clients`, `employees`, `history`, `settings`), and `MasterDetailScaffold` renders list + detail side by side. The `history` destination surfaces `clients/widgets/appointment_history_view.dart`.
+`lib/core/layout/` adapts the UI to screen width. `Breakpoints` defines `tablet` (600) and `expanded` (840); the `context.isWide` extension is `width >= 600`. On narrow phones the normal screens render unchanged; on wide screens `AdaptiveShell` wraps them with a navigation rail over the `AdaptiveDestination` enum (`calendar`, `clients`, `employees`, `history`, `settings`), and `MasterDetailScaffold` renders list + detail side by side. The `history` destination surfaces `clients/widgets/views/appointment_history_view.dart`.
 
 ---
 
@@ -268,9 +273,11 @@ Delete scaffolding exists for testing only — **not production-ready**:
 
 | File | What to remove |
 |---|---|
-| `lib/features/auth/services/auth_service.dart` | Signup-failure diagnostics logging (line 66) — remove once release-APK signup failures are diagnosed |
-| `lib/features/calendar/widgets/details_view_body.dart` | Testing delete button (line 124) + its confirm-delete helper (line 416) |
-| `lib/features/employees/widgets/employee_details_view.dart` | `_isDeleting`, `_confirmDelete()`, testing delete button (line 272). NOTE: keep the `ConsumerStatefulWidget` base + `flutter_riverpod`/`employees_providers` imports — the shipped disable/enable feature uses them |
+| `lib/features/auth/services/auth_service.dart` | Signup-failure diagnostics logging (~line 66) — remove once release-APK signup failures are diagnosed |
+| `lib/features/calendar/widgets/views/details_view_body.dart` | `_DeleteTestButton` testing-delete widget (~line 151) + its confirm-delete helper (~line 461) |
+| `lib/features/employees/widgets/views/employee_details_view.dart` | `_isDeleting`, `_confirmDelete()`, testing delete button (~line 271). NOTE: keep the `ConsumerStatefulWidget` base + `flutter_riverpod`/`employees_providers` imports — the shipped disable/enable feature uses them |
+
+Locate them with `grep -rn "TODO(pre-ship)" lib` — markers are authoritative; line numbers drift.
 
 ---
 
@@ -281,6 +288,25 @@ Delete scaffolding exists for testing only — **not production-ready**:
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (~327 test cases across 54 files as of 2026-05-27).
+Run: `flutter test` (339 test cases across 54 files as of 2026-05-31). `flutter analyze` is
+clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.
+
+---
+
+## Analysis & Linting
+
+Baseline is `very_good_analysis` (strict). `flutter analyze` reports **zero** issues — keep it
+that way. Four rules are intentionally disabled in `analysis_options.yaml`, each because it fights
+a deliberate convention rather than catching a real problem:
+
+| Disabled / excluded | Why |
+|---|---|
+| `public_member_api_docs` | This is an app, not a published package — documenting every public member is noise. |
+| `sort_pub_dependencies` | `pubspec.yaml` is grouped by purpose with section comments, not flat-alphabetical. |
+| `lines_longer_than_80_chars` | l10n keys are named after full English sentences and test names are readable sentences; an 80-char cap would force splitting them. `dart format` still governs wrapping. |
+| `lib/firebase_options.dart` (excluded) | Generated by `flutterfire configure`. |
+
+Everything else is fixed in code, not suppressed. `dart fix --apply` is safe to run; never run
+`flutter analyze`-driven mass changes that touch unrelated files.
