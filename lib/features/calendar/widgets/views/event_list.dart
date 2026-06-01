@@ -14,6 +14,7 @@ class EventList extends StatelessWidget {
   const EventList({
     required this.events,
     required this.employees,
+    required this.colorMap,
     super.key,
     this.isAdmin = true,
     this.isLoading = false,
@@ -22,6 +23,7 @@ class EventList extends StatelessWidget {
   });
   final ValueNotifier<List<AppointmentRecord>> events;
   final List<EmployeeRecord> employees;
+  final Map<String, Color> colorMap;
   final bool isAdmin;
   final bool isLoading;
   final void Function(AppointmentRecord appointment)? onAppointmentTap;
@@ -47,7 +49,6 @@ class EventList extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final colorMap = buildEmployeeColorMap(employees);
     final nameMap = {for (final emp in employees) emp.id: emp.name};
 
     return Expanded(

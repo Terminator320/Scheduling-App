@@ -8,8 +8,7 @@ import 'package:scheduling/features/employees/domain/models/employee_record.dart
 
 final employeesRepositoryProvider = Provider<EmployeesRepository>((ref) {
   final firestore = ref.watch(firestoreProvider);
-  final auth = ref.watch(firebaseAuthProvider);
-  return FirebaseEmployeesRepository(firestore, auth: auth);
+  return FirebaseEmployeesRepository(firestore);
 });
 
 // Routes by role so non-admin sessions don't fire `watchAllUsers`, which

@@ -182,6 +182,14 @@ const MAX_PAYLOAD_BYTES = 4 * 1024;
 const AUTH_RATE_MAX = 5;
 const AUTH_RATE_WINDOW_MS = 15 * 60 * 1000;
 
+// placesGetDetails is low-volume (one billable call per address the user
+// actually selects), so it gets the durable Firestore cap rather than the
+// in-memory limiter — that one resets on cold start and multiplies by
+// maxInstances, giving no real ceiling on the per-detail Places cost. The
+// limit is generous enough for an admin entering many appointments at once.
+const PLACES_DETAILS_RATE_MAX = 40;
+const PLACES_DETAILS_RATE_WINDOW_MS = 15 * 60 * 1000;
+
 // deleteAccount requires the caller to have re-authenticated within this
 // window. Firebase ID tokens are valid ~1 hour, so without this check a
 // stolen-but-not-yet-expired token could trigger irreversible deletion.
@@ -396,7 +404,12 @@ exports.placesGetDetails = onCall(
       }
       const sessionToken = readSessionToken(req.data);
 
-      enforceRateLimit(req.auth.uid);
+      await enforceDurableRateLimit(
+          "placesGetDetails",
+          req.auth.uid,
+          PLACES_DETAILS_RATE_MAX,
+          PLACES_DETAILS_RATE_WINDOW_MS,
+      );
 
       const url = new URL(
           `https://places.googleapis.com/v1/places/${encodeURIComponent(
@@ -567,11 +580,32 @@ exports.deleteAccount = onCall(
           throw new HttpsError("internal", "delete-user-doc-failed");
         }
       } else {
-        // No bridge row found — best-effort cleanup of an orphan auth account.
-        // We still try to delete the Auth user below so the caller can recover.
-        logger.warn("deleteAccount: no bridge for uid; auth-only delete", {
+        // No bridge row — it may simply be stale/missing while a users doc
+        // still exists. Fall back to a direct uid lookup so we don't strand
+        // the profile doc (account-deletion completeness for store policy).
+        logger.warn("deleteAccount: no bridge for uid; querying users by uid", {
           uid,
         });
+        try {
+          const q = await db
+              .collection("users")
+              .where("uid", "==", uid)
+              .limit(1)
+              .get();
+          if (!q.empty) {
+            await q.docs[0].ref.delete();
+            logger.info("deleteAccount: deleted users doc via uid fallback", {
+              uid,
+              docId: q.docs[0].id,
+            });
+          }
+        } catch (err) {
+          logger.error("deleteAccount: uid-fallback delete failed", {
+            uid,
+            err: err.message,
+          });
+          throw new HttpsError("internal", "delete-user-doc-failed");
+        }
       }
 
       try {
@@ -629,10 +663,20 @@ exports.resolveMyInvite = onCall(
         return {found: false};
       }
       const doc = snap.docs[0];
+      const d = doc.data();
+      // Project only the fields the signup/activation flow consumes — never
+      // return the whole users doc, so internal fields can't leak to the
+      // pre-activation account.
       return {
         found: true,
         docId: doc.id,
-        data: doc.data(),
+        data: {
+          name: d.name || "",
+          colorValue: d.colorValue || null,
+          role: d.role || "",
+          status: d.status || "",
+          email: d.email || "",
+        },
       };
     },
 );

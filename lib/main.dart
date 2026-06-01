@@ -210,10 +210,31 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     });
   }
 
+  // Optimistic splash routing skips the authoritative findUserByUid that used
+  // to sign out a user whose `users` doc no longer exists (e.g. an employee
+  // deleted while their Auth session is still valid). The shared doc stream
+  // resolving to an empty map reproduces that guard.
+  void _listenForDeletedAccount(BuildContext context) {
+    ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
+      prev,
+      next,
+    ) {
+      if (FirebaseAuth.instance.currentUser == null) return;
+      final doc = next.valueOrNull;
+      if (doc != null && doc.isEmpty) {
+        _handleAccountDisabled(
+          context,
+          context.l10n.error_thisAccountHasBeenDisabled,
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     _listenForAccountDisabled(context);
     _listenForRoleRevocation(context);
+    _listenForDeletedAccount(context);
     return AppLanguageScope(
       controller: _languageController,
       child: ThemeNotifier(

@@ -94,6 +94,16 @@ service cloud.firestore {
         return s is string && s.matches('^-?[0-9]+$');
       }
 
+      // Constrain the privilege/state fields an admin write can land on, so a
+      // compromised admin session can't mint a bogus role (e.g. 'superuser')
+      // or an out-of-allowlist status that would desync the usersByUid bridge.
+      function isValidRole(r) {
+        return r in ['admin', 'employee'];
+      }
+      function isValidUserStatus(s) {
+        return s in ['active', 'disabled', 'invited'];
+      }
+
       // Self-activation path is intentionally restricted to role=='employee'.
       // Invited admins cannot self-activate here — that would let anyone who
       // knows an invited admin's email claim full admin privileges by signing
@@ -104,7 +114,11 @@ service cloud.firestore {
       // invite. Verification forces the real email owner to complete the flow.
       allow update: if (isAdmin()
             && (!('colorValue' in request.resource.data.keys())
-                || isValidColorValue(request.resource.data.colorValue)))
+                || isValidColorValue(request.resource.data.colorValue))
+            && (!('role' in request.resource.data.keys())
+                || isValidRole(request.resource.data.role))
+            && (!('status' in request.resource.data.keys())
+                || isValidUserStatus(request.resource.data.status)))
         || (isSignedIn()
             && request.auth.token.email_verified == true
             && resource.data.status == 'invited'

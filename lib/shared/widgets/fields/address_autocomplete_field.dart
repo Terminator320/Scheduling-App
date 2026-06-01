@@ -45,6 +45,12 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
   bool _suppressFetch = false;
   String? _sessionToken;
   String _lastTypedApt = '';
+  String _lastFetched = '';
+
+  // Don't fire a billable Places Autocomplete call until there's enough to
+  // match on. Shorter prefixes return noise and just burn quota.
+  static const _minQueryLength = 3;
+  static const _debounceDelay = Duration(milliseconds: 700);
 
   @override
   void dispose() {
@@ -62,7 +68,9 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
     }
 
     _debounce?.cancel();
-    if (value.trim().isEmpty) {
+    final trimmed = value.trim();
+    if (trimmed.length < _minQueryLength) {
+      _lastFetched = '';
       setState(() {
         _suggestions = [];
         _isLoading = false;
@@ -71,7 +79,7 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
       return;
     }
 
-    _debounce = Timer(const Duration(milliseconds: 300), () => _fetch(value));
+    _debounce = Timer(_debounceDelay, () => _fetch(value));
   }
 
   String _localizedErrorFor(
@@ -84,6 +92,10 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
   }
 
   Future<void> _fetch(String query) async {
+    // Skip a re-fetch of the exact query we last sent (e.g. trailing edits
+    // that trim back to the same text) — it would bill an identical call.
+    if (query == _lastFetched) return;
+    _lastFetched = query;
     setState(() {
       _isLoading = true;
       _serviceError = null;
