@@ -11,24 +11,10 @@ final clientsRepositoryProvider = Provider<ClientsRepository>((ref) {
   return FirebaseClientsRepository(firestore);
 });
 
-final clientsStreamProvider = StreamProvider<List<ClientRecord>>((ref) {
-  final repo = ref.watch(clientsRepositoryProvider);
-  return repo.watchClients();
-});
-
-final filteredClientsProvider = Provider.family<List<ClientRecord>, String>((
-  ref,
-  query,
-) {
-  final list = ref.watch(clientsStreamProvider).asData?.value ?? const [];
-  final q = query.trim().toLowerCase();
-  if (q.isEmpty) return list;
-  return list
-      .where(
-        (c) => c.displayName.toLowerCase().contains(q) || c.phone.contains(q),
-      )
-      .toList();
-});
+/// Bumped after any client add/update/delete so the paginated clients list
+/// (which no longer streams) can refresh itself. Replaces the previous live
+/// `watchClients` stream's auto-update behavior.
+final clientsRefreshProvider = StateProvider<int>((ref) => 0);
 
 final clientSearchProvider = FutureProvider.family<List<ClientRecord>, String>((
   ref,

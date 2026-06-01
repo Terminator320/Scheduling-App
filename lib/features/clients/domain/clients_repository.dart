@@ -12,4 +12,13 @@ abstract class ClientsRepository {
   Future<void> deleteClient(String id);
 
   Future<List<ClientRecord>> searchClients(String query);
+
+  /// Fetches one page of clients ordered newest-first. Pass the last item of
+  /// the previously loaded page as [after] to fetch the following page; pass
+  /// null for the first page. A returned list shorter than [limit] means the
+  /// end has been reached.
+  Future<List<ClientRecord>> fetchClientsPage({
+    required int limit,
+    ClientRecord? after,
+  });
 }
