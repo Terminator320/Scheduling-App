@@ -46,7 +46,7 @@ lib/
 │
 └── features/
     ├── auth/                        Sign-in, account creation, password reset, account-status monitoring
-    ├── calendar/                    Appointments — creation, editing, viewing, image uploads
+    ├── calendar/                    Appointments — creation, editing, viewing, repeating series, image uploads
     ├── clients/                     Client management — CRUD, contacts, appointment history
     ├── employees/                   Employee roster — colours, roles, disable/enable
     ├── maps/                        Google Places address autocomplete and map launcher
@@ -123,6 +123,49 @@ Two stores, split by sensitivity:
 
 The clients list uses `infinite_scroll_pagination` (v5): `ClientsRepository.fetchClientsPage` pages newest-first via a Firestore `startAfterDocument` cursor (re-fetching the `after` doc by id keeps Firestore types out of the domain layer). It does **not** stream — `clientsRefreshProvider` is bumped by every add/update/delete and the list listens to it to refresh. Search filters the already-loaded pages in memory, preserving the client-side-search convention. Appointment photos display through `AppointmentImageCarousel` (`smooth_page_indicator`) in read-only mode; editing keeps the `PhotoPickerSection` thumbnail strip. New images are chosen via `pickAppointmentImages` (Camera gated by `MediaPermissionService`, Gallery via the OS photo picker).
 
+### Repeating Appointments
+
+Repeats are **materialized, not rule-evaluated**: picking a Repeat option in the
+add or edit sheet (every 4 / 6 / 12 months — `RepeatInterval`) pre-books the
+future visits up to `RepeatInterval.horizonMonths` (12) ahead as independent
+appointment docs in one atomic `WriteBatch`. Every visit stores the rule
+(`repeat`) and a shared `seriesId` (the first visit's doc id), so each
+occurrence renders, filters, and completes like any other appointment.
+`RepeatInterval.fromRaw` is the canonical string→interval mapper (parallel to
+`AppointmentStatus.fromRaw`).
+
+Changing the rule in the edit sheet rewrites the series like a real calendar:
+`EventDetailsController.save` detects a change against the stored baseline
+(`savedRepeat` in state) and calls `rewriteSeries` — one atomic batch that
+updates the edited doc, deletes the old future visits, and books the new
+cadence from the edited date. Unchanged saves never re-book. Deleting a series
+visit asks (via `showDeleteAppointmentDialog`) whether to remove this visit
+only or this and future visits (`deleteAppointment(includeFuture: true)` →
+`deleteAppointments` batch). Past visits and anything already done/cancelled
+are never touched by a rewrite or series delete (`_futureSeriesIds` filter);
+series copies are created `status: 'pending'` and never share pictures with
+the source visit.
+
+### Appointment Address & Client
+
+`AppointmentAddressField` (`calendar/widgets/fields/`) is shared by the add
+and edit sheets: with a client selected it renders the client's address as a
+pill whose **Change** button clears the controller and switches to the custom
+`AddressAutocompleteField` (a "Use client's address" link switches back and
+re-fills the controller). The add flow drives it with
+`AddEventState.useCustomAddress`; the edit flow mirrors it on
+`EventDetailsState`, seeding the flag when the client doc loads by comparing
+the appointment's stored address to the client's — a mismatch means a custom
+address was saved, so the field opens in custom mode.
+
+`EventDetailsController.save` validates the client through a fallback chain:
+`selectedClient` → loaded `client` → `_placeholderClient` built from the
+appointment's denormalised fields (keeps an appointment editable when its
+client doc was deleted or hasn't loaded yet). The `clientCleared` state flag
+(set by `clearClient`, reset by `selectClient`) suppresses that fallback after
+an explicit removal so `AppointmentFormValidator` fires `clientRequired`
+exactly like the add flow.
+
 ### Error Handling
 
 Domain-layer `Failure` subtypes (sealed, one per feature) carry localised messages. Each family lives at `lib/features/<f>/domain/<f>_failure.dart` and implements `toLocalizedMessage(BuildContext)`. The base `Failure` (`lib/core/errors/failure.dart`) `implements Exception`, so repositories and services can `throw` failures without tripping the `only_throw_errors` lint:
@@ -159,7 +202,7 @@ Status enums (`AppointmentStatus` written by `updateAppointmentStatus`) are allo
 
 ### Responsive Layout
 
-`lib/core/layout/` adapts the UI to screen width. `Breakpoints` defines `tablet` (600) and `expanded` (840); the `context.isWide` extension is `width >= 600`. On narrow phones the normal screens render unchanged; on wide screens `AdaptiveShell` wraps them with a navigation rail over the `AdaptiveDestination` enum (`calendar`, `clients`, `employees`, `history`, `settings`), and `MasterDetailScaffold` renders list + detail side by side. The `history` destination surfaces `clients/widgets/views/appointment_history_view.dart`.
+`lib/core/layout/` adapts the UI to screen width. `Breakpoints` defines `tablet` (840) and `expanded` (1200); the `context.isWide` extension is `width >= 840`. On narrow phones the normal screens render unchanged; on wide screens `AdaptiveShell` wraps them with a navigation rail over the `AdaptiveDestination` enum (`calendar`, `clients`, `employees`, `history`, `settings`), and `MasterDetailScaffold` renders list + detail side by side. The `history` destination surfaces `clients/widgets/views/appointment_history_view.dart`.
 
 ---
 
@@ -261,6 +304,8 @@ users/{docId}
 
 appointments/{docId}
   title, startTime, endTime, status, address, notes, materialsNeeded
+  repeat: 'none' | 'four_months' | 'six_months' | 'one_year'   stored on every visit of a series
+  seriesId: string         links the visits of one repeat series (first visit's doc id; '' when not repeating)
   clientId: string         → clients/{docId}
   clientName, clientPhone  client snapshot (denormalised for display)
   employeeIds: [string]    Firestore doc IDs (not auth UIDs)
@@ -299,7 +344,7 @@ Delete scaffolding exists for testing only — **not production-ready**:
 | File | What to remove |
 |---|---|
 | `lib/features/auth/services/auth_service.dart` | Signup-failure diagnostics logging (~line 66) — remove once release-APK signup failures are diagnosed |
-| `lib/features/calendar/widgets/views/details_view_body.dart` | `_DeleteTestButton` testing-delete widget (~line 151) + its confirm-delete helper (~line 461) |
+| `lib/features/calendar/widgets/views/details_view_body.dart` | `_DeleteTestButton` testing-delete widget (~line 155). NOTE: keep `showDeleteAppointmentDialog` (`widgets/dialogs/delete_appointment_dialog.dart`) — the edit sheet's shipped delete flow uses it |
 | `lib/features/employees/widgets/views/employee_details_view.dart` | `_isDeleting`, `_confirmDelete()`, testing delete button (~line 271). NOTE: keep the `ConsumerStatefulWidget` base + `flutter_riverpod`/`employees_providers` imports — the shipped disable/enable feature uses them |
 
 Locate them with `grep -rn "TODO(pre-ship)" lib` — markers are authoritative; line numbers drift.
@@ -313,7 +358,7 @@ Locate them with `grep -rn "TODO(pre-ship)" lib` — markers are authoritative; 
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (374 test cases as of 2026-06-06). `flutter analyze` is
+Run: `flutter test` (391 test cases as of 2026-06-07). `flutter analyze` is
 clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.

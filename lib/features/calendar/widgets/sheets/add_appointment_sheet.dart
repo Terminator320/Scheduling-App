@@ -141,6 +141,11 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     if (picked.isNotEmpty) _notifier.addImages(picked);
   }
 
+  void _switchToCustomAddress() {
+    _addressController.clear();
+    _notifier.setUseCustomAddress(value: true);
+  }
+
   void _useClientAddress() {
     final client = ref.read(_provider).selectedClient;
     if (client == null) return;
@@ -350,8 +355,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
               selectedClient: state.selectedClient,
               useCustomAddress: state.useCustomAddress,
               addressController: _addressController,
-              onSwitchToCustom: () =>
-                  _notifier.setUseCustomAddress(value: true),
+              onSwitchToCustom: _switchToCustomAddress,
               onUseClientAddress: _useClientAddress,
             ),
             const SizedBox(height: AppSpacing.sp16),

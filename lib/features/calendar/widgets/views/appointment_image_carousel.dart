@@ -27,8 +27,6 @@ class _AppointmentImageCarouselState extends State<AppointmentImageCarousel> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    // The carousel is 200px tall; decode to that height (at device resolution)
-    // instead of the source's full size, which can be up to 1600px.
     final cacheHeight = (200 * MediaQuery.devicePixelRatioOf(context)).round();
     return Column(
       children: [

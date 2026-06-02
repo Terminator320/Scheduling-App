@@ -11,6 +11,7 @@ import 'package:scheduling/features/calendar/domain/policies/appointment_form_va
 import 'package:scheduling/features/calendar/utils/appointment_form_error_text.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
+import 'package:scheduling/features/calendar/widgets/fields/appointment_address_field.dart';
 import 'package:scheduling/features/calendar/widgets/fields/appointment_status_picker.dart';
 import 'package:scheduling/features/calendar/widgets/fields/employee_picker.dart';
 import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
@@ -21,7 +22,6 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/fields/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
@@ -106,11 +106,22 @@ class DetailsEditBody extends ConsumerWidget {
         ),
         const SizedBox(height: AppSpacing.sp16),
         // --- Address ---
-        SheetFocusScroll(
-          child: AddressAutocompleteField(
-            controller: controllers.address,
-            optional: true,
-          ),
+        AppointmentAddressField(
+          selectedClient: state.selectedClient,
+          useCustomAddress: state.useCustomAddress,
+          addressController: controllers.address,
+          onSwitchToCustom: () {
+            controllers.address.clear();
+            notifier.setUseCustomAddress(value: true);
+          },
+          onUseClientAddress: () {
+            final client = state.selectedClient;
+            if (client == null) return;
+            controllers.address.text = AddressParser.canonicalToDisplay(
+              client.address,
+            );
+            notifier.setUseCustomAddress(value: false);
+          },
         ),
         const SizedBox(height: AppSpacing.sp16),
         // --- Materials & notes ---
