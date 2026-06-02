@@ -50,6 +50,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   AppointmentRecord? _selectedAppointment;
   late AppointmentDateRange _appointmentRange;
   PhotoUploadNotifier? _uploadNotifier;
+  bool _upgradingToAdmin = false;
 
   @override
   void initState() {
@@ -193,8 +194,15 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     // the live role stream confirms 'admin', upgrade to the admin calendar.
     // (Demotion the other way is handled by main.dart's role-revocation.)
     if (!widget.isAdmin) {
-      ref.listen<AsyncValue<String>>(userRoleProvider, (_, next) {
-        if (next.valueOrNull == 'admin' && mounted) {
+      // Upgrade the optimistic employee view to admin once the live role
+      // resolves to 'admin'. The user doc can load before this screen mounts,
+      // so a plain listen (which only fires on later changes) would miss it —
+      // check the current value too. Defer the nav out of build.
+      void upgradeIfAdmin(String? role) {
+        if (role != 'admin' || !mounted || _upgradingToAdmin) return;
+        _upgradingToAdmin = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
           Navigator.of(context).pushReplacementNamed(
             AppRoutes.mainCalendar,
             arguments: MainCalendarArgs(
@@ -202,8 +210,14 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
               employeeId: widget.employeeId,
             ),
           );
-        }
-      });
+        });
+      }
+
+      ref.listen<AsyncValue<String>>(
+        userRoleProvider,
+        (_, next) => upgradeIfAdmin(next.valueOrNull),
+      );
+      upgradeIfAdmin(ref.read(userRoleProvider).valueOrNull);
     }
 
     final employees =
