@@ -289,6 +289,24 @@ void main() {
       expect(saved.clientPhone, _newClient.phone);
     });
 
+    test('reports clientRequired after the client is cleared', () async {
+      readNotifier();
+      await waitForSeed();
+      final c = readNotifier()..clearClient();
+
+      final outcome = await c.save(
+        _appointment,
+        title: 'x',
+        address: 'y',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      expect(outcome, isA<EventDetailsInvalid>());
+      expect(readState().errors, contains('client'));
+      verifyNever(() => appointments.updateAppointment(any()));
+    });
+
     test('does not call deleteImages when nothing was removed', () async {
       readNotifier();
       await waitForSeed();

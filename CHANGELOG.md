@@ -10,6 +10,24 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.3.0+8] - 2026-06-07
+
+### Added
+- The edit-appointment sheet now handles the address like the add sheet: the
+  client's address shows as a pill with a Change button, and a "Use client's
+  address" link switches back from a custom address. An appointment saved with
+  a custom address opens in custom mode showing that address.
+
+### Changed
+- Tapping Change on the client-address pill clears the address field so a new
+  address can be typed straight away, instead of having to delete the client's
+  address by hand first.
+
+### Fixed
+- Editing an appointment no longer lets a save go through after the client was
+  removed — the client field now shows the same "client is required" error as
+  the add flow. Previously the save silently kept the old client.
+
 ## [1.2.0+7] - 2026-06-07
 
 ### Added

@@ -39,8 +39,6 @@ class AppCalendar extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxH = constraints.maxHeight;
-        // NOTE: reserved space for the event-marker dots; precise layout math,
-        // not a themeable spacing token.
         const markerSpace = 12.0;
         final availableHeight = (maxH - markerSpace).clamp(
           0.0,
