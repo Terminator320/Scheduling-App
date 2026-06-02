@@ -1,5 +1,5 @@
 name: scheduling
-description: "A new Flutter project."
+description: "Paul App"
 publish_to: 'none'
 
 version: 1.0.3+4
@@ -64,7 +64,7 @@ dependencies:
   flutter_animate: ^4.5.0
   flex_color_picker: ^3.8.0
   font_awesome_flutter: ^11.0.0
-  auto_size_text: ^3.0.0
+
 
   # App / device info
   package_info_plus: ^10.1.0
