@@ -11,13 +11,7 @@ final employeesRepositoryProvider = Provider<EmployeesRepository>((ref) {
   return FirebaseEmployeesRepository(firestore);
 });
 
-// Routes by role so non-admin sessions don't fire `watchAllUsers`, which
-// targets the unconstrained `users` query rule and would otherwise log a
-// PERMISSION_DENIED listener error every time a non-admin opens the calendar
-// or appointment history. Admins get the full list (invited + disabled
-// included, needed for the admin employees screen). Non-admins fall back to
-// the assignable (status=='active') stream — sufficient for the calendar's
-// employee color map.
+
 final allUsersStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
   if (ref.authUid == null) return Stream.value(const []);
   final repo = ref.watch(employeesRepositoryProvider);
@@ -31,19 +25,9 @@ final employeesStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
   return ref.watch(employeesRepositoryProvider).watchEmployees();
 });
 
-final assignableUsersStreamProvider = StreamProvider<List<EmployeeRecord>>((
-  ref,
-) {
-  if (ref.authUid == null) return Stream.value(const []);
-  return ref.watch(employeesRepositoryProvider).watchAssignableUsers();
-});
-
 final filteredEmployeesProvider = Provider.family<List<EmployeeRecord>, String>(
   (ref, query) {
-    // Admin employees list shows all users (active + disabled + invited) so
-    // a disabled employee remains reachable for re-enable. EmployeeCard
-    // already renders a StatusChip for each, so the visual distinction is
-    // handled in the tile, not by hiding the row.
+
     final list = ref.watch(allUsersStreamProvider).asData?.value ?? const [];
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return list;

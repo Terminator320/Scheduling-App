@@ -28,6 +28,28 @@ final userRoleProvider = Provider<AsyncValue<String>>((ref) {
       .whenData((doc) => (doc['role'] ?? '').toString().trim());
 });
 
+/// Whether a [currentUserDocProvider] emission means the signed-in user's
+/// account doc was deleted server-side — as opposed to a transient empty
+/// placeholder.
+///
+/// On a fresh sign-in `FirebaseAuth.currentUser` is set immediately, but the
+/// `authStateChanges()` stream behind [authUidProvider] lags, so
+/// [currentUserDocProvider] still serves the empty doc from its `uid == null`
+/// branch; the reload into `watchUserDoc` then retains that empty value as
+/// `AsyncLoading`'s previous data (an `AsyncData` flagged `isLoading`). Neither
+/// is a deletion. A real deletion is a *settled* empty doc for an
+/// already-resolved uid.
+bool isAccountDeletionSignal({
+  required bool isSignedIn,
+  required String? resolvedUid,
+  required AsyncValue<Map<String, dynamic>> docState,
+}) {
+  if (!isSignedIn || resolvedUid == null) return false;
+  if (docState.isLoading) return false;
+  final doc = docState.valueOrNull;
+  return doc != null && doc.isEmpty;
+}
+
 /// The signed-in user's display name (empty until the doc loads).
 final currentUserNameProvider = Provider<String>((ref) {
   final doc = ref.watch(currentUserDocProvider).valueOrNull;

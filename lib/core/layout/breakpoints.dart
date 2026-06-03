@@ -17,6 +17,4 @@ extension ResponsiveContext on BuildContext {
   bool get isWide => MediaQuery.sizeOf(this).width >= Breakpoints.tablet;
 
   bool get isExpanded => MediaQuery.sizeOf(this).width >= Breakpoints.expanded;
-
-  double get screenWidth => MediaQuery.sizeOf(this).width;
 }

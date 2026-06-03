@@ -10,15 +10,3 @@ Color? colorFromMap(AppointmentRecord appt, Map<String, Color> colorMap) {
   if (appt.employeeIds.length != 1) return null;
   return colorMap[appt.employeeIds.first];
 }
-
-Color? colorForAppointment(
-  AppointmentRecord appt,
-  List<EmployeeRecord> employees,
-) {
-  if (appt.employeeIds.length != 1 || employees.isEmpty) return null;
-  final id = appt.employeeIds.first;
-  for (final e in employees) {
-    if (e.id == id) return e.color;
-  }
-  return null;
-}

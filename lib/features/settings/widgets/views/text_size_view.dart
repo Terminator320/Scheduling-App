@@ -147,15 +147,8 @@ class _Card extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
     return Container(
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(AppRadius.r12),
-        boxShadow: isDark ? null : AppShadow.card,
-        border: isDark ? Border.all(color: scheme.outlineVariant) : null,
-      ),
+      decoration: appCardDecoration(theme, color: theme.colorScheme.surface),
       padding: padding ?? const EdgeInsets.all(14),
       child: child,
     );

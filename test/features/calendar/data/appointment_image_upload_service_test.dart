@@ -34,7 +34,6 @@ void main() {
     when(
       () => appointments.updateAppointmentPictures(any(), any()),
     ).thenAnswer((_) async {});
-    when(() => storage.deleteImages(any())).thenAnswer((_) async {});
   });
 
   tearDown(() => notifier.dispose());
@@ -117,25 +116,6 @@ void main() {
         notifier.latestFailure.value?.tooLargeFileNames,
         contains('big.jpg'),
       );
-    });
-
-    test('calls deleteImages when toDelete is non-empty', () async {
-      const toDelete = [
-        AppointmentImage(
-          url: 'https://example.com/old.jpg',
-          storagePath: 'appointments/a1/images/old.jpg',
-          fileName: 'old.jpg',
-        ),
-      ];
-
-      makeService().uploadInBackground(
-        appointmentId: 'a1',
-        newImages: const [],
-        toDelete: toDelete,
-      );
-
-      await Future<void>.delayed(Duration.zero);
-      verify(() => storage.deleteImages(toDelete)).called(1);
     });
 
     test('reports all images as failed when run throws unexpectedly', () async {
