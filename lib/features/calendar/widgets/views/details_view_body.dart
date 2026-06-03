@@ -17,6 +17,7 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 class DetailsViewBody extends ConsumerWidget {
   const DetailsViewBody({
@@ -37,9 +38,9 @@ class DetailsViewBody extends ConsumerWidget {
     final isSaving = ref.watch(provider.select((s) => s.isSaving));
     final notifier = ref.read(provider.notifier);
 
-    final status = appointment.status.toLowerCase();
-    final isCancelled = status == 'cancelled';
-    final isDone = status == 'done' || status == 'completed';
+    final status = AppointmentStatus.fromRaw(appointment.status);
+    final isCancelled = status.isCancelled;
+    final isDone = status.isDone;
     final now = DateTime.now();
     final isToday =
         appointment.startTime.year == now.year &&

@@ -339,78 +339,53 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
     return [
       // --- Contact info card ---
       if (hasContactInfo)
-        Container(
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest,
-            border: Border.all(color: scheme.outlineVariant),
-            borderRadius: BorderRadius.circular(AppRadius.r12),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.r12),
-            child: Column(
-              children: [
-                if (c.phone.isNotEmpty) ...[
-                  _ViewContactRow(icon: Icons.phone_outlined, text: c.phone),
-                  if (c.email.isNotEmpty || c.address.isNotEmpty)
-                    const Divider(height: 1, indent: 48),
-                ],
-                if (c.email.isNotEmpty) ...[
-                  _ViewContactRow(icon: Icons.email_outlined, text: c.email),
-                  if (c.address.isNotEmpty)
-                    const Divider(height: 1, indent: 48),
-                ],
-                if (c.address.isNotEmpty)
-                  _ViewContactRow(
-                    icon: Icons.location_on_outlined,
-                    text: AddressParser.canonicalToDisplay(c.address),
-                    onTap: () => AddressMapLauncher.showMapChoices(
-                      context,
-                      address: c.address,
-                    ),
-                    color: scheme.primary,
-                  ),
-              ],
-            ),
-          ),
+        _ViewContactCard(
+          rows: [
+            if (c.phone.isNotEmpty)
+              _ViewContactRow(icon: Icons.phone_outlined, text: c.phone),
+            if (c.email.isNotEmpty)
+              _ViewContactRow(icon: Icons.email_outlined, text: c.email),
+            if (c.address.isNotEmpty)
+              _ViewContactRow(
+                icon: Icons.location_on_outlined,
+                text: AddressParser.canonicalToDisplay(c.address),
+                onTap: () => AddressMapLauncher.showMapChoices(
+                  context,
+                  address: c.address,
+                ),
+                color: scheme.primary,
+              ),
+          ],
         ),
       // --- Business contacts list ---
       if (c.contacts.isNotEmpty) ...[
         const SizedBox(height: 24),
         SectionLabel(context.l10n.common_contacts),
         const SizedBox(height: 8),
-        ...c.contacts.map((contact) => _buildContactCard(contact, scheme)),
+        ...c.contacts.map(
+          (contact) => _ViewContactCard(
+            margin: const EdgeInsets.only(bottom: 8),
+            rows: [
+              if (contact.name.isNotEmpty)
+                _ViewContactRow(
+                  icon: Icons.person_outline,
+                  text: contact.name,
+                ),
+              if (contact.phone.isNotEmpty)
+                _ViewContactRow(
+                  icon: Icons.phone_outlined,
+                  text: contact.phone,
+                ),
+              if (contact.email.isNotEmpty)
+                _ViewContactRow(
+                  icon: Icons.email_outlined,
+                  text: contact.email,
+                ),
+            ],
+          ),
+        ),
       ],
     ];
-  }
-
-  Widget _buildContactCard(ClientContact contact, ColorScheme scheme) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(AppRadius.r12),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.r12),
-        child: Column(
-          children: [
-            if (contact.name.isNotEmpty) ...[
-              _ViewContactRow(icon: Icons.person_outline, text: contact.name),
-              if (contact.phone.isNotEmpty || contact.email.isNotEmpty)
-                const Divider(height: 1, indent: 48),
-            ],
-            if (contact.phone.isNotEmpty) ...[
-              _ViewContactRow(icon: Icons.phone_outlined, text: contact.phone),
-              if (contact.email.isNotEmpty)
-                const Divider(height: 1, indent: 48),
-            ],
-            if (contact.email.isNotEmpty)
-              _ViewContactRow(icon: Icons.email_outlined, text: contact.email),
-          ],
-        ),
-      ),
-    );
   }
 
   List<Widget> _buildEditFields() {
@@ -654,6 +629,39 @@ class _DetailActionBar extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Bordered card of contact rows with a divider between each pair — shared
+/// by the contact-info card and the business-contact cards.
+class _ViewContactCard extends StatelessWidget {
+  const _ViewContactCard({required this.rows, this.margin});
+
+  final List<_ViewContactRow> rows;
+  final EdgeInsetsGeometry? margin;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: margin,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+        child: Column(
+          children: [
+            for (var i = 0; i < rows.length; i++) ...[
+              if (i > 0) const Divider(height: 1, indent: 48),
+              rows[i],
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

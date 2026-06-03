@@ -17,6 +17,8 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/shared/widgets/feedback/status_chip.dart'
+    show AppointmentStatus;
 
 part 'event_details_controller.freezed.dart';
 
@@ -100,10 +102,13 @@ class EventDetailsController extends Notifier<EventDetailsState> {
   Future<void> _seedSelectedEmployees(List<String> employeeIds) async {
     if (employeeIds.isEmpty) return;
     try {
-      final all = await ref
-          .read(employeesRepositoryProvider)
-          .watchEmployees()
-          .first;
+      // Prefer the already-live employees stream over opening a throwaway
+      // Firestore listener just to read one value. An empty cached list is
+      // treated as a miss — the provider emits const [] while authUid lags.
+      final cached = ref.read(employeesStreamProvider).value;
+      final all = cached == null || cached.isEmpty
+          ? await ref.read(employeesRepositoryProvider).watchEmployees().first
+          : cached;
       final selected = all.where((e) => employeeIds.contains(e.id)).toList();
       if (state.selectedEmployees.isEmpty) {
         state = state.copyWith(selectedEmployees: selected);
@@ -140,10 +145,6 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       state = state.copyWith(isEditing: true, errors: const {});
 
   void exitEditing() => state = state.copyWith(isEditing: false);
-
-  void setSelectedEmployees(List<EmployeeRecord> employees) {
-    state = state.copyWith(selectedEmployees: employees);
-  }
 
   void selectDate(DateTime date) {
     state = state.copyWith(
@@ -479,8 +480,7 @@ List<String> _futureSeriesIds(
     if (a.id != null &&
         a.id != excludeId &&
         a.startTime.isAfter(after) &&
-        a.status != 'done' &&
-        a.status != 'cancelled')
+        !AppointmentStatus.fromRaw(a.status).isTerminal)
       a.id!,
 ];
 

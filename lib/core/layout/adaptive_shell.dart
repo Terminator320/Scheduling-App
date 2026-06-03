@@ -5,6 +5,50 @@ import 'package:scheduling/routes/app_routes.dart';
 
 enum AdaptiveDestination { calendar, clients, employees, history, settings }
 
+/// Route + typed args for a destination — shared by the nav rail and the
+/// settings drawer so the two nav surfaces can't drift.
+({String route, Object arguments}) destinationRoute(
+  AdaptiveDestination destination, {
+  required bool isAdmin,
+  required String employeeId,
+  String userName = '',
+  String userEmail = '',
+}) => switch (destination) {
+  AdaptiveDestination.calendar => (
+    route: AppRoutes.mainCalendar,
+    arguments: MainCalendarArgs(isAdmin: isAdmin, employeeId: employeeId),
+  ),
+  AdaptiveDestination.clients => (
+    route: AppRoutes.clients,
+    arguments: ClientsListArgs(
+      mode: 'Clients',
+      isAdmin: isAdmin,
+      employeeId: employeeId,
+    ),
+  ),
+  AdaptiveDestination.employees => (
+    route: AppRoutes.employees,
+    arguments: MainCalendarArgs(isAdmin: isAdmin, employeeId: employeeId),
+  ),
+  AdaptiveDestination.history => (
+    route: AppRoutes.clients,
+    arguments: ClientsListArgs(
+      mode: 'Appointments',
+      isAdmin: isAdmin,
+      employeeId: employeeId,
+    ),
+  ),
+  AdaptiveDestination.settings => (
+    route: AppRoutes.settings,
+    arguments: SettingsArgs(
+      name: userName,
+      email: userEmail,
+      role: isAdmin ? 'admin' : 'employee',
+      employeeId: employeeId,
+    ),
+  ),
+};
+
 class AdaptiveShell extends StatelessWidget {
   const AdaptiveShell({
     required this.currentDestination,
@@ -62,51 +106,18 @@ class AdaptiveShell extends StatelessWidget {
 
   void _onSelect(BuildContext context, AdaptiveDestination destination) {
     if (destination == currentDestination) return;
-    switch (destination) {
-      case AdaptiveDestination.calendar:
-        Navigator.pushReplacementNamed(
-          context,
-          AppRoutes.mainCalendar,
-          arguments: MainCalendarArgs(isAdmin: isAdmin, employeeId: employeeId),
-        );
-      case AdaptiveDestination.clients:
-        Navigator.pushReplacementNamed(
-          context,
-          AppRoutes.clients,
-          arguments: ClientsListArgs(
-            mode: 'Clients',
-            isAdmin: isAdmin,
-            employeeId: employeeId,
-          ),
-        );
-      case AdaptiveDestination.employees:
-        Navigator.pushReplacementNamed(
-          context,
-          AppRoutes.employees,
-          arguments: MainCalendarArgs(isAdmin: isAdmin, employeeId: employeeId),
-        );
-      case AdaptiveDestination.history:
-        Navigator.pushReplacementNamed(
-          context,
-          AppRoutes.clients,
-          arguments: ClientsListArgs(
-            mode: 'Appointments',
-            isAdmin: isAdmin,
-            employeeId: employeeId,
-          ),
-        );
-      case AdaptiveDestination.settings:
-        Navigator.pushReplacementNamed(
-          context,
-          AppRoutes.settings,
-          arguments: SettingsArgs(
-            name: userName ?? '',
-            email: userEmail ?? '',
-            role: isAdmin ? 'admin' : 'employee',
-            employeeId: employeeId,
-          ),
-        );
-    }
+    final target = destinationRoute(
+      destination,
+      isAdmin: isAdmin,
+      employeeId: employeeId,
+      userName: userName ?? '',
+      userEmail: userEmail ?? '',
+    );
+    Navigator.pushReplacementNamed(
+      context,
+      target.route,
+      arguments: target.arguments,
+    );
   }
 
   List<_RailEntry> _destinationsFor(BuildContext context, bool isAdmin) {

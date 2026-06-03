@@ -234,15 +234,10 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     final colorMap = ref.watch(employeeColorMapProvider);
     final nameMap = ref.watch(employeeNameMapProvider);
 
-    final visibleAppointments = appointmentsAsync.when(
-      data: (data) => data,
-      loading: () => const <AppointmentRecord>[],
-      error: (err, stack) {
-        ref.read(loggerProvider).warn('appointments stream error', err, stack);
-        return const <AppointmentRecord>[];
-      },
-    );
-
+    // Error logging/surfacing is owned by the onAsyncChange listener above —
+    // a `.when` error branch here would re-log on every rebuild.
+    final visibleAppointments =
+        appointmentsAsync.value ?? const <AppointmentRecord>[];
 
     if (!identical(visibleAppointments, _indexedAppointments)) {
       _indexedAppointments = visibleAppointments;
