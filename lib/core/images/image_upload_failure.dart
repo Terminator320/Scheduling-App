@@ -1,11 +1,10 @@
 import 'package:flutter/widgets.dart';
 
+import 'package:scheduling/core/errors/failure.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-sealed class ImageUploadFailure implements Exception {
+sealed class ImageUploadFailure extends Failure {
   const ImageUploadFailure();
-
-  String toLocalizedMessage(BuildContext context);
 }
 
 class ImageUploadFailureInvalidFormat extends ImageUploadFailure {

@@ -51,11 +51,7 @@ class _ListInformationState extends State<ListInformation> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      sheetAnimationStyle: const AnimationStyle(
-        duration: Duration(milliseconds: 280),
-        reverseDuration: Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-      ),
+      sheetAnimationStyle: AppMotion.sheetStyle,
       builder: (_) => const AddClientSheet(),
     );
   }
@@ -73,11 +69,7 @@ class _ListInformationState extends State<ListInformation> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      sheetAnimationStyle: const AnimationStyle(
-        duration: Duration(milliseconds: 280),
-        reverseDuration: Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-      ),
+      sheetAnimationStyle: AppMotion.sheetStyle,
       builder: (_) => ClientDetailSheet(client: client),
     );
 

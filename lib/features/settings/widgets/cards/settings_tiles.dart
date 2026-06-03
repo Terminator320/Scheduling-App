@@ -12,15 +12,9 @@ class SettingsSectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
     return Container(
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(AppRadius.r12),
-        boxShadow: isDark ? null : AppShadow.card,
-        border: isDark ? Border.all(color: scheme.outlineVariant) : null,
-      ),
+      decoration: appCardDecoration(theme, color: theme.colorScheme.surface),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: child,
     );
@@ -250,14 +244,9 @@ class SettingsProfileCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
 
     return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.r16),
-        boxShadow: isDark ? null : AppShadow.card,
-        border: isDark ? Border.all(color: scheme.outlineVariant) : null,
-      ),
+      decoration: appCardDecoration(theme, radius: AppRadius.r16),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.r16),
         child: ColoredBox(

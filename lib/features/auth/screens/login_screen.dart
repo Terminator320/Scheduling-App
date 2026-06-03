@@ -186,7 +186,8 @@ class _LoginState extends ConsumerState<Login> {
           employeeId: employee.id,
         ),
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
+      ref.read(loggerProvider).warn('login.sign_in', error, stackTrace);
       if (!mounted) return;
       final failure = AuthErrorMapper.map(error);
       setState(() {
