@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -337,7 +338,6 @@ class _AddClientActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
         Expanded(
@@ -351,21 +351,11 @@ class _AddClientActions extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: FilledButton(
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(double.infinity, 46),
-            ),
+          child: AnimatedLoadingButton(
+            label: context.l10n.clients_saveClient,
+            isLoading: isSaving,
             onPressed: onSave,
-            child: isSaving
-                ? SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: scheme.onPrimary,
-                    ),
-                  )
-                : Text(context.l10n.clients_saveClient),
+            height: 46,
           ),
         ),
       ],

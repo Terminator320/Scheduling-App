@@ -7,6 +7,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/sheet_focus.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_tile.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
@@ -149,12 +150,19 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
   // app's intentional client-side search behavior on top of pagination.
   Widget _buildSearchResults(String query) {
     final loaded = _pagingController.value.items ?? const <ClientRecord>[];
-    final q = query.toLowerCase();
-    final filtered = loaded
-        .where(
-          (c) => c.displayName.toLowerCase().contains(q) || c.phone.contains(q),
-        )
-        .toList();
+    // Accent-folded text + digits-only phone matching — same rule as the
+    // server-side client search.
+    final q = ClientSearchPolicy.normalize(query);
+    final qDigits = ClientSearchPolicy.digitsOnly(query);
+    final filtered = loaded.where((c) {
+      final matchesText =
+          q.isNotEmpty &&
+          ClientSearchPolicy.normalize(c.displayName).contains(q);
+      final matchesPhone =
+          qDigits.isNotEmpty &&
+          ClientSearchPolicy.digitsOnly(c.phone).contains(qDigits);
+      return matchesText || matchesPhone;
+    }).toList();
 
     if (filtered.isEmpty) return _emptyState(query: query);
 

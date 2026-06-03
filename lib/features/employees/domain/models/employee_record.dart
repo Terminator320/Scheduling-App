@@ -44,21 +44,6 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     'uid': uid,
   };
 
-  String get initials {
-    final parts = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((p) => p.isNotEmpty)
-        .toList();
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    }
-    if (parts.length == 1) {
-      return parts[0][0].toUpperCase();
-    }
-    return '?';
-  }
-
   bool get isAdmin => role == 'admin';
   bool get isActive => status == 'active';
   bool get isDisabled => status == 'disabled';
