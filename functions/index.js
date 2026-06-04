@@ -297,24 +297,26 @@ async function enforceDurableRateLimit(route, uid, max, windowMs) {
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const data = snap.exists ? snap.data() : null;
-    const windowStart = data && typeof data.windowStart === "number" ?
-      data.windowStart : 0;
-    if (!data || now - windowStart >= windowMs) {
-      overLimit = false;
-      tx.set(ref, {
-        route,
-        count: 1,
-        windowStart: now,
-        // Lets an optional Firestore TTL policy on `expiresAt` reap old rows.
-        expiresAt: new Date(now + windowMs),
-      });
-      return;
-    }
-    if (data.count >= max) {
+    const prior = data && Array.isArray(data.attempts) ? data.attempts : [];
+    // True sliding window: keep only the attempt timestamps still inside the
+    // window. A single windowStart counter would reset at the boundary and let
+    // a caller burst 2×max across it; per-attempt timestamps cannot.
+    const recent = prior.filter(
+        (t) => typeof t === "number" && now - t < windowMs,
+    );
+    if (recent.length >= max) {
+      // Rejected attempts are not recorded — otherwise a hammering caller would
+      // hold the window full forever.
       overLimit = true;
       return;
     }
-    tx.update(ref, {count: data.count + 1});
+    recent.push(now);
+    tx.set(ref, {
+      route,
+      attempts: recent,
+      // Lets an optional Firestore TTL policy on `expiresAt` reap old rows.
+      expiresAt: new Date(now + windowMs),
+    });
   });
   if (overLimit) {
     logger.warn("enforceDurableRateLimit: limit exceeded", {route, uid});
@@ -382,7 +384,16 @@ exports.placesAutocomplete = onCall(
         throw new HttpsError("internal", "places-upstream");
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (err) {
+        logger.warn("placesAutocomplete: invalid JSON in 200 response", {
+          status: response.status,
+          err: err.message,
+        });
+        throw new HttpsError("internal", "places-upstream");
+      }
       return {suggestions: Array.isArray(data.suggestions) ?
         data.suggestions : []};
     },
@@ -444,7 +455,16 @@ exports.placesGetDetails = onCall(
         throw new HttpsError("internal", "places-upstream");
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (err) {
+        logger.warn("placesGetDetails: invalid JSON in 200 response", {
+          status: response.status,
+          err: err.message,
+        });
+        throw new HttpsError("internal", "places-upstream");
+      }
       return {
         formattedAddress: typeof data.formattedAddress === "string" ?
           data.formattedAddress : "",
@@ -534,12 +554,9 @@ exports.deleteAccount = onCall(
         throw new HttpsError("unauthenticated", "auth-required");
       }
       assertPayloadShape(req.data, new Set());
-      await enforceDurableRateLimit(
-          "deleteAccount",
-          req.auth.uid,
-          AUTH_RATE_MAX,
-          AUTH_RATE_WINDOW_MS,
-      );
+      // Stale-auth is checked BEFORE the rate limiter so a stale-but-cheap
+      // rejection doesn't burn one of the caller's 5 deletion slots (which
+      // would let a few reauth retries lock them out of deletion entirely).
       const authTime = req.auth.token?.auth_time;
       const nowSec = Math.floor(Date.now() / 1000);
       if (typeof authTime !== "number" ||
@@ -551,6 +568,12 @@ exports.deleteAccount = onCall(
         });
         throw new HttpsError("unauthenticated", "stale-auth");
       }
+      await enforceDurableRateLimit(
+          "deleteAccount",
+          req.auth.uid,
+          AUTH_RATE_MAX,
+          AUTH_RATE_WINDOW_MS,
+      );
       const uid = req.auth.uid;
       const db = getFirestore();
 
@@ -652,11 +675,14 @@ exports.resolveMyInvite = onCall(
       }
       const email = tokenEmail.trim().toLowerCase();
       const db = getFirestore();
+      // Invites are employee-only — admin is granted post-activation, and
+      // firestore.rules forbids invited-admin self-activation. Resolving only
+      // employee invites keeps the callable consistent with that rule.
       const snap = await db
           .collection("users")
           .where("email", "==", email)
           .where("status", "==", "invited")
-          .where("role", "in", ["employee", "admin"])
+          .where("role", "==", "employee")
           .limit(1)
           .get();
       if (snap.empty) {

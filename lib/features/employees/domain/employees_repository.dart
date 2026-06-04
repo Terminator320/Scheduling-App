@@ -9,12 +9,15 @@ abstract class EmployeesRepository {
 
   Future<EmployeeRecord?> getEmployeeById(String docId);
 
+  /// Creates an invited employee. Invites are always `role: 'employee'` —
+  /// admin is granted only after activation via [updateEmployee], because
+  /// `firestore.rules` restricts invite self-activation to employees (an
+  /// invited admin could never activate; see the rule comment).
   Future<void> addEmployee({
     required String name,
     required String email,
     required String phone,
     required String colorValue,
-    required bool isAdmin,
   });
 
   Future<void> updateEmployee({

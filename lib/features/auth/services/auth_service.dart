@@ -11,15 +11,18 @@ class AuthService {
   AuthService({
     FirebaseAuth? firebaseAuth,
     EmployeesRepository? employeesRepository,
+    AuthCache? authCache,
     AppLogger? logger,
   }) : _auth = firebaseAuth ?? FirebaseAuth.instance,
        _employees =
            employeesRepository ??
            FirebaseEmployeesRepository(FirebaseFirestore.instance),
+       _authCache = authCache ?? AuthCache(),
        _logger = logger ?? AppLogger();
 
   final FirebaseAuth _auth;
   final EmployeesRepository _employees;
+  final AuthCache _authCache;
   final AppLogger _logger;
 
   User? get currentUser => _auth.currentUser;
@@ -120,7 +123,7 @@ class AuthService {
     try {
       await _auth.signOut();
     } finally {
-      await AuthCache().clear();
+      await _authCache.clear();
     }
   }
 }

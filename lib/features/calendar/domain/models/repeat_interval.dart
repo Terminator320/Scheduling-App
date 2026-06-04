@@ -50,3 +50,37 @@ enum RepeatInterval {
     return DateTime(year, month, day, date.hour, date.minute);
   }
 }
+
+/// End time for a repeated occurrence starting at [copyStart], preserving the
+/// original visit's wall-clock day-span and end time-of-day. Use this instead
+/// of `copyStart.add(originalEnd - originalStart)`: adding the raw elapsed
+/// Duration shifts the stored end ±1h when a copy (or the original) straddles a
+/// DST transition.
+DateTime occurrenceEnd({
+  required DateTime originalStart,
+  required DateTime originalEnd,
+  required DateTime copyStart,
+}) {
+  // UTC midnights carry no DST offset, so this is an exact calendar-day count.
+  final daySpan =
+      DateTime.utc(
+            originalEnd.year,
+            originalEnd.month,
+            originalEnd.day,
+          )
+          .difference(
+            DateTime.utc(
+              originalStart.year,
+              originalStart.month,
+              originalStart.day,
+            ),
+          )
+          .inDays;
+  return DateTime(
+    copyStart.year,
+    copyStart.month,
+    copyStart.day + daySpan,
+    originalEnd.hour,
+    originalEnd.minute,
+  );
+}

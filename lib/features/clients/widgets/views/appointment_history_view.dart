@@ -3,17 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
-import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
-import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
-import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
+import 'package:scheduling/features/calendar/widgets/cards/appointment_tile.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
 class AppointmentHistoryView extends ConsumerWidget {
@@ -121,9 +118,12 @@ class AppointmentHistoryView extends ConsumerWidget {
                   padding: EdgeInsets.only(
                     bottom: nextRow is _HistoryCardRow ? 7 : 8,
                   ),
-                  child: _HistoryCard(
+                  child: AppointmentTile(
                     appointment: appointment,
                     employeeColorMap: colorMap,
+                    showActions: false,
+                    alwaysShowChip: true,
+                    dimWhenCancelled: true,
                   ),
                 ),
               };
@@ -147,117 +147,4 @@ class _HistoryHeader extends _HistoryRow {
 class _HistoryCardRow extends _HistoryRow {
   const _HistoryCardRow(this.appointment);
   final AppointmentRecord appointment;
-}
-
-class _HistoryCard extends StatelessWidget {
-  const _HistoryCard({
-    required this.appointment,
-    required this.employeeColorMap,
-  });
-
-  final AppointmentRecord appointment;
-  final Map<String, Color> employeeColorMap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isCancelled = AppointmentStatus.fromRaw(
-      appointment.status,
-    ).isCancelled;
-    final accent =
-        colorFromMap(appointment, employeeColorMap) ?? scheme.primary;
-    final status = AppointmentStatus.fromRaw(appointment.displayStatus);
-
-    final employeeName = appointment.employeeNames.isNotEmpty
-        ? appointment.employeeNames.first
-        : null;
-
-    final timeLabel =
-        '${DateUtilsHelper.formatTime(appointment.startTime)} – ${DateUtilsHelper.formatTime(appointment.endTime)}'
-        '${employeeName != null ? ' · $employeeName' : ''}';
-
-    Widget card = Card(
-      margin: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => showEventDetails(context, appointment, showActions: false),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(width: 4, color: accent),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        appointment.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          decoration: isCancelled
-                              ? TextDecoration.lineThrough
-                              : null,
-                          color: isCancelled ? scheme.onSurfaceVariant : null,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          Container(
-                            width: 7,
-                            height: 7,
-                            decoration: BoxDecoration(
-                              color: accent,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Expanded(
-                            child: Text(
-                              timeLabel,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 10, left: 6),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    StatusChip(status: status),
-                    const SizedBox(width: 7),
-                    Icon(
-                      Icons.chevron_right,
-                      size: 16,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    if (isCancelled) {
-      card = Opacity(opacity: 0.75, child: card);
-    }
-
-    return card;
-  }
 }

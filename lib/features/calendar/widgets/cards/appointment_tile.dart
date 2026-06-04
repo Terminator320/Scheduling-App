@@ -14,11 +14,21 @@ class AppointmentTile extends StatelessWidget {
     super.key,
     this.showActions = true,
     this.onOpen,
+    this.alwaysShowChip = false,
+    this.dimWhenCancelled = false,
   });
   final AppointmentRecord appointment;
   final bool showActions;
   final Map<String, Color> employeeColorMap;
   final Future<void> Function()? onOpen;
+
+  /// Show the status chip even for confirmed appointments (the history list
+  /// wants every row chipped; the calendar hides the chip when confirmed).
+  final bool alwaysShowChip;
+
+  /// Strike through the title and dim the card when the appointment is
+  /// cancelled (history list treatment).
+  final bool dimWhenCancelled;
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +37,8 @@ class AppointmentTile extends StatelessWidget {
     final accent =
         colorFromMap(appointment, employeeColorMap) ?? scheme.primary;
     final status = AppointmentStatus.fromRaw(appointment.displayStatus);
-    final showChip = status != AppointmentStatus.confirmed;
+    final showChip = alwaysShowChip || status != AppointmentStatus.confirmed;
+    final isCancelled = dimWhenCancelled && status.isCancelled;
 
     final employeeName = appointment.employeeNames.isNotEmpty
         ? appointment.employeeNames.first
@@ -38,7 +49,7 @@ class AppointmentTile extends StatelessWidget {
         '${DateUtilsHelper.formatTime(appointment.endTime)}'
         '${employeeName != null ? ' · $employeeName' : ''}';
 
-    return Card(
+    final card = Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -77,6 +88,10 @@ class AppointmentTile extends StatelessWidget {
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
+                          decoration: isCancelled
+                              ? TextDecoration.lineThrough
+                              : null,
+                          color: isCancelled ? scheme.onSurfaceVariant : null,
                         ),
                       ),
                       const SizedBox(height: AppSpacing.sp4),
@@ -133,5 +148,7 @@ class AppointmentTile extends StatelessWidget {
         ),
       ),
     );
+
+    return isCancelled ? Opacity(opacity: 0.75, child: card) : card;
   }
 }

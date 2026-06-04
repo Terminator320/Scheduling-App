@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
+import 'package:scheduling/features/settings/domain/role_label.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
@@ -26,9 +27,6 @@ class SettingsDrawer extends ConsumerStatefulWidget {
 }
 
 class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
-  String _displayName = '';
-  String _displayEmail = '';
-
   String _resolveName() {
     final docName = ref.watch(currentUserNameProvider);
     if (docName.isNotEmpty) return docName;
@@ -37,10 +35,10 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
 
   @override
   Widget build(BuildContext context) {
-    _displayName = (widget.userName?.isNotEmpty ?? false)
+    final displayName = (widget.userName?.isNotEmpty ?? false)
         ? widget.userName!
         : _resolveName();
-    _displayEmail = (widget.email?.isNotEmpty ?? false)
+    final displayEmail = (widget.email?.isNotEmpty ?? false)
         ? widget.email!
         : (FirebaseAuth.instance.currentUser?.email ?? '');
 
@@ -53,19 +51,21 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
       ),
       child: Column(
         children: [
-          _buildHeader(context),
-          Expanded(child: _buildNav(context)),
+          _buildHeader(context, displayName, displayEmail),
+          Expanded(child: _buildNav(context, displayName, displayEmail)),
         ],
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(
+    BuildContext context,
+    String displayName,
+    String displayEmail,
+  ) {
     final scheme = Theme.of(context).colorScheme;
     final statusBarHeight = MediaQuery.of(context).padding.top;
-    final roleLabel = widget.isAdmin
-        ? context.l10n.common_admin
-        : context.l10n.common_employeeRoleValue;
+    final role = roleLabel(context.l10n, isAdmin: widget.isAdmin);
 
     return Container(
       width: double.infinity,
@@ -93,14 +93,14 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
               shape: BoxShape.circle,
             ),
             child: AppAvatar(
-              name: _displayName,
+              name: displayName,
               color: scheme.onPrimaryContainer,
               size: AvatarSize.lg,
             ),
           ),
           const SizedBox(height: 12),
           Text(
-            _displayName.isNotEmpty ? _displayName : ' ',
+            displayName.isNotEmpty ? displayName : ' ',
             style: TextStyle(
               color: scheme.onPrimary,
               fontSize: 16,
@@ -120,7 +120,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
                   borderRadius: BorderRadius.circular(AppRadius.rFull),
                 ),
                 child: Text(
-                  roleLabel,
+                  role,
                   style: TextStyle(
                     color: scheme.onPrimary,
                     fontSize: 10,
@@ -129,11 +129,11 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
                   ),
                 ),
               ),
-              if (_displayEmail.isNotEmpty) ...[
+              if (displayEmail.isNotEmpty) ...[
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
-                    _displayEmail,
+                    displayEmail,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -150,11 +150,18 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
     );
   }
 
-  Widget _buildNav(BuildContext context) {
+  Widget _buildNav(
+    BuildContext context,
+    String displayName,
+    String displayEmail,
+  ) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final statusColors = theme.statusColors;
     final bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    void go(AdaptiveDestination destination) =>
+        _goTo(context, destination, displayName, displayEmail);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -164,26 +171,26 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             icon: Icons.calendar_today_rounded,
             iconColor: scheme.primary,
             label: context.l10n.common_calendar,
-            onTap: () => _goTo(context, AdaptiveDestination.calendar),
+            onTap: () => go(AdaptiveDestination.calendar),
           ),
           if (widget.isAdmin) ...[
             _NavItem(
               icon: Icons.people_rounded,
               iconColor: statusColors.success,
               label: context.l10n.common_clients,
-              onTap: () => _goTo(context, AdaptiveDestination.clients),
+              onTap: () => go(AdaptiveDestination.clients),
             ),
             _NavItem(
               icon: Icons.badge_rounded,
               iconColor: statusColors.accent,
               label: context.l10n.common_employees,
-              onTap: () => _goTo(context, AdaptiveDestination.employees),
+              onTap: () => go(AdaptiveDestination.employees),
             ),
             _NavItem(
               icon: Icons.history_rounded,
               iconColor: statusColors.warning,
               label: context.l10n.common_history,
-              onTap: () => _goTo(context, AdaptiveDestination.history),
+              onTap: () => go(AdaptiveDestination.history),
             ),
           ],
           const Spacer(),
@@ -194,7 +201,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             icon: Icons.settings_rounded,
             iconColor: scheme.onSurfaceVariant,
             label: context.l10n.common_settings,
-            onTap: () => _goTo(context, AdaptiveDestination.settings),
+            onTap: () => go(AdaptiveDestination.settings),
           ),
           SizedBox(height: bottomPadding + 4),
         ],
@@ -202,14 +209,19 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
     );
   }
 
-  void _goTo(BuildContext context, AdaptiveDestination destination) {
+  void _goTo(
+    BuildContext context,
+    AdaptiveDestination destination,
+    String displayName,
+    String displayEmail,
+  ) {
     Navigator.pop(context);
     final target = destinationRoute(
       destination,
       isAdmin: widget.isAdmin,
       employeeId: widget.employeeId,
-      userName: _displayName,
-      userEmail: _displayEmail,
+      userName: displayName,
+      userEmail: displayEmail,
     );
     // The calendar is the root screen — replace it instead of stacking.
     if (destination == AdaptiveDestination.calendar) {

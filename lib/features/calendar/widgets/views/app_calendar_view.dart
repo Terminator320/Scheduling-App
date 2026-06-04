@@ -3,7 +3,6 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
-import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 class AppCalendar extends StatelessWidget {
@@ -12,7 +11,6 @@ class AppCalendar extends StatelessWidget {
     required this.selectedDay,
     required this.onDaySelected,
     required this.eventLoader,
-    required this.employees,
     required this.employeeColorMap,
     super.key,
     this.onCalendarCreated,
@@ -28,7 +26,6 @@ class AppCalendar extends StatelessWidget {
   final void Function(DateTime)? onPageChanged;
   final double? rowHeight;
 
-  final List<EmployeeRecord> employees;
   final Map<String, Color> employeeColorMap;
 
   Widget _dayCell(

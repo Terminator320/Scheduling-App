@@ -85,7 +85,17 @@ DateTime combineEndDateAndTime(
   final end = combineDateAndTime(date, endTime);
   if (startTime == null) return end;
   final start = combineDateAndTime(date, startTime);
-  return end.isAfter(start) ? end : end.add(const Duration(days: 1));
+  // Wall-clock next-day construction (not end.add(Duration(days: 1))) so an
+  // overnight end landing on a DST transition day keeps its time-of-day.
+  return end.isAfter(start)
+      ? end
+      : DateTime(
+          date.year,
+          date.month,
+          date.day + 1,
+          endTime.hour,
+          endTime.minute,
+        );
 }
 
 /// Returns [errors] without [key], or the same map untouched when absent —
