@@ -9,11 +9,14 @@ class AccountDeletionService {
   AccountDeletionService({
     FirebaseAuth? firebaseAuth,
     FirebaseFunctions? functions,
+    AuthCache? authCache,
   }) : _auth = firebaseAuth ?? FirebaseAuth.instance,
-       _functions = functions ?? FirebaseFunctions.instance;
+       _functions = functions ?? FirebaseFunctions.instance,
+       _authCache = authCache ?? AuthCache();
 
   final FirebaseAuth _auth;
   final FirebaseFunctions _functions;
+  final AuthCache _authCache;
 
   Future<void> reauthenticateWithPassword(String password) async {
     final user = _auth.currentUser;
@@ -44,6 +47,6 @@ class AccountDeletionService {
       throw const AuthFailureUnknown();
     }
     await _auth.signOut();
-    await AuthCache().clear();
+    await _authCache.clear();
   }
 }

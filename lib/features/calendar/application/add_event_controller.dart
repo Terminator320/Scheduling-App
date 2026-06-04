@@ -259,7 +259,11 @@ class AddEventController extends Notifier<AddEventState> {
           appointment.copyWith(
             id: repo.newDocId(),
             startTime: copyStart,
-            endTime: copyStart.add(end.difference(start)),
+            endTime: occurrenceEnd(
+              originalStart: start,
+              originalEnd: end,
+              copyStart: copyStart,
+            ),
           ),
       ];
 

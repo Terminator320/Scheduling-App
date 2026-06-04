@@ -88,7 +88,6 @@ void main() {
             email: 'alice@example.com',
             phone: '555-1234',
             colorValue: '0xFF0000FF',
-            isAdmin: false,
           ),
           throwsA(isA<EmployeesFailureEmailAlreadyExists>()),
         );
@@ -103,7 +102,6 @@ void main() {
         email: '  BOB@EXAMPLE.COM  ',
         phone: '555-0000',
         colorValue: '0xFF0000FF',
-        isAdmin: false,
       );
 
       final captured =
@@ -112,6 +110,7 @@ void main() {
       expect(captured['email'], 'bob@example.com');
       expect(captured['name'], 'Bob');
       expect(captured['status'], 'invited');
+      expect(captured['role'], 'employee');
       expect(captured.containsKey('createdAt'), isTrue);
     });
   });

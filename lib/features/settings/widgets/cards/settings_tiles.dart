@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/features/settings/domain/role_label.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
@@ -343,9 +344,7 @@ class _RoleBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final label = role == 'admin'
-        ? context.l10n.common_admin
-        : context.l10n.common_employeeRoleValue;
+    final label = roleLabel(context.l10n, isAdmin: role == 'admin');
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(

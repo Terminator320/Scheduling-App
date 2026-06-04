@@ -18,7 +18,6 @@ import 'package:scheduling/features/calendar/widgets/views/app_calendar_view.dar
 import 'package:scheduling/features/calendar/widgets/views/event_details_view.dart';
 import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
-import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
@@ -229,8 +228,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       upgradeIfAdmin(ref.read(userRoleProvider).value);
     }
 
-    final employees =
-        ref.watch(allUsersStreamProvider).asData?.value ?? const [];
     final colorMap = ref.watch(employeeColorMapProvider);
     final nameMap = ref.watch(employeeNameMapProvider);
 
@@ -349,7 +346,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
               isLoading: isLoading,
               colorMap: colorMap,
               nameMap: nameMap,
-              employees: employees,
             ),
             detail: _selectedAppointment == null
                 ? null
@@ -407,7 +403,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     required bool isLoading,
     required Map<String, Color> colorMap,
     required Map<String, String> nameMap,
-    required List<EmployeeRecord> employees,
   }) {
     final screenSize = MediaQuery.sizeOf(context);
     final isTablet = context.isWide;
@@ -424,7 +419,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           eventLoader: _getEventsForDay,
           onCalendarCreated: (_) {},
           onPageChanged: _setFocusedDay,
-          employees: employees,
           employeeColorMap: colorMap,
         ),
         const SizedBox(height: AppSpacing.sp12),
