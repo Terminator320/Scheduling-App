@@ -142,9 +142,12 @@ cadence from the edited date. Unchanged saves never re-book. Deleting a series
 visit asks (via `showDeleteAppointmentDialog`) whether to remove this visit
 only or this and future visits (`deleteAppointment(includeFuture: true)` →
 `deleteAppointments` batch). Past visits and anything already done/cancelled
-are never touched by a rewrite or series delete (`_futureSeriesIds` filter);
-series copies are created `status: 'pending'` and never share pictures with
-the source visit.
+are never touched by a rewrite or series delete (`_futureSeriesIds` filter,
+which uses `AppointmentStatus.isTerminal`); series copies are created
+`status: 'pending'` and never share pictures with the source visit. A copy's
+`endTime` is derived by `occurrenceEnd(...)` (wall-clock day-span + the
+original's end time-of-day), not by adding the raw elapsed `Duration` — so a
+visit landing across a daylight-saving transition keeps its intended times.
 
 ### Appointment Address & Client
 
@@ -179,9 +182,9 @@ UI catches the typed failure, calls `failure.toLocalizedMessage(context)`, and p
 
 **Generic catch sites (no typed failure)** compose `"{intro} — {cause}. (TAG)"` via `composeErrorNotice` (`lib/core/errors/error_cause.dart`): `classifyError` collapses the raw error into 4 sanitized causes (offline / permission-denied / not-found / unknown), and the short tag (e.g. `CLI-DEL`, `APPT-SAVE`) is mirrored as the prefix of the site's `logger.warn` label — so a user screenshot of the notice maps to a Crashlytics line. The raw error itself goes only to the log, never the UI. Field-level errors animate via `LabeledTextField` itself (shake on a new `errorText` + fade-slide error row, both disabled under `MediaQuery.disableAnimations`).
 
-**Stream errors** go through `AsyncValue.error` in Riverpod's `StreamProvider`. Consumers handle in two complementary places:
-1. The `.when(error: ...)` branch logs via `loggerProvider.warn` and renders an empty / placeholder UI.
-2. A `ref.listen(provider, (prev, next) {...})` next to the `.watch` call detects `data → error` and `loading → error` transitions and fires a one-shot `noticeServiceProvider.error(...)` notice. The `main_calendar_screen` appointments-stream wiring is the canonical example — putting the notice inside `.when` would re-toast on every rebuild.
+**Stream errors** (`AsyncValue.error` from a `StreamProvider`) are handled one of two ways, depending on the screen:
+- **Listener-owned** (e.g. `main_calendar_screen`): a `ref.listen(provider, (prev, next) {...})` next to the `.watch` detects `data → error` / `loading → error` transitions and fires the one-shot `logger.warn` + `noticeServiceProvider.error(...)`. The build reads data via `appointmentsAsync.value ?? const []` — **not** a `.when(error:)` — so neither the log nor the toast can repeat on rebuild.
+- **`.when`-owned** (e.g. `appointment_history_view`): the `.when(error: ...)` branch logs via `logger.warn` and renders an inline placeholder/message (no toast). Don't add a toast here — `.when` runs on every rebuild and would re-toast.
 
 ### Validation
 
@@ -298,7 +301,10 @@ users/{docId}
   name: string
   email: string
   phone: string
-  role: 'admin' | 'employee'
+  role: 'admin' | 'employee'   invites are always created 'employee' — admin is
+                       granted only after activation (the form's Admin toggle is
+                       edit-only), because firestore.rules self-activation requires
+                       role == 'employee'
   status: 'active' | 'disabled' | 'invited'
   colorValue: string   int-as-string; drives appointment card borders and avatars
 
@@ -328,10 +334,10 @@ usersByUid/{uid}       Bridge maintained by the syncUsersByUid Cloud Function.
   docId: string        → users/{docId}
   status: 'active' | 'disabled'
 
-rateLimits/{route__uid}  Sliding-window counters written by enforceDurableRateLimit.
+rateLimits/{route__uid}  True sliding window written by enforceDurableRateLimit.
   route: string        endpoint id ('deleteAccount' | 'resolveMyInvite')
-  count: number        attempts in the current window
-  windowStart: number  epoch ms
+  attempts: [number]   epoch-ms timestamps; entries older than the window are
+                       dropped each call, and a call is rejected when >= max remain
   expiresAt: timestamp optional Firestore TTL target
 ```
 
@@ -358,7 +364,7 @@ Locate them with `grep -rn "TODO(pre-ship)" lib` — markers are authoritative; 
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (391 test cases as of 2026-06-07). `flutter analyze` is
+Run: `flutter test` (382 test cases as of 2026-06-07). `flutter analyze` is
 clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.

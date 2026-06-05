@@ -10,6 +10,38 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.3.1+9] - 2026-06-07
+
+### Changed
+- New team members are always invited as employees. Admin access is now granted
+  by editing a person after they've joined the team, instead of at invite time —
+  an account invited directly as an admin previously couldn't finish signing up.
+- Searching clients and appointment history is now accent-insensitive everywhere
+  (searching "jose" matches "José"), and phone search matches on the digits you
+  type, so "(514) 555" finds a number saved as 5145551234.
+- Search and long appointment lists are smoother — date formatting is cached,
+  search patterns are compiled once, and the calendar drops some redundant
+  rebuilds.
+- Large internal cleanup/refactor pass: one consistent animated save button
+  across the add/edit appointment, client, and employee forms; shared status
+  labels and a single navigation route table; dead code removed. No change to
+  what the app does.
+
+### Fixed
+- Repeating appointments that span a daylight-saving change now keep their
+  correct start and end times. Previously a series crossing the spring/autumn
+  switch could store a visit an hour off.
+- An overnight appointment ending after midnight on a daylight-saving change
+  night now saves the correct end time.
+- Re-authenticating to delete your account no longer counts the "please log in
+  again" prompt against the attempt limit, so retrying after re-login can't lock
+  you out of deleting the account.
+- The abuse limit on account deletion and invite lookups is now a true rolling
+  15-minute window; a caller could previously slip a few extra attempts in right
+  at the window boundary.
+- Address lookups that return an unexpected or garbled response now fail cleanly
+  (and are logged for diagnosis) instead of showing a generic error.
+
 ## [1.3.0+8] - 2026-06-07
 
 ### Added
