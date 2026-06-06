@@ -214,10 +214,17 @@ class DetailsEditBody extends ConsumerWidget {
             .read(noticeServiceProvider)
             .success(context.l10n.common_appointmentChangesSaved);
         onSaved(appointment);
-      case EventDetailsFailed():
+      case EventDetailsFailed(:final error):
         ref
             .read(noticeServiceProvider)
-            .error(context.l10n.error_somethingWentWrongSavingChanges);
+            .error(
+              composeErrorNotice(
+                context,
+                intro: context.l10n.error_introSaveAppointment,
+                tag: 'APPT-SAVE',
+                error: error,
+              ),
+            );
     }
   }
 
