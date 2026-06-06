@@ -181,6 +181,13 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     ) {
       if (next is AsyncError && previous is! AsyncError) {
         ref
+            .read(loggerProvider)
+            .warn(
+              'APPT-LOAD appointments stream error',
+              next.error,
+              next.stackTrace,
+            );
+        ref
             .read(noticeServiceProvider)
             .error(
               composeErrorNotice(
