@@ -32,6 +32,8 @@ class _AnimatedFormFieldWrapperState extends State<AnimatedFormFieldWrapper>
   @override
   void didUpdateWidget(covariant AnimatedFormFieldWrapper oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // NOTE: reduced-motion is intentionally evaluated only at the error
+    // transition; an in-flight 320ms shake isn't worth interrupting.
     if (widget.hasError &&
         !oldWidget.hasError &&
         !MediaQuery.disableAnimationsOf(context)) {
