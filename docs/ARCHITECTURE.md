@@ -16,7 +16,7 @@ lib/
 │   ├── animations/                  Shared animation widgets (FadeInItem, TapScale, AnimatedLoadingButton, AnimatedFormFieldWrapper — transition-only field shake)
 │   ├── errors/                      Base Failure class + error_cause.dart (sanitized cause classifier + tagged notice composer)
 │   ├── images/                      Image picker, compression, Firebase Storage upload service
-│   ├── layout/                      Responsive shell — AdaptiveShell, MasterDetailScaffold, breakpoints (context.isWide)
+│   ├── layout/                      Responsive shell — AdaptiveShell (nav rail), MasterDetailScaffold, breakpoints (context.isWide / isLandscape / isSplitLayout)
 │   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics)
 │   ├── notices/                     In-app toast system: AppNotice types, NoticeService (stream), NoticeListener (widget)
 │   ├── permissions/                 MediaPermissionService — camera permission gate (permission_handler)
@@ -28,6 +28,7 @@ lib/
 │   └── validators/                  Auth input validators (email format, password rules)
 │
 ├── shared/widgets/                  Reusable UI components used across ≥2 features, grouped by type
+│   ├── app_bars/                    app_top_bar (AppTopBar — the standard primary app bar every screen uses; slims in landscape)
 │   ├── primitives/                  app_avatar (contrast-aware initials circle), fade_in_item, section_label (uppercase mini-header)
 │   ├── feedback/                    app_empty_state, skeleton_loader (shimmer), status_chip (+ AppointmentStatus.fromRaw, the canonical status mapper)
 │   ├── fields/                      address_autocomplete_field, labeled_text_field (built-in shake + animated error row), app_search_bar, form_helpers
@@ -81,8 +82,8 @@ features/<name>/
 **Widget bucket taxonomy** (same names everywhere, so a widget's kind predicts its folder):
 `sheets/` modal bottom sheets · `cards/` row & tile cards · `fields/` inline inputs & pickers ·
 `dialogs/` popup/overlay · `sections/` composed form/detail sections · `views/` larger composed
-view/list/body widgets. `shared/widgets/` additionally uses `primitives/` (atoms) and `feedback/`
-(empty/loading/status). Not every folder uses every bucket.
+view/list/body widgets. `shared/widgets/` additionally uses `primitives/` (atoms), `feedback/`
+(empty/loading/status), and `app_bars/` (the shared `AppTopBar`). Not every folder uses every bucket.
 
 ---
 
@@ -205,7 +206,22 @@ Status enums (`AppointmentStatus` written by `updateAppointmentStatus`) are allo
 
 ### Responsive Layout
 
-`lib/core/layout/` adapts the UI to screen width. `Breakpoints` defines `tablet` (840) and `expanded` (1200); the `context.isWide` extension is `width >= 840`. On narrow phones the normal screens render unchanged; on wide screens `AdaptiveShell` wraps them with a navigation rail over the `AdaptiveDestination` enum (`calendar`, `clients`, `employees`, `history`, `settings`), and `MasterDetailScaffold` renders list + detail side by side. The `history` destination surfaces `clients/widgets/views/appointment_history_view.dart`.
+`lib/core/layout/` adapts the UI to screen size **and orientation**. `Breakpoints`
+defines `tablet` (840) and `expanded` (1200). The `context` extensions are
+`isWide` (`width >= 840`), `isLandscape` (orientation), and `isSplitLayout`
+(`isWide || isLandscape`) — the last is the trigger for the desktop-style chrome.
+On a portrait phone screens render single-column with a hamburger drawer; in
+landscape or on a tablet `AdaptiveShell` wraps them with a navigation rail over
+the `AdaptiveDestination` enum (`calendar`, `clients`, `employees`, `history`,
+`settings`) and the drawer is dropped (`SettingsDrawer.endDrawerFor` returns
+`null`, which also strips the app bar's auto hamburger). In that mode the
+**calendar** renders a side-by-side Split (month grid | day agenda, details in a
+sheet — no detail pane), its month-row height adapting to the pane; the **list
+screens** use `MasterDetailScaffold` (list + detail side by side at ≥ 840). Every
+screen's app bar is the shared `AppTopBar`, which also slims itself in landscape
+(`compact: context.isLandscape`). `isSplitLayout` only adds the orientation path
+— it never lowers the 840 width gate. The `history` destination surfaces
+`clients/widgets/views/appointment_history_view.dart`.
 
 ---
 

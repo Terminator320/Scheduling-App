@@ -22,6 +22,7 @@ import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dial
 import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
+import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 
 enum _SettingsDetail { textSize }
@@ -284,21 +285,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: scheme.primary,
-        foregroundColor: scheme.onPrimary,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          context.l10n.common_settings,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
-        ),
+      appBar: AppTopBar(
+        title: context.l10n.common_settings,
+        compact: context.isLandscape,
+        onBack: () => Navigator.pop(context),
       ),
       body: AdaptiveShell(
         currentDestination: AdaptiveDestination.settings,

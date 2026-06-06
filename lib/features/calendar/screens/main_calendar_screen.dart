@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
-import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -15,12 +14,12 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/fields/month_year_picker.dart';
 import 'package:scheduling/features/calendar/widgets/views/app_calendar_view.dart';
-import 'package:scheduling/features/calendar/widgets/views/event_details_view.dart';
 import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
+import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 class MainCalendar extends ConsumerStatefulWidget {
@@ -46,10 +45,15 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
-  AppointmentRecord? _selectedAppointment;
   late AppointmentDateRange _appointmentRange;
   PhotoUploadNotifier? _uploadNotifier;
   bool _upgradingToAdmin = false;
+
+  /// The calendar uses the "Split" layout — month grid | day agenda, details via
+  /// a sheet — whenever the nav rail is showing: landscape phones AND tablets.
+  /// A portrait phone keeps the simple stacked column. There is no separate
+  /// tablet layout — tablets get the same Split as landscape.
+  bool get _splitCalendar => context.isSplitLayout;
 
   @override
   void initState() {
@@ -253,17 +257,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
     return Scaffold(
       key: _scaffoldKey,
-      appBar: AppBar(
-        backgroundColor: scheme.primary,
-        foregroundColor: scheme.onPrimary,
-        automaticallyImplyLeading: false,
-        title: Text(
-          context.l10n.common_calendar,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: scheme.onPrimary,
-          ),
-        ),
+      appBar: AppTopBar(
+        title: context.l10n.common_calendar,
+        compact: context.isLandscape,
         actions: [
           TextButton(
             onPressed: _goToToday,
@@ -275,15 +271,22 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
               ),
             ),
           ),
-          IconButton(
-            icon: Icon(Icons.menu, color: scheme.onPrimary),
-            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-          ),
+          // In landscape / on tablets the nav rail replaces the drawer.
+          if (!context.isSplitLayout)
+            IconButton(
+              icon: Icon(Icons.menu, color: scheme.onPrimary),
+              onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+            ),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(28),
+          preferredSize: Size.fromHeight(context.isLandscape ? 22 : 28),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              0,
+              16,
+              context.isLandscape ? 4 : 8,
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -330,7 +333,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
               child: const Icon(Icons.add),
             )
           : null,
-      endDrawer: SettingsDrawer(
+      endDrawer: SettingsDrawer.endDrawerFor(
+        context,
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
         userName: userName,
@@ -341,97 +345,74 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         employeeId: widget.employeeId,
         userName: userName,
         child: SafeArea(
-          child: MasterDetailScaffold(
-            master: _content(
-              isLoading: isLoading,
-              colorMap: colorMap,
-              nameMap: nameMap,
-            ),
-            detail: _selectedAppointment == null
-                ? null
-                : EventDetailsView(
-                    key: ValueKey(_selectedAppointment!.id),
-                    appointment: _selectedAppointment!,
-                    showActions: widget.isAdmin,
-                    onClose: (_) => setState(() => _selectedAppointment = null),
-                  ),
-            placeholder: _buildDetailPlaceholder(),
+          child: _content(
+            isLoading: isLoading,
+            colorMap: colorMap,
+            nameMap: nameMap,
           ),
         ),
       ),
     );
   }
 
-  Widget _buildDetailPlaceholder() {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      color: scheme.surface,
-      alignment: Alignment.center,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sp24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.event_outlined,
-              size: 48,
-              color: scheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              context.l10n.calendar_selectAnAppointmentToViewDetails,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _onAppointmentTap(AppointmentRecord appointment) {
-    if (context.isWide) {
-      setState(() => _selectedAppointment = appointment);
-    } else {
-      showEventDetails(context, appointment, showActions: widget.isAdmin);
-    }
-  }
+  AppCalendar _buildCalendar(Map<String, Color> colorMap, double rowHeight) =>
+      AppCalendar(
+        focusedDay: _focusedDay,
+        selectedDay: _selectedDay,
+        onDaySelected: _onDaySelected,
+        rowHeight: rowHeight,
+        eventLoader: _getEventsForDay,
+        onCalendarCreated: (_) {},
+        onPageChanged: _setFocusedDay,
+        employeeColorMap: colorMap,
+      );
 
   Widget _content({
     required bool isLoading,
     required Map<String, Color> colorMap,
     required Map<String, String> nameMap,
   }) {
-    final screenSize = MediaQuery.sizeOf(context);
-    final isTablet = context.isWide;
+    final eventList = EventList(
+      events: _selectedEvents,
+      nameMap: nameMap,
+      colorMap: colorMap,
+      isLoading: isLoading,
+      isAdmin: widget.isAdmin,
+    );
+
+    if (_splitCalendar) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            flex: 11,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Size the month rows to the pane: compact in the short
+                // landscape viewport, comfortable on a tall tablet.
+                final rowHeight = ((constraints.maxHeight - 40) / 6).clamp(
+                  40.0,
+                  88.0,
+                );
+                return SingleChildScrollView(
+                  child: _buildCalendar(colorMap, rowHeight),
+                );
+              },
+            ),
+          ),
+          const VerticalDivider(width: 1),
+          // EventList already returns an Expanded, so wrap it in a Flex.
+          Expanded(flex: 9, child: Column(children: [eventList])),
+        ],
+      );
+    }
 
     return Column(
       children: [
-        AppCalendar(
-          focusedDay: _focusedDay,
-          selectedDay: _selectedDay,
-          onDaySelected: _onDaySelected,
-          rowHeight: isTablet
-              ? screenSize.height * 0.08
-              : screenSize.height * 0.065,
-          eventLoader: _getEventsForDay,
-          onCalendarCreated: (_) {},
-          onPageChanged: _setFocusedDay,
-          employeeColorMap: colorMap,
-        ),
+        _buildCalendar(colorMap, MediaQuery.sizeOf(context).height * 0.065),
         const SizedBox(height: AppSpacing.sp12),
         const Divider(),
-        EventList(
-          events: _selectedEvents,
-          nameMap: nameMap,
-          colorMap: colorMap,
-          isLoading: isLoading,
-          isAdmin: widget.isAdmin,
-          selectedAppointmentId: _selectedAppointment?.id,
-          onAppointmentTap: _onAppointmentTap,
-        ),
+        eventList,
       ],
     );
   }

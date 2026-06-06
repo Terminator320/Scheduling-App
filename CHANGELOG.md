@@ -10,6 +10,26 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.4.0+10] - 2026-06-07
+
+### Added
+- **Landscape and tablet layout.** Rotating a phone to landscape — and on
+  tablets in any orientation — the app now shows a side navigation rail in place
+  of the hamburger menu, and the calendar lays out side by side (the month grid
+  next to the selected day's appointments) instead of stacked. Portrait phones
+  are unchanged.
+
+### Changed
+- The month/year date picker's year list now spans a few years back through
+  several years ahead and shifts automatically with the calendar each year,
+  instead of a fixed range that would eventually go out of date.
+- App headers take up less vertical space in landscape, giving the calendar and
+  lists more room.
+- On tablets the calendar now opens an appointment's details in a sheet (the same
+  as landscape) rather than a separate side pane.
+- The search fields on Clients, History, and Employees now all share one
+  consistent style.
+
 ## [1.3.1+9] - 2026-06-07
 
 ### Changed

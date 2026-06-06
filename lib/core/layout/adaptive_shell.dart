@@ -69,7 +69,7 @@ class AdaptiveShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!context.isWide) return child;
+    if (!context.isSplitLayout) return child;
 
     final destinations = _destinationsFor(context, isAdmin);
     final selectedIndex = destinations
@@ -77,6 +77,9 @@ class AdaptiveShell extends StatelessWidget {
         .clamp(0, destinations.length - 1);
 
     final scheme = Theme.of(context).colorScheme;
+    // A landscape phone is short: stacking a label under every icon can
+    // overflow the rail, so only label the selected destination there.
+    final isShort = MediaQuery.sizeOf(context).height < 520;
 
     return Row(
       children: [
@@ -86,7 +89,9 @@ class AdaptiveShell extends StatelessWidget {
           selectedIndex: selectedIndex,
           labelType: context.isExpanded
               ? NavigationRailLabelType.none
-              : NavigationRailLabelType.all,
+              : (isShort
+                    ? NavigationRailLabelType.selected
+                    : NavigationRailLabelType.all),
           onDestinationSelected: (index) =>
               _onSelect(context, destinations[index].destination),
           destinations: [

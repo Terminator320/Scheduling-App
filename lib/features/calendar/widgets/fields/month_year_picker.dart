@@ -6,8 +6,10 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 class MonthYearPicker {
-  static const int _startYear = 2000;
-  static const int _yearCount = 30;
+  // Year wheel spans a sliding window relative to today so the range never
+  // needs a manual code bump: a few years back through several years ahead.
+  static const int _pastYears = 5;
+  static const int _futureYears = 15;
 
   static Future<DateTime?> show(
     BuildContext context,
@@ -38,10 +40,14 @@ class _MonthYearPickerContent extends StatefulWidget {
 class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
   late int selectedMonth;
   late int selectedYear;
+  late final int _startYear;
+  late final int _yearCount;
 
   @override
   void initState() {
     super.initState();
+    _startYear = DateTime.now().year - MonthYearPicker._pastYears;
+    _yearCount = MonthYearPicker._pastYears + MonthYearPicker._futureYears + 1;
     selectedMonth = widget.focusedDay.month;
     selectedYear = widget.focusedDay.year;
   }
@@ -116,19 +122,21 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                 Expanded(
                   child: CupertinoPicker(
                     scrollController: FixedExtentScrollController(
-                      initialItem: selectedYear - MonthYearPicker._startYear,
+                      initialItem: (selectedYear - _startYear).clamp(
+                        0,
+                        _yearCount - 1,
+                      ),
                     ),
                     itemExtent: 40,
                     useMagnifier: true,
                     magnification: 1.2,
                     squeeze: 1.2,
-                    onSelectedItemChanged: (i) =>
-                        selectedYear = MonthYearPicker._startYear + i,
+                    onSelectedItemChanged: (i) => selectedYear = _startYear + i,
                     children: List.generate(
-                      MonthYearPicker._yearCount,
+                      _yearCount,
                       (i) => Center(
                         child: Text(
-                          '${MonthYearPicker._startYear + i}',
+                          '${_startYear + i}',
                           style: bodyLarge,
                         ),
                       ),

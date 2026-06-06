@@ -13,6 +13,7 @@ import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart
 import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
+import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
 
 class ListInformation extends StatefulWidget {
@@ -77,30 +78,20 @@ class _ListInformationState extends State<ListInformation> {
     await SheetFocus.unfocusAfterSheet();
   }
 
+  void _backToCalendar() => Navigator.pushReplacementNamed(
+    context,
+    AppRoutes.mainCalendar,
+    arguments: MainCalendarArgs(
+      isAdmin: widget.isAdmin,
+      employeeId: widget.employeeId,
+    ),
+  );
+
   PreferredSizeWidget _buildClientsAppBar() {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return AppBar(
-      backgroundColor: scheme.primary,
-      foregroundColor: scheme.onPrimary,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_rounded),
-        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-        onPressed: () => Navigator.pushReplacementNamed(
-          context,
-          AppRoutes.mainCalendar,
-          arguments: MainCalendarArgs(
-            isAdmin: widget.isAdmin,
-            employeeId: widget.employeeId,
-          ),
-        ),
-      ),
-      title: Text(
-        context.l10n.common_clients,
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+    return AppTopBar(
+      title: context.l10n.common_clients,
+      compact: context.isLandscape,
+      onBack: _backToCalendar,
       bottom: AppSearchBar(
         controller: _searchController,
         onChanged: (_) => setState(() {}),
@@ -110,63 +101,14 @@ class _ListInformationState extends State<ListInformation> {
   }
 
   PreferredSizeWidget _buildHistoryAppBar() {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return AppBar(
-      backgroundColor: scheme.primary,
-      foregroundColor: scheme.onPrimary,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_rounded),
-        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-        onPressed: () => Navigator.pushReplacementNamed(
-          context,
-          AppRoutes.mainCalendar,
-          arguments: MainCalendarArgs(
-            isAdmin: widget.isAdmin,
-            employeeId: widget.employeeId,
-          ),
-        ),
-      ),
-      title: Text(
-        context.l10n.common_history,
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(52),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-          child: TextField(
-            controller: _appointmentSearchController,
-            onChanged: (_) => setState(() {}),
-
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: scheme.onPrimary,
-            ),
-            decoration: InputDecoration(
-              hintText: context.l10n.clients_searchByClientOrEmployee,
-              hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                color: scheme.onPrimary.withValues(alpha: 0.6),
-              ),
-              prefixIcon: Icon(
-                Icons.search,
-                size: 16,
-                color: scheme.onPrimary.withValues(alpha: 0.7),
-              ),
-              filled: true,
-              fillColor: scheme.onPrimary.withValues(alpha: 0.15),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppRadius.r12),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                vertical: 8,
-                horizontal: 12,
-              ),
-            ),
-          ),
-        ),
+    return AppTopBar(
+      title: context.l10n.common_history,
+      compact: context.isLandscape,
+      onBack: _backToCalendar,
+      bottom: AppSearchBar(
+        controller: _appointmentSearchController,
+        onChanged: (_) => setState(() {}),
+        hintText: context.l10n.clients_searchByClientOrEmployee,
       ),
     );
   }
@@ -231,7 +173,8 @@ class _ListInformationState extends State<ListInformation> {
 
     return Scaffold(
       appBar: _isClients ? _buildClientsAppBar() : _buildHistoryAppBar(),
-      endDrawer: SettingsDrawer(
+      endDrawer: SettingsDrawer.endDrawerFor(
+        context,
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
       ),
