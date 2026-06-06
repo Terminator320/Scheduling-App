@@ -10,6 +10,29 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [Unreleased]
+
+### Added
+- Form fields now shake and their error messages animate in when validation
+  fails, across every form in the app (respects the OS reduced-motion setting).
+- Error messages now say what failed and why — e.g. "Couldn't delete the
+  client — you appear to be offline. (CLI-DEL)" — instead of a generic
+  "Something went wrong". The short tag matches the Crashlytics log entry so
+  tester reports can be traced directly to logs.
+
+### Changed
+- Internal cleanup pass: shared confirm dialog, shared section labels and
+  client-form validation, avatar initials now auto-contrast against light
+  employee colors, and one canonical appointment-status mapper.
+
+### Fixed
+- Several failure paths that silently swallowed errors (client delete,
+  employee save, appointment delete) now log to Crashlytics.
+- Calendar no longer re-sorts and regroups all appointments on every tap;
+  the history tab no longer re-sorts on every search keystroke; the busy-
+  employee conflict check now runs its queries in parallel.
+- Auth-screen fields no longer play a stray shake animation on first build.
+
 ## [1.1.1+6] - 2026-06-02
 
 ### Fixed
