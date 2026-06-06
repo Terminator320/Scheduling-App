@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -233,11 +234,18 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
         });
       }
     } catch (e, st) {
-      ref.read(loggerProvider).warn('updateClient failed', e, st);
+      ref.read(loggerProvider).warn('CLI-SAVE updateClient failed', e, st);
       if (!mounted) return;
       ref
           .read(noticeServiceProvider)
-          .error(context.l10n.error_couldNotSaveChangesTryAgain);
+          .error(
+            composeErrorNotice(
+              context,
+              intro: context.l10n.error_introSaveClient,
+              tag: 'CLI-SAVE',
+              error: e,
+            ),
+          );
     }
   }
 
@@ -268,10 +276,18 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
         Navigator.pop(context);
       }
       notices.success(context.l10n.clients_clientDeletedSuccessfully);
-    } catch (_) {
+    } catch (e, st) {
+      ref.read(loggerProvider).warn('CLI-DEL deleteClient failed', e, st);
       if (!mounted) return;
       setState(() => _isDeleting = false);
-      notices.error(context.l10n.error_couldNotDeleteClientTryAgain);
+      notices.error(
+        composeErrorNotice(
+          context,
+          intro: context.l10n.error_introDeleteClient,
+          tag: 'CLI-DEL',
+          error: e,
+        ),
+      );
     }
   }
 
