@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/settings/domain/role_label.dart';
@@ -21,6 +22,26 @@ class SettingsDrawer extends ConsumerStatefulWidget {
   final String employeeId;
   final String? userName;
   final String? email;
+
+  /// What a screen should hand to its [Scaffold.endDrawer]: `null` when the nav
+  /// rail is showing (landscape / wide), otherwise a [SettingsDrawer]. Returning
+  /// `null` also strips the app bar's automatic end-drawer hamburger. Centralises
+  /// the check so screens don't each repeat it.
+  static Widget? endDrawerFor(
+    BuildContext context, {
+    required bool isAdmin,
+    required String employeeId,
+    String? userName,
+    String? email,
+  }) {
+    if (context.isSplitLayout) return null;
+    return SettingsDrawer(
+      isAdmin: isAdmin,
+      employeeId: employeeId,
+      userName: userName,
+      email: email,
+    );
+  }
 
   @override
   ConsumerState<SettingsDrawer> createState() => _SettingsDrawerState();

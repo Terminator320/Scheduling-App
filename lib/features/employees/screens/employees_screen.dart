@@ -16,6 +16,7 @@ import 'package:scheduling/features/employees/widgets/views/employee_details_vie
 import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
+import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
@@ -119,24 +120,16 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
   }
 
   PreferredSizeWidget _buildAppBar() {
-    final scheme = Theme.of(context).colorScheme;
-    return AppBar(
-      backgroundColor: scheme.primary,
-      foregroundColor: scheme.onPrimary,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_rounded),
-        onPressed: () => Navigator.pushReplacementNamed(
-          context,
-          AppRoutes.mainCalendar,
-          arguments: MainCalendarArgs(
-            isAdmin: widget.isAdmin,
-            employeeId: widget.employeeId,
-          ),
+    return AppTopBar(
+      title: context.l10n.common_employees,
+      compact: context.isLandscape,
+      onBack: () => Navigator.pushReplacementNamed(
+        context,
+        AppRoutes.mainCalendar,
+        arguments: MainCalendarArgs(
+          isAdmin: widget.isAdmin,
+          employeeId: widget.employeeId,
         ),
-      ),
-      title: Text(
-        context.l10n.common_employees,
-        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
       ),
       bottom: AppSearchBar(
         controller: _searchController,
@@ -282,7 +275,8 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
 
     return Scaffold(
       appBar: _buildAppBar(),
-      endDrawer: SettingsDrawer(
+      endDrawer: SettingsDrawer.endDrawerFor(
+        context,
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
       ),
