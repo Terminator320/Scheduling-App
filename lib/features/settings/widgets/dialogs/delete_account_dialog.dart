@@ -2,43 +2,26 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/l10n/l10n.dart';
 
-class DeleteAccountDialog extends StatelessWidget {
-  const DeleteAccountDialog({required this.isAdmin, super.key});
+// Body for the delete-account confirm (shown via showConfirmDialog).
+class DeleteAccountWarningContent extends StatelessWidget {
+  const DeleteAccountWarningContent({required this.isAdmin, super.key});
 
   final bool isAdmin;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return AlertDialog(
-      title: Text(context.l10n.settings_deleteAccountConfirmTitle),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(context.l10n.settings_deleteAccountConfirmBody),
-          if (isAdmin) ...[
-            const SizedBox(height: 12),
-            Text(
-              context.l10n.settings_deleteAccountAdminWarning,
-              style: TextStyle(color: scheme.error),
-            ),
-          ],
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: Text(context.l10n.common_cancel),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: scheme.error,
-            foregroundColor: scheme.onError,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(context.l10n.settings_deleteAccountConfirmBody),
+        if (isAdmin) ...[
+          const SizedBox(height: 12),
+          Text(
+            context.l10n.settings_deleteAccountAdminWarning,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
-          onPressed: () => Navigator.of(context).pop(true),
-          child: Text(context.l10n.settings_deletePermanently),
-        ),
+        ],
       ],
     );
   }

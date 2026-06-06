@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
-import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/policies/client_form_validator.dart';
+import 'package:scheduling/features/clients/widgets/fields/address_grid_fields.dart';
 import 'package:scheduling/features/clients/widgets/sections/additional_contacts_section.dart';
 import 'package:scheduling/features/maps/address_field_filler.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
@@ -57,14 +58,6 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
     super.dispose();
   }
 
-  String? _validateEmail(String value) {
-    if (value.isEmpty) return null;
-    if (!AuthValidators.isValidEmailFormat(value)) {
-      return context.l10n.validation_enterAValidEmail;
-    }
-    return null;
-  }
-
   void _clearError(String key) {
     if (_errors[key] != null) setState(() => _errors[key] = null);
   }
@@ -86,25 +79,16 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
   }
 
   List<ClientContact> _buildContacts() {
-    final contacts = <ClientContact>[];
-
-    if (_isBusiness) {
-      contacts.add(
-        ClientContact(
-          name: _nameController.text.trim(),
-          phone: _phoneController.text.trim(),
-          email: _emailController.text.trim(),
-        ),
-      );
-
-      for (final contact in _additionalContacts) {
-        if (!contact.isEmpty) {
-          contacts.add(contact.toContact());
-        }
-      }
-    }
-
-    return contacts;
+    if (!_isBusiness) return const [];
+    return [
+      ClientContact(
+        name: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        email: _emailController.text.trim(),
+      ),
+      for (final contact in _additionalContacts)
+        if (!contact.isEmpty) contact.toContact(),
+    ];
   }
 
   void _handleAddressSelected() {
@@ -131,46 +115,18 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
     final phone = _phoneController.text.trim();
     final email = _emailController.text.trim();
     final address = _addressController.text.trim();
-    final hasContactMethod = phone.isNotEmpty || email.isNotEmpty;
 
-    final nextErrors = <String, String?>{};
-
-    final hasBusinessOrName = businessName.isNotEmpty || name.isNotEmpty;
-
-    nextErrors['businessName'] = !hasBusinessOrName
-        ? context.l10n.validation_businessNameOrContactNameIsRequired
-        : null;
-    nextErrors['name'] = !hasBusinessOrName
-        ? context.l10n.validation_businessNameOrContactNameIsRequired
-        : null;
-    nextErrors['phone'] = !hasContactMethod
-        ? context.l10n.validation_phoneOrEmailIsRequired
-        : null;
-    nextErrors['email'] = _validateEmail(email);
-    nextErrors['address'] = businessName.isEmpty && address.isEmpty
-        ? context.l10n.validation_addressIsRequired
-        : null;
-
-    if (businessName.isNotEmpty) {
-      for (var i = 0; i < _additionalContacts.length; i++) {
-        final contact = _additionalContacts[i];
-        if (contact.isEmpty) continue;
-
-        final contactName = contact.nameController.text.trim();
-        final contactPhone = contact.phoneController.text.trim();
-        final contactEmail = contact.emailController.text.trim();
-        final hasAdditionalContactMethod =
-            contactPhone.isNotEmpty || contactEmail.isNotEmpty;
-
-        nextErrors['contact_${i}_name'] = contactName.isEmpty
-            ? context.l10n.validation_contactNameIsRequired
-            : null;
-        nextErrors['contact_${i}_phone'] = !hasAdditionalContactMethod
-            ? context.l10n.validation_phoneOrEmailIsRequired
-            : null;
-        nextErrors['contact_${i}_email'] = _validateEmail(contactEmail);
-      }
-    }
+    final nextErrors = ClientFormValidator.validate(
+      l10n: context.l10n,
+      businessName: businessName,
+      name: name,
+      phone: phone,
+      email: email,
+      address: address,
+      additionalContacts: [
+        for (final contact in _additionalContacts) contact.toContact(),
+      ],
+    );
 
     setState(() {
       _errors
@@ -341,7 +297,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
               ),
             ),
             const SizedBox(height: 16),
-            _AddressGridFields(
+            AddressGridFields(
               cityController: _cityController,
               provinceController: _provinceController,
               postalCodeController: _postalCodeController,
@@ -356,79 +312,6 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
           ],
         );
       },
-    );
-  }
-}
-
-class _AddressGridFields extends StatelessWidget {
-  const _AddressGridFields({
-    required this.cityController,
-    required this.provinceController,
-    required this.postalCodeController,
-    required this.countryController,
-  });
-
-  final TextEditingController cityController;
-  final TextEditingController provinceController;
-  final TextEditingController postalCodeController;
-  final TextEditingController countryController;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: SheetFocusScroll(
-                child: LabeledTextField(
-                  label: context.l10n.common_city,
-                  controller: cityController,
-                  autofillHints: const [AutofillHints.addressCity],
-                  maxLength: TextLimits.city,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: SheetFocusScroll(
-                child: LabeledTextField(
-                  label: context.l10n.common_province,
-                  controller: provinceController,
-                  autofillHints: const [AutofillHints.addressState],
-                  maxLength: TextLimits.province,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: SheetFocusScroll(
-                child: LabeledTextField(
-                  label: context.l10n.common_postalCode,
-                  controller: postalCodeController,
-                  autofillHints: const [AutofillHints.postalCode],
-                  maxLength: TextLimits.postalCode,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: SheetFocusScroll(
-                child: LabeledTextField(
-                  label: context.l10n.clients_country,
-                  controller: countryController,
-                  autofillHints: const [AutofillHints.countryName],
-                  maxLength: TextLimits.country,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 }

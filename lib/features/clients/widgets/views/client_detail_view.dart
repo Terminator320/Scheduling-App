@@ -3,17 +3,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/policies/client_form_validator.dart';
+import 'package:scheduling/features/clients/widgets/fields/address_grid_fields.dart';
+import 'package:scheduling/features/clients/widgets/sections/additional_contacts_section.dart';
 import 'package:scheduling/features/maps/address_field_filler.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/fields/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
+import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
 class ClientDetailView extends ConsumerStatefulWidget {
@@ -39,6 +43,8 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
   bool _isDeleting = false;
   final Map<String, String?> _errors = {};
 
+  late ClientRecord _client;
+
   late final TextEditingController _businessNameController;
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
@@ -49,7 +55,12 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
   late final TextEditingController _provinceController;
   late final TextEditingController _countryController;
   late final TextEditingController _postalCodeController;
+  final List<ContactFields> _additionalContacts = [];
 
+  // A business name marks the client as a business and unlocks extra contacts.
+  bool get _isBusiness => _businessNameController.text.trim().isNotEmpty;
+
+  // Prefers the explicit apt field over an apt embedded in the street text.
   String _buildFullAddress() {
     final parsed = AddressParser.splitApt(_addressController.text);
     final street = (parsed?.street ?? _addressController.text).trim();
@@ -62,11 +73,12 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
   @override
   void initState() {
     super.initState();
+    _client = widget.client;
     _initControllers();
   }
 
   void _initControllers() {
-    final c = widget.client;
+    final c = _client;
     _businessNameController = TextEditingController(text: c.businessName);
     _nameController = TextEditingController(text: c.name);
     _phoneController = TextEditingController(text: c.phone);
@@ -82,6 +94,16 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
     _provinceController = TextEditingController(text: c.province);
     _countryController = TextEditingController(text: c.country);
     _postalCodeController = TextEditingController(text: c.postalCode);
+    // contacts[0] mirrors the main name/phone/email fields; the rest are
+    // the additional business contacts.
+    for (final contact in c.contacts.skip(1)) {
+      _additionalContacts.add(
+        ContactFields()
+          ..nameController.text = contact.name
+          ..phoneController.text = contact.phone
+          ..emailController.text = contact.email,
+      );
+    }
   }
 
   @override
@@ -96,6 +118,9 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
     _provinceController.dispose();
     _countryController.dispose();
     _postalCodeController.dispose();
+    for (final contact in _additionalContacts) {
+      contact.dispose();
+    }
     super.dispose();
   }
 
@@ -103,7 +128,41 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
     if (_errors[key] != null) setState(() => _errors[key] = null);
   }
 
+  void _addAdditionalContact() {
+    setState(() {
+      _additionalContacts.add(ContactFields());
+    });
+  }
+
+  void _removeAdditionalContact(int index) {
+    setState(() {
+      _additionalContacts.removeAt(index).dispose();
+      // Later rows shift down an index; _save rebuilds every contact_ key.
+      _errors
+        ..remove('contact_${index}_name')
+        ..remove('contact_${index}_phone')
+        ..remove('contact_${index}_email');
+    });
+  }
+
+  List<ClientContact> _buildContacts() {
+    // Clearing the business name hides the section but preserves the
+    // previously saved contacts.
+    if (!_isBusiness) return _client.contacts;
+
+    return [
+      ClientContact(
+        name: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        email: _emailController.text.trim(),
+      ),
+      for (final contact in _additionalContacts)
+        if (!contact.isEmpty) contact.toContact(),
+    ];
+  }
+
   void _handleAddressSelected() {
+    // Microtask: let the autocomplete finish writing the controller first.
     Future<void>.microtask(() {
       if (!mounted) return;
       setState(() {
@@ -127,32 +186,30 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
     final phone = _phoneController.text.trim();
     final email = _emailController.text.trim();
     final address = _addressController.text.trim();
-    final hasBusinessOrName = businessName.isNotEmpty || name.isNotEmpty;
-    final hasContactMethod = phone.isNotEmpty || email.isNotEmpty;
+
+    final nextErrors = ClientFormValidator.validate(
+      l10n: context.l10n,
+      businessName: businessName,
+      name: name,
+      phone: phone,
+      email: email,
+      address: address,
+      additionalContacts: [
+        for (final contact in _additionalContacts) contact.toContact(),
+      ],
+    );
 
     setState(() {
-      _errors['businessName'] = !hasBusinessOrName
-          ? context.l10n.validation_businessNameOrContactNameIsRequired
-          : null;
-      _errors['name'] = !hasBusinessOrName
-          ? context.l10n.validation_businessNameOrContactNameIsRequired
-          : null;
-      _errors['phone'] = !hasContactMethod
-          ? context.l10n.validation_phoneOrEmailIsRequired
-          : null;
-      _errors['email'] =
-          email.isNotEmpty && !AuthValidators.isValidEmailFormat(email)
-          ? context.l10n.validation_enterAValidEmail
-          : null;
-      _errors['address'] = businessName.isEmpty && address.isEmpty
-          ? context.l10n.validation_addressIsRequired
-          : null;
+      _errors
+        ..clear()
+        ..addAll(nextErrors);
     });
 
     if (_errors.values.any((e) => e != null)) return;
 
+    // --- Build & persist ---
     final updated = ClientRecord(
-      id: widget.client.id,
+      id: _client.id,
       businessName: businessName,
       name: name,
       phone: phone,
@@ -163,13 +220,18 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
       province: _provinceController.text.trim(),
       country: _countryController.text.trim(),
       postalCode: _postalCodeController.text.trim(),
-      contacts: widget.client.contacts,
+      contacts: _buildContacts(),
     );
 
     try {
       await ref.read(clientsRepositoryProvider).updateClient(updated);
       ref.read(clientsRefreshProvider.notifier).bump();
-      if (mounted) setState(() => _isEditing = false);
+      if (mounted) {
+        setState(() {
+          _client = updated;
+          _isEditing = false;
+        });
+      }
     } catch (e, st) {
       ref.read(loggerProvider).warn('updateClient failed', e, st);
       if (!mounted) return;
@@ -180,46 +242,28 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
   }
 
   Future<void> _confirmDelete() async {
-    final clientName = widget.client.displayName.isNotEmpty
-        ? widget.client.displayName
+    final clientName = _client.displayName.isNotEmpty
+        ? _client.displayName
         : context.l10n.clients_thisClient;
 
-    final shouldDelete = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        final scheme = Theme.of(dialogContext).colorScheme;
-        return AlertDialog(
-          title: Text(dialogContext.l10n.clients_deleteClient),
-          content: Text(
-            '${dialogContext.l10n.clients_areYouSureYouWantToDelete} $clientName? ${dialogContext.l10n.clients_thisCannotBeUndone}',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: Text(dialogContext.l10n.common_cancel),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: scheme.error,
-                foregroundColor: scheme.onError,
-              ),
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: Text(dialogContext.l10n.common_delete),
-            ),
-          ],
-        );
-      },
+    final shouldDelete = await showConfirmDialog(
+      context,
+      title: context.l10n.clients_deleteClient,
+      message:
+          '${context.l10n.clients_areYouSureYouWantToDelete} $clientName? ${context.l10n.clients_thisCannotBeUndone}',
+      confirmLabel: context.l10n.common_delete,
     );
 
-    if (shouldDelete != true || !mounted) return;
+    if (!shouldDelete || !mounted) return;
 
     setState(() => _isDeleting = true);
 
     final notices = ref.read(noticeServiceProvider);
     try {
-      await ref.read(clientsRepositoryProvider).deleteClient(widget.client.id);
+      await ref.read(clientsRepositoryProvider).deleteClient(_client.id);
       ref.read(clientsRefreshProvider.notifier).bump();
       if (!mounted) return;
+      // A scrollController means we're inside a bottom sheet — close it.
       if (widget.scrollController != null) {
         Navigator.pop(context);
       }
@@ -253,7 +297,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
             style: theme.textTheme.headlineLarge,
           )
         else
-          _ViewHeader(client: widget.client),
+          _ViewHeader(client: _client),
         const SizedBox(height: 20),
         const Divider(height: 1),
         const SizedBox(height: 20),
@@ -271,12 +315,13 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
   }
 
   List<Widget> _buildViewFields(ThemeData theme) {
-    final c = widget.client;
+    final c = _client;
     final scheme = theme.colorScheme;
     final hasContactInfo =
         c.phone.isNotEmpty || c.email.isNotEmpty || c.address.isNotEmpty;
 
     return [
+      // --- Contact info card ---
       if (hasContactInfo)
         Container(
           decoration: BoxDecoration(
@@ -312,17 +357,10 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
             ),
           ),
         ),
+      // --- Business contacts list ---
       if (c.contacts.isNotEmpty) ...[
         const SizedBox(height: 24),
-        Text(
-          context.l10n.common_contacts.toUpperCase(),
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: scheme.onSurfaceVariant,
-            letterSpacing: 0.7,
-          ),
-        ),
+        SectionLabel(context.l10n.common_contacts),
         const SizedBox(height: 8),
         ...c.contacts.map((contact) => _buildContactCard(contact, scheme)),
       ],
@@ -362,13 +400,14 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
   List<Widget> _buildEditFields() {
     final theme = Theme.of(context);
     return [
+      // --- Header ---
       Row(
         children: [
-          AppAvatar(name: widget.client.displayName, size: AvatarSize.lg),
+          AppAvatar(name: _client.displayName, size: AvatarSize.lg),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              widget.client.displayName,
+              _client.displayName,
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
@@ -380,6 +419,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
       const Divider(height: 1),
       const SizedBox(height: 14),
 
+      // --- Business & contact name ---
       SheetFocusScroll(
         child: LabeledTextField(
           label: context.l10n.clients_businessName,
@@ -414,6 +454,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
         ),
       ),
       const SizedBox(height: 16),
+      // --- Phone & email ---
       SheetFocusScroll(
         child: LabeledTextField(
           label: context.l10n.clients_phone,
@@ -444,7 +485,19 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
         ),
       ),
 
+      // --- Additional business contacts ---
+      if (_isBusiness) ...[
+        const SizedBox(height: 8),
+        AdditionalContactsSection(
+          contacts: _additionalContacts,
+          errors: _errors,
+          onAddContact: _addAdditionalContact,
+          onRemoveContact: _removeAdditionalContact,
+          onClearError: _clearError,
+        ),
+      ],
       const SizedBox(height: 16),
+      // --- Address ---
       SheetFocusScroll(
         child: AddressAutocompleteField(
           controller: _addressController,
@@ -464,56 +517,11 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
         ),
       ),
       const SizedBox(height: 16),
-      Row(
-        children: [
-          Expanded(
-            child: SheetFocusScroll(
-              child: LabeledTextField(
-                label: context.l10n.common_city,
-                controller: _cityController,
-                autofillHints: const [AutofillHints.addressCity],
-                maxLength: TextLimits.city,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: SheetFocusScroll(
-              child: LabeledTextField(
-                label: context.l10n.common_province,
-                controller: _provinceController,
-                autofillHints: const [AutofillHints.addressState],
-                maxLength: TextLimits.province,
-              ),
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 16),
-      Row(
-        children: [
-          Expanded(
-            child: SheetFocusScroll(
-              child: LabeledTextField(
-                label: context.l10n.common_postalCode,
-                controller: _postalCodeController,
-                autofillHints: const [AutofillHints.postalCode],
-                maxLength: TextLimits.postalCode,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: SheetFocusScroll(
-              child: LabeledTextField(
-                label: context.l10n.clients_country,
-                controller: _countryController,
-                autofillHints: const [AutofillHints.countryName],
-                maxLength: TextLimits.country,
-              ),
-            ),
-          ),
-        ],
+      AddressGridFields(
+        cityController: _cityController,
+        provinceController: _provinceController,
+        postalCodeController: _postalCodeController,
+        countryController: _countryController,
       ),
     ];
   }

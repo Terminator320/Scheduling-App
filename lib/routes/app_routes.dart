@@ -67,14 +67,15 @@ class AppRoutes {
         );
 
       case AppRoutes.settings:
-        final args = settings.arguments as SettingsArgs?;
+        // Settings is only reachable post-login, so args are always present.
+        final args = settings.arguments! as SettingsArgs;
         return _fadeRoute(
           settings,
           SettingsScreen(
-            name: args?.name ?? '',
-            email: args?.email ?? '',
-            role: args?.role,
-            employeeId: args?.employeeId ?? '',
+            name: args.name,
+            email: args.email,
+            role: args.role,
+            employeeId: args.employeeId,
           ),
         );
 

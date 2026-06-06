@@ -94,6 +94,7 @@
   "validation_pleaseSelectAnEndTime": "Veuillez sélectionner une heure de fin",
   "calendar_mustBeAfterStartTime": "Doit être après l’heure de début",
   "validation_pleaseSelectAClient": "Veuillez sélectionner un client",
+  "validation_maximumCharacterLimitReached": "Limite maximale de caractères atteinte",
   "error_somethingWentWrongCreatingTheAppointment": "Une erreur s’est produite lors de la création du rendez-vous",
   "error_somethingWentWrongSavingChanges": "Une erreur s’est produite lors de l’enregistrement des modifications",
   "calendar_noEmployeesAssigned": "Aucun employé assigné",

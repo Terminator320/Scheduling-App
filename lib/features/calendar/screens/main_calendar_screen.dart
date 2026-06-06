@@ -11,7 +11,6 @@ import 'package:scheduling/features/auth/application/account_status_provider.dar
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
-import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/fields/month_year_picker.dart';
 import 'package:scheduling/features/calendar/widgets/views/app_calendar_view.dart';
@@ -129,6 +128,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   }
 
   Map<DateTime, List<AppointmentRecord>>? _dayIndex;
+  // Memoization key for _dayIndex: the appointments list last indexed.
+  List<AppointmentRecord>? _indexedAppointments;
 
   Map<DateTime, List<AppointmentRecord>> _buildDayIndex(
     List<AppointmentRecord> source,
@@ -190,14 +191,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       ref.listen(myAppointmentsProvider(myAppointmentsKey), onAsyncChange);
     }
 
-    // Optimistic splash routing lands admins here in employee view first; once
-    // the live role stream confirms 'admin', upgrade to the admin calendar.
-    // (Demotion the other way is handled by main.dart's role-revocation.)
     if (!widget.isAdmin) {
-      // Upgrade the optimistic employee view to admin once the live role
-      // resolves to 'admin'. The user doc can load before this screen mounts,
-      // so a plain listen (which only fires on later changes) would miss it â€”
-      // check the current value too. Defer the nav out of build.
       void upgradeIfAdmin(String? role) {
         if (role != 'admin' || !mounted || _upgradingToAdmin) return;
         _upgradingToAdmin = true;
@@ -222,7 +216,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
     final employees =
         ref.watch(allUsersStreamProvider).asData?.value ?? const [];
-    final colorMap = buildEmployeeColorMap(employees);
+    final colorMap = ref.watch(employeeColorMapProvider);
+    final nameMap = ref.watch(employeeNameMapProvider);
 
     final visibleAppointments = appointmentsAsync.when(
       data: (data) => data,
@@ -233,7 +228,13 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       },
     );
 
-    _dayIndex = _buildDayIndex(visibleAppointments);
+    // Rebuild the index only when the stream emits a new list — otherwise
+    // every setState would regroup and re-sort, and the fresh per-day list
+    // instances would make _selectedEvents notify (rebuilding EventList).
+    if (!identical(visibleAppointments, _indexedAppointments)) {
+      _indexedAppointments = visibleAppointments;
+      _dayIndex = _buildDayIndex(visibleAppointments);
+    }
 
     final selectedDay = _selectedDay ?? _focusedDay;
     final selectedEvents = _getEventsForDay(selectedDay);
@@ -341,6 +342,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
             master: _content(
               isLoading: isLoading,
               colorMap: colorMap,
+              nameMap: nameMap,
               employees: employees,
             ),
             detail: _selectedAppointment == null
@@ -398,6 +400,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   Widget _content({
     required bool isLoading,
     required Map<String, Color> colorMap,
+    required Map<String, String> nameMap,
     required List<EmployeeRecord> employees,
   }) {
     final screenSize = MediaQuery.sizeOf(context);
@@ -422,7 +425,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         const Divider(),
         EventList(
           events: _selectedEvents,
-          employees: employees,
+          nameMap: nameMap,
           colorMap: colorMap,
           isLoading: isLoading,
           isAdmin: widget.isAdmin,

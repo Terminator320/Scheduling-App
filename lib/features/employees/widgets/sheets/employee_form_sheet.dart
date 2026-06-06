@@ -221,6 +221,18 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
   Widget _buildAccountStatusSection(ThemeData theme) {
     final scheme = theme.colorScheme;
     final statusColors = theme.statusColors;
+    final toggleForeground = _isDisabled
+        ? statusColors.onSuccessContainer
+        : statusColors.onWarningContainer;
+    final toggleBorder = _isDisabled
+        ? statusColors.success
+        : statusColors.warning;
+    final toggleIcon = _isDisabled
+        ? Icons.check_circle_outline
+        : Icons.block_outlined;
+    final toggleLabel = _isDisabled
+        ? context.l10n.employees_reEnableAccount
+        : context.l10n.employees_disableAccount;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -259,64 +271,27 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
           ],
         ),
         const SizedBox(height: 12),
-        if (_isDisabled)
-          OutlinedButton.icon(
-            onPressed: _isTogglingStatus ? null : _toggleStatus,
-            icon: _isTogglingStatus
-                ? SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: statusColors.onSuccessContainer,
-                    ),
-                  )
-                : Icon(
-                    Icons.check_circle_outline,
-                    size: 14,
-                    color: statusColors.onSuccessContainer,
+        OutlinedButton.icon(
+          onPressed: _isTogglingStatus ? null : _toggleStatus,
+          icon: _isTogglingStatus
+              ? SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: toggleForeground,
                   ),
-            label: Text(
-              context.l10n.employees_reEnableAccount,
-              style: TextStyle(color: statusColors.onSuccessContainer),
-            ),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 44),
-              side: BorderSide(color: statusColors.success),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.r8),
-              ),
-            ),
-          )
-        else
-          OutlinedButton.icon(
-            onPressed: _isTogglingStatus ? null : _toggleStatus,
-            icon: _isTogglingStatus
-                ? SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: statusColors.onWarningContainer,
-                    ),
-                  )
-                : Icon(
-                    Icons.block_outlined,
-                    size: 14,
-                    color: statusColors.onWarningContainer,
-                  ),
-            label: Text(
-              context.l10n.employees_disableAccount,
-              style: TextStyle(color: statusColors.onWarningContainer),
-            ),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 44),
-              side: BorderSide(color: statusColors.warning),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.r8),
-              ),
+                )
+              : Icon(toggleIcon, size: 14, color: toggleForeground),
+          label: Text(toggleLabel, style: TextStyle(color: toggleForeground)),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, 44),
+            side: BorderSide(color: toggleBorder),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.r8),
             ),
           ),
+        ),
         const SizedBox(height: 8),
         Text(
           _isDisabled

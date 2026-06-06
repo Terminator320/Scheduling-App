@@ -18,6 +18,7 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/fields/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
@@ -74,6 +75,7 @@ class DetailsEditBody extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // --- Header ---
         Text(
           context.l10n.calendar_editAppointment,
           style: theme.textTheme.headlineLarge,
@@ -81,6 +83,7 @@ class DetailsEditBody extends ConsumerWidget {
         const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
         const SizedBox(height: AppSpacing.sp16),
+        // --- Title, client & employees ---
         _ClientSection(
           controllers: controllers,
           state: state,
@@ -89,6 +92,7 @@ class DetailsEditBody extends ConsumerWidget {
           err: err,
         ),
         const SizedBox(height: AppSpacing.sp16),
+        // --- Date, time & status ---
         _ScheduleSection(
           controllers: controllers,
           state: state,
@@ -99,6 +103,7 @@ class DetailsEditBody extends ConsumerWidget {
           onPickEnd: () => _pickEndTime(context, state, notifier),
         ),
         const SizedBox(height: AppSpacing.sp16),
+        // --- Address ---
         SheetFocusScroll(
           child: AddressAutocompleteField(
             controller: controllers.address,
@@ -106,6 +111,7 @@ class DetailsEditBody extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.sp16),
+        // --- Materials & notes ---
         SheetFocusScroll(
           child: LabeledTextField(
             label: context.l10n.calendar_materialsNeeded,
@@ -125,12 +131,15 @@ class DetailsEditBody extends ConsumerWidget {
             optional: true,
             maxLines: 2,
             maxLength: TextLimits.appointmentNotes,
+            showCounter: true,
           ),
         ),
         const SizedBox(height: AppSpacing.sp16),
+        // --- Photos ---
         formLabel(context, context.l10n.calendar_pictures, optional: true),
         _EditPhotosSection(appointment: appointment),
         const SizedBox(height: AppSpacing.sp24),
+        // --- Actions ---
         _ActionButtons(
           isSaving: state.isSaving,
           onSave: () => _save(context, ref),
@@ -212,27 +221,13 @@ class DetailsEditBody extends ConsumerWidget {
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.l10n.calendar_deleteAppointment),
-        content: Text(context.l10n.calendar_areYouSureYouWantToDeleteThisJob),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.l10n.common_cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            child: Text(context.l10n.common_delete),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: context.l10n.calendar_deleteAppointment,
+      message: context.l10n.calendar_areYouSureYouWantToDeleteThisJob,
+      confirmLabel: context.l10n.common_delete,
     );
-    if (confirmed != true || !context.mounted) return;
+    if (!confirmed || !context.mounted) return;
     final notifier = ref.read(
       eventDetailsControllerProvider(appointment).notifier,
     );

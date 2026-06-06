@@ -22,15 +22,6 @@ class AppointmentCard extends StatelessWidget {
   final VoidCallback? onTap;
   final bool selected;
 
-  AppointmentStatus _statusFromString(String status) =>
-      switch (status.toLowerCase()) {
-        'done' || 'completed' => AppointmentStatus.done,
-        'cancelled' => AppointmentStatus.cancelled,
-        'pending' => AppointmentStatus.pending,
-        'in_progress' || 'inprogress' => AppointmentStatus.inProgress,
-        _ => AppointmentStatus.confirmed,
-      };
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -73,7 +64,7 @@ class AppointmentCard extends StatelessWidget {
                             ),
                             const SizedBox(width: AppSpacing.sp8),
                             StatusChip(
-                              status: _statusFromString(
+                              status: AppointmentStatus.fromRaw(
                                 appointment.displayStatus,
                               ),
                             ),

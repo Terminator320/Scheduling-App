@@ -26,7 +26,7 @@ class AppointmentTile extends StatelessWidget {
     final scheme = theme.colorScheme;
     final accent =
         colorFromMap(appointment, employeeColorMap) ?? scheme.primary;
-    final status = _mapStatus(appointment.displayStatus);
+    final status = AppointmentStatus.fromRaw(appointment.displayStatus);
     final showChip = status != AppointmentStatus.confirmed;
 
     final employeeName = appointment.employeeNames.isNotEmpty
@@ -134,13 +134,4 @@ class AppointmentTile extends StatelessWidget {
       ),
     );
   }
-
-  static AppointmentStatus _mapStatus(String status) =>
-      switch (status.toLowerCase()) {
-        'confirmed' => AppointmentStatus.confirmed,
-        'done' || 'completed' => AppointmentStatus.done,
-        'cancelled' => AppointmentStatus.cancelled,
-        'in_progress' || 'inprogress' => AppointmentStatus.inProgress,
-        _ => AppointmentStatus.pending,
-      };
 }

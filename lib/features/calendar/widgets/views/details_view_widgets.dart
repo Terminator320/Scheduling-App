@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
+import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
 class DetailsSectionRow extends StatelessWidget {
   const DetailsSectionRow({
@@ -24,14 +26,7 @@ class DetailsSectionRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label.toUpperCase(),
-          style: theme.textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: scheme.onSurfaceVariant,
-            letterSpacing: 0.7,
-          ),
-        ),
+        SectionLabel(label),
         const SizedBox(height: 6),
         customValue ??
             Text(
@@ -71,14 +66,7 @@ class DetailsAddressRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label.toUpperCase(),
-          style: theme.textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: scheme.onSurfaceVariant,
-            letterSpacing: 0.7,
-          ),
-        ),
+        SectionLabel(label),
         const SizedBox(height: 6),
         if (onTap != null)
           InkWell(
@@ -139,27 +127,10 @@ class DetailsEmployeePill extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: employee.color,
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                employee.initials,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color:
-                      ThemeData.estimateBrightnessForColor(employee.color) ==
-                          Brightness.dark
-                      ? Colors.white
-                      : Colors.black,
-                ),
-              ),
-            ),
+          AppAvatar(
+            name: employee.name,
+            color: employee.color,
+            size: AvatarSize.sm,
           ),
           const SizedBox(width: 8),
           Expanded(

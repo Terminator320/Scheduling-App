@@ -33,15 +33,6 @@ Widget formLabel(
   );
 }
 
-Widget formSectionLabel(BuildContext context, String text) {
-  return Text(
-    text.toUpperCase(),
-    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-      color: Theme.of(context).colorScheme.onSurfaceVariant,
-    ),
-  );
-}
-
 InputDecoration formInputDecoration(BuildContext context, String hint) {
   return InputDecoration(
     hintText: hint,
