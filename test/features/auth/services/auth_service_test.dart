@@ -1,4 +1,3 @@
-// ignore_for_file: subtype_of_sealed_class
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';

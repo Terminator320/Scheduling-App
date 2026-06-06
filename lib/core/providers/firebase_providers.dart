@@ -29,5 +29,5 @@ final authUidProvider = StreamProvider<String?>((ref) {
 });
 
 extension AuthGatedRef on Ref {
-  String? get authUid => watch(authUidProvider).valueOrNull;
+  String? get authUid => watch(authUidProvider).value;
 }

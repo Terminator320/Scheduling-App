@@ -39,7 +39,6 @@ class GooglePlacesRepository implements PlacesRepository {
     try {
       // NOTE: loose `as Map?` is required — Android callables return
       // Map<dynamic, dynamic>, so a direct Map<String, dynamic> cast throws.
-      // ignore: strict_raw_type
       final data = (result.data as Map?)?.cast<String, dynamic>() ?? const {};
       return (data['suggestions'] as List? ?? [])
           .whereType<Map<dynamic, dynamic>>()
@@ -70,7 +69,6 @@ class GooglePlacesRepository implements PlacesRepository {
     try {
       // NOTE: loose `as Map?` is required — Android callables return
       // Map<dynamic, dynamic>, so a direct Map<String, dynamic> cast throws.
-      // ignore: strict_raw_type
       final data = (result.data as Map?)?.cast<String, dynamic>() ?? const {};
       final components = (data['addressComponents'] as List? ?? [])
           .whereType<Map<dynamic, dynamic>>()

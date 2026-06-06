@@ -15,7 +15,7 @@ final employeesRepositoryProvider = Provider<EmployeesRepository>((ref) {
 final allUsersStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
   if (ref.authUid == null) return Stream.value(const []);
   final repo = ref.watch(employeesRepositoryProvider);
-  final role = ref.watch(userRoleProvider).valueOrNull;
+  final role = ref.watch(userRoleProvider).value;
   if (role == 'admin') return repo.watchAllUsers();
   return repo.watchAssignableUsers();
 });

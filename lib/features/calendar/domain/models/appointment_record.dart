@@ -75,7 +75,6 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     if (value is String) return DateTime.tryParse(value);
     final typeName = value.runtimeType.toString();
     if (typeName == 'Timestamp') {
-      // ignore: avoid_dynamic_calls
       return (value as dynamic).toDate() as DateTime;
     }
     return null;
