@@ -10,8 +10,10 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/utils/appointment_form_error_text.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
+import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/fields/appointment_status_picker.dart';
 import 'package:scheduling/features/calendar/widgets/fields/employee_picker.dart';
+import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_search_field.dart';
@@ -19,7 +21,6 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/fields/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
@@ -209,10 +210,18 @@ class DetailsEditBody extends ConsumerWidget {
     switch (outcome) {
       case EventDetailsInvalid():
         return;
-      case EventDetailsSaved(:final appointment):
-        ref
-            .read(noticeServiceProvider)
-            .success(context.l10n.common_appointmentChangesSaved);
+      case EventDetailsSaved(
+        :final appointment,
+        :final futureBookings,
+        :final removedBookings,
+      ):
+        final l10n = context.l10n;
+        final message = futureBookings > 0
+            ? l10n.calendar_changesSavedWithRepeats(futureBookings)
+            : removedBookings > 0
+            ? l10n.calendar_changesSavedWithRemoved(removedBookings)
+            : l10n.common_appointmentChangesSaved;
+        ref.read(noticeServiceProvider).success(message);
         onSaved(appointment);
       case EventDetailsFailed(:final error):
         ref
@@ -229,17 +238,18 @@ class DetailsEditBody extends ConsumerWidget {
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showConfirmDialog(
+    final choice = await showDeleteAppointmentDialog(
       context,
-      title: context.l10n.calendar_deleteAppointment,
-      message: context.l10n.calendar_areYouSureYouWantToDeleteThisJob,
-      confirmLabel: context.l10n.common_delete,
+      isSeries: appointment.seriesId.isNotEmpty,
     );
-    if (!confirmed || !context.mounted) return;
+    if (choice == null || !context.mounted) return;
     final notifier = ref.read(
       eventDetailsControllerProvider(appointment).notifier,
     );
-    final error = await notifier.deleteAppointment(appointment);
+    final error = await notifier.deleteAppointment(
+      appointment,
+      includeFuture: choice == DeleteAppointmentChoice.thisAndFuture,
+    );
     if (!context.mounted) return;
     if (error == null) {
       ref
@@ -414,6 +424,12 @@ class _ScheduleSection extends StatelessWidget {
         AppointmentStatusPicker(
           currentStatus: state.editingStatus,
           onChanged: notifier.setStatus,
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        formLabel(context, context.l10n.calendar_repeat, optional: true),
+        RepeatIntervalPicker(
+          current: state.repeat,
+          onChanged: notifier.selectRepeat,
         ),
       ],
     );
