@@ -40,6 +40,10 @@ abstract class EventDetailsState with _$EventDetailsState {
     ClientRecord? selectedClient,
     @Default(<ClientRecord>[]) List<ClientRecord> clientResults,
     @Default(false) bool isSearchingClient,
+    @Default(false) bool useCustomAddress,
+    // True once the user explicitly removed the client — blocks the
+    // placeholder fallback in save() so clientRequired fires like the add flow.
+    @Default(false) bool clientCleared,
     @Default(<String, AppointmentFormError>{})
     Map<String, AppointmentFormError> errors,
   }) = _EventDetailsState;
@@ -117,8 +121,13 @@ class EventDetailsController extends Notifier<EventDetailsState> {
           .read(clientsRepositoryProvider)
           .getClientById(id);
       if (client == null) return;
-      if (state.selectedClient == null) {
-        state = state.copyWith(client: client, selectedClient: client);
+      if (state.selectedClient == null && !state.clientCleared) {
+        state = state.copyWith(
+          client: client,
+          selectedClient: client,
+          // A stored address that differs from the client's is a custom one.
+          useCustomAddress: appointment.address.trim() != client.address.trim(),
+        );
       } else {
         state = state.copyWith(client: client);
       }
@@ -188,6 +197,8 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       selectedClient: client,
       client: client,
       clientResults: const [],
+      useCustomAddress: false,
+      clientCleared: false,
       errors: withoutKey(state.errors, 'client'),
     );
   }
@@ -197,7 +208,13 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       selectedClient: null,
       client: null,
       clientResults: const [],
+      useCustomAddress: false,
+      clientCleared: true,
     );
+  }
+
+  void setUseCustomAddress({required bool value}) {
+    state = state.copyWith(useCustomAddress: value);
   }
 
   void toggleEmployee(EmployeeRecord employee) {
@@ -279,7 +296,7 @@ class EventDetailsController extends Notifier<EventDetailsState> {
   }) async {
     final clientForValidation =
         state.selectedClient ??
-        (appointment.clientId.trim().isNotEmpty
+        (!state.clientCleared && appointment.clientId.trim().isNotEmpty
             ? state.client ?? _placeholderClient(appointment)
             : null);
 
