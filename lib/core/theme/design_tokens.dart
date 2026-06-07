@@ -3,19 +3,21 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  static const Color primary = Color(0xFF1E82C8);
-  static const Color primaryDark = Color(0xFF155E8E);
-  static const Color primaryTint = Color(0xFFC5E6F6);
-  static const Color primarySurface = Color(0xFFE8F5FC);
+  static const Color primary = Color(0xFF005CC8); // Royal Blue
+  static const Color primaryDark = Color(0xFF00256B); // Dark Navy Blue
+  static const Color primaryTint = Color(0xFF7FD3FF); // Light Sky Blue
+  static const Color primarySurface = Color(0xFFE6F4FF);
 
   static const Color background = Color(0xFFF8FAFC);
   static const Color surface = Color(0xFFFFFFFF);
   static const Color surfaceAlt = Color(0xFFF1F5F9);
-  static const Color onSurface = Color(0xFF0F172A);
-  static const Color subtle = Color(0xFF64748B);
-  static const Color muted = Color(0xFF94A3B8);
-  static const Color outline = Color(0xFFE2E8F0);
-  static const Color disabled = Color(0xFFCBD5E1);
+  static const Color onSurface = Color(
+    0xFF00256B,
+  ); // Dark Navy Blue (main text)
+  static const Color subtle = Color(0xFF5A6B8C);
+  static const Color muted = Color(0xFF8A99B5);
+  static const Color outline = Color(0xFFD8E1EF);
+  static const Color disabled = Color(0xFFBFCBDD);
 
   static const Color success = Color(0xFF22C55E);
   static const Color successTint = Color(0xFFDCFCE7);
@@ -23,22 +25,22 @@ class AppColors {
   static const Color warning = Color(0xFFF59E0B);
   static const Color warningTint = Color(0xFFFEF9C3);
   static const Color warningText = Color(0xFF854D0E);
-  static const Color error = Color(0xFFEF4444);
-  static const Color errorTint = Color(0xFFFEF2F2);
-  static const Color errorText = Color(0xFF991B1B);
-  static const Color accent = Color(0xFF8B5CF6);
+  static const Color error = Color(0xFFD61F3A); // Plunger Red
+  static const Color errorTint = Color(0xFFFDE7EA);
+  static const Color errorText = Color(0xFF7A1124);
+  static const Color accent = Color(0xFF00A6F4); // Bright Blue
 
-  static const Color darkBackground = Color(0xFF0F172A);
-  static const Color darkSurface = Color(0xFF1E293B);
-  static const Color darkSurfaceAlt = Color(0xFF334155);
-  static const Color darkOnSurface = Color(0xFFF1F5F9);
-  static const Color darkSubtle = Color(0xFF64748B);
-  static const Color darkMuted = Color(0xFF475569);
-  static const Color darkOutline = Color(0xFF475569);
-  static const Color darkDisabled = Color(0xFF334155);
+  static const Color darkBackground = Color(0xFF0A1633); // Dark Outline
+  static const Color darkSurface = Color(0xFF142347);
+  static const Color darkSurfaceAlt = Color(0xFF1E3260);
+  static const Color darkOnSurface = Color(0xFFE6F0FF);
+  static const Color darkSubtle = Color(0xFF8FA3C7);
+  static const Color darkMuted = Color(0xFF5A6B8C);
+  static const Color darkOutline = Color(0xFF2A3B66);
+  static const Color darkDisabled = Color(0xFF1E3260);
 
-  static const Color darkPrimaryTint = Color(0xFF0C3A52);
-  static const Color darkPrimaryOnDark = Color(0xFF93C5FD);
+  static const Color darkPrimaryTint = Color(0xFF07214F);
+  static const Color darkPrimaryOnDark = Color(0xFF7FD3FF); // Light Sky Blue
   static const Color darkSuccessTint = Color(0xFF14532D);
   static const Color darkSuccessText = Color(0xFF86EFAC);
   static const Color darkWarningTint = Color(0xFF422006);
