@@ -66,7 +66,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     required String email,
     required String phone,
     required String colorValue,
-    required bool isAdmin,
   }) async {
     final normalizedEmail = email.trim().toLowerCase();
 
@@ -83,7 +82,9 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       'name': name.trim(),
       'email': normalizedEmail,
       'phone': phone.trim(),
-      'role': isAdmin ? 'admin' : 'employee',
+      // Always employee — admin is granted post-activation via updateEmployee
+      // (invite self-activation is employee-only in firestore.rules).
+      'role': 'employee',
       'status': 'invited',
       'uid': '',
       'colorValue': colorValue,

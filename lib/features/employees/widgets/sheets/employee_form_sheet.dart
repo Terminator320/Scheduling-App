@@ -110,7 +110,6 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
           email: email,
           phone: phone,
           colorValue: colorValue,
-          isAdmin: _isAdmin,
         );
       }
 
@@ -351,8 +350,13 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
             ] else
               const SizedBox(height: 20),
             ..._buildIdentityFields(),
-            const SizedBox(height: 16),
-            _buildPermissionsCard(theme),
+            // Admin access is grantable only after activation — an invited
+            // admin can't self-activate (firestore.rules), so the toggle is
+            // edit-only.
+            if (_isEdit) ...[
+              const SizedBox(height: 16),
+              _buildPermissionsCard(theme),
+            ],
             const SizedBox(height: 12),
             EmployeeColorPickerRow(
               selectedColor: _selectedColor,
