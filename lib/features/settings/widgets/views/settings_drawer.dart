@@ -1,11 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 class SettingsDrawer extends ConsumerStatefulWidget {
@@ -27,11 +26,8 @@ class SettingsDrawer extends ConsumerStatefulWidget {
 }
 
 class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
-
   String _displayName = '';
   String _displayEmail = '';
-
-
 
   String _resolveName() {
     final docName = ref.watch(currentUserNameProvider);
@@ -168,26 +164,26 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             icon: Icons.calendar_today_rounded,
             iconColor: scheme.primary,
             label: context.l10n.common_calendar,
-            onTap: () => _goToCalendar(context),
+            onTap: () => _goTo(context, AdaptiveDestination.calendar),
           ),
           if (widget.isAdmin) ...[
             _NavItem(
               icon: Icons.people_rounded,
               iconColor: statusColors.success,
               label: context.l10n.common_clients,
-              onTap: () => _goToClients(context),
+              onTap: () => _goTo(context, AdaptiveDestination.clients),
             ),
             _NavItem(
               icon: Icons.badge_rounded,
               iconColor: statusColors.accent,
               label: context.l10n.common_employees,
-              onTap: () => _goToEmployees(context),
+              onTap: () => _goTo(context, AdaptiveDestination.employees),
             ),
             _NavItem(
               icon: Icons.history_rounded,
               iconColor: statusColors.warning,
               label: context.l10n.common_history,
-              onTap: () => _goToHistory(context),
+              onTap: () => _goTo(context, AdaptiveDestination.history),
             ),
           ],
           const Spacer(),
@@ -198,7 +194,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             icon: Icons.settings_rounded,
             iconColor: scheme.onSurfaceVariant,
             label: context.l10n.common_settings,
-            onTap: () => _goToSettings(context),
+            onTap: () => _goTo(context, AdaptiveDestination.settings),
           ),
           SizedBox(height: bottomPadding + 4),
         ],
@@ -206,68 +202,25 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
     );
   }
 
-  void _goToCalendar(BuildContext context) {
+  void _goTo(BuildContext context, AdaptiveDestination destination) {
     Navigator.pop(context);
-    Navigator.pushReplacementNamed(
-      context,
-      AppRoutes.mainCalendar,
-      arguments: MainCalendarArgs(
-        isAdmin: widget.isAdmin,
-        employeeId: widget.employeeId,
-      ),
+    final target = destinationRoute(
+      destination,
+      isAdmin: widget.isAdmin,
+      employeeId: widget.employeeId,
+      userName: _displayName,
+      userEmail: _displayEmail,
     );
-  }
-
-  void _goToClients(BuildContext context) {
-    Navigator.pop(context);
-    Navigator.pushNamed(
-      context,
-      AppRoutes.clients,
-      arguments: ClientsListArgs(
-        mode: 'Clients',
-        isAdmin: widget.isAdmin,
-        employeeId: widget.employeeId,
-      ),
-    );
-  }
-
-  void _goToEmployees(BuildContext context) {
-    Navigator.pop(context);
-    Navigator.pushNamed(
-      context,
-      AppRoutes.employees,
-      arguments: MainCalendarArgs(
-        isAdmin: widget.isAdmin,
-        employeeId: widget.employeeId,
-      ),
-    );
-  }
-
-  void _goToHistory(BuildContext context) {
-    Navigator.pop(context);
-    Navigator.pushNamed(
-      context,
-      AppRoutes.clients,
-      arguments: ClientsListArgs(
-        mode: 'Appointments',
-        isAdmin: widget.isAdmin,
-        employeeId: widget.employeeId,
-      ),
-    );
-  }
-
-  void _goToSettings(BuildContext context) {
-    Navigator.pop(context);
-    Navigator.pushNamed(
-      context,
-      AppRoutes.settings,
-      arguments: SettingsArgs(
-        name: _displayName,
-        email: _displayEmail,
-        role: widget.isAdmin ? 'admin' : 'employee',
-        employeeId: widget.employeeId,
-      ),
-    );
+    // The calendar is the root screen — replace it instead of stacking.
+    if (destination == AdaptiveDestination.calendar) {
+      Navigator.pushReplacementNamed(
+        context,
+        target.route,
+        arguments: target.arguments,
+      );
+    } else {
+      Navigator.pushNamed(context, target.route, arguments: target.arguments);
+    }
   }
 }
 
@@ -288,7 +241,6 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final isDark = ThemeNotifier.of(context).isDark;
 
     return InkWell(
       onTap: onTap,
@@ -301,7 +253,9 @@ class _NavItem extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: isDark ? 0.15 : 0.10),
+                color: iconColor.withValues(
+                  alpha: theme.cardStyle.iconChipAlpha,
+                ),
                 borderRadius: BorderRadius.circular(AppRadius.r8),
               ),
               child: Icon(icon, size: 19, color: iconColor),

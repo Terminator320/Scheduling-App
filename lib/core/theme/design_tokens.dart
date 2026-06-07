@@ -1,3 +1,5 @@
+import 'dart:ui' show lerpDouble;
+
 import 'package:flutter/material.dart';
 
 class AppColors {
@@ -140,27 +142,46 @@ BoxDecoration appCardDecoration(
 }
 
 /// Per-theme surface-card treatment: a soft drop shadow in light mode, swapped
-/// for an outline border in dark mode. Registered on `ThemeData.extensions`
-/// so widgets read it via `theme.cardStyle` instead of branching on brightness.
+/// for an outline border in dark mode, plus the tint strength for icon chips.
+/// Registered on `ThemeData.extensions` so widgets read it via
+/// `theme.cardStyle` instead of branching on brightness.
 @immutable
 class AppCardStyle extends ThemeExtension<AppCardStyle> {
-  const AppCardStyle({required this.shadow, required this.border});
+  const AppCardStyle({
+    required this.shadow,
+    required this.border,
+    required this.iconChipAlpha,
+  });
 
   final List<BoxShadow>? shadow;
   final BoxBorder? border;
 
-  static const light = AppCardStyle(shadow: AppShadow.card, border: null);
+  /// Background alpha applied to an icon's own color in tinted icon chips
+  /// (e.g. the drawer nav items).
+  final double iconChipAlpha;
+
+  static const light = AppCardStyle(
+    shadow: AppShadow.card,
+    border: null,
+    iconChipAlpha: 0.10,
+  );
 
   static const dark = AppCardStyle(
     shadow: null,
     border: Border.fromBorderSide(BorderSide(color: AppColors.darkSurfaceAlt)),
+    iconChipAlpha: 0.15,
   );
 
   @override
-  AppCardStyle copyWith({List<BoxShadow>? shadow, BoxBorder? border}) {
+  AppCardStyle copyWith({
+    List<BoxShadow>? shadow,
+    BoxBorder? border,
+    double? iconChipAlpha,
+  }) {
     return AppCardStyle(
       shadow: shadow ?? this.shadow,
       border: border ?? this.border,
+      iconChipAlpha: iconChipAlpha ?? this.iconChipAlpha,
     );
   }
 
@@ -170,6 +191,8 @@ class AppCardStyle extends ThemeExtension<AppCardStyle> {
     return AppCardStyle(
       shadow: BoxShadow.lerpList(shadow, other.shadow, t),
       border: BoxBorder.lerp(border, other.border, t),
+      iconChipAlpha:
+          lerpDouble(iconChipAlpha, other.iconChipAlpha, t) ?? iconChipAlpha,
     );
   }
 }

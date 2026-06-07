@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -399,21 +400,11 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
             ),
             const SizedBox(height: AppSpacing.sp24),
             // --- Save ---
-            FilledButton(
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(double.infinity, 48),
-              ),
-              onPressed: state.isSubmitting ? null : _submit,
-              child: state.isSubmitting
-                  ? SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Theme.of(sheetContext).colorScheme.onPrimary,
-                      ),
-                    )
-                  : Text(sheetContext.l10n.calendar_saveAppointment),
+            AnimatedLoadingButton(
+              label: sheetContext.l10n.calendar_saveAppointment,
+              isLoading: state.isSubmitting,
+              onPressed: _submit,
+              height: 48,
             ),
           ],
         );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -360,7 +361,12 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
               usedColors: widget.usedColors,
             ),
             const SizedBox(height: 16),
-            _buildSubmitButton(theme, submitLabel),
+            AnimatedLoadingButton(
+              label: submitLabel,
+              isLoading: _isSaving,
+              onPressed: _save,
+              height: 48,
+            ),
             if (_isEdit) ...[
               const SizedBox(height: 16),
               _buildAccountStatusSection(theme),
@@ -414,24 +420,5 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
         ),
       ),
     ];
-  }
-
-  Widget _buildSubmitButton(ThemeData theme, String submitLabel) {
-    return FilledButton(
-      style: FilledButton.styleFrom(
-        minimumSize: const Size(double.infinity, 48),
-      ),
-      onPressed: _isSaving ? null : _save,
-      child: _isSaving
-          ? SizedBox(
-              height: 20,
-              width: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: theme.colorScheme.onPrimary,
-              ),
-            )
-          : Text(submitLabel),
-    );
   }
 }

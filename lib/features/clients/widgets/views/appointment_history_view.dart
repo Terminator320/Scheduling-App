@@ -8,6 +8,7 @@ import 'package:scheduling/features/calendar/application/appointments_providers.
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
+import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
@@ -20,11 +21,11 @@ class AppointmentHistoryView extends ConsumerWidget {
 
   final String searchQuery;
 
-  static final _dateKeyFormat = DateFormat('yyyy-MM-dd');
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final query = searchQuery.trim().toLowerCase();
+    // Accent-folded matching — same rule as the server-side client search.
+    final normalizedQuery = ClientSearchPolicy.normalize(searchQuery);
     final colorMap = ref.watch(employeeColorMapProvider);
     final historyAsync = ref.watch(appointmentHistoryProvider);
 
@@ -61,11 +62,16 @@ class AppointmentHistoryView extends ConsumerWidget {
           final filtered = query.isEmpty
               ? appointments
               : appointments.where((a) {
-                  final matchesClient = a.clientName.toLowerCase().contains(
-                    query,
-                  );
+                  // A punctuation-only query normalizes to '' — contains('')
+                  // matches everything, so treat it as matching nothing.
+                  if (normalizedQuery.isEmpty) return false;
+                  final matchesClient = ClientSearchPolicy.normalize(
+                    a.clientName,
+                  ).contains(normalizedQuery);
                   final matchesEmployee = a.employeeNames.any(
-                    (e) => e.toLowerCase().contains(query),
+                    (e) => ClientSearchPolicy.normalize(
+                      e,
+                    ).contains(normalizedQuery),
                   );
                   return matchesClient || matchesEmployee;
                 }).toList();
@@ -88,15 +94,14 @@ class AppointmentHistoryView extends ConsumerWidget {
           final dateHeaderFormat = DateFormat('EEEE, MMMM d', locale);
 
           final rows = <_HistoryRow>[];
-          String? currentKey;
+          DateTime? currentDay;
           for (final app in filtered) {
-            final key = _dateKeyFormat.format(app.startTime);
-            if (key != currentKey) {
-              final label = dateHeaderFormat
-                  .format(DateTime.parse(key))
-                  .toUpperCase();
-              rows.add(_HistoryHeader(label));
-              currentKey = key;
+            final day = DateUtils.dateOnly(app.startTime);
+            if (day != currentDay) {
+              rows.add(
+                _HistoryHeader(dateHeaderFormat.format(day).toUpperCase()),
+              );
+              currentDay = day;
             }
             rows.add(_HistoryCardRow(app));
           }
@@ -157,7 +162,9 @@ class _HistoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final isCancelled = appointment.status.toLowerCase() == 'cancelled';
+    final isCancelled = AppointmentStatus.fromRaw(
+      appointment.status,
+    ).isCancelled;
     final accent =
         colorFromMap(appointment, employeeColorMap) ?? scheme.primary;
     final status = AppointmentStatus.fromRaw(appointment.displayStatus);

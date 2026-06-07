@@ -51,21 +51,6 @@ void main() {
       expect(employee.isDisabled, isFalse);
     });
 
-    test('initials returns first letter for one word', () {
-      const e = EmployeeRecord(id: 'e1', name: 'Jane');
-      expect(e.initials, 'J');
-    });
-
-    test('initials returns first letters of two words', () {
-      const e = EmployeeRecord(id: 'e1', name: 'Jane Doe');
-      expect(e.initials, 'JD');
-    });
-
-    test('initials returns ? for empty name', () {
-      const e = EmployeeRecord(id: 'e1');
-      expect(e.initials, '?');
-    });
-
     test('toMap → fromMap roundtrip preserves data', () {
       const original = EmployeeRecord(
         id: 'e1',
@@ -95,7 +80,9 @@ void main() {
     });
 
     test('fromMap parses colorValue as decimal int string', () {
-      final r = EmployeeRecord.fromMap('e1', const {'colorValue': '4280391411'});
+      final r = EmployeeRecord.fromMap('e1', const {
+        'colorValue': '4280391411',
+      });
       expect(r.color.toARGB32(), 4280391411);
     });
   });

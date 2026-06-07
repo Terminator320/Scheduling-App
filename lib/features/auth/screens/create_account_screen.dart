@@ -213,6 +213,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   ),
                   const SizedBox(height: AppSpacing.sp16),
                   _CreateAccountPasswordField(
+                    label: context.l10n.common_password,
+                    prefixIcon: Icons.lock_outlined,
+                    textInputAction: TextInputAction.next,
                     controller: _passwordController,
                     focusNode: _passwordFocus,
                     enabled: !_isLoading,
@@ -224,7 +227,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                         setState(() => _isObscured = !_isObscured),
                   ),
                   const SizedBox(height: AppSpacing.sp16),
-                  _CreateAccountConfirmField(
+                  _CreateAccountPasswordField(
+                    label: context.l10n.auth_confirmPassword,
+                    prefixIcon: Icons.lock_reset_outlined,
+                    textInputAction: TextInputAction.done,
                     controller: _confirmPasswordController,
                     focusNode: _confirmPasswordFocus,
                     enabled: !_isLoading,
@@ -414,6 +420,9 @@ class _CreateAccountEmailField extends StatelessWidget {
 
 class _CreateAccountPasswordField extends StatelessWidget {
   const _CreateAccountPasswordField({
+    required this.label,
+    required this.prefixIcon,
+    required this.textInputAction,
     required this.controller,
     required this.focusNode,
     required this.enabled,
@@ -424,6 +433,9 @@ class _CreateAccountPasswordField extends StatelessWidget {
     required this.onToggleObscured,
   });
 
+  final String label;
+  final IconData prefixIcon;
+  final TextInputAction textInputAction;
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool enabled;
@@ -442,90 +454,28 @@ class _CreateAccountPasswordField extends StatelessWidget {
         controller: controller,
         focusNode: focusNode,
         obscureText: isObscured,
-        textInputAction: TextInputAction.next,
+        textInputAction: textInputAction,
         autofillHints: const [AutofillHints.newPassword],
         enabled: enabled,
         onSubmitted: (_) => onSubmitted(),
         onChanged: (_) => onChanged(),
-        decoration: formInputDecoration(context, context.l10n.common_password)
-            .copyWith(
-              errorText: errorText,
-              prefixIcon: const Icon(Icons.lock_outlined, size: 20),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  isObscured
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  size: 20,
-                  color: scheme.onSurfaceVariant,
-                ),
-                tooltip: isObscured
-                    ? context.l10n.auth_showPassword
-                    : context.l10n.auth_hidePassword,
-                onPressed: onToggleObscured,
-              ),
+        decoration: formInputDecoration(context, label).copyWith(
+          errorText: errorText,
+          prefixIcon: Icon(prefixIcon, size: 20),
+          suffixIcon: IconButton(
+            icon: Icon(
+              isObscured
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+              size: 20,
+              color: scheme.onSurfaceVariant,
             ),
-      ),
-    );
-  }
-}
-
-class _CreateAccountConfirmField extends StatelessWidget {
-  const _CreateAccountConfirmField({
-    required this.controller,
-    required this.focusNode,
-    required this.enabled,
-    required this.errorText,
-    required this.isObscured,
-    required this.onSubmitted,
-    required this.onChanged,
-    required this.onToggleObscured,
-  });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final bool enabled;
-  final String? errorText;
-  final bool isObscured;
-  final VoidCallback onSubmitted;
-  final VoidCallback onChanged;
-  final VoidCallback onToggleObscured;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return AnimatedFormFieldWrapper(
-      hasError: errorText != null,
-      child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        obscureText: isObscured,
-        textInputAction: TextInputAction.done,
-        autofillHints: const [AutofillHints.newPassword],
-        enabled: enabled,
-        onSubmitted: (_) => onSubmitted(),
-        onChanged: (_) => onChanged(),
-        decoration:
-            formInputDecoration(
-              context,
-              context.l10n.auth_confirmPassword,
-            ).copyWith(
-              errorText: errorText,
-              prefixIcon: const Icon(Icons.lock_reset_outlined, size: 20),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  isObscured
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  size: 20,
-                  color: scheme.onSurfaceVariant,
-                ),
-                tooltip: isObscured
-                    ? context.l10n.auth_showPassword
-                    : context.l10n.auth_hidePassword,
-                onPressed: onToggleObscured,
-              ),
-            ),
+            tooltip: isObscured
+                ? context.l10n.auth_showPassword
+                : context.l10n.auth_hidePassword,
+            onPressed: onToggleObscured,
+          ),
+        ),
       ),
     );
   }

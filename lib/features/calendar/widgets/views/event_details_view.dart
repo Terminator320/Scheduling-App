@@ -8,6 +8,7 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/widgets/views/details_edit_body.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_view_body.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
+import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
 class EventDetailsView extends ConsumerStatefulWidget {
@@ -109,7 +110,9 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(eventDetailsControllerProvider(widget.appointment));
-    final isCancelled = widget.appointment.status.toLowerCase() == 'cancelled';
+    final isCancelled = AppointmentStatus.fromRaw(
+      widget.appointment.status,
+    ).isCancelled;
     final showEdit = state.isEditing && !isCancelled && widget.showActions;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
