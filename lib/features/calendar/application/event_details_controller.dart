@@ -427,6 +427,7 @@ class EventDetailsController extends Notifier<EventDetailsState> {
             );
       }
 
+      state = state.copyWith(isSaving: false);
       return EventDetailsSaved(
         updated,
         futureBookings: futureBookings,
@@ -464,6 +465,7 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       } else {
         await repo.deleteAppointment(id);
       }
+      state = state.copyWith(isSaving: false);
       return null;
     } catch (e, st) {
       ref.read(loggerProvider).warn('APPT-DEL deleteAppointment failed', e, st);
