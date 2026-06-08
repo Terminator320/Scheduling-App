@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
+import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
@@ -473,7 +474,6 @@ class _ActionButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -485,10 +485,9 @@ class _ActionButtons extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.sp8),
         OutlinedButton(
-          style: OutlinedButton.styleFrom(
+          style: destructiveOutlinedButtonStyle(
+            context,
             minimumSize: const Size(double.infinity, 48),
-            foregroundColor: scheme.error,
-            side: BorderSide(color: scheme.error),
           ),
           onPressed: isSaving ? null : onDelete,
           child: Text(context.l10n.calendar_deleteAppointment),

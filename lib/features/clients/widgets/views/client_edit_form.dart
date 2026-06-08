@@ -3,18 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
+import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_form_validator.dart';
-import 'package:scheduling/features/clients/widgets/fields/address_grid_fields.dart';
+import 'package:scheduling/features/clients/widgets/fields/client_address_section.dart';
 import 'package:scheduling/features/clients/widgets/sections/additional_contacts_section.dart';
-import 'package:scheduling/features/maps/address_field_filler.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/fields/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
-import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
+import 'package:scheduling/shared/widgets/primitives/entity_form_header.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
 /// Editable form for a [ClientRecord]. Owns every text controller and the
@@ -158,25 +157,6 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm> {
     ];
   }
 
-  void _handleAddressSelected() {
-    // Microtask: let the autocomplete finish writing the controller first.
-    Future<void>.microtask(() {
-      if (!mounted) return;
-      setState(() {
-        _errors['address'] = null;
-        fillAddressControllersFromText(
-          _addressController.text,
-          address: _addressController,
-          apt: _aptController,
-          city: _cityController,
-          province: _provinceController,
-          postalCode: _postalCodeController,
-          country: _countryController,
-        );
-      });
-    });
-  }
-
   Future<void> _save() async {
     final businessName = _businessNameController.text.trim();
     final name = _nameController.text.trim();
@@ -243,25 +223,11 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // --- Header ---
-        Row(
-          children: [
-            AppAvatar(name: widget.client.displayName, size: AvatarSize.lg),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                widget.client.displayName,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
+        EntityFormHeader(name: widget.client.displayName),
         const SizedBox(height: 16),
         const Divider(height: 1),
         const SizedBox(height: 14),
@@ -345,30 +311,16 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm> {
         ],
         const SizedBox(height: 16),
         // --- Address ---
-        SheetFocusScroll(
-          child: AddressAutocompleteField(
-            controller: _addressController,
-            required: _businessNameController.text.trim().isEmpty,
-            errorText: _errors['address'],
-            onChanged: (_) => _clearError('address'),
-            onAddressSelected: (_) => _handleAddressSelected(),
-          ),
-        ),
-        const SizedBox(height: 16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: context.l10n.clients_aptUnit,
-            controller: _aptController,
-            optional: true,
-            maxLength: TextLimits.aptUnit,
-          ),
-        ),
-        const SizedBox(height: 16),
-        AddressGridFields(
+        ClientAddressSection(
+          addressController: _addressController,
+          aptController: _aptController,
           cityController: _cityController,
           provinceController: _provinceController,
           postalCodeController: _postalCodeController,
           countryController: _countryController,
+          isRequired: _businessNameController.text.trim().isEmpty,
+          errorText: _errors['address'],
+          onAddressErrorCleared: () => _clearError('address'),
         ),
         const SizedBox(height: 24),
         _EditActions(onSave: _save, onDelete: widget.onDelete),
@@ -385,7 +337,6 @@ class _EditActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -398,10 +349,9 @@ class _EditActions extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         OutlinedButton(
-          style: OutlinedButton.styleFrom(
+          style: destructiveOutlinedButtonStyle(
+            context,
             minimumSize: const Size(double.infinity, 44),
-            foregroundColor: scheme.error,
-            side: BorderSide(color: scheme.error),
           ),
           onPressed: onDelete,
           child: Text(context.l10n.common_delete),

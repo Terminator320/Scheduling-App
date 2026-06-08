@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
@@ -62,10 +63,9 @@ class DetailsActionBar extends StatelessWidget {
         if (showCancel && !isCancelled) ...[
           if (isToday && !isDone) const SizedBox(height: AppSpacing.sp8),
           OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
+            style: destructiveOutlinedButtonStyle(
+              context,
               minimumSize: const Size(double.infinity, 48),
-              foregroundColor: scheme.error,
-              side: BorderSide(color: scheme.error),
             ),
             onPressed: isSaving ? null : onCancel,
             icon: const Icon(Icons.close, size: 15),
