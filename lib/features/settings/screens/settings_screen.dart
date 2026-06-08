@@ -24,6 +24,7 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
+import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 
 enum _SettingsDetail { textSize }
 
@@ -258,30 +259,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Widget _buildDetailPlaceholder() {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      color: scheme.surface,
-      alignment: Alignment.center,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sp24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.tune_rounded, size: 48, color: scheme.onSurfaceVariant),
-            const SizedBox(height: 12),
-            Text(
-              context.l10n.common_settings,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildDetailPlaceholder() => DetailPlaceholder(
+    icon: Icons.tune_rounded,
+    message: context.l10n.common_settings,
+  );
 
   @override
   Widget build(BuildContext context) {

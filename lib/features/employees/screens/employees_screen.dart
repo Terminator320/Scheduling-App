@@ -213,34 +213,10 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     );
   }
 
-  Widget _buildDetailPlaceholder() {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      color: scheme.surface,
-      alignment: Alignment.center,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sp24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.badge_outlined,
-              size: 48,
-              color: scheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              context.l10n.employees_selectAnEmployeeToViewDetails,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildDetailPlaceholder() => DetailPlaceholder(
+    icon: Icons.badge_outlined,
+    message: context.l10n.employees_selectAnEmployeeToViewDetails,
+  );
 
   void _handleEmployeeAction(String action, EmployeeRecord employee) {
     final notices = ref.read(noticeServiceProvider);
