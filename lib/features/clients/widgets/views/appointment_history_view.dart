@@ -13,16 +13,60 @@ import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
-class AppointmentHistoryView extends ConsumerWidget {
+class AppointmentHistoryView extends ConsumerStatefulWidget {
   const AppointmentHistoryView({required this.searchQuery, super.key});
 
   final String searchQuery;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final query = searchQuery.trim().toLowerCase();
-    // Accent-folded matching — same rule as the server-side client search.
-    final normalizedQuery = ClientSearchPolicy.normalize(searchQuery);
+  ConsumerState<AppointmentHistoryView> createState() =>
+      _AppointmentHistoryViewState();
+}
+
+class _AppointmentHistoryViewState
+    extends ConsumerState<AppointmentHistoryView> {
+  List<AppointmentRecord>? _cachedAppointments;
+  String? _cachedQuery;
+  List<_HistoryRow> _rows = const [];
+  List<AppointmentRecord> _filtered = const [];
+
+  List<AppointmentRecord> _filter(
+    List<AppointmentRecord> appointments,
+    String query,
+  ) {
+    final normalizedQuery = ClientSearchPolicy.normalize(query);
+    if (query.trim().isEmpty) return appointments;
+    if (normalizedQuery.isEmpty) return const [];
+    return appointments.where((a) {
+      final matchesClient = ClientSearchPolicy.normalize(
+        a.clientName,
+      ).contains(normalizedQuery);
+      final matchesEmployee = a.employeeNames.any(
+        (e) => ClientSearchPolicy.normalize(e).contains(normalizedQuery),
+      );
+      return matchesClient || matchesEmployee;
+    }).toList();
+  }
+
+  List<_HistoryRow> _buildRows(List<AppointmentRecord> filtered) {
+    final locale = Intl.defaultLocale ?? 'en_CA';
+    final dateHeaderFormat = DateFormat('EEEE, MMMM d', locale);
+    final rows = <_HistoryRow>[];
+    DateTime? currentDay;
+    for (final app in filtered) {
+      final day = DateUtils.dateOnly(app.startTime);
+      if (day != currentDay) {
+        rows.add(_HistoryHeader(dateHeaderFormat.format(day).toUpperCase()));
+        currentDay = day;
+      }
+      rows.add(_HistoryCardRow(app));
+    }
+    return rows;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = widget.searchQuery.trim().toLowerCase();
     final colorMap = ref.watch(employeeColorMapProvider);
     final historyAsync = ref.watch(appointmentHistoryProvider);
 
@@ -55,25 +99,16 @@ class AppointmentHistoryView extends ConsumerWidget {
           );
         },
         data: (appointments) {
-          // Already sorted newest-first by watchHistory.
-          final filtered = query.isEmpty
-              ? appointments
-              : appointments.where((a) {
-                  // A punctuation-only query normalizes to '' — contains('')
-                  // matches everything, so treat it as matching nothing.
-                  if (normalizedQuery.isEmpty) return false;
-                  final matchesClient = ClientSearchPolicy.normalize(
-                    a.clientName,
-                  ).contains(normalizedQuery);
-                  final matchesEmployee = a.employeeNames.any(
-                    (e) => ClientSearchPolicy.normalize(
-                      e,
-                    ).contains(normalizedQuery),
-                  );
-                  return matchesClient || matchesEmployee;
-                }).toList();
+          final queryChanged = widget.searchQuery != _cachedQuery;
+          final listChanged = !identical(appointments, _cachedAppointments);
+          if (queryChanged || listChanged) {
+            _cachedAppointments = appointments;
+            _cachedQuery = widget.searchQuery;
+            _filtered = _filter(appointments, widget.searchQuery);
+            _rows = _buildRows(_filtered);
+          }
 
-          if (filtered.isEmpty) {
+          if (_filtered.isEmpty) {
             return AppEmptyState(
               icon: query.isEmpty
                   ? Icons.history_outlined
@@ -87,28 +122,14 @@ class AppointmentHistoryView extends ConsumerWidget {
             );
           }
 
-          final locale = Intl.defaultLocale ?? 'en_CA';
-          final dateHeaderFormat = DateFormat('EEEE, MMMM d', locale);
-
-          final rows = <_HistoryRow>[];
-          DateTime? currentDay;
-          for (final app in filtered) {
-            final day = DateUtils.dateOnly(app.startTime);
-            if (day != currentDay) {
-              rows.add(
-                _HistoryHeader(dateHeaderFormat.format(day).toUpperCase()),
-              );
-              currentDay = day;
-            }
-            rows.add(_HistoryCardRow(app));
-          }
-
           return ListView.builder(
             padding: const EdgeInsets.all(12),
-            itemCount: rows.length,
+            itemCount: _rows.length,
             itemBuilder: (context, index) {
-              final row = rows[index];
-              final nextRow = index + 1 < rows.length ? rows[index + 1] : null;
+              final row = _rows[index];
+              final nextRow = index + 1 < _rows.length
+                  ? _rows[index + 1]
+                  : null;
               return switch (row) {
                 _HistoryHeader(:final label) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
