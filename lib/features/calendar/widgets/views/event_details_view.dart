@@ -34,21 +34,13 @@ class EventDetailsView extends ConsumerStatefulWidget {
 }
 
 class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
-  late final TextEditingController _titleController;
-  late final TextEditingController _dateController;
-  late final TextEditingController _startTimeController;
-  late final TextEditingController _endTimeController;
-  late final TextEditingController _clientSearchController;
-  late final TextEditingController _addressController;
-  late final TextEditingController _notesController;
-  late final TextEditingController _materialsController;
-
-  late final DetailsEditControllers _editControllers;
+  // Created lazily the first time the edit form is shown — a view-only open
+  // (the common case) never allocates these controllers.
+  DetailsEditControllers? _editControllers;
 
   @override
   void initState() {
     super.initState();
-    _initControllers();
     if (widget.initialEditing) {
       Future.microtask(() {
         if (!mounted) return;
@@ -59,46 +51,31 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
     }
   }
 
-  void _initControllers() {
+  DetailsEditControllers _ensureControllers() {
     final a = widget.appointment;
-    _titleController = TextEditingController(text: a.title);
-    _dateController = TextEditingController(
-      text: DateUtilsHelper.formatDate(a.startTime),
-    );
-    _startTimeController = TextEditingController(
-      text: DateUtilsHelper.formatTime(a.startTime),
-    );
-    _endTimeController = TextEditingController(
-      text: DateUtilsHelper.formatTime(a.endTime),
-    );
-    _clientSearchController = TextEditingController(text: a.clientName);
-    _addressController = TextEditingController(
-      text: AddressParser.canonicalToDisplay(a.address),
-    );
-    _notesController = TextEditingController(text: a.notes);
-    _materialsController = TextEditingController(text: a.materialsNeeded);
-    _editControllers = DetailsEditControllers(
-      title: _titleController,
-      date: _dateController,
-      startTime: _startTimeController,
-      endTime: _endTimeController,
-      clientSearch: _clientSearchController,
-      address: _addressController,
-      notes: _notesController,
-      materials: _materialsController,
+    return _editControllers ??= DetailsEditControllers(
+      title: TextEditingController(text: a.title),
+      date: TextEditingController(
+        text: DateUtilsHelper.formatDate(a.startTime),
+      ),
+      startTime: TextEditingController(
+        text: DateUtilsHelper.formatTime(a.startTime),
+      ),
+      endTime: TextEditingController(
+        text: DateUtilsHelper.formatTime(a.endTime),
+      ),
+      clientSearch: TextEditingController(text: a.clientName),
+      address: TextEditingController(
+        text: AddressParser.canonicalToDisplay(a.address),
+      ),
+      notes: TextEditingController(text: a.notes),
+      materials: TextEditingController(text: a.materialsNeeded),
     );
   }
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _dateController.dispose();
-    _startTimeController.dispose();
-    _endTimeController.dispose();
-    _clientSearchController.dispose();
-    _addressController.dispose();
-    _notesController.dispose();
-    _materialsController.dispose();
+    _editControllers?.dispose();
     super.dispose();
   }
 
@@ -114,23 +91,15 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
       widget.appointment.status,
     ).isCancelled;
     final showEdit = state.isEditing && !isCancelled && widget.showActions;
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-
-    return ListView(
-      controller: widget.scrollController,
-      padding: EdgeInsets.only(
-        left: AppSpacing.sp16,
-        right: AppSpacing.sp16,
-        top: AppSpacing.sp12,
-        bottom: bottomInset + AppSpacing.sp24,
-      ),
+    return DetailSheetListView(
+      scrollController: widget.scrollController,
+      showHandle: widget.showHandle,
+      handleGap: AppSpacing.sp8,
       children: [
-        if (widget.showHandle) const SheetHandle(),
-        if (widget.showHandle) const SizedBox(height: AppSpacing.sp8),
         if (showEdit)
           DetailsEditBody(
             appointment: widget.appointment,
-            controllers: _editControllers,
+            controllers: _ensureControllers(),
             onSaved: _handleClose,
             onClose: _handleClose,
           )

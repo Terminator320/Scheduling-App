@@ -87,7 +87,6 @@ Future<void> main() async {
 
       final settings = await settingsFuture;
 
-
       runApp(
         ProviderScope(
           retry: (retryCount, error) => null,

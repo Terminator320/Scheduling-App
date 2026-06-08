@@ -47,6 +47,18 @@ class DetailsEditControllers {
   final TextEditingController address;
   final TextEditingController notes;
   final TextEditingController materials;
+
+  /// Disposes every owned controller. Call from the State that created them.
+  void dispose() {
+    title.dispose();
+    date.dispose();
+    startTime.dispose();
+    endTime.dispose();
+    clientSearch.dispose();
+    address.dispose();
+    notes.dispose();
+    materials.dispose();
+  }
 }
 
 class DetailsEditBody extends ConsumerWidget {

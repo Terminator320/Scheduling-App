@@ -15,6 +15,7 @@ import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
+import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
 class EmployeeFormSheet extends ConsumerStatefulWidget {
@@ -284,16 +285,12 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
         const SizedBox(height: 12),
         OutlinedButton.icon(
           onPressed: _isTogglingStatus ? null : _toggleStatus,
-          icon: _isTogglingStatus
-              ? SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: toggleForeground,
-                  ),
-                )
-              : Icon(toggleIcon, size: 14, color: toggleForeground),
+          icon: BusyButtonIcon(
+            isBusy: _isTogglingStatus,
+            icon: toggleIcon,
+            iconSize: 14,
+            color: toggleForeground,
+          ),
           label: Text(toggleLabel, style: TextStyle(color: toggleForeground)),
           style: OutlinedButton.styleFrom(
             minimumSize: const Size(double.infinity, 44),

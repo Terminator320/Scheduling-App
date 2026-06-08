@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
 
 class DetailsActionBar extends StatelessWidget {
   const DetailsActionBar({
@@ -38,16 +39,11 @@ class DetailsActionBar extends StatelessWidget {
               foregroundColor: scheme.onSecondary,
             ),
             onPressed: isSaving ? null : onMarkDone,
-            icon: isSaving
-                ? SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: scheme.onSecondary,
-                    ),
-                  )
-                : const Icon(Icons.check, size: 18),
+            icon: BusyButtonIcon(
+              isBusy: isSaving,
+              icon: Icons.check,
+              color: scheme.onSecondary,
+            ),
             label: Text(context.l10n.calendar_markAsDone),
           ),
         if (isDone) ...[
