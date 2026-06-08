@@ -111,13 +111,15 @@ class MainCalendarArgs {
   final String employeeId;
 }
 
+enum ClientsMode { clients, history }
+
 class ClientsListArgs {
   const ClientsListArgs({
     required this.mode,
     required this.isAdmin,
     required this.employeeId,
   });
-  final String mode;
+  final ClientsMode mode;
   final bool isAdmin;
   final String employeeId;
 }

@@ -24,7 +24,7 @@ class ListInformation extends StatefulWidget {
     super.key,
   });
 
-  final String mode;
+  final ClientsMode mode;
   final bool isAdmin;
   final String employeeId;
 
@@ -38,7 +38,7 @@ class _ListInformationState extends State<ListInformation> {
       TextEditingController();
   ClientRecord? _selectedClient;
 
-  bool get _isClients => widget.mode == 'Clients';
+  bool get _isClients => widget.mode == ClientsMode.clients;
 
   @override
   void dispose() {
