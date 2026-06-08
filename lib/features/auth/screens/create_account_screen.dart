@@ -8,6 +8,8 @@ import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/auth/widgets/auth_error_banner.dart';
+import 'package:scheduling/features/auth/widgets/auth_logo.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
@@ -199,7 +201,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children:
             <Widget>[
-                  const _CreateAccountLogo(),
+                  const AuthLogo(),
                   const SizedBox(height: AppSpacing.sp24),
                   const _CreateAccountHeaderText(),
                   const SizedBox(height: AppSpacing.sp32),
@@ -242,7 +244,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                       () => _isConfirmObscured = !_isConfirmObscured,
                     ),
                   ),
-                  _CreateAccountErrorBanner(message: _bannerError),
+                  AuthErrorBanner(message: _bannerError),
                   const SizedBox(height: AppSpacing.sp24),
                   AnimatedLoadingButton(
                     label: context.l10n.auth_createAccount,
@@ -329,28 +331,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   duration: 425.ms,
                   curve: Curves.easeOutCubic,
                 ),
-      ),
-    );
-  }
-}
-
-class _CreateAccountLogo extends StatelessWidget {
-  const _CreateAccountLogo();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: scheme.primary,
-        borderRadius: BorderRadius.circular(AppRadius.r12),
-      ),
-      child: Icon(
-        Icons.calendar_today_rounded,
-        color: scheme.onPrimary,
-        size: 22,
       ),
     );
   }
@@ -477,57 +457,6 @@ class _CreateAccountPasswordField extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _CreateAccountErrorBanner extends StatelessWidget {
-  const _CreateAccountErrorBanner({required this.message});
-
-  final String? message;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final textTheme = theme.textTheme;
-    return AnimatedSwitcher(
-      duration: AppAnimationDurations.banner,
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: SizeTransition(
-          sizeFactor: animation,
-          alignment: AlignmentDirectional.topStart,
-          child: child,
-        ),
-      ),
-      child: message != null
-          ? Padding(
-              key: ValueKey('err_$message'),
-              padding: const EdgeInsets.only(top: AppSpacing.sp12),
-              child: Container(
-                padding: const EdgeInsets.all(AppSpacing.sp12),
-                decoration: BoxDecoration(
-                  color: scheme.errorContainer,
-                  borderRadius: BorderRadius.circular(AppRadius.r8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.error_outline, color: scheme.error, size: 16),
-                    const SizedBox(width: AppSpacing.sp8),
-                    Expanded(
-                      child: Text(
-                        message!,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: scheme.onErrorContainer,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : const SizedBox.shrink(key: ValueKey('banner_none')),
     );
   }
 }
