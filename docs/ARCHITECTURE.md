@@ -23,18 +23,18 @@ lib/
 │   ├── providers/                   firebase_providers.dart — Riverpod providers for Auth/Firestore/Storage instances
 │   ├── security/                    BiometricAuthService (local_auth) + AppLock app-wide biometric gate
 │   ├── storage/                     SecureStorageService + SecureStorageKeys — encrypted local storage (flutter_secure_storage)
-│   ├── theme/                       Design tokens (AppColors, AppSpacing, AppRadius), ThemeData, ThemeNotifier
+│   ├── theme/                       Design tokens (AppColors, AppSpacing, AppRadius), button_styles (destructiveOutlinedButtonStyle), ThemeData, ThemeNotifier
 │   ├── utils/                       l10n_extensions.dart (context.l10n), date helpers, language controller, sheet focus
 │   └── validators/                  Auth input validators (email format, password rules)
 │
 ├── shared/widgets/                  Reusable UI components used across ≥2 features, grouped by type
 │   ├── app_bars/                    app_top_bar (AppTopBar — the standard primary app bar every screen uses; slims in landscape)
-│   ├── primitives/                  app_avatar (contrast-aware initials circle), busy_button_icon (spinner-or-icon slot for *.icon buttons), fade_in_item, section_label (uppercase mini-header)
-│   ├── feedback/                    app_empty_state, skeleton_loader (shimmer), status_chip (+ AppointmentStatus.fromRaw, the canonical status mapper)
+│   ├── primitives/                  app_avatar (contrast-aware initials circle), busy_button_icon (spinner-or-icon slot for *.icon buttons), entity_form_header (avatar + name + optional status, for edit forms), fade_in_item, section_label (uppercase mini-header)
+│   ├── feedback/                    app_empty_state, error_snack_bar (errorSnackBar — shared error SnackBar for the sites that bypass NoticeService), skeleton_loader (shimmer), status_chip (+ AppointmentStatus.fromRaw, the canonical status mapper)
 │   ├── fields/                      address_autocomplete_field, labeled_text_field (built-in shake + animated error row), app_search_bar, form_helpers
 │   ├── cards/                       list_item_tile (shared row layout behind client/employee tiles)
 │   ├── dialogs/                     confirm_dialog (showConfirmDialog — shared Cancel/confirm, destructive variant)
-│   └── sheets/                      sheet_widgets (DraggableSheetFrame, SheetHandle, DetailSheetListView — the standard detail-view scroll shell)
+│   └── sheets/                      sheet_widgets (DraggableSheetFrame, SheetHandle, DetailSheetListView — detail-view scroll shell; FormSheetScaffold — add/edit form-sheet chrome)
 │
 ├── routes/
 │   └── app_routes.dart              Single onGenerateRoute; typed arg classes per route; page transitions
@@ -135,7 +135,11 @@ toggles between a read-only **view body** and an **edit form**. The client
 separate widgets, and their edit `TextEditingController`s are built **lazily on
 first edit** — a view-only open never allocates them. Loading/destructive
 buttons across these surfaces use the shared `BusyButtonIcon` for the
-spinner-or-icon swap.
+spinner-or-icon swap and `destructiveOutlinedButtonStyle`
+(`core/theme/button_styles.dart`) for the error-colored delete/cancel outline.
+The add- and edit-client forms also share the street-address block
+(`ClientAddressSection`) and a `ClientFormState` mixin (the field-error map and
+the extra-contacts list with its add/remove/dispose mutators).
 
 ### Repeating Appointments
 
