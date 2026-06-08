@@ -29,12 +29,12 @@ lib/
 │
 ├── shared/widgets/                  Reusable UI components used across ≥2 features, grouped by type
 │   ├── app_bars/                    app_top_bar (AppTopBar — the standard primary app bar every screen uses; slims in landscape)
-│   ├── primitives/                  app_avatar (contrast-aware initials circle), fade_in_item, section_label (uppercase mini-header)
+│   ├── primitives/                  app_avatar (contrast-aware initials circle), busy_button_icon (spinner-or-icon slot for *.icon buttons), fade_in_item, section_label (uppercase mini-header)
 │   ├── feedback/                    app_empty_state, skeleton_loader (shimmer), status_chip (+ AppointmentStatus.fromRaw, the canonical status mapper)
 │   ├── fields/                      address_autocomplete_field, labeled_text_field (built-in shake + animated error row), app_search_bar, form_helpers
 │   ├── cards/                       list_item_tile (shared row layout behind client/employee tiles)
 │   ├── dialogs/                     confirm_dialog (showConfirmDialog — shared Cancel/confirm, destructive variant)
-│   └── sheets/                      sheet_widgets (DraggableSheetFrame, SheetHandle)
+│   └── sheets/                      sheet_widgets (DraggableSheetFrame, SheetHandle, DetailSheetListView — the standard detail-view scroll shell)
 │
 ├── routes/
 │   └── app_routes.dart              Single onGenerateRoute; typed arg classes per route; page transitions
@@ -123,6 +123,19 @@ Two stores, split by sensitivity:
 ### Clients Pagination
 
 The clients list uses `infinite_scroll_pagination` (v5): `ClientsRepository.fetchClientsPage` pages newest-first via a Firestore `startAfterDocument` cursor (re-fetching the `after` doc by id keeps Firestore types out of the domain layer). It does **not** stream — `clientsRefreshProvider` is bumped by every add/update/delete and the list listens to it to refresh. Search filters the already-loaded pages in memory, preserving the client-side-search convention. Appointment photos display through `AppointmentImageCarousel` (`smooth_page_indicator`) in read-only mode; editing keeps the `PhotoPickerSection` thumbnail strip. New images are chosen via `pickAppointmentImages` (Camera gated by `MediaPermissionService`, Gallery via the OS photo picker).
+
+### Detail Views
+
+Each detail surface (client, employee, appointment) is a thin coordinator that
+renders inside the shared `DetailSheetListView` (`shared/widgets/sheets/` —
+standard padding, optional drag handle, keyboard-inset-aware bottom gap) and
+toggles between a read-only **view body** and an **edit form**. The client
+(`client_view_body.dart` / `client_edit_form.dart`) and appointment
+(`details_view_body.dart` / `details_edit_body.dart`) views keep the two in
+separate widgets, and their edit `TextEditingController`s are built **lazily on
+first edit** — a view-only open never allocates them. Loading/destructive
+buttons across these surfaces use the shared `BusyButtonIcon` for the
+spinner-or-icon swap.
 
 ### Repeating Appointments
 
@@ -380,7 +393,7 @@ Locate them with `grep -rn "TODO(pre-ship)" lib` — markers are authoritative; 
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (382 test cases as of 2026-06-07). `flutter analyze` is
+Run: `flutter test` (385 test cases as of 2026-06-07). `flutter analyze` is
 clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.

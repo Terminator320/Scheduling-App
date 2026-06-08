@@ -10,6 +10,20 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.4.1+11] - 2026-06-07
+
+### Changed
+- Internal refactor and optimization pass — no change to how the app behaves:
+  - **Snappier detail screens.** Opening a client or an appointment no longer
+    builds the edit form's text fields up front — they're created only when you
+    tap Edit, so a view-only open does no edit-form work.
+  - **Less duplicated UI code.** The client detail screen was split into a
+    read-only view and a separate edit form, and recurring pieces were pulled
+    into shared widgets reused across screens: a busy/loading button icon
+    (`BusyButtonIcon`), the standard detail-sheet scroll shell
+    (`DetailSheetListView`), and the auth-screen logo and error banner
+    (`AuthLogo`, `AuthErrorBanner`).
+
 ## [1.4.0+10] - 2026-06-07
 
 ### Added
