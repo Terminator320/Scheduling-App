@@ -48,6 +48,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   late AppointmentDateRange _appointmentRange;
   PhotoUploadNotifier? _uploadNotifier;
   bool _upgradingToAdmin = false;
+  late DateFormat _monthLabelFormat;
+  String _lastLocale = '';
 
   /// The calendar uses the "Split" layout — month grid | day agenda, details via
   /// a sheet — whenever the nav rail is showing: landscape phones AND tablets.
@@ -251,7 +253,11 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
     final isLoading = appointmentsAsync.isLoading;
     final locale = Localizations.localeOf(context).toString();
-    final monthLabel = DateFormat.yMMMM(locale).format(_focusedDay);
+    if (locale != _lastLocale) {
+      _monthLabelFormat = DateFormat.yMMMM(locale);
+      _lastLocale = locale;
+    }
+    final monthLabel = _monthLabelFormat.format(_focusedDay);
     final jobLabel =
         '${selectedEvents.length} ${context.l10n.calendar_appointments}';
 
