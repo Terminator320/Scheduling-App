@@ -1,11 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
-import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/storage/secure_storage_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -15,12 +12,12 @@ import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/screens/create_account_screen.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
-import 'package:scheduling/features/auth/widgets/auth_logo.dart';
+import 'package:scheduling/features/auth/widgets/auth_banner.dart';
+import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
-import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
 class Login extends ConsumerStatefulWidget {
   const Login({super.key, this.authService});
@@ -248,289 +245,61 @@ class _LoginState extends ConsumerState<Login> {
     });
   }
 
-  Widget _buildBanner(TextTheme textTheme) {
-    final scheme = Theme.of(context).colorScheme;
-    if (_bannerError != null) {
-      return Padding(
-        key: ValueKey('err_$_bannerError'),
-        padding: const EdgeInsets.only(bottom: AppSpacing.sp12),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.sp12),
-          decoration: BoxDecoration(
-            color: scheme.errorContainer,
-            borderRadius: BorderRadius.circular(AppRadius.r8),
-            border: Border.all(color: scheme.error.withValues(alpha: 0.4)),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.error_outline, color: scheme.error, size: 16),
-              const SizedBox(width: AppSpacing.sp8),
-              Expanded(
-                child: Text(
-                  _bannerError!,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: scheme.onErrorContainer,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-    if (_bannerSuccess != null) {
-      return Padding(
-        key: ValueKey('ok_$_bannerSuccess'),
-        padding: const EdgeInsets.only(bottom: AppSpacing.sp12),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.sp12),
-          decoration: BoxDecoration(
-            color: scheme.tertiaryContainer,
-            borderRadius: BorderRadius.circular(AppRadius.r8),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.check_circle_outline,
-                color: scheme.tertiary,
-                size: 16,
-              ),
-              const SizedBox(width: AppSpacing.sp8),
-              Expanded(
-                child: Text(
-                  _bannerSuccess!,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: scheme.onTertiaryContainer,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-    return const SizedBox.shrink(key: ValueKey('banner_none'));
-  }
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
-    final scheme = theme.colorScheme;
-
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
-      child: Scaffold(
-        backgroundColor: scheme.surface,
-        body: SafeArea(
-          child: SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sp24,
-              vertical: AppSpacing.sp32,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children:
-                  [
-                        const AuthLogo(),
-                        const SizedBox(height: AppSpacing.sp24),
-                        const _LoginHeaderText(),
-                        const SizedBox(height: AppSpacing.sp16),
-                        AnimatedSwitcher(
-                          duration: AppAnimationDurations.banner,
-                          transitionBuilder: (child, animation) =>
-                              FadeTransition(
-                                opacity: animation,
-                                child: SizeTransition(
-                                  sizeFactor: animation,
-                                  alignment: AlignmentDirectional.topStart,
-                                  child: child,
-                                ),
-                              ),
-                          child: _buildBanner(textTheme),
-                        ),
-                        const SizedBox(height: AppSpacing.sp16),
-                        _LoginEmailField(
-                          controller: _emailController,
-                          focusNode: _emailFocus,
-                          enabled: !_isLoading,
-                          hasError: _emailError != null,
-                          errorText: _submitted ? _emailError : null,
-                          onSubmitted: _passwordFocus.requestFocus,
-                          onChanged: _onFieldChanged,
-                        ),
-                        const SizedBox(height: AppSpacing.sp16),
-                        _LoginPasswordField(
-                          controller: _passwordController,
-                          focusNode: _passwordFocus,
-                          enabled: !_isLoading,
-                          hasError: _passwordError != null,
-                          errorText: _submitted ? _passwordError : null,
-                          isObscured: _isObscured,
-                          onSubmitted: _signIn,
-                          onChanged: _onFieldChanged,
-                          onToggleObscured: () =>
-                              setState(() => _isObscured = !_isObscured),
-                        ),
-                        const SizedBox(height: AppSpacing.sp24),
-                        AnimatedLoadingButton(
-                          label: context.l10n.auth_signIn,
-                          isLoading: _isLoading,
-                          onPressed: _signIn,
-                        ),
-                        const SizedBox(height: AppSpacing.sp16),
-                        _LoginFooterActions(
-                          enabled: !_isLoading,
-                          onForgotPassword: _openForgotPassword,
-                          onCreateAccount: _openCreateAccount,
-                        ),
-                      ]
-                      .animate(interval: 65.ms)
-                      .fadeIn(duration: 425.ms, curve: Curves.easeOutCubic)
-                      .slideY(
-                        begin: 0.28,
-                        duration: 425.ms,
-                        curve: Curves.easeOutCubic,
-                      ),
-            ),
+    return AuthScaffold(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const AuthLogo(),
+          const SizedBox(height: AppSpacing.sp24),
+          AuthHeaderText(
+            title: context.l10n.auth_welcomeBack,
+            subtitle: context.l10n.auth_signInToYourAccount,
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LoginHeaderText extends StatelessWidget {
-  const _LoginHeaderText();
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(context.l10n.auth_welcomeBack, style: textTheme.headlineLarge),
-        const SizedBox(height: 4),
-        Text(
-          context.l10n.auth_signInToYourAccount,
-          style: textTheme.bodyMedium,
-        ),
-      ],
-    );
-  }
-}
-
-class _LoginEmailField extends StatelessWidget {
-  const _LoginEmailField({
-    required this.controller,
-    required this.focusNode,
-    required this.enabled,
-    required this.hasError,
-    required this.errorText,
-    required this.onSubmitted,
-    required this.onChanged,
-  });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final bool enabled;
-  final bool hasError;
-  final String? errorText;
-  final VoidCallback onSubmitted;
-  final VoidCallback onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedFormFieldWrapper(
-      hasError: hasError,
-      child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        keyboardType: TextInputType.emailAddress,
-        textInputAction: TextInputAction.next,
-        autocorrect: false,
-        enableSuggestions: false,
-        autofillHints: const [AutofillHints.email],
-        enabled: enabled,
-        onSubmitted: (_) => onSubmitted(),
-        onChanged: (_) => onChanged(),
-        decoration: formInputDecoration(context, context.l10n.common_email)
-            .copyWith(
-              errorText: errorText,
-              prefixIcon: const Icon(Icons.email_outlined, size: 20),
-            ),
-      ),
-    );
-  }
-}
-
-class _LoginPasswordField extends StatelessWidget {
-  const _LoginPasswordField({
-    required this.controller,
-    required this.focusNode,
-    required this.enabled,
-    required this.hasError,
-    required this.errorText,
-    required this.isObscured,
-    required this.onSubmitted,
-    required this.onChanged,
-    required this.onToggleObscured,
-  });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final bool enabled;
-  final bool hasError;
-  final String? errorText;
-  final bool isObscured;
-  final VoidCallback onSubmitted;
-  final VoidCallback onChanged;
-  final VoidCallback onToggleObscured;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return AnimatedFormFieldWrapper(
-      hasError: hasError,
-      child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        obscureText: isObscured,
-        textInputAction: TextInputAction.done,
-        autofillHints: const [AutofillHints.password],
-        enabled: enabled,
-        onSubmitted: (_) => onSubmitted(),
-        onChanged: (_) => onChanged(),
-        decoration: formInputDecoration(context, context.l10n.common_password)
-            .copyWith(
-              errorText: errorText,
-              prefixIcon: const Icon(Icons.lock_outlined, size: 20),
-              suffixIcon: AnimatedSwitcher(
-                duration: AppAnimationDurations.quick,
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: ScaleTransition(
-                    scale: Tween<double>(begin: 0.7, end: 1).animate(animation),
-                    child: child,
-                  ),
-                ),
-                child: IconButton(
-                  key: ValueKey(isObscured),
-                  icon: Icon(
-                    isObscured
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    size: 20,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                  tooltip: isObscured
-                      ? context.l10n.auth_showPassword
-                      : context.l10n.auth_hidePassword,
-                  onPressed: onToggleObscured,
-                ),
-              ),
-            ),
+          const SizedBox(height: AppSpacing.sp16),
+          AuthBanner(
+            message: _bannerError ?? _bannerSuccess,
+            kind: _bannerError != null
+                ? AuthBannerKind.error
+                : AuthBannerKind.success,
+          ),
+          const SizedBox(height: AppSpacing.sp16),
+          AuthEmailField(
+            controller: _emailController,
+            focusNode: _emailFocus,
+            enabled: !_isLoading,
+            hasError: _emailError != null,
+            errorText: _submitted ? _emailError : null,
+            onSubmitted: _passwordFocus.requestFocus,
+            onChanged: _onFieldChanged,
+          ),
+          const SizedBox(height: AppSpacing.sp16),
+          AuthPasswordField(
+            label: context.l10n.common_password,
+            controller: _passwordController,
+            focusNode: _passwordFocus,
+            enabled: !_isLoading,
+            hasError: _passwordError != null,
+            errorText: _submitted ? _passwordError : null,
+            isObscured: _isObscured,
+            onSubmitted: _signIn,
+            onChanged: _onFieldChanged,
+            onToggleObscured: () => setState(() => _isObscured = !_isObscured),
+          ),
+          const SizedBox(height: AppSpacing.sp24),
+          AnimatedLoadingButton(
+            label: context.l10n.auth_signIn,
+            isLoading: _isLoading,
+            onPressed: _signIn,
+          ),
+          const SizedBox(height: AppSpacing.sp16),
+          _LoginFooterActions(
+            enabled: !_isLoading,
+            onForgotPassword: _openForgotPassword,
+            onCreateAccount: _openCreateAccount,
+          ),
+        ].authStaggerIn(),
       ),
     );
   }

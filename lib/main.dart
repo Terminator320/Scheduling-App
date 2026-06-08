@@ -29,6 +29,7 @@ import 'package:scheduling/features/settings/domain/models/app_settings.dart';
 import 'package:scheduling/firebase_options.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
+import 'package:scheduling/shared/widgets/feedback/error_snack_bar.dart';
 
 const bool _useFirebaseEmulator = bool.fromEnvironment('USE_FIREBASE_EMULATOR');
 const String _emulatorHost = String.fromEnvironment(
@@ -166,7 +167,6 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     final navContext = _navigatorKey.currentContext;
     if (navContext == null) return;
     _isHandlingAccountExit = true;
-    final scheme = Theme.of(navContext).colorScheme;
     final message = selectMessage(AppLocalizations.of(navContext));
     await AuthService().signOut();
 
@@ -176,21 +176,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
         (_) => false,
       );
       _scaffoldMessengerKey.currentState?.showSnackBar(
-        SnackBar(
-          backgroundColor: scheme.errorContainer,
-          content: Row(
-            children: [
-              Icon(Icons.error_outline, color: scheme.onErrorContainer),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  message,
-                  style: TextStyle(color: scheme.onErrorContainer),
-                ),
-              ),
-            ],
-          ),
-        ),
+        errorSnackBar(navContext, message),
       );
       _isHandlingAccountExit = false;
     });

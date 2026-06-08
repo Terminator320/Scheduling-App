@@ -141,3 +141,52 @@ class DetailSheetListView extends StatelessWidget {
     );
   }
 }
+
+/// Standard chrome for an add/edit **form** shown in a bottom sheet: the
+/// [DraggableSheetFrame] container plus a scrollable body with the shared sheet
+/// padding, a drag [SheetHandle], and a [headlineLarge] [title]. Put the
+/// divider and form fields in [children]. Mirrors [DetailSheetListView], which
+/// serves read-only detail views.
+class FormSheetScaffold extends StatelessWidget {
+  const FormSheetScaffold({
+    required this.title,
+    required this.children,
+    super.key,
+    this.initialChildSize = 0.7,
+    this.minChildSize = 0.5,
+    this.maxChildSize = 0.95,
+  });
+
+  final String title;
+  final List<Widget> children;
+  final double initialChildSize;
+  final double minChildSize;
+  final double maxChildSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableSheetFrame(
+      initialChildSize: initialChildSize,
+      minChildSize: minChildSize,
+      maxChildSize: maxChildSize,
+      builder: (sheetContext, scrollController) {
+        return ListView(
+          controller: scrollController,
+          padding: EdgeInsets.only(
+            left: AppSpacing.sp16,
+            right: AppSpacing.sp16,
+            top: AppSpacing.sp12,
+            bottom:
+                MediaQuery.of(sheetContext).viewInsets.bottom + AppSpacing.sp24,
+          ),
+          children: [
+            const SheetHandle(),
+            const SizedBox(height: AppSpacing.sp16),
+            Text(title, style: Theme.of(sheetContext).textTheme.headlineLarge),
+            ...children,
+          ],
+        );
+      },
+    );
+  }
+}

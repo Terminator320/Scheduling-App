@@ -187,140 +187,122 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return DraggableSheetFrame(
-      builder: (sheetContext, scrollController) {
-        return ListView(
-          controller: scrollController,
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 12,
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+    return FormSheetScaffold(
+      title: context.l10n.clients_newClient,
+      children: [
+        const SizedBox(height: 20),
+        const Divider(height: 1),
+        const SizedBox(height: 20),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: context.l10n.clients_businessName,
+            controller: _businessNameController,
+            optional: true,
+            autofillHints: const [AutofillHints.organizationName],
+            maxLength: TextLimits.personName,
+            errorText: _errors['businessName'],
+            onChanged: (_) {
+              _clearError('businessName');
+              _clearError('name');
+              _clearError('address');
+              setState(() {});
+            },
           ),
-          children: [
-            const SheetHandle(),
-            const SizedBox(height: 16),
-            Text(
-              context.l10n.clients_newClient,
-              style: theme.textTheme.headlineLarge,
-            ),
-            const SizedBox(height: 20),
-            const Divider(height: 1),
-            const SizedBox(height: 20),
-            SheetFocusScroll(
-              child: LabeledTextField(
-                label: context.l10n.clients_businessName,
-                controller: _businessNameController,
-                optional: true,
-                autofillHints: const [AutofillHints.organizationName],
-                maxLength: TextLimits.personName,
-                errorText: _errors['businessName'],
-                onChanged: (_) {
-                  _clearError('businessName');
-                  _clearError('name');
-                  _clearError('address');
-                  setState(() {});
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-            SheetFocusScroll(
-              child: LabeledTextField(
-                label: context.l10n.clients_contactName,
-                controller: _nameController,
-                required: !_isBusiness,
-                optional: _isBusiness,
-                autofillHints: const [AutofillHints.name],
-                maxLength: TextLimits.personName,
-                errorText: _errors['name'],
-                onChanged: (_) {
-                  _clearError('name');
-                  _clearError('businessName');
-                  setState(() {});
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-            SheetFocusScroll(
-              child: LabeledTextField(
-                label: context.l10n.common_email,
-                controller: _emailController,
-                keyboard: TextInputType.emailAddress,
-                optional: true,
-                autofillHints: const [AutofillHints.email],
-                maxLength: TextLimits.email,
-                errorText: _errors['email'],
-                onChanged: (_) {
-                  _clearError('email');
-                  _clearError('phone');
-                },
-              ),
-            ),
+        ),
+        const SizedBox(height: 16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: context.l10n.clients_contactName,
+            controller: _nameController,
+            required: !_isBusiness,
+            optional: _isBusiness,
+            autofillHints: const [AutofillHints.name],
+            maxLength: TextLimits.personName,
+            errorText: _errors['name'],
+            onChanged: (_) {
+              _clearError('name');
+              _clearError('businessName');
+              setState(() {});
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: context.l10n.common_email,
+            controller: _emailController,
+            keyboard: TextInputType.emailAddress,
+            optional: true,
+            autofillHints: const [AutofillHints.email],
+            maxLength: TextLimits.email,
+            errorText: _errors['email'],
+            onChanged: (_) {
+              _clearError('email');
+              _clearError('phone');
+            },
+          ),
+        ),
 
-            const SizedBox(height: 16),
-            SheetFocusScroll(
-              child: LabeledTextField(
-                label: context.l10n.clients_phone,
-                controller: _phoneController,
-                keyboard: TextInputType.phone,
-                required: true,
-                autofillHints: const [AutofillHints.telephoneNumber],
-                maxLength: TextLimits.phone,
-                errorText: _errors['phone'],
-                onChanged: (_) {
-                  _clearError('phone');
-                  _clearError('email');
-                },
-              ),
-            ),
+        const SizedBox(height: 16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: context.l10n.clients_phone,
+            controller: _phoneController,
+            keyboard: TextInputType.phone,
+            required: true,
+            autofillHints: const [AutofillHints.telephoneNumber],
+            maxLength: TextLimits.phone,
+            errorText: _errors['phone'],
+            onChanged: (_) {
+              _clearError('phone');
+              _clearError('email');
+            },
+          ),
+        ),
 
-            if (_isBusiness) ...[
-              const SizedBox(height: 8),
-              AdditionalContactsSection(
-                contacts: _additionalContacts,
-                errors: _errors,
-                onAddContact: _addAdditionalContact,
-                onRemoveContact: _removeAdditionalContact,
-                onClearError: _clearError,
-              ),
-            ],
-            const SizedBox(height: 16),
-            SheetFocusScroll(
-              child: AddressAutocompleteField(
-                controller: _addressController,
-                required: !_isBusiness,
-                errorText: _errors['address'],
-                onChanged: (_) => _clearError('address'),
-                onAddressSelected: (_) => _handleAddressSelected(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SheetFocusScroll(
-              child: LabeledTextField(
-                label: context.l10n.clients_aptUnit,
-                controller: _aptController,
-                optional: true,
-                maxLength: TextLimits.aptUnit,
-              ),
-            ),
-            const SizedBox(height: 16),
-            AddressGridFields(
-              cityController: _cityController,
-              provinceController: _provinceController,
-              postalCodeController: _postalCodeController,
-              countryController: _countryController,
-            ),
-            const SizedBox(height: 24),
-            _AddClientActions(
-              isSaving: _isSaving,
-              onCancel: _isSaving ? null : () => Navigator.pop(context),
-              onSave: _isSaving ? null : _save,
-            ),
-          ],
-        );
-      },
+        if (_isBusiness) ...[
+          const SizedBox(height: 8),
+          AdditionalContactsSection(
+            contacts: _additionalContacts,
+            errors: _errors,
+            onAddContact: _addAdditionalContact,
+            onRemoveContact: _removeAdditionalContact,
+            onClearError: _clearError,
+          ),
+        ],
+        const SizedBox(height: 16),
+        SheetFocusScroll(
+          child: AddressAutocompleteField(
+            controller: _addressController,
+            required: !_isBusiness,
+            errorText: _errors['address'],
+            onChanged: (_) => _clearError('address'),
+            onAddressSelected: (_) => _handleAddressSelected(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: context.l10n.clients_aptUnit,
+            controller: _aptController,
+            optional: true,
+            maxLength: TextLimits.aptUnit,
+          ),
+        ),
+        const SizedBox(height: 16),
+        AddressGridFields(
+          cityController: _cityController,
+          provinceController: _provinceController,
+          postalCodeController: _postalCodeController,
+          countryController: _countryController,
+        ),
+        const SizedBox(height: 24),
+        _AddClientActions(
+          isSaving: _isSaving,
+          onCancel: _isSaving ? null : () => Navigator.pop(context),
+          onSave: _isSaving ? null : _save,
+        ),
+      ],
     );
   }
 }

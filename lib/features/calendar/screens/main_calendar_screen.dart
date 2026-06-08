@@ -20,6 +20,7 @@ import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart'
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
+import 'package:scheduling/shared/widgets/feedback/error_snack_bar.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 class MainCalendar extends ConsumerStatefulWidget {
@@ -83,20 +84,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     final appointmentId = failure.appointmentId;
     final scheme = Theme.of(context).colorScheme;
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(
-        backgroundColor: scheme.errorContainer,
-        content: Row(
-          children: [
-            Icon(Icons.error_outline, color: scheme.onErrorContainer, size: 20),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                context.l10n.calendar_photoUploadFailedSnackbar,
-                style: TextStyle(color: scheme.onErrorContainer),
-              ),
-            ),
-          ],
-        ),
+      errorSnackBar(
+        context,
+        context.l10n.calendar_photoUploadFailedSnackbar,
         action: SnackBarAction(
           label: context.l10n.calendar_open,
           textColor: scheme.onErrorContainer,

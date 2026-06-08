@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/feedback/error_snack_bar.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AddressMapLauncher {
@@ -85,28 +86,10 @@ class AddressMapLauncher {
                       );
 
                       if (!opened && context.mounted) {
-                        final scheme = Theme.of(context).colorScheme;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            backgroundColor: scheme.errorContainer,
-                            content: Row(
-                              children: [
-                                Icon(
-                                  Icons.error_outline,
-                                  color: scheme.onErrorContainer,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    context.l10n.error_couldNotOpenMapApp,
-                                    style: TextStyle(
-                                      color: scheme.onErrorContainer,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                          errorSnackBar(
+                            context,
+                            context.l10n.error_couldNotOpenMapApp,
                           ),
                         );
                       }
