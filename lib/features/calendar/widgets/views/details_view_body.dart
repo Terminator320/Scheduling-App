@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
+import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
@@ -168,16 +169,14 @@ class _DeleteTestButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: AppSpacing.sp8),
         OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
+          style: destructiveOutlinedButtonStyle(
+            context,
             minimumSize: const Size(double.infinity, 44),
-            foregroundColor: scheme.error,
-            side: BorderSide(color: scheme.error),
           ),
           onPressed: isSaving
               ? null

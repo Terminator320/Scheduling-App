@@ -14,8 +14,8 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
-import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
+import 'package:scheduling/shared/widgets/primitives/entity_form_header.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
 class EmployeeFormSheet extends ConsumerStatefulWidget {
@@ -152,33 +152,19 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
     }
   }
 
-  Widget _buildEditHeader(ThemeData theme) {
+  Widget _buildEditHeader() {
     final e = widget.employee!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            AppAvatar(name: e.name, color: e.color, size: AvatarSize.lg),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  e.name,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                StatusChip(
-                  status: _isDisabled
-                      ? AppointmentStatus.disabled
-                      : AppointmentStatus.active,
-                ),
-              ],
-            ),
-          ],
+        EntityFormHeader(
+          name: e.name,
+          avatarColor: e.color,
+          status: StatusChip(
+            status: _isDisabled
+                ? AppointmentStatus.disabled
+                : AppointmentStatus.active,
+          ),
         ),
         const SizedBox(height: 16),
         const Divider(height: 1),
@@ -331,7 +317,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
         const Divider(height: 1),
         if (_isEdit) ...[
           const SizedBox(height: 4),
-          _buildEditHeader(theme),
+          _buildEditHeader(),
           const SizedBox(height: 14),
         ] else
           const SizedBox(height: 20),
