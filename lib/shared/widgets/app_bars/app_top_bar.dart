@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/layout/breakpoints.dart';
 
 /// The app's standard top bar: a primary-coloured [AppBar] with a bold
 /// on-primary title, an optional back button ([onBack]) and optional
@@ -41,6 +42,11 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    assert(
+      compact == context.isLandscape,
+      'AppTopBar.compact must equal context.isLandscape. '
+      'Pass compact: context.isLandscape at the call site.',
+    );
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final titleStyle =
