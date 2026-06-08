@@ -8,12 +8,10 @@ import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_form_validator.dart';
-import 'package:scheduling/features/clients/widgets/fields/address_grid_fields.dart';
+import 'package:scheduling/features/clients/widgets/fields/client_address_section.dart';
 import 'package:scheduling/features/clients/widgets/sections/additional_contacts_section.dart';
-import 'package:scheduling/features/maps/address_field_filler.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/fields/address_autocomplete_field.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
@@ -91,24 +89,6 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
       for (final contact in _additionalContacts)
         if (!contact.isEmpty) contact.toContact(),
     ];
-  }
-
-  void _handleAddressSelected() {
-    Future<void>.microtask(() {
-      if (!mounted) return;
-      setState(() {
-        _errors['address'] = null;
-        fillAddressControllersFromText(
-          _addressController.text,
-          address: _addressController,
-          apt: _aptController,
-          city: _cityController,
-          province: _provinceController,
-          postalCode: _postalCodeController,
-          country: _countryController,
-        );
-      });
-    });
   }
 
   Future<void> _save() async {
@@ -271,30 +251,16 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet> {
           ),
         ],
         const SizedBox(height: 16),
-        SheetFocusScroll(
-          child: AddressAutocompleteField(
-            controller: _addressController,
-            required: !_isBusiness,
-            errorText: _errors['address'],
-            onChanged: (_) => _clearError('address'),
-            onAddressSelected: (_) => _handleAddressSelected(),
-          ),
-        ),
-        const SizedBox(height: 16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: context.l10n.clients_aptUnit,
-            controller: _aptController,
-            optional: true,
-            maxLength: TextLimits.aptUnit,
-          ),
-        ),
-        const SizedBox(height: 16),
-        AddressGridFields(
+        ClientAddressSection(
+          addressController: _addressController,
+          aptController: _aptController,
           cityController: _cityController,
           provinceController: _provinceController,
           postalCodeController: _postalCodeController,
           countryController: _countryController,
+          isRequired: !_isBusiness,
+          errorText: _errors['address'],
+          onAddressErrorCleared: () => _clearError('address'),
         ),
         const SizedBox(height: 24),
         _AddClientActions(
