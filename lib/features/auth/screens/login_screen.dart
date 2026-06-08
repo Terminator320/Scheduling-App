@@ -15,6 +15,7 @@ import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/screens/create_account_screen.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/auth/widgets/auth_logo.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -332,7 +333,7 @@ class _LoginState extends ConsumerState<Login> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children:
                   [
-                        const _LoginLogo(),
+                        const AuthLogo(),
                         const SizedBox(height: AppSpacing.sp24),
                         const _LoginHeaderText(),
                         const SizedBox(height: AppSpacing.sp16),
@@ -395,28 +396,6 @@ class _LoginState extends ConsumerState<Login> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _LoginLogo extends StatelessWidget {
-  const _LoginLogo();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: scheme.primary,
-        borderRadius: BorderRadius.circular(AppRadius.r12),
-      ),
-      child: Icon(
-        Icons.calendar_today_rounded,
-        color: scheme.onPrimary,
-        size: 22,
       ),
     );
   }

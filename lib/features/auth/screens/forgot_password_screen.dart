@@ -8,6 +8,8 @@ import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/auth/widgets/auth_error_banner.dart';
+import 'package:scheduling/features/auth/widgets/auth_logo.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
@@ -144,19 +146,7 @@ class _ForgotPasswordState extends State<ForgotPasswordScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children:
           [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: scheme.primary,
-                    borderRadius: BorderRadius.circular(AppRadius.r12),
-                  ),
-                  child: Icon(
-                    Icons.calendar_today_rounded,
-                    color: scheme.onPrimary,
-                    size: 22,
-                  ),
-                ),
+                const AuthLogo(),
                 const SizedBox(height: AppSpacing.sp24),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -206,47 +196,8 @@ class _ForgotPasswordState extends State<ForgotPasswordScreen> {
                         ),
                   ),
                 ),
-                AnimatedSwitcher(
-                  duration: AppAnimationDurations.banner,
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: SizeTransition(
-                      sizeFactor: animation,
-                      alignment: AlignmentDirectional.topStart,
-                      child: child,
-                    ),
-                  ),
-                  child: _errorMessage.isNotEmpty
-                      ? Padding(
-                          key: ValueKey('error_$_errorMessage'),
-                          padding: const EdgeInsets.only(top: AppSpacing.sp12),
-                          child: Container(
-                            padding: const EdgeInsets.all(AppSpacing.sp12),
-                            decoration: BoxDecoration(
-                              color: scheme.errorContainer,
-                              borderRadius: BorderRadius.circular(AppRadius.r8),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.error_outline,
-                                  color: scheme.error,
-                                  size: 16,
-                                ),
-                                const SizedBox(width: AppSpacing.sp8),
-                                Expanded(
-                                  child: Text(
-                                    _errorMessage,
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: scheme.onErrorContainer,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      : const SizedBox.shrink(key: ValueKey('error_none')),
+                AuthErrorBanner(
+                  message: _errorMessage.isEmpty ? null : _errorMessage,
                 ),
                 const SizedBox(height: AppSpacing.sp24),
                 AnimatedLoadingButton(
