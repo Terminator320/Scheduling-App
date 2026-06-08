@@ -88,7 +88,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     await Future<void>.delayed(const Duration(milliseconds: 80));
     if (!mounted) return;
 
-    if (context.isWide) {
+    if (context.isSplitLayout) {
       setState(() => _selectedEmployee = employee);
       return;
     }

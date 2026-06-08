@@ -91,7 +91,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _onTextSizeTap() async {
-    if (context.isWide) {
+    if (context.isSplitLayout) {
       setState(() => _selectedDetail = _SettingsDetail.textSize);
       return;
     }
