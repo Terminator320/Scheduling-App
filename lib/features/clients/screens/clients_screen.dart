@@ -94,7 +94,6 @@ class _ListInformationState extends State<ListInformation> {
       onBack: _backToCalendar,
       bottom: AppSearchBar(
         controller: _searchController,
-        onChanged: (_) => setState(() {}),
         hintText: context.l10n.clients_searchByNameOrPhone,
       ),
     );
@@ -107,7 +106,6 @@ class _ListInformationState extends State<ListInformation> {
       onBack: _backToCalendar,
       bottom: AppSearchBar(
         controller: _appointmentSearchController,
-        onChanged: (_) => setState(() {}),
         hintText: context.l10n.clients_searchByClientOrEmployee,
       ),
     );
@@ -160,17 +158,6 @@ class _ListInformationState extends State<ListInformation> {
 
   @override
   Widget build(BuildContext context) {
-    final body = MasterDetailScaffold(
-      master: _buildMaster(),
-      detail: _isClients && _selectedClient != null
-          ? ClientDetailView(
-              key: ValueKey(_selectedClient!.id),
-              client: _selectedClient!,
-            )
-          : null,
-      placeholder: _buildDetailPlaceholder(),
-    );
-
     return Scaffold(
       appBar: _isClients ? _buildClientsAppBar() : _buildHistoryAppBar(),
       endDrawer: SettingsDrawer.endDrawerFor(
@@ -184,13 +171,31 @@ class _ListInformationState extends State<ListInformation> {
               child: const Icon(Icons.add),
             )
           : null,
-      body: AdaptiveShell(
-        currentDestination: _isClients
-            ? AdaptiveDestination.clients
-            : AdaptiveDestination.history,
-        isAdmin: widget.isAdmin,
-        employeeId: widget.employeeId,
-        child: body,
+      body: ListenableBuilder(
+        listenable: Listenable.merge([
+          _searchController,
+          _appointmentSearchController,
+        ]),
+        builder: (context, _) {
+          final body = MasterDetailScaffold(
+            master: _buildMaster(),
+            detail: _isClients && _selectedClient != null
+                ? ClientDetailView(
+                    key: ValueKey(_selectedClient!.id),
+                    client: _selectedClient!,
+                  )
+                : null,
+            placeholder: _buildDetailPlaceholder(),
+          );
+          return AdaptiveShell(
+            currentDestination: _isClients
+                ? AdaptiveDestination.clients
+                : AdaptiveDestination.history,
+            isAdmin: widget.isAdmin,
+            employeeId: widget.employeeId,
+            child: body,
+          );
+        },
       ),
     );
   }

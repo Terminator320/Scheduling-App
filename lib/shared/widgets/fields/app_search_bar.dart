@@ -3,13 +3,14 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 
 class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
   const AppSearchBar({
-    required this.onChanged, super.key,
+    super.key,
+    this.onChanged,
     this.hintText = 'Search…',
     this.controller,
     this.focusNode,
   });
 
-  final ValueChanged<String> onChanged;
+  final ValueChanged<String>? onChanged;
   final String hintText;
   final TextEditingController? controller;
   final FocusNode? focusNode;
@@ -28,7 +29,7 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
       child: TextField(
         controller: controller,
         focusNode: focusNode,
-        onChanged: onChanged,
+        onChanged: onChanged ?? (_) {},
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
           color: scheme.onSurface,
         ),
@@ -65,7 +66,7 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
                           ),
                           onPressed: () {
                             controller!.clear();
-                            onChanged('');
+                            onChanged?.call('');
                           },
                         ),
                       ),
