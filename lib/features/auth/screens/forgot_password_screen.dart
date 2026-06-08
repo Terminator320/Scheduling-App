@@ -1,17 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
-import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
-import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
-import 'package:scheduling/features/auth/widgets/auth_error_banner.dart';
-import 'package:scheduling/features/auth/widgets/auth_logo.dart';
+import 'package:scheduling/features/auth/widgets/auth_banner.dart';
+import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key, this.initialEmail, this.authService});
@@ -100,38 +96,11 @@ class _ForgotPasswordState extends State<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
-      child: Scaffold(
-        backgroundColor: scheme.surface,
-        body: SafeArea(
-          child: SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sp24,
-              vertical: AppSpacing.sp32,
-            ),
-            child: AnimatedSwitcher(
-              duration: AppAnimationDurations.banner,
-              switchInCurve: AppAnimationCurves.entrance,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, animation) => FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0, 0.04),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  child: child,
-                ),
-              ),
-              child: _emailSent
-                  ? _buildSuccess(key: ValueKey('success_$_restartTick'))
-                  : _buildForm(key: ValueKey('form_$_restartTick')),
-            ),
-          ),
-        ),
+    return AuthScaffold(
+      child: AuthFormSwitcher(
+        child: _emailSent
+            ? _buildSuccess(key: ValueKey('success_$_restartTick'))
+            : _buildForm(key: ValueKey('form_$_restartTick')),
       ),
     );
   }
@@ -144,87 +113,52 @@ class _ForgotPasswordState extends State<ForgotPasswordScreen> {
     return Column(
       key: key,
       crossAxisAlignment: CrossAxisAlignment.start,
-      children:
-          [
-                const AuthLogo(),
-                const SizedBox(height: AppSpacing.sp24),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.l10n.auth_forgotYourPassword,
-                      style: textTheme.headlineLarge,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      context
-                          .l10n
-                          .auth_enterYourAccountEmailAndWeLlSendYouALinkToResetYourPassword,
-                      style: textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sp32),
-                AnimatedFormFieldWrapper(
-                  hasError: _emailError != null,
-                  child: TextField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    autofillHints: const [AutofillHints.email],
-                    autocorrect: false,
-                    textInputAction: TextInputAction.done,
-                    enabled: !_isLoading,
-                    onSubmitted: (_) => _sendResetEmail(),
-                    onChanged: (_) {
-                      if (_emailError != null || _errorMessage.isNotEmpty) {
-                        setState(() {
-                          _emailError = null;
-                          _errorMessage = '';
-                        });
-                      }
-                    },
-                    decoration:
-                        formInputDecoration(
-                          context,
-                          context.l10n.auth_youExampleCom,
-                        ).copyWith(
-                          errorText: _emailError,
-                          prefixIcon: const Icon(
-                            Icons.email_outlined,
-                            size: 20,
-                          ),
-                        ),
-                  ),
-                ),
-                AuthErrorBanner(
-                  message: _errorMessage.isEmpty ? null : _errorMessage,
-                ),
-                const SizedBox(height: AppSpacing.sp24),
-                AnimatedLoadingButton(
-                  label: context.l10n.auth_sendResetEmail,
-                  isLoading: _isLoading,
-                  onPressed: _sendResetEmail,
-                ),
-                const SizedBox(height: AppSpacing.sp16),
-                Center(
-                  child: TextButton(
-                    onPressed: _isLoading ? null : _backToSignIn,
-                    child: Text(
-                      context.l10n.auth_backToSignIn,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: scheme.primary,
-                      ),
-                    ),
-                  ),
-                ),
-              ]
-              .animate(interval: 65.ms)
-              .fadeIn(duration: 425.ms, curve: Curves.easeOutCubic)
-              .slideY(
-                begin: 0.28,
-                duration: 425.ms,
-                curve: Curves.easeOutCubic,
-              ),
+      children: [
+        const AuthLogo(),
+        const SizedBox(height: AppSpacing.sp24),
+        AuthHeaderText(
+          title: context.l10n.auth_forgotYourPassword,
+          subtitle: context
+              .l10n
+              .auth_enterYourAccountEmailAndWeLlSendYouALinkToResetYourPassword,
+        ),
+        const SizedBox(height: AppSpacing.sp32),
+        AuthEmailField(
+          controller: _emailController,
+          enabled: !_isLoading,
+          errorText: _emailError,
+          hint: context.l10n.auth_youExampleCom,
+          textInputAction: TextInputAction.done,
+          onSubmitted: _sendResetEmail,
+          onChanged: () {
+            if (_emailError != null || _errorMessage.isNotEmpty) {
+              setState(() {
+                _emailError = null;
+                _errorMessage = '';
+              });
+            }
+          },
+        ),
+        AuthBanner(
+          message: _errorMessage.isEmpty ? null : _errorMessage,
+        ),
+        const SizedBox(height: AppSpacing.sp24),
+        AnimatedLoadingButton(
+          label: context.l10n.auth_sendResetEmail,
+          isLoading: _isLoading,
+          onPressed: _sendResetEmail,
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        Center(
+          child: TextButton(
+            onPressed: _isLoading ? null : _backToSignIn,
+            child: Text(
+              context.l10n.auth_backToSignIn,
+              style: textTheme.bodySmall?.copyWith(color: scheme.primary),
+            ),
+          ),
+        ),
+      ].authStaggerIn(),
     );
   }
 
@@ -236,89 +170,66 @@ class _ForgotPasswordState extends State<ForgotPasswordScreen> {
     return Column(
       key: key,
       crossAxisAlignment: CrossAxisAlignment.start,
-      children:
-          [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: scheme.tertiaryContainer,
-                    borderRadius: BorderRadius.circular(AppRadius.r12),
-                  ),
-                  child: Icon(
-                    Icons.mark_email_read_rounded,
-                    size: 22,
-                    color: scheme.tertiary,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sp24),
-                Text(
-                  context.l10n.auth_checkYourInbox,
-                  style: textTheme.headlineLarge,
-                ),
-                const SizedBox(height: 4),
-                Text(
+      children: [
+        AuthIconBadge(
+          icon: Icons.mark_email_read_rounded,
+          background: scheme.tertiaryContainer,
+          foreground: scheme.tertiary,
+        ),
+        const SizedBox(height: AppSpacing.sp24),
+        AuthHeaderText(
+          title: context.l10n.auth_checkYourInbox,
+          subtitle: context
+              .l10n
+              .auth_ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent,
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.sp12),
+          decoration: BoxDecoration(
+            color: scheme.tertiaryContainer,
+            borderRadius: BorderRadius.circular(AppRadius.r8),
+            border: Border.all(
+              color: scheme.tertiary.withValues(alpha: 0.4),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.check_circle_outline,
+                color: scheme.tertiary,
+                size: 16,
+              ),
+              const SizedBox(width: AppSpacing.sp8),
+              Expanded(
+                child: Text(
                   context
                       .l10n
-                      .auth_ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent,
-                  style: textTheme.bodyMedium,
-                ),
-                const SizedBox(height: AppSpacing.sp16),
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.sp12),
-                  decoration: BoxDecoration(
-                    color: scheme.tertiaryContainer,
-                    borderRadius: BorderRadius.circular(AppRadius.r8),
-                    border: Border.all(
-                      color: scheme.tertiary.withValues(alpha: 0.4),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.check_circle_outline,
-                        color: scheme.tertiary,
-                        size: 16,
-                      ),
-                      const SizedBox(width: AppSpacing.sp8),
-                      Expanded(
-                        child: Text(
-                          context
-                              .l10n
-                              .auth_theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder,
-                          style: textTheme.bodySmall?.copyWith(
-                            color: scheme.onTertiaryContainer,
-                          ),
-                        ),
-                      ),
-                    ],
+                      .auth_theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: scheme.onTertiaryContainer,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.sp24),
-                AnimatedLoadingButton(
-                  label: context.l10n.auth_backToSignIn,
-                  onPressed: _backToSignIn,
-                ),
-                const SizedBox(height: AppSpacing.sp16),
-                Center(
-                  child: TextButton(
-                    onPressed: _resendEmail,
-                    child: Text(
-                      context.l10n.auth_didnTReceiveTheEmailTryAgain,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: scheme.primary,
-                      ),
-                    ),
-                  ),
-                ),
-              ]
-              .animate(interval: 65.ms)
-              .fadeIn(duration: 425.ms, curve: Curves.easeOutCubic)
-              .slideY(
-                begin: 0.28,
-                duration: 425.ms,
-                curve: Curves.easeOutCubic,
               ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp24),
+        AnimatedLoadingButton(
+          label: context.l10n.auth_backToSignIn,
+          onPressed: _backToSignIn,
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        Center(
+          child: TextButton(
+            onPressed: _resendEmail,
+            child: Text(
+              context.l10n.auth_didnTReceiveTheEmailTryAgain,
+              style: textTheme.bodySmall?.copyWith(color: scheme.primary),
+            ),
+          ),
+        ),
+      ].authStaggerIn(),
     );
   }
 }

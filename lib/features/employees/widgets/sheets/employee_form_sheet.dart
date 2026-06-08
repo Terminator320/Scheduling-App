@@ -324,57 +324,44 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
         ? context.l10n.common_saveChanges
         : context.l10n.employees_sendInvite;
 
-    return DraggableSheetFrame(
-      builder: (sheetContext, scrollController) {
-        return ListView(
-          controller: scrollController,
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 12,
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
-          ),
-          children: [
-            const SheetHandle(),
-            const SizedBox(height: 16),
-            Text(title, style: theme.textTheme.headlineLarge),
-            const SizedBox(height: 16),
-            const Divider(height: 1),
-            if (_isEdit) ...[
-              const SizedBox(height: 4),
-              _buildEditHeader(theme),
-              const SizedBox(height: 14),
-            ] else
-              const SizedBox(height: 20),
-            ..._buildIdentityFields(),
-            // Admin access is grantable only after activation — an invited
-            // admin can't self-activate (firestore.rules), so the toggle is
-            // edit-only.
-            if (_isEdit) ...[
-              const SizedBox(height: 16),
-              _buildPermissionsCard(theme),
-            ],
-            const SizedBox(height: 12),
-            EmployeeColorPickerRow(
-              selectedColor: _selectedColor,
-              onColorChanged: (value) => setState(() => _selectedColor = value),
-              required: !_isEdit,
-              usedColors: widget.usedColors,
-            ),
-            const SizedBox(height: 16),
-            AnimatedLoadingButton(
-              label: submitLabel,
-              isLoading: _isSaving,
-              onPressed: _save,
-              height: 48,
-            ),
-            if (_isEdit) ...[
-              const SizedBox(height: 16),
-              _buildAccountStatusSection(theme),
-            ],
-          ],
-        );
-      },
+    return FormSheetScaffold(
+      title: title,
+      children: [
+        const SizedBox(height: 16),
+        const Divider(height: 1),
+        if (_isEdit) ...[
+          const SizedBox(height: 4),
+          _buildEditHeader(theme),
+          const SizedBox(height: 14),
+        ] else
+          const SizedBox(height: 20),
+        ..._buildIdentityFields(),
+        // Admin access is grantable only after activation — an invited
+        // admin can't self-activate (firestore.rules), so the toggle is
+        // edit-only.
+        if (_isEdit) ...[
+          const SizedBox(height: 16),
+          _buildPermissionsCard(theme),
+        ],
+        const SizedBox(height: 12),
+        EmployeeColorPickerRow(
+          selectedColor: _selectedColor,
+          onColorChanged: (value) => setState(() => _selectedColor = value),
+          required: !_isEdit,
+          usedColors: widget.usedColors,
+        ),
+        const SizedBox(height: 16),
+        AnimatedLoadingButton(
+          label: submitLabel,
+          isLoading: _isSaving,
+          onPressed: _save,
+          height: 48,
+        ),
+        if (_isEdit) ...[
+          const SizedBox(height: 16),
+          _buildAccountStatusSection(theme),
+        ],
+      ],
     );
   }
 
