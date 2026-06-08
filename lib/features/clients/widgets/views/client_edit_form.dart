@@ -119,9 +119,9 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
   }
 
   List<ClientContact> _buildContacts() {
-    // Clearing the business name hides the section but preserves the
-    // previously saved contacts.
-    if (!_isBusiness) return widget.client.contacts;
+    // A non-business client has no contacts list — its sole contact lives in
+    // the top-level name/phone/email fields (mirrors the add-client form).
+    if (!_isBusiness) return const [];
 
     return [
       ClientContact(

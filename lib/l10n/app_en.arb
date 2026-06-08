@@ -519,6 +519,42 @@
   "@error_couldNotOpenMapApp": {
     "description": "Could not open map app"
   },
+  "error_couldNotStartCall": "Could not start the call",
+  "@error_couldNotStartCall": {
+    "description": "Shown when launching the phone dialer for a client fails"
+  },
+  "error_couldNotOpenEmail": "Could not open email app",
+  "@error_couldNotOpenEmail": {
+    "description": "Shown when launching the email composer for a client fails"
+  },
+  "clients_call": "Call",
+  "@clients_call": {
+    "description": "Quick-action button that dials the client's phone number"
+  },
+  "clients_contactInfo": "Contact info",
+  "@clients_contactInfo": {
+    "description": "Section header above the client's phone, email and address"
+  },
+  "clients_directions": "Directions",
+  "@clients_directions": {
+    "description": "Quick-action button that opens the client's address in a map app"
+  },
+  "clients_emailWith": "Email with",
+  "@clients_emailWith": {
+    "description": "Header of the bottom sheet that picks which email app to compose with"
+  },
+  "clients_defaultMailApp": "Default mail app",
+  "@clients_defaultMailApp": {
+    "description": "Email chooser option that opens the system default mail app"
+  },
+  "clients_gmail": "Gmail",
+  "@clients_gmail": {
+    "description": "Email chooser option that composes in Gmail"
+  },
+  "clients_outlook": "Outlook",
+  "@clients_outlook": {
+    "description": "Email chooser option that composes in Outlook"
+  },
   "common_noEmployeesFound": "No employees found",
   "@common_noEmployeesFound": {
     "description": "No employees found"

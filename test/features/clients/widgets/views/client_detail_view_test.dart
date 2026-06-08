@@ -132,6 +132,40 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('view mode shows quick actions only for available details', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    // _businessClient has a phone and an address but no email.
+    await tester.pumpWidget(_wrap(repo, _businessClient));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(InkWell, 'Call'), findsOneWidget);
+    expect(find.widgetWithText(InkWell, 'Directions'), findsOneWidget);
+    expect(find.widgetWithText(InkWell, 'Email'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('view mode lists only the extra contacts, not the primary', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    // contacts: [Alice Brown (primary mirror), Bob Builder (extra)].
+    await tester.pumpWidget(_wrap(repo, _businessClient));
+    await tester.pumpAndSettle();
+
+    // The extra contact is listed.
+    expect(find.text('Bob Builder'), findsOneWidget);
+    // The primary phone shows once (contact-info card) — not duplicated in a
+    // redundant primary-contact card below.
+    expect(find.text('555-0101'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('view mode shows the saved changes without reopening', (
     tester,
   ) async {
@@ -150,7 +184,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('saving with a cleared business name preserves stored contacts', (
+  testWidgets('clearing the business name drops the business contacts', (
     tester,
   ) async {
     when(() => repo.updateClient(any())).thenAnswer((_) async {});
@@ -166,7 +200,30 @@ void main() {
     final saved =
         verify(() => repo.updateClient(captureAny())).captured.single
             as ClientRecord;
-    expect(saved.contacts, _businessClient.contacts);
+    expect(saved.businessName, isEmpty);
+    expect(saved.contacts, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('removing an extra contact then clearing the business name '
+      'persists the removal', (tester) async {
+    when(() => repo.updateClient(any())).thenAnswer((_) async {});
+    await _pumpInEditMode(tester, repo, _businessClient);
+
+    // Remove the extra "Bob Builder" contact card.
+    await tester.tap(find.byTooltip('Remove contact'));
+    await tester.pumpAndSettle();
+    // Then clear the business name and save.
+    await tester.enterText(_textFieldFor('Business name'), '');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+
+    final saved =
+        verify(() => repo.updateClient(captureAny())).captured.single
+            as ClientRecord;
+    expect(saved.contacts, isEmpty);
     expect(tester.takeException(), isNull);
   });
 }
