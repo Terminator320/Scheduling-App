@@ -21,7 +21,7 @@ enum AdaptiveDestination { calendar, clients, employees, history, settings }
   AdaptiveDestination.clients => (
     route: AppRoutes.clients,
     arguments: ClientsListArgs(
-      mode: 'Clients',
+      mode: ClientsMode.clients,
       isAdmin: isAdmin,
       employeeId: employeeId,
     ),
@@ -33,7 +33,7 @@ enum AdaptiveDestination { calendar, clients, employees, history, settings }
   AdaptiveDestination.history => (
     route: AppRoutes.clients,
     arguments: ClientsListArgs(
-      mode: 'Appointments',
+      mode: ClientsMode.history,
       isAdmin: isAdmin,
       employeeId: employeeId,
     ),
