@@ -97,3 +97,47 @@ class SheetHandle extends StatelessWidget {
     );
   }
 }
+
+/// Standard scrollable body for a detail view shown either in a bottom sheet
+/// (with a drag [showHandle]) or a master-detail pane. Centralises the detail
+/// padding and the keyboard-inset–aware bottom gap so every detail view stays
+/// consistent.
+class DetailSheetListView extends StatelessWidget {
+  const DetailSheetListView({
+    required this.children,
+    super.key,
+    this.scrollController,
+    this.showHandle = false,
+    this.bottomPadding = 24,
+    this.handleGap = 16,
+  });
+
+  final List<Widget> children;
+  final ScrollController? scrollController;
+  final bool showHandle;
+  final double bottomPadding;
+
+  /// Gap between the drag handle and the first child (only when [showHandle]).
+  final double handleGap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return ListView(
+      controller: scrollController,
+      padding: EdgeInsets.only(
+        left: AppSpacing.sp16,
+        right: AppSpacing.sp16,
+        top: AppSpacing.sp12,
+        bottom: bottomInset + bottomPadding,
+      ),
+      children: [
+        if (showHandle) ...[
+          const SheetHandle(),
+          SizedBox(height: handleGap),
+        ],
+        ...children,
+      ],
+    );
+  }
+}

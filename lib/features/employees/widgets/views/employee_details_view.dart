@@ -9,6 +9,7 @@ import 'package:scheduling/features/employees/domain/models/employee_record.dart
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
+import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
 typedef EmployeeDetailsAction = void Function(String action);
@@ -120,19 +121,12 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDisabled = widget.employee.isDisabled;
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    return ListView(
-      controller: widget.scrollController,
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 12,
-        bottom: bottomInset + widget.bottomPadding,
-      ),
+    return DetailSheetListView(
+      scrollController: widget.scrollController,
+      showHandle: widget.showHandle,
+      bottomPadding: widget.bottomPadding,
       children: [
-        if (widget.showHandle) const SheetHandle(),
-        if (widget.showHandle) const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
@@ -227,23 +221,16 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
           const SizedBox(height: AppSpacing.sp8),
           FilledButton.icon(
             onPressed: _isDisabling ? null : _confirmDisable,
-            icon: _isDisabling
-                ? SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: isDisabled
-                          ? theme.colorScheme.onPrimary
-                          : theme.colorScheme.onError,
-                    ),
-                  )
-                : Icon(
-                    isDisabled
-                        ? Icons.lock_open_outlined
-                        : Icons.block_outlined,
-                    size: 18,
-                  ),
+            icon: BusyButtonIcon(
+              isBusy: _isDisabling,
+              icon: isDisabled
+                  ? Icons.lock_open_outlined
+                  : Icons.block_outlined,
+              spinnerSize: 16,
+              color: isDisabled
+                  ? theme.colorScheme.onPrimary
+                  : theme.colorScheme.onError,
+            ),
             label: Text(
               isDisabled
                   ? context.l10n.employees_enableEmployee
@@ -260,16 +247,12 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
         const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: _isDeleting ? null : _confirmDelete,
-          icon: _isDeleting
-              ? SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: theme.colorScheme.error,
-                  ),
-                )
-              : const Icon(Icons.delete_outline, size: 18),
+          icon: BusyButtonIcon(
+            isBusy: _isDeleting,
+            icon: Icons.delete_outline,
+            spinnerSize: 16,
+            color: theme.colorScheme.error,
+          ),
           label: Text(context.l10n.employees_deleteEmployee),
           style: OutlinedButton.styleFrom(
             minimumSize: const Size(double.infinity, 48),
