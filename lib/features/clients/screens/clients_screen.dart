@@ -58,7 +58,7 @@ class _ListInformationState extends State<ListInformation> {
   }
 
   Future<void> _onClientTap(ClientRecord client) async {
-    if (context.isWide) {
+    if (context.isSplitLayout) {
       setState(() => _selectedClient = client);
       return;
     }
