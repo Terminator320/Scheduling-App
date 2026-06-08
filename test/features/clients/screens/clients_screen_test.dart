@@ -10,6 +10,7 @@ import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/screens/clients_screen.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/routes/app_routes.dart';
 
 class _MockClientsRepo extends Mock implements ClientsRepository {}
 
@@ -43,7 +44,7 @@ Widget _wrap(ClientsRepository repo) {
         supportedLocales: AppLocalizations.supportedLocales,
         theme: lightTheme(),
         home: const ListInformation(
-          mode: 'Clients',
+          mode: ClientsMode.clients,
           isAdmin: true,
           employeeId: 'admin',
         ),
