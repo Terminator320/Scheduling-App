@@ -14,6 +14,7 @@ import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart'
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
+import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
 
 class ListInformation extends StatefulWidget {
@@ -125,36 +126,12 @@ class _ListInformationState extends State<ListInformation> {
     );
   }
 
-  Widget _buildDetailPlaceholder() {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      color: scheme.surface,
-      alignment: Alignment.center,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sp24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.people_outline_rounded,
-              size: 48,
-              color: scheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              _isClients
-                  ? context.l10n.clients_selectAClientToViewDetails
-                  : context.l10n.clients_noClientsYet,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildDetailPlaceholder() => DetailPlaceholder(
+    icon: Icons.people_outline_rounded,
+    message: _isClients
+        ? context.l10n.clients_selectAClientToViewDetails
+        : context.l10n.clients_noClientsYet,
+  );
 
   @override
   Widget build(BuildContext context) {

@@ -3,7 +3,10 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 
 class AppEmptyState extends StatelessWidget {
   const AppEmptyState({
-    required this.icon, required this.title, required this.body, super.key,
+    required this.icon,
+    required this.title,
+    required this.body,
+    super.key,
     this.actionLabel,
     this.onAction,
   });
@@ -46,7 +49,11 @@ class AppEmptyState extends StatelessWidget {
                 child: Icon(icon, size: 24, color: scheme.primary),
               ),
               const SizedBox(height: AppSpacing.sp16),
-              Text(title, style: textTheme.titleMedium, textAlign: TextAlign.center),
+              Text(
+                title,
+                style: textTheme.titleMedium,
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: AppSpacing.sp8),
               Text(
                 body,
@@ -57,11 +64,52 @@ class AppEmptyState extends StatelessWidget {
                 const SizedBox(height: AppSpacing.sp16),
                 SizedBox(
                   width: 160,
-                  child: FilledButton(onPressed: onAction, child: Text(actionLabel!)),
+                  child: FilledButton(
+                    onPressed: onAction,
+                    child: Text(actionLabel!),
+                  ),
                 ),
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Centered empty-pane placeholder for master-detail layouts.
+class DetailPlaceholder extends StatelessWidget {
+  const DetailPlaceholder({
+    required this.icon,
+    required this.message,
+    super.key,
+  });
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      color: scheme.surface,
+      alignment: Alignment.center,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sp24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 48, color: scheme.onSurfaceVariant),
+            const SizedBox(height: AppSpacing.sp12),
+            Text(
+              message,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );
