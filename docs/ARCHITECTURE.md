@@ -141,6 +141,16 @@ The add- and edit-client forms also share the street-address block
 (`ClientAddressSection`) and a `ClientFormState` mixin (the field-error map and
 the extra-contacts list with its add/remove/dispose mutators).
 
+The read-only client view (`client_view_body.dart`) leads with a Call / Email /
+Directions quick-action row (each button appears only when the client has that
+detail) and renders the phone/email/address as tappable rows. Address taps open
+the map-app chooser (`AddressMapLauncher`); email taps open a parallel
+mail-app chooser (`EmailComposeLauncher` — system default / Gmail / Outlook, via
+`mailto:` and web-compose URLs so no iOS query-scheme entitlements are needed).
+The **Contacts** list skips `contacts[0]` (the primary, already shown in the
+header and contact-info card via the top-level name/phone/email fields) and
+lists only the additional business contacts.
+
 ### Repeating Appointments
 
 Repeats are **materialized, not rule-evaluated**: picking a Repeat option in the

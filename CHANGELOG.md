@@ -10,6 +10,26 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.5.0+13] - 2026-06-08
+
+### Added
+- Client details now show **Call**, **Email**, and **Directions** quick-action
+  buttons right under the name, and the phone, email, and address rows are
+  tappable.
+- Tapping **Email** lets you pick which app to send from — your default mail
+  app, Gmail, or Outlook — the same way addresses already let you choose a map
+  app.
+
+### Changed
+- Refreshed the look of the client details screen: tinted icon chips and
+  clearer section headers. The primary contact is no longer repeated in the
+  **Contacts** list — only the additional business contacts appear there.
+
+### Fixed
+- Editing a business client: clearing the business name now correctly removes
+  its extra business contacts when you save, instead of a previously removed
+  contact reappearing.
+
 ## [1.4.2+12] - 2026-06-08
 
 ### Changed
