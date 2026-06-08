@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/widgets/fields/address_grid_fields.dart';
 import 'package:scheduling/features/maps/address_field_filler.dart';
@@ -74,7 +75,7 @@ class _ClientAddressSectionState extends State<ClientAddressSection> {
             onAddressSelected: (_) => _handleAddressSelected(),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.sp16),
         SheetFocusScroll(
           child: LabeledTextField(
             label: context.l10n.clients_aptUnit,
@@ -83,7 +84,7 @@ class _ClientAddressSectionState extends State<ClientAddressSection> {
             maxLength: TextLimits.aptUnit,
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.sp16),
         AddressGridFields(
           cityController: widget.cityController,
           provinceController: widget.provinceController,

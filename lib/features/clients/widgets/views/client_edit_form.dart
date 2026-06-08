@@ -4,10 +4,12 @@ import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_form_validator.dart';
+import 'package:scheduling/features/clients/widgets/client_form_state.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_address_section.dart';
 import 'package:scheduling/features/clients/widgets/sections/additional_contacts_section.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
@@ -39,9 +41,8 @@ class ClientEditForm extends ConsumerStatefulWidget {
   ConsumerState<ClientEditForm> createState() => _ClientEditFormState();
 }
 
-class _ClientEditFormState extends ConsumerState<ClientEditForm> {
-  final Map<String, String?> _errors = {};
-
+class _ClientEditFormState extends ConsumerState<ClientEditForm>
+    with ClientFormState<ClientEditForm> {
   late final TextEditingController _businessNameController;
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
@@ -52,7 +53,6 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm> {
   late final TextEditingController _provinceController;
   late final TextEditingController _countryController;
   late final TextEditingController _postalCodeController;
-  final List<ContactFields> _additionalContacts = [];
 
   // A business name marks the client as a business and unlocks extra contacts.
   bool get _isBusiness => _businessNameController.text.trim().isNotEmpty;
@@ -93,7 +93,7 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm> {
     // contacts[0] mirrors the main name/phone/email fields; the rest are
     // the additional business contacts.
     for (final contact in c.contacts.skip(1)) {
-      _additionalContacts.add(
+      additionalContacts.add(
         ContactFields()
           ..nameController.text = contact.name
           ..phoneController.text = contact.phone
@@ -114,31 +114,8 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm> {
     _provinceController.dispose();
     _countryController.dispose();
     _postalCodeController.dispose();
-    for (final contact in _additionalContacts) {
-      contact.dispose();
-    }
+    disposeAdditionalContacts();
     super.dispose();
-  }
-
-  void _clearError(String key) {
-    if (_errors[key] != null) setState(() => _errors[key] = null);
-  }
-
-  void _addAdditionalContact() {
-    setState(() {
-      _additionalContacts.add(ContactFields());
-    });
-  }
-
-  void _removeAdditionalContact(int index) {
-    setState(() {
-      _additionalContacts.removeAt(index).dispose();
-      // Later rows shift down an index; _save rebuilds every contact_ key.
-      _errors
-        ..remove('contact_${index}_name')
-        ..remove('contact_${index}_phone')
-        ..remove('contact_${index}_email');
-    });
   }
 
   List<ClientContact> _buildContacts() {
@@ -152,7 +129,7 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm> {
         phone: _phoneController.text.trim(),
         email: _emailController.text.trim(),
       ),
-      for (final contact in _additionalContacts)
+      for (final contact in additionalContacts)
         if (!contact.isEmpty) contact.toContact(),
     ];
   }
@@ -172,17 +149,17 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm> {
       email: email,
       address: address,
       additionalContacts: [
-        for (final contact in _additionalContacts) contact.toContact(),
+        for (final contact in additionalContacts) contact.toContact(),
       ],
     );
 
     setState(() {
-      _errors
+      errors
         ..clear()
         ..addAll(nextErrors);
     });
 
-    if (_errors.values.any((e) => e != null)) return;
+    if (errors.values.any((e) => e != null)) return;
 
     // --- Build & persist ---
     final updated = ClientRecord(
@@ -228,7 +205,7 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm> {
       children: [
         // --- Header ---
         EntityFormHeader(name: widget.client.displayName),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
         const SizedBox(height: 14),
 
@@ -240,16 +217,16 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm> {
             optional: true,
             autofillHints: const [AutofillHints.organizationName],
             maxLength: TextLimits.personName,
-            errorText: _errors['businessName'],
+            errorText: errors['businessName'],
             onChanged: (_) {
-              _clearError('businessName');
-              _clearError('name');
-              _clearError('address');
+              clearError('businessName');
+              clearError('name');
+              clearError('address');
               setState(() {});
             },
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.sp16),
         SheetFocusScroll(
           child: LabeledTextField(
             label: context.l10n.clients_contactName,
@@ -258,15 +235,15 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm> {
             optional: _businessNameController.text.trim().isNotEmpty,
             autofillHints: const [AutofillHints.name],
             maxLength: TextLimits.personName,
-            errorText: _errors['name'],
+            errorText: errors['name'],
             onChanged: (_) {
-              _clearError('name');
-              _clearError('businessName');
+              clearError('name');
+              clearError('businessName');
               setState(() {});
             },
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.sp16),
         // --- Phone & email ---
         SheetFocusScroll(
           child: LabeledTextField(
@@ -275,14 +252,14 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm> {
             keyboard: TextInputType.phone,
             autofillHints: const [AutofillHints.telephoneNumber],
             maxLength: TextLimits.phone,
-            errorText: _errors['phone'],
+            errorText: errors['phone'],
             onChanged: (_) {
-              _clearError('phone');
-              _clearError('email');
+              clearError('phone');
+              clearError('email');
             },
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.sp16),
         SheetFocusScroll(
           child: LabeledTextField(
             label: context.l10n.common_email,
@@ -290,26 +267,26 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm> {
             keyboard: TextInputType.emailAddress,
             autofillHints: const [AutofillHints.email],
             maxLength: TextLimits.email,
-            errorText: _errors['email'],
+            errorText: errors['email'],
             onChanged: (_) {
-              _clearError('email');
-              _clearError('phone');
+              clearError('email');
+              clearError('phone');
             },
           ),
         ),
 
         // --- Additional business contacts ---
         if (_isBusiness) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sp8),
           AdditionalContactsSection(
-            contacts: _additionalContacts,
-            errors: _errors,
-            onAddContact: _addAdditionalContact,
-            onRemoveContact: _removeAdditionalContact,
-            onClearError: _clearError,
+            contacts: additionalContacts,
+            errors: errors,
+            onAddContact: addAdditionalContact,
+            onRemoveContact: removeAdditionalContact,
+            onClearError: clearError,
           ),
         ],
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.sp16),
         // --- Address ---
         ClientAddressSection(
           addressController: _addressController,
@@ -319,10 +296,10 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm> {
           postalCodeController: _postalCodeController,
           countryController: _countryController,
           isRequired: _businessNameController.text.trim().isEmpty,
-          errorText: _errors['address'],
-          onAddressErrorCleared: () => _clearError('address'),
+          errorText: errors['address'],
+          onAddressErrorCleared: () => clearError('address'),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.sp24),
         _EditActions(onSave: _save, onDelete: widget.onDelete),
       ],
     );
@@ -347,7 +324,7 @@ class _EditActions extends StatelessWidget {
           onPressed: onSave,
           child: Text(context.l10n.common_saveChanges),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.sp8),
         OutlinedButton(
           style: destructiveOutlinedButtonStyle(
             context,

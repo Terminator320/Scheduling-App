@@ -166,7 +166,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
                 : AppointmentStatus.active,
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
       ],
     );
@@ -182,7 +182,10 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
             color: theme.colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(AppRadius.r12),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sp12,
+            vertical: 10,
+          ),
           child: Row(
             children: [
               Expanded(
@@ -235,7 +238,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Divider(height: 1),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.sp16),
         Row(
           children: [
             Expanded(
@@ -260,7 +263,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.sp8),
             StatusChip(
               status: _isDisabled
                   ? AppointmentStatus.disabled
@@ -268,7 +271,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.sp12),
         OutlinedButton.icon(
           onPressed: _isTogglingStatus ? null : _toggleStatus,
           icon: BusyButtonIcon(
@@ -286,7 +289,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
             ),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.sp8),
         Text(
           _isDisabled
               ? context.l10n.employees_reEnableAccountNote
@@ -313,10 +316,10 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
     return FormSheetScaffold(
       title: title,
       children: [
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
         if (_isEdit) ...[
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.sp4),
           _buildEditHeader(),
           const SizedBox(height: 14),
         ] else
@@ -326,17 +329,17 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
         // admin can't self-activate (firestore.rules), so the toggle is
         // edit-only.
         if (_isEdit) ...[
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.sp16),
           _buildPermissionsCard(theme),
         ],
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.sp12),
         EmployeeColorPickerRow(
           selectedColor: _selectedColor,
           onColorChanged: (value) => setState(() => _selectedColor = value),
           required: !_isEdit,
           usedColors: widget.usedColors,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.sp16),
         AnimatedLoadingButton(
           label: submitLabel,
           isLoading: _isSaving,
@@ -344,7 +347,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
           height: 48,
         ),
         if (_isEdit) ...[
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.sp16),
           _buildAccountStatusSection(theme),
         ],
       ],
@@ -367,7 +370,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
           },
         ),
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpacing.sp12),
       SheetFocusScroll(
         child: LabeledTextField(
           label: context.l10n.common_email,
@@ -383,7 +386,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
           },
         ),
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpacing.sp12),
       SheetFocusScroll(
         child: LabeledTextField(
           label: context.l10n.employees_phoneNumber,

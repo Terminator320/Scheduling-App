@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 /// Horizontal header for an entity edit form: a large [AppAvatar] beside the
@@ -23,7 +24,7 @@ class EntityFormHeader extends StatelessWidget {
     return Row(
       children: [
         AppAvatar(name: name, color: avatarColor, size: AvatarSize.lg),
-        const SizedBox(width: 12),
+        const SizedBox(width: AppSpacing.sp12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -35,7 +36,10 @@ class EntityFormHeader extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              if (status != null) ...[const SizedBox(height: 4), status!],
+              if (status != null) ...[
+                const SizedBox(height: AppSpacing.sp4),
+                status!,
+              ],
             ],
           ),
         ),
