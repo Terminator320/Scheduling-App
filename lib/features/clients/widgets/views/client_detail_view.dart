@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
+import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/views/client_edit_form.dart';
@@ -180,7 +181,6 @@ class _ViewActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
         Expanded(
@@ -193,10 +193,7 @@ class _ViewActions extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: scheme.error,
-              side: BorderSide(color: scheme.error),
-            ),
+            style: destructiveOutlinedButtonStyle(context),
             onPressed: onDelete,
             icon: BusyButtonIcon(
               isBusy: isDeleting,

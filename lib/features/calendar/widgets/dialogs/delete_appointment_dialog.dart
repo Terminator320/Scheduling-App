@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
@@ -34,10 +35,7 @@ Future<DeleteAppointmentChoice?> showDeleteAppointmentDialog(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: scheme.error,
-                  side: BorderSide(color: scheme.error),
-                ),
+                style: destructiveOutlinedButtonStyle(ctx),
                 onPressed: () =>
                     Navigator.pop(ctx, DeleteAppointmentChoice.thisOnly),
                 child: Text(ctx.l10n.calendar_deleteThisVisitOnly),
