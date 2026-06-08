@@ -10,6 +10,22 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.4.2+12] - 2026-06-08
+
+### Changed
+- Internal refactor/cleanup pass — no change to how the app behaves. Recurring
+  UI was consolidated into shared, reusable pieces so screens stay thin and
+  consistent:
+  - The three auth screens (sign-in, create-account, forgot-password) now share
+    one set of form building blocks — scaffold, header, email/password fields,
+    status banner, and entrance animation — instead of each re-rolling its own.
+  - The add-appointment, add-client, and employee forms share one bottom-sheet
+    frame (`FormSheetScaffold`); the add- and edit-client forms also share the
+    street-address block and a common form-state mixin.
+  - One shared error toast (`errorSnackBar`), one destructive-button style, and
+    one avatar-and-name form header replace copies scattered across screens.
+  - Form spacing now uses the design-system spacing tokens.
+
 ## [1.4.1+11] - 2026-06-07
 
 ### Changed
