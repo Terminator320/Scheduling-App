@@ -47,68 +47,6 @@ class DetailsSectionRow extends StatelessWidget {
   }
 }
 
-class DetailsAddressRow extends StatelessWidget {
-  const DetailsAddressRow({
-    required this.label,
-    required this.address,
-    this.onTap,
-    super.key,
-  });
-
-  final String label;
-  final String address;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionLabel(label),
-        const SizedBox(height: 6),
-        if (onTap != null)
-          InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(AppRadius.r8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      address,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        height: 1.5,
-                        color: scheme.primary,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Icon(
-                      Icons.open_in_new,
-                      size: 14,
-                      color: scheme.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          )
-        else
-          Text(
-            address,
-            style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
-          ),
-      ],
-    );
-  }
-}
-
 class DetailsEmployeePill extends StatelessWidget {
   const DetailsEmployeePill({required this.employee, super.key});
 

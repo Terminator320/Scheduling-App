@@ -16,6 +16,7 @@ lib/
 │   ├── animations/                  Shared animation widgets (FadeInItem, TapScale, AnimatedLoadingButton, AnimatedFormFieldWrapper — transition-only field shake)
 │   ├── errors/                      Base Failure class + error_cause.dart (sanitized cause classifier + tagged notice composer)
 │   ├── images/                      Image picker, compression, Firebase Storage upload service
+│   ├── launchers/                   phone_call_launcher.dart (launchPhoneCall — shared tel: dialer; parallels AddressMapLauncher / EmailComposeLauncher)
 │   ├── layout/                      Responsive shell — AdaptiveShell (nav rail), MasterDetailScaffold, breakpoints (context.isWide / isLandscape / isSplitLayout)
 │   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics)
 │   ├── notices/                     In-app toast system: AppNotice types, NoticeService (stream), NoticeListener (widget)
@@ -29,10 +30,10 @@ lib/
 │
 ├── shared/widgets/                  Reusable UI components used across ≥2 features, grouped by type
 │   ├── app_bars/                    app_top_bar (AppTopBar — the standard primary app bar every screen uses; slims in landscape)
-│   ├── primitives/                  app_avatar (contrast-aware initials circle), busy_button_icon (spinner-or-icon slot for *.icon buttons), entity_form_header (avatar + name + optional status, for edit forms), fade_in_item, section_label (uppercase mini-header)
+│   ├── primitives/                  app_avatar (contrast-aware initials circle), busy_button_icon (spinner-or-icon slot for *.icon buttons), entity_form_header (avatar + name + optional status, for edit forms), fade_in_item, quick_action_button (QuickActionsRow + QuickActionButton — tinted Call/Email/Directions tiles), section_label (uppercase mini-header)
 │   ├── feedback/                    app_empty_state, error_snack_bar (errorSnackBar — shared error SnackBar for the sites that bypass NoticeService), skeleton_loader (shimmer), status_chip (+ AppointmentStatus.fromRaw, the canonical status mapper)
 │   ├── fields/                      address_autocomplete_field, labeled_text_field (built-in shake + animated error row), app_search_bar, form_helpers
-│   ├── cards/                       list_item_tile (shared row layout behind client/employee tiles)
+│   ├── cards/                       list_item_tile (shared row layout behind client/employee tiles), info_card (InfoCard + InfoCardRow — bordered card of tappable rows with tinted icon chips)
 │   ├── dialogs/                     confirm_dialog (showConfirmDialog — shared Cancel/confirm, destructive variant)
 │   └── sheets/                      sheet_widgets (DraggableSheetFrame, SheetHandle, DetailSheetListView — detail-view scroll shell; FormSheetScaffold — add/edit form-sheet chrome)
 │
@@ -141,15 +142,27 @@ The add- and edit-client forms also share the street-address block
 (`ClientAddressSection`) and a `ClientFormState` mixin (the field-error map and
 the extra-contacts list with its add/remove/dispose mutators).
 
-The read-only client view (`client_view_body.dart`) leads with a Call / Email /
-Directions quick-action row (each button appears only when the client has that
-detail) and renders the phone/email/address as tappable rows. Address taps open
-the map-app chooser (`AddressMapLauncher`); email taps open a parallel
-mail-app chooser (`EmailComposeLauncher` — system default / Gmail / Outlook, via
-`mailto:` and web-compose URLs so no iOS query-scheme entitlements are needed).
-The **Contacts** list skips `contacts[0]` (the primary, already shown in the
-header and contact-info card via the top-level name/phone/email fields) and
-lists only the additional business contacts.
+Both read-only views build on the same shared kit:
+`QuickActionsRow` + `QuickActionButton` (`shared/widgets/primitives/`,
+tinted action tiles) and `InfoCard` + `InfoCardRow` (`shared/widgets/cards/`,
+a bordered card of tappable rows with tinted icon chips). The three action
+launchers are shared too: `launchPhoneCall` (`core/launchers/`, the `tel:`
+dialer), `AddressMapLauncher` (map-app chooser), and `EmailComposeLauncher`
+(mail-app chooser — system default / Gmail / Outlook, via `mailto:` and
+web-compose URLs so no iOS query-scheme entitlements are needed). Each action
+button is built where `ref` lives and appears only when the data exists.
+
+The read-only **client** view (`client_view_body.dart`) leads with a Call /
+Email / Directions quick-action row and renders the phone/email/address as
+tappable `InfoCardRow`s. Its **Contacts** list skips `contacts[0]` (the primary,
+already shown above) and lists only the additional business contacts.
+
+The read-only **appointment** view (`details_view_body.dart`) follows the same
+shape: a `StatusChip` under the title, a Call / Directions quick-action row, and
+the client shown by **name only** in an `InfoCard` (phone and address are reached
+through the buttons, not repeated as rows). Empty sections — notes, materials,
+employees, pictures — are omitted entirely rather than rendered as "None" rows,
+so a sparse appointment stays short.
 
 ### Repeating Appointments
 
@@ -187,7 +200,9 @@ re-fills the controller). The add flow drives it with
 `AddEventState.useCustomAddress`; the edit flow mirrors it on
 `EventDetailsState`, seeding the flag when the client doc loads by comparing
 the appointment's stored address to the client's — a mismatch means a custom
-address was saved, so the field opens in custom mode.
+address was saved, so the field opens in custom mode. A `noFixedAddress` client
+has no pill to show, so booking opens the field straight in custom mode, ready
+for a per-appointment address.
 
 `EventDetailsController.save` validates the client through a fallback chain:
 `selectedClient` → loaded `client` → `_placeholderClient` built from the
@@ -363,8 +378,12 @@ appointments/{docId}
   createdAt, updatedAt     server timestamps
 
 clients/{docId}
-  businessName, name, email, phone
+  businessName, name           only a name is required; email and phone are optional
+  email, phone                 (a typed email is still format-checked)
   address, apt, city, province, country, postalCode   (structured address)
+  noFixedAddress: bool         when true the structured address is left blank and
+                       the address requirement is skipped (city/many-location
+                       clients); the address is entered per appointment instead
   contacts: [{name, phone, email}]   (field is `contacts`, not `additionalContacts`)
 ```
 

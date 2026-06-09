@@ -10,6 +10,18 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.7.0+15] - 2026-06-08
+
+### Added
+- The appointment details screen now shows a **status badge** (Pending,
+  Confirmed, Done, etc.) right under the title, and **Call** and **Directions**
+  quick-action buttons — tap to phone the client or open the address in a map.
+
+### Changed
+- The appointment details screen is cleaner: the client is shown by name (call
+  and directions now live in the buttons above), and empty sections — notes,
+  materials, employees, pictures — are hidden instead of showing "None" rows.
+
 ## [1.6.0+14] - 2026-06-08
 
 ### Added
