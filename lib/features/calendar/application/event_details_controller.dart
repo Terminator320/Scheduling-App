@@ -401,21 +401,12 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       // The doc now stores state.repeat — make it the new baseline.
       state = state.copyWith(savedRepeat: state.repeat);
 
-      // Delete removed images only after the doc (which no longer references
-      // them) has committed. A failure here orphans bytes in Storage — harmless
-      // — rather than leaving the appointment pointing at deleted images, so it
-      // must not fail the save.
-      if (state.removedExistingImages.isNotEmpty) {
-        try {
-          await ref
-              .read(imageStorageProvider)
-              .deleteImages(state.removedExistingImages);
-        } catch (e, st) {
-          ref
-              .read(loggerProvider)
-              .warn('deleteImages after save failed (orphaned bytes)', e, st);
-        }
-      }
+      // Clean up images dropped in this edit only after the doc (which no
+      // longer references them) has committed.
+      await _deleteOrphanedImages(
+        state.removedExistingImages,
+        tag: 'APPT-SAVE',
+      );
 
       if (state.newImages.isNotEmpty) {
         ref
@@ -454,6 +445,7 @@ class EventDetailsController extends Notifier<EventDetailsState> {
     state = state.copyWith(isSaving: true);
     try {
       final repo = ref.read(appointmentsRepositoryProvider);
+      final orphanedImages = <AppointmentImage>[...appointment.pictures];
       if (includeFuture && appointment.seriesId.isNotEmpty) {
         final series = await repo.getSeries(appointment.seriesId);
         final futureIds = _futureSeriesIds(
@@ -461,16 +453,45 @@ class EventDetailsController extends Notifier<EventDetailsState> {
           excludeId: id,
           after: appointment.startTime,
         );
+        // Only the visits actually being deleted contribute orphaned bytes —
+        // preserved past/terminal visits keep their pictures.
+        final futureIdSet = futureIds.toSet();
+        for (final a in series) {
+          if (a.id != null && futureIdSet.contains(a.id)) {
+            orphanedImages.addAll(a.pictures);
+          }
+        }
         await repo.deleteAppointments([id, ...futureIds]);
       } else {
         await repo.deleteAppointment(id);
       }
+
+      // Clean up images only after the docs that referenced them are gone.
+      await _deleteOrphanedImages(orphanedImages, tag: 'APPT-DEL');
+
       state = state.copyWith(isSaving: false);
       return null;
     } catch (e, st) {
       ref.read(loggerProvider).warn('APPT-DEL deleteAppointment failed', e, st);
       state = state.copyWith(isSaving: false);
       return e;
+    }
+  }
+
+  /// Best-effort Storage cleanup for [images] the doc no longer references.
+  /// A failure here only orphans bytes (harmless), so it's logged under [tag]
+  /// — never rethrown — and must not fail the surrounding save/delete.
+  Future<void> _deleteOrphanedImages(
+    List<AppointmentImage> images, {
+    required String tag,
+  }) async {
+    if (images.isEmpty) return;
+    try {
+      await ref.read(imageStorageProvider).deleteImages(images);
+    } catch (e, st) {
+      ref
+          .read(loggerProvider)
+          .warn('$tag deleteImages failed (orphaned bytes)', e, st);
     }
   }
 }

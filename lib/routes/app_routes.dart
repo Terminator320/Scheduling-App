@@ -4,6 +4,7 @@ import 'package:scheduling/features/auth/screens/forgot_password_screen.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
 import 'package:scheduling/features/clients/screens/clients_screen.dart';
+import 'package:scheduling/features/clients/screens/history_screen.dart';
 import 'package:scheduling/features/employees/screens/employees_screen.dart';
 import 'package:scheduling/features/settings/screens/settings_screen.dart';
 import 'package:scheduling/features/splash/screens/splash_screen.dart';
@@ -17,6 +18,7 @@ class AppRoutes {
   static const String mainCalendar = '/calendar';
   static const String employees = '/employees';
   static const String clients = '/clients';
+  static const String history = '/history';
   static const String settings = '/settings';
 
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
@@ -59,11 +61,14 @@ class AppRoutes {
         final args = settings.arguments! as ClientsListArgs;
         return _fadeRoute(
           settings,
-          ListInformation(
-            mode: args.mode,
-            isAdmin: args.isAdmin,
-            employeeId: args.employeeId,
-          ),
+          ListInformation(isAdmin: args.isAdmin, employeeId: args.employeeId),
+        );
+
+      case history:
+        final args = settings.arguments! as HistoryArgs;
+        return _fadeRoute(
+          settings,
+          HistoryScreen(isAdmin: args.isAdmin, employeeId: args.employeeId),
         );
 
       case AppRoutes.settings:
@@ -111,15 +116,14 @@ class MainCalendarArgs {
   final String employeeId;
 }
 
-enum ClientsMode { clients, history }
-
 class ClientsListArgs {
-  const ClientsListArgs({
-    required this.mode,
-    required this.isAdmin,
-    required this.employeeId,
-  });
-  final ClientsMode mode;
+  const ClientsListArgs({required this.isAdmin, required this.employeeId});
+  final bool isAdmin;
+  final String employeeId;
+}
+
+class HistoryArgs {
+  const HistoryArgs({required this.isAdmin, required this.employeeId});
   final bool isAdmin;
   final String employeeId;
 }

@@ -603,9 +603,25 @@
   "@clients_searchByNameOrPhone": {
     "description": "Search by name or phone..."
   },
-  "clients_searchByClientOrEmployee": "Search by client or employee...",
+  "clients_searchByClientOrEmployee": "Search by client, phone, or employee...",
   "@clients_searchByClientOrEmployee": {
-    "description": "Search by client or employee..."
+    "description": "History search field hint — matches client name, client phone, or employee name"
+  },
+  "clients_allYears": "All years",
+  "@clients_allYears": {
+    "description": "History year-filter chip option that clears the year filter"
+  },
+  "clients_allStaff": "All staff",
+  "@clients_allStaff": {
+    "description": "History employee-filter chip option that clears the employee filter"
+  },
+  "clients_noAppointmentsMatchFilters": "No appointments match your filters",
+  "@clients_noAppointmentsMatchFilters": {
+    "description": "Empty state shown when the active history filters exclude every appointment"
+  },
+  "clients_clearFilters": "Clear filters",
+  "@clients_clearFilters": {
+    "description": "Button that resets the active history year and employee filters"
   },
   "error_nameAndEmailAreRequired": "Name and email are required",
   "@error_nameAndEmailAreRequired": {

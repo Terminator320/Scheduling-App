@@ -10,6 +10,30 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.8.0+16] - 2026-06-09
+
+### Added
+- **History is now its own screen with filters.** Narrow appointment history by
+  **year** or by **assigned staff** with the new filter chips, and the list is
+  grouped under clear **year** headers — so the year is visible, not just the
+  month and day.
+- History search now also matches a **client's phone number** (on top of client
+  and employee name); formatting doesn't matter — `5550199` finds
+  `(514) 555-0199`.
+- The appointment details screen now shows the client's **phone number** and
+  **address** as tappable rows (tap to call or open directions), alongside the
+  existing quick-action buttons.
+- **Automatic history cleanup.** Done and cancelled appointments stay in history
+  for **2 years**, then are removed automatically — the appointment **and its
+  photos** — once that period has passed. Nothing is deleted before the full two
+  years elapse. (Runs server-side, daily.)
+
+### Fixed
+- Deleting an appointment now also deletes its **photos** from storage. Photos
+  were previously left behind, accumulating as orphaned files. For a recurring
+  series, only the photos of the visits actually being deleted are removed —
+  past and completed/cancelled visits keep theirs.
+
 ## [1.7.0+15] - 2026-06-08
 
 ### Added

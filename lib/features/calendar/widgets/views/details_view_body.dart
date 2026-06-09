@@ -17,6 +17,7 @@ import 'package:scheduling/features/calendar/widgets/views/details_action_bar.da
 import 'package:scheduling/features/calendar/widgets/views/details_view_widgets.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
+import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/info_card.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
@@ -66,6 +67,9 @@ class DetailsViewBody extends ConsumerWidget {
             address: appointment.address,
           )
         : null;
+    final displayAddress = appointment.address.isNotEmpty
+        ? AddressParser.canonicalToDisplay(appointment.address)
+        : '';
 
     final notes = appointment.notes;
     final materials = appointment.materialsNeeded
@@ -113,7 +117,29 @@ class DetailsViewBody extends ConsumerWidget {
         SectionLabel(context.l10n.calendar_client),
         const SizedBox(height: AppSpacing.sp8),
         InfoCard(
-          rows: [InfoCardRow(icon: Icons.person_outline, text: clientName)],
+          rows: [
+            InfoCardRow(
+              icon: Icons.person_outline,
+              text: clientName,
+              emphasize: true,
+            ),
+            if (phone.isNotEmpty)
+              InfoCardRow(
+                icon: Icons.phone_outlined,
+                text: phone,
+                onTap: onCall,
+                trailingIcon: Icons.chevron_right,
+              ),
+            if (displayAddress.isNotEmpty)
+              InfoCardRow(
+                icon: Icons.location_on_outlined,
+                text: displayAddress,
+                onTap: onDirections,
+                trailingIcon: Icons.open_in_new,
+                semanticLabel:
+                    '$displayAddress, ${context.l10n.maps_openAddressWith}',
+              ),
+          ],
         ),
         if (extraContacts.isNotEmpty)
           ClientContactsSection(contacts: extraContacts),
@@ -155,67 +181,6 @@ class DetailsViewBody extends ConsumerWidget {
               onClose();
             }
           },
-        ),
-        if (showActions)
-          _DeleteTestButton(
-            appointment: appointment,
-            isSaving: isSaving,
-            notifier: notifier,
-            onClose: onClose,
-          ),
-      ],
-    );
-  }
-}
-
-// TODO(pre-ship): Remove this entire widget — testing-only delete control.
-class _DeleteTestButton extends ConsumerWidget {
-  const _DeleteTestButton({
-    required this.appointment,
-    required this.isSaving,
-    required this.notifier,
-    required this.onClose,
-  });
-
-  final AppointmentRecord appointment;
-  final bool isSaving;
-  final EventDetailsController notifier;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SizedBox(height: AppSpacing.sp8),
-        OutlinedButton.icon(
-          style: destructiveOutlinedButtonStyle(
-            context,
-            minimumSize: const Size(double.infinity, 44),
-          ),
-          onPressed: isSaving
-              ? null
-              : () async {
-                  final choice = await showDeleteAppointmentDialog(
-                    context,
-                    isSeries: appointment.seriesId.isNotEmpty,
-                  );
-                  if (!context.mounted || choice == null) return;
-                  final error = await notifier.deleteAppointment(
-                    appointment,
-                    includeFuture:
-                        choice == DeleteAppointmentChoice.thisAndFuture,
-                  );
-                  if (error == null) {
-                    if (!context.mounted) return;
-                    ref
-                        .read(noticeServiceProvider)
-                        .success(context.l10n.common_appointmentDeleted);
-                    onClose();
-                  }
-                },
-          icon: const Icon(Icons.delete_outline, size: 15),
-          label: Text(context.l10n.calendar_deleteAppointment),
         ),
       ],
     );

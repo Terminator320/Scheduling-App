@@ -262,8 +262,13 @@ sheet — no detail pane), its month-row height adapting to the pane; the **list
 screens** use `MasterDetailScaffold` (list + detail side by side at ≥ 840). Every
 screen's app bar is the shared `AppTopBar`, which also slims itself in landscape
 (`compact: context.isLandscape`). `isSplitLayout` only adds the orientation path
-— it never lowers the 840 width gate. The `history` destination surfaces
-`clients/widgets/views/appointment_history_view.dart`.
+— it never lowers the 840 width gate. The `history` destination is its own
+`HistoryScreen` (`clients/screens/history_screen.dart`, route `AppRoutes.history`
++ `HistoryArgs`) — chrome only (search + shell), delegating the list to
+`clients/widgets/views/appointment_history_view.dart`, which groups by year then
+day and filters by year/employee via the reusable `HistoryFilterBar`
+(`clients/widgets/sections/`). It is no longer a `ClientsMode` of the clients
+screen.
 
 ---
 
