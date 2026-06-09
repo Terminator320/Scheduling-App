@@ -46,6 +46,8 @@
   "common_address": "Adresse",
   "clients_businessName": "Nom de l’entreprise",
   "clients_contactName": "Nom du contact",
+  "clients_noFixedAddress": "Aucune adresse fixe",
+  "clients_noFixedAddressHint": "Adresse saisie par rendez-vous",
   "clients_phone": "Téléphone",
   "clients_aptUnit": "App. / Unité",
   "common_city": "Ville",

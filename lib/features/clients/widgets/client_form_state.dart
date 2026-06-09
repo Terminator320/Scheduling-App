@@ -13,6 +13,17 @@ mixin ClientFormState<T extends StatefulWidget> on State<T> {
   /// Extra business contacts beyond the primary name/phone/email.
   final List<ContactFields> additionalContacts = [];
 
+  /// When true, the client has no stored address; it is set per appointment.
+  bool noFixedAddress = false;
+
+  /// Toggles [noFixedAddress]; clears any stale address error when enabling.
+  void setNoFixedAddress({required bool value}) {
+    setState(() {
+      noFixedAddress = value;
+      if (value) errors['address'] = null;
+    });
+  }
+
   /// Clears the error for [key] (and rebuilds) if one is currently set.
   void clearError(String key) {
     if (errors[key] != null) setState(() => errors[key] = null);

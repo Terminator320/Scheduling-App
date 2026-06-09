@@ -15,6 +15,7 @@ void main() {
     String email = '',
     String address = '',
     List<ClientContact> additionalContacts = const [],
+    bool noFixedAddress = false,
   }) {
     return ClientFormValidator.validate(
       l10n: l10n,
@@ -24,6 +25,7 @@ void main() {
       email: email,
       address: address,
       additionalContacts: additionalContacts,
+      noFixedAddress: noFixedAddress,
     );
   }
 
@@ -37,15 +39,16 @@ void main() {
       expect(errors.values.where((e) => e != null), isEmpty);
     });
 
-    test('missing both business name and contact name flags both fields', () {
+    test('missing both names flags only the contact-name field', () {
+      // Business name is optional, so it never carries the requirement error.
       final errors = validate(phone: '555-1234', address: '1 Main St');
-      expect(errors['businessName'], isNotNull);
       expect(errors['name'], isNotNull);
+      expect(errors['businessName'], isNull);
     });
 
-    test('missing both phone and email flags phone', () {
+    test('phone and email are optional — a name and address are enough', () {
       final errors = validate(name: 'Jane', address: '1 Main St');
-      expect(errors['phone'], isNotNull);
+      expect(errors.values.where((e) => e != null), isEmpty);
     });
 
     test('a malformed email is rejected', () {
@@ -58,10 +61,20 @@ void main() {
       expect(errors['email'], isNotNull);
     });
 
-    test('address is required only without a business name', () {
+    test('address is required whenever not marked no-fixed-address', () {
+      // A business name no longer waives the address requirement — only the
+      // no-fixed-address flag or a non-empty address does.
       expect(validate(name: 'Jane', phone: '555-1234')['address'], isNotNull);
       expect(
         validate(businessName: 'Acme', phone: '555-1234')['address'],
+        isNotNull,
+      );
+      expect(
+        validate(
+          businessName: 'Acme',
+          phone: '555-1234',
+          address: '1 Main St',
+        )['address'],
         isNull,
       );
     });
@@ -96,6 +109,25 @@ void main() {
         additionalContacts: const [ClientContact(name: 'Bob')],
       );
       expect(errors['contact_0_phone'], isNotNull);
+    });
+
+    test('noFixedAddress skips the address requirement', () {
+      final errors = validate(
+        name: 'City Hall',
+        phone: '555-1234',
+        noFixedAddress: true,
+      );
+      expect(errors['address'], isNull);
+    });
+
+    test('noFixedAddress still validates a typed email', () {
+      final errors = validate(
+        name: 'City Hall',
+        phone: '555-1234',
+        email: 'not-an-email',
+        noFixedAddress: true,
+      );
+      expect(errors['email'], isNotNull);
     });
   });
 }

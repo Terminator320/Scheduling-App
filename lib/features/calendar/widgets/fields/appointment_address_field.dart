@@ -36,7 +36,9 @@ class AppointmentAddressField extends StatelessWidget {
           SheetFocusScroll(
             child: AddressAutocompleteField(controller: addressController),
           ),
-          if (selectedClient != null && useCustomAddress) ...[
+          if (selectedClient != null &&
+              useCustomAddress &&
+              selectedClient!.address.trim().isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sp8),
             GestureDetector(
               onTap: onUseClientAddress,

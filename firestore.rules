@@ -172,7 +172,8 @@ service cloud.firestore {
       return (!('name' in data) || (data.name is string && data.name.size() <= 200))
         && (!('businessName' in data) || (data.businessName is string && data.businessName.size() <= 200))
         && (!('phone' in data) || (data.phone is string && data.phone.size() <= 32))
-        && (!('email' in data) || (data.email is string && data.email.size() <= 320));
+        && (!('email' in data) || (data.email is string && data.email.size() <= 320))
+        && (!('noFixedAddress' in data) || data.noFixedAddress is bool);
     }
 
     match /clients/{clientId} {

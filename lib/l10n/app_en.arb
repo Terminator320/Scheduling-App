@@ -184,6 +184,14 @@
   "@clients_contactName": {
     "description": "Contact name"
   },
+  "clients_noFixedAddress": "No fixed address",
+  "@clients_noFixedAddress": {
+    "description": "Toggle label marking a client whose address is set per appointment"
+  },
+  "clients_noFixedAddressHint": "Address entered per appointment",
+  "@clients_noFixedAddressHint": {
+    "description": "Subtitle explaining the no-fixed-address toggle"
+  },
   "clients_phone": "Phone",
   "@clients_phone": {
     "description": "Phone"
