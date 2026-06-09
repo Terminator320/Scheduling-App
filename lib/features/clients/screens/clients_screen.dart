@@ -7,7 +7,6 @@ import 'package:scheduling/core/utils/sheet_focus.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
-import 'package:scheduling/features/clients/widgets/views/appointment_history_view.dart';
 import 'package:scheduling/features/clients/widgets/views/client_detail_view.dart';
 import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart';
 import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
@@ -19,13 +18,11 @@ import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
 
 class ListInformation extends StatefulWidget {
   const ListInformation({
-    required this.mode,
     required this.isAdmin,
     required this.employeeId,
     super.key,
   });
 
-  final ClientsMode mode;
   final bool isAdmin;
   final String employeeId;
 
@@ -35,16 +32,11 @@ class ListInformation extends StatefulWidget {
 
 class _ListInformationState extends State<ListInformation> {
   final TextEditingController _searchController = TextEditingController();
-  final TextEditingController _appointmentSearchController =
-      TextEditingController();
   ClientRecord? _selectedClient;
-
-  bool get _isClients => widget.mode == ClientsMode.clients;
 
   @override
   void dispose() {
     _searchController.dispose();
-    _appointmentSearchController.dispose();
     super.dispose();
   }
 
@@ -88,75 +80,45 @@ class _ListInformationState extends State<ListInformation> {
     ),
   );
 
-  PreferredSizeWidget _buildClientsAppBar() {
-    return AppTopBar(
-      title: context.l10n.common_clients,
-      compact: context.isLandscape,
-      onBack: _backToCalendar,
-      bottom: AppSearchBar(
-        controller: _searchController,
-        hintText: context.l10n.clients_searchByNameOrPhone,
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildHistoryAppBar() {
-    return AppTopBar(
-      title: context.l10n.common_history,
-      compact: context.isLandscape,
-      onBack: _backToCalendar,
-      bottom: AppSearchBar(
-        controller: _appointmentSearchController,
-        hintText: context.l10n.clients_searchByClientOrEmployee,
-      ),
-    );
-  }
-
-  Widget _buildMaster() {
-    if (!_isClients) {
-      return AppointmentHistoryView(
-        searchQuery: _appointmentSearchController.text,
-      );
-    }
-    return ClientsListView(
-      searchQuery: _searchController.text,
-      isAdmin: widget.isAdmin,
-      selectedClientId: _selectedClient?.id,
-      onClientTap: _onClientTap,
-    );
-  }
-
   Widget _buildDetailPlaceholder() => DetailPlaceholder(
     icon: Icons.people_outline_rounded,
-    message: _isClients
-        ? context.l10n.clients_selectAClientToViewDetails
-        : context.l10n.clients_noClientsYet,
+    message: context.l10n.clients_selectAClientToViewDetails,
   );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _isClients ? _buildClientsAppBar() : _buildHistoryAppBar(),
+      appBar: AppTopBar(
+        title: context.l10n.common_clients,
+        compact: context.isLandscape,
+        onBack: _backToCalendar,
+        bottom: AppSearchBar(
+          controller: _searchController,
+          hintText: context.l10n.clients_searchByNameOrPhone,
+        ),
+      ),
       endDrawer: SettingsDrawer.endDrawerFor(
         context,
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
       ),
-      floatingActionButton: widget.isAdmin && _isClients
+      floatingActionButton: widget.isAdmin
           ? FloatingActionButton(
               onPressed: _onAddClient,
               child: const Icon(Icons.add),
             )
           : null,
       body: ListenableBuilder(
-        listenable: Listenable.merge([
-          _searchController,
-          _appointmentSearchController,
-        ]),
+        listenable: _searchController,
         builder: (context, _) {
           final body = MasterDetailScaffold(
-            master: _buildMaster(),
-            detail: _isClients && _selectedClient != null
+            master: ClientsListView(
+              searchQuery: _searchController.text,
+              isAdmin: widget.isAdmin,
+              selectedClientId: _selectedClient?.id,
+              onClientTap: _onClientTap,
+            ),
+            detail: _selectedClient != null
                 ? ClientDetailView(
                     key: ValueKey(_selectedClient!.id),
                     client: _selectedClient!,
@@ -165,9 +127,7 @@ class _ListInformationState extends State<ListInformation> {
             placeholder: _buildDetailPlaceholder(),
           );
           return AdaptiveShell(
-            currentDestination: _isClients
-                ? AdaptiveDestination.clients
-                : AdaptiveDestination.history,
+            currentDestination: AdaptiveDestination.clients,
             isAdmin: widget.isAdmin,
             employeeId: widget.employeeId,
             child: body,
