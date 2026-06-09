@@ -100,6 +100,7 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
           ..emailController.text = contact.email,
       );
     }
+    noFixedAddress = c.noFixedAddress;
   }
 
   @override
@@ -151,6 +152,7 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
       additionalContacts: [
         for (final contact in additionalContacts) contact.toContact(),
       ],
+      noFixedAddress: noFixedAddress,
     );
 
     setState(() {
@@ -168,13 +170,14 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
       name: name,
       phone: phone,
       email: email,
-      address: _buildFullAddress(),
-      apt: _aptController.text.trim(),
-      city: _cityController.text.trim(),
-      province: _provinceController.text.trim(),
-      country: _countryController.text.trim(),
-      postalCode: _postalCodeController.text.trim(),
+      address: noFixedAddress ? '' : _buildFullAddress(),
+      apt: noFixedAddress ? '' : _aptController.text.trim(),
+      city: noFixedAddress ? '' : _cityController.text.trim(),
+      province: noFixedAddress ? '' : _provinceController.text.trim(),
+      country: noFixedAddress ? '' : _countryController.text.trim(),
+      postalCode: noFixedAddress ? '' : _postalCodeController.text.trim(),
       contacts: _buildContacts(),
+      noFixedAddress: noFixedAddress,
     );
 
     try {
@@ -217,11 +220,8 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
             optional: true,
             autofillHints: const [AutofillHints.organizationName],
             maxLength: TextLimits.personName,
-            errorText: errors['businessName'],
             onChanged: (_) {
-              clearError('businessName');
               clearError('name');
-              clearError('address');
               setState(() {});
             },
           ),
@@ -238,7 +238,6 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
             errorText: errors['name'],
             onChanged: (_) {
               clearError('name');
-              clearError('businessName');
               setState(() {});
             },
           ),
@@ -250,13 +249,9 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
             label: context.l10n.clients_phone,
             controller: _phoneController,
             keyboard: TextInputType.phone,
+            optional: true,
             autofillHints: const [AutofillHints.telephoneNumber],
             maxLength: TextLimits.phone,
-            errorText: errors['phone'],
-            onChanged: (_) {
-              clearError('phone');
-              clearError('email');
-            },
           ),
         ),
         const SizedBox(height: AppSpacing.sp16),
@@ -265,13 +260,11 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
             label: context.l10n.common_email,
             controller: _emailController,
             keyboard: TextInputType.emailAddress,
+            optional: true,
             autofillHints: const [AutofillHints.email],
             maxLength: TextLimits.email,
             errorText: errors['email'],
-            onChanged: (_) {
-              clearError('email');
-              clearError('phone');
-            },
+            onChanged: (_) => clearError('email'),
           ),
         ),
 
@@ -286,19 +279,32 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
             onClearError: clearError,
           ),
         ],
-        const SizedBox(height: AppSpacing.sp16),
+        const SizedBox(height: AppSpacing.sp8),
         // --- Address ---
-        ClientAddressSection(
-          addressController: _addressController,
-          aptController: _aptController,
-          cityController: _cityController,
-          provinceController: _provinceController,
-          postalCodeController: _postalCodeController,
-          countryController: _countryController,
-          isRequired: _businessNameController.text.trim().isEmpty,
-          errorText: errors['address'],
-          onAddressErrorCleared: () => clearError('address'),
+        Material(
+          type: MaterialType.transparency,
+          child: SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(context.l10n.clients_noFixedAddress),
+            subtitle: Text(context.l10n.clients_noFixedAddressHint),
+            value: noFixedAddress,
+            onChanged: (value) => setNoFixedAddress(value: value),
+          ),
         ),
+        if (!noFixedAddress) ...[
+          const SizedBox(height: AppSpacing.sp16),
+          ClientAddressSection(
+            addressController: _addressController,
+            aptController: _aptController,
+            cityController: _cityController,
+            provinceController: _provinceController,
+            postalCodeController: _postalCodeController,
+            countryController: _countryController,
+            isRequired: true,
+            errorText: errors['address'],
+            onAddressErrorCleared: () => clearError('address'),
+          ),
+        ],
         const SizedBox(height: AppSpacing.sp24),
         _EditActions(onSave: _save, onDelete: widget.onDelete),
       ],

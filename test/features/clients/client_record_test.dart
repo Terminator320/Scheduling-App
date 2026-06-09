@@ -33,8 +33,11 @@ void main() {
 
     test('displayName prefers businessName, falls back to name', () {
       expect(
-        const ClientRecord(id: 'c1', businessName: 'Acme', name: 'Jane')
-            .displayName,
+        const ClientRecord(
+          id: 'c1',
+          businessName: 'Acme',
+          name: 'Jane',
+        ).displayName,
         'Acme',
       );
       expect(
@@ -89,6 +92,20 @@ void main() {
       expect(map['address'], '123 Main');
       expect(map['phone'], '514');
       expect(map['email'], 'jane@acme.com');
+    });
+
+    test('noFixedAddress defaults to false and roundtrips through maps', () {
+      final defaulted = ClientRecord.fromMap('c1', const {});
+      expect(defaulted.noFixedAddress, isFalse);
+
+      const original = ClientRecord(
+        id: 'c1',
+        name: 'City Hall',
+        noFixedAddress: true,
+      );
+      final restored = ClientRecord.fromMap(original.id, original.toMap());
+      expect(restored.noFixedAddress, isTrue);
+      expect(restored, equals(original));
     });
   });
 

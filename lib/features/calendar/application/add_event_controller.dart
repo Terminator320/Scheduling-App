@@ -130,7 +130,7 @@ class AddEventController extends Notifier<AddEventState> {
     state = state.copyWith(
       selectedClient: client,
       clientResults: const [],
-      useCustomAddress: false,
+      useCustomAddress: client.noFixedAddress || client.address.trim().isEmpty,
       errors: withoutKey(state.errors, 'client'),
     );
   }

@@ -87,6 +87,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
       additionalContacts: [
         for (final contact in additionalContacts) contact.toContact(),
       ],
+      noFixedAddress: noFixedAddress,
     );
 
     setState(() {
@@ -112,13 +113,14 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
       name: name,
       phone: phone,
       email: email,
-      address: fullAddress,
-      apt: apt,
-      city: _cityController.text.trim(),
-      province: _provinceController.text.trim(),
-      country: _countryController.text.trim(),
-      postalCode: _postalCodeController.text.trim(),
+      address: noFixedAddress ? '' : fullAddress,
+      apt: noFixedAddress ? '' : apt,
+      city: noFixedAddress ? '' : _cityController.text.trim(),
+      province: noFixedAddress ? '' : _provinceController.text.trim(),
+      country: noFixedAddress ? '' : _countryController.text.trim(),
+      postalCode: noFixedAddress ? '' : _postalCodeController.text.trim(),
       contacts: _buildContacts(),
+      noFixedAddress: noFixedAddress,
     );
 
     try {
@@ -159,11 +161,8 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
             optional: true,
             autofillHints: const [AutofillHints.organizationName],
             maxLength: TextLimits.personName,
-            errorText: errors['businessName'],
             onChanged: (_) {
-              clearError('businessName');
               clearError('name');
-              clearError('address');
               setState(() {});
             },
           ),
@@ -180,7 +179,6 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
             errorText: errors['name'],
             onChanged: (_) {
               clearError('name');
-              clearError('businessName');
               setState(() {});
             },
           ),
@@ -195,10 +193,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
             autofillHints: const [AutofillHints.email],
             maxLength: TextLimits.email,
             errorText: errors['email'],
-            onChanged: (_) {
-              clearError('email');
-              clearError('phone');
-            },
+            onChanged: (_) => clearError('email'),
           ),
         ),
 
@@ -208,14 +203,9 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
             label: context.l10n.clients_phone,
             controller: _phoneController,
             keyboard: TextInputType.phone,
-            required: true,
+            optional: true,
             autofillHints: const [AutofillHints.telephoneNumber],
             maxLength: TextLimits.phone,
-            errorText: errors['phone'],
-            onChanged: (_) {
-              clearError('phone');
-              clearError('email');
-            },
           ),
         ),
 
@@ -229,18 +219,31 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
             onClearError: clearError,
           ),
         ],
-        const SizedBox(height: AppSpacing.sp16),
-        ClientAddressSection(
-          addressController: _addressController,
-          aptController: _aptController,
-          cityController: _cityController,
-          provinceController: _provinceController,
-          postalCodeController: _postalCodeController,
-          countryController: _countryController,
-          isRequired: !_isBusiness,
-          errorText: errors['address'],
-          onAddressErrorCleared: () => clearError('address'),
+        const SizedBox(height: AppSpacing.sp8),
+        Material(
+          type: MaterialType.transparency,
+          child: SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(context.l10n.clients_noFixedAddress),
+            subtitle: Text(context.l10n.clients_noFixedAddressHint),
+            value: noFixedAddress,
+            onChanged: (value) => setNoFixedAddress(value: value),
+          ),
         ),
+        if (!noFixedAddress) ...[
+          const SizedBox(height: AppSpacing.sp16),
+          ClientAddressSection(
+            addressController: _addressController,
+            aptController: _aptController,
+            cityController: _cityController,
+            provinceController: _provinceController,
+            postalCodeController: _postalCodeController,
+            countryController: _countryController,
+            isRequired: true,
+            errorText: errors['address'],
+            onAddressErrorCleared: () => clearError('address'),
+          ),
+        ],
         const SizedBox(height: AppSpacing.sp24),
         _AddClientActions(
           isSaving: _isSaving,

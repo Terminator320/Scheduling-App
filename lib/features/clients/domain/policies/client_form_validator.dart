@@ -16,22 +16,20 @@ class ClientFormValidator {
     required String email,
     required String address,
     required List<ClientContact> additionalContacts,
+    bool noFixedAddress = false,
   }) {
     final hasBusinessOrName = businessName.isNotEmpty || name.isNotEmpty;
-    final hasContactMethod = phone.isNotEmpty || email.isNotEmpty;
 
     final errors = <String, String?>{
-      'businessName': !hasBusinessOrName
-          ? l10n.validation_businessNameOrContactNameIsRequired
-          : null,
+      // Business name is always optional; the "at least one name" requirement
+      // surfaces only on the contact-name field (not every client is a
+      // business). Phone and email are both optional — a client only needs a
+      // name. A typed email must still be well-formed.
       'name': !hasBusinessOrName
           ? l10n.validation_businessNameOrContactNameIsRequired
           : null,
-      'phone': !hasContactMethod
-          ? l10n.validation_phoneOrEmailIsRequired
-          : null,
       'email': _validateEmail(l10n, email),
-      'address': businessName.isEmpty && address.isEmpty
+      'address': (!noFixedAddress && address.isEmpty)
           ? l10n.validation_addressIsRequired
           : null,
     };

@@ -277,7 +277,7 @@ as String,
 /// @nodoc
 mixin _$ClientRecord {
 
- String get id; String get businessName; String get name; String get address; String get apt; String get city; String get province; String get country; String get postalCode; String get phone; String get email; List<ClientContact> get contacts;
+ String get id; String get businessName; String get name; String get address; String get apt; String get city; String get province; String get country; String get postalCode; String get phone; String get email; List<ClientContact> get contacts; bool get noFixedAddress;
 /// Create a copy of ClientRecord
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -288,16 +288,16 @@ $ClientRecordCopyWith<ClientRecord> get copyWith => _$ClientRecordCopyWithImpl<C
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ClientRecord&&(identical(other.id, id) || other.id == id)&&(identical(other.businessName, businessName) || other.businessName == businessName)&&(identical(other.name, name) || other.name == name)&&(identical(other.address, address) || other.address == address)&&(identical(other.apt, apt) || other.apt == apt)&&(identical(other.city, city) || other.city == city)&&(identical(other.province, province) || other.province == province)&&(identical(other.country, country) || other.country == country)&&(identical(other.postalCode, postalCode) || other.postalCode == postalCode)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.email, email) || other.email == email)&&const DeepCollectionEquality().equals(other.contacts, contacts));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ClientRecord&&(identical(other.id, id) || other.id == id)&&(identical(other.businessName, businessName) || other.businessName == businessName)&&(identical(other.name, name) || other.name == name)&&(identical(other.address, address) || other.address == address)&&(identical(other.apt, apt) || other.apt == apt)&&(identical(other.city, city) || other.city == city)&&(identical(other.province, province) || other.province == province)&&(identical(other.country, country) || other.country == country)&&(identical(other.postalCode, postalCode) || other.postalCode == postalCode)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.email, email) || other.email == email)&&const DeepCollectionEquality().equals(other.contacts, contacts)&&(identical(other.noFixedAddress, noFixedAddress) || other.noFixedAddress == noFixedAddress));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,businessName,name,address,apt,city,province,country,postalCode,phone,email,const DeepCollectionEquality().hash(contacts));
+int get hashCode => Object.hash(runtimeType,id,businessName,name,address,apt,city,province,country,postalCode,phone,email,const DeepCollectionEquality().hash(contacts),noFixedAddress);
 
 @override
 String toString() {
-  return 'ClientRecord(id: $id, businessName: $businessName, name: $name, address: $address, apt: $apt, city: $city, province: $province, country: $country, postalCode: $postalCode, phone: $phone, email: $email, contacts: $contacts)';
+  return 'ClientRecord(id: $id, businessName: $businessName, name: $name, address: $address, apt: $apt, city: $city, province: $province, country: $country, postalCode: $postalCode, phone: $phone, email: $email, contacts: $contacts, noFixedAddress: $noFixedAddress)';
 }
 
 
@@ -308,7 +308,7 @@ abstract mixin class $ClientRecordCopyWith<$Res>  {
   factory $ClientRecordCopyWith(ClientRecord value, $Res Function(ClientRecord) _then) = _$ClientRecordCopyWithImpl;
 @useResult
 $Res call({
- String id, String businessName, String name, String address, String apt, String city, String province, String country, String postalCode, String phone, String email, List<ClientContact> contacts
+ String id, String businessName, String name, String address, String apt, String city, String province, String country, String postalCode, String phone, String email, List<ClientContact> contacts, bool noFixedAddress
 });
 
 
@@ -325,7 +325,7 @@ class _$ClientRecordCopyWithImpl<$Res>
 
 /// Create a copy of ClientRecord
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? businessName = null,Object? name = null,Object? address = null,Object? apt = null,Object? city = null,Object? province = null,Object? country = null,Object? postalCode = null,Object? phone = null,Object? email = null,Object? contacts = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? businessName = null,Object? name = null,Object? address = null,Object? apt = null,Object? city = null,Object? province = null,Object? country = null,Object? postalCode = null,Object? phone = null,Object? email = null,Object? contacts = null,Object? noFixedAddress = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,businessName: null == businessName ? _self.businessName : businessName // ignore: cast_nullable_to_non_nullable
@@ -339,7 +339,8 @@ as String,postalCode: null == postalCode ? _self.postalCode : postalCode // igno
 as String,phone: null == phone ? _self.phone : phone // ignore: cast_nullable_to_non_nullable
 as String,email: null == email ? _self.email : email // ignore: cast_nullable_to_non_nullable
 as String,contacts: null == contacts ? _self.contacts : contacts // ignore: cast_nullable_to_non_nullable
-as List<ClientContact>,
+as List<ClientContact>,noFixedAddress: null == noFixedAddress ? _self.noFixedAddress : noFixedAddress // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -424,10 +425,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String businessName,  String name,  String address,  String apt,  String city,  String province,  String country,  String postalCode,  String phone,  String email,  List<ClientContact> contacts)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String businessName,  String name,  String address,  String apt,  String city,  String province,  String country,  String postalCode,  String phone,  String email,  List<ClientContact> contacts,  bool noFixedAddress)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ClientRecord() when $default != null:
-return $default(_that.id,_that.businessName,_that.name,_that.address,_that.apt,_that.city,_that.province,_that.country,_that.postalCode,_that.phone,_that.email,_that.contacts);case _:
+return $default(_that.id,_that.businessName,_that.name,_that.address,_that.apt,_that.city,_that.province,_that.country,_that.postalCode,_that.phone,_that.email,_that.contacts,_that.noFixedAddress);case _:
   return orElse();
 
 }
@@ -445,10 +446,10 @@ return $default(_that.id,_that.businessName,_that.name,_that.address,_that.apt,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String businessName,  String name,  String address,  String apt,  String city,  String province,  String country,  String postalCode,  String phone,  String email,  List<ClientContact> contacts)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String businessName,  String name,  String address,  String apt,  String city,  String province,  String country,  String postalCode,  String phone,  String email,  List<ClientContact> contacts,  bool noFixedAddress)  $default,) {final _that = this;
 switch (_that) {
 case _ClientRecord():
-return $default(_that.id,_that.businessName,_that.name,_that.address,_that.apt,_that.city,_that.province,_that.country,_that.postalCode,_that.phone,_that.email,_that.contacts);case _:
+return $default(_that.id,_that.businessName,_that.name,_that.address,_that.apt,_that.city,_that.province,_that.country,_that.postalCode,_that.phone,_that.email,_that.contacts,_that.noFixedAddress);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -465,10 +466,10 @@ return $default(_that.id,_that.businessName,_that.name,_that.address,_that.apt,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String businessName,  String name,  String address,  String apt,  String city,  String province,  String country,  String postalCode,  String phone,  String email,  List<ClientContact> contacts)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String businessName,  String name,  String address,  String apt,  String city,  String province,  String country,  String postalCode,  String phone,  String email,  List<ClientContact> contacts,  bool noFixedAddress)?  $default,) {final _that = this;
 switch (_that) {
 case _ClientRecord() when $default != null:
-return $default(_that.id,_that.businessName,_that.name,_that.address,_that.apt,_that.city,_that.province,_that.country,_that.postalCode,_that.phone,_that.email,_that.contacts);case _:
+return $default(_that.id,_that.businessName,_that.name,_that.address,_that.apt,_that.city,_that.province,_that.country,_that.postalCode,_that.phone,_that.email,_that.contacts,_that.noFixedAddress);case _:
   return null;
 
 }
@@ -480,7 +481,7 @@ return $default(_that.id,_that.businessName,_that.name,_that.address,_that.apt,_
 
 
 class _ClientRecord extends ClientRecord {
-  const _ClientRecord({required this.id, this.businessName = '', this.name = '', this.address = '', this.apt = '', this.city = '', this.province = '', this.country = '', this.postalCode = '', this.phone = '', this.email = '', final  List<ClientContact> contacts = const <ClientContact>[]}): _contacts = contacts,super._();
+  const _ClientRecord({required this.id, this.businessName = '', this.name = '', this.address = '', this.apt = '', this.city = '', this.province = '', this.country = '', this.postalCode = '', this.phone = '', this.email = '', final  List<ClientContact> contacts = const <ClientContact>[], this.noFixedAddress = false}): _contacts = contacts,super._();
   
 
 @override final  String id;
@@ -501,6 +502,7 @@ class _ClientRecord extends ClientRecord {
   return EqualUnmodifiableListView(_contacts);
 }
 
+@override@JsonKey() final  bool noFixedAddress;
 
 /// Create a copy of ClientRecord
 /// with the given fields replaced by the non-null parameter values.
@@ -512,16 +514,16 @@ _$ClientRecordCopyWith<_ClientRecord> get copyWith => __$ClientRecordCopyWithImp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ClientRecord&&(identical(other.id, id) || other.id == id)&&(identical(other.businessName, businessName) || other.businessName == businessName)&&(identical(other.name, name) || other.name == name)&&(identical(other.address, address) || other.address == address)&&(identical(other.apt, apt) || other.apt == apt)&&(identical(other.city, city) || other.city == city)&&(identical(other.province, province) || other.province == province)&&(identical(other.country, country) || other.country == country)&&(identical(other.postalCode, postalCode) || other.postalCode == postalCode)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.email, email) || other.email == email)&&const DeepCollectionEquality().equals(other._contacts, _contacts));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ClientRecord&&(identical(other.id, id) || other.id == id)&&(identical(other.businessName, businessName) || other.businessName == businessName)&&(identical(other.name, name) || other.name == name)&&(identical(other.address, address) || other.address == address)&&(identical(other.apt, apt) || other.apt == apt)&&(identical(other.city, city) || other.city == city)&&(identical(other.province, province) || other.province == province)&&(identical(other.country, country) || other.country == country)&&(identical(other.postalCode, postalCode) || other.postalCode == postalCode)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.email, email) || other.email == email)&&const DeepCollectionEquality().equals(other._contacts, _contacts)&&(identical(other.noFixedAddress, noFixedAddress) || other.noFixedAddress == noFixedAddress));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,businessName,name,address,apt,city,province,country,postalCode,phone,email,const DeepCollectionEquality().hash(_contacts));
+int get hashCode => Object.hash(runtimeType,id,businessName,name,address,apt,city,province,country,postalCode,phone,email,const DeepCollectionEquality().hash(_contacts),noFixedAddress);
 
 @override
 String toString() {
-  return 'ClientRecord(id: $id, businessName: $businessName, name: $name, address: $address, apt: $apt, city: $city, province: $province, country: $country, postalCode: $postalCode, phone: $phone, email: $email, contacts: $contacts)';
+  return 'ClientRecord(id: $id, businessName: $businessName, name: $name, address: $address, apt: $apt, city: $city, province: $province, country: $country, postalCode: $postalCode, phone: $phone, email: $email, contacts: $contacts, noFixedAddress: $noFixedAddress)';
 }
 
 
@@ -532,7 +534,7 @@ abstract mixin class _$ClientRecordCopyWith<$Res> implements $ClientRecordCopyWi
   factory _$ClientRecordCopyWith(_ClientRecord value, $Res Function(_ClientRecord) _then) = __$ClientRecordCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String businessName, String name, String address, String apt, String city, String province, String country, String postalCode, String phone, String email, List<ClientContact> contacts
+ String id, String businessName, String name, String address, String apt, String city, String province, String country, String postalCode, String phone, String email, List<ClientContact> contacts, bool noFixedAddress
 });
 
 
@@ -549,7 +551,7 @@ class __$ClientRecordCopyWithImpl<$Res>
 
 /// Create a copy of ClientRecord
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? businessName = null,Object? name = null,Object? address = null,Object? apt = null,Object? city = null,Object? province = null,Object? country = null,Object? postalCode = null,Object? phone = null,Object? email = null,Object? contacts = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? businessName = null,Object? name = null,Object? address = null,Object? apt = null,Object? city = null,Object? province = null,Object? country = null,Object? postalCode = null,Object? phone = null,Object? email = null,Object? contacts = null,Object? noFixedAddress = null,}) {
   return _then(_ClientRecord(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,businessName: null == businessName ? _self.businessName : businessName // ignore: cast_nullable_to_non_nullable
@@ -563,7 +565,8 @@ as String,postalCode: null == postalCode ? _self.postalCode : postalCode // igno
 as String,phone: null == phone ? _self.phone : phone // ignore: cast_nullable_to_non_nullable
 as String,email: null == email ? _self.email : email // ignore: cast_nullable_to_non_nullable
 as String,contacts: null == contacts ? _self._contacts : contacts // ignore: cast_nullable_to_non_nullable
-as List<ClientContact>,
+as List<ClientContact>,noFixedAddress: null == noFixedAddress ? _self.noFixedAddress : noFixedAddress // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

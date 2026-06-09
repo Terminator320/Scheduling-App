@@ -10,6 +10,28 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.6.0+14] - 2026-06-08
+
+### Added
+- Clients can now be marked **No fixed address** when adding or editing them —
+  useful for a city or a client with many locations. The address requirement is
+  skipped, and the address is entered per appointment instead. Booking an
+  appointment for such a client opens the address field ready for a custom
+  address rather than showing the client's (empty) address.
+
+### Changed
+- A client's address is now required unless **No fixed address** is set.
+  Previously, entering a business name silently skipped the address requirement;
+  that shortcut is gone — use the toggle instead.
+- **Phone** and **email** are now optional on clients — a client only needs a
+  name (and an address, unless **No fixed address** is set). A typed email is
+  still checked for a valid format.
+
+### Fixed
+- The optional **Business name** field no longer turns red with a required
+  error when both name fields are left empty — the "business name or contact
+  name is required" message now appears only on the **Contact name** field.
+
 ## [1.5.0+13] - 2026-06-08
 
 ### Added

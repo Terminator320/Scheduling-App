@@ -198,7 +198,7 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       selectedClient: client,
       client: client,
       clientResults: const [],
-      useCustomAddress: false,
+      useCustomAddress: client.noFixedAddress || client.address.trim().isEmpty,
       clientCleared: false,
       errors: withoutKey(state.errors, 'client'),
     );

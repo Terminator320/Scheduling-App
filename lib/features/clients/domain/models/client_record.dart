@@ -4,7 +4,6 @@ part 'client_record.freezed.dart';
 
 @freezed
 abstract class ClientContact with _$ClientContact {
-
   const factory ClientContact({
     @Default('') String name,
     @Default('') String phone,
@@ -29,7 +28,6 @@ abstract class ClientContact with _$ClientContact {
 
 @freezed
 abstract class ClientRecord with _$ClientRecord {
-
   const factory ClientRecord({
     required String id,
     @Default('') String businessName,
@@ -43,6 +41,7 @@ abstract class ClientRecord with _$ClientRecord {
     @Default('') String phone,
     @Default('') String email,
     @Default(<ClientContact>[]) List<ClientContact> contacts,
+    @Default(false) bool noFixedAddress,
   }) = _ClientRecord;
   const ClientRecord._();
 
@@ -64,6 +63,7 @@ abstract class ClientRecord with _$ClientRecord {
           .whereType<Map<Object?, Object?>>()
           .map((c) => ClientContact.fromMap(Map<String, dynamic>.from(c)))
           .toList(),
+      noFixedAddress: (data['noFixedAddress'] as bool?) ?? false,
     );
   }
 
@@ -79,6 +79,7 @@ abstract class ClientRecord with _$ClientRecord {
     'phone': phone.trim(),
     'email': email.trim(),
     'contacts': contacts.map((c) => c.toMap()).toList(),
+    'noFixedAddress': noFixedAddress,
   };
 
   String get displayName => businessName.isNotEmpty ? businessName : name;
