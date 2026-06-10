@@ -151,16 +151,22 @@ dialer), `AddressMapLauncher` (map-app chooser), and `EmailComposeLauncher`
 (mail-app chooser — system default / Gmail / Outlook, via `mailto:` and
 web-compose URLs so no iOS query-scheme entitlements are needed). Each action
 button is built where `ref` lives and appears only when the data exists.
+Additional business contacts render through one shared `ClientContactsCards`
+(`clients/widgets/cards/`) — a `ConsumerWidget` of tappable (call/email)
+`InfoCard`s used by both read-only views (it owns `ClientContact` +
+`EmailComposeLauncher`, so it lives in the clients feature).
 
 The read-only **client** view (`client_view_body.dart`) leads with a Call /
 Email / Directions quick-action row and renders the phone/email/address as
-tappable `InfoCardRow`s. Its **Contacts** list skips `contacts[0]` (the primary,
-already shown above) and lists only the additional business contacts.
+tappable `InfoCardRow`s. Its **Contacts** list (`ClientContactsCards`) skips
+`contacts[0]` (the primary, already shown above) and lists only the additional
+business contacts.
 
 The read-only **appointment** view (`details_view_body.dart`) follows the same
 shape: a `StatusChip` under the title, a Call / Directions quick-action row, and
 the client shown by **name only** in an `InfoCard` (phone and address are reached
-through the buttons, not repeated as rows). Empty sections — notes, materials,
+through the buttons, not repeated as rows), with any extra business contacts
+below via the same `ClientContactsCards`. Empty sections — notes, materials,
 employees, pictures — are omitted entirely rather than rendered as "None" rows,
 so a sparse appointment stays short.
 
@@ -245,6 +251,8 @@ Status enums (`AppointmentStatus` written by `updateAppointmentStatus`) are allo
 ### Routing
 
 `AppRoutes.onGenerateRoute` is the single routing entry point. Pass typed argument classes via `Navigator.pushNamed(..., arguments: MyArgs(...))`. Screens do not navigate themselves — they receive args and call back via `Navigator.pop(context, result)`.
+
+Cross-destination navigation has a second SSOT in `adaptive_shell.dart`: `destinationRoute` maps an `AdaptiveDestination` to its `(route, typed args)`, and `navigateToDestination(context, destination, isAdmin:, employeeId:)` replaces the current route via it. Both the nav rail (`AdaptiveShell._onSelect`) and every hub screen's `AppTopBar(onBack:)` go through it, so the rail, the drawer, and the back arrows can't drift. All four hub screens (Clients, Employees, History, Settings) return to `AdaptiveDestination.calendar` this way. Auth screens and the Settings → Text-size sub-page are not hub screens and keep their own `Navigator.pop`.
 
 ### Responsive Layout
 
