@@ -106,6 +106,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     );
   }
 
+  bool get _showTodayButton => !isSameDay(_focusedDay, DateTime.now());
+
   void _goToToday() {
     final now = DateTime.now();
     setState(() {
@@ -257,16 +259,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         title: context.l10n.common_calendar,
         compact: context.isLandscape,
         actions: [
-          TextButton(
-            onPressed: _goToToday,
-            child: Text(
-              context.l10n.calendar_today,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: scheme.onPrimary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
           // In landscape / on tablets the nav rail replaces the drawer.
           if (!context.isSplitLayout)
             IconButton(
@@ -320,6 +312,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       ),
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton(
+              heroTag: 'addFab',
               onPressed: () async {
                 await showAddEventPopup(
                   context,
@@ -341,10 +334,35 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         employeeId: widget.employeeId,
         userName: userName,
         child: SafeArea(
-          child: _content(
-            isLoading: isLoading,
-            colorMap: colorMap,
-            nameMap: nameMap,
+          child: Stack(
+            children: [
+              _content(
+                isLoading: isLoading,
+                colorMap: colorMap,
+                nameMap: nameMap,
+              ),
+              Positioned(
+                bottom: 16,
+                left: 16,
+                child: AnimatedScale(
+                  scale: _showTodayButton ? 1.0 : 0.75,
+                  duration: AppDuration.normal,
+                  curve: Curves.easeInOut,
+                  child: AnimatedOpacity(
+                    opacity: _showTodayButton ? 1.0 : 0.0,
+                    duration: AppDuration.normal,
+                    child: IgnorePointer(
+                      ignoring: !_showTodayButton,
+                      child: FloatingActionButton(
+                        heroTag: 'todayFab',
+                        onPressed: _goToToday,
+                        child: const Icon(Icons.today),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
