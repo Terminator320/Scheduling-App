@@ -41,6 +41,31 @@ enum AdaptiveDestination { calendar, clients, employees, history, settings }
   ),
 };
 
+/// Replaces the current route with [destination] and its typed args — the
+/// single nav action shared by the rail and every screen's back button, so
+/// they can't drift from [destinationRoute].
+void navigateToDestination(
+  BuildContext context,
+  AdaptiveDestination destination, {
+  required bool isAdmin,
+  required String employeeId,
+  String userName = '',
+  String userEmail = '',
+}) {
+  final target = destinationRoute(
+    destination,
+    isAdmin: isAdmin,
+    employeeId: employeeId,
+    userName: userName,
+    userEmail: userEmail,
+  );
+  Navigator.pushReplacementNamed(
+    context,
+    target.route,
+    arguments: target.arguments,
+  );
+}
+
 class AdaptiveShell extends StatelessWidget {
   const AdaptiveShell({
     required this.currentDestination,
@@ -103,17 +128,13 @@ class AdaptiveShell extends StatelessWidget {
 
   void _onSelect(BuildContext context, AdaptiveDestination destination) {
     if (destination == currentDestination) return;
-    final target = destinationRoute(
+    navigateToDestination(
+      context,
       destination,
       isAdmin: isAdmin,
       employeeId: employeeId,
       userName: userName ?? '',
       userEmail: userEmail ?? '',
-    );
-    Navigator.pushReplacementNamed(
-      context,
-      target.route,
-      arguments: target.arguments,
     );
   }
 

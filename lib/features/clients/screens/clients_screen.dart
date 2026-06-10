@@ -11,7 +11,6 @@ import 'package:scheduling/features/clients/widgets/views/client_detail_view.dar
 import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart';
 import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
@@ -71,13 +70,11 @@ class _ListInformationState extends State<ListInformation> {
     await SheetFocus.unfocusAfterSheet();
   }
 
-  void _backToCalendar() => Navigator.pushReplacementNamed(
+  void _backToCalendar() => navigateToDestination(
     context,
-    AppRoutes.mainCalendar,
-    arguments: MainCalendarArgs(
-      isAdmin: widget.isAdmin,
-      employeeId: widget.employeeId,
-    ),
+    AdaptiveDestination.calendar,
+    isAdmin: widget.isAdmin,
+    employeeId: widget.employeeId,
   );
 
   Widget _buildDetailPlaceholder() => DetailPlaceholder(

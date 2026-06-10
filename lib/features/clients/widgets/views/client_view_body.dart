@@ -4,6 +4,7 @@ import 'package:scheduling/core/launchers/phone_call_launcher.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/email_compose_launcher.dart';
+import 'package:scheduling/features/clients/widgets/cards/client_contacts_cards.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -107,45 +108,7 @@ class ClientDetailViewBody extends ConsumerWidget {
             ],
           ),
         ],
-        // --- Additional business contacts ---
-        if (extraContacts.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.sp24),
-          SectionLabel(context.l10n.common_contacts),
-          const SizedBox(height: AppSpacing.sp8),
-          for (final contact in extraContacts)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sp8),
-              child: InfoCard(
-                rows: [
-                  if (contact.name.isNotEmpty)
-                    InfoCardRow(
-                      icon: Icons.person_outline,
-                      text: contact.name,
-                      iconColor: Theme.of(context).colorScheme.secondary,
-                      emphasize: true,
-                    ),
-                  if (contact.phone.isNotEmpty)
-                    InfoCardRow(
-                      icon: Icons.phone_outlined,
-                      text: contact.phone,
-                      onTap: () => launchPhoneCall(context, ref, contact.phone),
-                      trailingIcon: Icons.chevron_right,
-                    ),
-                  if (contact.email.isNotEmpty)
-                    InfoCardRow(
-                      icon: Icons.email_outlined,
-                      text: contact.email,
-                      onTap: () => EmailComposeLauncher.showEmailChoices(
-                        context,
-                        ref,
-                        email: contact.email,
-                      ),
-                      trailingIcon: Icons.chevron_right,
-                    ),
-                ],
-              ),
-            ),
-        ],
+        ClientContactsCards(contacts: extraContacts),
       ],
     );
   }
