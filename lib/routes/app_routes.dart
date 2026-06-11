@@ -89,6 +89,11 @@ class AppRoutes {
     }
   }
 
+  /// A clean cross-fade between hub destinations. The chrome (top bar + nav
+  /// rail) sits in the same place on every hub screen, so fading — with no
+  /// scale or slide — reads as just the body and the rail's selected highlight
+  /// changing, with the frame staying put. Collapses to an instant cut when the
+  /// platform requests reduced motion.
   static PageRouteBuilder<T> _fadeRoute<T>(
     RouteSettings settings,
     Widget page,
@@ -97,10 +102,13 @@ class AppRoutes {
       settings: settings,
       reverseTransitionDuration: const Duration(milliseconds: 250),
       pageBuilder: (_, _, _) => page,
-      transitionsBuilder: (_, animation, _, child) => FadeTransition(
-        opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-        child: child,
-      ),
+      transitionsBuilder: (context, animation, _, child) {
+        if (MediaQuery.disableAnimationsOf(context)) return child;
+        return FadeTransition(
+          opacity: animation.drive(CurveTween(curve: Curves.easeInOut)),
+          child: child,
+        );
+      },
     );
   }
 }
