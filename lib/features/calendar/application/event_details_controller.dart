@@ -64,6 +64,7 @@ class EventDetailsSaved extends EventDetailsSaveOutcome {
     this.appointment, {
     this.futureBookings = 0,
     this.removedBookings = 0,
+    this.updatedSiblings = 0,
   });
   final AppointmentRecord appointment;
 
@@ -72,6 +73,9 @@ class EventDetailsSaved extends EventDetailsSaveOutcome {
 
   /// Old future occurrences deleted by a series rewrite.
   final int removedBookings;
+
+  /// Future series visits the edit was propagated to (apply-to-all).
+  final int updatedSiblings;
 }
 
 class EventDetailsFailed extends EventDetailsSaveOutcome {
@@ -300,6 +304,7 @@ class EventDetailsController extends Notifier<EventDetailsState> {
     required String address,
     required String notes,
     required String materialsNeeded,
+    bool applyToSeries = false,
   }) async {
     final clientForValidation =
         state.selectedClient ??
@@ -363,9 +368,8 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       final repo = ref.read(appointmentsRepositoryProvider);
       var futureBookings = 0;
       var removedBookings = 0;
-      if (state.repeat == state.savedRepeat) {
-        await repo.updateAppointment(updated);
-      } else {
+      var updatedSiblings = 0;
+      if (state.repeat != state.savedRepeat) {
         // The rule changed — rewrite the series like a real calendar: drop
         // the old future visits and book the new cadence in one atomic
         // batch. Done/cancelled visits are kept as records, and copies
@@ -403,6 +407,43 @@ class EventDetailsController extends Notifier<EventDetailsState> {
         );
         futureBookings = copies.length;
         removedBookings = deleteIds.length;
+      } else if (applyToSeries && appointment.seriesId.isNotEmpty) {
+        // Apply-to-all: propagate the edited details and time-of-day to this
+        // visit and every future non-terminal sibling, keeping each sibling's
+        // own calendar date so the schedule isn't disturbed. Status stays
+        // per-visit (never propagated), and each visit keeps its own pictures.
+        // Past and done/cancelled visits are left untouched.
+        final series = await repo.getSeries(appointment.seriesId);
+        final siblings = _futureSeriesRecords(
+          series,
+          excludeId: id,
+          after: appointment.startTime,
+        );
+        final propagated = [
+          for (final v in siblings)
+            v.copyWith(
+              title: updated.title,
+              clientId: updated.clientId,
+              clientName: updated.clientName,
+              clientPhone: updated.clientPhone,
+              address: updated.address,
+              employeeIds: updated.employeeIds,
+              employeeNames: updated.employeeNames,
+              notes: updated.notes,
+              materialsNeeded: updated.materialsNeeded,
+              repeat: updated.repeat,
+              startTime: _withTimeOfDay(v.startTime, start),
+              endTime: occurrenceEnd(
+                originalStart: start,
+                originalEnd: end,
+                copyStart: _withTimeOfDay(v.startTime, start),
+              ),
+            ),
+        ];
+        await repo.updateAppointments([updated, ...propagated]);
+        updatedSiblings = propagated.length;
+      } else {
+        await repo.updateAppointment(updated);
       }
       // The doc now stores state.repeat — make it the new baseline.
       state = state.copyWith(savedRepeat: state.repeat);
@@ -429,6 +470,7 @@ class EventDetailsController extends Notifier<EventDetailsState> {
         updated,
         futureBookings: futureBookings,
         removedBookings: removedBookings,
+        updatedSiblings: updatedSiblings,
       );
     } catch (e, st) {
       ref.read(loggerProvider).warn('APPT-SAVE saveChanges failed', e, st);
@@ -509,13 +551,38 @@ List<String> _futureSeriesIds(
   required String excludeId,
   required DateTime after,
 }) => [
+  for (final a in _futureSeriesRecords(
+    series,
+    excludeId: excludeId,
+    after: after,
+  ))
+    a.id!,
+];
+
+/// Series visits after [after], skipping [excludeId] and any visit already
+/// done or cancelled (those stay as records) — the targets an edit or delete
+/// propagates to.
+List<AppointmentRecord> _futureSeriesRecords(
+  List<AppointmentRecord> series, {
+  required String excludeId,
+  required DateTime after,
+}) => [
   for (final a in series)
     if (a.id != null &&
         a.id != excludeId &&
         a.startTime.isAfter(after) &&
         !AppointmentStatus.fromRaw(a.status).isTerminal)
-      a.id!,
+      a,
 ];
+
+/// [date]'s calendar day carrying [timeSource]'s time of day.
+DateTime _withTimeOfDay(DateTime date, DateTime timeSource) => DateTime(
+  date.year,
+  date.month,
+  date.day,
+  timeSource.hour,
+  timeSource.minute,
+);
 
 ClientRecord _placeholderClient(AppointmentRecord a) => ClientRecord(
   id: a.clientId,

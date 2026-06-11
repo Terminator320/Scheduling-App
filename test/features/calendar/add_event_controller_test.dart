@@ -264,17 +264,19 @@ void main() {
       );
 
       expect(outcome, isA<AddEventSubmitted>());
-      expect((outcome as AddEventSubmitted).futureBookings, 3);
+      // 60-month horizon / 4 = 15 future visits, booked across five years.
+      expect((outcome as AddEventSubmitted).futureBookings, 15);
 
       final captured = verify(
         () => appointments.addAppointments(captureAny()),
       ).captured.single;
       final series = (captured as List).cast<AppointmentRecord>();
-      expect(series, hasLength(4));
-      expect(series.map((a) => a.id).toSet(), hasLength(4));
+      expect(series, hasLength(16));
+      expect(series.map((a) => a.id).toSet(), hasLength(16));
       expect(series[1].startTime, DateTime(2026, 9, 10, 9));
       expect(series[3].startTime, DateTime(2027, 5, 10, 9));
       expect(series[3].endTime, DateTime(2027, 5, 10, 10));
+      expect(series.last.startTime, DateTime(2031, 5, 10, 9));
       expect(series.every((a) => a.status == 'pending'), isTrue);
       // Every visit in the series stores the rule, like a real calendar.
       expect(

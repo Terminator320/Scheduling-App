@@ -10,6 +10,7 @@ import 'package:scheduling/features/calendar/application/event_details_controlle
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
+import 'package:scheduling/features/calendar/widgets/dialogs/series_scope_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
@@ -136,15 +137,32 @@ class DetailsEditBody extends ConsumerWidget {
   }
 
   Future<void> _save(BuildContext context, WidgetRef ref) async {
-    final notifier = ref.read(
-      eventDetailsControllerProvider(appointment).notifier,
-    );
+    final provider = eventDetailsControllerProvider(appointment);
+    final notifier = ref.read(provider.notifier);
+
+    // Editing a repeating visit asks whether to apply the changes to this
+    // visit only or to this and the future visits — mirroring delete. Changing
+    // the repeat rule itself always rewrites the series, so it skips the prompt.
+    final state = ref.read(provider);
+    var applyToSeries = false;
+    if (appointment.seriesId.isNotEmpty && state.repeat == state.savedRepeat) {
+      final choice = await showSeriesScopeDialog(
+        context,
+        title: context.l10n.calendar_editAppointment,
+        thisOnlyLabel: context.l10n.calendar_editThisVisitOnly,
+        thisAndFutureLabel: context.l10n.calendar_editThisAndFutureVisits,
+      );
+      if (choice == null || !context.mounted) return;
+      applyToSeries = choice == SeriesScopeChoice.thisAndFuture;
+    }
+
     final outcome = await notifier.save(
       appointment,
       title: controllers.title.text,
       address: AddressParser.toCanonical(controllers.address.text),
       notes: controllers.notes.text,
       materialsNeeded: controllers.materials.text,
+      applyToSeries: applyToSeries,
     );
     if (!context.mounted) return;
     switch (outcome) {
@@ -154,12 +172,15 @@ class DetailsEditBody extends ConsumerWidget {
         :final appointment,
         :final futureBookings,
         :final removedBookings,
+        :final updatedSiblings,
       ):
         final l10n = context.l10n;
         final message = futureBookings > 0
             ? l10n.calendar_changesSavedWithRepeats(futureBookings)
             : removedBookings > 0
             ? l10n.calendar_changesSavedWithRemoved(removedBookings)
+            : updatedSiblings > 0
+            ? l10n.calendar_changesAppliedToSeries(updatedSiblings)
             : l10n.common_appointmentChangesSaved;
         ref.read(noticeServiceProvider).success(message);
         onSaved(appointment);
@@ -188,7 +209,7 @@ class DetailsEditBody extends ConsumerWidget {
     );
     final error = await notifier.deleteAppointment(
       appointment,
-      includeFuture: choice == DeleteAppointmentChoice.thisAndFuture,
+      includeFuture: choice == SeriesScopeChoice.thisAndFuture,
     );
     if (!context.mounted) return;
     if (error == null) {

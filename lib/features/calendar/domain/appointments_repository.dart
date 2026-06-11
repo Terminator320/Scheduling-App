@@ -25,6 +25,10 @@ abstract class AppointmentsRepository {
 
   Future<void> updateAppointment(AppointmentRecord appointment);
 
+  /// Atomically updates every appointment in [appointments] (all-or-nothing).
+  /// Used to propagate an edit across this visit and its future series siblings.
+  Future<void> updateAppointments(List<AppointmentRecord> appointments);
+
   Future<void> updateAppointmentPictures(
     String id,
     List<AppointmentImage> pictures,
