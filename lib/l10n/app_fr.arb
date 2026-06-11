@@ -23,6 +23,8 @@
   "common_settings": "Paramètres",
   "settings_logOut": "Déconnexion",
   "common_cancel": "Annuler",
+  "common_clearText": "Effacer le texte",
+  "clients_clearAddress": "Effacer l’adresse",
   "settings_apply": "Appliquer",
   "common_delete": "Supprimer",
   "common_edit": "Modifier",

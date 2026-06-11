@@ -167,4 +167,76 @@ void main() {
     expect(find.text('Required'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('clear x empties the field and notifies onChanged', (
+    tester,
+  ) async {
+    final controller = TextEditingController(text: 'hello');
+    addTearDown(controller.dispose);
+    String? lastChanged;
+
+    await tester.pumpWidget(
+      _wrap(
+        LabeledTextField(
+          label: 'Phone',
+          controller: controller,
+          onChanged: (v) => lastChanged = v,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Clear text'));
+    await tester.pumpAndSettle();
+
+    expect(controller.text, isEmpty);
+    expect(lastChanged, '');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('clear x is inert while the field is empty', (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _wrap(LabeledTextField(label: 'Phone', controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    // The button is present but scaled away and ignoring taps.
+    expect(
+      tester
+          .widget<IgnorePointer>(
+            find
+                .ancestor(
+                  of: find.byIcon(Icons.clear),
+                  matching: find.byType(IgnorePointer),
+                )
+                .first,
+          )
+          .ignoring,
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a custom suffixIcon suppresses the clear x', (tester) async {
+    final controller = TextEditingController(text: 'hello');
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _wrap(
+        LabeledTextField(
+          label: 'Date',
+          controller: controller,
+          readOnly: true,
+          suffixIcon: const Icon(Icons.calendar_today_outlined),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.clear), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
