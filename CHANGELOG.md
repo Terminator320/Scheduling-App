@@ -10,6 +10,29 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.9.0+17] - 2026-06-10
+
+### Changed
+- **History now loads in pages.** The history list shows the most recent
+  appointments first and loads more as you scroll, so it stays fast even with
+  years of history. Filters and search apply to the appointments already loaded;
+  pull down to refresh.
+
+### Fixed
+- History could **hide the most recent appointments** once there were more than
+  500 past appointments — the full history is now reachable.
+- Searching history no longer **lags while you type** on large histories.
+- While editing an appointment, picking a different client no longer briefly
+  reverts to the original client.
+- Editing an appointment for a client with **no fixed address** now opens the
+  address field ready to type, instead of showing an empty address row.
+
+### Security
+- With the biometric **app lock** on, the app now hides your data in the phone's
+  app-switcher preview, not only once it's fully in the background.
+- Hardened an internal sign-up lookup so repeated retries can't lock you out of
+  it.
+
 ## [1.8.0+16] - 2026-06-09
 
 ### Added
