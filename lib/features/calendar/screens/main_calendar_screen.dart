@@ -18,7 +18,6 @@ import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/error_snack_bar.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -105,6 +104,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       ),
     );
   }
+
+  bool get _showTodayButton => !isSameDay(_focusedDay, DateTime.now());
 
   void _goToToday() {
     final now = DateTime.now();
@@ -207,12 +208,11 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         _upgradingToAdmin = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          Navigator.of(context).pushReplacementNamed(
-            AppRoutes.mainCalendar,
-            arguments: MainCalendarArgs(
-              isAdmin: true,
-              employeeId: widget.employeeId,
-            ),
+          navigateToDestination(
+            context,
+            AdaptiveDestination.calendar,
+            isAdmin: true,
+            employeeId: widget.employeeId,
           );
         });
       }
@@ -257,16 +257,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         title: context.l10n.common_calendar,
         compact: context.isLandscape,
         actions: [
-          TextButton(
-            onPressed: _goToToday,
-            child: Text(
-              context.l10n.calendar_today,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: scheme.onPrimary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
           // In landscape / on tablets the nav rail replaces the drawer.
           if (!context.isSplitLayout)
             IconButton(
@@ -320,6 +310,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       ),
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton(
+              heroTag: 'addFab',
               onPressed: () async {
                 await showAddEventPopup(
                   context,
@@ -341,10 +332,35 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         employeeId: widget.employeeId,
         userName: userName,
         child: SafeArea(
-          child: _content(
-            isLoading: isLoading,
-            colorMap: colorMap,
-            nameMap: nameMap,
+          child: Stack(
+            children: [
+              _content(
+                isLoading: isLoading,
+                colorMap: colorMap,
+                nameMap: nameMap,
+              ),
+              Positioned(
+                bottom: 16,
+                left: 16,
+                child: AnimatedScale(
+                  scale: _showTodayButton ? 1.0 : 0.75,
+                  duration: AppDuration.normal,
+                  curve: Curves.easeInOut,
+                  child: AnimatedOpacity(
+                    opacity: _showTodayButton ? 1.0 : 0.0,
+                    duration: AppDuration.normal,
+                    child: IgnorePointer(
+                      ignoring: !_showTodayButton,
+                      child: FloatingActionButton(
+                        heroTag: 'todayFab',
+                        onPressed: _goToToday,
+                        child: const Icon(Icons.today),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

@@ -270,7 +270,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       appBar: AppTopBar(
         title: context.l10n.common_settings,
         compact: context.isLandscape,
-        onBack: () => Navigator.pop(context),
+        onBack: () => navigateToDestination(
+          context,
+          AdaptiveDestination.calendar,
+          isAdmin: _isAdmin,
+          employeeId: widget.employeeId,
+        ),
       ),
       body: AdaptiveShell(
         currentDestination: AdaptiveDestination.settings,

@@ -1,24 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/launchers/phone_call_launcher.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
-import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
-import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
-import 'package:scheduling/features/calendar/widgets/sections/client_contacts_section.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_action_bar.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_view_widgets.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/widgets/cards/client_contacts_cards.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/cards/info_card.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
+import 'package:scheduling/shared/widgets/primitives/quick_action_button.dart';
+import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
 class DetailsViewBody extends ConsumerWidget {
   const DetailsViewBody({
@@ -48,6 +50,37 @@ class DetailsViewBody extends ConsumerWidget {
         appointment.startTime.month == now.month &&
         appointment.startTime.day == now.day;
 
+    // Call / Directions handlers are built here (where `ref` lives); the phone
+    // and address themselves move into these quick actions rather than rows.
+    final clientName = client?.displayName ?? appointment.clientName;
+    final phone = (client?.phone.isNotEmpty ?? false)
+        ? client!.phone
+        : appointment.clientPhone;
+    final onCall = phone.isNotEmpty
+        ? () => launchPhoneCall(context, ref, phone)
+        : null;
+    final onDirections = appointment.address.isNotEmpty
+        ? () => AddressMapLauncher.showMapChoices(
+            context,
+            address: appointment.address,
+          )
+        : null;
+    final displayAddress = appointment.address.isNotEmpty
+        ? AddressParser.canonicalToDisplay(appointment.address)
+        : '';
+
+    final notes = appointment.notes;
+    final materials = appointment.materialsNeeded
+        .split(',')
+        .map((m) => m.trim())
+        .where((m) => m.isNotEmpty)
+        .toList();
+    // contacts[0] mirrors the primary client already named above — only the
+    // remaining business contacts are worth listing again.
+    final extraContacts = (client?.contacts ?? const <ClientContact>[])
+        .skip(1)
+        .toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -56,12 +89,66 @@ class DetailsViewBody extends ConsumerWidget {
             alignment: Alignment.centerRight,
             child: _EditChip(onTap: notifier.enterEditing),
           ),
-        _Header(appointment: appointment),
+        _Header(appointment: appointment, status: status),
         const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
         const SizedBox(height: AppSpacing.sp16),
-        _DetailsSections(appointment: appointment, client: client),
-        const SizedBox(height: AppSpacing.sp16),
+        if (onCall != null || onDirections != null) ...[
+          QuickActionsRow(
+            buttons: [
+              if (onCall != null)
+                QuickActionButton(
+                  icon: Icons.phone_outlined,
+                  label: context.l10n.clients_call,
+                  onTap: onCall,
+                ),
+              if (onDirections != null)
+                QuickActionButton(
+                  icon: Icons.directions_outlined,
+                  label: context.l10n.clients_directions,
+                  onTap: onDirections,
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sp24),
+        ],
+        SectionLabel(context.l10n.calendar_client),
+        const SizedBox(height: AppSpacing.sp8),
+        InfoCard(
+          rows: [
+            InfoCardRow(
+              icon: Icons.person_outline,
+              text: clientName,
+              emphasize: true,
+            ),
+            if (phone.isNotEmpty)
+              InfoCardRow(
+                icon: Icons.phone_outlined,
+                text: phone,
+                onTap: onCall,
+                trailingIcon: Icons.chevron_right,
+              ),
+            if (displayAddress.isNotEmpty)
+              InfoCardRow(
+                icon: Icons.location_on_outlined,
+                text: displayAddress,
+                onTap: onDirections,
+                trailingIcon: Icons.open_in_new,
+                semanticLabel:
+                    '$displayAddress, ${context.l10n.maps_openAddressWith}',
+              ),
+          ],
+        ),
+        ClientContactsCards(contacts: extraContacts, collapsible: true),
+        if (notes.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sp16),
+          DetailsSectionRow(label: context.l10n.calendar_notes, value: notes),
+        ],
+        if (materials.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sp16),
+          _MaterialsRow(items: materials),
+        ],
+        _EmployeesView(appointment: appointment),
         _PhotosView(
           appointment: appointment,
           isCancelled: isCancelled,
@@ -91,116 +178,6 @@ class DetailsViewBody extends ConsumerWidget {
               onClose();
             }
           },
-        ),
-        if (showActions)
-          _DeleteTestButton(
-            appointment: appointment,
-            isSaving: isSaving,
-            notifier: notifier,
-            onClose: onClose,
-          ),
-      ],
-    );
-  }
-}
-
-class _DetailsSections extends StatelessWidget {
-  const _DetailsSections({required this.appointment, required this.client});
-
-  final AppointmentRecord appointment;
-  final ClientRecord? client;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        DetailsSectionRow(
-          label: context.l10n.calendar_client,
-          value: client?.displayName ?? appointment.clientName,
-          subtitle: appointment.clientPhone.isNotEmpty
-              ? appointment.clientPhone
-              : context.l10n.calendar_noNumber,
-        ),
-        if ((client?.contacts ?? const <ClientContact>[]).isNotEmpty)
-          ClientContactsSection(contacts: client!.contacts),
-        const SizedBox(height: AppSpacing.sp16),
-        DetailsAddressRow(
-          label: context.l10n.common_address,
-          address: appointment.address.isNotEmpty
-              ? AddressParser.canonicalToDisplay(appointment.address)
-              : context.l10n.calendar_noAddress,
-          onTap: appointment.address.isNotEmpty
-              ? () => AddressMapLauncher.showMapChoices(
-                  context,
-                  address: appointment.address,
-                )
-              : null,
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        DetailsSectionRow(
-          label: context.l10n.calendar_notes,
-          value: appointment.notes.isNotEmpty
-              ? appointment.notes
-              : context.l10n.calendar_noNotes,
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        _MaterialsRow(materials: appointment.materialsNeeded),
-        const SizedBox(height: AppSpacing.sp16),
-        _EmployeesView(appointment: appointment),
-      ],
-    );
-  }
-}
-
-// TODO(pre-ship): Remove this entire widget — testing-only delete control.
-class _DeleteTestButton extends ConsumerWidget {
-  const _DeleteTestButton({
-    required this.appointment,
-    required this.isSaving,
-    required this.notifier,
-    required this.onClose,
-  });
-
-  final AppointmentRecord appointment;
-  final bool isSaving;
-  final EventDetailsController notifier;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SizedBox(height: AppSpacing.sp8),
-        OutlinedButton.icon(
-          style: destructiveOutlinedButtonStyle(
-            context,
-            minimumSize: const Size(double.infinity, 44),
-          ),
-          onPressed: isSaving
-              ? null
-              : () async {
-                  final choice = await showDeleteAppointmentDialog(
-                    context,
-                    isSeries: appointment.seriesId.isNotEmpty,
-                  );
-                  if (!context.mounted || choice == null) return;
-                  final error = await notifier.deleteAppointment(
-                    appointment,
-                    includeFuture:
-                        choice == DeleteAppointmentChoice.thisAndFuture,
-                  );
-                  if (error == null) {
-                    if (!context.mounted) return;
-                    ref
-                        .read(noticeServiceProvider)
-                        .success(context.l10n.common_appointmentDeleted);
-                    onClose();
-                  }
-                },
-          icon: const Icon(Icons.delete_outline, size: 15),
-          label: Text(context.l10n.calendar_deleteAppointment),
         ),
       ],
     );
@@ -245,9 +222,10 @@ class _EditChip extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.appointment});
+  const _Header({required this.appointment, required this.status});
 
   final AppointmentRecord appointment;
+  final AppointmentStatus status;
 
   @override
   Widget build(BuildContext context) {
@@ -262,6 +240,8 @@ class _Header extends StatelessWidget {
             style: theme.textTheme.headlineLarge,
             textAlign: TextAlign.center,
           ),
+          const SizedBox(height: AppSpacing.sp8),
+          StatusChip(status: status),
           const SizedBox(height: AppSpacing.sp8),
           Wrap(
             alignment: WrapAlignment.center,
@@ -329,51 +309,43 @@ class _IconLabel extends StatelessWidget {
 }
 
 class _MaterialsRow extends StatelessWidget {
-  const _MaterialsRow({required this.materials});
+  const _MaterialsRow({required this.items});
 
-  final String materials;
+  final List<String> items;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final items = materials
-        .split(',')
-        .map((m) => m.trim())
-        .where((m) => m.isNotEmpty)
-        .toList();
+    final scheme = Theme.of(context).colorScheme;
     return DetailsSectionRow(
       label: context.l10n.calendar_materialsNeeded,
-      value: items.isEmpty ? context.l10n.calendar_noMaterials : '',
-      customValue: items.isNotEmpty
-          ? Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: items
-                  .map(
-                    (m) => Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 11,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: scheme.surfaceContainerHighest,
-                        border: Border.all(color: scheme.outlineVariant),
-                        borderRadius: BorderRadius.circular(AppRadius.rFull),
-                      ),
-                      child: Text(
-                        m,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: scheme.onSurface,
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(),
+      value: '',
+      customValue: Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: items
+            .map(
+              (m) => Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest,
+                  border: Border.all(color: scheme.outlineVariant),
+                  borderRadius: BorderRadius.circular(AppRadius.rFull),
+                ),
+                child: Text(
+                  m,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: scheme.onSurface,
+                  ),
+                ),
+              ),
             )
-          : null,
+            .toList(),
+      ),
     );
   }
 }
@@ -385,31 +357,28 @@ class _EmployeesView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final selectedEmployees = ref.watch(
       eventDetailsControllerProvider(
         appointment,
       ).select((s) => s.selectedEmployees),
     );
-    return DetailsSectionRow(
-      label: context.l10n.common_employees,
-      value: '',
-      customValue: selectedEmployees.isEmpty
-          ? Text(
-              context.l10n.calendar_noEmployeesAssigned,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ...selectedEmployees.map(
-                  (e) => DetailsEmployeePill(employee: e),
-                ),
-              ],
-            ),
+    if (selectedEmployees.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: AppSpacing.sp16),
+        DetailsSectionRow(
+          label: context.l10n.common_employees,
+          value: '',
+          customValue: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final e in selectedEmployees)
+                DetailsEmployeePill(employee: e),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -435,27 +404,37 @@ class _PhotosView extends ConsumerWidget {
     final failure = appointmentId != null
         ? notifier.failureFor(appointmentId)
         : null;
-    return DetailsSectionRow(
-      label: context.l10n.calendar_pictures,
-      value: '',
-      customValue: PhotoPickerSection(
-        existingImages: existingImages,
-        newImages: newImages,
-        isEditing: false,
-        onPickImages: () {},
-        onRemoveExisting: (_) {},
-        onRemoveNew: (_) {},
-        failedCount: failure?.failedCount ?? 0,
-        tooLargeFileNames: failure?.tooLargeFileNames ?? const [],
-        onRetry: (failure?.failedCount ?? 0) > 0 && !isCancelled
-            ? () {
-                if (appointmentId != null) {
-                  notifier.clearFailure(appointmentId);
-                }
-                onRetry();
-              }
-            : null,
-      ),
+    final failedCount = failure?.failedCount ?? 0;
+    final hasPhotos =
+        existingImages.isNotEmpty || newImages.isNotEmpty || failedCount > 0;
+    if (!hasPhotos) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: AppSpacing.sp16),
+        DetailsSectionRow(
+          label: context.l10n.calendar_pictures,
+          value: '',
+          customValue: PhotoPickerSection(
+            existingImages: existingImages,
+            newImages: newImages,
+            isEditing: false,
+            onPickImages: () {},
+            onRemoveExisting: (_) {},
+            onRemoveNew: (_) {},
+            failedCount: failedCount,
+            tooLargeFileNames: failure?.tooLargeFileNames ?? const [],
+            onRetry: failedCount > 0 && !isCancelled
+                ? () {
+                    if (appointmentId != null) {
+                      notifier.clearFailure(appointmentId);
+                    }
+                    onRetry();
+                  }
+                : null,
+          ),
+        ),
+      ],
     );
   }
 }

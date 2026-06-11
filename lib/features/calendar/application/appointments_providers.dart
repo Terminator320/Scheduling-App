@@ -26,13 +26,6 @@ final myAppointmentsProvider = StreamProvider.family
           .watchForEmployeeInRange(key.employeeId, key.range);
     });
 
-final appointmentHistoryProvider = StreamProvider<List<AppointmentRecord>>((
-  ref,
-) {
-  if (ref.authUid == null) return Stream.value(const []);
-  return ref.watch(appointmentsRepositoryProvider).watchHistory();
-});
-
 final appointmentByIdProvider = FutureProvider.family
     .autoDispose<AppointmentRecord?, String>((ref, id) {
       final repo = ref.watch(appointmentsRepositoryProvider);

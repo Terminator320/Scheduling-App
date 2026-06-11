@@ -7,25 +7,16 @@ import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
-import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
-import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
-import 'package:scheduling/features/calendar/utils/appointment_form_error_text.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
-import 'package:scheduling/features/calendar/widgets/fields/appointment_address_field.dart';
-import 'package:scheduling/features/calendar/widgets/fields/employee_picker.dart';
-import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
+import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
-import 'package:scheduling/features/clients/domain/models/client_record.dart';
-import 'package:scheduling/features/clients/widgets/fields/client_search_field.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
-import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
 class AddEventSheet extends ConsumerStatefulWidget {
@@ -38,14 +29,16 @@ class AddEventSheet extends ConsumerStatefulWidget {
 }
 
 class _AddEventSheetState extends ConsumerState<AddEventSheet> {
-  final _titleController = TextEditingController();
-  final _dateController = TextEditingController();
-  final _startTimeController = TextEditingController();
-  final _endTimeController = TextEditingController();
-  final _clientSearchController = TextEditingController();
-  final _addressController = TextEditingController();
-  final _notesController = TextEditingController();
-  final _materialsController = TextEditingController();
+  final _controllers = AppointmentFormControllers(
+    title: TextEditingController(),
+    date: TextEditingController(),
+    startTime: TextEditingController(),
+    endTime: TextEditingController(),
+    clientSearch: TextEditingController(),
+    address: TextEditingController(),
+    notes: TextEditingController(),
+    materials: TextEditingController(),
+  );
   Timer? _clientSearchDebounce;
   late final _provider = addEventControllerProvider(widget.initialDate);
 
@@ -56,21 +49,14 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     super.initState();
     final initialDate = widget.initialDate;
     if (initialDate != null) {
-      _dateController.text = DateUtilsHelper.formatDate(initialDate);
+      _controllers.date.text = DateUtilsHelper.formatDate(initialDate);
     }
   }
 
   @override
   void dispose() {
     _clientSearchDebounce?.cancel();
-    _titleController.dispose();
-    _dateController.dispose();
-    _startTimeController.dispose();
-    _endTimeController.dispose();
-    _clientSearchController.dispose();
-    _addressController.dispose();
-    _notesController.dispose();
-    _materialsController.dispose();
+    _controllers.dispose();
     super.dispose();
   }
 
@@ -86,18 +72,6 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     );
   }
 
-  void _selectClient(ClientRecord client) {
-    _clientSearchController.text = client.displayName;
-    _addressController.text = AddressParser.canonicalToDisplay(client.address);
-    _notifier.selectClient(client);
-  }
-
-  void _clearClient() {
-    _clientSearchController.clear();
-    _addressController.clear();
-    _notifier.clearClient();
-  }
-
   Future<void> _pickDate() async {
     final state = ref.read(_provider);
     final picked = await showDatePicker(
@@ -107,7 +81,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
       lastDate: DateTime(2100),
     );
     if (picked == null) return;
-    _dateController.text = DateUtilsHelper.formatDate(picked);
+    _controllers.date.text = DateUtilsHelper.formatDate(picked);
     _notifier.selectDate(picked);
   }
 
@@ -118,10 +92,10 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
       initialTime: stateBefore.selectedStartTime,
     );
     if (picked == null || !mounted) return;
-    _startTimeController.text = picked.format(context);
+    _controllers.startTime.text = picked.format(context);
     if (!stateBefore.endTimeWasPickedManually) {
       final autoEnd = AppointmentDraftDefaults.defaultEndTime(picked);
-      _endTimeController.text = autoEnd.format(context);
+      _controllers.endTime.text = autoEnd.format(context);
     }
     _notifier.selectStartTime(picked);
   }
@@ -133,7 +107,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
       initialTime: state.selectedEndTime,
     );
     if (picked == null || !mounted) return;
-    _endTimeController.text = picked.format(context);
+    _controllers.endTime.text = picked.format(context);
     _notifier.selectEndTime(picked);
   }
 
@@ -142,25 +116,13 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     if (picked.isNotEmpty) _notifier.addImages(picked);
   }
 
-  void _switchToCustomAddress() {
-    _addressController.clear();
-    _notifier.setUseCustomAddress(value: true);
-  }
-
-  void _useClientAddress() {
-    final client = ref.read(_provider).selectedClient;
-    if (client == null) return;
-    _addressController.text = AddressParser.canonicalToDisplay(client.address);
-    _notifier.setUseCustomAddress(value: false);
-  }
-
   Future<void> _submit() async {
     Future<AddEventSubmitOutcome> attempt({bool forceBusy = false}) =>
         _notifier.submit(
-          title: _titleController.text,
-          address: AddressParser.toCanonical(_addressController.text),
-          notes: _notesController.text,
-          materialsNeeded: _materialsController.text,
+          title: _controllers.title.text,
+          address: AddressParser.toCanonical(_controllers.address.text),
+          notes: _controllers.notes.text,
+          materialsNeeded: _controllers.materials.text,
           forceBusy: forceBusy,
         );
 
@@ -205,11 +167,6 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     }
   }
 
-  String? _errorFor(Map<String, AppointmentFormError> errors, String field) {
-    final key = errors[field];
-    return key == null ? null : appointmentFormErrorText(context, key);
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(_provider);
@@ -222,168 +179,39 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
         const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
         const SizedBox(height: AppSpacing.sp16),
-        // --- Service title ---
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: context.l10n.calendar_serviceTitle,
-            hint: context.l10n.calendar_eGPlumbingRepair,
-            controller: _titleController,
-            required: true,
-            maxLength: TextLimits.appointmentTitle,
-            errorText: _errorFor(state.errors, 'title'),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Client ---
-        formLabel(
-          context,
-          context.l10n.calendar_client,
-          required: true,
-        ),
-        SheetFocusScroll(
-          child: ClientSearchField(
-            controller: _clientSearchController,
-            selectedClient: state.selectedClient,
-            results: state.clientResults,
-            isSearching: state.isSearchingClient,
-            onChanged: _onClientSearchChanged,
-            onSelect: _selectClient,
-            onClear: _clearClient,
-            errorText: _errorFor(state.errors, 'client'),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Employees ---
-        formLabel(
-          context,
-          context.l10n.calendar_assignEmployee,
-          required: true,
-        ),
-        const SizedBox(height: 6),
-        EmployeePicker(
+        AppointmentFormFields(
+          controllers: _controllers,
           allEmployees: allEmployees,
-          selectedEmployees: state.selectedEmployees,
-          onToggle: _notifier.toggleEmployee,
-          hasError: state.errors.containsKey('employees'),
-        ),
-        if (state.errors.containsKey('employees'))
-          Padding(
-            padding: const EdgeInsets.only(top: 6, left: 4),
-            child: Text(
-              _errorFor(state.errors, 'employees') ?? '',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.error,
-              ),
-            ),
-          ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Date & time ---
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: context.l10n.calendar_date,
-            hint: context.l10n.calendar_selectDate,
-            controller: _dateController,
-            required: true,
-            readOnly: true,
-            suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
-            errorText: _errorFor(state.errors, 'date'),
-            onTap: _pickDate,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: SheetFocusScroll(
-                child: LabeledTextField(
-                  label: context.l10n.calendar_startTime,
-                  hint: context.l10n.calendar_start,
-                  controller: _startTimeController,
-                  required: true,
-                  readOnly: true,
-                  errorText: _errorFor(state.errors, 'startTime'),
-                  onTap: _pickStartTime,
-                ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sp12),
-            Expanded(
-              child: SheetFocusScroll(
-                child: LabeledTextField(
-                  label: context.l10n.calendar_endTime,
-                  hint: context.l10n.calendar_end,
-                  controller: _endTimeController,
-                  required: true,
-                  readOnly: true,
-                  errorText: _errorFor(state.errors, 'endTime'),
-                  onTap: _pickEndTime,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Repeat ---
-        formLabel(
-          context,
-          context.l10n.calendar_repeat,
-          optional: true,
-        ),
-        RepeatIntervalPicker(
-          current: state.repeat,
-          onChanged: _notifier.selectRepeat,
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Address ---
-        AppointmentAddressField(
           selectedClient: state.selectedClient,
+          clientResults: state.clientResults,
+          isSearchingClient: state.isSearchingClient,
+          selectedEmployees: state.selectedEmployees,
+          repeat: state.repeat,
           useCustomAddress: state.useCustomAddress,
-          addressController: _addressController,
-          onSwitchToCustom: _switchToCustomAddress,
-          onUseClientAddress: _useClientAddress,
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Notes & materials ---
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: context.l10n.calendar_notes,
-            hint: context.l10n.calendar_typeTheNoteHere,
-            controller: _notesController,
-            optional: true,
-            maxLines: 2,
-            maxLength: TextLimits.appointmentNotes,
-            showCounter: true,
+          errors: state.errors,
+          employeeLabel: context.l10n.calendar_assignEmployee,
+          employeeRequired: true,
+          materialsHint: context.l10n.calendar_typeTheMaterialsHere,
+          onSearchClients: _onClientSearchChanged,
+          onSelectClient: _notifier.selectClient,
+          onClearClient: _notifier.clearClient,
+          onToggleEmployee: _notifier.toggleEmployee,
+          onPickDate: _pickDate,
+          onPickStartTime: _pickStartTime,
+          onPickEndTime: _pickEndTime,
+          onSelectRepeat: _notifier.selectRepeat,
+          onUseCustomAddress: (value) =>
+              _notifier.setUseCustomAddress(value: value),
+          photosSection: PhotoPickerSection(
+            existingImages: const [],
+            newImages: state.selectedImages,
+            isEditing: true,
+            onPickImages: _pickImages,
+            onRemoveExisting: (_) {},
+            onRemoveNew: _notifier.removeImage,
           ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: context.l10n.calendar_materialsNeeded,
-            hint: context.l10n.calendar_typeTheMaterialsHere,
-            controller: _materialsController,
-            optional: true,
-            maxLines: 2,
-            maxLength: TextLimits.appointmentMaterials,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Photos ---
-        formLabel(
-          context,
-          context.l10n.calendar_pictures,
-          optional: true,
-        ),
-        PhotoPickerSection(
-          existingImages: const [],
-          newImages: state.selectedImages,
-          isEditing: true,
-          onPickImages: _pickImages,
-          onRemoveExisting: (_) {},
-          onRemoveNew: _notifier.removeImage,
         ),
         const SizedBox(height: AppSpacing.sp24),
-        // --- Save ---
         AnimatedLoadingButton(
           label: context.l10n.calendar_saveAppointment,
           isLoading: state.isSubmitting,

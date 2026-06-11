@@ -2,6 +2,7 @@ const {setGlobalOptions} = require("firebase-functions");
 const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {onObjectFinalized} = require("firebase-functions/v2/storage");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {getStorage} = require("firebase-admin/storage");
 const {defineSecret} = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
@@ -663,16 +664,19 @@ exports.resolveMyInvite = onCall(
         throw new HttpsError("unauthenticated", "auth-required");
       }
       assertPayloadShape(req.data, new Set());
+      const tokenEmail = req.auth.token?.email;
+      if (typeof tokenEmail !== "string" || tokenEmail === "") {
+        throw new HttpsError("failed-precondition", "no-email-claim");
+      }
+      // Rate-limit AFTER the cheap precondition checks (mirrors deleteAccount):
+      // a tokenless/precondition-failing retry must not record an attempt and
+      // burn one of the caller's own limited slots.
       await enforceDurableRateLimit(
           "resolveMyInvite",
           req.auth.uid,
           AUTH_RATE_MAX,
           AUTH_RATE_WINDOW_MS,
       );
-      const tokenEmail = req.auth.token?.email;
-      if (typeof tokenEmail !== "string" || tokenEmail === "") {
-        throw new HttpsError("failed-precondition", "no-email-claim");
-      }
       const email = tokenEmail.trim().toLowerCase();
       const db = getFirestore();
       // Invites are employee-only — admin is granted post-activation, and
@@ -704,5 +708,91 @@ exports.resolveMyInvite = onCall(
           email: d.email || "",
         },
       };
+    },
+);
+
+// ----- Scheduled history purge ----------------------------------------------
+//
+// History retention: done/cancelled appointments stay in history for
+// HISTORY_RETENTION_YEARS, then are purged automatically — the Firestore doc
+// AND its Storage images — once (and only once) that long has elapsed. The
+// cutoff is anchored on `startTime` (the visit date, which is what the history
+// view is keyed on) and is strict, so nothing is removed before the full
+// window passes. Non-terminal appointments are never touched, however old —
+// only history is purged. Image cleanup mirrors the manual delete path in
+// EventDetailsController.deleteAppointment so a purged appointment leaves no
+// orphaned bytes. Admin SDK bypasses security rules; this runs unattended.
+const HISTORY_RETENTION_YEARS = 2;
+const PURGE_STATUSES = ["done", "cancelled"];
+// Well under Firestore's 500-writes-per-batch ceiling, with headroom.
+const PURGE_BATCH_SIZE = 200;
+
+/**
+ * Best-effort deletion of every Storage object under an appointment's image
+ * prefix (`appointments/{id}/images/`). Returns false (and logs) on failure —
+ * the Firestore doc is already gone by the time this runs, so a Storage error
+ * only orphans bytes and must not be treated as a purge failure.
+ * @param {string} appointmentId Firestore doc id of the purged appointment.
+ * @return {!Promise<boolean>} true when the prefix was cleared.
+ */
+async function deleteAppointmentImages(appointmentId) {
+  const prefix = `appointments/${appointmentId}/images/`;
+  try {
+    await getStorage().bucket().deleteFiles({prefix});
+    return true;
+  } catch (err) {
+    logger.warn("purgeExpiredHistory: image cleanup failed", {
+      appointmentId,
+      err: err.message,
+    });
+    return false;
+  }
+}
+
+exports.purgeExpiredHistory = onSchedule(
+    {
+
+      schedule: "every day 03:00",
+      timeZone: "America/Toronto",
+      maxInstances: 1,
+    },
+    async () => {
+      const db = getFirestore();
+      const cutoff = new Date();
+      cutoff.setFullYear(cutoff.getFullYear() - HISTORY_RETENTION_YEARS);
+      const col = db.collection("appointments");
+
+      let purged = 0;
+      let imageFailures = 0;
+      // Every fetched doc is deleted, so the next page's oldest terminal visit
+      // simply takes its place — a plain limit loop advances without a cursor.
+      for (;;) {
+        const snap = await col
+            .where("status", "in", PURGE_STATUSES)
+            .where("startTime", "<", cutoff)
+            .orderBy("startTime")
+            .limit(PURGE_BATCH_SIZE)
+            .get();
+        if (snap.empty) break;
+
+        const batch = db.batch();
+        for (const doc of snap.docs) batch.delete(doc.ref);
+        await batch.commit();
+        purged += snap.size;
+
+        for (const doc of snap.docs) {
+          const ok = await deleteAppointmentImages(doc.id);
+          if (!ok) imageFailures += 1;
+        }
+
+        if (snap.size < PURGE_BATCH_SIZE) break;
+      }
+
+      logger.info("purgeExpiredHistory: done", {
+        purged,
+        imageFailures,
+        retentionYears: HISTORY_RETENTION_YEARS,
+        cutoff: cutoff.toISOString(),
+      });
     },
 );

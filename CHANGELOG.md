@@ -10,6 +10,88 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.10.0+19] - 2026-06-10
+
+### Added
+- **Appointment details now tuck extra contacts behind a tap.** When a client
+  has additional business contacts, the appointment view shows a collapsible
+  **Contacts (N)** header — tap to reveal the full contact cards, tap again to
+  hide them. The key info (client, phone, address) stays visible up top.
+
+### Changed
+- **Switching between the main screens** (Calendar, Clients, History, Employees,
+  Settings) now uses a clean cross-fade, so the top bar and nav rail stay put
+  and only the page content changes.
+- The **back arrow** in the top bar now animates on tap — the arrow nudges back
+  and springs into place — for clearer touch feedback. (Respects the system
+  reduce-motion setting.)
+
+## [1.9.1+18] - 2026-06-10
+
+### Changed
+- The **edit appointment** form now lists **Notes before Materials**, matching
+  the new-appointment form and the appointment details view — the same fields in
+  the same order everywhere.
+
+## [1.9.0+17] - 2026-06-10
+
+### Changed
+- **History now loads in pages.** The history list shows the most recent
+  appointments first and loads more as you scroll, so it stays fast even with
+  years of history. Filters and search apply to the appointments already loaded;
+  pull down to refresh.
+
+### Fixed
+- History could **hide the most recent appointments** once there were more than
+  500 past appointments — the full history is now reachable.
+- Searching history no longer **lags while you type** on large histories.
+- While editing an appointment, picking a different client no longer briefly
+  reverts to the original client.
+- Editing an appointment for a client with **no fixed address** now opens the
+  address field ready to type, instead of showing an empty address row.
+
+### Security
+- With the biometric **app lock** on, the app now hides your data in the phone's
+  app-switcher preview, not only once it's fully in the background.
+- Hardened an internal sign-up lookup so repeated retries can't lock you out of
+  it.
+
+## [1.8.0+16] - 2026-06-09
+
+### Added
+- **History is now its own screen with filters.** Narrow appointment history by
+  **year** or by **assigned staff** with the new filter chips, and the list is
+  grouped under clear **year** headers — so the year is visible, not just the
+  month and day.
+- History search now also matches a **client's phone number** (on top of client
+  and employee name); formatting doesn't matter — `5550199` finds
+  `(514) 555-0199`.
+- The appointment details screen now shows the client's **phone number** and
+  **address** as tappable rows (tap to call or open directions), alongside the
+  existing quick-action buttons.
+- **Automatic history cleanup.** Done and cancelled appointments stay in history
+  for **2 years**, then are removed automatically — the appointment **and its
+  photos** — once that period has passed. Nothing is deleted before the full two
+  years elapse. (Runs server-side, daily.)
+
+### Fixed
+- Deleting an appointment now also deletes its **photos** from storage. Photos
+  were previously left behind, accumulating as orphaned files. For a recurring
+  series, only the photos of the visits actually being deleted are removed —
+  past and completed/cancelled visits keep theirs.
+
+## [1.7.0+15] - 2026-06-08
+
+### Added
+- The appointment details screen now shows a **status badge** (Pending,
+  Confirmed, Done, etc.) right under the title, and **Call** and **Directions**
+  quick-action buttons — tap to phone the client or open the address in a map.
+
+### Changed
+- The appointment details screen is cleaner: the client is shown by name (call
+  and directions now live in the buttons above), and empty sections — notes,
+  materials, employees, pictures — are hidden instead of showing "None" rows.
+
 ## [1.6.0+14] - 2026-06-08
 
 ### Added

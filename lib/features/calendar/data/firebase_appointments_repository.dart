@@ -164,21 +164,30 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }
 
   @override
-  Stream<List<AppointmentRecord>> watchHistory() {
-    return _appointments
-        .where('status', whereIn: ['done', 'cancelled'])
-        .limit(500)
-        .snapshots()
-        .map(
-          // Sorted Dart-side: a Firestore orderBy alongside the whereIn
-          // would require a composite index.
-          (snapshot) =>
-              snapshot.docs
-                  .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
-                  .toList()
-                ..sort((a, b) => b.startTime.compareTo(a.startTime)),
-        );
+  Future<List<AppointmentRecord>> fetchHistoryPage({
+    required int limit,
+    AppointmentRecord? after,
+  }) async {
+    // Newest-first, server-ordered + cursor-paged so the most recent history
+    // is always returned (the old limit(500) had no orderBy, so it kept an
+    // arbitrary doc-id slice and could drop recent visits past 500). Served by
+    // the existing `appointments (status ASC, startTime ASC)` composite index,
+    // scanned in reverse for the descending order.
+    var query = _appointments
+        .where('status', whereIn: _historyStatuses)
+        .orderBy('startTime', descending: true);
+    final afterId = after?.id;
+    if (afterId != null) {
+      final afterDoc = await _appointments.doc(afterId).get();
+      if (afterDoc.exists) query = query.startAfterDocument(afterDoc);
+    }
+    final snapshot = await query.limit(limit).get();
+    return snapshot.docs
+        .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
+        .toList();
   }
+
+  static const List<String> _historyStatuses = ['done', 'cancelled'];
 
   @override
   Stream<List<AppointmentRecord>> watchForEmployeeInRange(
