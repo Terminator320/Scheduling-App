@@ -86,16 +86,26 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   @override
   Future<void> updateAppointments(List<AppointmentRecord> appointments) async {
-    final batch = _appointments.firestore.batch();
-    for (final appointment in appointments) {
-      final id = appointment.id;
-      if (id == null) continue;
-      batch.update(_appointments.doc(id), {
-        ..._toFirestoreMap(appointment),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    }
-    await batch.commit();
+    final records = [
+      for (final a in appointments)
+        if (a.id != null) a,
+    ];
+    if (records.isEmpty) return;
+    // A transaction (not a plain batch) so a sibling deleted concurrently
+    // (e.g. another admin removing a future visit) is skipped rather than
+    // failing the whole apply-to-series save with NOT_FOUND and losing the
+    // user's edit. Reads must precede writes inside the transaction.
+    await _appointments.firestore.runTransaction((txn) async {
+      final refs = [for (final r in records) _appointments.doc(r.id)];
+      final snaps = await Future.wait([for (final ref in refs) txn.get(ref)]);
+      for (var i = 0; i < records.length; i++) {
+        if (!snaps[i].exists) continue;
+        txn.update(refs[i], {
+          ..._toFirestoreMap(records[i]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+    });
   }
 
   @override

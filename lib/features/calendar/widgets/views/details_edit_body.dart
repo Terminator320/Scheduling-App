@@ -144,15 +144,22 @@ class DetailsEditBody extends ConsumerWidget {
     // visit only or to this and the future visits — mirroring delete. Changing
     // the repeat rule itself always rewrites the series, so it skips the prompt.
     final state = ref.read(provider);
+    if (state.isSaving) return; // a save (or its prompt) is already in flight
     var applyToSeries = false;
     if (appointment.seriesId.isNotEmpty && state.repeat == state.savedRepeat) {
+      // Busy the form while the prompt is open so a second tap can't stack a
+      // duplicate dialog; reset before save() takes over the flag.
+      notifier.setSaving(busy: true);
       final choice = await showSeriesScopeDialog(
         context,
         title: context.l10n.calendar_editAppointment,
+        message: context.l10n.calendar_editSeriesScopeMessage,
         thisOnlyLabel: context.l10n.calendar_editThisVisitOnly,
         thisAndFutureLabel: context.l10n.calendar_editThisAndFutureVisits,
       );
-      if (choice == null || !context.mounted) return;
+      if (!context.mounted) return;
+      notifier.setSaving(busy: false);
+      if (choice == null) return;
       applyToSeries = choice == SeriesScopeChoice.thisAndFuture;
     }
 

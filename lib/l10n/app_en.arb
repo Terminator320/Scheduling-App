@@ -412,9 +412,13 @@
       }
     }
   },
-  "calendar_repeatingSeriesMessage": "This appointment is part of a repeating series.",
-  "@calendar_repeatingSeriesMessage": {
-    "description": "Body of the edit/delete dialog shown for a repeating appointment, above the this-visit-only / this-and-future choices"
+  "calendar_editSeriesScopeMessage": "Apply your changes to this visit only, or to this and all future visits in the series?",
+  "@calendar_editSeriesScopeMessage": {
+    "description": "Body of the edit dialog for a repeating appointment, stating that the apply-to-all option changes every future visit in the series"
+  },
+  "calendar_deleteSeriesScopeMessage": "Delete this visit only, or this and all future visits in the series?",
+  "@calendar_deleteSeriesScopeMessage": {
+    "description": "Body of the delete dialog for a repeating appointment, stating that the delete-all option removes every future visit in the series"
   },
   "calendar_deleteThisVisitOnly": "Delete this visit only",
   "@calendar_deleteThisVisitOnly": {
