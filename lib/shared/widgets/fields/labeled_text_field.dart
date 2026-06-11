@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/fields/clear_text_button.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
 class LabeledTextField extends StatelessWidget {
@@ -72,7 +73,16 @@ class LabeledTextField extends StatelessWidget {
             decoration: formInputDecoration(context, hint ?? label).copyWith(
               errorText: errorText != null ? '' : null,
               errorStyle: const TextStyle(fontSize: 0, height: 0),
-              suffixIcon: suffixIcon,
+              // Every editable field gets a clear "x" while it holds text;
+              // a custom suffix or a readOnly (picker) field keeps its own.
+              suffixIcon:
+                  suffixIcon ??
+                  (readOnly
+                      ? null
+                      : ClearTextButton(
+                          controller: controller,
+                          onCleared: () => onChanged?.call(''),
+                        )),
               prefixIcon: prefixIcon,
             ),
           ),

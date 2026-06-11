@@ -13,6 +13,8 @@ plugins {
     // symbols bundle on release assemble tasks, so native + obfuscated
     // stack traces symbolicate in the Firebase Crashlytics console.
     id("com.google.firebase.crashlytics")
+    // Performance Monitoring Gradle plugin
+    id("com.google.firebase.firebase-perf")
 }
 
 val agpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.substringBefore('.').toInt()
@@ -99,7 +101,7 @@ flutter {
 
 dependencies {
     // Import the Firebase BoM
-    implementation(platform("com.google.firebase:firebase-bom:34.10.0"))
+    implementation(platform("com.google.firebase:firebase-bom:34.14.0"))
 
     // Firebase Crashlytics — native crash reporting + mapping-file
     // uploads. The Dart-side firebase_crashlytics plugin still owns
@@ -114,4 +116,9 @@ dependencies {
     // on crash events, so keeping it present improves Crashlytics fidelity
     // even without explicit Dart-side tracking.
     implementation("com.google.firebase:firebase-analytics")
+
+    // Performance Monitoring library — version managed by the BoM above.
+    // The Dart firebase_performance plugin owns custom traces; this native
+    // dep + the firebase-perf Gradle plugin enable the automatic traces.
+    implementation("com.google.firebase:firebase-perf")
 }

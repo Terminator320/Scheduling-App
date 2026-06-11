@@ -105,14 +105,24 @@ void main() {
 
   group('searchClients', () {
     test(
-      'returns empty list without querying Firestore when query too short',
+      'returns empty list without querying Firestore for a blank or '
+      'punctuation-only query (search starts at the first searchable char)',
       () async {
-        final results = await repo().searchClients('a');
+        expect(await repo().searchClients('   '), isEmpty);
+        expect(await repo().searchClients('@'), isEmpty);
 
-        expect(results, isEmpty);
         verifyNever(() => query.get());
       },
     );
+
+    test('searches Firestore from the first character', () async {
+      when(() => snapshot.docs).thenReturn(const []);
+
+      final results = await repo().searchClients('a');
+
+      expect(results, isEmpty);
+      verify(() => query.get()).called(1);
+    });
 
     test('returns cached result on second call with same query', () async {
       when(() => snapshot.docs).thenReturn(const []);

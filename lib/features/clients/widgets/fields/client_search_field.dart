@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/fields/clear_text_button.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
 class ClientSearchField extends StatelessWidget {
@@ -53,7 +54,13 @@ class ClientSearchField extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                       )
-                    : const Icon(Icons.search, size: 18),
+                    // Typed-but-unselected: an "x" wipes the query in one tap
+                    // (clearing results too); empty shows the search affordance.
+                    : ClearTextButton(
+                        controller: controller,
+                        onCleared: () => onChanged(''),
+                        placeholder: const Icon(Icons.search, size: 18),
+                      ),
               ),
 
           onChanged: onChanged,

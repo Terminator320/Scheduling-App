@@ -147,6 +147,21 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
         await repo.deactivateEmployee(widget.employee!.id);
       }
       if (mounted) setState(() => _isDisabled = !_isDisabled);
+    } catch (e, st) {
+      ref
+          .read(loggerProvider)
+          .warn('EMP-STATUS toggleEmployeeStatus failed', e, st);
+      if (!mounted) return;
+      ref
+          .read(noticeServiceProvider)
+          .error(
+            composeErrorNotice(
+              context,
+              intro: context.l10n.error_introChangeEmployeeStatus,
+              tag: 'EMP-STATUS',
+              error: e,
+            ),
+          );
     } finally {
       if (mounted) setState(() => _isTogglingStatus = false);
     }

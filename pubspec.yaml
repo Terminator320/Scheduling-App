@@ -2,7 +2,7 @@ name: scheduling
 description: "Paul App"
 publish_to: 'none'
 
-version: 1.10.0+19
+version: 1.14.0+24
 
 environment:
   sdk: ^3.10.7
@@ -22,6 +22,7 @@ dependencies:
   firebase_storage: ^13.3.0
   firebase_app_check: ^0.4.3
   firebase_crashlytics: ^5.0.0
+  firebase_performance: ^0.11.4+2
   cloud_functions: ^6.0.0
 
   # Calendar / dates / i18n
@@ -52,6 +53,9 @@ dependencies:
   # Network / external launches
   url_launcher: ^6.3.2
   http: ^1.6.0
+
+  # Device contacts (native pre-filled insert — no runtime permission)
+  flutter_contacts: ^1.1.9+2
 
   # IDs
   uuid: ^4.5.1
@@ -110,7 +114,6 @@ flutter:
   assets:
     - dev/.env
     - assets/images/logo_splash.png
-  # TODO(ios): bump bundle id from com.example.scheduling once Android applicationId is finalized; keep both in sync.
 
 # Native splash config consumed by `dart run flutter_native_splash:create`.
 # Brand color #005CC8 matches AppColors.primary (lib/core/theme/design_tokens.dart).

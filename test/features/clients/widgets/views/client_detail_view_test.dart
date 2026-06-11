@@ -11,6 +11,7 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/views/client_detail_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _MockClientsRepo extends Mock implements ClientsRepository {}
 
@@ -83,6 +84,9 @@ void main() {
   });
 
   setUp(() {
+    // The edit-save flow consults the contact-link store (SharedPreferences);
+    // with no link present the phone-contact sync is a no-op.
+    SharedPreferences.setMockInitialValues({});
     repo = _MockClientsRepo();
   });
 
@@ -147,6 +151,27 @@ void main() {
     expect(find.widgetWithText(InkWell, 'Email'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'view mode always offers Save to contacts, even with no details',
+    (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 2600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      // A name-only client has no phone / email / address.
+      await tester.pumpWidget(
+        _wrap(repo, const ClientRecord(id: 'c3', name: 'Eve')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(InkWell, 'Save'), findsOneWidget);
+      expect(find.widgetWithText(InkWell, 'Call'), findsNothing);
+      expect(find.widgetWithText(InkWell, 'Directions'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('view mode lists only the extra contacts, not the primary', (
     tester,
@@ -224,6 +249,30 @@ void main() {
         verify(() => repo.updateClient(captureAny())).captured.single
             as ClientRecord;
     expect(saved.contacts, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('deleting a client drops its phone-contact link', (tester) async {
+    SharedPreferences.setMockInitialValues({'contact_link_c1': 'native-7'});
+    when(() => repo.deleteClient('c1')).thenAnswer((_) async {});
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_wrap(repo, _personClient));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Delete'));
+    await tester.pumpAndSettle();
+    // The confirm dialog's destructive action is also labelled "Delete".
+    await tester.tap(find.text('Delete').last);
+    // Bounded pumps: the post-delete busy spinner animates forever, so
+    // pumpAndSettle would time out.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    verify(() => repo.deleteClient('c1')).called(1);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('contact_link_c1'), isNull);
     expect(tester.takeException(), isNull);
   });
 }

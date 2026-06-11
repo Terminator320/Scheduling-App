@@ -108,3 +108,24 @@ needs the billing-account ID and `roles/billing.admin`, so run it yourself.
 
 Until this is in place, the in-code limiters bound per-user abuse but not total
 monthly spend.
+
+---
+
+## 3. Upgrade `flutter_contacts` 1.x → 2.x (device-verified)
+
+**Problem.** `flutter_contacts` is pinned at `^1.1.9+2`; 2.x is current. The
+plugin backs the save-to-contacts quick action and the client→phone-contact
+edit-sync (`contact_export_launcher.dart`), both of which are **device-only
+verifiable** per `.claude/rules/testing.md` (method-channel plugin, no unit
+harness).
+
+**Fix — upgrade with on-device verification.**
+
+1. Bump `flutter_contacts: ^2.2.1` in `pubspec.yaml`, `flutter pub get`, and
+   reconcile any 2.x API changes in `contact_export_launcher.dart`
+   (`insertContact`, `getContact(withAccounts:)`, `updateContact`,
+   `openExternalInsert`) and the `clientToContact` mapper.
+2. On a real device, verify all four flows: save with permission granted
+   (contact appears + link persists), save with permission declined (OS insert
+   screen opens), edit-sync updates the linked contact without erasing its
+   photo/account, and a deleted contact unlinks cleanly on the next sync.

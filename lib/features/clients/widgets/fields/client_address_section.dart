@@ -43,6 +43,22 @@ class ClientAddressSection extends StatefulWidget {
 }
 
 class _ClientAddressSectionState extends State<ClientAddressSection> {
+  List<TextEditingController> get _allControllers => [
+    widget.addressController,
+    widget.aptController,
+    widget.cityController,
+    widget.provinceController,
+    widget.postalCodeController,
+    widget.countryController,
+  ];
+
+  void _clearAddress() {
+    for (final controller in _allControllers) {
+      controller.clear();
+    }
+    widget.onAddressErrorCleared();
+  }
+
   // Microtask: let the autocomplete finish writing the controller first, then
   // split the chosen address across the individual fields.
   void _handleAddressSelected() {
@@ -90,6 +106,25 @@ class _ClientAddressSectionState extends State<ClientAddressSection> {
           provinceController: widget.provinceController,
           postalCodeController: widget.postalCodeController,
           countryController: widget.countryController,
+        ),
+        // One-tap wipe of the whole block (street, apt, and the grid);
+        // hidden while every address field is already empty.
+        ListenableBuilder(
+          listenable: Listenable.merge(_allControllers),
+          builder: (context, _) {
+            final hasAny = _allControllers.any(
+              (c) => c.text.trim().isNotEmpty,
+            );
+            if (!hasAny) return const SizedBox.shrink();
+            return Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: TextButton.icon(
+                onPressed: _clearAddress,
+                icon: const Icon(Icons.backspace_outlined, size: 16),
+                label: Text(context.l10n.clients_clearAddress),
+              ),
+            );
+          },
         ),
       ],
     );
