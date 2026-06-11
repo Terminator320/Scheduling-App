@@ -85,6 +85,20 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }
 
   @override
+  Future<void> updateAppointments(List<AppointmentRecord> appointments) async {
+    final batch = _appointments.firestore.batch();
+    for (final appointment in appointments) {
+      final id = appointment.id;
+      if (id == null) continue;
+      batch.update(_appointments.doc(id), {
+        ..._toFirestoreMap(appointment),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+
+  @override
   Future<void> updateAppointmentPictures(
     String id,
     List<AppointmentImage> pictures,

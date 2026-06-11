@@ -10,6 +10,22 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.12.0+22] - 2026-06-11
+### Added
+- **Edit a repeating appointment for this visit only or all of them.** Saving a
+  change to a recurring appointment now asks whether to apply it to just this
+  visit or to this and all future visits — mirroring the delete prompt. Applying
+  to all updates the shared details and the start/end time on every future visit
+  while keeping each visit's own date and its own status.
+
+### Changed
+- **Repeating appointments now book five years ahead instead of one.** A
+  recurring job appears across all upcoming years, not just the current one.
+
+## [1.11.1+21] - 2026-06-11
+### Added
+Performance tracking
+
 ## [1.11.0+20] - 2026-06-11
 
 ### Added

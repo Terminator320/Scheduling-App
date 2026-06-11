@@ -412,9 +412,9 @@
       }
     }
   },
-  "calendar_deleteSeriesMessage": "This appointment is part of a repeating series.",
-  "@calendar_deleteSeriesMessage": {
-    "description": "Body of the delete dialog shown for a repeating appointment, above the this-visit-only / this-and-future choices"
+  "calendar_repeatingSeriesMessage": "This appointment is part of a repeating series.",
+  "@calendar_repeatingSeriesMessage": {
+    "description": "Body of the edit/delete dialog shown for a repeating appointment, above the this-visit-only / this-and-future choices"
   },
   "calendar_deleteThisVisitOnly": "Delete this visit only",
   "@calendar_deleteThisVisitOnly": {
@@ -423,6 +423,23 @@
   "calendar_deleteThisAndFutureVisits": "Delete this and future visits",
   "@calendar_deleteThisAndFutureVisits": {
     "description": "Delete dialog option: delete the opened occurrence plus the series' future occurrences"
+  },
+  "calendar_editThisVisitOnly": "Save this visit only",
+  "@calendar_editThisVisitOnly": {
+    "description": "Edit dialog option: apply the edit to only the opened occurrence of a repeating appointment"
+  },
+  "calendar_editThisAndFutureVisits": "Save this and future visits",
+  "@calendar_editThisAndFutureVisits": {
+    "description": "Edit dialog option: apply the edit to the opened occurrence plus the series' future occurrences"
+  },
+  "calendar_changesAppliedToSeries": "{count, plural, =1{Changes saved — applied to 1 future visit} other{Changes saved — applied to {count} future visits}}",
+  "@calendar_changesAppliedToSeries": {
+    "description": "Success notice after saving an appointment edit that was propagated to future visits in the series; count is the number of future visits updated",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "calendar_eGPlumbingRepair": "e.g. Plumbing repair",
   "@calendar_eGPlumbingRepair": {

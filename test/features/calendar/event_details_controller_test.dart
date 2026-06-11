@@ -363,7 +363,8 @@ void main() {
       );
 
       expect(outcome, isA<EventDetailsSaved>());
-      expect((outcome as EventDetailsSaved).futureBookings, 2);
+      // 60-month horizon / 6 = 10 future visits, booked across five years.
+      expect((outcome as EventDetailsSaved).futureBookings, 10);
       expect(outcome.appointment.repeat, RepeatInterval.sixMonths);
       // A doc without a series gets one keyed by its own id.
       expect(outcome.appointment.seriesId, 'appt-1');
@@ -377,10 +378,12 @@ void main() {
       ).captured;
       expect((captured[1] as List).cast<String>(), isEmpty);
       final copies = (captured[2] as List).cast<AppointmentRecord>();
-      expect(copies, hasLength(2));
-      expect(copies.map((a) => a.id), ['copy-1', 'copy-2']);
+      expect(copies, hasLength(10));
+      expect(copies.first.id, 'copy-1');
+      expect(copies.last.id, 'copy-10');
       expect(copies[0].startTime, DateTime(2026, 11, 10, 9));
       expect(copies[1].startTime, DateTime(2027, 5, 10, 9));
+      expect(copies.last.startTime, DateTime(2031, 5, 10, 9));
       expect(copies.every((a) => a.status == 'pending'), isTrue);
       expect(copies.every((a) => a.pictures.isEmpty), isTrue);
       expect(copies.every((a) => a.seriesId == 'appt-1'), isTrue);
@@ -440,7 +443,8 @@ void main() {
         materialsNeeded: '',
       );
 
-      expect((outcome as EventDetailsSaved).futureBookings, 1);
+      // 60-month horizon / 12 = 5 future visits across five years.
+      expect((outcome as EventDetailsSaved).futureBookings, 5);
       expect(outcome.removedBookings, 2);
 
       final captured = verify(
@@ -453,9 +457,124 @@ void main() {
       // The edited doc itself and the done visit are preserved.
       expect((captured[1] as List).cast<String>(), ['old-1', 'old-2']);
       final copies = (captured[2] as List).cast<AppointmentRecord>();
-      expect(copies, hasLength(1));
-      expect(copies.single.startTime, DateTime(2027, 5, 10, 9));
-      expect(copies.single.seriesId, 'series-1');
+      expect(copies, hasLength(5));
+      expect(copies.first.startTime, DateTime(2027, 5, 10, 9));
+      expect(copies.last.startTime, DateTime(2031, 5, 10, 9));
+      expect(copies.every((a) => a.seriesId == 'series-1'), isTrue);
+    });
+
+    test(
+      'applyToSeries propagates details + time of day to future visits, '
+      'keeping each visit date',
+      () async {
+        when(
+          () => appointments.updateAppointments(any()),
+        ).thenAnswer((_) async {});
+
+        final repeating = _appointment.copyWith(
+          id: 'series-1',
+          seriesId: 'series-1',
+          repeat: RepeatInterval.sixMonths,
+        );
+        when(() => appointments.getSeries('series-1')).thenAnswer(
+          (_) async => [
+            repeating,
+            repeating.copyWith(
+              id: 'past',
+              startTime: DateTime(2025, 11, 10, 9),
+            ),
+            repeating.copyWith(
+              id: 'fut-1',
+              startTime: DateTime(2026, 11, 10, 9),
+              status: 'confirmed',
+            ),
+            repeating.copyWith(
+              id: 'fut-2',
+              startTime: DateTime(2027, 5, 10, 9),
+              status: 'in_progress',
+            ),
+            repeating.copyWith(
+              id: 'fut-done',
+              startTime: DateTime(2027, 11, 10, 9),
+              status: 'done',
+            ),
+          ],
+        );
+
+        container.listen(eventDetailsControllerProvider(repeating), (_, _) {});
+        final c = container.read(
+          eventDetailsControllerProvider(repeating).notifier,
+        );
+        await waitForSeed();
+        // Move the time of day; the repeat rule is unchanged.
+        c
+          ..selectStartTime(const TimeOfDay(hour: 8, minute: 0))
+          ..selectEndTime(const TimeOfDay(hour: 9, minute: 0));
+
+        final outcome = await c.save(
+          repeating,
+          title: 'New title',
+          address: 'New address',
+          notes: 'n',
+          materialsNeeded: 'm',
+          applyToSeries: true,
+        );
+
+        // Two future non-terminal siblings updated; past and done preserved.
+        expect((outcome as EventDetailsSaved).updatedSiblings, 2);
+
+        final captured = verify(
+          () => appointments.updateAppointments(captureAny()),
+        ).captured.single;
+        final batch = (captured as List).cast<AppointmentRecord>();
+        // This visit plus the two future siblings, in order.
+        expect(batch.map((a) => a.id), ['series-1', 'fut-1', 'fut-2']);
+        expect(batch.every((a) => a.title == 'New title'), isTrue);
+        expect(batch.every((a) => a.address == 'New address'), isTrue);
+        expect(batch.every((a) => a.seriesId == 'series-1'), isTrue);
+        // Status stays per-visit — never propagated across the series.
+        expect(batch[1].status, 'confirmed');
+        expect(batch[2].status, 'in_progress');
+        // Each sibling keeps its own date but takes the new time of day.
+        expect(batch[1].startTime, DateTime(2026, 11, 10, 8));
+        expect(batch[1].endTime, DateTime(2026, 11, 10, 9));
+        expect(batch[2].startTime, DateTime(2027, 5, 10, 8));
+        expect(batch[2].endTime, DateTime(2027, 5, 10, 9));
+
+        verifyNever(
+          () => appointments.rewriteSeries(
+            updated: any(named: 'updated'),
+            deleteIds: any(named: 'deleteIds'),
+            copies: any(named: 'copies'),
+          ),
+        );
+      },
+    );
+
+    test('applyToSeries false edits only this visit', () async {
+      final repeating = _appointment.copyWith(
+        id: 'series-1',
+        seriesId: 'series-1',
+        repeat: RepeatInterval.sixMonths,
+      );
+      container.listen(eventDetailsControllerProvider(repeating), (_, _) {});
+      final c = container.read(
+        eventDetailsControllerProvider(repeating).notifier,
+      );
+      await waitForSeed();
+
+      final outcome = await c.save(
+        repeating,
+        title: 'New title',
+        address: 'New address',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      expect((outcome as EventDetailsSaved).updatedSiblings, 0);
+      verify(() => appointments.updateAppointment(any())).called(1);
+      verifyNever(() => appointments.getSeries(any()));
+      verifyNever(() => appointments.updateAppointments(any()));
     });
 
     test('seeds the stored repeat and does not re-book it unchanged', () async {

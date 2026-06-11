@@ -1,5 +1,6 @@
 /// How often an appointment repeats. When a repeat is selected, the future
-/// occurrences are pre-booked at creation time up to [horizonMonths] ahead.
+/// occurrences are pre-booked at creation time up to [horizonMonths] ahead
+/// (five years), spanning multiple years rather than the current one.
 enum RepeatInterval {
   none(0),
   fourMonths(4),
@@ -11,8 +12,8 @@ enum RepeatInterval {
   /// Months between occurrences; 0 means no repeat.
   final int months;
 
-  /// Pre-booking horizon: occurrences are created up to one year out.
-  static const int horizonMonths = 12;
+  /// Pre-booking horizon: occurrences are created up to five years out.
+  static const int horizonMonths = 60;
 
   /// Firestore string value. [fromRaw] is the only string→interval mapper.
   String get raw => switch (this) {
