@@ -135,12 +135,25 @@ class _LoginState extends ConsumerState<Login> {
       if (!mounted) return;
 
       if (userDoc == null) {
+        // An invited user who hasn't verified yet has no uid-keyed users doc.
+        // Their first verification email may never have arrived, so resend it
+        // before signing out and point them at their inbox/spam folder.
+        if (!user.emailVerified) {
+          final resent = await _authService.resendVerificationEmail(user);
+          await _authService.signOut();
+          if (!mounted) return;
+          setState(() {
+            _bannerError = resent
+                ? context.l10n.auth_verificationEmailResentCheckInboxAndSpam
+                : context.l10n.auth_pleaseVerifyYourEmailBeforeSigningIn;
+            _isLoading = false;
+          });
+          return;
+        }
         await _authService.signOut();
         if (!mounted) return;
         setState(() {
-          _bannerError = (user.emailVerified)
-              ? context.l10n.error_noUserProfileFoundForThisAccount
-              : context.l10n.auth_pleaseVerifyYourEmailBeforeSigningIn;
+          _bannerError = context.l10n.error_noUserProfileFoundForThisAccount;
           _isLoading = false;
         });
         return;

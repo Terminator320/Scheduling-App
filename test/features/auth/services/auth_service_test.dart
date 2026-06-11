@@ -1,4 +1,3 @@
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -31,7 +30,27 @@ void main() {
     when(() => credential.user).thenReturn(user);
     when(() => user.uid).thenReturn('uid-001');
     when(() => user.delete()).thenAnswer((_) async {});
+    when(() => auth.signOut()).thenAnswer((_) async {});
   });
+
+  void stubSignIn({String? email}) {
+    when(
+      () => auth.signInWithEmailAndPassword(
+        email: email ?? any(named: 'email'),
+        password: any(named: 'password'),
+      ),
+    ).thenAnswer((_) async => credential);
+  }
+
+  void stubRegisterThrowsEmailInUse() {
+    when(
+      () => auth.createUserWithEmailAndPassword(
+        email: any(named: 'email'),
+        password: any(named: 'password'),
+      ),
+    ).thenThrow(FirebaseAuthException(code: 'email-already-in-use'));
+    when(() => user.sendEmailVerification()).thenAnswer((_) async {});
+  }
 
   void stubRegister({String? email}) {
     when(
@@ -145,8 +164,129 @@ void main() {
           ),
           throwsA(isA<AuthFailureAccountCreationIncomplete>()),
         );
+        verify(() => auth.signOut()).called(1);
       },
     );
+
+    test(
+      'recovers an orphan: signs in on email-already-in-use and sends '
+      'verification when an invite exists',
+      () async {
+        stubRegisterThrowsEmailInUse();
+        stubSignIn(email: 'orphan@example.com');
+        when(() => employees.findInvitedEmployeeForCurrentUser()).thenAnswer(
+          (_) async => const InvitedEmployeeMatch(
+            docId: 'doc1',
+            data: {'uid': '', 'status': 'invited'},
+          ),
+        );
+
+        await service.createEmployeeAccount(
+          email: 'orphan@example.com',
+          password: 'pass',
+        );
+
+        verify(
+          () => auth.signInWithEmailAndPassword(
+            email: 'orphan@example.com',
+            password: 'pass',
+          ),
+        ).called(1);
+        verify(() => user.sendEmailVerification()).called(1);
+        verifyNever(() => user.delete());
+      },
+    );
+
+    test(
+      'throws AuthFailureEmailAlreadyInUse without deleting when the email '
+      'belongs to an already-provisioned account',
+      () async {
+        stubRegisterThrowsEmailInUse();
+        stubSignIn();
+        when(
+          () => employees.findInvitedEmployeeForCurrentUser(),
+        ).thenAnswer((_) async => null);
+        when(() => employees.findUserByUid('uid-001')).thenAnswer(
+          (_) async =>
+              const UserUidMatch(id: 'doc9', data: {'status': 'active'}),
+        );
+
+        await expectLater(
+          service.createEmployeeAccount(
+            email: 'real@example.com',
+            password: 'pass',
+          ),
+          throwsA(isA<AuthFailureEmailAlreadyInUse>()),
+        );
+        verifyNever(() => user.delete());
+        verify(() => auth.signOut()).called(1);
+      },
+    );
+
+    test(
+      'deletes the adopted orphan when no invite and no provisioned doc exist',
+      () async {
+        stubRegisterThrowsEmailInUse();
+        stubSignIn();
+        when(
+          () => employees.findInvitedEmployeeForCurrentUser(),
+        ).thenAnswer((_) async => null);
+        when(
+          () => employees.findUserByUid('uid-001'),
+        ).thenAnswer((_) async => null);
+
+        await expectLater(
+          service.createEmployeeAccount(
+            email: 'orphan@example.com',
+            password: 'pass',
+          ),
+          throwsA(isA<AuthFailureNotAuthorized>()),
+        );
+        verify(() => user.delete()).called(1);
+      },
+    );
+
+    test(
+      'does not delete an adopted account when the invite lookup throws',
+      () async {
+        stubRegisterThrowsEmailInUse();
+        stubSignIn();
+        when(
+          () => employees.findInvitedEmployeeForCurrentUser(),
+        ).thenThrow(Exception('firestore unavailable'));
+
+        await expectLater(
+          service.createEmployeeAccount(
+            email: 'orphan@example.com',
+            password: 'pass',
+          ),
+          throwsException,
+        );
+        verifyNever(() => user.delete());
+        verify(() => auth.signOut()).called(1);
+      },
+    );
+  });
+
+  group('resendVerificationEmail', () {
+    test('returns true when the verification email is sent', () async {
+      when(() => user.sendEmailVerification()).thenAnswer((_) async {});
+
+      final sent = await service.resendVerificationEmail(user);
+
+      expect(sent, isTrue);
+      verify(() => user.sendEmailVerification()).called(1);
+    });
+
+    test('returns false when sending throws (e.g. rate-limited)', () async {
+      when(
+        () => user.sendEmailVerification(),
+      ).thenThrow(FirebaseAuthException(code: 'too-many-requests'));
+
+      final sent = await service.resendVerificationEmail(user);
+
+      expect(sent, isFalse);
+    });
   });
 
   group('tryActivateInvitedEmployee', () {
