@@ -4,6 +4,7 @@ import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/fields/clear_text_button.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
 /// Shared building blocks for the three auth screens (sign-in,
@@ -189,6 +190,10 @@ class AuthEmailField extends StatelessWidget {
             ).copyWith(
               errorText: errorText,
               prefixIcon: const Icon(Icons.email_outlined, size: 20),
+              suffixIcon: ClearTextButton(
+                controller: controller,
+                onCleared: onChanged,
+              ),
             ),
       ),
     );

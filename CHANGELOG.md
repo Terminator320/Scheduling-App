@@ -18,6 +18,12 @@ code; it increments by one on every store upload regardless of the semver part.
   credentials after a successful sign-in or account creation.
 - **Haptic feedback on notices.** Success, info, and error notices now come
   with a matching tactile cue.
+- **One-tap clear on text fields.** Every editable text field across the app
+  now shows a small "x" while it holds text, so emptying a field is one tap
+  instead of holding backspace.
+- **Clear address button.** The client add/edit form's address block has a
+  "Clear address" action that empties the street, apt/unit, city, province,
+  postal code, and country fields all at once.
 
 ### Changed
 - **Easier employee color picker.** Colors already taken by another employee

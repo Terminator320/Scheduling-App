@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/shared/widgets/fields/clear_text_button.dart';
 
 class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
   const AppSearchBar({
@@ -48,30 +49,9 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
           ),
           contentPadding: const EdgeInsets.symmetric(vertical: AppSpacing.sp8),
           suffixIcon: controller != null
-              ? ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: controller!,
-                  builder: (context, value, child) {
-                    final hasText = value.text.isNotEmpty;
-                    return IgnorePointer(
-                      ignoring: !hasText,
-                      child: AnimatedScale(
-                        scale: hasText ? 1.0 : 0.0,
-                        duration: AppDuration.fast,
-                        curve: Curves.easeOut,
-                        child: IconButton(
-                          icon: Icon(
-                            Icons.clear,
-                            size: 16,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                          onPressed: () {
-                            controller!.clear();
-                            onChanged?.call('');
-                          },
-                        ),
-                      ),
-                    );
-                  },
+              ? ClearTextButton(
+                  controller: controller!,
+                  onCleared: () => onChanged?.call(''),
                 )
               : null,
         ),

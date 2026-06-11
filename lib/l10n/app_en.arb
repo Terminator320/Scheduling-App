@@ -92,6 +92,14 @@
   "@common_cancel": {
     "description": "Cancel"
   },
+  "common_clearText": "Clear text",
+  "@common_clearText": {
+    "description": "Tooltip on the x button that empties a text field"
+  },
+  "clients_clearAddress": "Clear address",
+  "@clients_clearAddress": {
+    "description": "Button that empties every field of the client address block at once"
+  },
   "settings_apply": "Apply",
   "@settings_apply": {
     "description": "Apply"
