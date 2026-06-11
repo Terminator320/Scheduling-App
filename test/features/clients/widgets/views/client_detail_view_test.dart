@@ -11,6 +11,7 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/views/client_detail_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _MockClientsRepo extends Mock implements ClientsRepository {}
 
@@ -83,6 +84,9 @@ void main() {
   });
 
   setUp(() {
+    // The edit-save flow consults the contact-link store (SharedPreferences);
+    // with no link present the phone-contact sync is a no-op.
+    SharedPreferences.setMockInitialValues({});
     repo = _MockClientsRepo();
   });
 
@@ -147,6 +151,27 @@ void main() {
     expect(find.widgetWithText(InkWell, 'Email'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'view mode always offers Save to contacts, even with no details',
+    (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 2600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      // A name-only client has no phone / email / address.
+      await tester.pumpWidget(
+        _wrap(repo, const ClientRecord(id: 'c3', name: 'Eve')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(InkWell, 'Save'), findsOneWidget);
+      expect(find.widgetWithText(InkWell, 'Call'), findsNothing);
+      expect(find.widgetWithText(InkWell, 'Directions'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('view mode lists only the extra contacts, not the primary', (
     tester,

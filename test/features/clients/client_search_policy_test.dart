@@ -8,23 +8,25 @@ void main() {
       expect(ClientSearchPolicy.shouldSearch('   '), isFalse);
     });
 
-    test('rejects single-letter text queries', () {
-      expect(ClientSearchPolicy.shouldSearch('a'), isFalse);
-      expect(ClientSearchPolicy.shouldSearch('é'), isFalse);
+    test('rejects punctuation-only queries (nothing searchable)', () {
+      expect(ClientSearchPolicy.shouldSearch('@'), isFalse);
+      expect(ClientSearchPolicy.shouldSearch('---'), isFalse);
     });
 
-    test('accepts two-letter text queries', () {
+    test('searches from the first character — single letters trigger it', () {
+      expect(ClientSearchPolicy.shouldSearch('a'), isTrue);
+      expect(ClientSearchPolicy.shouldSearch('é'), isTrue);
+    });
+
+    test('searches from the first digit — single digits trigger it', () {
+      expect(ClientSearchPolicy.shouldSearch('5'), isTrue);
+    });
+
+    test('accepts longer text and phone queries', () {
       expect(ClientSearchPolicy.shouldSearch('ab'), isTrue);
       expect(ClientSearchPolicy.shouldSearch('Jo'), isTrue);
-    });
-
-    test('accepts three-digit phone queries even when whole text is short', () {
       expect(ClientSearchPolicy.shouldSearch('514'), isTrue);
       expect(ClientSearchPolicy.shouldSearch('5-14'), isTrue);
-    });
-
-    test('rejects single-digit queries (fails both phone- and text-length gates)', () {
-      expect(ClientSearchPolicy.shouldSearch('5'), isFalse);
     });
   });
 

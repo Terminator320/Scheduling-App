@@ -565,6 +565,10 @@
   "@error_couldNotOpenEmail": {
     "description": "Shown when launching the email composer for a client fails"
   },
+  "error_couldNotOpenContacts": "Could not open contacts app",
+  "@error_couldNotOpenContacts": {
+    "description": "Shown when launching the device's new-contact screen for a client fails"
+  },
   "clients_call": "Call",
   "@clients_call": {
     "description": "Quick-action button that dials the client's phone number"
@@ -576,6 +580,14 @@
   "clients_directions": "Directions",
   "@clients_directions": {
     "description": "Quick-action button that opens the client's address in a map app"
+  },
+  "clients_saveToContacts": "Save",
+  "@clients_saveToContacts": {
+    "description": "Quick-action button that saves the client to the phone's contacts"
+  },
+  "clients_savedToContacts": "Saved to contacts",
+  "@clients_savedToContacts": {
+    "description": "Success notice shown after a client is written to the phone's contacts"
   },
   "clients_emailWith": "Email with",
   "@clients_emailWith": {

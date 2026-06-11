@@ -10,6 +10,23 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.13.0+23] - 2026-06-11
+### Added
+- **Save a client to your phone contacts.** The client detail view has a new
+  **Save** quick action that adds the client (name, business, phone, email,
+  address) to your phone contacts in one tap.
+- **Edited clients sync back to your phone contacts.** Once a client has been
+  saved to contacts, editing their details updates that same contact
+  automatically. Saving and syncing ask for the Contacts permission the first
+  time; if you decline, Save still works through the OS new-contact screen but
+  edits won't sync. The link is per-device — a client saved on one phone only
+  syncs on that phone.
+
+### Changed
+- **Client search now starts from the first character.** Typing a single letter
+  or digit begins searching your clients — you no longer have to type at least
+  two characters (or three for a phone number) before results appear.
+
 ## [1.12.0+22] - 2026-06-11
 ### Added
 - **Edit a repeating appointment for this visit only or all of them.** Saving a
