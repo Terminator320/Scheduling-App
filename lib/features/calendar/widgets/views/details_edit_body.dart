@@ -6,61 +6,16 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
-import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
-import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
-import 'package:scheduling/features/calendar/utils/appointment_form_error_text.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
-import 'package:scheduling/features/calendar/widgets/fields/appointment_address_field.dart';
-import 'package:scheduling/features/calendar/widgets/fields/appointment_status_picker.dart';
-import 'package:scheduling/features/calendar/widgets/fields/employee_picker.dart';
-import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
+import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
-import 'package:scheduling/features/clients/widgets/fields/client_search_field.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
-import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
-import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
-import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
-
-class DetailsEditControllers {
-  const DetailsEditControllers({
-    required this.title,
-    required this.date,
-    required this.startTime,
-    required this.endTime,
-    required this.clientSearch,
-    required this.address,
-    required this.notes,
-    required this.materials,
-  });
-
-  final TextEditingController title;
-  final TextEditingController date;
-  final TextEditingController startTime;
-  final TextEditingController endTime;
-  final TextEditingController clientSearch;
-  final TextEditingController address;
-  final TextEditingController notes;
-  final TextEditingController materials;
-
-  /// Disposes every owned controller. Call from the State that created them.
-  void dispose() {
-    title.dispose();
-    date.dispose();
-    startTime.dispose();
-    endTime.dispose();
-    clientSearch.dispose();
-    address.dispose();
-    notes.dispose();
-    materials.dispose();
-  }
-}
 
 class DetailsEditBody extends ConsumerWidget {
   const DetailsEditBody({
@@ -72,7 +27,7 @@ class DetailsEditBody extends ConsumerWidget {
   });
 
   final AppointmentRecord appointment;
-  final DetailsEditControllers controllers;
+  final AppointmentFormControllers controllers;
   final ValueChanged<AppointmentRecord> onSaved;
   final VoidCallback onClose;
 
@@ -86,8 +41,6 @@ class DetailsEditBody extends ConsumerWidget {
     final allEmployees =
         ref.watch(employeesStreamProvider).asData?.value ?? const [];
 
-    String? err(String key) => _errorFor(context, state.errors, key);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -99,72 +52,34 @@ class DetailsEditBody extends ConsumerWidget {
         const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
         const SizedBox(height: AppSpacing.sp16),
-        // --- Title, client & employees ---
-        _ClientSection(
+        // --- Shared form fields ---
+        AppointmentFormFields(
           controllers: controllers,
-          state: state,
-          notifier: notifier,
           allEmployees: allEmployees,
-          err: err,
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Date, time & status ---
-        _ScheduleSection(
-          controllers: controllers,
-          state: state,
-          notifier: notifier,
-          err: err,
-          onPickDate: () => _pickDate(context, state, notifier),
-          onPickStart: () => _pickStartTime(context, state, notifier),
-          onPickEnd: () => _pickEndTime(context, state, notifier),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Address ---
-        AppointmentAddressField(
           selectedClient: state.selectedClient,
+          clientResults: state.clientResults,
+          isSearchingClient: state.isSearchingClient,
+          selectedEmployees: state.selectedEmployees,
+          repeat: state.repeat,
           useCustomAddress: state.useCustomAddress,
-          addressController: controllers.address,
-          onSwitchToCustom: () {
-            controllers.address.clear();
-            notifier.setUseCustomAddress(value: true);
-          },
-          onUseClientAddress: () {
-            final client = state.selectedClient;
-            if (client == null) return;
-            controllers.address.text = AddressParser.canonicalToDisplay(
-              client.address,
-            );
-            notifier.setUseCustomAddress(value: false);
-          },
+          errors: state.errors,
+          employeeLabel: context.l10n.calendar_assignedEmployee,
+          employeeRequired: false,
+          materialsHint: context.l10n.calendar_eGPipeWrenchTapeCommaSeparated,
+          editingStatus: state.editingStatus,
+          onStatusChanged: notifier.setStatus,
+          onSearchClients: notifier.searchClients,
+          onSelectClient: notifier.selectClient,
+          onClearClient: notifier.clearClient,
+          onToggleEmployee: notifier.toggleEmployee,
+          onPickDate: () => _pickDate(context, state, notifier),
+          onPickStartTime: () => _pickStartTime(context, state, notifier),
+          onPickEndTime: () => _pickEndTime(context, state, notifier),
+          onSelectRepeat: notifier.selectRepeat,
+          onUseCustomAddress: (value) =>
+              notifier.setUseCustomAddress(value: value),
+          photosSection: _EditPhotosSection(appointment: appointment),
         ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Materials & notes ---
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: context.l10n.calendar_materialsNeeded,
-            hint: context.l10n.calendar_eGPipeWrenchTapeCommaSeparated,
-            controller: controllers.materials,
-            optional: true,
-            maxLines: 2,
-            maxLength: TextLimits.appointmentMaterials,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: context.l10n.calendar_notes,
-            hint: context.l10n.calendar_typeTheNoteHere,
-            controller: controllers.notes,
-            optional: true,
-            maxLines: 2,
-            maxLength: TextLimits.appointmentNotes,
-            showCounter: true,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Photos ---
-        formLabel(context, context.l10n.calendar_pictures, optional: true),
-        _EditPhotosSection(appointment: appointment),
         const SizedBox(height: AppSpacing.sp24),
         // --- Actions ---
         _ActionButtons(
@@ -296,171 +211,6 @@ class DetailsEditBody extends ConsumerWidget {
   }
 }
 
-class _ClientSection extends StatelessWidget {
-  const _ClientSection({
-    required this.controllers,
-    required this.state,
-    required this.notifier,
-    required this.allEmployees,
-    required this.err,
-  });
-
-  final DetailsEditControllers controllers;
-  final EventDetailsState state;
-  final EventDetailsController notifier;
-  final List<EmployeeRecord> allEmployees;
-  final String? Function(String) err;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: context.l10n.calendar_serviceTitle,
-            hint: context.l10n.calendar_eGPlumbingRepair,
-            controller: controllers.title,
-            required: true,
-            maxLength: TextLimits.appointmentTitle,
-            errorText: err('title'),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        formLabel(context, context.l10n.calendar_client, required: true),
-        SheetFocusScroll(
-          child: ClientSearchField(
-            controller: controllers.clientSearch,
-            selectedClient: state.selectedClient,
-            results: state.clientResults,
-            isSearching: state.isSearchingClient,
-            onChanged: notifier.searchClients,
-            onSelect: (c) {
-              controllers.clientSearch.text = c.displayName;
-              controllers.address.text = AddressParser.canonicalToDisplay(
-                c.address,
-              );
-              notifier.selectClient(c);
-            },
-            onClear: () {
-              controllers.clientSearch.clear();
-              controllers.address.clear();
-              notifier.clearClient();
-            },
-            errorText: err('client'),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        formLabel(context, context.l10n.calendar_assignedEmployee),
-        const SizedBox(height: 6),
-        EmployeePicker(
-          allEmployees: allEmployees,
-          selectedEmployees: state.selectedEmployees,
-          hasError: state.errors.containsKey('employees'),
-          onToggle: notifier.toggleEmployee,
-        ),
-        if (state.errors.containsKey('employees'))
-          Padding(
-            padding: const EdgeInsets.only(top: 6, left: 4),
-            child: Text(
-              err('employees') ?? '',
-              style: theme.textTheme.bodySmall?.copyWith(color: scheme.error),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _ScheduleSection extends StatelessWidget {
-  const _ScheduleSection({
-    required this.controllers,
-    required this.state,
-    required this.notifier,
-    required this.err,
-    required this.onPickDate,
-    required this.onPickStart,
-    required this.onPickEnd,
-  });
-
-  final DetailsEditControllers controllers;
-  final EventDetailsState state;
-  final EventDetailsController notifier;
-  final String? Function(String) err;
-  final VoidCallback onPickDate;
-  final VoidCallback onPickStart;
-  final VoidCallback onPickEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: context.l10n.calendar_date,
-            hint: context.l10n.calendar_selectDate,
-            controller: controllers.date,
-            required: true,
-            readOnly: true,
-            errorText: err('date'),
-            suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
-            onTap: onPickDate,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: SheetFocusScroll(
-                child: LabeledTextField(
-                  label: context.l10n.calendar_startTime,
-                  hint: context.l10n.calendar_start,
-                  controller: controllers.startTime,
-                  required: true,
-                  readOnly: true,
-                  errorText: err('startTime'),
-                  onTap: onPickStart,
-                ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sp12),
-            Expanded(
-              child: SheetFocusScroll(
-                child: LabeledTextField(
-                  label: context.l10n.calendar_endTime,
-                  hint: context.l10n.calendar_end,
-                  controller: controllers.endTime,
-                  required: true,
-                  readOnly: true,
-                  errorText: err('endTime'),
-                  onTap: onPickEnd,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        formLabel(context, context.l10n.calendar_appointmentStatus),
-        const SizedBox(height: 6),
-        AppointmentStatusPicker(
-          currentStatus: state.editingStatus,
-          onChanged: notifier.setStatus,
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        formLabel(context, context.l10n.calendar_repeat, optional: true),
-        RepeatIntervalPicker(
-          current: state.repeat,
-          onChanged: notifier.selectRepeat,
-        ),
-      ],
-    );
-  }
-}
-
 class _ActionButtons extends StatelessWidget {
   const _ActionButtons({
     required this.isSaving,
@@ -520,13 +270,4 @@ class _EditPhotosSection extends ConsumerWidget {
       onRemoveNew: notifier.removeNewImage,
     );
   }
-}
-
-String? _errorFor(
-  BuildContext context,
-  Map<String, AppointmentFormError> errors,
-  String field,
-) {
-  final key = errors[field];
-  return key == null ? null : appointmentFormErrorText(context, key);
 }

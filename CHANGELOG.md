@@ -10,6 +10,13 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.9.1+18] - 2026-06-10
+
+### Changed
+- The **edit appointment** form now lists **Notes before Materials**, matching
+  the new-appointment form and the appointment details view — the same fields in
+  the same order everywhere.
+
 ## [1.9.0+17] - 2026-06-10
 
 ### Changed
