@@ -11,6 +11,7 @@ class EmployeePicker extends StatelessWidget {
     super.key,
     this.selectable = true,
     this.hasError = false,
+    this.errorText,
     this.onToggle,
   });
 
@@ -18,74 +19,102 @@ class EmployeePicker extends StatelessWidget {
   final List<EmployeeRecord> selectedEmployees;
   final bool selectable;
   final bool hasError;
+
+  /// When non-null, an error row is rendered below the chips (and the chip
+  /// borders are highlighted). Lets the picker own its validation message
+  /// instead of every call site hand-rolling the same Padding + Text.
+  final String? errorText;
   final void Function(EmployeeRecord)? onToggle;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final hasError = this.hasError || errorText != null;
     final displayEmployees = selectable
         ? allEmployees
         : allEmployees
               .where((e) => selectedEmployees.any((s) => s.id == e.id))
               .toList();
 
-    if (displayEmployees.isEmpty) {
-      return Text(
-        selectable
-            ? context.l10n.common_noEmployeesFound
-            : context.l10n.calendar_noEmployeesAssigned,
-        style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
-      );
-    }
+    final content = displayEmployees.isEmpty
+        ? Text(
+            selectable
+                ? context.l10n.common_noEmployeesFound
+                : context.l10n.calendar_noEmployeesAssigned,
+            style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+          )
+        : Wrap(
+            spacing: AppSpacing.sp8,
+            runSpacing: AppSpacing.sp8,
+            children: displayEmployees.map((employee) {
+              final isSelected = selectedEmployees.any(
+                (e) => e.id == employee.id,
+              );
 
-    return Wrap(
-      spacing: AppSpacing.sp8,
-      runSpacing: AppSpacing.sp8,
-      children: displayEmployees.map((employee) {
-        final isSelected = selectedEmployees.any((e) => e.id == employee.id);
-
-        return GestureDetector(
-          onTap: selectable ? () => onToggle?.call(employee) : null,
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(6, 4, 10, 4),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? scheme.primaryContainer
-                  : scheme.surfaceContainerHighest,
-              border: Border.all(
-                color: hasError && !isSelected
-                    ? scheme.error
-                    : isSelected
-                    ? scheme.primary
-                    : scheme.outlineVariant,
-                width: 1.5,
-              ),
-              borderRadius: BorderRadius.circular(AppRadius.rFull),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AppAvatar(
-                  name: employee.name,
-                  color: employee.color,
-                  size: AvatarSize.xs,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  employee.name.split(' ').first,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+              return GestureDetector(
+                onTap: selectable ? () => onToggle?.call(employee) : null,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(6, 4, 10, 4),
+                  decoration: BoxDecoration(
                     color: isSelected
-                        ? scheme.primary
-                        : scheme.onSurfaceVariant,
+                        ? scheme.primaryContainer
+                        : scheme.surfaceContainerHighest,
+                    border: Border.all(
+                      color: hasError && !isSelected
+                          ? scheme.error
+                          : isSelected
+                          ? scheme.primary
+                          : scheme.outlineVariant,
+                      width: 1.5,
+                    ),
+                    borderRadius: BorderRadius.circular(AppRadius.rFull),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AppAvatar(
+                        name: employee.name,
+                        color: employee.color,
+                        size: AvatarSize.xs,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        employee.name.split(' ').first,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                          color: isSelected
+                              ? scheme.primary
+                              : scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              );
+            }).toList(),
+          );
+
+    if (errorText == null) return content;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        content,
+        Padding(
+          padding: const EdgeInsets.only(
+            top: AppSpacing.sp4,
+            left: AppSpacing.sp4,
           ),
-        );
-      }).toList(),
+          child: Text(
+            errorText!,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: scheme.error),
+          ),
+        ),
+      ],
     );
   }
 }
