@@ -56,6 +56,7 @@
   "clients_country": "Pays",
   "clients_editClient": "Modifier le client",
   "common_contacts": "Contacts",
+  "common_contactsCount": "Contacts ({count})",
   "clients_newClient": "Nouveau client",
   "common_saveChanges": "Enregistrer les modifications",
   "clients_deleting": "Suppression...",

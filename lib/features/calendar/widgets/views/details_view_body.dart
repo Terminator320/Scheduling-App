@@ -139,7 +139,7 @@ class DetailsViewBody extends ConsumerWidget {
               ),
           ],
         ),
-        ClientContactsCards(contacts: extraContacts),
+        ClientContactsCards(contacts: extraContacts, collapsible: true),
         if (notes.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sp16),
           DetailsSectionRow(label: context.l10n.calendar_notes, value: notes),
