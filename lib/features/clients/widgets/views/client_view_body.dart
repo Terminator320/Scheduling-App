@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/launchers/phone_call_launcher.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/features/clients/contact_export_launcher.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/email_compose_launcher.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_contacts_cards.dart';
@@ -45,6 +46,8 @@ class ClientDetailViewBody extends ConsumerWidget {
             address: client.address,
           )
         : null;
+    // Always offered — even a name-only client is worth saving to the phone.
+    void onSaveToContacts() => saveClientToPhoneContacts(context, ref, client);
 
     // contacts[0] mirrors the primary name/phone/email already shown in the
     // header and contact-info card — only the rest are worth listing again.
@@ -53,29 +56,34 @@ class ClientDetailViewBody extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        QuickActionsRow(
+          buttons: [
+            if (onCall != null)
+              QuickActionButton(
+                icon: Icons.phone_outlined,
+                label: context.l10n.clients_call,
+                onTap: onCall,
+              ),
+            if (onEmail != null)
+              QuickActionButton(
+                icon: Icons.email_outlined,
+                label: context.l10n.common_email,
+                onTap: onEmail,
+              ),
+            if (onDirections != null)
+              QuickActionButton(
+                icon: Icons.directions_outlined,
+                label: context.l10n.clients_directions,
+                onTap: onDirections,
+              ),
+            QuickActionButton(
+              icon: Icons.person_add_alt_1_outlined,
+              label: context.l10n.clients_saveToContacts,
+              onTap: onSaveToContacts,
+            ),
+          ],
+        ),
         if (hasContactInfo) ...[
-          QuickActionsRow(
-            buttons: [
-              if (onCall != null)
-                QuickActionButton(
-                  icon: Icons.phone_outlined,
-                  label: context.l10n.clients_call,
-                  onTap: onCall,
-                ),
-              if (onEmail != null)
-                QuickActionButton(
-                  icon: Icons.email_outlined,
-                  label: context.l10n.common_email,
-                  onTap: onEmail,
-                ),
-              if (onDirections != null)
-                QuickActionButton(
-                  icon: Icons.directions_outlined,
-                  label: context.l10n.clients_directions,
-                  onTap: onDirections,
-                ),
-            ],
-          ),
           const SizedBox(height: AppSpacing.sp24),
           SectionLabel(context.l10n.clients_contactInfo),
           const SizedBox(height: AppSpacing.sp8),

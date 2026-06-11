@@ -7,6 +7,7 @@ import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
+import 'package:scheduling/features/clients/contact_export_launcher.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_form_validator.dart';
 import 'package:scheduling/features/clients/widgets/client_form_state.dart';
@@ -183,6 +184,9 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
     try {
       await ref.read(clientsRepositoryProvider).updateClient(updated);
       ref.read(clientsRefreshProvider.notifier).bump();
+      // Mirror the edit onto the phone contact this client was saved as (no-op
+      // unless it was saved on this device). Best-effort — never blocks save.
+      await updateLinkedPhoneContact(ref, updated);
       if (!mounted) return;
       widget.onSaved(updated);
     } catch (e, st) {

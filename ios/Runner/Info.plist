@@ -47,6 +47,8 @@
 		<true/>
 		<key>NSCameraUsageDescription</key>
 		<string>This app uses the camera to take appointment photos and profile pictures.</string>
+		<key>NSContactsUsageDescription</key>
+		<string>This app opens a pre-filled contact card so you can save a client to your phone contacts.</string>
 		<key>NSFaceIDUsageDescription</key>
 		<string>This app uses Face ID to unlock the app lock you enabled in Settings.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
