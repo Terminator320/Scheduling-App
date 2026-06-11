@@ -160,6 +160,19 @@
   "@employees_employeeColor": {
     "description": "Employee Color"
   },
+  "employees_customColor": "Custom color",
+  "@employees_customColor": {
+    "description": "Tooltip on the rainbow swatch and title of the custom color picker dialog"
+  },
+  "employees_colorOption": "Color option {number}",
+  "@employees_colorOption": {
+    "description": "Semantics label for a palette swatch in the employee color grid",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
   "employees_editEmployee": "Edit Employee",
   "@employees_editEmployee": {
     "description": "Edit Employee"

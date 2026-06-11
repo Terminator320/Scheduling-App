@@ -20,6 +20,11 @@ code; it increments by one on every store upload regardless of the semver part.
   with a matching tactile cue.
 
 ### Changed
+- **Easier employee color picker.** Colors already taken by another employee
+  are hidden instead of greyed out, so everything shown is pickable. Swatches
+  are bigger and easier to tap, picking gives a small haptic tick, and the
+  custom picker is now a tap-a-swatch palette with shades — no more color
+  wheel or hex code.
 - **Android predictive back.** The app opts into Android 13+ predictive back,
   so the system back gesture previews where you'll land before you commit.
 - Firebase Performance's Logcat mirroring is now debug-only, so release builds

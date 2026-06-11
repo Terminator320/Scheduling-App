@@ -40,6 +40,8 @@
   "calendar_end": "Fin",
   "employees_phoneNumber": "Numéro de téléphone",
   "employees_employeeColor": "Couleur de l’employé",
+  "employees_customColor": "Couleur personnalisée",
+  "employees_colorOption": "Option de couleur {number}",
   "employees_editEmployee": "Modifier l’employé",
   "employees_employeeDetails": "Détails de l’employé",
   "clients_addClient": "Ajouter un client",
