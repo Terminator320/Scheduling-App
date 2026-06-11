@@ -65,7 +65,9 @@
 			<key>NSAllowsArbitraryLoads</key>
 			<false/>
 		</dict>
-		<!-- TODO(ios): add ITSAppUsesNonExemptEncryption=false if app does not implement custom crypto (Firebase TLS is exempt). -->
+		<!-- App implements no custom crypto; Firebase/TLS is exempt. -->
+		<key>ITSAppUsesNonExemptEncryption</key>
+		<false/>
 		<key>UIStatusBarHidden</key>
 		<false/>
 	</dict>

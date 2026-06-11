@@ -111,7 +111,6 @@ flutter:
   assets:
     - dev/.env
     - assets/images/logo_splash.png
-  # TODO(ios): bump bundle id from com.example.scheduling once Android applicationId is finalized; keep both in sync.
 
 # Native splash config consumed by `dart run flutter_native_splash:create`.
 # Brand color #005CC8 matches AppColors.primary (lib/core/theme/design_tokens.dart).
