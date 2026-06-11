@@ -161,7 +161,10 @@ class AuthService {
 
   Future<void> tryActivateInvitedEmployee(User user) async {
     await user.reload();
-    if (!user.emailVerified) return;
+    // reload() refreshes the auth instance's user; the passed-in snapshot can
+    // be stale, so re-read the verified flag from the instance.
+    final refreshed = _auth.currentUser ?? user;
+    if (!refreshed.emailVerified) return;
     final invite = await _employees.findInvitedEmployeeForCurrentUser();
     if (invite == null) return;
     await _employees.activateEmployee(docId: invite.docId, uid: user.uid);

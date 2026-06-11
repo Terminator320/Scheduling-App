@@ -21,7 +21,7 @@ final accountDisabledProvider = Provider<AsyncValue<bool>>((ref) {
 /// Streams the signed-in user's role (e.g. `admin`, `employee`).
 ///
 /// Emits an empty string when no user is signed in or the doc has no role.
-/// Used by `main.dart` to detect live admin â†’ employee demotion (H3).
+/// Used by `main.dart` to detect live admin-to-employee demotion (H3).
 final userRoleProvider = Provider<AsyncValue<String>>((ref) {
   return ref
       .watch(currentUserDocProvider)
@@ -29,7 +29,7 @@ final userRoleProvider = Provider<AsyncValue<String>>((ref) {
 });
 
 /// Whether a [currentUserDocProvider] emission means the signed-in user's
-/// account doc was deleted server-side â€” as opposed to a transient empty
+/// account doc was deleted server-side, as opposed to a transient empty
 /// placeholder.
 ///
 /// On a fresh sign-in `FirebaseAuth.currentUser` is set immediately, but the
