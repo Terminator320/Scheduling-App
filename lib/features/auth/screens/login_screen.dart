@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -179,6 +180,10 @@ class _LoginState extends ConsumerState<Login> {
         });
         return;
       }
+
+      // Commit the autofill context so the OS password manager offers to
+      // save the credentials that just worked.
+      TextInput.finishAutofillContext();
 
       unawaited(
         AuthCache().save(employee).catchError((Object e, StackTrace st) {

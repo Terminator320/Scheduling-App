@@ -10,7 +10,15 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
-## [1.13.1+24] - 2026-06-11
+## [1.14.0+24] - 2026-06-11
+### Added
+- **Password managers can now save your sign-in.** The sign-in and
+  create-account forms are linked into the OS autofill context, so Google /
+  iCloud password managers fill both fields together and offer to save the
+  credentials after a successful sign-in or account creation.
+- **Haptic feedback on notices.** Success, info, and error notices now come
+  with a matching tactile cue.
+
 ### Changed
 - **Android predictive back.** The app opts into Android 13+ predictive back,
   so the system back gesture previews where you'll land before you commit.
@@ -22,6 +30,10 @@ code; it increments by one on every store upload regardless of the semver part.
   stale link can't linger after the client is gone.
 - Dismissing the edit sheet while the "this visit or all visits" prompt was
   open could leave the appointment editor stuck in its busy state.
+- A failed employee enable/disable from the edit sheet now shows an error
+  notice instead of failing silently.
+- Invited-employee activation re-reads the verification flag after the auth
+  reload instead of trusting a possibly stale user snapshot.
 
 ## [1.13.0+23] - 2026-06-11
 ### Added

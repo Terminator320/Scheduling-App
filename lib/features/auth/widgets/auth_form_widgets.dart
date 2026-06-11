@@ -14,6 +14,10 @@ import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 /// The outer shell every auth screen shares: tap-to-dismiss keyboard, a
 /// surface-colored [Scaffold], and a scroll view with the standard auth
 /// padding. The form/success column goes in [child].
+///
+/// The [AutofillGroup] links the email + password fields into one OS autofill
+/// context so password managers can fill both and — once the screen commits
+/// via `TextInput.finishAutofillContext()` on success — offer to save them.
 class AuthScaffold extends StatelessWidget {
   const AuthScaffold({required this.child, super.key});
 
@@ -33,7 +37,7 @@ class AuthScaffold extends StatelessWidget {
               horizontal: AppSpacing.sp24,
               vertical: AppSpacing.sp32,
             ),
-            child: child,
+            child: AutofillGroup(child: child),
           ),
         ),
       ),

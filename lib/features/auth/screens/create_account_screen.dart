@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -120,6 +121,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         email: _emailController.text,
         password: _passwordController.text,
       );
+
+      // Commit the autofill context so the OS password manager offers to
+      // save the freshly created credentials.
+      TextInput.finishAutofillContext();
 
       if (!mounted) return;
       setState(() {
