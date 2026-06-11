@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
@@ -125,13 +126,21 @@ class _LoginState extends ConsumerState<Login> {
         return;
       }
 
-      // Reload to pick up email_verified status, then auto-activate the
-      // invite if the user has verified their email since registering.
-      await _authService.tryActivateInvitedEmployee(user);
+      // Already-provisioned users have a uid-keyed users doc. Look that up
+      // first and only fall back to invite activation (the rate-limited
+      // resolveMyInvite callable) when there's no doc yet — i.e. a freshly
+      // verified invited employee whose doc is still keyed by email, not uid.
+      // This keeps every routine sign-in off the auth-route rate limit.
+      var userDoc = await _retryOnAuthPropagation(
+        () => ref.read(employeesRepositoryProvider).findUserByUid(user.uid),
+      );
 
-      final userDoc = await ref
-          .read(employeesRepositoryProvider)
-          .findUserByUid(user.uid);
+      if (userDoc == null) {
+        await _authService.tryActivateInvitedEmployee(user);
+        userDoc = await _retryOnAuthPropagation(
+          () => ref.read(employeesRepositoryProvider).findUserByUid(user.uid),
+        );
+      }
       if (!mounted) return;
 
       if (userDoc == null) {
@@ -315,6 +324,21 @@ class _LoginState extends ConsumerState<Login> {
         ].authStaggerIn(),
       ),
     );
+  }
+}
+
+// signInWithEmailAndPassword resolves before the freshly minted ID token has
+// propagated to Firestore's request channel, so the first authorized read fired
+// right after sign-in can come back permission-denied even though the user is
+// signed in — the "have to tap Sign in twice" race. Retry such a read once
+// after a short delay, by which point the token has propagated.
+Future<T> _retryOnAuthPropagation<T>(Future<T> Function() read) async {
+  try {
+    return await read();
+  } on FirebaseException catch (e) {
+    if (e.code != 'permission-denied') rethrow;
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    return read();
   }
 }
 

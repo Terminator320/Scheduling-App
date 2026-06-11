@@ -1,5 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -10,10 +12,15 @@ import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/routes/app_routes.dart';
 
 class _MockAuthService extends Mock implements AuthService {}
 
 class _MockRepo extends Mock implements EmployeesRepository {}
+
+class _MockUserCredential extends Mock implements UserCredential {}
+
+class _MockUser extends Mock implements User {}
 
 Widget _wrap(AuthService auth, EmployeesRepository repo) {
   return ProviderScope(
@@ -29,6 +36,15 @@ Widget _wrap(AuthService auth, EmployeesRepository repo) {
         supportedLocales: AppLocalizations.supportedLocales,
         theme: lightTheme(),
         home: Login(authService: auth),
+        onGenerateRoute: (settings) => MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            body: Text(
+              settings.name == AppRoutes.mainCalendar
+                  ? 'CALENDAR_REACHED'
+                  : 'OTHER_ROUTE',
+            ),
+          ),
+        ),
       ),
     ),
   );
@@ -39,6 +55,7 @@ void main() {
   late _MockRepo repo;
 
   setUp(() {
+    FlutterSecureStorage.setMockInitialValues({});
     auth = _MockAuthService();
     repo = _MockRepo();
   });
@@ -73,4 +90,108 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'signs in on a single tap when the first authorized read races the '
+    'auth-token propagation (permission-denied) and the retry succeeds',
+    (tester) async {
+      final credential = _MockUserCredential();
+      final user = _MockUser();
+      when(() => user.uid).thenReturn('u1');
+      when(() => user.emailVerified).thenReturn(true);
+      when(() => credential.user).thenReturn(user);
+      when(
+        () => auth.signIn(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        ),
+      ).thenAnswer((_) async => credential);
+      when(
+        () => auth.tryActivateInvitedEmployee(user),
+      ).thenAnswer((_) async {});
+
+      var reads = 0;
+      when(() => repo.findUserByUid('u1')).thenAnswer((_) async {
+        reads++;
+        if (reads == 1) {
+          // First read after sign-in: token not yet propagated to Firestore.
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'permission-denied',
+          );
+        }
+        return const UserUidMatch(
+          id: 'doc1',
+          data: <String, dynamic>{
+            'name': 'Active User',
+            'email': 'user@test.com',
+            'status': 'active',
+            'role': 'admin',
+            'uid': 'u1',
+          },
+        );
+      });
+
+      await tester.pumpWidget(_wrap(auth, repo));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).at(0), 'user@test.com');
+      await tester.enterText(find.byType(TextField).at(1), 'password123');
+
+      await tester.tap(find.byType(FilledButton).first);
+      await tester.pumpAndSettle();
+
+      // A single tap lands on the calendar — no banner error, no second tap.
+      expect(find.text('CALENDAR_REACHED'), findsOneWidget);
+      expect(reads, 2);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'does not attempt invite activation when the user already has a uid-keyed '
+    'profile (keeps routine logins off the resolveMyInvite rate limit)',
+    (tester) async {
+      final credential = _MockUserCredential();
+      final user = _MockUser();
+      when(() => user.uid).thenReturn('u1');
+      when(() => user.emailVerified).thenReturn(true);
+      when(() => credential.user).thenReturn(user);
+      when(
+        () => auth.signIn(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        ),
+      ).thenAnswer((_) async => credential);
+      when(
+        () => auth.tryActivateInvitedEmployee(user),
+      ).thenAnswer((_) async {});
+      when(() => repo.findUserByUid('u1')).thenAnswer(
+        (_) async => const UserUidMatch(
+          id: 'doc1',
+          data: <String, dynamic>{
+            'name': 'Active User',
+            'email': 'user@test.com',
+            'status': 'active',
+            'role': 'admin',
+            'uid': 'u1',
+          },
+        ),
+      );
+
+      await tester.pumpWidget(_wrap(auth, repo));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).at(0), 'user@test.com');
+      await tester.enterText(find.byType(TextField).at(1), 'password123');
+
+      await tester.tap(find.byType(FilledButton).first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('CALENDAR_REACHED'), findsOneWidget);
+      // The provisioned doc is found first, so the invite callable never runs.
+      verifyNever(() => auth.tryActivateInvitedEmployee(user));
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
