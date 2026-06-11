@@ -10,6 +10,104 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.14.0+24] - 2026-06-11
+### Added
+- **Password managers can now save your sign-in.** The sign-in and
+  create-account forms are linked into the OS autofill context, so Google /
+  iCloud password managers fill both fields together and offer to save the
+  credentials after a successful sign-in or account creation.
+- **Haptic feedback on notices.** Success, info, and error notices now come
+  with a matching tactile cue.
+- **One-tap clear on text fields.** Every editable text field across the app
+  now shows a small "x" while it holds text, so emptying a field is one tap
+  instead of holding backspace.
+- **Clear address button.** The client add/edit form's address block has a
+  "Clear address" action that empties the street, apt/unit, city, province,
+  postal code, and country fields all at once.
+
+### Changed
+- **Easier employee color picker.** Colors already taken by another employee
+  are hidden instead of greyed out, so everything shown is pickable. Swatches
+  are bigger and easier to tap, picking gives a small haptic tick, and the
+  custom picker is now a tap-a-swatch palette with shades — no more color
+  wheel or hex code.
+- **Android predictive back.** The app opts into Android 13+ predictive back,
+  so the system back gesture previews where you'll land before you commit.
+- Firebase Performance's Logcat mirroring is now debug-only, so release builds
+  no longer carry the extra logging.
+
+### Fixed
+- Deleting a client now also removes its device-local phone-contact link, so a
+  stale link can't linger after the client is gone.
+- Dismissing the edit sheet while the "this visit or all visits" prompt was
+  open could leave the appointment editor stuck in its busy state.
+- A failed employee enable/disable from the edit sheet now shows an error
+  notice instead of failing silently.
+- Invited-employee activation re-reads the verification flag after the auth
+  reload instead of trusting a possibly stale user snapshot.
+
+## [1.13.0+23] - 2026-06-11
+### Added
+- **Save a client to your phone contacts.** The client detail view has a new
+  **Save** quick action that adds the client (name, business, phone, email,
+  address) to your phone contacts in one tap.
+- **Edited clients sync back to your phone contacts.** Once a client has been
+  saved to contacts, editing their details updates that same contact
+  automatically. Saving and syncing ask for the Contacts permission the first
+  time; if you decline, Save still works through the OS new-contact screen but
+  edits won't sync. The link is per-device — a client saved on one phone only
+  syncs on that phone.
+
+### Changed
+- **Client search now starts from the first character.** Typing a single letter
+  or digit begins searching your clients — you no longer have to type at least
+  two characters (or three for a phone number) before results appear.
+
+## [1.12.0+22] - 2026-06-11
+### Added
+- **Edit a repeating appointment for this visit only or all of them.** Saving a
+  change to a recurring appointment now asks whether to apply it to just this
+  visit or to this and all future visits — mirroring the delete prompt. Applying
+  to all updates the shared details and the start/end time on every future visit
+  while keeping each visit's own date and its own status.
+
+### Changed
+- **Repeating appointments now book five years ahead instead of one.** A
+  recurring job appears across all upcoming years, not just the current one.
+- **The repeating-appointment edit/delete prompt now spells out its scope** —
+  it says whether the choice affects only this visit or every future visit in
+  the series, and the destructive delete option carries an icon so its intent
+  isn't conveyed by colour alone.
+
+### Fixed
+- **Editing "this and future visits" no longer fails if one future visit was
+  deleted in the meantime.** The series update now skips a visit that was
+  removed concurrently instead of aborting the whole save.
+- **The "Resend verification email" button now reports when it can't send** (no
+  active session) instead of doing nothing silently.
+
+## [1.11.1+21] - 2026-06-11
+### Added
+Performance tracking
+
+## [1.11.0+20] - 2026-06-11
+
+### Added
+- **Didn't get your verification email? You can resend it.** The "Account
+  created" screen now has a **Resend verification email** button, and signing in
+  before you've verified your email automatically sends a fresh link — both
+  remind you to check your inbox **and** spam folder.
+
+### Fixed
+- **Signing up no longer gets stuck.** If an earlier attempt left a half-created
+  account, the app now recovers it automatically on the next try instead of
+  blocking that email with an "already in use" dead-end — and it can never
+  remove a real, active account while doing so.
+
+### Changed
+- **Clearer sign-up guidance** — the account-created and "verify your email"
+  messages now remind you to check your spam folder.
+
 ## [1.10.0+19] - 2026-06-10
 
 ### Added

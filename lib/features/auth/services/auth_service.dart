@@ -57,41 +57,69 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    final credential = await register(
-      email: email.trim().toLowerCase(),
-      password: password.trim(),
-    );
+    // A previous attempt can orphan an Auth user (the invite lookup or the
+    // rollback delete failed), and that orphan then blocks re-registration
+    // with `email-already-in-use`. Adopt it by signing in so we can re-check
+    // the invite and resend verification instead of dead-ending the user.
+    // signIn rethrows wrong-password / invalid-credential when the email is
+    // someone else's, which surfaces as the usual auth failure.
+    UserCredential credential;
+    var freshlyCreated = true;
+    try {
+      credential = await register(email: email, password: password);
+    } on FirebaseAuthException catch (e) {
+      if (e.code != 'email-already-in-use') rethrow;
+      credential = await signIn(email: email, password: password);
+      freshlyCreated = false;
+    }
+
+    final user = credential.user!;
 
     InvitedEmployeeMatch? invitedEmployee;
     try {
       invitedEmployee = await _employees.findInvitedEmployeeForCurrentUser();
     } catch (e, st) {
-      // TODO(pre-ship): remove once signup failures on release APK are diagnosed.
       _logger.warn(
-        'createEmployeeAccount: findInvitedEmployeeByEmail failed',
+        'createEmployeeAccount: findInvitedEmployeeForCurrentUser failed',
         e,
         st,
       );
-      await _rollbackOrFailLoud(credential, reason: 'invite-lookup-failed');
+      // Only roll back an account we freshly created this call — never delete
+      // an adopted pre-existing account on a transient lookup failure.
+      if (freshlyCreated) {
+        await _rollbackOrFailLoud(credential, reason: 'invite-lookup-failed');
+      } else {
+        await _signOutQuietly();
+      }
       rethrow;
     }
 
-    if (invitedEmployee == null) {
-      await _rollbackOrFailLoud(credential, reason: 'no-invite-found');
-      throw const AuthFailureNotAuthorized();
+    if (invitedEmployee != null) {
+      await user.sendEmailVerification();
+      return credential;
     }
 
-    await credential.user!.sendEmailVerification();
-
-    return credential;
+    // No invite matches this email. An adopted account that's already
+    // provisioned (has a `users` doc keyed by uid) is a real account — tell
+    // them to sign in, never delete it. Only a true orphan gets cleaned up.
+    if (!freshlyCreated) {
+      final provisioned = await _employees.findUserByUid(user.uid);
+      if (provisioned != null) {
+        await _signOutQuietly();
+        throw const AuthFailureEmailAlreadyInUse();
+      }
+    }
+    await _rollbackOrFailLoud(credential, reason: 'no-invite-found');
+    throw const AuthFailureNotAuthorized();
   }
 
-  // Best-effort cleanup of the Auth user we just registered. When this delete
+  // Best-effort cleanup of the Auth user we just created. When this delete
   // fails (App Check hiccup, network blip, requires-recent-login edge case)
   // the user is left orphaned: an Auth identity with no Firestore users doc
   // backing it, which blocks future Create-Account attempts with the same
-  // email. Log the failure so Crashlytics surfaces it, and throw a distinct
-  // failure so the UI tells the admin how to recover.
+  // email. Sign the session out so we never leave a half-signed-in orphan,
+  // log the failure for Crashlytics, and throw a distinct failure so the UI
+  // tells the admin how to recover.
   Future<void> _rollbackOrFailLoud(
     UserCredential credential, {
     required String reason,
@@ -107,13 +135,36 @@ class AuthService {
         e,
         st,
       );
+      await _signOutQuietly();
       throw const AuthFailureAccountCreationIncomplete();
+    }
+  }
+
+  Future<void> _signOutQuietly() async {
+    try {
+      await _auth.signOut();
+    } catch (_) {}
+  }
+
+  // Best-effort resend of the email-verification link. Returns false (instead
+  // of throwing) when the send fails — e.g. Firebase rate-limits repeated
+  // requests — so the caller can fall back to a plain "please verify" message.
+  Future<bool> resendVerificationEmail(User user) async {
+    try {
+      await user.sendEmailVerification();
+      return true;
+    } catch (e, st) {
+      _logger.warn('resendVerificationEmail failed', e, st);
+      return false;
     }
   }
 
   Future<void> tryActivateInvitedEmployee(User user) async {
     await user.reload();
-    if (!user.emailVerified) return;
+    // reload() refreshes the auth instance's user; the passed-in snapshot can
+    // be stale, so re-read the verified flag from the instance.
+    final refreshed = _auth.currentUser ?? user;
+    if (!refreshed.emailVerified) return;
     final invite = await _employees.findInvitedEmployeeForCurrentUser();
     if (invite == null) return;
     await _employees.activateEmployee(docId: invite.docId, uid: user.uid);

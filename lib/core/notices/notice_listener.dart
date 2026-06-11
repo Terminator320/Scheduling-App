@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/animations/app_animation_constants.dart';
@@ -64,6 +65,12 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
         Icons.error_outline,
       ),
     };
+
+    // Native tactile cue alongside the visual notice (best-effort).
+    unawaited(switch (notice) {
+      NoticeError() => HapticFeedback.mediumImpact(),
+      NoticeSuccess() || NoticeInfo() => HapticFeedback.lightImpact(),
+    });
 
     _currentEntry?.remove();
     _currentEntry = null;

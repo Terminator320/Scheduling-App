@@ -4,6 +4,7 @@ import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/fields/clear_text_button.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
 /// Shared building blocks for the three auth screens (sign-in,
@@ -14,6 +15,10 @@ import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 /// The outer shell every auth screen shares: tap-to-dismiss keyboard, a
 /// surface-colored [Scaffold], and a scroll view with the standard auth
 /// padding. The form/success column goes in [child].
+///
+/// The [AutofillGroup] links the email + password fields into one OS autofill
+/// context so password managers can fill both and — once the screen commits
+/// via `TextInput.finishAutofillContext()` on success — offer to save them.
 class AuthScaffold extends StatelessWidget {
   const AuthScaffold({required this.child, super.key});
 
@@ -33,7 +38,7 @@ class AuthScaffold extends StatelessWidget {
               horizontal: AppSpacing.sp24,
               vertical: AppSpacing.sp32,
             ),
-            child: child,
+            child: AutofillGroup(child: child),
           ),
         ),
       ),
@@ -185,6 +190,10 @@ class AuthEmailField extends StatelessWidget {
             ).copyWith(
               errorText: errorText,
               prefixIcon: const Icon(Icons.email_outlined, size: 20),
+              suffixIcon: ClearTextButton(
+                controller: controller,
+                onCleared: onChanged,
+              ),
             ),
       ),
     );

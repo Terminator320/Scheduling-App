@@ -131,6 +131,7 @@ class AppCalendar extends StatelessWidget {
           if (events.isEmpty) return const SizedBox();
 
           final appointments = events.cast<AppointmentRecord>();
+          final fallback = Theme.of(context).colorScheme.outline;
 
           return Positioned(
             bottom: 2,
@@ -143,8 +144,7 @@ class AppCalendar extends StatelessWidget {
                     width: 5,
                     height: 5,
                     decoration: BoxDecoration(
-                      color:
-                          colorFromMap(appt, employeeColorMap) ?? Colors.grey,
+                      color: colorFromMap(appt, employeeColorMap) ?? fallback,
                       shape: BoxShape.circle,
                     ),
                   ),

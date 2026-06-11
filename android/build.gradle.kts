@@ -5,6 +5,10 @@ plugins {
     // and mapping-file upload (uploads happen automatically on assemble
     // tasks when the plugin is applied; minify settings live in app/).
     id("com.google.firebase.crashlytics") version "3.0.6" apply false
+    // Performance Monitoring Gradle plugin — build-time instrumentation for
+    // automatic app-start, screen-render, and HTTP/network traces.
+    // (AGP version is owned by settings.gradle.kts — don't redeclare it here.)
+    id("com.google.firebase.firebase-perf") version "2.0.2" apply false
 }
 
 allprojects {

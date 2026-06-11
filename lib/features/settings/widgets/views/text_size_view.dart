@@ -118,7 +118,7 @@ class _TextSizeViewState extends State<TextSizeView> {
         FilledButton(
           style: FilledButton.styleFrom(
             backgroundColor: scheme.primary,
-            foregroundColor: Colors.white,
+            foregroundColor: scheme.onPrimary,
             minimumSize: const Size.fromHeight(48),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadius.r12),

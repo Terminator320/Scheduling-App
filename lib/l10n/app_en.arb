@@ -92,6 +92,14 @@
   "@common_cancel": {
     "description": "Cancel"
   },
+  "common_clearText": "Clear text",
+  "@common_clearText": {
+    "description": "Tooltip on the x button that empties a text field"
+  },
+  "clients_clearAddress": "Clear address",
+  "@clients_clearAddress": {
+    "description": "Button that empties every field of the client address block at once"
+  },
   "settings_apply": "Apply",
   "@settings_apply": {
     "description": "Apply"
@@ -159,6 +167,19 @@
   "employees_employeeColor": "Employee Color",
   "@employees_employeeColor": {
     "description": "Employee Color"
+  },
+  "employees_customColor": "Custom color",
+  "@employees_customColor": {
+    "description": "Tooltip on the rainbow swatch and title of the custom color picker dialog"
+  },
+  "employees_colorOption": "Color option {number}",
+  "@employees_colorOption": {
+    "description": "Semantics label for a palette swatch in the employee color grid",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
   },
   "employees_editEmployee": "Edit Employee",
   "@employees_editEmployee": {
@@ -412,9 +433,13 @@
       }
     }
   },
-  "calendar_deleteSeriesMessage": "This appointment is part of a repeating series.",
-  "@calendar_deleteSeriesMessage": {
-    "description": "Body of the delete dialog shown for a repeating appointment, above the this-visit-only / this-and-future choices"
+  "calendar_editSeriesScopeMessage": "Apply your changes to this visit only, or to this and all future visits in the series?",
+  "@calendar_editSeriesScopeMessage": {
+    "description": "Body of the edit dialog for a repeating appointment, stating that the apply-to-all option changes every future visit in the series"
+  },
+  "calendar_deleteSeriesScopeMessage": "Delete this visit only, or this and all future visits in the series?",
+  "@calendar_deleteSeriesScopeMessage": {
+    "description": "Body of the delete dialog for a repeating appointment, stating that the delete-all option removes every future visit in the series"
   },
   "calendar_deleteThisVisitOnly": "Delete this visit only",
   "@calendar_deleteThisVisitOnly": {
@@ -423,6 +448,23 @@
   "calendar_deleteThisAndFutureVisits": "Delete this and future visits",
   "@calendar_deleteThisAndFutureVisits": {
     "description": "Delete dialog option: delete the opened occurrence plus the series' future occurrences"
+  },
+  "calendar_editThisVisitOnly": "Save this visit only",
+  "@calendar_editThisVisitOnly": {
+    "description": "Edit dialog option: apply the edit to only the opened occurrence of a repeating appointment"
+  },
+  "calendar_editThisAndFutureVisits": "Save this and future visits",
+  "@calendar_editThisAndFutureVisits": {
+    "description": "Edit dialog option: apply the edit to the opened occurrence plus the series' future occurrences"
+  },
+  "calendar_changesAppliedToSeries": "{count, plural, =1{Changes saved — applied to 1 future visit} other{Changes saved — applied to {count} future visits}}",
+  "@calendar_changesAppliedToSeries": {
+    "description": "Success notice after saving an appointment edit that was propagated to future visits in the series; count is the number of future visits updated",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "calendar_eGPlumbingRepair": "e.g. Plumbing repair",
   "@calendar_eGPlumbingRepair": {
@@ -544,6 +586,10 @@
   "@error_couldNotOpenEmail": {
     "description": "Shown when launching the email composer for a client fails"
   },
+  "error_couldNotOpenContacts": "Could not open contacts app",
+  "@error_couldNotOpenContacts": {
+    "description": "Shown when launching the device's new-contact screen for a client fails"
+  },
   "clients_call": "Call",
   "@clients_call": {
     "description": "Quick-action button that dials the client's phone number"
@@ -555,6 +601,14 @@
   "clients_directions": "Directions",
   "@clients_directions": {
     "description": "Quick-action button that opens the client's address in a map app"
+  },
+  "clients_saveToContacts": "Save",
+  "@clients_saveToContacts": {
+    "description": "Quick-action button that saves the client to the phone's contacts"
+  },
+  "clients_savedToContacts": "Saved to contacts",
+  "@clients_savedToContacts": {
+    "description": "Success notice shown after a client is written to the phone's contacts"
   },
   "clients_emailWith": "Email with",
   "@clients_emailWith": {
@@ -828,9 +882,9 @@
   "@auth_accountCreated": {
     "description": "Account created"
   },
-  "auth_youCanNowSignInWithThisEmailAndPassword": "Check your inbox and verify your email, then sign in.",
+  "auth_youCanNowSignInWithThisEmailAndPassword": "Check your inbox and spam folder to verify your email, then sign in.",
   "@auth_youCanNowSignInWithThisEmailAndPassword": {
-    "description": "Check your inbox and verify your email, then sign in."
+    "description": "Create-account success subtitle telling the user to verify their email before signing in."
   },
   "auth_useTheEmailYourAdminAddedToTheEmployeeList": "Use the email your admin added to the employee list.",
   "@auth_useTheEmailYourAdminAddedToTheEmployeeList": {
@@ -843,6 +897,18 @@
   "auth_pleaseVerifyYourEmailBeforeSigningIn": "Please verify your email before signing in.",
   "@auth_pleaseVerifyYourEmailBeforeSigningIn": {
     "description": "Please verify your email before signing in."
+  },
+  "auth_verificationEmailResentCheckInboxAndSpam": "Your email isn't verified yet. We sent a new verification link — check your inbox and spam folder, then sign in.",
+  "@auth_verificationEmailResentCheckInboxAndSpam": {
+    "description": "Shown on sign-in when an unverified invited user's account triggered an automatic resend of the email-verification link."
+  },
+  "auth_resendVerificationEmail": "Resend verification email",
+  "@auth_resendVerificationEmail": {
+    "description": "Button on the account-created screen to send the email-verification link again."
+  },
+  "auth_verificationEmailSentCheckInboxAndSpam": "Verification email sent — check your inbox and spam folder.",
+  "@auth_verificationEmailSentCheckInboxAndSpam": {
+    "description": "Confirmation shown after the user taps Resend verification email."
   },
   "auth_pleaseLogInAgainAndRetry": "Please log in again and retry",
   "@auth_pleaseLogInAgainAndRetry": {
