@@ -22,6 +22,7 @@ dependencies:
   firebase_storage: ^13.3.0
   firebase_app_check: ^0.4.3
   firebase_crashlytics: ^5.0.0
+  firebase_performance: ^0.11.4+2
   cloud_functions: ^6.0.0
 
   # Calendar / dates / i18n
