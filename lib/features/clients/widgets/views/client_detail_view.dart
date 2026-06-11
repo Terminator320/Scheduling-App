@@ -5,6 +5,7 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
+import 'package:scheduling/features/clients/data/contact_link_store.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/views/client_edit_form.dart';
 import 'package:scheduling/features/clients/widgets/views/client_view_body.dart';
@@ -66,6 +67,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
     final notices = ref.read(noticeServiceProvider);
     try {
       await ref.read(clientsRepositoryProvider).deleteClient(_client.id);
+      await _unlinkPhoneContact();
       ref.read(clientsRefreshProvider.notifier).bump();
       if (!mounted) return;
       // A scrollController means we're inside a bottom sheet — close it.
@@ -85,6 +87,16 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
           error: e,
         ),
       );
+    }
+  }
+
+  /// Drops the device-local phone-contact link for the deleted client.
+  /// Best-effort (mirrors CLI-CONTACT-SYNC): a failure must not fail the delete.
+  Future<void> _unlinkPhoneContact() async {
+    try {
+      await ref.read(contactLinkStoreProvider).unlink(_client.id);
+    } catch (e, st) {
+      ref.read(loggerProvider).warn('CLI-DEL contact unlink failed', e, st);
     }
   }
 

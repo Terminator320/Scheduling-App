@@ -10,6 +10,19 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.13.1+24] - 2026-06-11
+### Changed
+- **Android predictive back.** The app opts into Android 13+ predictive back,
+  so the system back gesture previews where you'll land before you commit.
+- Firebase Performance's Logcat mirroring is now debug-only, so release builds
+  no longer carry the extra logging.
+
+### Fixed
+- Deleting a client now also removes its device-local phone-contact link, so a
+  stale link can't linger after the client is gone.
+- Dismissing the edit sheet while the "this visit or all visits" prompt was
+  open could leave the appointment editor stuck in its busy state.
+
 ## [1.13.0+23] - 2026-06-11
 ### Added
 - **Save a client to your phone contacts.** The client detail view has a new

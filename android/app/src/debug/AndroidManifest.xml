@@ -11,5 +11,11 @@
          This file is in src/debug so it is NOT merged into release builds. -->
     <application
         android:networkSecurityConfig="@xml/network_security_config"
-        tools:replace="android:networkSecurityConfig" />
+        tools:replace="android:networkSecurityConfig">
+        <!-- Firebase Performance: mirror trace/metric logs to Logcat. Debug-only
+             so release builds don't carry the extra logging. -->
+        <meta-data
+            android:name="firebase_performance_logcat_enabled"
+            android:value="true" />
+    </application>
 </manifest>
