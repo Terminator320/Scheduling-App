@@ -48,7 +48,11 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!ref.read(appLockEnabledProvider)) return;
-    if (state == AppLifecycleState.paused ||
+    // Lock on `inactive` too, not just paused/hidden: the OS app-switcher
+    // snapshot is captured during the `inactive` transition, so covering only
+    // paused/hidden would leak the unprotected screen into the recents preview.
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
       if (!_locked) setState(() => _locked = true);
     } else if (state == AppLifecycleState.resumed && _locked) {

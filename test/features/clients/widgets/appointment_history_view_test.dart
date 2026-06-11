@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/clients/widgets/views/appointment_history_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
+
+class _MockAppointmentsRepository extends Mock
+    implements AppointmentsRepository {}
 
 AppointmentRecord _appt({
   required String id,
@@ -45,10 +50,15 @@ final _bobJob = _appt(
 );
 
 Widget _wrap(List<AppointmentRecord> history, {String searchQuery = ''}) {
+  final repo = _MockAppointmentsRepository();
+  when(
+    () => repo.fetchHistoryPage(
+      limit: any(named: 'limit'),
+      after: any(named: 'after'),
+    ),
+  ).thenAnswer((_) async => history);
   return ProviderScope(
-    overrides: [
-      appointmentHistoryProvider.overrideWith((ref) => Stream.value(history)),
-    ],
+    overrides: [appointmentsRepositoryProvider.overrideWithValue(repo)],
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
       toggleTheme: () {},
