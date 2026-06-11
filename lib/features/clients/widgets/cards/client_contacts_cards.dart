@@ -11,55 +11,152 @@ import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 /// Section of additional business [contacts], each an [InfoCard] with tappable
 /// phone (call) and email (compose) rows. Shared by the client and appointment
 /// detail views; renders nothing when [contacts] is empty.
-class ClientContactsCards extends ConsumerWidget {
-  const ClientContactsCards({required this.contacts, super.key});
+///
+/// When [collapsible] is true the cards are hidden behind a tappable
+/// "Contacts (N)" header (appointment view, where the primary client is already
+/// shown above); otherwise every card renders expanded (client view).
+class ClientContactsCards extends StatelessWidget {
+  const ClientContactsCards({
+    required this.contacts,
+    this.collapsible = false,
+    super.key,
+  });
 
   final List<ClientContact> contacts;
+  final bool collapsible;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     if (contacts.isEmpty) return const SizedBox.shrink();
-    final scheme = Theme.of(context).colorScheme;
+    if (collapsible) return _CollapsibleContacts(contacts: contacts);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: AppSpacing.sp24),
         SectionLabel(context.l10n.common_contacts),
         const SizedBox(height: AppSpacing.sp8),
-        for (final contact in contacts)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.sp8),
-            child: InfoCard(
-              rows: [
-                if (contact.name.isNotEmpty)
-                  InfoCardRow(
-                    icon: Icons.person_outline,
-                    text: contact.name,
-                    iconColor: scheme.secondary,
-                    emphasize: true,
-                  ),
-                if (contact.phone.isNotEmpty)
-                  InfoCardRow(
-                    icon: Icons.phone_outlined,
-                    text: contact.phone,
-                    onTap: () => launchPhoneCall(context, ref, contact.phone),
-                    trailingIcon: Icons.chevron_right,
-                  ),
-                if (contact.email.isNotEmpty)
-                  InfoCardRow(
-                    icon: Icons.email_outlined,
-                    text: contact.email,
-                    onTap: () => EmailComposeLauncher.showEmailChoices(
-                      context,
-                      ref,
-                      email: contact.email,
+        for (final contact in contacts) _ContactCard(contact: contact),
+      ],
+    );
+  }
+}
+
+/// Tappable header that reveals the [contacts] cards in place.
+class _CollapsibleContacts extends StatefulWidget {
+  const _CollapsibleContacts({required this.contacts});
+
+  final List<ClientContact> contacts;
+
+  @override
+  State<_CollapsibleContacts> createState() => _CollapsibleContactsState();
+}
+
+class _CollapsibleContactsState extends State<_CollapsibleContacts> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : AppDuration.fast;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: AppSpacing.sp24),
+        Semantics(
+          button: true,
+          expanded: _expanded,
+          child: InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(AppRadius.r8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sp4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SectionLabel(
+                      context.l10n.common_contactsCount(
+                        widget.contacts.length,
+                      ),
                     ),
-                    trailingIcon: Icons.chevron_right,
                   ),
-              ],
+                  AnimatedRotation(
+                    duration: duration,
+                    turns: _expanded ? 0.5 : 0,
+                    child: Icon(
+                      Icons.expand_more,
+                      size: 20,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
+        ),
+        AnimatedSize(
+          duration: duration,
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: _expanded
+              ? Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.sp8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final contact in widget.contacts)
+                        _ContactCard(contact: contact),
+                    ],
+                  ),
+                )
+              : const SizedBox(width: double.infinity),
+        ),
       ],
+    );
+  }
+}
+
+/// A single business contact rendered as a tappable [InfoCard].
+class _ContactCard extends ConsumerWidget {
+  const _ContactCard({required this.contact});
+
+  final ClientContact contact;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sp8),
+      child: InfoCard(
+        rows: [
+          if (contact.name.isNotEmpty)
+            InfoCardRow(
+              icon: Icons.person_outline,
+              text: contact.name,
+              iconColor: scheme.secondary,
+              emphasize: true,
+            ),
+          if (contact.phone.isNotEmpty)
+            InfoCardRow(
+              icon: Icons.phone_outlined,
+              text: contact.phone,
+              onTap: () => launchPhoneCall(context, ref, contact.phone),
+              trailingIcon: Icons.chevron_right,
+            ),
+          if (contact.email.isNotEmpty)
+            InfoCardRow(
+              icon: Icons.email_outlined,
+              text: contact.email,
+              onTap: () => EmailComposeLauncher.showEmailChoices(
+                context,
+                ref,
+                email: contact.email,
+              ),
+              trailingIcon: Icons.chevron_right,
+            ),
+        ],
+      ),
     );
   }
 }

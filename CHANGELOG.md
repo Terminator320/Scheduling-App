@@ -10,6 +10,14 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.10.0+19] - 2026-06-10
+
+### Added
+- **Appointment details now tuck extra contacts behind a tap.** When a client
+  has additional business contacts, the appointment view shows a collapsible
+  **Contacts (N)** header — tap to reveal the full contact cards, tap again to
+  hide them. The key info (client, phone, address) stays visible up top.
+
 ## [1.9.1+18] - 2026-06-10
 
 ### Changed

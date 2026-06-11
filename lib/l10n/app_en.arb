@@ -224,6 +224,15 @@
   "@common_contacts": {
     "description": "Contacts"
   },
+  "common_contactsCount": "Contacts ({count})",
+  "@common_contactsCount": {
+    "description": "Header for the collapsible extra-contacts section, showing the number of additional contacts.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "clients_newClient": "New client",
   "@clients_newClient": {
     "description": "New client"
