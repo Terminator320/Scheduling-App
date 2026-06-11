@@ -9,6 +9,7 @@ import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/auth/widgets/auth_banner.dart';
 import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
 
 class CreateAccountResult {
   const CreateAccountResult({required this.created, this.email});
@@ -46,6 +47,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   bool _isLoading = false;
   bool _submitted = false;
   bool _created = false;
+  bool _isResending = false;
+  bool _resendFailed = false;
+  String? _resendMessage;
 
   String? _emailError;
   String? _passwordError;
@@ -143,6 +147,24 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         email: _emailController.text.trim().toLowerCase(),
       ),
     );
+  }
+
+  Future<void> _resendVerification() async {
+    final user = _authService.currentUser;
+    if (user == null) return;
+    setState(() {
+      _isResending = true;
+      _resendMessage = null;
+    });
+    final sent = await _authService.resendVerificationEmail(user);
+    if (!mounted) return;
+    setState(() {
+      _isResending = false;
+      _resendFailed = !sent;
+      _resendMessage = sent
+          ? context.l10n.auth_verificationEmailSentCheckInboxAndSpam
+          : context.l10n.error_somethingWentWrongPleaseTryAgain;
+    });
   }
 
   @override
@@ -266,10 +288,26 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
             title: context.l10n.auth_accountCreated,
             subtitle: context.l10n.auth_youCanNowSignInWithThisEmailAndPassword,
           ),
-          const SizedBox(height: AppSpacing.sp32),
+          AuthBanner(
+            message: _resendMessage,
+            kind: _resendFailed ? AuthBannerKind.error : AuthBannerKind.success,
+          ),
+          const SizedBox(height: AppSpacing.sp24),
           AnimatedLoadingButton(
             label: context.l10n.auth_backToSignIn,
             onPressed: _backToSignIn,
+          ),
+          const SizedBox(height: AppSpacing.sp8),
+          Center(
+            child: TextButton.icon(
+              onPressed: _isResending ? null : _resendVerification,
+              icon: BusyButtonIcon(
+                isBusy: _isResending,
+                icon: Icons.refresh,
+                color: scheme.primary,
+              ),
+              label: Text(context.l10n.auth_resendVerificationEmail),
+            ),
           ),
         ].authStaggerIn(),
       ),

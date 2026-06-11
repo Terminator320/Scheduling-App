@@ -10,6 +10,24 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.11.0+20] - 2026-06-11
+
+### Added
+- **Didn't get your verification email? You can resend it.** The "Account
+  created" screen now has a **Resend verification email** button, and signing in
+  before you've verified your email automatically sends a fresh link — both
+  remind you to check your inbox **and** spam folder.
+
+### Fixed
+- **Signing up no longer gets stuck.** If an earlier attempt left a half-created
+  account, the app now recovers it automatically on the next try instead of
+  blocking that email with an "already in use" dead-end — and it can never
+  remove a real, active account while doing so.
+
+### Changed
+- **Clearer sign-up guidance** — the account-created and "verify your email"
+  messages now remind you to check your spam folder.
+
 ## [1.10.0+19] - 2026-06-10
 
 ### Added
