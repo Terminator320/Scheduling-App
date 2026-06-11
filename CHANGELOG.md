@@ -21,6 +21,17 @@ code; it increments by one on every store upload regardless of the semver part.
 ### Changed
 - **Repeating appointments now book five years ahead instead of one.** A
   recurring job appears across all upcoming years, not just the current one.
+- **The repeating-appointment edit/delete prompt now spells out its scope** —
+  it says whether the choice affects only this visit or every future visit in
+  the series, and the destructive delete option carries an icon so its intent
+  isn't conveyed by colour alone.
+
+### Fixed
+- **Editing "this and future visits" no longer fails if one future visit was
+  deleted in the meantime.** The series update now skips a visit that was
+  removed concurrently instead of aborting the whole save.
+- **The "Resend verification email" button now reports when it can't send** (no
+  active session) instead of doing nothing silently.
 
 ## [1.11.1+21] - 2026-06-11
 ### Added

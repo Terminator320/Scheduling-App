@@ -15,6 +15,13 @@ enum RepeatInterval {
   /// Pre-booking horizon: occurrences are created up to five years out.
   static const int horizonMonths = 60;
 
+  /// Upper bound on pre-booked occurrences. A rule rewrite books copies +
+  /// deletes old futures + updates the anchor in one atomic WriteBatch (hard
+  /// limit 500 ops), so 120 copies + 120 deletes + 1 stays well clear. Today's
+  /// shortest interval (4 months) yields 15, but this guards a future shorter
+  /// interval or longer [horizonMonths] from silently breaching the limit.
+  static const int maxOccurrences = 120;
+
   /// Firestore string value. [fromRaw] is the only string→interval mapper.
   String get raw => switch (this) {
     RepeatInterval.none => 'none',
@@ -34,10 +41,16 @@ enum RepeatInterval {
   /// Start times of the pre-booked future occurrences (excludes [first]).
   List<DateTime> occurrenceStartsAfter(DateTime first) {
     if (this == RepeatInterval.none) return const [];
-    return [
+    final starts = [
       for (var m = months; m <= horizonMonths; m += months)
         _addMonthsClamped(first, m),
     ];
+    assert(
+      starts.length <= maxOccurrences,
+      'repeat horizon produces ${starts.length} occurrences '
+      '(> $maxOccurrences) — atomic series WriteBatch could exceed 500 ops',
+    );
+    return starts;
   }
 
   /// Adds [months] keeping the time of day; the day-of-month is clamped to

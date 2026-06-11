@@ -151,7 +151,15 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   Future<void> _resendVerification() async {
     final user = _authService.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      // No current session (e.g. signed out by the login auto-resend path) —
+      // surface it instead of a silent no-op so the user isn't left waiting.
+      setState(() {
+        _resendFailed = true;
+        _resendMessage = context.l10n.error_somethingWentWrongPleaseTryAgain;
+      });
+      return;
+    }
     setState(() {
       _isResending = true;
       _resendMessage = null;

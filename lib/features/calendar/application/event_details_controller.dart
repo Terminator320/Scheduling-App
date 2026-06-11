@@ -298,6 +298,12 @@ class EventDetailsController extends Notifier<EventDetailsState> {
     }
   }
 
+  /// Toggles the busy flag from the UI while a confirmation dialog is open, so
+  /// a second Save tap can't stack a duplicate prompt (the action buttons,
+  /// which watch [EventDetailsState.isSaving], disable too).
+  void setSaving({required bool busy}) =>
+      state = state.copyWith(isSaving: busy);
+
   Future<EventDetailsSaveOutcome> save(
     AppointmentRecord appointment, {
     required String title,
@@ -419,8 +425,10 @@ class EventDetailsController extends Notifier<EventDetailsState> {
           excludeId: id,
           after: appointment.startTime,
         );
-        final propagated = [
-          for (final v in siblings)
+        final propagated = <AppointmentRecord>[];
+        for (final v in siblings) {
+          final copyStart = _withTimeOfDay(v.startTime, start);
+          propagated.add(
             v.copyWith(
               title: updated.title,
               clientId: updated.clientId,
@@ -432,14 +440,15 @@ class EventDetailsController extends Notifier<EventDetailsState> {
               notes: updated.notes,
               materialsNeeded: updated.materialsNeeded,
               repeat: updated.repeat,
-              startTime: _withTimeOfDay(v.startTime, start),
+              startTime: copyStart,
               endTime: occurrenceEnd(
                 originalStart: start,
                 originalEnd: end,
-                copyStart: _withTimeOfDay(v.startTime, start),
+                copyStart: copyStart,
               ),
             ),
-        ];
+          );
+        }
         await repo.updateAppointments([updated, ...propagated]);
         updatedSiblings = propagated.length;
       } else {
