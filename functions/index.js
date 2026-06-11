@@ -664,16 +664,19 @@ exports.resolveMyInvite = onCall(
         throw new HttpsError("unauthenticated", "auth-required");
       }
       assertPayloadShape(req.data, new Set());
+      const tokenEmail = req.auth.token?.email;
+      if (typeof tokenEmail !== "string" || tokenEmail === "") {
+        throw new HttpsError("failed-precondition", "no-email-claim");
+      }
+      // Rate-limit AFTER the cheap precondition checks (mirrors deleteAccount):
+      // a tokenless/precondition-failing retry must not record an attempt and
+      // burn one of the caller's own limited slots.
       await enforceDurableRateLimit(
           "resolveMyInvite",
           req.auth.uid,
           AUTH_RATE_MAX,
           AUTH_RATE_WINDOW_MS,
       );
-      const tokenEmail = req.auth.token?.email;
-      if (typeof tokenEmail !== "string" || tokenEmail === "") {
-        throw new HttpsError("failed-precondition", "no-email-claim");
-      }
       const email = tokenEmail.trim().toLowerCase();
       const db = getFirestore();
       // Invites are employee-only — admin is granted post-activation, and

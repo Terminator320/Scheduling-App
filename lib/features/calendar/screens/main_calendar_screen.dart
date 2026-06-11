@@ -18,7 +18,6 @@ import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/error_snack_bar.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -209,12 +208,11 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         _upgradingToAdmin = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          Navigator.of(context).pushReplacementNamed(
-            AppRoutes.mainCalendar,
-            arguments: MainCalendarArgs(
-              isAdmin: true,
-              employeeId: widget.employeeId,
-            ),
+          navigateToDestination(
+            context,
+            AdaptiveDestination.calendar,
+            isAdmin: true,
+            employeeId: widget.employeeId,
           );
         });
       }

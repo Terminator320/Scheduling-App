@@ -125,13 +125,19 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       final client = await ref
           .read(clientsRepositoryProvider)
           .getClientById(id);
-      if (client == null) return;
+      // Re-check after the await: if the user picked (or cleared) a client
+      // while the load was in flight, selectClient already set state.client —
+      // don't clobber that selection with the appointment's original client.
+      if (client == null || state.client != null) return;
       if (state.selectedClient == null && !state.clientCleared) {
         state = state.copyWith(
           client: client,
           selectedClient: client,
-          // A stored address that differs from the client's is a custom one.
-          useCustomAddress: appointment.address.trim() != client.address.trim(),
+          // No-fixed-address clients always open in custom mode; otherwise a
+          // stored address that differs from the client's is a custom one.
+          useCustomAddress:
+              client.noFixedAddress ||
+              appointment.address.trim() != client.address.trim(),
         );
       } else {
         state = state.copyWith(client: client);
