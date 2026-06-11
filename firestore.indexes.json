@@ -39,6 +39,22 @@
         { "fieldPath": "employeeIds", "arrayConfig": "CONTAINS" },
         { "fieldPath": "startTime", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "startTime", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "startTime", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [

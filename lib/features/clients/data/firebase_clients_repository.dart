@@ -10,7 +10,20 @@ class FirebaseClientsRepository implements ClientsRepository {
     : _clients = firestore.collection('clients');
 
   final CollectionReference<Map<String, dynamic>> _clients;
+
+  // Bounded LRU of recent search results. The repository is a long-lived
+  // singleton, so an unbounded map would grow one entry per distinct query for
+  // the whole session. Oldest entry is evicted past [_searchCacheMax].
+  static const int _searchCacheMax = 50;
   final Map<String, List<ClientRecord>> _searchCache = {};
+
+  void _cacheSearch(String key, List<ClientRecord> results) {
+    _searchCache.remove(key);
+    if (_searchCache.length >= _searchCacheMax) {
+      _searchCache.remove(_searchCache.keys.first);
+    }
+    _searchCache[key] = results;
+  }
 
   @override
   Future<List<ClientRecord>> fetchClientsPage({
@@ -67,7 +80,10 @@ class FirebaseClientsRepository implements ClientsRepository {
 
     final cacheKey = ClientSearchPolicy.cacheKey(q);
     final cached = _searchCache[cacheKey];
-    if (cached != null) return cached;
+    if (cached != null) {
+      _cacheSearch(cacheKey, cached); // mark most-recently-used
+      return cached;
+    }
 
     final normalizedQuery = ClientSearchPolicy.normalize(q);
     final queryDigits = ClientSearchPolicy.digitsOnly(q);
@@ -173,7 +189,7 @@ class FirebaseClientsRepository implements ClientsRepository {
         .take(ClientSearchPolicy.resultDisplayLimit)
         .map((entry) => entry.value)
         .toList();
-    _searchCache[cacheKey] = results;
+    _cacheSearch(cacheKey, results);
     return results;
   }
 

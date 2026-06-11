@@ -108,6 +108,30 @@ void main() {
     },
   );
 
+  testWidgets('shows the client phone number and address', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        DetailsViewBody(
+          appointment: _appointment,
+          showActions: true,
+          onClose: () {},
+        ),
+        overrides: [
+          appointmentsRepositoryProvider.overrideWithValue(appointments),
+          clientsRepositoryProvider.overrideWithValue(clients),
+          employeesRepositoryProvider.overrideWithValue(employees),
+          photoUploadNotifierProvider.overrideWithValue(uploadNotifier),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Existing Client'), findsOneWidget);
+    expect(find.text('555-1111'), findsOneWidget);
+    expect(find.text('1 First St'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'no failure banner when notifier reports a failure for a different id',
     (tester) async {

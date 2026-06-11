@@ -44,7 +44,13 @@ abstract class AppointmentsRepository {
 
   Stream<List<AppointmentRecord>> watchInRange(AppointmentDateRange range);
 
-  Stream<List<AppointmentRecord>> watchHistory();
+  /// One newest-first page of terminal (done/cancelled) appointments.
+  /// [after] is the last record of the previous page (cursor); null for the
+  /// first page.
+  Future<List<AppointmentRecord>> fetchHistoryPage({
+    required int limit,
+    AppointmentRecord? after,
+  });
 
   Stream<List<AppointmentRecord>> watchForEmployeeInRange(
     String employeeId,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
+import 'package:scheduling/shared/widgets/primitives/app_back_button.dart';
 
 /// The app's standard top bar: a primary-coloured [AppBar] with a bold
 /// on-primary title, an optional back button ([onBack]) and optional
@@ -58,13 +59,7 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
       foregroundColor: scheme.onPrimary,
       automaticallyImplyLeading: false,
       toolbarHeight: compact ? _compactToolbarHeight : null,
-      leading: onBack == null
-          ? null
-          : IconButton(
-              icon: const Icon(Icons.arrow_back_rounded),
-              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-              onPressed: onBack,
-            ),
+      leading: onBack == null ? null : AppBackButton(onTap: onBack!),
       title: Text(title, style: titleStyle),
       actions: actions,
       bottom: bottom,

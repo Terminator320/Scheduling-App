@@ -15,7 +15,6 @@ import 'package:scheduling/features/employees/widgets/sheets/employee_form_sheet
 import 'package:scheduling/features/employees/widgets/views/employee_details_view.dart';
 import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
@@ -123,13 +122,11 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     return AppTopBar(
       title: context.l10n.common_employees,
       compact: context.isLandscape,
-      onBack: () => Navigator.pushReplacementNamed(
+      onBack: () => navigateToDestination(
         context,
-        AppRoutes.mainCalendar,
-        arguments: MainCalendarArgs(
-          isAdmin: widget.isAdmin,
-          employeeId: widget.employeeId,
-        ),
+        AdaptiveDestination.calendar,
+        isAdmin: widget.isAdmin,
+        employeeId: widget.employeeId,
       ),
       bottom: AppSearchBar(
         controller: _searchController,

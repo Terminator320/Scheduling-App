@@ -1,0 +1,78 @@
+import 'package:flutter/material.dart';
+
+import 'package:scheduling/core/theme/design_tokens.dart';
+
+/// Evenly-spaced row of [QuickActionButton]s (e.g. Call / Email / Directions).
+/// Collapses to nothing when [buttons] is empty, so callers can build the list
+/// conditionally. Shared by the client and appointment detail views.
+class QuickActionsRow extends StatelessWidget {
+  const QuickActionsRow({required this.buttons, super.key});
+
+  final List<Widget> buttons;
+
+  @override
+  Widget build(BuildContext context) {
+    if (buttons.isEmpty) return const SizedBox.shrink();
+    return Row(
+      children: [
+        for (var i = 0; i < buttons.length; i++) ...[
+          if (i > 0) const SizedBox(width: AppSpacing.sp8),
+          Expanded(child: buttons[i]),
+        ],
+      ],
+    );
+  }
+}
+
+/// A tinted, tappable quick-action tile: an icon over a short label.
+class QuickActionButton extends StatelessWidget {
+  const QuickActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    super.key,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Semantics(
+      button: true,
+      label: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: scheme.primaryContainer,
+            borderRadius: BorderRadius.circular(AppRadius.r12),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 22, color: scheme.onPrimaryContainer),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onPrimaryContainer,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

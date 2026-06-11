@@ -5,6 +5,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_edit_body.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_view_body.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
@@ -36,7 +37,7 @@ class EventDetailsView extends ConsumerStatefulWidget {
 class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
   // Created lazily the first time the edit form is shown — a view-only open
   // (the common case) never allocates these controllers.
-  DetailsEditControllers? _editControllers;
+  AppointmentFormControllers? _editControllers;
 
   @override
   void initState() {
@@ -51,9 +52,9 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
     }
   }
 
-  DetailsEditControllers _ensureControllers() {
+  AppointmentFormControllers _ensureControllers() {
     final a = widget.appointment;
-    return _editControllers ??= DetailsEditControllers(
+    return _editControllers ??= AppointmentFormControllers(
       title: TextEditingController(text: a.title),
       date: TextEditingController(
         text: DateUtilsHelper.formatDate(a.startTime),
