@@ -251,4 +251,28 @@ void main() {
     expect(saved.contacts, isEmpty);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('deleting a client drops its phone-contact link', (tester) async {
+    SharedPreferences.setMockInitialValues({'contact_link_c1': 'native-7'});
+    when(() => repo.deleteClient('c1')).thenAnswer((_) async {});
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_wrap(repo, _personClient));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Delete'));
+    await tester.pumpAndSettle();
+    // The confirm dialog's destructive action is also labelled "Delete".
+    await tester.tap(find.text('Delete').last);
+    // Bounded pumps: the post-delete busy spinner animates forever, so
+    // pumpAndSettle would time out.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    verify(() => repo.deleteClient('c1')).called(1);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('contact_link_c1'), isNull);
+    expect(tester.takeException(), isNull);
+  });
 }

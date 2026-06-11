@@ -157,9 +157,10 @@ class DetailsEditBody extends ConsumerWidget {
         thisOnlyLabel: context.l10n.calendar_editThisVisitOnly,
         thisAndFutureLabel: context.l10n.calendar_editThisAndFutureVisits,
       );
-      if (!context.mounted) return;
+      // Reset before the mounted guard — the notifier is context-free, and
+      // bailing while still busy would wedge a surviving controller.
       notifier.setSaving(busy: false);
-      if (choice == null) return;
+      if (!context.mounted || choice == null) return;
       applyToSeries = choice == SeriesScopeChoice.thisAndFuture;
     }
 
