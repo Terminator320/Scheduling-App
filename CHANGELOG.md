@@ -18,6 +18,14 @@ code; it increments by one on every store upload regardless of the semver part.
   **Contacts (N)** header — tap to reveal the full contact cards, tap again to
   hide them. The key info (client, phone, address) stays visible up top.
 
+### Changed
+- **Switching between the main screens** (Calendar, Clients, History, Employees,
+  Settings) now uses a clean cross-fade, so the top bar and nav rail stay put
+  and only the page content changes.
+- The **back arrow** in the top bar now animates on tap — the arrow nudges back
+  and springs into place — for clearer touch feedback. (Respects the system
+  reduce-motion setting.)
+
 ## [1.9.1+18] - 2026-06-10
 
 ### Changed
