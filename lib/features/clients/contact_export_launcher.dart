@@ -8,14 +8,33 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
+/// The contact properties the client sync owns. Fetching exactly this set
+/// before `update` means only these are overwritten — everything else
+/// (photo, groups, account) is untouched by design of the 2.x API.
+const Set<ContactProperty> _syncedProperties = {
+  ContactProperty.name,
+  ContactProperty.organization,
+  ContactProperty.phone,
+  ContactProperty.email,
+  ContactProperty.address,
+};
+
+Future<bool> _requestContactsPermission() async {
+  final status = await FlutterContacts.permissions.request(
+    PermissionType.readWrite,
+  );
+  return status == PermissionStatus.granted ||
+      status == PermissionStatus.limited;
+}
+
 /// Saves [client] into the device's contacts.
 ///
 /// With the Contacts permission granted, the contact is written directly and
 /// the resulting native id is linked to the client (via [ContactLinkStore]) so
 /// later edits can sync — see [updateLinkedPhoneContact]. If the user declines
-/// the permission, it falls back to the permission-free OS "new contact" screen
-/// (`openExternalInsert`), which saves the contact but can't be linked for
-/// auto-update.
+/// the permission, it falls back to the permission-free OS "new contact"
+/// screen (`showCreator`), which also links when the user saves (the id is
+/// null if they cancel).
 Future<void> saveClientToPhoneContacts(
   BuildContext context,
   WidgetRef ref,
@@ -24,17 +43,19 @@ Future<void> saveClientToPhoneContacts(
   final notices = ref.read(noticeServiceProvider);
   final linkStore = ref.read(contactLinkStoreProvider);
   try {
-    final granted = await FlutterContacts.requestPermission();
-    if (granted) {
-      final inserted = await FlutterContacts.insertContact(
-        clientToContact(client),
-      );
-      await linkStore.link(client.id, inserted.id);
+    if (await _requestContactsPermission()) {
+      final insertedId = await FlutterContacts.create(clientToContact(client));
+      await linkStore.link(client.id, insertedId);
       if (context.mounted) {
         notices.success(context.l10n.clients_savedToContacts);
       }
     } else {
-      await FlutterContacts.openExternalInsert(clientToContact(client));
+      final createdId = await FlutterContacts.native.showCreator(
+        contact: clientToContact(client),
+      );
+      if (createdId != null) {
+        await linkStore.link(client.id, createdId);
+      }
     }
   } catch (_) {
     if (context.mounted) {
@@ -49,8 +70,8 @@ Future<void> saveClientToPhoneContacts(
 /// but never surfaced — it must not block or fail the client save.
 ///
 /// Overwrites only the synced fields (name, organization, phones, emails,
-/// addresses) on the existing contact, preserving everything else (photo,
-/// account, groups).
+/// addresses); unfetched properties (photo, groups, account) are preserved
+/// because `update` only writes the properties that were fetched.
 Future<void> updateLinkedPhoneContact(
   WidgetRef ref,
   ClientRecord client,
@@ -63,15 +84,11 @@ Future<void> updateLinkedPhoneContact(
     final contactId = await linkStore.contactIdFor(client.id);
     if (contactId == null) return;
 
-    final granted = await FlutterContacts.requestPermission();
-    if (!granted) return;
+    if (!await _requestContactsPermission()) return;
 
-    // withAccounts: updateContact needs the raw account id on Android;
-    // properties + photo are fetched by default and must be present or the
-    // update would erase them.
-    final existing = await FlutterContacts.getContact(
+    final existing = await FlutterContacts.get(
       contactId,
-      withAccounts: true,
+      properties: _syncedProperties,
     );
     if (existing == null) {
       // The user deleted the contact on their phone — drop the stale link.
@@ -80,13 +97,17 @@ Future<void> updateLinkedPhoneContact(
     }
 
     final mapped = clientToContact(client);
-    existing
-      ..name = mapped.name
-      ..organizations = mapped.organizations
-      ..phones = mapped.phones
-      ..emails = mapped.emails
-      ..addresses = mapped.addresses;
-    await FlutterContacts.updateContact(existing);
+    await FlutterContacts.update(
+      existing.copyWith(
+        // copyWith keeps the old value on null — pass an empty Name so a
+        // client without a person name clears the contact's, as before.
+        name: mapped.name ?? const Name(),
+        organizations: mapped.organizations,
+        phones: mapped.phones,
+        emails: mapped.emails,
+        addresses: mapped.addresses,
+      ),
+    );
   } catch (e, st) {
     logger.warn('CLI-CONTACT-SYNC updateLinkedPhoneContact failed', e, st);
   }
@@ -100,28 +121,12 @@ Future<void> updateLinkedPhoneContact(
 /// Empty optional fields are left off so the native form shows blank rows
 /// rather than empty entries.
 Contact clientToContact(ClientRecord client) {
-  final contact = Contact();
-
   final personName = client.name.trim();
-  if (personName.isNotEmpty) {
-    contact.name.first = personName;
-  }
-
   final business = client.businessName.trim();
-  if (business.isNotEmpty) {
-    contact.organizations = [Organization(company: business)];
-  }
-
   final phone = client.phone.trim();
-  if (phone.isNotEmpty) {
-    contact.phones = [Phone(phone)];
-  }
-
   final email = client.email.trim();
-  if (email.isNotEmpty) {
-    contact.emails = [Email(email)];
-  }
 
+  Address? address;
   if (!client.noFixedAddress && client.address.trim().isNotEmpty) {
     final street = AddressParser.canonicalToDisplay(client.address);
     final formatted = [
@@ -132,17 +137,21 @@ Contact clientToContact(ClientRecord client) {
       client.country.trim(),
     ].where((part) => part.isNotEmpty).join(', ');
 
-    contact.addresses = [
-      Address(
-        formatted,
-        street: street,
-        city: client.city.trim(),
-        state: client.province.trim(),
-        postalCode: client.postalCode.trim(),
-        country: client.country.trim(),
-      ),
-    ];
+    address = Address(
+      formatted: formatted,
+      street: street,
+      city: client.city.trim(),
+      state: client.province.trim(),
+      postalCode: client.postalCode.trim(),
+      country: client.country.trim(),
+    );
   }
 
-  return contact;
+  return Contact(
+    name: personName.isNotEmpty ? Name(first: personName) : null,
+    organizations: [if (business.isNotEmpty) Organization(name: business)],
+    phones: [if (phone.isNotEmpty) Phone(number: phone)],
+    emails: [if (email.isNotEmpty) Email(address: email)],
+    addresses: [?address],
+  );
 }

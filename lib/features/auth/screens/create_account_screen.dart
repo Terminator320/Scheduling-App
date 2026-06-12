@@ -9,6 +9,7 @@ import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/auth/widgets/auth_banner.dart';
 import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
+import 'package:scheduling/features/auth/widgets/password_requirements_checklist.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
 
@@ -76,7 +77,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   bool _validate() {
     final emailErr = AuthValidators.email(context, _emailController.text);
-    final passwordErr = AuthValidators.password(
+    final passwordErr = AuthValidators.newPassword(
       context,
       _passwordController.text,
     );
@@ -103,6 +104,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     if (_bannerError != null) {
       setState(() => _bannerError = null);
     }
+  }
+
+  void _onPasswordChanged() {
+    // Rebuild so the requirements checklist tracks every keystroke.
+    setState(() {});
+    _onFieldChanged();
   }
 
   Future<void> _createAccount() async {
@@ -232,9 +239,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
             errorText: _passwordError,
             isObscured: _isObscured,
             onSubmitted: _confirmPasswordFocus.requestFocus,
-            onChanged: _onFieldChanged,
+            onChanged: _onPasswordChanged,
             onToggleObscured: () => setState(() => _isObscured = !_isObscured),
           ),
+          const SizedBox(height: AppSpacing.sp12),
+          PasswordRequirementsChecklist(password: _passwordController.text),
           const SizedBox(height: AppSpacing.sp16),
           AuthPasswordField(
             label: context.l10n.auth_confirmPassword,
@@ -275,7 +284,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   }
 
   Widget _buildSuccess({required Key key}) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return KeyedSubtree(
       key: key,
@@ -285,8 +295,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         children: <Widget>[
           AuthIconBadge(
                 icon: Icons.check_circle_outline_rounded,
-                background: scheme.tertiaryContainer,
-                foreground: scheme.tertiary,
+                background: theme.statusColors.successContainer,
+                foreground: theme.statusColors.success,
               )
               .animate()
               .scale(

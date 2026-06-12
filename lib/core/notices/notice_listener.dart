@@ -46,12 +46,13 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
     final accessible =
         MediaQuery.maybeOf(context)?.accessibleNavigation ?? false;
     final duration = Duration(seconds: accessible ? 6 : 3);
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     final (Color bg, Color fg, IconData icon) = switch (notice) {
       NoticeSuccess() => (
-        scheme.primaryContainer,
-        scheme.onPrimaryContainer,
+        theme.statusColors.successContainer,
+        theme.statusColors.onSuccessContainer,
         Icons.check_circle_outline,
       ),
       NoticeInfo() => (

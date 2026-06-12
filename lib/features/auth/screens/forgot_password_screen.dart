@@ -173,8 +173,8 @@ class _ForgotPasswordState extends State<ForgotPasswordScreen> {
       children: [
         AuthIconBadge(
           icon: Icons.mark_email_read_rounded,
-          background: scheme.tertiaryContainer,
-          foreground: scheme.tertiary,
+          background: theme.statusColors.successContainer,
+          foreground: theme.statusColors.success,
         ),
         const SizedBox(height: AppSpacing.sp24),
         AuthHeaderText(
@@ -187,17 +187,17 @@ class _ForgotPasswordState extends State<ForgotPasswordScreen> {
         Container(
           padding: const EdgeInsets.all(AppSpacing.sp12),
           decoration: BoxDecoration(
-            color: scheme.tertiaryContainer,
+            color: theme.statusColors.successContainer,
             borderRadius: BorderRadius.circular(AppRadius.r8),
             border: Border.all(
-              color: scheme.tertiary.withValues(alpha: 0.4),
+              color: theme.statusColors.success.withValues(alpha: 0.4),
             ),
           ),
           child: Row(
             children: [
               Icon(
                 Icons.check_circle_outline,
-                color: scheme.tertiary,
+                color: theme.statusColors.success,
                 size: 16,
               ),
               const SizedBox(width: AppSpacing.sp8),
@@ -207,7 +207,7 @@ class _ForgotPasswordState extends State<ForgotPasswordScreen> {
                       .l10n
                       .auth_theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder,
                   style: textTheme.bodySmall?.copyWith(
-                    color: scheme.onTertiaryContainer,
+                    color: theme.statusColors.onSuccessContainer,
                   ),
                 ),
               ),

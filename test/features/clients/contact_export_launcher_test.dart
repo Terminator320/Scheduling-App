@@ -19,7 +19,7 @@ void main() {
 
       final contact = clientToContact(client);
 
-      expect(contact.name.first, 'Jane Doe');
+      expect(contact.name?.first, 'Jane Doe');
       expect(contact.phones.single.number, '555-1234');
       expect(contact.emails.single.address, 'jane@example.com');
       expect(contact.organizations, isEmpty);
@@ -30,7 +30,7 @@ void main() {
       expect(address.state, 'IL');
       expect(address.postalCode, '62704');
       expect(address.country, 'USA');
-      expect(address.address, '123 Main St, Springfield, IL, 62704, USA');
+      expect(address.formatted, '123 Main St, Springfield, IL, 62704, USA');
     });
 
     test('business client lands on the organization, not the person name', () {
@@ -42,8 +42,8 @@ void main() {
 
       final contact = clientToContact(client);
 
-      expect(contact.name.first, isEmpty);
-      expect(contact.organizations.single.company, 'Acme Co');
+      expect(contact.name, isNull);
+      expect(contact.organizations.single.name, 'Acme Co');
       expect(contact.phones.single.number, '555-0000');
     });
 
@@ -66,7 +66,7 @@ void main() {
 
       final contact = clientToContact(client);
 
-      expect(contact.name.first, 'Solo');
+      expect(contact.name?.first, 'Solo');
       expect(contact.phones, isEmpty);
       expect(contact.emails, isEmpty);
       expect(contact.addresses, isEmpty);

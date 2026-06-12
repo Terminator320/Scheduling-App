@@ -838,6 +838,30 @@
   "@validation_passwordMustBeAtLeast8Characters": {
     "description": "Password must be at least 8 characters"
   },
+  "validation_passwordDoesNotMeetAllRequirements": "Password doesn't meet all the requirements below",
+  "@validation_passwordDoesNotMeetAllRequirements": {
+    "description": "Field error on the create-account password when one or more checklist requirements are unmet."
+  },
+  "validation_passwordReqMinLength": "At least 8 characters",
+  "@validation_passwordReqMinLength": {
+    "description": "Password requirement checklist row: minimum length."
+  },
+  "validation_passwordReqUppercase": "An uppercase letter (A–Z)",
+  "@validation_passwordReqUppercase": {
+    "description": "Password requirement checklist row: at least one uppercase letter."
+  },
+  "validation_passwordReqLowercase": "A lowercase letter (a–z)",
+  "@validation_passwordReqLowercase": {
+    "description": "Password requirement checklist row: at least one lowercase letter."
+  },
+  "validation_passwordReqNumber": "A number (0–9)",
+  "@validation_passwordReqNumber": {
+    "description": "Password requirement checklist row: at least one digit."
+  },
+  "validation_passwordReqSymbol": "A symbol (!@#%&*…)",
+  "@validation_passwordReqSymbol": {
+    "description": "Password requirement checklist row: at least one symbol/special character."
+  },
   "error_couldNotLoadAppointments": "Could not load appointments. Check your connection and try again.",
   "@error_couldNotLoadAppointments": {
     "description": "Could not load appointments. Check your connection and try again."
