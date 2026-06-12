@@ -2,7 +2,7 @@ name: scheduling
 description: "Paul App"
 publish_to: 'none'
 
-version: 1.14.0+24
+version: 1.15.0+25
 
 environment:
   sdk: ^3.10.7
@@ -55,7 +55,7 @@ dependencies:
   http: ^1.6.0
 
   # Device contacts (native pre-filled insert — no runtime permission)
-  flutter_contacts: ^1.1.9+2
+  flutter_contacts: ^2.2.1
 
   # IDs
   uuid: ^4.5.1
