@@ -60,8 +60,9 @@ Future<void> main() async {
         dotenv.load(fileName: 'dev/.env'),
       ]);
 
-      // TODO(ios): On Mac run `flutterfire configure` to populate iOS fields in firebase_options.dart, then swap DefaultFirebaseOptions.android -> DefaultFirebaseOptions.currentPlatform.
-      await Firebase.initializeApp(options: DefaultFirebaseOptions.android);
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
 
       if (_useFirebaseEmulator) {
         await _wireFirebaseEmulator();
