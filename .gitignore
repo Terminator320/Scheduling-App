@@ -9,6 +9,7 @@
 
 *.env
 *google-services.json
+**/GoogleService-Info.plist
 
 # Node tooling (root + functions/)
 node_modules/

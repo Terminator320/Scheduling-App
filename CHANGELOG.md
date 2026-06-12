@@ -10,6 +10,23 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.15.0+25] - 2026-06-11
+### Added
+- **Password strength checklist when creating an account.** The create-account
+  password field now shows its five requirements — at least 8 characters, an
+  uppercase letter, a lowercase letter, a number, and a symbol — as a live
+  checklist where each circle turns into a green checkmark as you type. New
+  passwords must meet all five; existing sign-ins are unaffected.
+
+### Changed
+- **Success messages are now green.** The "account created" and "check your
+  inbox" screens, the success banners, and the slide-in success notices all use
+  a consistent green instead of yellow or blue accents.
+- **Saving a client to contacts without the permission now still links it.**
+  Declining the Contacts permission falls back to the system new-contact screen
+  as before, but the saved contact is now linked to the client, so later edits
+  sync to it too (contacts plugin upgraded).
+
 ## [1.14.0+24] - 2026-06-11
 ### Added
 - **Password managers can now save your sign-in.** The sign-in and

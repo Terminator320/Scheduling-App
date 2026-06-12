@@ -3,7 +3,7 @@ import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 
 /// Whether an [AuthBanner] shows a failure (error colors) or a confirmation
-/// (tertiary/success colors).
+/// (green success tokens).
 enum AuthBannerKind { error, success }
 
 /// Inline status banner for the auth forms: fade/size-animates a colored box
@@ -24,15 +24,16 @@ class AuthBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final status = theme.statusColors;
     final message = this.message;
     final isError = kind == AuthBannerKind.error;
     final background = isError
         ? scheme.errorContainer
-        : scheme.tertiaryContainer;
+        : status.successContainer;
     final foreground = isError
         ? scheme.onErrorContainer
-        : scheme.onTertiaryContainer;
-    final accent = isError ? scheme.error : scheme.tertiary;
+        : status.onSuccessContainer;
+    final accent = isError ? scheme.error : status.success;
     final icon = isError ? Icons.error_outline : Icons.check_circle_outline;
 
     return AnimatedSwitcher(
