@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import 'package:scheduling/core/validators/password_requirements.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 class AuthValidators {
@@ -20,7 +21,7 @@ class AuthValidators {
     return null;
   }
 
-  static const int minPasswordLength = 8;
+  static const int minPasswordLength = PasswordRequirement.minLengthChars;
 
   static String? password(BuildContext context, String value) {
     if (value.trim().isEmpty) {
@@ -28,6 +29,18 @@ class AuthValidators {
     }
     if (value.length < minPasswordLength) {
       return context.l10n.validation_passwordMustBeAtLeast8Characters;
+    }
+    return null;
+  }
+
+  /// Strict variant for the create-account flow — sign-in keeps [password]
+  /// so existing credentials predating these rules aren't blocked.
+  static String? newPassword(BuildContext context, String value) {
+    if (value.trim().isEmpty) {
+      return context.l10n.validation_pleaseEnterYourPassword;
+    }
+    if (!PasswordRequirement.allMetBy(value)) {
+      return context.l10n.validation_passwordDoesNotMeetAllRequirements;
     }
     return null;
   }
