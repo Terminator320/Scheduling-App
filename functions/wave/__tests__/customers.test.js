@@ -239,6 +239,21 @@ describe("upsertCustomer create", () => {
     const [, vars] = graphql.mock.calls[0];
     expect(vars.input.businessId).toBe("biz-from-doc");
   });
+
+  test("write-back no-ops when doc deleted before txn (exists:false)",
+      async () => {
+        const data = {...CLIENT};
+        // The write-back re-read returns a missing snapshot.
+        const ref = clientRef(data, null);
+        const graphql = graphqlSeq(createOk("wave-new"));
+        // Should complete without throwing even though the doc is gone.
+        const result = await upsertCustomer("c1", {
+          db: upsertDb(ref), graphql, businessId: "biz-1", now,
+        });
+        expect(result).toEqual({status: "created", waveCustomerId: "wave-new"});
+        // Guard skipped the update — no writes recorded.
+        expect(ref.updates).toHaveLength(0);
+      });
 });
 
 // ---------------------------------------------------------------------------
