@@ -76,7 +76,7 @@ void main() {
   ) async {
     final repo = await pumpSheet(tester);
 
-    // Business name (first field) satisfies the name requirement; the phone
+    // Customer name (first field) satisfies the name requirement; the phone
     // field satisfies the contact-method requirement. With no-fixed-address on,
     // no address is required.
     await tester.enterText(find.byType(TextField).first, 'City of Montreal');
