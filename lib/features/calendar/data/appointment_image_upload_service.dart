@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:scheduling/core/images/image_compress_service.dart';
 import 'package:scheduling/core/images/image_storage_service.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
@@ -14,16 +13,13 @@ class AppointmentImageUploadService {
   AppointmentImageUploadService({
     required AppointmentsRepository appointments,
     required PhotoUploadNotifier notifier,
-    ImageCompressService? compress,
     ImageStorageService? storage,
   }) : _appointments = appointments,
        _notifier = notifier,
-       _compress = compress ?? ImageCompressService(),
        _storage = storage ?? ImageStorageService();
 
   final AppointmentsRepository _appointments;
   final PhotoUploadNotifier _notifier;
-  final ImageCompressService _compress;
   final ImageStorageService _storage;
 
   void uploadInBackground({
@@ -47,7 +43,7 @@ class AppointmentImageUploadService {
       var failedCount = 0;
       final tooLargeNames = <String>[];
       if (newImages.isNotEmpty) {
-        final result = await _compressUploadAndPatch(
+        final result = await _uploadAndPatch(
           appointmentId,
           newImages,
           existingImages,
@@ -71,24 +67,22 @@ class AppointmentImageUploadService {
     }
   }
 
-  Future<_CompressUploadOutcome> _compressUploadAndPatch(
+  Future<_UploadOutcome> _uploadAndPatch(
     String appointmentId,
     List<File> newImages,
     List<AppointmentImage> existingImages,
   ) async {
-    final compressed = await _compress.compressImages(newImages);
-
     try {
-      final sizes = await Future.wait(compressed.map((f) => f.length()));
+      final sizes = await Future.wait(newImages.map((f) => f.length()));
 
       final uploadable = <File>[];
       final tooLargeNames = <String>[];
 
-      for (var i = 0; i < compressed.length; i++) {
+      for (var i = 0; i < newImages.length; i++) {
         if (sizes[i] > ImageStorageService.maxUploadBytes) {
           tooLargeNames.add(_fileName(newImages[i]));
         } else {
-          uploadable.add(compressed[i]);
+          uploadable.add(newImages[i]);
         }
       }
 
@@ -102,12 +96,12 @@ class AppointmentImageUploadService {
         failedCount = result.failedCount;
       }
 
-      return _CompressUploadOutcome(
+      return _UploadOutcome(
         tooLargeNames: tooLargeNames,
         failedCount: failedCount,
       );
     } finally {
-      for (final f in compressed) {
+      for (final f in newImages) {
         try {
           await f.delete();
         } catch (e) {
@@ -125,8 +119,8 @@ class AppointmentImageUploadService {
   }
 }
 
-class _CompressUploadOutcome {
-  const _CompressUploadOutcome({
+class _UploadOutcome {
+  const _UploadOutcome({
     required this.tooLargeNames,
     required this.failedCount,
   });

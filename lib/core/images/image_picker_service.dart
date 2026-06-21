@@ -3,7 +3,10 @@ import 'package:image_picker/image_picker.dart';
 
 class ImagePickerService {
   static const double maxImageDimension = 1600;
-  static const int imageQuality = 80;
+  // image_picker resizes and JPEG-compresses natively at decode time, so no
+  // separate compression pass is needed. 70 matches the previous post-compress
+  // quality and keeps files well under the upload size limit.
+  static const int imageQuality = 70;
 
   final ImagePicker _picker = ImagePicker();
 
