@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'package:scheduling/core/notices/app_notice.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
@@ -211,6 +212,36 @@ void main() {
       // Import success notice contains the counts.
       expect(emitted.last, contains('8'));
       expect(emitted.last, contains('2'));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Import failure surfaces an error notice', (tester) async {
+      final service = _MockWaveService();
+      final notices = NoticeService();
+      final emitted = <AppNotice>[];
+      notices.stream.listen(emitted.add);
+
+      when(service.bootstrap).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Test Biz',
+        ),
+      );
+      when(service.importCustomers).thenThrow(const WaveAuthInvalid());
+
+      await tester.pumpWidget(_wrapSection(service, noticeService: notices));
+      await tester.pumpAndSettle();
+
+      // Connect first so the Import button is enabled.
+      await tester.tap(find.text('Connect to Wave'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Import customers from Wave'));
+      await tester.pumpAndSettle();
+
+      // The last notice must be an error (import failed), never a success.
+      expect(emitted, isNotEmpty);
+      expect(emitted.last, isA<NoticeError>());
       expect(tester.takeException(), isNull);
     });
   });

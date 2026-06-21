@@ -345,7 +345,7 @@
   "wave_connectToWave": "Connecter à Wave",
   "wave_importCustomers": "Importer les clients depuis Wave",
   "wave_connectedSuccess": "Connecté à {businessName}",
-  "wave_importSuccess": "Importé {imported}, mis à jour {updated}",
+  "wave_importSuccess": "Importation Wave terminée — {imported} ajouté(s), {updated} mis à jour, {skipped} ignoré(s).",
   "wave_syncedWithWave": "Synchronisé avec Wave",
   "wave_syncPending": "Synchronisation en attente",
   "wave_syncError": "Erreur de synchronisation"

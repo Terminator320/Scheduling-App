@@ -1405,7 +1405,7 @@
       }
     }
   },
-  "wave_importSuccess": "Imported {imported}, updated {updated}",
+  "wave_importSuccess": "Wave import complete — {imported} added, {updated} updated, {skipped} skipped.",
   "@wave_importSuccess": {
     "description": "Success notice summarising a Wave customer import run",
     "placeholders": {
@@ -1416,6 +1416,10 @@
       "updated": {
         "type": "int",
         "description": "Number of existing client records updated"
+      },
+      "skipped": {
+        "type": "int",
+        "description": "Number of archived Wave customers skipped"
       }
     }
   },
