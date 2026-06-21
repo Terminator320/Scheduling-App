@@ -338,5 +338,7 @@
   "error_introSaveClient": "Impossible d’enregistrer les modifications du client",
   "error_introDeleteClient": "Impossible de supprimer le client",
   "error_introLoadHistory": "Impossible de charger l’historique des rendez-vous",
-  "error_introLoadClients": "Impossible de charger les clients"
+  "error_introLoadClients": "Impossible de charger les clients",
+  "wave_errorAuthInvalid": "Le jeton de connexion Wave est manquant ou a été révoqué. Veuillez vous reconnecter.",
+  "wave_errorValidation": "Une erreur s'est produite avec la demande Wave. Veuillez réessayer."
 }
