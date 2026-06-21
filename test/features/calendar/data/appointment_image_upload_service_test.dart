@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:scheduling/core/images/image_compress_service.dart';
 import 'package:scheduling/core/images/image_storage_service.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
@@ -13,21 +12,17 @@ import 'package:scheduling/features/calendar/domain/models/appointment_image.dar
 class _MockAppointmentsRepository extends Mock
     implements AppointmentsRepository {}
 
-class _MockImageCompressService extends Mock implements ImageCompressService {}
-
 class _MockImageStorageService extends Mock implements ImageStorageService {}
 
 class _MockFile extends Mock implements File {}
 
 void main() {
   late _MockAppointmentsRepository appointments;
-  late _MockImageCompressService compress;
   late _MockImageStorageService storage;
   late PhotoUploadNotifier notifier;
 
   setUp(() {
     appointments = _MockAppointmentsRepository();
-    compress = _MockImageCompressService();
     storage = _MockImageStorageService();
     notifier = PhotoUploadNotifier();
 
@@ -41,7 +36,6 @@ void main() {
   AppointmentImageUploadService makeService() => AppointmentImageUploadService(
     appointments: appointments,
     notifier: notifier,
-    compress: compress,
     storage: storage,
   );
 
@@ -57,11 +51,7 @@ void main() {
   group('uploadInBackground', () {
     test('reports no failure when all images upload successfully', () async {
       final src = file('photo.jpg');
-      final compressed = file('photo_c.jpg');
 
-      when(
-        () => compress.compressImages(any()),
-      ).thenAnswer((_) async => [compressed]);
       when(() => storage.uploadImages(any(), any())).thenAnswer(
         (_) async => ImageUploadBatchResult(
           uploaded: [
@@ -84,11 +74,7 @@ void main() {
 
     test('reports failedCount when storage upload partially fails', () async {
       final src = file('photo.jpg');
-      final compressed = file('photo_c.jpg');
 
-      when(
-        () => compress.compressImages(any()),
-      ).thenAnswer((_) async => [compressed]);
       when(() => storage.uploadImages(any(), any())).thenAnswer(
         (_) async => const ImageUploadBatchResult(uploaded: [], failedCount: 1),
       );
@@ -102,12 +88,7 @@ void main() {
 
     test('reports tooLargeFileNames for images over size limit', () async {
       const overLimit = ImageStorageService.maxUploadBytes + 1;
-      final src = file('big.jpg');
-      final compressed = file('big_c.jpg', size: overLimit);
-
-      when(
-        () => compress.compressImages(any()),
-      ).thenAnswer((_) async => [compressed]);
+      final src = file('big.jpg', size: overLimit);
 
       makeService().uploadInBackground(appointmentId: 'a1', newImages: [src]);
 
@@ -122,8 +103,8 @@ void main() {
       final src = file('photo.jpg');
 
       when(
-        () => compress.compressImages(any()),
-      ).thenThrow(Exception('compress failed'));
+        () => storage.uploadImages(any(), any()),
+      ).thenThrow(Exception('upload failed'));
 
       makeService().uploadInBackground(appointmentId: 'a1', newImages: [src]);
 
