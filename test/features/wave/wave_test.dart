@@ -313,7 +313,7 @@ void main() {
             _fnEx('resource-exhausted', 'wave/rate-limited'),
           );
 
-          expect(
+          await expectLater(
             () => service.bootstrap(),
             throwsA(isA<WaveRateLimited>()),
           );
@@ -327,7 +327,7 @@ void main() {
             _fnEx('failed-precondition', 'wave/token-invalid'),
           );
 
-          expect(
+          await expectLater(
             () => service.bootstrap(),
             throwsA(isA<WaveAuthInvalid>()),
           );
@@ -364,7 +364,7 @@ void main() {
             _fnEx('unavailable', 'wave/network'),
           );
 
-          expect(
+          await expectLater(
             () => service.importCustomers(),
             throwsA(isA<WaveNetwork>()),
           );
@@ -376,7 +376,7 @@ void main() {
           _fnEx('internal', 'wave/unknown'),
         );
 
-        expect(
+        await expectLater(
           () => service.importCustomers(),
           throwsA(isA<WaveUnknown>()),
         );

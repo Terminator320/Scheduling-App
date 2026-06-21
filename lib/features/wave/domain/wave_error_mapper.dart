@@ -25,10 +25,6 @@ class WaveErrorMapper {
       return const WaveRateLimited();
     }
 
-    if (msg == 'too-many-attempts' && e.code == 'resource-exhausted') {
-      return const WaveRateLimited();
-    }
-
     if (msg == 'wave/network' || e.code == 'unavailable') {
       return const WaveNetwork();
     }
