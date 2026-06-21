@@ -56,7 +56,7 @@ function presence(v) {
  */
 function toProvinceCode(province) {
   if (!province || typeof province !== "string") return undefined;
-  const p = province.trim();
+  const p = province.trim().toUpperCase();
   if (!p) return undefined;
   // Already in subdivision-code form (e.g. CA-QC, US-NY).
   if (/^[A-Z]{2}-[A-Z]{2,3}$/.test(p)) return p;
@@ -78,7 +78,7 @@ function toCountryCode(country) {
   const c = country.trim();
   if (!c) return undefined;
   // Already a 2-letter ISO code.
-  if (/^[A-Z]{2}$/.test(c)) return c;
+  if (/^[A-Z]{2}$/.test(c.toUpperCase())) return c.toUpperCase();
   // Look up by name (case-insensitive).
   return COUNTRY_NAME_TO_CODE[c.toLowerCase()] || undefined;
 }
@@ -157,7 +157,8 @@ function toWaveCustomerInput(clientFields) {
   const postalCode = presence(f.postalCode);
   if (postalCode) addr.postalCode = postalCode;
 
-  const input = {name: f.name || ""};
+  const rawName = typeof f.name === "string" ? f.name.trim() : "";
+  const input = {name: rawName};
   const firstName = presence(f.firstName);
   if (firstName) input.firstName = firstName;
   const lastName = presence(f.lastName);
