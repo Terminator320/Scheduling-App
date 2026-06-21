@@ -371,6 +371,11 @@ async function createCustomerWithPhoneFallback(graphql, businessId,
     // Best-effort: the customer exists; a patch failure here would surface as
     // a validation error on the phone fields again. Patch and ignore its
     // didSucceed — the create already succeeded and the doc is linked.
+    // NOTE: if this patch fails (didSucceed:false, ignored), the write-back
+    // still records syncState:'synced' with a lastSyncedHash computed over
+    // the full fields INCLUDING phone. A later upsertCustomer will no-op and
+    // never retry the phone — the unretried phone is an accepted narrow edge
+    // (Wave accepted the customer without phone but rejected it on patch).
     await runCustomerMutation(
         graphql, PATCH_CUSTOMER, {id: newId, ...phoneFields},
     );
@@ -395,6 +400,9 @@ async function createCustomerWithPhoneFallback(graphql, businessId,
 async function writeSyncSuccess(db, ref, now, result) {
   await db.runTransaction(async (tx) => {
     const fresh = await tx.get(ref);
+    // Guard: doc deleted between the initial read and this write-back.
+    // The Wave customer already exists and is left unlinked — clean no-op.
+    if (!fresh || !fresh.exists) return;
     const cur = (fresh && fresh.exists && fresh.data()) || {};
     const update = {
       "wave.syncState": "synced",
@@ -541,6 +549,10 @@ async function importCustomers(deps = {}) {
 /**
  * Builds a `Map<waveCustomerId, docRef>` over the current `clients`
  * collection in a single pass. Docs without a `waveCustomerId` are skipped.
+ *
+ * NOTE: loads the entire `clients` collection into memory — safe at the
+ * planned ~650-customer scale (one-shot admin import); revisit with a cursor
+ * if the client count ever grows large.
  * @param {!Object} db Firestore instance.
  * @return {!Promise<!Map<string, !Object>>}
  */
