@@ -955,7 +955,11 @@ function selectBusiness(businesses, wantId, wantName) {
     return match;
   }
   if (wantName) {
-    const match = list.find((b) => b && b.name === wantName);
+    // NOTE: name match is case-insensitive and trims surrounding whitespace so
+    // "acme co" / "  Acme Co  " both reach the same business. Id match above
+    // stays exact (ids are opaque tokens).
+    const want = wantName.trim().toLowerCase();
+    const match = list.find((b) => b && b.name.trim().toLowerCase() === want);
     if (!match) throw new HttpsError("not-found", "wave/business-not-found");
     return match;
   }
@@ -1035,9 +1039,15 @@ exports.waveUpsertCustomer = onDocumentWritten(
       const before = beforeSnap?.exists ? beforeSnap.data() : null;
       if (!shouldEnqueueClientWrite(before, after)) return;
 
+      // Compute once here; shouldEnqueueClientWrite also hashes internally
+      // but does not expose its result, so this call is the single explicit
+      // hash at the enqueue site.
+      const hash = mappedFieldsHash(after);
       const clientId = event.params.clientId;
       await enqueueCustomerUpsert(clientId, {
-        payloadHash: mappedFieldsHash(after),
+        // payloadHash is diagnostic only: the worker re-reads the live doc
+        // and recomputes before writing — the doc is the source of truth.
+        payloadHash: hash,
       });
       logger.debug("waveUpsertCustomer: enqueued", {clientId});
     },
@@ -1058,6 +1068,9 @@ exports.waveSyncWorker = onSchedule(
         logger.debug("waveSyncWorker: not bootstrapped — nothing to do");
         return;
       }
+      // `graphql`/`upsertCustomer` intentionally omitted: drainQueue defaults
+      // to the real Wave client (WAVE_FULL_ACCESS_TOKEN is in scope via this
+      // function's `secrets` binding).
       const summary = await drainQueue({businessId});
       logger.info("waveSyncWorker: drain done", {
         processed: summary.processed,
