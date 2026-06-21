@@ -171,15 +171,50 @@ service cloud.firestore {
     function isValidClientData(data) {
       return (!('name' in data) || (data.name is string && data.name.size() <= 200))
         && (!('businessName' in data) || (data.businessName is string && data.businessName.size() <= 200))
+        && (!('firstName' in data) || (data.firstName is string && data.firstName.size() <= 200))
+        && (!('lastName' in data) || (data.lastName is string && data.lastName.size() <= 200))
         && (!('phone' in data) || (data.phone is string && data.phone.size() <= 32))
+        && (!('mobile' in data) || (data.mobile is string && data.mobile.size() <= 32))
         && (!('email' in data) || (data.email is string && data.email.size() <= 320))
         && (!('noFixedAddress' in data) || data.noFixedAddress is bool);
     }
 
     match /clients/{clientId} {
       allow read: if isAdmin();
-      allow create, update: if isAdmin() && isValidClientData(request.resource.data);
+      // `waveCustomerId` and `wave` are written exclusively by Cloud Functions
+      // via Admin SDK (which bypasses these rules). The client app must never
+      // set or modify these fields; reject any create that includes them.
+      allow create: if isAdmin()
+        && isValidClientData(request.resource.data)
+        && !('waveCustomerId' in request.resource.data.keys())
+        && !('wave' in request.resource.data.keys());
+      // For updates, reject only if the client is changing/adding the Wave
+      // fields — an update that leaves them untouched has no affected keys.
+      allow update: if isAdmin()
+        && isValidClientData(request.resource.data)
+        && !request.resource.data.diff(resource.data)
+             .affectedKeys()
+             .hasAny(['waveCustomerId', 'wave']);
       allow delete: if isAdmin();
+    }
+
+    // ── wave (Wave Accounting connection metadata) ────────────────────────────
+    // Written exclusively by Cloud Functions via Admin SDK (connection status,
+    // OAuth tokens, last-sync timestamps). No client may read sync credentials
+    // or connection state — treat this collection like rateLimits. The default
+    // deny-everything would already block access; the explicit rule documents
+    // intent for a security-sensitive collection.
+    match /wave/{docId} {
+      allow read, write: if false;
+    }
+
+    // ── waveSyncQueue (outbox for Wave API sync jobs) ─────────────────────────
+    // Jobs are enqueued and processed exclusively by Cloud Functions via Admin
+    // SDK. No client may read pending jobs, inspect retry state, or reset the
+    // queue — doing so could expose Wave API credentials embedded in job
+    // payloads or allow a client to cancel/replay sync operations.
+    match /waveSyncQueue/{jobId} {
+      allow read, write: if false;
     }
   }
 }
