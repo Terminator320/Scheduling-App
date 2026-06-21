@@ -340,5 +340,13 @@
   "error_introLoadHistory": "Impossible de charger l’historique des rendez-vous",
   "error_introLoadClients": "Impossible de charger les clients",
   "wave_errorAuthInvalid": "Le jeton de connexion Wave est manquant ou a été révoqué. Veuillez vous reconnecter.",
-  "wave_errorValidation": "Une erreur s’est produite avec la demande Wave. Veuillez réessayer."
+  "wave_errorValidation": "Une erreur s’est produite avec la demande Wave. Veuillez réessayer.",
+  "settings_integrations": "Intégrations",
+  "wave_connectToWave": "Connecter à Wave",
+  "wave_importCustomers": "Importer les clients depuis Wave",
+  "wave_connectedSuccess": "Connecté à {businessName}",
+  "wave_importSuccess": "Importé {imported}, mis à jour {updated}",
+  "wave_syncedWithWave": "Synchronisé avec Wave",
+  "wave_syncPending": "Synchronisation en attente",
+  "wave_syncError": "Erreur de synchronisation"
 }

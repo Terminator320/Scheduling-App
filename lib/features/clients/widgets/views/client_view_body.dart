@@ -8,6 +8,7 @@ import 'package:scheduling/features/clients/email_compose_launcher.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_contacts_cards.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
+import 'package:scheduling/features/wave/widgets/wave_sync_badge.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/info_card.dart';
 import 'package:scheduling/shared/widgets/primitives/quick_action_button.dart';
@@ -64,6 +65,8 @@ class ClientDetailViewBody extends ConsumerWidget {
     // `contacts` holds only the extra contacts (the customer's own details
     // live in the header and contact-info card).
     final extraContacts = client.contacts;
+
+    final hasSyncBadge = client.waveSyncState.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -141,6 +144,16 @@ class ClientDetailViewBody extends ConsumerWidget {
           ),
         ],
         ClientContactsCards(contacts: extraContacts),
+        if (hasSyncBadge) ...[
+          const SizedBox(height: AppSpacing.sp16),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: WaveSyncBadge(
+              syncState: client.waveSyncState,
+              syncError: client.waveSyncError,
+            ),
+          ),
+        ],
       ],
     );
   }
