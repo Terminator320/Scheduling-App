@@ -1,8 +1,13 @@
 "use strict";
 
-const {enqueueCustomerUpsert, drainQueue} = require("../worker");
+const {
+  enqueueCustomerUpsert,
+  drainQueue,
+  shouldEnqueueClientWrite,
+} = require("../worker");
 const {WaveValidationError} = require("../customers");
 const {WaveApiError} = require("../client");
+const {mappedFieldsHash} = require("../mappers");
 
 // ---------------------------------------------------------------------------
 // Fakes / helpers
@@ -1152,5 +1157,88 @@ describe("drainQueue non-retryable errors (additional)", () => {
     expect(logMeta.errorKind).toBe("unknown");
     // Must not echo the raw error message.
     expect(JSON.stringify(logMeta)).not.toContain("something unrecognised");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// shouldEnqueueClientWrite
+// ---------------------------------------------------------------------------
+
+describe("shouldEnqueueClientWrite", () => {
+  // A representative mapped-field set; helpers tweak copies of this.
+  const base = {
+    name: "Acme Co",
+    email: "billing@acme.test",
+    phone: "514-555-0100",
+    address: "100 Main St",
+    city: "Montreal",
+    province: "QC",
+    country: "Canada",
+    postalCode: "H2X 1Y4",
+  };
+
+  test("enqueues a real mapped-field change (name edited)", () => {
+    const before = {...base};
+    const after = {...base, name: "Acme Corp"};
+    expect(shouldEnqueueClientWrite(before, after)).toBe(true);
+  });
+
+  test("skips a wave-only change (worker write-back echo)", () => {
+    const before = {...base, wave: {syncState: "queued"}};
+    // Only wave.* / waveCustomerId changed — mapped fields are identical.
+    const after = {
+      ...base,
+      waveCustomerId: "wv-123",
+      wave: {
+        syncState: "synced",
+        lastSyncedHash: "stale-different-hash",
+        lastSyncedAt: "ts",
+      },
+    };
+    expect(shouldEnqueueClientWrite(before, after)).toBe(false);
+  });
+
+  test("skips an unmapped-field-only change (e.g. business contacts)", () => {
+    const before = {...base, contacts: [{name: "A"}]};
+    const after = {...base, contacts: [{name: "A"}, {name: "B"}]};
+    expect(shouldEnqueueClientWrite(before, after)).toBe(false);
+  });
+
+  test("skips when after already matches lastSyncedHash (import write)", () => {
+    // Import writes the full doc with lastSyncedHash = hash(mapped fields).
+    const after = {
+      ...base,
+      waveCustomerId: "wv-1",
+      wave: {syncState: "synced", lastSyncedHash: mappedFieldsHash(base)},
+    };
+    // before differs in mapped fields, so rule 1 does NOT short-circuit;
+    // rule 2 (lastSyncedHash match) is what suppresses the enqueue.
+    const before = {...base, name: "Old Name"};
+    expect(shouldEnqueueClientWrite(before, after)).toBe(false);
+  });
+
+  test("enqueues on create (no before) when not pre-synced", () => {
+    const after = {...base};
+    expect(shouldEnqueueClientWrite(null, after)).toBe(true);
+    expect(shouldEnqueueClientWrite(undefined, after)).toBe(true);
+  });
+
+  test("skips on create when import already stamped lastSyncedHash", () => {
+    const after = {
+      ...base,
+      wave: {syncState: "synced", lastSyncedHash: mappedFieldsHash(base)},
+    };
+    expect(shouldEnqueueClientWrite(null, after)).toBe(false);
+  });
+
+  test("enqueues when a mapped field changes even if a stale " +
+    "lastSyncedHash is present", () => {
+    const after = {
+      ...base,
+      email: "new@acme.test",
+      wave: {syncState: "synced", lastSyncedHash: mappedFieldsHash(base)},
+    };
+    const before = {...base};
+    expect(shouldEnqueueClientWrite(before, after)).toBe(true);
   });
 });
