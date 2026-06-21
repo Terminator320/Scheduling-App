@@ -197,6 +197,29 @@ describe("toWaveCustomerInput", () => {
     expect(result).not.toHaveProperty("businessId");
     expect(result).not.toHaveProperty("id");
   });
+
+  // Fix 1: province case-insensitivity
+  test("province lowercase qc → provinceCode CA-QC", () => {
+    const result = toWaveCustomerInput({name: "T", province: "qc"});
+    expect(result.address.provinceCode).toBe("CA-QC");
+  });
+
+  test("province mixed ca-qc → provinceCode CA-QC", () => {
+    const result = toWaveCustomerInput({name: "T", province: "ca-qc"});
+    expect(result.address.provinceCode).toBe("CA-QC");
+  });
+
+  // Fix 1: country ISO-2 passthrough case-insensitivity
+  test("country lowercase ca → countryCode CA", () => {
+    const result = toWaveCustomerInput({name: "T", country: "ca"});
+    expect(result.address.countryCode).toBe("CA");
+  });
+
+  // Fix 2: name trimming
+  test("name with trailing space → trimmed in output", () => {
+    const result = toWaveCustomerInput({name: "Acme "});
+    expect(result.name).toBe("Acme");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -261,6 +284,16 @@ describe("mappedFieldsHash", () => {
     const h1 = mappedFieldsHash({name: "T", address: "1 Main St"});
     const h2 = mappedFieldsHash({name: "T", address: "2 Main St"});
     expect(h1).not.toBe(h2);
+  });
+
+  // Fix 2: name trim produces identical hash regardless of trailing space
+  test("name with trailing space → same hash as trimmed name", () => {
+    const base = {
+      city: "Montreal", province: "QC", country: "Canada",
+    };
+    const h1 = mappedFieldsHash({...base, name: "Acme"});
+    const h2 = mappedFieldsHash({...base, name: "Acme "});
+    expect(h1).toBe(h2);
   });
 });
 
