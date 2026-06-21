@@ -1382,5 +1382,53 @@
   "wave_errorValidation": "Something went wrong with the Wave request. Please try again.",
   "@wave_errorValidation": {
     "description": "WaveValidation failure: covers validation errors and precondition failures (not bootstrapped, ambiguous/not-found business)"
+  },
+  "settings_integrations": "Integrations",
+  "@settings_integrations": {
+    "description": "Settings section header for third-party integrations (Wave, etc.)"
+  },
+  "wave_connectToWave": "Connect to Wave",
+  "@wave_connectToWave": {
+    "description": "Button label: initiates Wave OAuth bootstrap"
+  },
+  "wave_importCustomers": "Import customers from Wave",
+  "@wave_importCustomers": {
+    "description": "Button label: triggers Wave customer import"
+  },
+  "wave_connectedSuccess": "Connected to {businessName}",
+  "@wave_connectedSuccess": {
+    "description": "Success notice shown after a successful Wave bootstrap",
+    "placeholders": {
+      "businessName": {
+        "type": "String",
+        "description": "The Wave business name returned by bootstrap"
+      }
+    }
+  },
+  "wave_importSuccess": "Imported {imported}, updated {updated}",
+  "@wave_importSuccess": {
+    "description": "Success notice summarising a Wave customer import run",
+    "placeholders": {
+      "imported": {
+        "type": "int",
+        "description": "Number of newly created client records"
+      },
+      "updated": {
+        "type": "int",
+        "description": "Number of existing client records updated"
+      }
+    }
+  },
+  "wave_syncedWithWave": "Synced with Wave",
+  "@wave_syncedWithWave": {
+    "description": "Badge label shown on a client that is synced with Wave"
+  },
+  "wave_syncPending": "Sync pending",
+  "@wave_syncPending": {
+    "description": "Badge label shown on a client whose Wave sync is pending"
+  },
+  "wave_syncError": "Sync error",
+  "@wave_syncError": {
+    "description": "Badge label shown on a client whose Wave sync has failed"
   }
 }

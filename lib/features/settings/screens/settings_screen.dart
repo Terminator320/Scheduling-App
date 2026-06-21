@@ -20,6 +20,7 @@ import 'package:scheduling/features/settings/screens/text_size_screen.dart';
 import 'package:scheduling/features/settings/widgets/cards/settings_tiles.dart';
 import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dialog.dart';
 import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
+import 'package:scheduling/features/wave/widgets/wave_settings_section.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
@@ -223,6 +224,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
         ),
+        if (_isAdmin) ...[
+          const SizedBox(height: AppSpacing.sp24),
+          SettingsSectionHeader(
+            label: context.l10n.settings_integrations.toUpperCase(),
+          ),
+          const SettingsSectionCard(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpacing.sp12),
+              child: WaveSettingsSection(),
+            ),
+          ),
+        ],
         const SizedBox(height: AppSpacing.sp24),
         _buildVersionFooter(scheme),
         const SizedBox(height: AppSpacing.sp32),
