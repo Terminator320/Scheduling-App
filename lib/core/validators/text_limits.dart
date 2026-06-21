@@ -7,7 +7,10 @@ class TextLimits {
   static const int appointmentMaterials = 2000;
 
   static const int personName = 200;
+  static const int firstName = 200;
+  static const int lastName = 200;
   static const int phone = 32;
+  static const int mobile = 32;
   static const int email = 320;
 
   static const int aptUnit = 32;

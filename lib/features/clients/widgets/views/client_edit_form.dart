@@ -44,9 +44,11 @@ class ClientEditForm extends ConsumerStatefulWidget {
 
 class _ClientEditFormState extends ConsumerState<ClientEditForm>
     with ClientFormState<ClientEditForm> {
-  late final TextEditingController _businessNameController;
   late final TextEditingController _nameController;
+  late final TextEditingController _firstNameController;
+  late final TextEditingController _lastNameController;
   late final TextEditingController _phoneController;
+  late final TextEditingController _mobileController;
   late final TextEditingController _emailController;
   late final TextEditingController _addressController;
   late final TextEditingController _aptController;
@@ -54,9 +56,6 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
   late final TextEditingController _provinceController;
   late final TextEditingController _countryController;
   late final TextEditingController _postalCodeController;
-
-  // A business name marks the client as a business and unlocks extra contacts.
-  bool get _isBusiness => _businessNameController.text.trim().isNotEmpty;
 
   // Prefers the explicit apt field over an apt embedded in the street text.
   String _buildFullAddress() {
@@ -76,9 +75,11 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
 
   void _initControllers() {
     final c = widget.client;
-    _businessNameController = TextEditingController(text: c.businessName);
     _nameController = TextEditingController(text: c.name);
+    _firstNameController = TextEditingController(text: c.firstName);
+    _lastNameController = TextEditingController(text: c.lastName);
     _phoneController = TextEditingController(text: c.phone);
+    _mobileController = TextEditingController(text: c.mobile);
     _emailController = TextEditingController(text: c.email);
     final parsed = AddressParser.splitApt(c.address);
     _addressController = TextEditingController(
@@ -91,9 +92,8 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
     _provinceController = TextEditingController(text: c.province);
     _countryController = TextEditingController(text: c.country);
     _postalCodeController = TextEditingController(text: c.postalCode);
-    // contacts[0] mirrors the main name/phone/email fields; the rest are
-    // the additional business contacts.
-    for (final contact in c.contacts.skip(1)) {
+    // `contacts` is now purely the extra contacts (no primary mirror).
+    for (final contact in c.contacts) {
       additionalContacts.add(
         ContactFields()
           ..nameController.text = contact.name
@@ -106,9 +106,11 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
 
   @override
   void dispose() {
-    _businessNameController.dispose();
     _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _phoneController.dispose();
+    _mobileController.dispose();
     _emailController.dispose();
     _addressController.dispose();
     _aptController.dispose();
@@ -120,34 +122,27 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
     super.dispose();
   }
 
-  List<ClientContact> _buildContacts() {
-    // A non-business client has no contacts list — its sole contact lives in
-    // the top-level name/phone/email fields (mirrors the add-client form).
-    if (!_isBusiness) return const [];
-
-    return [
-      ClientContact(
-        name: _nameController.text.trim(),
-        phone: _phoneController.text.trim(),
-        email: _emailController.text.trim(),
-      ),
-      for (final contact in additionalContacts)
-        if (!contact.isEmpty) contact.toContact(),
-    ];
-  }
+  List<ClientContact> _buildContacts() => [
+    for (final contact in additionalContacts)
+      if (!contact.isEmpty) contact.toContact(),
+  ];
 
   Future<void> _save() async {
-    final businessName = _businessNameController.text.trim();
     final name = _nameController.text.trim();
+    final firstName = _firstNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
     final phone = _phoneController.text.trim();
+    final mobile = _mobileController.text.trim();
     final email = _emailController.text.trim();
     final address = _addressController.text.trim();
 
     final nextErrors = ClientFormValidator.validate(
       l10n: context.l10n,
-      businessName: businessName,
       name: name,
+      firstName: firstName,
+      lastName: lastName,
       phone: phone,
+      mobile: mobile,
       email: email,
       address: address,
       additionalContacts: [
@@ -165,11 +160,15 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
     if (errors.values.any((e) => e != null)) return;
 
     // --- Build & persist ---
-    final updated = ClientRecord(
-      id: widget.client.id,
-      businessName: businessName,
+    // Preserves the Wave projection fields (waveCustomerId / waveSyncState /
+    // waveSyncError) by copying the loaded record — they're never edited here
+    // and toMap drops them anyway.
+    final updated = widget.client.copyWith(
       name: name,
+      firstName: firstName,
+      lastName: lastName,
       phone: phone,
+      mobile: mobile,
       email: email,
       address: noFixedAddress ? '' : _buildFullAddress(),
       apt: noFixedAddress ? '' : _aptController.text.trim(),
@@ -216,38 +215,40 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
         const Divider(height: 1),
         const SizedBox(height: 14),
 
-        // --- Business & contact name ---
+        // --- Names ---
         SheetFocusScroll(
           child: LabeledTextField(
-            label: context.l10n.clients_businessName,
-            controller: _businessNameController,
-            optional: true,
-            autofillHints: const [AutofillHints.organizationName],
-            maxLength: TextLimits.personName,
-            onChanged: (_) {
-              clearError('name');
-              setState(() {});
-            },
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: context.l10n.clients_contactName,
+            label: context.l10n.clients_customerName,
             controller: _nameController,
-            required: _businessNameController.text.trim().isEmpty,
-            optional: _businessNameController.text.trim().isNotEmpty,
+            required: true,
             autofillHints: const [AutofillHints.name],
             maxLength: TextLimits.personName,
             errorText: errors['name'],
-            onChanged: (_) {
-              clearError('name');
-              setState(() {});
-            },
+            onChanged: (_) => clearError('name'),
           ),
         ),
         const SizedBox(height: AppSpacing.sp16),
-        // --- Phone & email ---
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: context.l10n.clients_firstName,
+            controller: _firstNameController,
+            optional: true,
+            autofillHints: const [AutofillHints.givenName],
+            maxLength: TextLimits.firstName,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: context.l10n.clients_lastName,
+            controller: _lastNameController,
+            optional: true,
+            autofillHints: const [AutofillHints.familyName],
+            maxLength: TextLimits.lastName,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        // --- Phone, mobile & email ---
         SheetFocusScroll(
           child: LabeledTextField(
             label: context.l10n.clients_phone,
@@ -256,6 +257,17 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
             optional: true,
             autofillHints: const [AutofillHints.telephoneNumber],
             maxLength: TextLimits.phone,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: context.l10n.clients_mobile,
+            controller: _mobileController,
+            keyboard: TextInputType.phone,
+            optional: true,
+            autofillHints: const [AutofillHints.telephoneNumber],
+            maxLength: TextLimits.mobile,
           ),
         ),
         const SizedBox(height: AppSpacing.sp16),
@@ -272,17 +284,15 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
           ),
         ),
 
-        // --- Additional business contacts ---
-        if (_isBusiness) ...[
-          const SizedBox(height: AppSpacing.sp8),
-          AdditionalContactsSection(
-            contacts: additionalContacts,
-            errors: errors,
-            onAddContact: addAdditionalContact,
-            onRemoveContact: removeAdditionalContact,
-            onClearError: clearError,
-          ),
-        ],
+        // --- Additional contacts ---
+        const SizedBox(height: AppSpacing.sp8),
+        AdditionalContactsSection(
+          contacts: additionalContacts,
+          errors: errors,
+          onAddContact: addAdditionalContact,
+          onRemoveContact: removeAdditionalContact,
+          onClearError: clearError,
+        ),
         const SizedBox(height: AppSpacing.sp8),
         // --- Address ---
         Material(

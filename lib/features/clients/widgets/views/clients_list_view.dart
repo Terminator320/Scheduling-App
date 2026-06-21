@@ -155,12 +155,14 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     final q = ClientSearchPolicy.normalize(query);
     final qDigits = ClientSearchPolicy.digitsOnly(query);
     final filtered = loaded.where((c) {
-      final matchesText =
-          q.isNotEmpty &&
-          ClientSearchPolicy.normalize(c.displayName).contains(q);
-      final matchesPhone =
-          qDigits.isNotEmpty &&
-          ClientSearchPolicy.digitsOnly(c.phone).contains(qDigits);
+      final text = ClientSearchPolicy.normalize(
+        '${c.displayName} ${c.firstName} ${c.lastName}',
+      );
+      final phoneDigits = ClientSearchPolicy.digitsOnly(
+        '${c.phone} ${c.mobile}',
+      );
+      final matchesText = q.isNotEmpty && text.contains(q);
+      final matchesPhone = qDigits.isNotEmpty && phoneDigits.contains(qDigits);
       return matchesText || matchesPhone;
     }).toList();
 

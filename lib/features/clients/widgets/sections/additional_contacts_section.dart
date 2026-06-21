@@ -148,9 +148,8 @@ class _AdditionalContactCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                // +2: the main contact above the section is "Contact 1".
                 child: Text(
-                  '${context.l10n.clients_contact} ${index + 2}',
+                  '${context.l10n.clients_contact} ${index + 1}',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),

@@ -197,9 +197,21 @@
   "@common_address": {
     "description": "Address"
   },
-  "clients_businessName": "Business name",
-  "@clients_businessName": {
-    "description": "Business name"
+  "clients_customerName": "Customer name",
+  "@clients_customerName": {
+    "description": "The customer/display name field on the client form (required)"
+  },
+  "clients_firstName": "First name",
+  "@clients_firstName": {
+    "description": "First name field on the client form"
+  },
+  "clients_lastName": "Last name",
+  "@clients_lastName": {
+    "description": "Last name field on the client form"
+  },
+  "clients_mobile": "Mobile",
+  "@clients_mobile": {
+    "description": "Mobile phone field on the client form"
   },
   "clients_contactName": "Contact name",
   "@clients_contactName": {
@@ -298,13 +310,13 @@
   "@clients_thisClient": {
     "description": "this client"
   },
-  "clients_additionalBusinessContacts": "Additional business contacts",
+  "clients_additionalBusinessContacts": "Additional contacts",
   "@clients_additionalBusinessContacts": {
-    "description": "Additional business contacts"
+    "description": "Section header for extra contacts on the client form"
   },
-  "clients_theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded": "The first contact is the main contact above. Add more contacts here if needed.",
+  "clients_theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded": "Add extra contacts for this customer if needed.",
   "@clients_theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded": {
-    "description": "The first contact is the main contact above. Add more contacts here if needed."
+    "description": "Helper text under the additional-contacts section header"
   },
   "clients_add": "Add",
   "@clients_add": {
@@ -326,9 +338,9 @@
   "@validation_contactNameIsRequired": {
     "description": "Contact name is required"
   },
-  "validation_businessNameOrContactNameIsRequired": "Business name or contact name is required",
-  "@validation_businessNameOrContactNameIsRequired": {
-    "description": "Business name or contact name is required"
+  "validation_nameIsRequired": "Name is required",
+  "@validation_nameIsRequired": {
+    "description": "Shown when the required customer name field is empty"
   },
   "validation_phoneOrEmailIsRequired": "Phone or email is required",
   "@validation_phoneOrEmailIsRequired": {

@@ -26,9 +26,11 @@ class AddClientSheet extends ConsumerStatefulWidget {
 
 class _AddClientSheetState extends ConsumerState<AddClientSheet>
     with ClientFormState<AddClientSheet> {
-  final _businessNameController = TextEditingController();
   final _nameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _mobileController = TextEditingController();
   final _emailController = TextEditingController();
   final _addressController = TextEditingController();
   final _cityController = TextEditingController();
@@ -39,13 +41,13 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
 
   bool _isSaving = false;
 
-  bool get _isBusiness => _businessNameController.text.trim().isNotEmpty;
-
   @override
   void dispose() {
-    _businessNameController.dispose();
     _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _phoneController.dispose();
+    _mobileController.dispose();
     _emailController.dispose();
     _addressController.dispose();
     _cityController.dispose();
@@ -57,31 +59,27 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
     super.dispose();
   }
 
-  List<ClientContact> _buildContacts() {
-    if (!_isBusiness) return const [];
-    return [
-      ClientContact(
-        name: _nameController.text.trim(),
-        phone: _phoneController.text.trim(),
-        email: _emailController.text.trim(),
-      ),
-      for (final contact in additionalContacts)
-        if (!contact.isEmpty) contact.toContact(),
-    ];
-  }
+  List<ClientContact> _buildContacts() => [
+    for (final contact in additionalContacts)
+      if (!contact.isEmpty) contact.toContact(),
+  ];
 
   Future<void> _save() async {
-    final businessName = _businessNameController.text.trim();
     final name = _nameController.text.trim();
+    final firstName = _firstNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
     final phone = _phoneController.text.trim();
+    final mobile = _mobileController.text.trim();
     final email = _emailController.text.trim();
     final address = _addressController.text.trim();
 
     final nextErrors = ClientFormValidator.validate(
       l10n: context.l10n,
-      businessName: businessName,
       name: name,
+      firstName: firstName,
+      lastName: lastName,
       phone: phone,
+      mobile: mobile,
       email: email,
       address: address,
       additionalContacts: [
@@ -109,9 +107,11 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
 
     final newClient = ClientRecord(
       id: '',
-      businessName: businessName,
       name: name,
+      firstName: firstName,
+      lastName: lastName,
       phone: phone,
+      mobile: mobile,
       email: email,
       address: noFixedAddress ? '' : fullAddress,
       apt: noFixedAddress ? '' : apt,
@@ -156,31 +156,55 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
         const SizedBox(height: 20),
         SheetFocusScroll(
           child: LabeledTextField(
-            label: context.l10n.clients_businessName,
-            controller: _businessNameController,
-            optional: true,
-            autofillHints: const [AutofillHints.organizationName],
+            label: context.l10n.clients_customerName,
+            controller: _nameController,
+            required: true,
+            autofillHints: const [AutofillHints.name],
             maxLength: TextLimits.personName,
-            onChanged: (_) {
-              clearError('name');
-              setState(() {});
-            },
+            errorText: errors['name'],
+            onChanged: (_) => clearError('name'),
           ),
         ),
         const SizedBox(height: AppSpacing.sp16),
         SheetFocusScroll(
           child: LabeledTextField(
-            label: context.l10n.clients_contactName,
-            controller: _nameController,
-            required: !_isBusiness,
-            optional: _isBusiness,
-            autofillHints: const [AutofillHints.name],
-            maxLength: TextLimits.personName,
-            errorText: errors['name'],
-            onChanged: (_) {
-              clearError('name');
-              setState(() {});
-            },
+            label: context.l10n.clients_firstName,
+            controller: _firstNameController,
+            optional: true,
+            autofillHints: const [AutofillHints.givenName],
+            maxLength: TextLimits.firstName,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: context.l10n.clients_lastName,
+            controller: _lastNameController,
+            optional: true,
+            autofillHints: const [AutofillHints.familyName],
+            maxLength: TextLimits.lastName,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: context.l10n.clients_phone,
+            controller: _phoneController,
+            keyboard: TextInputType.phone,
+            optional: true,
+            autofillHints: const [AutofillHints.telephoneNumber],
+            maxLength: TextLimits.phone,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: context.l10n.clients_mobile,
+            controller: _mobileController,
+            keyboard: TextInputType.phone,
+            optional: true,
+            autofillHints: const [AutofillHints.telephoneNumber],
+            maxLength: TextLimits.mobile,
           ),
         ),
         const SizedBox(height: AppSpacing.sp16),
@@ -196,29 +220,14 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
             onChanged: (_) => clearError('email'),
           ),
         ),
-
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: context.l10n.clients_phone,
-            controller: _phoneController,
-            keyboard: TextInputType.phone,
-            optional: true,
-            autofillHints: const [AutofillHints.telephoneNumber],
-            maxLength: TextLimits.phone,
-          ),
+        const SizedBox(height: AppSpacing.sp8),
+        AdditionalContactsSection(
+          contacts: additionalContacts,
+          errors: errors,
+          onAddContact: addAdditionalContact,
+          onRemoveContact: removeAdditionalContact,
+          onClearError: clearError,
         ),
-
-        if (_isBusiness) ...[
-          const SizedBox(height: AppSpacing.sp8),
-          AdditionalContactsSection(
-            contacts: additionalContacts,
-            errors: errors,
-            onAddContact: addAdditionalContact,
-            onRemoveContact: removeAdditionalContact,
-            onClearError: clearError,
-          ),
-        ],
         const SizedBox(height: AppSpacing.sp8),
         Material(
           type: MaterialType.transparency,

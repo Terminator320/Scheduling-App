@@ -24,14 +24,26 @@ class ClientDetailViewBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final hasPhone = client.phone.isNotEmpty;
+    final hasMobile = client.mobile.isNotEmpty;
     final hasEmail = client.email.isNotEmpty;
     final hasAddress = client.address.isNotEmpty;
-    final hasContactInfo = hasPhone || hasEmail || hasAddress;
+    final fullName = [
+      client.firstName,
+      client.lastName,
+    ].where((part) => part.trim().isNotEmpty).join(' ').trim();
+    // The person name is worth showing only when it adds info beyond the
+    // customer/display name already in the header.
+    final hasPersonName = fullName.isNotEmpty && fullName != client.name;
+    final hasContactInfo =
+        hasPersonName || hasPhone || hasMobile || hasEmail || hasAddress;
 
     // Handlers are built here (where `ref` lives) and passed down, so the row
     // and button widgets stay presentational.
     final onCall = hasPhone
         ? () => launchPhoneCall(context, ref, client.phone)
+        : null;
+    final onMobile = hasMobile
+        ? () => launchPhoneCall(context, ref, client.mobile)
         : null;
     final onEmail = hasEmail
         ? () => EmailComposeLauncher.showEmailChoices(
@@ -49,9 +61,9 @@ class ClientDetailViewBody extends ConsumerWidget {
     // Always offered — even a name-only client is worth saving to the phone.
     void onSaveToContacts() => saveClientToPhoneContacts(context, ref, client);
 
-    // contacts[0] mirrors the primary name/phone/email already shown in the
-    // header and contact-info card — only the rest are worth listing again.
-    final extraContacts = client.contacts.skip(1).toList();
+    // `contacts` holds only the extra contacts (the customer's own details
+    // live in the header and contact-info card).
+    final extraContacts = client.contacts;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -89,11 +101,23 @@ class ClientDetailViewBody extends ConsumerWidget {
           const SizedBox(height: AppSpacing.sp8),
           InfoCard(
             rows: [
+              if (hasPersonName)
+                InfoCardRow(
+                  icon: Icons.person_outline,
+                  text: fullName,
+                ),
               if (hasPhone)
                 InfoCardRow(
                   icon: Icons.phone_outlined,
                   text: client.phone,
                   onTap: onCall,
+                  trailingIcon: Icons.chevron_right,
+                ),
+              if (hasMobile)
+                InfoCardRow(
+                  icon: Icons.smartphone_outlined,
+                  text: client.mobile,
+                  onTap: onMobile,
                   trailingIcon: Icons.chevron_right,
                 ),
               if (hasEmail)

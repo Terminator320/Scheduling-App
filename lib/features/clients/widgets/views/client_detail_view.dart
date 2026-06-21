@@ -154,6 +154,11 @@ class _ViewHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final fullName = [
+      client.firstName,
+      client.lastName,
+    ].where((part) => part.trim().isNotEmpty).join(' ').trim();
+    final showPersonName = fullName.isNotEmpty && fullName != client.name;
     return Column(
       children: [
         AppAvatar(name: client.displayName, size: AvatarSize.lg),
@@ -165,10 +170,10 @@ class _ViewHeader extends StatelessWidget {
           ),
           textAlign: TextAlign.center,
         ),
-        if (client.name.isNotEmpty && client.name != client.displayName) ...[
+        if (showPersonName) ...[
           const SizedBox(height: 3),
           Text(
-            client.name,
+            fullName,
             style: theme.textTheme.bodySmall?.copyWith(
               color: scheme.onSurfaceVariant,
             ),
