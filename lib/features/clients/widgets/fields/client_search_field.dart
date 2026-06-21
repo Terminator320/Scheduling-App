@@ -25,6 +25,9 @@ class ClientSearchField extends StatelessWidget {
   final VoidCallback onClear;
   final String? errorText;
 
+  /// Max suggestions shown in the dropdown; keeps the inline list compact.
+  static const int _maxVisibleResults = 5;
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -76,7 +79,7 @@ class ClientSearchField extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(
-              children: results.map((client) {
+              children: results.take(_maxVisibleResults).map((client) {
                 final String subtitleText;
                 if (client.phone.trim().isNotEmpty) {
                   subtitleText = client.phone;

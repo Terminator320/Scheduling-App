@@ -33,7 +33,10 @@ class AppEmptyState extends StatelessWidget {
         ),
       ),
       child: Center(
-        child: Padding(
+        // Scrolls instead of overflowing when the host pane is shorter than the
+        // empty-state content (e.g. a compact EventList slot); still centers
+        // when there is ample vertical room.
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.sp32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
