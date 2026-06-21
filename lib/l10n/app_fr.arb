@@ -242,7 +242,7 @@
   "common_searchAddress": "Rechercher une adresse",
   "common_typeToSearchAnAddress": "Tapez pour rechercher une adresse",
   "common_street": "Rue",
-  "clients_searchByNameBusinessPhoneEmailAddress": "Rechercher par nom, entreprise, téléphone, courriel ou adresse...",
+  "clients_searchByNameBusinessPhoneEmailAddress": "Rechercher par nom, téléphone, courriel ou adresse...",
   "clients_noClientsFound": "Aucun client trouvé",
   "common_employeeRoleValue": "Employé",
   "auth_welcomeBack": "Bienvenue",

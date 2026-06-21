@@ -15,7 +15,7 @@ import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
 /// Read-only display of a [ClientRecord]: a Call / Email / Directions
 /// quick-action row, a contact-info card (tappable phone / email / address)
-/// and, for business clients, the saved business contacts.
+/// and an additional-contacts section when the client has extra contacts.
 class ClientDetailViewBody extends ConsumerWidget {
   const ClientDetailViewBody({required this.client, super.key});
 

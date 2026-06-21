@@ -1,5 +1,20 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
+
+// Mirrors the filter predicate in ClientsListView._buildSearchResults exactly,
+// so these tests break if the search fields change.
+bool _matches(ClientRecord c, String query) {
+  final q = ClientSearchPolicy.normalize(query);
+  final qDigits = ClientSearchPolicy.digitsOnly(query);
+  final text = ClientSearchPolicy.normalize(
+    '${c.displayName} ${c.firstName} ${c.lastName}',
+  );
+  final phoneDigits = ClientSearchPolicy.digitsOnly('${c.phone} ${c.mobile}');
+  final matchesText = q.isNotEmpty && text.contains(q);
+  final matchesPhone = qDigits.isNotEmpty && phoneDigits.contains(qDigits);
+  return matchesText || matchesPhone;
+}
 
 void main() {
   group('ClientSearchPolicy.shouldSearch', () {
@@ -65,6 +80,39 @@ void main() {
         ClientSearchPolicy.cacheKey('Montréal'),
         ClientSearchPolicy.cacheKey('  MONTREAL  '),
       );
+    });
+  });
+
+  // These tests lock in the reshaped search fields (firstName, mobile) that
+  // replaced the old businessName field in the client record.
+  group('client list search filter (_matches)', () {
+    const sophie = ClientRecord(
+      id: 'c1',
+      name: 'Tremblay Services',
+      firstName: 'Sophie',
+      lastName: 'Tremblay',
+      mobile: '438-555-0199',
+      email: 'sophie@tremblay.com',
+    );
+
+    test('firstName-only query matches the client', () {
+      expect(_matches(sophie, 'Sophie'), isTrue);
+    });
+
+    test('partial firstName match (case-insensitive) matches the client', () {
+      expect(_matches(sophie, 'soph'), isTrue);
+    });
+
+    test('mobile-only query matches the client', () {
+      expect(_matches(sophie, '4385550199'), isTrue);
+    });
+
+    test('partial mobile digits match the client', () {
+      expect(_matches(sophie, '5550199'), isTrue);
+    });
+
+    test('unrelated query does not match', () {
+      expect(_matches(sophie, 'Xavier'), isFalse);
     });
   });
 }

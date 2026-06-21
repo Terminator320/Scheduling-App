@@ -998,9 +998,9 @@
   "@common_street": {
     "description": "Street"
   },
-  "clients_searchByNameBusinessPhoneEmailAddress": "Search by name, business, phone, email, address...",
+  "clients_searchByNameBusinessPhoneEmailAddress": "Search by name, phone, email, address...",
   "@clients_searchByNameBusinessPhoneEmailAddress": {
-    "description": "Search by name, business, phone, email, address..."
+    "description": "Hint text for the client list search field"
   },
   "clients_noClientsFound": "No clients found",
   "@clients_noClientsFound": {
