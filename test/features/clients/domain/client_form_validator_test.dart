@@ -9,9 +9,11 @@ void main() {
   final l10n = lookupAppLocalizations(const Locale('en'));
 
   Map<String, String?> validate({
-    String businessName = '',
     String name = '',
+    String firstName = '',
+    String lastName = '',
     String phone = '',
+    String mobile = '',
     String email = '',
     String address = '',
     List<ClientContact> additionalContacts = const [],
@@ -19,9 +21,11 @@ void main() {
   }) {
     return ClientFormValidator.validate(
       l10n: l10n,
-      businessName: businessName,
       name: name,
+      firstName: firstName,
+      lastName: lastName,
       phone: phone,
+      mobile: mobile,
       email: email,
       address: address,
       additionalContacts: additionalContacts,
@@ -39,11 +43,14 @@ void main() {
       expect(errors.values.where((e) => e != null), isEmpty);
     });
 
-    test('missing both names flags only the contact-name field', () {
-      // Business name is optional, so it never carries the requirement error.
+    test('a missing customer name flags the name field', () {
       final errors = validate(phone: '555-1234', address: '1 Main St');
       expect(errors['name'], isNotNull);
-      expect(errors['businessName'], isNull);
+    });
+
+    test('first/last name and mobile are optional', () {
+      final errors = validate(name: 'Jane', address: '1 Main St');
+      expect(errors.values.where((e) => e != null), isEmpty);
     });
 
     test('phone and email are optional — a name and address are enough', () {
@@ -62,16 +69,10 @@ void main() {
     });
 
     test('address is required whenever not marked no-fixed-address', () {
-      // A business name no longer waives the address requirement — only the
-      // no-fixed-address flag or a non-empty address does.
       expect(validate(name: 'Jane', phone: '555-1234')['address'], isNotNull);
       expect(
-        validate(businessName: 'Acme', phone: '555-1234')['address'],
-        isNotNull,
-      );
-      expect(
         validate(
-          businessName: 'Acme',
+          name: 'Jane',
           phone: '555-1234',
           address: '1 Main St',
         )['address'],
@@ -79,19 +80,9 @@ void main() {
       );
     });
 
-    test('additional contacts are ignored without a business name', () {
-      final errors = validate(
-        name: 'Jane',
-        phone: '555-1234',
-        address: '1 Main St',
-        additionalContacts: const [ClientContact()],
-      );
-      expect(errors.keys.where((k) => k.startsWith('contact_')), isEmpty);
-    });
-
     test('an all-empty contact card is skipped but keeps its index', () {
       final errors = validate(
-        businessName: 'Acme',
+        name: 'Acme',
         phone: '555-1234',
         additionalContacts: const [
           ClientContact(),
@@ -104,7 +95,7 @@ void main() {
 
     test('a contact needs a phone or email', () {
       final errors = validate(
-        businessName: 'Acme',
+        name: 'Acme',
         phone: '555-1234',
         additionalContacts: const [ClientContact(name: 'Bob')],
       );

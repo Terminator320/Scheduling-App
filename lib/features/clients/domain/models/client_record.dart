@@ -30,8 +30,9 @@ abstract class ClientContact with _$ClientContact {
 abstract class ClientRecord with _$ClientRecord {
   const factory ClientRecord({
     required String id,
-    @Default('') String businessName,
     @Default('') String name,
+    @Default('') String firstName,
+    @Default('') String lastName,
     @Default('') String address,
     @Default('') String apt,
     @Default('') String city,
@@ -39,18 +40,28 @@ abstract class ClientRecord with _$ClientRecord {
     @Default('') String country,
     @Default('') String postalCode,
     @Default('') String phone,
+    @Default('') String mobile,
     @Default('') String email,
     @Default(<ClientContact>[]) List<ClientContact> contacts,
     @Default(false) bool noFixedAddress,
+    // Wave projection (read-only): written exclusively by Cloud Functions via
+    // the Admin SDK. The app reads them for a sync indicator and MUST NOT emit
+    // them in toMap — firestore.rules rejects any client write that touches
+    // `waveCustomerId` or `wave`.
+    @Default(null) String? waveCustomerId,
+    @Default('') String waveSyncState,
+    @Default(null) String? waveSyncError,
   }) = _ClientRecord;
   const ClientRecord._();
 
   factory ClientRecord.fromMap(String id, Map<String, dynamic> data) {
     final rawContacts = (data['contacts'] as List?) ?? const [];
+    final wave = (data['wave'] as Map?)?.cast<String, dynamic>();
     return ClientRecord(
       id: id,
-      businessName: (data['businessName'] ?? '').toString(),
       name: (data['name'] ?? '').toString(),
+      firstName: (data['firstName'] ?? '').toString(),
+      lastName: (data['lastName'] ?? '').toString(),
       address: (data['address'] ?? '').toString(),
       apt: (data['apt'] ?? '').toString(),
       city: (data['city'] ?? '').toString(),
@@ -58,18 +69,26 @@ abstract class ClientRecord with _$ClientRecord {
       country: (data['country'] ?? '').toString(),
       postalCode: (data['postalCode'] ?? '').toString(),
       phone: (data['phone'] ?? '').toString(),
+      mobile: (data['mobile'] ?? '').toString(),
       email: (data['email'] ?? '').toString(),
       contacts: rawContacts
           .whereType<Map<Object?, Object?>>()
           .map((c) => ClientContact.fromMap(Map<String, dynamic>.from(c)))
           .toList(),
       noFixedAddress: (data['noFixedAddress'] as bool?) ?? false,
+      waveCustomerId: data['waveCustomerId']?.toString(),
+      waveSyncState: (wave?['syncState'] ?? '').toString(),
+      waveSyncError: wave?['syncError']?.toString(),
     );
   }
 
+  /// Only the user-owned fields. Deliberately omits `waveCustomerId` and the
+  /// `wave` sub-map: those are function-owned, and the `clients` update rule
+  /// rejects any write that adds/changes them (`updateClient` uses `.update`).
   Map<String, dynamic> toMap() => {
-    'businessName': businessName.trim(),
     'name': name.trim(),
+    'firstName': firstName.trim(),
+    'lastName': lastName.trim(),
     'address': address.trim(),
     'apt': apt.trim(),
     'city': city.trim(),
@@ -77,12 +96,13 @@ abstract class ClientRecord with _$ClientRecord {
     'country': country.trim(),
     'postalCode': postalCode.trim(),
     'phone': phone.trim(),
+    'mobile': mobile.trim(),
     'email': email.trim(),
     'contacts': contacts.map((c) => c.toMap()).toList(),
     'noFixedAddress': noFixedAddress,
   };
 
-  String get displayName => businessName.isNotEmpty ? businessName : name;
+  String get displayName => name;
 
   List<ClientContact> get displayContact => contacts;
 }

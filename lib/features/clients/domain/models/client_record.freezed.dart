@@ -277,7 +277,11 @@ as String,
 /// @nodoc
 mixin _$ClientRecord {
 
- String get id; String get businessName; String get name; String get address; String get apt; String get city; String get province; String get country; String get postalCode; String get phone; String get email; List<ClientContact> get contacts; bool get noFixedAddress;
+ String get id; String get name; String get firstName; String get lastName; String get address; String get apt; String get city; String get province; String get country; String get postalCode; String get phone; String get mobile; String get email; List<ClientContact> get contacts; bool get noFixedAddress;// Wave projection (read-only): written exclusively by Cloud Functions via
+// the Admin SDK. The app reads them for a sync indicator and MUST NOT emit
+// them in toMap — firestore.rules rejects any client write that touches
+// `waveCustomerId` or `wave`.
+ String? get waveCustomerId; String get waveSyncState; String? get waveSyncError;
 /// Create a copy of ClientRecord
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -288,16 +292,16 @@ $ClientRecordCopyWith<ClientRecord> get copyWith => _$ClientRecordCopyWithImpl<C
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ClientRecord&&(identical(other.id, id) || other.id == id)&&(identical(other.businessName, businessName) || other.businessName == businessName)&&(identical(other.name, name) || other.name == name)&&(identical(other.address, address) || other.address == address)&&(identical(other.apt, apt) || other.apt == apt)&&(identical(other.city, city) || other.city == city)&&(identical(other.province, province) || other.province == province)&&(identical(other.country, country) || other.country == country)&&(identical(other.postalCode, postalCode) || other.postalCode == postalCode)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.email, email) || other.email == email)&&const DeepCollectionEquality().equals(other.contacts, contacts)&&(identical(other.noFixedAddress, noFixedAddress) || other.noFixedAddress == noFixedAddress));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ClientRecord&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.firstName, firstName) || other.firstName == firstName)&&(identical(other.lastName, lastName) || other.lastName == lastName)&&(identical(other.address, address) || other.address == address)&&(identical(other.apt, apt) || other.apt == apt)&&(identical(other.city, city) || other.city == city)&&(identical(other.province, province) || other.province == province)&&(identical(other.country, country) || other.country == country)&&(identical(other.postalCode, postalCode) || other.postalCode == postalCode)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.mobile, mobile) || other.mobile == mobile)&&(identical(other.email, email) || other.email == email)&&const DeepCollectionEquality().equals(other.contacts, contacts)&&(identical(other.noFixedAddress, noFixedAddress) || other.noFixedAddress == noFixedAddress)&&(identical(other.waveCustomerId, waveCustomerId) || other.waveCustomerId == waveCustomerId)&&(identical(other.waveSyncState, waveSyncState) || other.waveSyncState == waveSyncState)&&(identical(other.waveSyncError, waveSyncError) || other.waveSyncError == waveSyncError));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,businessName,name,address,apt,city,province,country,postalCode,phone,email,const DeepCollectionEquality().hash(contacts),noFixedAddress);
+int get hashCode => Object.hash(runtimeType,id,name,firstName,lastName,address,apt,city,province,country,postalCode,phone,mobile,email,const DeepCollectionEquality().hash(contacts),noFixedAddress,waveCustomerId,waveSyncState,waveSyncError);
 
 @override
 String toString() {
-  return 'ClientRecord(id: $id, businessName: $businessName, name: $name, address: $address, apt: $apt, city: $city, province: $province, country: $country, postalCode: $postalCode, phone: $phone, email: $email, contacts: $contacts, noFixedAddress: $noFixedAddress)';
+  return 'ClientRecord(id: $id, name: $name, firstName: $firstName, lastName: $lastName, address: $address, apt: $apt, city: $city, province: $province, country: $country, postalCode: $postalCode, phone: $phone, mobile: $mobile, email: $email, contacts: $contacts, noFixedAddress: $noFixedAddress, waveCustomerId: $waveCustomerId, waveSyncState: $waveSyncState, waveSyncError: $waveSyncError)';
 }
 
 
@@ -308,7 +312,7 @@ abstract mixin class $ClientRecordCopyWith<$Res>  {
   factory $ClientRecordCopyWith(ClientRecord value, $Res Function(ClientRecord) _then) = _$ClientRecordCopyWithImpl;
 @useResult
 $Res call({
- String id, String businessName, String name, String address, String apt, String city, String province, String country, String postalCode, String phone, String email, List<ClientContact> contacts, bool noFixedAddress
+ String id, String name, String firstName, String lastName, String address, String apt, String city, String province, String country, String postalCode, String phone, String mobile, String email, List<ClientContact> contacts, bool noFixedAddress, String? waveCustomerId, String waveSyncState, String? waveSyncError
 });
 
 
@@ -325,11 +329,12 @@ class _$ClientRecordCopyWithImpl<$Res>
 
 /// Create a copy of ClientRecord
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? businessName = null,Object? name = null,Object? address = null,Object? apt = null,Object? city = null,Object? province = null,Object? country = null,Object? postalCode = null,Object? phone = null,Object? email = null,Object? contacts = null,Object? noFixedAddress = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? firstName = null,Object? lastName = null,Object? address = null,Object? apt = null,Object? city = null,Object? province = null,Object? country = null,Object? postalCode = null,Object? phone = null,Object? mobile = null,Object? email = null,Object? contacts = null,Object? noFixedAddress = null,Object? waveCustomerId = freezed,Object? waveSyncState = null,Object? waveSyncError = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as String,businessName: null == businessName ? _self.businessName : businessName // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+as String,firstName: null == firstName ? _self.firstName : firstName // ignore: cast_nullable_to_non_nullable
+as String,lastName: null == lastName ? _self.lastName : lastName // ignore: cast_nullable_to_non_nullable
 as String,address: null == address ? _self.address : address // ignore: cast_nullable_to_non_nullable
 as String,apt: null == apt ? _self.apt : apt // ignore: cast_nullable_to_non_nullable
 as String,city: null == city ? _self.city : city // ignore: cast_nullable_to_non_nullable
@@ -337,10 +342,14 @@ as String,province: null == province ? _self.province : province // ignore: cast
 as String,country: null == country ? _self.country : country // ignore: cast_nullable_to_non_nullable
 as String,postalCode: null == postalCode ? _self.postalCode : postalCode // ignore: cast_nullable_to_non_nullable
 as String,phone: null == phone ? _self.phone : phone // ignore: cast_nullable_to_non_nullable
+as String,mobile: null == mobile ? _self.mobile : mobile // ignore: cast_nullable_to_non_nullable
 as String,email: null == email ? _self.email : email // ignore: cast_nullable_to_non_nullable
 as String,contacts: null == contacts ? _self.contacts : contacts // ignore: cast_nullable_to_non_nullable
 as List<ClientContact>,noFixedAddress: null == noFixedAddress ? _self.noFixedAddress : noFixedAddress // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,waveCustomerId: freezed == waveCustomerId ? _self.waveCustomerId : waveCustomerId // ignore: cast_nullable_to_non_nullable
+as String?,waveSyncState: null == waveSyncState ? _self.waveSyncState : waveSyncState // ignore: cast_nullable_to_non_nullable
+as String,waveSyncError: freezed == waveSyncError ? _self.waveSyncError : waveSyncError // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 
@@ -425,10 +434,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String businessName,  String name,  String address,  String apt,  String city,  String province,  String country,  String postalCode,  String phone,  String email,  List<ClientContact> contacts,  bool noFixedAddress)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String firstName,  String lastName,  String address,  String apt,  String city,  String province,  String country,  String postalCode,  String phone,  String mobile,  String email,  List<ClientContact> contacts,  bool noFixedAddress,  String? waveCustomerId,  String waveSyncState,  String? waveSyncError)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ClientRecord() when $default != null:
-return $default(_that.id,_that.businessName,_that.name,_that.address,_that.apt,_that.city,_that.province,_that.country,_that.postalCode,_that.phone,_that.email,_that.contacts,_that.noFixedAddress);case _:
+return $default(_that.id,_that.name,_that.firstName,_that.lastName,_that.address,_that.apt,_that.city,_that.province,_that.country,_that.postalCode,_that.phone,_that.mobile,_that.email,_that.contacts,_that.noFixedAddress,_that.waveCustomerId,_that.waveSyncState,_that.waveSyncError);case _:
   return orElse();
 
 }
@@ -446,10 +455,10 @@ return $default(_that.id,_that.businessName,_that.name,_that.address,_that.apt,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String businessName,  String name,  String address,  String apt,  String city,  String province,  String country,  String postalCode,  String phone,  String email,  List<ClientContact> contacts,  bool noFixedAddress)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String firstName,  String lastName,  String address,  String apt,  String city,  String province,  String country,  String postalCode,  String phone,  String mobile,  String email,  List<ClientContact> contacts,  bool noFixedAddress,  String? waveCustomerId,  String waveSyncState,  String? waveSyncError)  $default,) {final _that = this;
 switch (_that) {
 case _ClientRecord():
-return $default(_that.id,_that.businessName,_that.name,_that.address,_that.apt,_that.city,_that.province,_that.country,_that.postalCode,_that.phone,_that.email,_that.contacts,_that.noFixedAddress);case _:
+return $default(_that.id,_that.name,_that.firstName,_that.lastName,_that.address,_that.apt,_that.city,_that.province,_that.country,_that.postalCode,_that.phone,_that.mobile,_that.email,_that.contacts,_that.noFixedAddress,_that.waveCustomerId,_that.waveSyncState,_that.waveSyncError);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -466,10 +475,10 @@ return $default(_that.id,_that.businessName,_that.name,_that.address,_that.apt,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String businessName,  String name,  String address,  String apt,  String city,  String province,  String country,  String postalCode,  String phone,  String email,  List<ClientContact> contacts,  bool noFixedAddress)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String firstName,  String lastName,  String address,  String apt,  String city,  String province,  String country,  String postalCode,  String phone,  String mobile,  String email,  List<ClientContact> contacts,  bool noFixedAddress,  String? waveCustomerId,  String waveSyncState,  String? waveSyncError)?  $default,) {final _that = this;
 switch (_that) {
 case _ClientRecord() when $default != null:
-return $default(_that.id,_that.businessName,_that.name,_that.address,_that.apt,_that.city,_that.province,_that.country,_that.postalCode,_that.phone,_that.email,_that.contacts,_that.noFixedAddress);case _:
+return $default(_that.id,_that.name,_that.firstName,_that.lastName,_that.address,_that.apt,_that.city,_that.province,_that.country,_that.postalCode,_that.phone,_that.mobile,_that.email,_that.contacts,_that.noFixedAddress,_that.waveCustomerId,_that.waveSyncState,_that.waveSyncError);case _:
   return null;
 
 }
@@ -481,12 +490,13 @@ return $default(_that.id,_that.businessName,_that.name,_that.address,_that.apt,_
 
 
 class _ClientRecord extends ClientRecord {
-  const _ClientRecord({required this.id, this.businessName = '', this.name = '', this.address = '', this.apt = '', this.city = '', this.province = '', this.country = '', this.postalCode = '', this.phone = '', this.email = '', final  List<ClientContact> contacts = const <ClientContact>[], this.noFixedAddress = false}): _contacts = contacts,super._();
+  const _ClientRecord({required this.id, this.name = '', this.firstName = '', this.lastName = '', this.address = '', this.apt = '', this.city = '', this.province = '', this.country = '', this.postalCode = '', this.phone = '', this.mobile = '', this.email = '', final  List<ClientContact> contacts = const <ClientContact>[], this.noFixedAddress = false, this.waveCustomerId = null, this.waveSyncState = '', this.waveSyncError = null}): _contacts = contacts,super._();
   
 
 @override final  String id;
-@override@JsonKey() final  String businessName;
 @override@JsonKey() final  String name;
+@override@JsonKey() final  String firstName;
+@override@JsonKey() final  String lastName;
 @override@JsonKey() final  String address;
 @override@JsonKey() final  String apt;
 @override@JsonKey() final  String city;
@@ -494,6 +504,7 @@ class _ClientRecord extends ClientRecord {
 @override@JsonKey() final  String country;
 @override@JsonKey() final  String postalCode;
 @override@JsonKey() final  String phone;
+@override@JsonKey() final  String mobile;
 @override@JsonKey() final  String email;
  final  List<ClientContact> _contacts;
 @override@JsonKey() List<ClientContact> get contacts {
@@ -503,6 +514,13 @@ class _ClientRecord extends ClientRecord {
 }
 
 @override@JsonKey() final  bool noFixedAddress;
+// Wave projection (read-only): written exclusively by Cloud Functions via
+// the Admin SDK. The app reads them for a sync indicator and MUST NOT emit
+// them in toMap — firestore.rules rejects any client write that touches
+// `waveCustomerId` or `wave`.
+@override@JsonKey() final  String? waveCustomerId;
+@override@JsonKey() final  String waveSyncState;
+@override@JsonKey() final  String? waveSyncError;
 
 /// Create a copy of ClientRecord
 /// with the given fields replaced by the non-null parameter values.
@@ -514,16 +532,16 @@ _$ClientRecordCopyWith<_ClientRecord> get copyWith => __$ClientRecordCopyWithImp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ClientRecord&&(identical(other.id, id) || other.id == id)&&(identical(other.businessName, businessName) || other.businessName == businessName)&&(identical(other.name, name) || other.name == name)&&(identical(other.address, address) || other.address == address)&&(identical(other.apt, apt) || other.apt == apt)&&(identical(other.city, city) || other.city == city)&&(identical(other.province, province) || other.province == province)&&(identical(other.country, country) || other.country == country)&&(identical(other.postalCode, postalCode) || other.postalCode == postalCode)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.email, email) || other.email == email)&&const DeepCollectionEquality().equals(other._contacts, _contacts)&&(identical(other.noFixedAddress, noFixedAddress) || other.noFixedAddress == noFixedAddress));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ClientRecord&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.firstName, firstName) || other.firstName == firstName)&&(identical(other.lastName, lastName) || other.lastName == lastName)&&(identical(other.address, address) || other.address == address)&&(identical(other.apt, apt) || other.apt == apt)&&(identical(other.city, city) || other.city == city)&&(identical(other.province, province) || other.province == province)&&(identical(other.country, country) || other.country == country)&&(identical(other.postalCode, postalCode) || other.postalCode == postalCode)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.mobile, mobile) || other.mobile == mobile)&&(identical(other.email, email) || other.email == email)&&const DeepCollectionEquality().equals(other._contacts, _contacts)&&(identical(other.noFixedAddress, noFixedAddress) || other.noFixedAddress == noFixedAddress)&&(identical(other.waveCustomerId, waveCustomerId) || other.waveCustomerId == waveCustomerId)&&(identical(other.waveSyncState, waveSyncState) || other.waveSyncState == waveSyncState)&&(identical(other.waveSyncError, waveSyncError) || other.waveSyncError == waveSyncError));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,businessName,name,address,apt,city,province,country,postalCode,phone,email,const DeepCollectionEquality().hash(_contacts),noFixedAddress);
+int get hashCode => Object.hash(runtimeType,id,name,firstName,lastName,address,apt,city,province,country,postalCode,phone,mobile,email,const DeepCollectionEquality().hash(_contacts),noFixedAddress,waveCustomerId,waveSyncState,waveSyncError);
 
 @override
 String toString() {
-  return 'ClientRecord(id: $id, businessName: $businessName, name: $name, address: $address, apt: $apt, city: $city, province: $province, country: $country, postalCode: $postalCode, phone: $phone, email: $email, contacts: $contacts, noFixedAddress: $noFixedAddress)';
+  return 'ClientRecord(id: $id, name: $name, firstName: $firstName, lastName: $lastName, address: $address, apt: $apt, city: $city, province: $province, country: $country, postalCode: $postalCode, phone: $phone, mobile: $mobile, email: $email, contacts: $contacts, noFixedAddress: $noFixedAddress, waveCustomerId: $waveCustomerId, waveSyncState: $waveSyncState, waveSyncError: $waveSyncError)';
 }
 
 
@@ -534,7 +552,7 @@ abstract mixin class _$ClientRecordCopyWith<$Res> implements $ClientRecordCopyWi
   factory _$ClientRecordCopyWith(_ClientRecord value, $Res Function(_ClientRecord) _then) = __$ClientRecordCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String businessName, String name, String address, String apt, String city, String province, String country, String postalCode, String phone, String email, List<ClientContact> contacts, bool noFixedAddress
+ String id, String name, String firstName, String lastName, String address, String apt, String city, String province, String country, String postalCode, String phone, String mobile, String email, List<ClientContact> contacts, bool noFixedAddress, String? waveCustomerId, String waveSyncState, String? waveSyncError
 });
 
 
@@ -551,11 +569,12 @@ class __$ClientRecordCopyWithImpl<$Res>
 
 /// Create a copy of ClientRecord
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? businessName = null,Object? name = null,Object? address = null,Object? apt = null,Object? city = null,Object? province = null,Object? country = null,Object? postalCode = null,Object? phone = null,Object? email = null,Object? contacts = null,Object? noFixedAddress = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? firstName = null,Object? lastName = null,Object? address = null,Object? apt = null,Object? city = null,Object? province = null,Object? country = null,Object? postalCode = null,Object? phone = null,Object? mobile = null,Object? email = null,Object? contacts = null,Object? noFixedAddress = null,Object? waveCustomerId = freezed,Object? waveSyncState = null,Object? waveSyncError = freezed,}) {
   return _then(_ClientRecord(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as String,businessName: null == businessName ? _self.businessName : businessName // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+as String,firstName: null == firstName ? _self.firstName : firstName // ignore: cast_nullable_to_non_nullable
+as String,lastName: null == lastName ? _self.lastName : lastName // ignore: cast_nullable_to_non_nullable
 as String,address: null == address ? _self.address : address // ignore: cast_nullable_to_non_nullable
 as String,apt: null == apt ? _self.apt : apt // ignore: cast_nullable_to_non_nullable
 as String,city: null == city ? _self.city : city // ignore: cast_nullable_to_non_nullable
@@ -563,10 +582,14 @@ as String,province: null == province ? _self.province : province // ignore: cast
 as String,country: null == country ? _self.country : country // ignore: cast_nullable_to_non_nullable
 as String,postalCode: null == postalCode ? _self.postalCode : postalCode // ignore: cast_nullable_to_non_nullable
 as String,phone: null == phone ? _self.phone : phone // ignore: cast_nullable_to_non_nullable
+as String,mobile: null == mobile ? _self.mobile : mobile // ignore: cast_nullable_to_non_nullable
 as String,email: null == email ? _self.email : email // ignore: cast_nullable_to_non_nullable
 as String,contacts: null == contacts ? _self._contacts : contacts // ignore: cast_nullable_to_non_nullable
 as List<ClientContact>,noFixedAddress: null == noFixedAddress ? _self.noFixedAddress : noFixedAddress // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,waveCustomerId: freezed == waveCustomerId ? _self.waveCustomerId : waveCustomerId // ignore: cast_nullable_to_non_nullable
+as String?,waveSyncState: null == waveSyncState ? _self.waveSyncState : waveSyncState // ignore: cast_nullable_to_non_nullable
+as String,waveSyncError: freezed == waveSyncError ? _self.waveSyncError : waveSyncError // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 

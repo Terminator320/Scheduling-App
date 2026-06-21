@@ -121,9 +121,11 @@ class FirebaseClientsRepository implements ClientsRepository {
 
       final searchableText = ClientSearchPolicy.normalize(
         [
-          data['businessName'],
           data['name'],
+          data['firstName'],
+          data['lastName'],
           data['phone'],
+          data['mobile'],
           data['email'],
           data['address'],
           data['city'],
@@ -135,12 +137,14 @@ class FirebaseClientsRepository implements ClientsRepository {
       );
 
       final displayName = ClientSearchPolicy.normalize(client.displayName);
-      final name = ClientSearchPolicy.normalize(data['name']?.toString() ?? '');
-      final businessName = ClientSearchPolicy.normalize(
-        data['businessName']?.toString() ?? '',
+      final personName = ClientSearchPolicy.normalize(
+        [
+          data['firstName'],
+          data['lastName'],
+        ].whereType<Object>().map((v) => v.toString()).join(' '),
       );
       final phoneDigits = ClientSearchPolicy.digitsOnly(
-        data['phone']?.toString() ?? '',
+        '${data['phone'] ?? ''} ${data['mobile'] ?? ''}',
       );
       final contactsDigits = ClientSearchPolicy.digitsOnly(contactSearchText);
 
@@ -156,15 +160,13 @@ class FirebaseClientsRepository implements ClientsRepository {
       if (displayName == normalizedQuery || phoneDigits == queryDigits) {
         score = 0;
       } else if (displayName.startsWith(normalizedQuery) ||
-          businessName.startsWith(normalizedQuery) ||
-          name.startsWith(normalizedQuery)) {
+          personName.startsWith(normalizedQuery)) {
         score = 1;
       } else if (queryDigits.isNotEmpty &&
           phoneDigits.startsWith(queryDigits)) {
         score = 2;
       } else if (displayName.contains(normalizedQuery) ||
-          businessName.contains(normalizedQuery) ||
-          name.contains(normalizedQuery)) {
+          personName.contains(normalizedQuery)) {
         score = 3;
       } else if (queryDigits.isNotEmpty &&
           (phoneDigits.contains(queryDigits) ||
