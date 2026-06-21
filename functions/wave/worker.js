@@ -255,6 +255,8 @@ async function drainQueue(deps = {}) {
     let claimed = false;
     try {
       await db.runTransaction(async (tx) => {
+        // Reset on each retry so a prior abandoned callback run doesn't bleed.
+        claimed = false;
         const fresh = await tx.get(doc.ref);
         if (!fresh || !fresh.exists) return; // deleted between query and claim
         const freshData = fresh.data() || {};
