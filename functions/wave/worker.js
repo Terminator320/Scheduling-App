@@ -61,6 +61,7 @@
 
 const {WaveValidationError, upsertCustomer} = require("./customers");
 const {WaveApiError} = require("./client");
+const {mappedFieldsHash} = require("./mappers");
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -165,6 +166,53 @@ function clientIdFromRefPath(refPath) {
   if (typeof refPath !== "string") return "";
   const parts = refPath.split("/");
   return parts.length >= 2 ? parts[parts.length - 1] : "";
+}
+
+// ---------------------------------------------------------------------------
+// shouldEnqueueClientWrite
+// ---------------------------------------------------------------------------
+
+/**
+ * Decides whether a `clients/{id}` document write should enqueue a Wave
+ * customer-upsert job. Pure (hash-only comparison, no I/O) so it is unit-
+ * testable in isolation; the `onDocumentWritten` trigger in `index.js` calls
+ * it with the before/after document data.
+ *
+ * Skip rules (both absorb writes that would create a pointless no-op job):
+ *   1. The mapped fields are unchanged
+ *      (`mappedFieldsHash(after) === mappedFieldsHash(before)`). Only
+ *      `wave.*` / `waveCustomerId` (or other unmapped) fields changed — this
+ *      catches the worker's own write-back echo.
+ *   2. The mapped fields already match `after.wave.lastSyncedHash` (already in
+ *      sync) — this absorbs the import's full-doc writes so they don't enqueue.
+ *
+ * A create (`before == null`) is enqueued unless rule 2 already marks it
+ * synced (e.g. the import wrote the doc with a matching `lastSyncedHash`).
+ *
+ * @param {Object|null|undefined} before Pre-write client document data
+ *   (null/undefined on a create).
+ * @param {Object|null|undefined} after Post-write client document data. Callers
+ *   must not invoke this for a delete (after absent) — that path returns early
+ *   in the trigger.
+ * @return {boolean} True when a job should be enqueued.
+ */
+function shouldEnqueueClientWrite(before, after) {
+  const afterData = after || {};
+  const afterHash = mappedFieldsHash(afterData);
+
+  // Rule 1: mapped fields unchanged vs. before → wave-only/unmapped change.
+  if (before && afterHash === mappedFieldsHash(before)) {
+    return false;
+  }
+
+  // Rule 2: mapped fields already equal the last synced hash → no-op.
+  const wave = (afterData.wave && typeof afterData.wave === "object") ?
+    afterData.wave : {};
+  if (afterHash === wave.lastSyncedHash) {
+    return false;
+  }
+
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -482,4 +530,8 @@ async function drainQueue(deps = {}) {
   return summary;
 }
 
-module.exports = {enqueueCustomerUpsert, drainQueue};
+module.exports = {
+  enqueueCustomerUpsert,
+  drainQueue,
+  shouldEnqueueClientWrite,
+};

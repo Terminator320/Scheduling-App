@@ -8,7 +8,18 @@ const {defineSecret} = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const {initializeApp} = require("firebase-admin/app");
 const {getAuth} = require("firebase-admin/auth");
-const {getFirestore} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+
+const {WAVE_FULL_ACCESS_TOKEN} = require("./wave/auth");
+const {graphql, whoami, listBusinesses} = require("./wave/client");
+const {importCustomers} = require("./wave/customers");
+const {
+  enqueueCustomerUpsert,
+  drainQueue,
+  shouldEnqueueClientWrite,
+} = require("./wave/worker");
+const {mappedFieldsHash} = require("./wave/mappers");
+const {classifyWaveError} = require("./wave/errors");
 
 setGlobalOptions({maxInstances: 10});
 
@@ -196,6 +207,12 @@ const PLACES_DETAILS_RATE_WINDOW_MS = 15 * 60 * 1000;
 // stolen-but-not-yet-expired token could trigger irreversible deletion.
 const REAUTH_MAX_AGE_SECONDS = 5 * 60;
 
+// waveImportCustomers is a heavy one-shot admin op (it paginates ~650 customers
+// across ~7 Wave pages). A modest durable cap keeps a stuck/retried admin from
+// hammering Wave: 5 imports per hour is ample for a setup/reconcile action.
+const WAVE_IMPORT_RATE_MAX = 5;
+const WAVE_IMPORT_RATE_WINDOW_MS = 60 * 60 * 1000;
+
 /**
  * True when the string contains a C0 control character (code < 0x20) or DEL
  * (0x7F). Control characters have no place in a place query, place id, or
@@ -322,6 +339,29 @@ async function enforceDurableRateLimit(route, uid, max, windowMs) {
   if (overLimit) {
     logger.warn("enforceDurableRateLimit: limit exceeded", {route, uid});
     throw new HttpsError("resource-exhausted", "too-many-attempts");
+  }
+}
+
+/**
+ * Asserts the caller is an active admin by reading the `usersByUid/{uid}`
+ * bridge (kept in sync by syncUsersByUid; fields `{role, docId, status}`).
+ * Throws HttpsError("permission-denied", "wave/not-admin") for any caller who
+ * is not an `admin` with an `active` status — including a missing bridge doc.
+ * The role is read from Firestore, never from a client-supplied value.
+ * @param {string} uid Firebase Auth uid of the caller.
+ * @return {!Promise<void>}
+ */
+async function assertAdmin(uid) {
+  const db = getFirestore();
+  const snap = await db.collection("usersByUid").doc(uid).get();
+  const data = snap.exists ? snap.data() : null;
+  if (!data || data.role !== "admin" || data.status !== "active") {
+    logger.warn("assertAdmin: caller is not an active admin", {
+      uid,
+      role: data ? data.role : null,
+      status: data ? data.status : null,
+    });
+    throw new HttpsError("permission-denied", "wave/not-admin");
   }
 }
 
@@ -793,6 +833,239 @@ exports.purgeExpiredHistory = onSchedule(
         imageFailures,
         retentionYears: HISTORY_RETENTION_YEARS,
         cutoff: cutoff.toISOString(),
+      });
+    },
+);
+
+// ----- Wave Accounting integration ------------------------------------------
+//
+// Four functions wire the app's `clients` collection to Wave Accounting
+// customers (plan Task 5). The single `wave/connection` doc holds the selected
+// business id; `waveSyncQueue` is a durable outbox drained on a schedule. The
+// heavy lifting (GraphQL transport, mapping, queue mechanics) lives in the
+// `wave/*` modules — these functions are thin orchestrators that add auth,
+// admin, and rate-limit guards and translate Wave errors into HttpsErrors.
+//
+// App Check posture mirrors deleteAccount/resolveMyInvite: the two admin
+// callables run enforceAppCheck:false with a TODO(pre-ship) until Play
+// Integrity can mint verified tokens for store builds.
+
+/**
+ * Reads the connected Wave `businessId` from the `wave/connection` doc, or
+ * returns "" when the doc/field is absent. Used by the callables/scheduler to
+ * gate on "bootstrapped yet?".
+ * @return {!Promise<string>} The business id, or "" if not connected.
+ */
+async function readWaveBusinessId() {
+  const snap = await getFirestore().collection("wave").doc("connection").get();
+  const data = snap.exists ? snap.data() : null;
+  return data && typeof data.businessId === "string" ? data.businessId : "";
+}
+
+// 1) waveBootstrap — admin-only, idempotent get-or-create of wave/connection.
+exports.waveBootstrap = onCall(
+    // TODO(pre-ship): set back to `enforceAppCheck: true` once the app ships
+    // through Play Store and Play Integrity can mint verified App Check tokens.
+    {secrets: [WAVE_FULL_ACCESS_TOKEN], enforceAppCheck: false},
+    async (req) => {
+      if (!req.auth || !req.auth.uid) {
+        throw new HttpsError("unauthenticated", "auth-required");
+      }
+      assertPayloadShape(req.data, new Set(["businessId", "businessName"]));
+      await assertAdmin(req.auth.uid);
+
+      const db = getFirestore();
+      const ref = db.collection("wave").doc("connection");
+
+      // Idempotent: an already-connected doc is returned unchanged.
+      const existing = await ref.get();
+      if (existing.exists && existing.data() &&
+          typeof existing.data().businessId === "string" &&
+          existing.data().businessId) {
+        const d = existing.data();
+        logger.info("WAVE-BOOT already connected", {
+          uid: req.auth.uid,
+          businessId: d.businessId,
+        });
+        return {businessId: d.businessId, businessName: d.businessName || ""};
+      }
+
+      const wantId = typeof req.data?.businessId === "string" ?
+        req.data.businessId.trim() : "";
+      const wantName = typeof req.data?.businessName === "string" ?
+        req.data.businessName.trim() : "";
+
+      // Network calls run OUTSIDE the transaction (transactions retry; a Wave
+      // mutation must never run more than once). whoami() fast-fails a bad
+      // token before we list businesses.
+      let selected;
+      try {
+        await whoami();
+        const businesses = await listBusinesses();
+        selected = selectBusiness(businesses, wantId, wantName);
+      } catch (e) {
+        if (e instanceof HttpsError) throw e;
+        const {code, message} = classifyWaveError(e);
+        logger.warn("WAVE-BOOT failed", {uid: req.auth.uid, code, message});
+        throw new HttpsError(code, message);
+      }
+
+      // Transaction set-if-absent so concurrent first calls converge on one
+      // connection (the first writer wins; later writers return its value).
+      const result = await db.runTransaction(async (tx) => {
+        const fresh = await tx.get(ref);
+        const fd = fresh.exists ? fresh.data() : null;
+        if (fd && typeof fd.businessId === "string" && fd.businessId) {
+          return {businessId: fd.businessId, businessName: fd.businessName ||
+            ""};
+        }
+        tx.set(ref, {
+          businessId: selected.id,
+          businessName: selected.name || "",
+          bootstrappedAt: FieldValue.serverTimestamp(),
+        });
+        return {businessId: selected.id, businessName: selected.name || ""};
+      });
+
+      logger.info("WAVE-BOOT connected", {
+        uid: req.auth.uid,
+        businessId: result.businessId,
+      });
+      return result;
+    },
+);
+
+/**
+ * Selects the intended Wave business from the listed businesses. Selection
+ * order: by id when `wantId` is given, else by name when `wantName` is given,
+ * else the single business when exactly one exists. Never blindly takes the
+ * first of several.
+ * @param {!Array<{id: string, name: string}>} businesses Listed businesses.
+ * @param {string} wantId Requested business id ("" when not provided).
+ * @param {string} wantName Requested business name ("" when not provided).
+ * @return {{id: string, name: string}} The selected business.
+ * @throws {HttpsError} not-found when a given id/name has no match;
+ *   failed-precondition when ambiguous (several businesses, no selector).
+ */
+function selectBusiness(businesses, wantId, wantName) {
+  const list = Array.isArray(businesses) ? businesses : [];
+  if (wantId) {
+    const match = list.find((b) => b && b.id === wantId);
+    if (!match) throw new HttpsError("not-found", "wave/business-not-found");
+    return match;
+  }
+  if (wantName) {
+    const match = list.find((b) => b && b.name === wantName);
+    if (!match) throw new HttpsError("not-found", "wave/business-not-found");
+    return match;
+  }
+  if (list.length === 1) return list[0];
+  throw new HttpsError("failed-precondition", "wave/business-ambiguous");
+}
+
+// 2) waveImportCustomers — admin-only one-shot Wave → App seed.
+exports.waveImportCustomers = onCall(
+    // TODO(pre-ship): set back to `enforceAppCheck: true` once the app ships
+    // through Play Store and Play Integrity can mint verified App Check tokens.
+    {
+      secrets: [WAVE_FULL_ACCESS_TOKEN],
+      enforceAppCheck: false,
+      timeoutSeconds: 300,
+    },
+    async (req) => {
+      if (!req.auth || !req.auth.uid) {
+        throw new HttpsError("unauthenticated", "auth-required");
+      }
+      assertPayloadShape(req.data, new Set());
+      await assertAdmin(req.auth.uid);
+      await enforceDurableRateLimit(
+          "wave-import",
+          req.auth.uid,
+          WAVE_IMPORT_RATE_MAX,
+          WAVE_IMPORT_RATE_WINDOW_MS,
+      );
+
+      const businessId = await readWaveBusinessId();
+      if (!businessId) {
+        throw new HttpsError("failed-precondition", "wave/not-bootstrapped");
+      }
+
+      logger.info("WAVE-CUST import starting", {
+        uid: req.auth.uid,
+        businessId,
+      });
+      let summary;
+      try {
+        summary = await importCustomers({businessId, graphql});
+      } catch (e) {
+        const {code, message} = classifyWaveError(e);
+        logger.warn("WAVE-CUST import failed", {
+          uid: req.auth.uid,
+          code,
+          message,
+        });
+        throw new HttpsError(code, message);
+      }
+
+      logger.info("WAVE-CUST import done", {
+        uid: req.auth.uid,
+        totalCount: summary.totalCount,
+        imported: summary.imported,
+        updated: summary.updated,
+        skippedArchived: summary.skippedArchived,
+        pages: summary.pages,
+      });
+      return summary;
+    },
+);
+
+// 3) waveUpsertCustomer — enqueues a Wave write-back when a client doc's mapped
+// fields change. No secret needed (it only writes to the Firestore outbox).
+exports.waveUpsertCustomer = onDocumentWritten(
+    "clients/{clientId}",
+    async (event) => {
+      const beforeSnap = event.data?.before;
+      const afterSnap = event.data?.after;
+      const after = afterSnap?.exists ? afterSnap.data() : null;
+
+      // Delete: the local doc is dropped and Wave is left intact (plan). No
+      // enqueue.
+      if (!after) return;
+
+      const before = beforeSnap?.exists ? beforeSnap.data() : null;
+      if (!shouldEnqueueClientWrite(before, after)) return;
+
+      const clientId = event.params.clientId;
+      await enqueueCustomerUpsert(clientId, {
+        payloadHash: mappedFieldsHash(after),
+      });
+      logger.debug("waveUpsertCustomer: enqueued", {clientId});
+    },
+);
+
+// 4) waveSyncWorker — drains the Wave outbox on a schedule. Single instance so
+// Wave pacing stays simple; the worker's lease reaper + transactional claim
+// handle robustness. 1/min × default batchLimit 30 = 30 Wave calls/min (< 60).
+exports.waveSyncWorker = onSchedule(
+    {
+      schedule: "every 1 minutes",
+      secrets: [WAVE_FULL_ACCESS_TOKEN],
+      maxInstances: 1,
+    },
+    async () => {
+      const businessId = await readWaveBusinessId();
+      if (!businessId) {
+        logger.debug("waveSyncWorker: not bootstrapped — nothing to do");
+        return;
+      }
+      const summary = await drainQueue({businessId});
+      logger.info("waveSyncWorker: drain done", {
+        processed: summary.processed,
+        done: summary.done,
+        retried: summary.retried,
+        dead: summary.dead,
+        skipped: summary.skipped,
+        reclaimed: summary.reclaimed,
       });
     },
 );
