@@ -165,6 +165,61 @@ describe("graphql() 429 retry", () => {
     expect(delays.length).toBe(1);
     expect(delays[0]).toBe(2000); // 2 seconds in ms
   });
+
+  // Fix #2 regression: Retry-After: 3600 must be clamped to 60000 ms
+  test("Fix#2: Retry-After:3600 is clamped to 60000 ms", async () => {
+    const delays = [];
+    const sleepSpy = (ms) => {
+      delays.push(ms);
+      return Promise.resolve();
+    };
+    const fetch = sequencedFetch(
+        mockResponse(429, null, {"retry-after": "3600"}),
+        mockResponse(200, {data: {}}),
+    );
+    await graphql(
+        "query { ok }",
+        {},
+        {
+          token: "t",
+          fetchImpl: jest.fn(fetch),
+          sleepFn: sleepSpy,
+          maxRetries: 1,
+        },
+    );
+    expect(delays.length).toBe(1);
+    // 3600 s = 3,600,000 ms; must be clamped to 60,000 ms
+    expect(delays[0]).toBe(60000);
+    expect(delays[0]).not.toBe(3600000);
+  });
+
+  // Fix #4 regression: Retry-After:0 must be honored as 0, not fall through
+  // to jittered backoff (which would always be >= 250 ms)
+  test("Fix#4: Retry-After:0 is honored as 0 ms, not treated as absent",
+      async () => {
+        const delays = [];
+        const sleepSpy = (ms) => {
+          delays.push(ms);
+          return Promise.resolve();
+        };
+        const fetch = sequencedFetch(
+            mockResponse(429, null, {"retry-after": "0"}),
+            mockResponse(200, {data: {}}),
+        );
+        await graphql(
+            "query { ok }",
+            {},
+            {
+              token: "t",
+              fetchImpl: jest.fn(fetch),
+              sleepFn: sleepSpy,
+              maxRetries: 1,
+            },
+        );
+        expect(delays.length).toBe(1);
+        // Must be exactly 0 (header honored), not a backoff value
+        expect(delays[0]).toBe(0);
+      });
 });
 
 // ---------------------------------------------------------------------------
@@ -283,6 +338,41 @@ describe("graphql() GraphQL errors", () => {
 });
 
 // ---------------------------------------------------------------------------
+// graphql() — Fix #3: non-object 200 body guard
+// ---------------------------------------------------------------------------
+
+describe("graphql() non-object 200 body (Fix #3)", () => {
+  test("200 with JSON-null body throws WaveApiError kind unknown",
+      async () => {
+        const fetch = jest.fn().mockResolvedValue(mockResponse(200, null));
+        const err = await graphql(
+            "query { ok }",
+            {},
+            opts(fetch, {maxRetries: 0}),
+        ).catch((e) => e);
+        expect(err).toBeInstanceOf(WaveApiError);
+        expect(err.kind).toBe("unknown");
+        // Must NOT be a raw TypeError from null.errors access
+        expect(err.constructor.name).not.toBe("TypeError");
+      });
+
+  test("200 with JSON-array body throws WaveApiError kind unknown",
+      async () => {
+        const fetch = jest.fn().mockResolvedValue(
+            mockResponse(200, ["not", "an", "object"]),
+        );
+        const err = await graphql(
+            "query { ok }",
+            {},
+            opts(fetch, {maxRetries: 0}),
+        ).catch((e) => e);
+        expect(err).toBeInstanceOf(WaveApiError);
+        expect(err.kind).toBe("unknown");
+        expect(err.constructor.name).not.toBe("TypeError");
+      });
+});
+
+// ---------------------------------------------------------------------------
 // graphql() — unknown status
 // ---------------------------------------------------------------------------
 
@@ -333,6 +423,30 @@ describe("whoami()", () => {
         expect(sent.query).toContain("user");
         expect(sent.query).toContain("id");
         expect(sent.query).toContain("defaultEmail");
+      });
+
+  // Fix #1 regression: off-spec 200 must throw WaveApiError, not TypeError
+  test("Fix#1: 200 with {data:{}} (no user) throws WaveApiError kind unknown",
+      async () => {
+        const fetch = jest.fn().mockResolvedValue(
+            mockResponse(200, {data: {}}),
+        );
+        const err = await whoami(opts(fetch)).catch((e) => e);
+        expect(err).toBeInstanceOf(WaveApiError);
+        expect(err.kind).toBe("unknown");
+        // Must NOT be a raw TypeError
+        expect(err.constructor.name).not.toBe("TypeError");
+      });
+
+  test("Fix#1: 200 with {data:null} throws WaveApiError kind unknown",
+      async () => {
+        const fetch = jest.fn().mockResolvedValue(
+            mockResponse(200, {data: null}),
+        );
+        const err = await whoami(opts(fetch)).catch((e) => e);
+        expect(err).toBeInstanceOf(WaveApiError);
+        expect(err.kind).toBe("unknown");
+        expect(err.constructor.name).not.toBe("TypeError");
       });
 });
 

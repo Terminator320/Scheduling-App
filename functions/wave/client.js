@@ -26,6 +26,9 @@ const WAVE_GQL_URL = "https://gql.waveapps.com/graphql/public";
 const DEFAULT_MAX_RETRIES = 3;
 const BASE_DELAY_MS = 500;
 const MAX_DELAY_MS = 10_000;
+// Hard ceiling on the Retry-After header value so a rogue/misconfigured
+// server cannot stall the function against its Cloud Run timeout.
+const MAX_RETRY_AFTER_MS = 60_000;
 
 // ---------------------------------------------------------------------------
 // WaveApiError
@@ -177,7 +180,13 @@ async function graphql(query, variables = {}, options = {}) {
     // Rate limit: retry with Retry-After or backoff.
     if (status === 429) {
       if (attempt < maxRetries) {
-        const delay = retryAfterMs(response.headers) || backoffMs(attempt);
+        const headerDelay = retryAfterMs(response.headers);
+        // Fix #4: treat 0 as a valid header value (honor it), only fall back
+        // to backoff when the header is genuinely absent (null).
+        // Fix #2: clamp to MAX_RETRY_AFTER_MS so a huge header can't stall us.
+        const delay = headerDelay == null ?
+          backoffMs(attempt) :
+          Math.min(headerDelay, MAX_RETRY_AFTER_MS);
         await sleep(sleepFn, delay);
         attempt++;
         continue;
@@ -224,6 +233,16 @@ async function graphql(query, variables = {}, options = {}) {
       );
     }
 
+    // Fix #3: guard against null or non-object bodies (e.g. null, array)
+    // before property access to avoid a raw TypeError.
+    if (body === null || Array.isArray(body) || typeof body !== "object") {
+      throw new WaveApiError(
+          "unknown",
+          "Wave API returned a 2xx response with an unexpected body shape.",
+          body,
+      );
+    }
+
     if (Array.isArray(body.errors) && body.errors.length > 0) {
       const messages = body.errors
           .map((e) => (typeof e.message === "string" ? e.message : String(e)))
@@ -255,6 +274,15 @@ async function whoami(options = {}) {
       {},
       options,
   );
+  // Fix #1: a 200 with no data.user (off-spec response) must throw a typed
+  // WaveApiError rather than a raw TypeError from `undefined.user`.
+  if (data == null || data.user == null) {
+    throw new WaveApiError(
+        "unknown",
+        "Wave API /whoami returned a 200 but no user object in data.",
+        {data},
+    );
+  }
   return data.user;
 }
 
