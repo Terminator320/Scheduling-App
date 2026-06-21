@@ -262,7 +262,7 @@ describe("drainQueue happy path", () => {
         expect(lastUpdate.lastError).toBeNull();
 
         expect(summary).toEqual({
-          processed: 1, done: 1, retried: 0, dead: 0, skipped: 0,
+          processed: 1, done: 1, retried: 0, dead: 0, skipped: 0, reclaimed: 0,
         });
 
         expect(logger.error).not.toHaveBeenCalled();
@@ -435,7 +435,7 @@ describe("drainQueue retryable errors", () => {
         });
 
         expect(summary).toEqual({
-          processed: 1, done: 0, retried: 1, dead: 0, skipped: 0,
+          processed: 1, done: 0, retried: 1, dead: 0, skipped: 0, reclaimed: 0,
         });
 
         const finalUpdate = refs[0].updates[refs[0].updates.length - 1];
@@ -510,7 +510,7 @@ describe("drainQueue retryable errors", () => {
     });
 
     expect(summary).toEqual({
-      processed: 1, done: 0, retried: 0, dead: 1, skipped: 0,
+      processed: 1, done: 0, retried: 0, dead: 1, skipped: 0, reclaimed: 0,
     });
 
     const finalUpdate = refs[0].updates[refs[0].updates.length - 1];
@@ -597,6 +597,7 @@ describe("drainQueue non-retryable errors", () => {
 
         expect(summary).toEqual({
           processed: 1, done: 0, retried: 0, dead: 1, skipped: 0,
+          reclaimed: 0,
         });
         const finalUpdate = refs[0].updates[refs[0].updates.length - 1];
         expect(finalUpdate.status).toBe("dead");
@@ -638,6 +639,7 @@ describe("drainQueue non-retryable errors", () => {
 
         expect(summary).toEqual({
           processed: 1, done: 0, retried: 0, dead: 1, skipped: 0,
+          reclaimed: 0,
         });
 
         const finalUpdate = refs[0].updates[refs[0].updates.length - 1];
@@ -804,5 +806,351 @@ describe("drainQueue defaults", () => {
     await drainQueue({db, now, logger: fakeLogger(),
       upsertCustomer: jest.fn(), backoffFn: fixedBackoff()});
     expect(capturedLimit).toBe(30);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// claim stamps claimedAt + reclaim pass — shared constants
+// ---------------------------------------------------------------------------
+
+/**
+ * Lease used in reclaim tests (60 s) — short enough to be precise in tests
+ * without coupling to the production default (600 s).
+ */
+const TEST_LEASE_MS = 60_000;
+
+// ---------------------------------------------------------------------------
+// claim stamps claimedAt
+// ---------------------------------------------------------------------------
+
+describe("drainQueue claim stamps claimedAt", () => {
+  test("claim transaction sets status:inflight and claimedAt", async () => {
+    const nowDate = new Date("2024-06-01T10:00:00Z");
+    const nowFn = () => nowDate;
+
+    const job = {
+      id: "customerUpsert__c1",
+      data: {
+        type: "customerUpsert",
+        refPath: "clients/c1",
+        status: "queued",
+        attempts: 0,
+        nextAttemptAt: new Date("2024-01-01"),
+        lastError: null,
+        idempotencyKey: "customerUpsert__c1",
+      },
+    };
+    const {db} = drainDb([job]);
+
+    // Replace runTransaction to capture what the claim writes.
+    const claimWrites = [];
+    db.runTransaction = jest.fn(async (fn) => {
+      const txn = {
+        get: jest.fn((ref) =>
+          Promise.resolve(snap(ref.id, {...ref._data}, ref))),
+        update: jest.fn((ref, fields) => {
+          claimWrites.push({ref, fields});
+          Object.assign(ref._data, fields);
+        }),
+      };
+      return fn(txn);
+    });
+
+    await drainQueue({
+      db, now: nowFn, logger: fakeLogger(),
+      upsertCustomer: jest.fn(() => Promise.resolve({status: "done"})),
+      backoffFn: fixedBackoff(),
+      leaseMs: TEST_LEASE_MS,
+    });
+
+    // The claim write should have set status:inflight and claimedAt.
+    const claimWrite = claimWrites.find((w) =>
+      w.fields.status === "inflight");
+    expect(claimWrite).toBeDefined();
+    expect(claimWrite.fields.claimedAt).toBe(nowDate);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// drainQueue — reclaim pass
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds a fake Firestore that returns stale `inflight` jobs from the reclaim
+ * query and an empty result for the main `queued` drain query.
+ *
+ * @param {!Array<{id:string, data:Object}>} staleJobs Inflight jobs older than
+ *   the lease to return from the reclaim query.
+ * @param {Object=} opts
+ * @param {boolean=} opts.reclaimTxSucceeds Whether the reclaim transaction
+ *   should resolve (default true).
+ * @return {{db: !Object, staleRefs: !Array<!Object>}}
+ */
+function reclaimDb(staleJobs, opts = {}) {
+  const reclaimTxSucceeds = opts.reclaimTxSucceeds !== false;
+  const staleRefs = staleJobs.map((j) => fakeRef(j.id, {...j.data}));
+  const staleSnaps = staleRefs.map((ref, i) =>
+    snap(staleJobs[i].id, {...staleJobs[i].data}, ref));
+
+  // Each collection() call returns a fresh query builder. The reclaim query
+  // filters status=='inflight' and gets the stale docs; the main drain query
+  // filters status=='queued' and gets an empty result.
+  const makeQueryBuilder = () => {
+    // Use a closure variable so arrow functions can read the accumulated
+    // filter without triggering the no-invalid-this lint rule.
+    let statusFilter = null;
+    const qb = {
+      where: jest.fn((field, op, val) => {
+        if (field === "status") statusFilter = val;
+        return qb;
+      }),
+      orderBy: jest.fn(() => qb),
+      limit: jest.fn(() => qb),
+      get: jest.fn(() => {
+        const docs = statusFilter === "inflight" ? staleSnaps : [];
+        return Promise.resolve({docs});
+      }),
+    };
+    return qb;
+  };
+
+  const db = {
+    collection: jest.fn((col) => {
+      if (col !== "waveSyncQueue") throw new Error(`unexpected col: ${col}`);
+      return makeQueryBuilder();
+    }),
+    runTransaction: jest.fn(async (fn) => {
+      if (!reclaimTxSucceeds) throw new Error("reclaim tx contention");
+      const txn = {
+        get: jest.fn((ref) =>
+          Promise.resolve(snap(ref.id, {...ref._data}, ref))),
+        update: jest.fn((ref, fields) => {
+          Object.assign(ref._data, fields);
+        }),
+      };
+      return fn(txn);
+    }),
+  };
+
+  return {db, staleRefs};
+}
+
+describe("drainQueue reclaim pass", () => {
+  // Fixed "now" for reclaim tests: jobs claimed before this minus leaseMs
+  // are stale.
+  const NOW_MS = new Date("2024-06-01T10:00:00Z").getTime();
+  const nowDate = new Date(NOW_MS);
+  const nowFn = () => nowDate;
+
+  // A claimedAt that is definitely stale (2 × leaseMs ago).
+  const staleClaimedAt = new Date(NOW_MS - TEST_LEASE_MS * 2);
+  // A claimedAt that is fresh (half leaseMs ago — within the lease).
+  const freshClaimedAt = new Date(NOW_MS - TEST_LEASE_MS / 2);
+
+  test("stale inflight job is reset to queued, attempts bumped, " +
+    "nextAttemptAt advanced, reclaimed counter increments", async () => {
+    const staleJob = {
+      id: "customerUpsert__c1",
+      data: {
+        type: "customerUpsert",
+        refPath: "clients/c1",
+        status: "inflight",
+        attempts: 1,
+        claimedAt: staleClaimedAt,
+        nextAttemptAt: new Date("2024-01-01"),
+        lastError: null,
+        idempotencyKey: "customerUpsert__c1",
+      },
+    };
+    const {db, staleRefs} = reclaimDb([staleJob]);
+    const logger = fakeLogger();
+    const backoffFn = fixedBackoff(5000);
+
+    const summary = await drainQueue({
+      db, now: nowFn, logger,
+      upsertCustomer: jest.fn(),
+      maxAttempts: 5,
+      backoffFn,
+      leaseMs: TEST_LEASE_MS,
+    });
+
+    expect(summary.reclaimed).toBe(1);
+
+    const ref = staleRefs[0];
+    const lastUpdate = ref.updates[ref.updates.length - 1];
+    expect(lastUpdate.status).toBe("queued");
+    expect(lastUpdate.attempts).toBe(2); // was 1, bumped to 2
+    expect(lastUpdate.lastError).toBe("reclaimed: lease expired");
+    expect(lastUpdate.nextAttemptAt).toBeInstanceOf(Date);
+    // nextAttemptAt must be strictly after nowDate.
+    expect(lastUpdate.nextAttemptAt.getTime()).toBeGreaterThan(NOW_MS);
+
+    // backoffFn called with pre-increment index (attempts-1 = 1).
+    expect(backoffFn).toHaveBeenCalledWith(1);
+
+    // No error log for a reclaim that goes back to queued.
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  test("fresh inflight job (within lease) is NOT reclaimed", async () => {
+    const freshJob = {
+      id: "customerUpsert__c2",
+      data: {
+        type: "customerUpsert",
+        refPath: "clients/c2",
+        status: "inflight",
+        attempts: 0,
+        claimedAt: freshClaimedAt,
+        nextAttemptAt: new Date("2024-01-01"),
+        lastError: null,
+        idempotencyKey: "customerUpsert__c2",
+      },
+    };
+
+    // Override the reclaim query transaction to simulate a fresh job:
+    // when the tx re-reads, claimedAt is within the lease window.
+    const {db, staleRefs} = reclaimDb([freshJob]);
+
+    // Replace the transaction to return data with a fresh claimedAt so the
+    // guard condition `claimedAtMs > nowMs - leaseMs` fires and bails out.
+    db.runTransaction = jest.fn(async (fn) => {
+      const txn = {
+        get: jest.fn((ref) =>
+          Promise.resolve(snap(ref.id, {
+            ...ref._data,
+            claimedAt: freshClaimedAt,
+          }, ref))),
+        update: jest.fn(),
+      };
+      return fn(txn);
+    });
+
+    const summary = await drainQueue({
+      db, now: nowFn, logger: fakeLogger(),
+      upsertCustomer: jest.fn(),
+      maxAttempts: 5,
+      backoffFn: fixedBackoff(),
+      leaseMs: TEST_LEASE_MS,
+    });
+
+    expect(summary.reclaimed).toBe(0);
+    // The ref should have no outcome update (only the reclaim transaction ran,
+    // which bailed out without writing).
+    expect(staleRefs[0].updates).toHaveLength(0);
+  });
+
+  test("stale inflight job at maxAttempts-1 is dead-lettered on reclaim",
+      async () => {
+        const maxAttempts = 3;
+        const staleJob = {
+          id: "customerUpsert__c1",
+          data: {
+            type: "customerUpsert",
+            refPath: "clients/c1",
+            status: "inflight",
+            // Already at maxAttempts - 1: reclaim bumps to cap → dead.
+            attempts: maxAttempts - 1,
+            claimedAt: staleClaimedAt,
+            nextAttemptAt: new Date("2024-01-01"),
+            lastError: null,
+            idempotencyKey: "customerUpsert__c1",
+          },
+        };
+        const {db, staleRefs} = reclaimDb([staleJob]);
+        const logger = fakeLogger();
+
+        const summary = await drainQueue({
+          db, now: nowFn, logger,
+          upsertCustomer: jest.fn(),
+          maxAttempts,
+          backoffFn: fixedBackoff(),
+          leaseMs: TEST_LEASE_MS,
+        });
+
+        expect(summary.reclaimed).toBe(1);
+
+        const ref = staleRefs[0];
+        const lastUpdate = ref.updates[ref.updates.length - 1];
+        expect(lastUpdate.status).toBe("dead");
+        expect(lastUpdate.attempts).toBe(maxAttempts);
+        expect(typeof lastUpdate.lastError).toBe("string");
+
+        // Must log at error level for dead-letter.
+        expect(logger.error).toHaveBeenCalledTimes(1);
+        const [msg, meta] = logger.error.mock.calls[0];
+        expect(typeof msg).toBe("string");
+        expect(meta.jobId).toBe("customerUpsert__c1");
+      });
+});
+
+// ---------------------------------------------------------------------------
+// enqueueCustomerUpsert — payloadHash
+// ---------------------------------------------------------------------------
+
+describe("enqueueCustomerUpsert payloadHash", () => {
+  test("writes payloadHash when provided", async () => {
+    const {db, ref} = enqueueDb("customerUpsert__c1");
+    await enqueueCustomerUpsert("c1", {db, now, payloadHash: "abc123"});
+
+    expect(ref.set).toHaveBeenCalledWith(
+        expect.objectContaining({payloadHash: "abc123"}),
+        {merge: true},
+    );
+  });
+
+  test("omits payloadHash when not provided", async () => {
+    const {db, ref} = enqueueDb("customerUpsert__c1");
+    await enqueueCustomerUpsert("c1", {db, now});
+
+    const written = ref.sets[0].data;
+    expect(Object.prototype.hasOwnProperty.call(written, "payloadHash"))
+        .toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// drainQueue — WaveApiError('unknown') → dead immediately (Fix #5)
+// ---------------------------------------------------------------------------
+
+describe("drainQueue non-retryable errors (additional)", () => {
+  test("WaveApiError('unknown') → dead immediately, no retry", async () => {
+    const job = {
+      id: "customerUpsert__c1",
+      data: {
+        type: "customerUpsert",
+        refPath: "clients/c1",
+        status: "queued",
+        attempts: 0,
+        nextAttemptAt: new Date("2024-01-01"),
+        lastError: null,
+        idempotencyKey: "customerUpsert__c1",
+      },
+    };
+    const {db, refs} = drainDb([job]);
+    const unknownErr = new WaveApiError("unknown", "something unrecognised");
+    const mockUpsert = jest.fn(() => Promise.reject(unknownErr));
+    const logger = fakeLogger();
+
+    const summary = await drainQueue({
+      db, now, logger,
+      upsertCustomer: mockUpsert,
+      maxAttempts: 5,
+      backoffFn: fixedBackoff(),
+    });
+
+    expect(summary).toEqual({
+      processed: 1, done: 0, retried: 0, dead: 1, skipped: 0, reclaimed: 0,
+    });
+
+    const finalUpdate = refs[0].updates[refs[0].updates.length - 1];
+    expect(finalUpdate.status).toBe("dead");
+    expect(finalUpdate.attempts).toBe(1);
+
+    // Logged at error level.
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    const logMeta = logger.error.mock.calls[0][1];
+    expect(logMeta.errorKind).toBe("unknown");
+    // Must not echo the raw error message.
+    expect(JSON.stringify(logMeta)).not.toContain("something unrecognised");
   });
 });
