@@ -10,6 +10,21 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.15.1+26] - 2026-06-21
+### Changed
+- **iOS build now uses Swift Package Manager; CocoaPods removed.** All native
+  iOS plugins are resolved through Swift Package Manager and the CocoaPods
+  integration (Podfile, Pods project, and xcconfig includes) has been removed,
+  which speeds up iOS builds. No change to app behavior. The custom
+  permission-handler setup is no longer needed — only the permissions the app
+  actually declares in Info.plist (camera, photos, contacts) are compiled in.
+- **Image uploads no longer double-compress.** Picked images were being resized
+  and JPEG-compressed once by the image picker and then a second time by a
+  separate compression step. The redundant pass and its plugin
+  (`flutter_image_compress`) were removed; the picker now produces the upload
+  image directly at the same target size and quality. Uploads look the same and
+  stay well under the size limit.
+
 ## [1.15.0+25] - 2026-06-11
 ### Added
 - **Password strength checklist when creating an account.** The create-account

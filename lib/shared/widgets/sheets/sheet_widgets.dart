@@ -37,7 +37,15 @@ class DraggableSheetFrame extends StatelessWidget {
               ),
               boxShadow: AppShadow.sheet,
             ),
-            child: builder(sheetContext, scrollController),
+            // A transparent Material sits between the decorated Container and
+            // the sheet content so descendant ListTiles paint their background
+            // and ink ripples here (above the Container's surface color) rather
+            // than on the modal Material below, where the Container would hide
+            // them.
+            child: Material(
+              type: MaterialType.transparency,
+              child: builder(sheetContext, scrollController),
+            ),
           ),
         );
       },
