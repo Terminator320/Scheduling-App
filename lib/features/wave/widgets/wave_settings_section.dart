@@ -52,7 +52,11 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
       ref
           .read(noticeServiceProvider)
           .success(
-            context.l10n.wave_importSuccess(summary.imported, summary.updated),
+            context.l10n.wave_importSuccess(
+              summary.imported,
+              summary.updated,
+              summary.skippedArchived,
+            ),
           );
     } on WaveFailure catch (e) {
       if (!mounted) return;

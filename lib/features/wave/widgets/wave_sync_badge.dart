@@ -47,7 +47,7 @@ class WaveSyncBadge extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(config.icon, size: 12, color: config.foreground),
-            const SizedBox(width: 4),
+            const SizedBox(width: AppSpacing.sp4),
             Text(
               config.label,
               style: theme.textTheme.labelSmall?.copyWith(
