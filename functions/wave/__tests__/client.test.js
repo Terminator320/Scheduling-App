@@ -1,0 +1,392 @@
+"use strict";
+
+const {WaveApiError, graphql, whoami, listBusinesses} =
+  require("../client");
+
+// ---------------------------------------------------------------------------
+// Shared test helpers
+// ---------------------------------------------------------------------------
+
+// No-op sleep so retry tests complete instantly.
+const noopSleep = () => Promise.resolve();
+
+/**
+ * Builds a minimal options bag injecting token + fetchImpl + sleepFn so no
+ * real secret or network is touched.
+ * @param {function} fetchImpl Mock fetch implementation.
+ * @param {object=} extra Extra overrides merged into options.
+ * @return {object}
+ */
+function opts(fetchImpl, extra = {}) {
+  return {token: "test-token", fetchImpl, sleepFn: noopSleep, ...extra};
+}
+
+/**
+ * Creates a mock Response-like object.
+ * @param {number} status HTTP status code.
+ * @param {*} body Value returned by `.json()`.
+ * @param {object=} headers Optional header key→value map.
+ * @return {object}
+ */
+function mockResponse(status, body, headers = {}) {
+  return {
+    status,
+    headers: {
+      get: (name) => headers[name.toLowerCase()] || null,
+    },
+    json: () => Promise.resolve(body),
+  };
+}
+
+/**
+ * Returns a fetch mock that returns each response from `responses` in order,
+ * repeating the last one forever once the array is exhausted.
+ * @param {...object} responses Response objects to return in sequence.
+ * @return {function(): Promise<object>}
+ */
+function sequencedFetch(...responses) {
+  let i = 0;
+  return () => {
+    const r = responses[Math.min(i, responses.length - 1)];
+    i++;
+    return Promise.resolve(r);
+  };
+}
+
+// ---------------------------------------------------------------------------
+// graphql() — success path
+// ---------------------------------------------------------------------------
+
+describe("graphql() success", () => {
+  test("returns data on HTTP 200 with no errors", async () => {
+    const body = {data: {user: {id: "u1", defaultEmail: "a@b.com"}}};
+    const fetch = jest.fn().mockResolvedValue(mockResponse(200, body));
+    const result = await graphql("query { user { id } }", {}, opts(fetch));
+    expect(result).toEqual(body.data);
+  });
+
+  test("sends Authorization Bearer header", async () => {
+    const fetch = jest.fn().mockResolvedValue(
+        mockResponse(200, {data: {}}),
+    );
+    await graphql("query { user { id } }", {}, opts(fetch));
+    const [, init] = fetch.mock.calls[0];
+    expect(init.headers["Authorization"]).toBe("Bearer test-token");
+  });
+
+  test("sends Content-Type application/json header", async () => {
+    const fetch = jest.fn().mockResolvedValue(
+        mockResponse(200, {data: {}}),
+    );
+    await graphql("query { user { id } }", {}, opts(fetch));
+    const [, init] = fetch.mock.calls[0];
+    expect(init.headers["Content-Type"]).toBe("application/json");
+  });
+
+  test("serializes query AND variables into the body", async () => {
+    const fetch = jest.fn().mockResolvedValue(
+        mockResponse(200, {data: {}}),
+    );
+    const vars = {businessId: "biz1", name: "Acme"};
+    await graphql("mutation { foo }", vars, opts(fetch));
+    const [, init] = fetch.mock.calls[0];
+    const sent = JSON.parse(init.body);
+    expect(sent.query).toBe("mutation { foo }");
+    expect(sent.variables).toEqual(vars);
+  });
+
+  test("variables are NOT string-interpolated into the query", async () => {
+    const fetch = jest.fn().mockResolvedValue(
+        mockResponse(200, {data: {}}),
+    );
+    const vars = {name: "injected-value"};
+    await graphql("mutation { createCustomer }", vars, opts(fetch));
+    const [, init] = fetch.mock.calls[0];
+    const sent = JSON.parse(init.body);
+    // The query string must not contain the variable value.
+    expect(sent.query).not.toContain("injected-value");
+    // The value must be in variables, not baked into query.
+    expect(sent.variables.name).toBe("injected-value");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// graphql() — 429 retry
+// ---------------------------------------------------------------------------
+
+describe("graphql() 429 retry", () => {
+  test("429 then 200 → succeeds after one retry", async () => {
+    const successBody = {data: {ok: true}};
+    const fetch = sequencedFetch(
+        mockResponse(429, null),
+        mockResponse(200, successBody),
+    );
+    const mockFetch = jest.fn(fetch);
+    const result = await graphql(
+        "query { ok }",
+        {},
+        opts(mockFetch, {maxRetries: 3}),
+    );
+    expect(result).toEqual(successBody.data);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  test("429 persisting → throws WaveApiError kind rateLimited", async () => {
+    const alwaysRateLimited = jest.fn().mockResolvedValue(
+        mockResponse(429, null),
+    );
+    await expect(
+        graphql("query { ok }", {}, opts(alwaysRateLimited, {maxRetries: 2})),
+    ).rejects.toMatchObject({kind: "rateLimited"});
+    // Initial attempt + maxRetries retries = maxRetries + 1 calls.
+    expect(alwaysRateLimited).toHaveBeenCalledTimes(3);
+  });
+
+  test("429 with Retry-After header → delay uses header value", async () => {
+    const delays = [];
+    const sleepSpy = (ms) => {
+      delays.push(ms);
+      return Promise.resolve();
+    };
+    const fetch = sequencedFetch(
+        mockResponse(429, null, {"retry-after": "2"}),
+        mockResponse(200, {data: {}}),
+    );
+    await graphql(
+        "query { ok }",
+        {},
+        {
+          token: "t",
+          fetchImpl: jest.fn(fetch),
+          sleepFn: sleepSpy,
+          maxRetries: 1,
+        },
+    );
+    expect(delays.length).toBe(1);
+    expect(delays[0]).toBe(2000); // 2 seconds in ms
+  });
+});
+
+// ---------------------------------------------------------------------------
+// graphql() — 5xx retry
+// ---------------------------------------------------------------------------
+
+describe("graphql() 5xx retry", () => {
+  test("5xx then 200 → retries and succeeds", async () => {
+    const successBody = {data: {value: 42}};
+    const fetch = sequencedFetch(
+        mockResponse(503, null),
+        mockResponse(200, successBody),
+    );
+    const mockFetch = jest.fn(fetch);
+    const result = await graphql(
+        "query { value }",
+        {},
+        opts(mockFetch, {maxRetries: 2}),
+    );
+    expect(result).toEqual(successBody.data);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  test("5xx persisting → throws WaveApiError kind network", async () => {
+    const always500 = jest.fn().mockResolvedValue(mockResponse(500, null));
+    await expect(
+        graphql("query { ok }", {}, opts(always500, {maxRetries: 2})),
+    ).rejects.toMatchObject({kind: "network"});
+    expect(always500).toHaveBeenCalledTimes(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// graphql() — network (fetch rejection) retry
+// ---------------------------------------------------------------------------
+
+describe("graphql() network error retry", () => {
+  test("fetch rejects then resolves → retries and succeeds", async () => {
+    const successBody = {data: {done: true}};
+    let call = 0;
+    const fetchMock = jest.fn(() => {
+      call++;
+      if (call === 1) return Promise.reject(new Error("ECONNRESET"));
+      return Promise.resolve(mockResponse(200, successBody));
+    });
+    const result = await graphql(
+        "query { done }",
+        {},
+        opts(fetchMock, {maxRetries: 2}),
+    );
+    expect(result).toEqual(successBody.data);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("fetch rejects persistently → throws WaveApiError kind network",
+      async () => {
+        const netErr = jest.fn().mockRejectedValue(new Error("ETIMEDOUT"));
+        await expect(
+            graphql("query { ok }", {}, opts(netErr, {maxRetries: 2})),
+        ).rejects.toMatchObject({kind: "network"});
+        expect(netErr).toHaveBeenCalledTimes(3);
+      });
+});
+
+// ---------------------------------------------------------------------------
+// graphql() — auth errors (no retry)
+// ---------------------------------------------------------------------------
+
+describe("graphql() auth errors", () => {
+  test("401 → throws WaveApiError kind auth and does NOT retry", async () => {
+    const fetch401 = jest.fn().mockResolvedValue(mockResponse(401, null));
+    await expect(
+        graphql("query { ok }", {}, opts(fetch401, {maxRetries: 3})),
+    ).rejects.toMatchObject({kind: "auth"});
+    expect(fetch401).toHaveBeenCalledTimes(1);
+  });
+
+  test("403 → throws WaveApiError kind auth and does NOT retry", async () => {
+    const fetch403 = jest.fn().mockResolvedValue(mockResponse(403, null));
+    await expect(
+        graphql("query { ok }", {}, opts(fetch403, {maxRetries: 3})),
+    ).rejects.toMatchObject({kind: "auth"});
+    expect(fetch403).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// graphql() — GraphQL-layer errors
+// ---------------------------------------------------------------------------
+
+describe("graphql() GraphQL errors", () => {
+  test("200 with non-empty errors array → throws WaveApiError kind graphql",
+      async () => {
+        const body = {
+          data: null,
+          errors: [{message: "Not found"}, {message: "Bad input"}],
+        };
+        const fetch = jest.fn().mockResolvedValue(mockResponse(200, body));
+        const err = await graphql(
+            "query { ok }",
+            {},
+            opts(fetch),
+        ).catch((e) => e);
+        expect(err).toBeInstanceOf(WaveApiError);
+        expect(err.kind).toBe("graphql");
+        expect(err.details).toEqual(body.errors);
+      });
+
+  test("200 with empty errors array → succeeds (not a GraphQL error)",
+      async () => {
+        const body = {data: {ok: true}, errors: []};
+        const fetch = jest.fn().mockResolvedValue(mockResponse(200, body));
+        const result = await graphql("query { ok }", {}, opts(fetch));
+        expect(result).toEqual(body.data);
+      });
+});
+
+// ---------------------------------------------------------------------------
+// graphql() — unknown status
+// ---------------------------------------------------------------------------
+
+describe("graphql() unknown status", () => {
+  test("302 → throws WaveApiError kind unknown", async () => {
+    const fetch302 = jest.fn().mockResolvedValue(mockResponse(302, null));
+    await expect(
+        graphql("query { ok }", {}, opts(fetch302, {maxRetries: 0})),
+    ).rejects.toMatchObject({kind: "unknown"});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WaveApiError shape
+// ---------------------------------------------------------------------------
+
+describe("WaveApiError", () => {
+  test("is an instance of Error", () => {
+    const e = new WaveApiError("auth", "token invalid", 401);
+    expect(e).toBeInstanceOf(Error);
+    expect(e).toBeInstanceOf(WaveApiError);
+  });
+
+  test("exposes kind and details fields", () => {
+    const details = [{message: "oops"}];
+    const e = new WaveApiError("graphql", "oops", details);
+    expect(e.kind).toBe("graphql");
+    expect(e.details).toBe(details);
+    expect(e.message).toBe("oops");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// whoami()
+// ---------------------------------------------------------------------------
+
+describe("whoami()", () => {
+  test("calls graphql with the user query and returns the user object",
+      async () => {
+        const user = {id: "usr1", defaultEmail: "admin@example.com"};
+        const fetch = jest.fn().mockResolvedValue(
+            mockResponse(200, {data: {user}}),
+        );
+        const result = await whoami(opts(fetch));
+        expect(result).toEqual(user);
+        const [, init] = fetch.mock.calls[0];
+        const sent = JSON.parse(init.body);
+        expect(sent.query).toContain("user");
+        expect(sent.query).toContain("id");
+        expect(sent.query).toContain("defaultEmail");
+      });
+});
+
+// ---------------------------------------------------------------------------
+// listBusinesses()
+// ---------------------------------------------------------------------------
+
+describe("listBusinesses()", () => {
+  test("returns array of {id, name} nodes", async () => {
+    const edges = [
+      {node: {id: "biz1", name: "Alpha Co"}},
+      {node: {id: "biz2", name: "Beta LLC"}},
+    ];
+    const fetch = jest.fn().mockResolvedValue(
+        mockResponse(200, {data: {businesses: {edges}}}),
+    );
+    const result = await listBusinesses(opts(fetch));
+    expect(result).toEqual([
+      {id: "biz1", name: "Alpha Co"},
+      {id: "biz2", name: "Beta LLC"},
+    ]);
+  });
+
+  test("calls graphql with the businesses query", async () => {
+    const fetch = jest.fn().mockResolvedValue(
+        mockResponse(200, {data: {businesses: {edges: []}}}),
+    );
+    await listBusinesses(opts(fetch));
+    const [, init] = fetch.mock.calls[0];
+    const sent = JSON.parse(init.body);
+    expect(sent.query).toContain("businesses");
+    expect(sent.query).toContain("edges");
+    expect(sent.query).toContain("node");
+  });
+
+  test("returns empty array when edges is empty", async () => {
+    const fetch = jest.fn().mockResolvedValue(
+        mockResponse(200, {data: {businesses: {edges: []}}}),
+    );
+    const result = await listBusinesses(opts(fetch));
+    expect(result).toEqual([]);
+  });
+
+  test("does not pass variable values interpolated into the query string",
+      async () => {
+        const fetch = jest.fn().mockResolvedValue(
+            mockResponse(200, {data: {businesses: {edges: []}}}),
+        );
+        await listBusinesses(opts(fetch));
+        const [, init] = fetch.mock.calls[0];
+        const sent = JSON.parse(init.body);
+        // page and pageSize are literals in the query document (pagination
+        // constants), not user-supplied values — so they are acceptable inline.
+        // This test ensures no *variable* values are string-interpolated.
+        expect(Object.keys(sent.variables)).toHaveLength(0);
+      });
+});
