@@ -118,15 +118,15 @@ flutter:
 # Brand color #005CC8 matches AppColors.primary (lib/core/theme/design_tokens.dart).
 flutter_native_splash:
   color: "#005CC8"
-  image: assets/images/logo_splash.png
+  image: assets/images/icon.png
   color_dark: "#0A1633"
-  image_dark: assets/images/logo_splash.png
+  image_dark: assets/images/icon.png
 
   android_12:
     color: "#005CC8"
-    image: assets/images/logo_splash.png
+    image: assets/images/icon.png
     color_dark: "#0A1633"
-    image_dark: assets/images/logo_splash.png
+    image_dark: assets/images/icon.png
 
   android: true
   ios: true
@@ -141,4 +141,4 @@ flutter_launcher_icons:
   image_path: "assets/images/icon.png"
   min_sdk_android: 21
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/images/icon.png"
+  adaptive_icon_foreground: "assets/images/icon_foreground.png"
