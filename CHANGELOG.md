@@ -10,6 +10,25 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.16.0+27] - 2026-06-21
+### Added
+- **Wave Accounting customer sync (admins).** Settings has a new Wave section
+  (admins only) to connect the business's Wave account and import its existing
+  customers into the app. From then on, every client you add or edit is synced
+  to Wave automatically in the background, and each client shows a small Wave
+  badge — *synced*, *sync pending*, or *sync error* — so you can see its status
+  at a glance. The sync runs entirely server-side: it never slows the app down
+  and a Wave outage just leaves a client "pending," never a failed save. The app
+  always reads clients from its own database, so browsing and searching are as
+  fast as before.
+
+### Changed
+- **Client details reshaped to match Wave.** A client now has a **Customer
+  name** plus optional **First name** / **Last name**, and a separate **Mobile**
+  field alongside Phone. The old single "Business name" field is gone — the
+  customer name covers both people and businesses. Client search now also
+  matches first name, last name, and mobile number.
+
 ## [1.15.1+26] - 2026-06-21
 ### Changed
 - **iOS build now uses Swift Package Manager; CocoaPods removed.** All native
