@@ -303,7 +303,12 @@ async function listBusinesses(options = {}) {
     data.businesses.edges : [];
   return edges
       .filter((e) => e && e.node)
-      .map((e) => ({id: e.node.id, name: e.node.name}));
+      // Coerce a null/non-string name to "" so downstream name matching
+      // (selectBusiness) never throws on `name.trim()` for an off-spec node.
+      .map((e) => ({
+        id: e.node.id,
+        name: typeof e.node.name === "string" ? e.node.name : "",
+      }));
 }
 
 module.exports = {WaveApiError, graphql, whoami, listBusinesses};

@@ -29,9 +29,11 @@ class WaveValidation extends WaveFailure {
   final String? reason;
 
   @override
-  String toLocalizedMessage(BuildContext context) => reason == 'notConnected'
-      ? context.l10n.wave_errorNotConnected
-      : context.l10n.wave_errorValidation;
+  String toLocalizedMessage(BuildContext context) => switch (reason) {
+    'notConnected' => context.l10n.wave_errorNotConnected,
+    'businessAmbiguous' => context.l10n.wave_errorBusinessAmbiguous,
+    _ => context.l10n.wave_errorValidation,
+  };
 }
 
 class WaveNetwork extends WaveFailure {

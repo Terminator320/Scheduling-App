@@ -28,15 +28,9 @@ class ClientDetailViewBody extends ConsumerWidget {
     final hasMobile = client.mobile.isNotEmpty;
     final hasEmail = client.email.isNotEmpty;
     final hasAddress = client.address.isNotEmpty;
-    final fullName = [
-      client.firstName,
-      client.lastName,
-    ].where((part) => part.trim().isNotEmpty).join(' ').trim();
-    // The person name is worth showing only when it adds info beyond the
-    // customer/display name already in the header.
-    final hasPersonName = fullName.isNotEmpty && fullName != client.name;
-    final hasContactInfo =
-        hasPersonName || hasPhone || hasMobile || hasEmail || hasAddress;
+    // The person name (first/last) is shown once, as the header subtitle in
+    // ClientDetailView; it is deliberately not repeated as a contact row here.
+    final hasContactInfo = hasPhone || hasMobile || hasEmail || hasAddress;
 
     // Handlers are built here (where `ref` lives) and passed down, so the row
     // and button widgets stay presentational.
@@ -104,11 +98,6 @@ class ClientDetailViewBody extends ConsumerWidget {
           const SizedBox(height: AppSpacing.sp8),
           InfoCard(
             rows: [
-              if (hasPersonName)
-                InfoCardRow(
-                  icon: Icons.person_outline,
-                  text: fullName,
-                ),
               if (hasPhone)
                 InfoCardRow(
                   icon: Icons.phone_outlined,

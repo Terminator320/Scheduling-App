@@ -482,13 +482,16 @@ describe("drainQueue retryable errors", () => {
           },
         };
         const {db, refs} = drainDb([job]);
+        // Real numeric clock so nextAttemptAt is a real (not Invalid) Date.
+        const nowDate = new Date("2024-06-01T10:00:00Z");
+        const nowFn = () => nowDate;
         const networkErr = new WaveApiError("network", "fetch failed");
         const mockUpsert = jest.fn(() => Promise.reject(networkErr));
         const backoffFn = jest.fn(() => 5000);
         const logger = fakeLogger();
 
         const summary = await drainQueue({
-          db, now, logger,
+          db, now: nowFn, logger,
           upsertCustomer: mockUpsert,
           maxAttempts: 5,
           backoffFn,
@@ -502,7 +505,12 @@ describe("drainQueue retryable errors", () => {
         expect(finalUpdate.status).toBe("queued");
         expect(finalUpdate.attempts).toBe(1);
         expect(finalUpdate.lastError).toBe("WaveApiError(network)");
+        // nextAttemptAt must be a VALID future Date — guards against the
+        // Invalid-Date regression that would never re-match the due query.
         expect(finalUpdate.nextAttemptAt).toBeInstanceOf(Date);
+        expect(Number.isNaN(finalUpdate.nextAttemptAt.getTime())).toBe(false);
+        expect(finalUpdate.nextAttemptAt.getTime())
+            .toBe(nowDate.getTime() + 5000);
 
         // backoffFn called with attempts-1 (0-indexed attempt index).
         expect(backoffFn).toHaveBeenCalledWith(0);
@@ -525,11 +533,13 @@ describe("drainQueue retryable errors", () => {
       },
     };
     const {db, refs} = drainDb([job]);
+    const nowDate = new Date("2024-06-01T10:00:00Z");
+    const nowFn = () => nowDate;
     const rateLimitErr = new WaveApiError("rateLimited", "rate limited");
     const mockUpsert = jest.fn(() => Promise.reject(rateLimitErr));
 
     const summary = await drainQueue({
-      db, now, logger: fakeLogger(),
+      db, now: nowFn, logger: fakeLogger(),
       upsertCustomer: mockUpsert,
       maxAttempts: 5,
       backoffFn: fixedBackoff(),
@@ -540,6 +550,10 @@ describe("drainQueue retryable errors", () => {
     expect(finalUpdate.status).toBe("queued");
     expect(finalUpdate.attempts).toBe(3);
     expect(finalUpdate.lastError).toBe("WaveApiError(rateLimited)");
+    // nextAttemptAt must be a valid future Date, not an Invalid Date.
+    expect(Number.isNaN(finalUpdate.nextAttemptAt.getTime())).toBe(false);
+    expect(finalUpdate.nextAttemptAt.getTime())
+        .toBeGreaterThan(nowDate.getTime());
   });
 
   test("retryable until cap → finally dead", async () => {

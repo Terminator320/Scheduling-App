@@ -15,7 +15,7 @@ lib/
 ├── core/                            Cross-cutting concerns — nothing feature-specific lives here
 │   ├── animations/                  Shared animation widgets (FadeInItem, TapScale, AnimatedLoadingButton, AnimatedFormFieldWrapper — transition-only field shake)
 │   ├── errors/                      Base Failure class + error_cause.dart (sanitized cause classifier + tagged notice composer)
-│   ├── images/                      Image picker, compression, Firebase Storage upload service
+│   ├── images/                      Image picker (native resize/compress at pick time) + Firebase Storage upload service
 │   ├── launchers/                   phone_call_launcher.dart (launchPhoneCall — shared tel: dialer; parallels AddressMapLauncher / EmailComposeLauncher)
 │   ├── layout/                      Responsive shell — AdaptiveShell (nav rail), MasterDetailScaffold, breakpoints (context.isWide / isLandscape / isSplitLayout)
 │   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics)
@@ -107,7 +107,7 @@ All Firebase instances (Auth, Firestore, Storage) come from `lib/core/providers/
 ### Services vs Repositories
 
 - **Repositories** speak Firestore. They take and return domain models. All Firestore reads/writes go through a repository.
-- **Services** wrap non-CRUD async work: `AuthService` (account creation with invitation enforcement), `AppointmentImageUploadService` (multi-image Firebase Storage), `ImagePickerService` / `ImageCompressService`.
+- **Services** wrap non-CRUD async work: `AuthService` (account creation with invitation enforcement), `AppointmentImageUploadService` (multi-image Firebase Storage), `ImagePickerService` (pick with native resize/compress).
 - **NoticeService** is a broadcast stream of `AppNotice` events. Any code that needs to show a toast calls `ref.read(noticeServiceProvider).success(...)` or `.error(...)`. `NoticeListener` (inside `MaterialApp.builder`) renders them as animated notices that slide in from the **top** of the screen via `Overlay`, auto-dismiss after a timeout, and can be manually dismissed with ×.
 
 ### Local Storage

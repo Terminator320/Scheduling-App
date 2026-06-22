@@ -200,8 +200,9 @@ service cloud.firestore {
 
     // ── wave (Wave Accounting connection metadata) ────────────────────────────
     // Written exclusively by Cloud Functions via Admin SDK (connection status,
-    // OAuth tokens, last-sync timestamps). No client may read sync credentials
-    // or connection state — treat this collection like rateLimits. The default
+    // businessId, last-sync timestamps; the access token lives only in Secret
+    // Manager, never here). No client may read connection state — treat this
+    // collection like rateLimits. The default
     // deny-everything would already block access; the explicit rule documents
     // intent for a security-sensitive collection.
     match /wave/{docId} {

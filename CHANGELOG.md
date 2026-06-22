@@ -10,6 +10,21 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.16.1+28] - 2026-06-21
+### Fixed
+- **Clients identified only by a business name stay visible.** A client created
+  before the recent details reshape — one whose only name was the old "Business
+  name" — keeps that name on its card and detail screen, stays findable in
+  search, and can still be opened and saved. Previously such clients could show
+  up blank and refuse to save.
+- **A quick second edit to a client is no longer lost during Wave sync.** If you
+  edited a client again while its previous change was still syncing to Wave, the
+  newer edit could be silently dropped; both edits now reach Wave.
+- **Clearer message when your Wave account has more than one business.** Instead
+  of a generic "something went wrong, try again," connecting now explains that
+  choosing a specific business isn't supported yet.
+- **The client detail screen no longer shows the contact's name twice.**
+
 ## [1.16.0+27] - 2026-06-21
 ### Added
 - **Wave Accounting customer sync (admins).** Settings has a new Wave section

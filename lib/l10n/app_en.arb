@@ -1377,15 +1377,19 @@
   "@error_introLoadClients": {"description": "Error intro for CLI-LIST"},
   "wave_errorAuthInvalid": "Wave connection token is missing or has been revoked. Please reconnect.",
   "@wave_errorAuthInvalid": {
-    "description": "WaveAuthInvalid failure: the Wave OAuth token is missing or revoked"
+    "description": "WaveAuthInvalid failure: the Wave access token is missing or revoked"
   },
   "wave_errorValidation": "Something went wrong with the Wave request. Please try again.",
   "@wave_errorValidation": {
-    "description": "WaveValidation failure: covers validation errors and precondition failures (ambiguous/not-found business)"
+    "description": "WaveValidation failure: covers Wave validation errors and not-found precondition failures"
   },
   "wave_errorNotConnected": "Connect to Wave first, then try the import again.",
   "@wave_errorNotConnected": {
     "description": "WaveValidation failure with reason notConnected: the Wave integration has not been bootstrapped yet"
+  },
+  "wave_errorBusinessAmbiguous": "Your Wave account has more than one business, which isn't supported yet.",
+  "@wave_errorBusinessAmbiguous": {
+    "description": "WaveValidation failure with reason businessAmbiguous: the Wave account exposes multiple businesses and no business-picker exists yet"
   },
   "settings_integrations": "Integrations",
   "@settings_integrations": {
@@ -1393,7 +1397,7 @@
   },
   "wave_connectToWave": "Connect to Wave",
   "@wave_connectToWave": {
-    "description": "Button label: initiates Wave OAuth bootstrap"
+    "description": "Button label: initiates the Wave connection bootstrap"
   },
   "wave_importCustomers": "Import customers from Wave",
   "@wave_importCustomers": {

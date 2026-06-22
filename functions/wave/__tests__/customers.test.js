@@ -408,6 +408,34 @@ describe("upsertCustomer missing doc", () => {
 });
 
 // ---------------------------------------------------------------------------
+// not connected (wave/connection businessId missing)
+// ---------------------------------------------------------------------------
+
+describe("not connected (missing businessId)", () => {
+  test("upsertCustomer rejects when no injected or stored businessId",
+      async () => {
+        const ref = clientRef({...CLIENT});
+        const graphql = jest.fn();
+        await expect(
+            upsertCustomer("c1", {
+              db: upsertDb(ref, {businessId: ""}), graphql, now,
+            }),
+        ).rejects.toThrow(/not connected/);
+        expect(graphql).not.toHaveBeenCalled();
+      });
+
+  test("importCustomers rejects when no injected or stored businessId",
+      async () => {
+        const {db} = importDb([], {businessId: ""});
+        const graphql = jest.fn();
+        await expect(
+            importCustomers({db, graphql, now}),
+        ).rejects.toThrow(/not connected/);
+        expect(graphql).not.toHaveBeenCalled();
+      });
+});
+
+// ---------------------------------------------------------------------------
 // importCustomers
 // ---------------------------------------------------------------------------
 
@@ -439,7 +467,10 @@ function importDb(existingDocs, opts = {}) {
   const batchLog = {sets: [], commits: []};
   const newRefs = [];
   let autoId = 0;
-  const connectionData = {businessId: opts.businessId || "biz-1"};
+  // Mirror upsertDb: an explicit "" must reach readBusinessId (not-connected),
+  // so only fall back to "biz-1" when businessId is omitted entirely.
+  const connectionData = opts.businessId !== undefined ?
+    {businessId: opts.businessId} : {businessId: "biz-1"};
   const waveColl = {
     doc: () => ({get: () => Promise.resolve(snap(connectionData))}),
   };

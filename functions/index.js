@@ -212,6 +212,11 @@ const REAUTH_MAX_AGE_SECONDS = 5 * 60;
 // hammering Wave: 5 imports per hour is ample for a setup/reconcile action.
 const WAVE_IMPORT_RATE_MAX = 5;
 const WAVE_IMPORT_RATE_WINDOW_MS = 60 * 60 * 1000;
+// waveBootstrap's not-yet-connected path makes live Wave calls (whoami +
+// listBusinesses). Cap it per-admin so a buggy/looping client can't burn the
+// Wave request budget before a connection exists. The idempotent short-circuit
+// (already-connected) runs before this and is not rate-limited.
+const WAVE_BOOTSTRAP_RATE_MAX = 10;
 
 /**
  * True when the string contains a C0 control character (code < 0x20) or DEL
@@ -894,6 +899,14 @@ exports.waveBootstrap = onCall(
         req.data.businessId.trim() : "";
       const wantName = typeof req.data?.businessName === "string" ?
         req.data.businessName.trim() : "";
+
+      // Only the not-yet-connected path (live Wave calls) is rate-limited.
+      await enforceDurableRateLimit(
+          "wave-bootstrap",
+          req.auth.uid,
+          WAVE_BOOTSTRAP_RATE_MAX,
+          WAVE_IMPORT_RATE_WINDOW_MS,
+      );
 
       // Network calls run OUTSIDE the transaction (transactions retry; a Wave
       // mutation must never run more than once). whoami() fast-fails a bad

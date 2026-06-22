@@ -36,7 +36,43 @@ Result counts: **3 high · 2 medium · 6 low · 7 nit · 4 dismissed.**
   `dead` only while it is still `inflight` with the same `claimedAt`. A concurrent
   re-enqueue is left intact so the newer edit still syncs. New regression test +
   full functions suite green (134/134), ESLint clean.
-- Still open (not in this pass): MEDIUM #4 (retry-test NaN clock) and the lows/nits.
+**Second pass 2026-06-21 — remaining findings fixed (uncommitted):**
+- **MEDIUM #4 — FIXED:** the two dispatch retry tests now inject a real numeric
+  clock and assert `nextAttemptAt` is a valid future Date (not Invalid), closing
+  the vacuous-assertion gap.
+- **LOW #5 — FIXED:** `listBusinesses` (client.js) coerces a null/non-string Wave
+  business name to `""`, so `selectBusiness` can't throw a raw TypeError. New
+  client.test.js coercion test.
+- **LOW #6 — FIXED:** added not-connected tests for `upsertCustomer` and
+  `importCustomers` (customers.test.js); fixed the `importDb` fake so an explicit
+  empty `businessId` reaches `readBusinessId`.
+- **LOW #7 — FIXED (documented):** added a NOTE on `_connection` explaining it is
+  session-only by design (rules block client reads of `wave`). No read-on-mount
+  added (would need a new callable or a rules relax — out of proportion).
+- **LOW #8 — FIXED:** `wave/business-ambiguous` now maps to a dedicated
+  `WaveValidation(reason: 'businessAmbiguous')` with a truthful EN/FR message
+  (`wave_errorBusinessAmbiguous`) instead of the generic "try again". Mapper +
+  failure + l10n + tests updated.
+- **LOW #9 — FIXED:** removed the duplicate person-name `InfoCardRow`; the name
+  now shows once, as the detail header subtitle.
+- **LOW #10 — FIXED:** `docs/ARCHITECTURE.md` no longer references the deleted
+  `ImageCompressService`.
+- **Nits — FIXED:** `waveBootstrap` now rate-limited (`wave-bootstrap`, 10/hr) on
+  its pre-connection Wave-calling path; "OAuth" wording removed from the
+  `app_en.arb` `@key` descriptions and the `firestore.rules` `wave` comment;
+  redundant French `app_name` override removed (it duplicated the default).
+
+**Deliberately deferred (nits, with reason):**
+- Done/dead job purge in `waveSyncQueue` — bounded one-per-client (~650), benign;
+  would be a behavior change with test churn for no real gain at this scale.
+- Client-search per-row memoization — verifier downgraded to nit (regexes already
+  precompiled, active-search path doesn't accumulate pages); would need cached
+  fields on `ClientRecord` — premature.
+- `drainDb` reclaim-query isolation in tests — reclaim is already isolated by a
+  separate `reclaimDb` fake; pure test-fixture nit.
+
+Verification: functions `137/137` jest + ESLint clean; Flutter `507/507`; l10n
+`gen-l10n` clean with no EN/FR drift.
 
 ---
 
