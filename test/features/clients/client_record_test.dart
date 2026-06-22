@@ -95,6 +95,25 @@ void main() {
       expect(errored.waveSyncError, 'boom');
     });
 
+    test('fromMap falls back to legacy businessName when name is empty', () {
+      // A pre-Wave-reshape business-only doc: businessName set, name empty.
+      final r = ClientRecord.fromMap('c1', const {
+        'name': '',
+        'businessName': 'Acme Industries',
+        'phone': '514-555-0101',
+      });
+      expect(r.name, 'Acme Industries');
+      expect(r.displayName, 'Acme Industries');
+    });
+
+    test('fromMap prefers name over legacy businessName when both set', () {
+      final r = ClientRecord.fromMap('c1', const {
+        'name': 'Jane Doe',
+        'businessName': 'Acme Industries',
+      });
+      expect(r.name, 'Jane Doe');
+    });
+
     test('toMap never emits the function-owned Wave fields', () {
       const c = ClientRecord(
         id: 'c1',

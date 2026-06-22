@@ -37,6 +37,14 @@
  * as a normal failure). `attempts` is bumped so a crash-looping job eventually
  * dead-letters instead of cycling indefinitely.
  *
+ * ## Outcome-write guard
+ * The outcome write (`done`/`queued`/`dead`) is itself transactional
+ * (`commitOutcome`): it re-reads the job and writes only while it is still
+ * `inflight` with the same `claimedAt` stamped at claim time. If a client edit
+ * re-enqueues the job during the in-flight Wave call (status flips back to
+ * `queued`), or another worker re-claims it, the outcome is skipped so the
+ * newer edit still syncs instead of being clobbered to `done`.
+ *
  * ## Retryability taxonomy
  * - `WaveValidationError` — NOT retryable (bad input; dead-letter immediately).
  * - `WaveApiError` kind `rateLimited`|`network` — retryable (transient).
@@ -166,6 +174,73 @@ function clientIdFromRefPath(refPath) {
   if (typeof refPath !== "string") return "";
   const parts = refPath.split("/");
   return parts.length >= 2 ? parts[parts.length - 1] : "";
+}
+
+/**
+ * Converts a Firestore timestamp-ish value to epoch milliseconds. Handles a JS
+ * Date, a Firestore Timestamp (`toMillis`/`toDate`), or a numeric value, and
+ * returns NaN for anything non-numeric (e.g. a serverTimestamp sentinel).
+ * @param {*} value
+ * @return {number} Epoch ms, or NaN.
+ */
+function timestampToMs(value) {
+  if (value instanceof Date) return value.getTime();
+  if (value && typeof value.toMillis === "function") return value.toMillis();
+  if (value && typeof value.toDate === "function") {
+    return value.toDate().getTime();
+  }
+  const n = Number(value);
+  return Number.isFinite(n) ? n : NaN;
+}
+
+/**
+ * Whether two `claimedAt` stamps identify the same claim. Compares by epoch ms
+ * when both are real timestamps (so a Date written and re-read as a Firestore
+ * Timestamp still matches), and falls back to strict identity for non-numeric
+ * values such as a test serverTimestamp sentinel.
+ * @param {*} a
+ * @param {*} b
+ * @return {boolean}
+ */
+function sameClaim(a, b) {
+  const am = timestampToMs(a);
+  const bm = timestampToMs(b);
+  if (Number.isFinite(am) && Number.isFinite(bm)) return am === bm;
+  return a === b;
+}
+
+/**
+ * Atomically writes a claimed job's terminal/retry outcome, but ONLY if this
+ * worker still owns the claim.
+ *
+ * The claim (`inflight`) and the outcome write are separated by a multi-second
+ * Wave API call. If a client edits the same client during that window, the
+ * `onDocumentWritten` trigger re-enqueues the deterministic-id job — flipping
+ * its status back to `queued` and resetting attempts. Writing the outcome
+ * unconditionally would clobber that re-enqueue to `done`, silently dropping
+ * the newer edit's sync. This transaction re-reads the job and applies `update`
+ * only while it is still `inflight` with the same `claimedAt` stamped at claim
+ * time; otherwise it leaves the job alone so the newer edit still syncs.
+ *
+ * @param {!Object} db Firestore instance.
+ * @param {!Object} ref The job document ref.
+ * @param {*} claimStamp The `claimedAt` value written when the job was claimed.
+ * @param {!Object} update The outcome fields to write when still owned.
+ * @return {!Promise<boolean>} True if the outcome was written.
+ */
+async function commitOutcome(db, ref, claimStamp, update) {
+  let applied = false;
+  await db.runTransaction(async (tx) => {
+    applied = false; // reset per retry of the transaction callback
+    const fresh = await tx.get(ref);
+    if (!fresh || !fresh.exists) return;
+    const freshData = fresh.data() || {};
+    if (freshData.status !== "inflight") return;
+    if (!sameClaim(freshData.claimedAt, claimStamp)) return;
+    tx.update(ref, update);
+    applied = true;
+  });
+  return applied;
 }
 
 // ---------------------------------------------------------------------------
@@ -352,11 +427,7 @@ async function drainQueue(deps = {}) {
         const freshData = fresh.data() || {};
         // Only reclaim if STILL inflight AND claimedAt still beyond the lease.
         if (freshData.status !== "inflight") return;
-        const claimedAtMs = freshData.claimedAt instanceof Date ?
-          freshData.claimedAt.getTime() :
-          (freshData.claimedAt && freshData.claimedAt.toDate ?
-            freshData.claimedAt.toDate().getTime() :
-            Number(freshData.claimedAt));
+        const claimedAtMs = timestampToMs(freshData.claimedAt);
         if (!claimedAtMs || claimedAtMs > nowMs - leaseMs) return;
         reclaimedData = freshData;
       });
@@ -470,14 +541,18 @@ async function drainQueue(deps = {}) {
       dispatchError = err;
     }
 
-    // --- Resolve outcome ------------------------------------------------
+    // --- Resolve outcome (guarded against a concurrent re-enqueue) -------
     if (!dispatchError) {
       // Success.
-      await doc.ref.update({
+      const applied = await commitOutcome(db, doc.ref, nowValue, {
         status: "done",
         lastError: null,
       });
-      summary.done += 1;
+      if (applied) {
+        summary.done += 1;
+      } else {
+        logger.info("WAVE-WORKER outcome superseded (done skipped)", {jobId});
+      }
       continue;
     }
 
@@ -493,13 +568,17 @@ async function drainQueue(deps = {}) {
       const delayMs = backoffFn(newAttempts - 1);
       const nextAttemptAt = new Date(nowMs + delayMs);
 
-      await doc.ref.update({
+      const applied = await commitOutcome(db, doc.ref, nowValue, {
         status: "queued",
         attempts: newAttempts,
         nextAttemptAt,
         lastError: sanitized,
       });
-      summary.retried += 1;
+      if (applied) {
+        summary.retried += 1;
+      } else {
+        logger.info("WAVE-WORKER outcome superseded (retry skipped)", {jobId});
+      }
     } else {
       // Dead-letter: not retryable OR attempts cap reached.
       const clientId = clientIdFromRefPath(jobData.refPath);
@@ -508,22 +587,25 @@ async function drainQueue(deps = {}) {
         (dispatchError instanceof WaveValidationError ?
           "validation" : "unexpected");
 
-      logger.error("WAVE-WORKER dead-lettering job", {
-        jobId,
-        clientId,
-        errorClass: dispatchError.constructor ?
-          dispatchError.constructor.name : "Error",
-        errorKind: errKind,
-        attempts: newAttempts,
-        retryable,
-      });
-
-      await doc.ref.update({
+      const applied = await commitOutcome(db, doc.ref, nowValue, {
         status: "dead",
         attempts: newAttempts,
         lastError: sanitized,
       });
-      summary.dead += 1;
+      if (applied) {
+        logger.error("WAVE-WORKER dead-lettering job", {
+          jobId,
+          clientId,
+          errorClass: dispatchError.constructor ?
+            dispatchError.constructor.name : "Error",
+          errorKind: errKind,
+          attempts: newAttempts,
+          retryable,
+        });
+        summary.dead += 1;
+      } else {
+        logger.info("WAVE-WORKER outcome superseded (dead skipped)", {jobId});
+      }
     }
   }
 

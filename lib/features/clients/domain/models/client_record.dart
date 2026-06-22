@@ -57,9 +57,16 @@ abstract class ClientRecord with _$ClientRecord {
   factory ClientRecord.fromMap(String id, Map<String, dynamic> data) {
     final rawContacts = (data['contacts'] as List?) ?? const [];
     final wave = (data['wave'] as Map?)?.cast<String, dynamic>();
+    // Back-compat: pre-Wave-reshape docs stored a business-type client as
+    // `businessName` with an empty `name`. Fall back so those docs keep a
+    // display name and stay editable/searchable until a backfill runs.
+    final rawName = (data['name'] ?? '').toString();
+    final name = rawName.trim().isNotEmpty
+        ? rawName
+        : (data['businessName'] ?? '').toString();
     return ClientRecord(
       id: id,
-      name: (data['name'] ?? '').toString(),
+      name: name,
       firstName: (data['firstName'] ?? '').toString(),
       lastName: (data['lastName'] ?? '').toString(),
       address: (data['address'] ?? '').toString(),
