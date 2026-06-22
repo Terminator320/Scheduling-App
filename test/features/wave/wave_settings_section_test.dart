@@ -111,19 +111,30 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('Import button is disabled before Connect succeeds', (
+    testWidgets('Import button is enabled without connecting first', (
       tester,
     ) async {
       final service = _MockWaveService();
-      await tester.pumpWidget(_wrapSection(service));
+      final notices = NoticeService();
+      final emitted = <AppNotice>[];
+      notices.stream.listen(emitted.add);
+
+      // Server returns not-bootstrapped — surfaces as a WaveValidation notice.
+      when(service.importCustomers).thenThrow(
+        const WaveValidation(reason: 'notConnected'),
+      );
+
+      await tester.pumpWidget(_wrapSection(service, noticeService: notices));
       await tester.pumpAndSettle();
 
-      // Tap Import — the button has no onPressed when not connected, so
-      // nothing should happen (no call on the service).
+      // Tap Import without ever tapping Connect — should call the service.
       await tester.tap(find.text('Import customers from Wave'));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
-      verifyNever(service.importCustomers);
+      verify(() => service.importCustomers()).called(1);
+      // The not-connected failure surfaces as an error notice.
+      expect(emitted, isNotEmpty);
+      expect(emitted.last, isA<NoticeError>());
       expect(tester.takeException(), isNull);
     });
 
@@ -221,19 +232,9 @@ void main() {
       final emitted = <AppNotice>[];
       notices.stream.listen(emitted.add);
 
-      when(service.bootstrap).thenAnswer(
-        (_) async => const WaveConnection(
-          businessId: 'biz-1',
-          businessName: 'Test Biz',
-        ),
-      );
       when(service.importCustomers).thenThrow(const WaveAuthInvalid());
 
       await tester.pumpWidget(_wrapSection(service, noticeService: notices));
-      await tester.pumpAndSettle();
-
-      // Connect first so the Import button is enabled.
-      await tester.tap(find.text('Connect to Wave'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Import customers from Wave'));

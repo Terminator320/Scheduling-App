@@ -115,33 +115,33 @@ void main() {
       );
     });
 
-    test('wave/not-bootstrapped → WaveValidation with precondition reason', () {
+    test('wave/not-bootstrapped → WaveValidation with notConnected reason', () {
       final result = WaveErrorMapper.map(
         _fnEx('failed-precondition', 'wave/not-bootstrapped'),
       );
       expect(result, isA<WaveValidation>());
-      expect((result as WaveValidation).reason, 'precondition');
+      expect((result as WaveValidation).reason, 'notConnected');
     });
 
     test(
-      'wave/business-ambiguous → WaveValidation with precondition reason',
+      'wave/business-ambiguous → WaveValidation with no reason',
       () {
         final result = WaveErrorMapper.map(
           _fnEx('failed-precondition', 'wave/business-ambiguous'),
         );
         expect(result, isA<WaveValidation>());
-        expect((result as WaveValidation).reason, 'precondition');
+        expect((result as WaveValidation).reason, isNull);
       },
     );
 
     test(
-      'wave/business-not-found → WaveValidation with precondition reason',
+      'wave/business-not-found → WaveValidation with no reason',
       () {
         final result = WaveErrorMapper.map(
           _fnEx('not-found', 'wave/business-not-found'),
         );
         expect(result, isA<WaveValidation>());
-        expect((result as WaveValidation).reason, 'precondition');
+        expect((result as WaveValidation).reason, isNull);
       },
     );
 
@@ -412,6 +412,17 @@ void main() {
         isNotEmpty,
       );
     });
+
+    testWidgets(
+      'WaveValidation(reason: notConnected) yields non-empty string',
+      (tester) async {
+        final ctx = await _pumpL10nContext(tester);
+        expect(
+          const WaveValidation(reason: 'notConnected').toLocalizedMessage(ctx),
+          isNotEmpty,
+        );
+      },
+    );
 
     testWidgets('WaveNetwork yields non-empty string', (tester) async {
       final ctx = await _pumpL10nContext(tester);

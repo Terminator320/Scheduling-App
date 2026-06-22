@@ -33,10 +33,12 @@ class WaveErrorMapper {
       return const WaveValidation();
     }
 
-    if (msg == 'wave/not-bootstrapped' ||
-        msg == 'wave/business-ambiguous' ||
-        msg == 'wave/business-not-found') {
-      return const WaveValidation(reason: 'precondition');
+    if (msg == 'wave/not-bootstrapped') {
+      return const WaveValidation(reason: 'notConnected');
+    }
+
+    if (msg == 'wave/business-ambiguous' || msg == 'wave/business-not-found') {
+      return const WaveValidation();
     }
 
     if (msg == 'wave/not-admin') return const WaveUnknown();
