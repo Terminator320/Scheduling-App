@@ -124,13 +124,13 @@ void main() {
     });
 
     test(
-      'wave/business-ambiguous → WaveValidation with no reason',
+      'wave/business-ambiguous → WaveValidation with businessAmbiguous reason',
       () {
         final result = WaveErrorMapper.map(
           _fnEx('failed-precondition', 'wave/business-ambiguous'),
         );
         expect(result, isA<WaveValidation>());
-        expect((result as WaveValidation).reason, isNull);
+        expect((result as WaveValidation).reason, 'businessAmbiguous');
       },
     );
 
@@ -420,6 +420,21 @@ void main() {
         expect(
           const WaveValidation(reason: 'notConnected').toLocalizedMessage(ctx),
           isNotEmpty,
+        );
+      },
+    );
+
+    testWidgets(
+      'WaveValidation(reason: businessAmbiguous) yields a distinct message',
+      (tester) async {
+        final ctx = await _pumpL10nContext(tester);
+        final ambiguous = const WaveValidation(reason: 'businessAmbiguous')
+            .toLocalizedMessage(ctx);
+        expect(ambiguous, isNotEmpty);
+        // Must not fall back to the generic validation message.
+        expect(
+          ambiguous,
+          isNot(const WaveValidation().toLocalizedMessage(ctx)),
         );
       },
     );

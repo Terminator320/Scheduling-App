@@ -37,7 +37,13 @@ class WaveErrorMapper {
       return const WaveValidation(reason: 'notConnected');
     }
 
-    if (msg == 'wave/business-ambiguous' || msg == 'wave/business-not-found') {
+    // Ambiguous = the token's account exposes several businesses and no picker
+    // exists yet; surface a truthful message instead of a pointless "try again".
+    if (msg == 'wave/business-ambiguous') {
+      return const WaveValidation(reason: 'businessAmbiguous');
+    }
+
+    if (msg == 'wave/business-not-found') {
       return const WaveValidation();
     }
 

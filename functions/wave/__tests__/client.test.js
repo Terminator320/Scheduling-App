@@ -490,6 +490,21 @@ describe("listBusinesses()", () => {
     expect(result).toEqual([]);
   });
 
+  test("coerces a null/missing business name to empty string", async () => {
+    const edges = [
+      {node: {id: "biz1", name: null}},
+      {node: {id: "biz2"}},
+    ];
+    const fetch = jest.fn().mockResolvedValue(
+        mockResponse(200, {data: {businesses: {edges}}}),
+    );
+    const result = await listBusinesses(opts(fetch));
+    expect(result).toEqual([
+      {id: "biz1", name: ""},
+      {id: "biz2", name: ""},
+    ]);
+  });
+
   test("does not pass variable values interpolated into the query string",
       async () => {
         const fetch = jest.fn().mockResolvedValue(

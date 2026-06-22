@@ -23,6 +23,10 @@ class WaveSettingsSection extends ConsumerStatefulWidget {
 }
 
 class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
+  // NOTE: session-only. The app intentionally never reads Wave connection state
+  // (firestore.rules locks the `wave` collection to clients), so this resets to
+  // null on every fresh mount. The connected row/affordance therefore reflects
+  // only a Connect performed in the current session, not server-side state.
   WaveConnection? _connection;
   bool _connectBusy = false;
   bool _importBusy = false;
