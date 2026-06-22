@@ -114,11 +114,10 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
         AnimatedLoadingButton(
           label: context.l10n.wave_importCustomers,
           isLoading: _importBusy,
-          // Gate on having an active connection for clarity; the server enforces
-          // the precondition as well (WaveValidation if not bootstrapped).
-          onPressed: connected && !_connectBusy && !_importBusy
-              ? _import
-              : null,
+          // No local-connection gate: the server returns wave/not-bootstrapped
+          // if not bootstrapped, which surfaces as a clear notice. The admin
+          // should not need to re-Connect every session just to Import.
+          onPressed: !_connectBusy && !_importBusy ? _import : null,
           variant: AnimatedLoadingButtonVariant.outlined,
         ),
       ],

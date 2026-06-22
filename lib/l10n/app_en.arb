@@ -1381,7 +1381,11 @@
   },
   "wave_errorValidation": "Something went wrong with the Wave request. Please try again.",
   "@wave_errorValidation": {
-    "description": "WaveValidation failure: covers validation errors and precondition failures (not bootstrapped, ambiguous/not-found business)"
+    "description": "WaveValidation failure: covers validation errors and precondition failures (ambiguous/not-found business)"
+  },
+  "wave_errorNotConnected": "Connect to Wave first, then try the import again.",
+  "@wave_errorNotConnected": {
+    "description": "WaveValidation failure with reason notConnected: the Wave integration has not been bootstrapped yet"
   },
   "settings_integrations": "Integrations",
   "@settings_integrations": {

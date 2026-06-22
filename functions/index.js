@@ -1039,11 +1039,25 @@ exports.waveUpsertCustomer = onDocumentWritten(
       const before = beforeSnap?.exists ? beforeSnap.data() : null;
       if (!shouldEnqueueClientWrite(before, after)) return;
 
+      // NOTE: this write touches only wave.* fields, so
+      // shouldEnqueueClientWrite returns false when the trigger re-fires
+      // (mappedFieldsHash is unchanged) — no second pending-write or loop.
+      const clientId = event.params.clientId;
+      try {
+        await getFirestore()
+            .doc("clients/" + clientId)
+            .update({"wave.syncState": "pending", "wave.syncError": null});
+      } catch (e) {
+        // Best-effort: the doc may have been deleted between the trigger
+        // firing and this update. Log and continue — never fail the trigger.
+        logger.warn("waveUpsertCustomer: could not mark pending",
+            {clientId, err: e.message});
+      }
+
       // Compute once here; shouldEnqueueClientWrite also hashes internally
       // but does not expose its result, so this call is the single explicit
       // hash at the enqueue site.
       const hash = mappedFieldsHash(after);
-      const clientId = event.params.clientId;
       await enqueueCustomerUpsert(clientId, {
         // payloadHash is diagnostic only: the worker re-reads the live doc
         // and recomputes before writing — the doc is the source of truth.

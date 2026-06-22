@@ -341,6 +341,7 @@
   "error_introLoadClients": "Impossible de charger les clients",
   "wave_errorAuthInvalid": "Le jeton de connexion Wave est manquant ou a été révoqué. Veuillez vous reconnecter.",
   "wave_errorValidation": "Une erreur s’est produite avec la demande Wave. Veuillez réessayer.",
+  "wave_errorNotConnected": "Connectez-vous d’abord à Wave, puis réessayez l’importation.",
   "settings_integrations": "Intégrations",
   "wave_connectToWave": "Connecter à Wave",
   "wave_importCustomers": "Importer les clients depuis Wave",
