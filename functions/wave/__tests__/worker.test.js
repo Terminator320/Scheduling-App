@@ -149,6 +149,9 @@ function drainDb(jobs, opts = {}) {
         }),
         update: jest.fn((ref, fields) => {
           if (claimSetsInflight) {
+            // Record the write (claim + outcome both flow through tx.update)
+            // and mutate _data so a later re-read in the same drain sees it.
+            ref.updates.push(fields);
             Object.assign(ref._data, fields);
           }
         }),
@@ -404,6 +407,58 @@ describe("drainQueue claim atomicity", () => {
     expect(summary.skipped).toBe(1);
     expect(logger.warn).toHaveBeenCalled();
   });
+});
+
+// ---------------------------------------------------------------------------
+// drainQueue — outcome guard (concurrent re-enqueue / lost-update)
+// ---------------------------------------------------------------------------
+
+describe("drainQueue outcome guard", () => {
+  test("does not clobber a job re-enqueued mid-dispatch to 'done'",
+      async () => {
+        const job = {
+          id: "customerUpsert__c1",
+          data: {
+            type: "customerUpsert",
+            refPath: "clients/c1",
+            status: "queued",
+            attempts: 0,
+            nextAttemptAt: new Date("2024-01-01"),
+            lastError: null,
+            idempotencyKey: "customerUpsert__c1",
+          },
+        };
+        const {db, refs} = drainDb([job]);
+
+        // Simulate a client edit re-enqueuing the SAME job while the Wave call
+        // is in flight: enqueueCustomerUpsert merges status:'queued',
+        // attempts:0. The dispatch then succeeds for the data it read first.
+        const mockUpsert = jest.fn(() => {
+          Object.assign(refs[0]._data, {
+            status: "queued",
+            attempts: 0,
+            lastError: null,
+          });
+          return Promise.resolve({status: "patched", waveCustomerId: "wv-1"});
+        });
+        const logger = fakeLogger();
+
+        const summary = await drainQueue({
+          db, now, logger,
+          upsertCustomer: mockUpsert,
+          backoffFn: fixedBackoff(),
+        });
+
+        // The re-enqueued job must stay 'queued' so the newer edit still syncs;
+        // the worker must NOT overwrite it to 'done'.
+        expect(refs[0]._data.status).toBe("queued");
+        const doneWrite = refs[0].updates.find((u) => u.status === "done");
+        expect(doneWrite).toBeUndefined();
+        expect(summary).toEqual({
+          processed: 1, done: 0, retried: 0, dead: 0, skipped: 0, reclaimed: 0,
+        });
+        expect(logger.error).not.toHaveBeenCalled();
+      });
 });
 
 // ---------------------------------------------------------------------------

@@ -122,6 +122,9 @@ class FirebaseClientsRepository implements ClientsRepository {
       final searchableText = ClientSearchPolicy.normalize(
         [
           data['name'],
+          // Legacy business-only docs (pre-Wave reshape) keep their name under
+          // `businessName`; index it so those clients stay searchable.
+          data['businessName'],
           data['firstName'],
           data['lastName'],
           data['phone'],
