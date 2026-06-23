@@ -1,6 +1,7 @@
 import 'package:cloud_functions/cloud_functions.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/features/wave/domain/models/wave_business.dart';
 import 'package:scheduling/features/wave/domain/models/wave_connection.dart';
 import 'package:scheduling/features/wave/domain/wave_error_mapper.dart';
 
@@ -36,6 +37,35 @@ class WaveService {
       return WaveConnection.fromMap(data);
     } catch (e, st) {
       _logger.warn('WAVE-BOOT waveBootstrap response parse failed', e, st);
+      throw WaveErrorMapper.map(e);
+    }
+  }
+
+  Future<List<WaveBusiness>> listBusinesses() async {
+    final HttpsCallableResult<dynamic> result;
+    try {
+      result = await _functions
+          .httpsCallable('waveListBusinesses')
+          .call(<String, dynamic>{});
+    } catch (e, st) {
+      _logger.warn('WAVE-LIST waveListBusinesses callable failed', e, st);
+      throw WaveErrorMapper.map(e);
+    }
+
+    try {
+      // NOTE: loose `as Map?` required — Android callables return
+      // Map<dynamic, dynamic>, not Map<String, dynamic>.
+      final data = (result.data as Map?)?.cast<String, dynamic>() ?? const {};
+      final raw = (data['businesses'] as List?) ?? const [];
+      return raw
+          .map((e) => WaveBusiness.fromMap((e as Map).cast<String, dynamic>()))
+          .toList();
+    } catch (e, st) {
+      _logger.warn(
+        'WAVE-LIST waveListBusinesses response parse failed',
+        e,
+        st,
+      );
       throw WaveErrorMapper.map(e);
     }
   }

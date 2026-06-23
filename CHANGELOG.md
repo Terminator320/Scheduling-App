@@ -10,6 +10,22 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.17.0+29] - 2026-06-23
+### Added
+- **Pick which Wave business to connect.** If your Wave account has more than
+  one business, connecting now shows a short list so you can choose the right
+  one; if there's only one, it connects automatically as before.
+
+### Changed
+- **Clients are now listed alphabetically by name.** The client list is sorted
+  A–Z instead of newest-first, making it easier to scan and find someone.
+
+### Fixed
+- **Imported Wave customers now appear in your client list.** Customers brought
+  in from Wave were saved but didn't show up when browsing or searching clients.
+  They now appear immediately. Re-running the import once repairs any customers
+  imported earlier so they show up too.
+
 ## [1.16.1+28] - 2026-06-21
 ### Fixed
 - **Clients identified only by a business name stay visible.** A client created

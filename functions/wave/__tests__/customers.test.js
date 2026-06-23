@@ -561,6 +561,10 @@ describe("importCustomers", () => {
         expect(first.data.waveCustomerId).toBe("w1");
         expect(first.data.wave.syncState).toBe("synced");
         expect(first.data.wave.lastSyncedHash).toEqual(expect.any(String));
+        // New docs MUST carry createdAt/updatedAt — the clients list orders by
+        // createdAt and Firestore hides docs missing it.
+        expect(first.data.createdAt).toBe(TS);
+        expect(first.data.updatedAt).toBe(TS);
       });
 
   test("idempotent: existing waveCustomerId updates same ref, no duplicate",
@@ -586,6 +590,34 @@ describe("importCustomers", () => {
         expect(op.ref).toBe(existingRef);
         expect(op.opts).toEqual({merge: true});
         expect(op.data.name).toBe("Alpha");
+        // updatedAt always refreshed; createdAt backfilled because the existing
+        // doc lacked one (an earlier import that omitted it stays hidden
+        // otherwise).
+        expect(op.data.updatedAt).toBe(TS);
+        expect(op.data.createdAt).toBe(TS);
+      });
+
+  test("update preserves an existing createdAt (no overwrite)",
+      async () => {
+        const existingRef = {id: "existing-doc"};
+        const existingDoc = {
+          data: () => ({
+            waveCustomerId: "w1",
+            name: "Old",
+            createdAt: {__earlier: true},
+          }),
+          ref: existingRef,
+        };
+        const {db, batchLog} = importDb([existingDoc]);
+        const graphql = graphqlSeq(
+            listPage(1, 1, 1, [waveNode("w1", "Alpha")]),
+        );
+        await importCustomers({db, graphql, businessId: "biz-1", now});
+
+        const op = batchLog.sets[0];
+        // createdAt is left untouched; only updatedAt is refreshed.
+        expect(op.data).not.toHaveProperty("createdAt");
+        expect(op.data.updatedAt).toBe(TS);
       });
 
   test("reads businessId from wave/connection when not injected", async () => {

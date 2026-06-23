@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/features/wave/data/wave_service.dart';
+import 'package:scheduling/features/wave/domain/models/wave_business.dart';
 import 'package:scheduling/features/wave/domain/models/wave_connection.dart';
 import 'package:scheduling/features/wave/domain/wave_error_mapper.dart';
 import 'package:scheduling/features/wave/domain/wave_failure.dart';
@@ -233,18 +234,23 @@ void main() {
     late _MockFunctions functions;
     late _MockCallable bootstrapCallable;
     late _MockCallable importCallable;
+    late _MockCallable listCallable;
     late WaveService service;
 
     setUp(() {
       functions = _MockFunctions();
       bootstrapCallable = _MockCallable();
       importCallable = _MockCallable();
+      listCallable = _MockCallable();
       when(
         () => functions.httpsCallable('waveBootstrap'),
       ).thenReturn(bootstrapCallable);
       when(
         () => functions.httpsCallable('waveImportCustomers'),
       ).thenReturn(importCallable);
+      when(
+        () => functions.httpsCallable('waveListBusinesses'),
+      ).thenReturn(listCallable);
       service = WaveService(functions: functions);
     });
 
@@ -382,6 +388,52 @@ void main() {
         );
       });
     });
+
+    group('listBusinesses', () {
+      test('parses businesses from the nested callable result', () async {
+        final result = _MockResult();
+        // Android callables return Map<dynamic, dynamic> nested maps.
+        when(() => result.data).thenReturn(<dynamic, dynamic>{
+          'businesses': <dynamic>[
+            <dynamic, dynamic>{'id': 'biz-1', 'name': 'Alpha Co'},
+            <dynamic, dynamic>{'id': 'biz-2', 'name': 'Beta LLC'},
+          ],
+        });
+        when(
+          () => listCallable.call<dynamic>(any<Object?>()),
+        ).thenAnswer((_) async => result);
+
+        final businesses = await service.listBusinesses();
+        expect(businesses, [
+          const WaveBusiness(id: 'biz-1', name: 'Alpha Co'),
+          const WaveBusiness(id: 'biz-2', name: 'Beta LLC'),
+        ]);
+      });
+
+      test('returns an empty list when none are present', () async {
+        final result = _MockResult();
+        when(() => result.data).thenReturn(<String, dynamic>{});
+        when(
+          () => listCallable.call<dynamic>(any<Object?>()),
+        ).thenAnswer((_) async => result);
+
+        expect(await service.listBusinesses(), isEmpty);
+      });
+
+      test(
+        'FirebaseFunctionsException → mapped WaveFailure is thrown',
+        () async {
+          when(() => listCallable.call<dynamic>(any<Object?>())).thenThrow(
+            _fnEx('failed-precondition', 'wave/token-invalid'),
+          );
+
+          await expectLater(
+            () => service.listBusinesses(),
+            throwsA(isA<WaveAuthInvalid>()),
+          );
+        },
+      );
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -428,8 +480,9 @@ void main() {
       'WaveValidation(reason: businessAmbiguous) yields a distinct message',
       (tester) async {
         final ctx = await _pumpL10nContext(tester);
-        final ambiguous = const WaveValidation(reason: 'businessAmbiguous')
-            .toLocalizedMessage(ctx);
+        final ambiguous = const WaveValidation(
+          reason: 'businessAmbiguous',
+        ).toLocalizedMessage(ctx);
         expect(ambiguous, isNotEmpty);
         // Must not fall back to the generic validation message.
         expect(

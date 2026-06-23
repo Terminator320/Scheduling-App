@@ -5,6 +5,7 @@ import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/wave/application/wave_providers.dart';
+import 'package:scheduling/features/wave/domain/models/wave_business.dart';
 import 'package:scheduling/features/wave/domain/models/wave_connection.dart';
 import 'package:scheduling/features/wave/domain/wave_failure.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -34,7 +35,30 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
   Future<void> _connect() async {
     setState(() => _connectBusy = true);
     try {
-      final conn = await ref.read(waveServiceProvider).bootstrap();
+      final service = ref.read(waveServiceProvider);
+      final businesses = await service.listBusinesses();
+      if (!mounted) return;
+
+      if (businesses.isEmpty) {
+        ref
+            .read(noticeServiceProvider)
+            .error(context.l10n.wave_noBusinessesFound);
+        return;
+      }
+
+      final WaveBusiness target;
+      if (businesses.length == 1) {
+        target = businesses.first;
+      } else {
+        final picked = await showDialog<WaveBusiness>(
+          context: context,
+          builder: (_) => _WaveBusinessPickerDialog(businesses: businesses),
+        );
+        if (picked == null) return; // dismissed — connect quietly aborts
+        target = picked;
+      }
+
+      final conn = await service.bootstrap(businessId: target.id);
       if (!mounted) return;
       setState(() => _connection = conn);
       ref
@@ -118,12 +142,31 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
         AnimatedLoadingButton(
           label: context.l10n.wave_importCustomers,
           isLoading: _importBusy,
-          // No local-connection gate: the server returns wave/not-bootstrapped
-          // if not bootstrapped, which surfaces as a clear notice. The admin
-          // should not need to re-Connect every session just to Import.
           onPressed: !_connectBusy && !_importBusy ? _import : null,
           variant: AnimatedLoadingButtonVariant.outlined,
         ),
+      ],
+    );
+  }
+}
+
+/// Lets the admin pick which Wave business to connect when the token's account
+/// exposes several. Pops the chosen [WaveBusiness], or null when dismissed.
+class _WaveBusinessPickerDialog extends StatelessWidget {
+  const _WaveBusinessPickerDialog({required this.businesses});
+
+  final List<WaveBusiness> businesses;
+
+  @override
+  Widget build(BuildContext context) {
+    return SimpleDialog(
+      title: Text(context.l10n.wave_pickBusinessTitle),
+      children: [
+        for (final business in businesses)
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(business),
+            child: Text(business.name.isEmpty ? business.id : business.name),
+          ),
       ],
     );
   }
