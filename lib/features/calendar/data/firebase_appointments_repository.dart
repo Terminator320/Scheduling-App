@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 class FirebaseAppointmentsRepository implements AppointmentsRepository {
@@ -212,6 +214,52 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }
 
   static const List<String> _historyStatuses = ['done', 'cancelled'];
+
+  // How many of the most-recent history docs a search scans. Bounded so a
+  // search reads at most this many docs (mirrors the clients search window).
+  static const int _historySearchScanLimit = 1000;
+
+  @override
+  Future<List<AppointmentRecord>> searchHistory(String query) async {
+    final q = query.trim();
+    if (!ClientSearchPolicy.shouldSearch(q)) return const [];
+
+    final normalizedQuery = ClientSearchPolicy.normalize(q);
+    final queryDigits = ClientSearchPolicy.digitsOnly(q);
+
+    final QuerySnapshot<Map<String, dynamic>> snapshot;
+    try {
+      // Same query shape as fetchHistoryPage, so the existing
+      // (status, startTime) composite index serves it — no new index.
+      snapshot = await _appointments
+          .where('status', whereIn: _historyStatuses)
+          .orderBy('startTime', descending: true)
+          .limit(_historySearchScanLimit)
+          .get();
+    } on FirebaseException catch (e, st) {
+      debugPrint('[FirebaseAppointmentsRepository] searchHistory failed: $e');
+      debugPrintStack(stackTrace: st);
+      return const [];
+    }
+
+    final matches = <AppointmentRecord>[];
+    for (final doc in snapshot.docs) {
+      final a = AppointmentRecord.fromMap(doc.id, doc.data());
+      final matchesClient =
+          normalizedQuery.isNotEmpty &&
+          ClientSearchPolicy.normalize(a.clientName).contains(normalizedQuery);
+      final matchesEmployee =
+          normalizedQuery.isNotEmpty &&
+          a.employeeNames.any(
+            (e) => ClientSearchPolicy.normalize(e).contains(normalizedQuery),
+          );
+      final matchesPhone =
+          queryDigits.isNotEmpty &&
+          ClientSearchPolicy.digitsOnly(a.clientPhone).contains(queryDigits);
+      if (matchesClient || matchesEmployee || matchesPhone) matches.add(a);
+    }
+    return matches;
+  }
 
   @override
   Stream<List<AppointmentRecord>> watchForEmployeeInRange(

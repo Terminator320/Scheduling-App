@@ -25,8 +25,10 @@ class ClientSearchField extends StatelessWidget {
   final VoidCallback onClear;
   final String? errorText;
 
-  /// Max suggestions shown in the dropdown; keeps the inline list compact.
-  static const int _maxVisibleResults = 5;
+  /// Max dropdown height — about five dense tiles. The list scrolls past this
+  /// so every scored result (the repo returns up to 25) stays reachable while
+  /// the inline list stays compact.
+  static const double _maxDropdownHeight = 280;
 
   @override
   Widget build(BuildContext context) {
@@ -72,14 +74,20 @@ class ClientSearchField extends StatelessWidget {
         if (results.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(top: 4),
+            constraints: const BoxConstraints(maxHeight: _maxDropdownHeight),
             decoration: BoxDecoration(
               border: Border.all(
                 color: Theme.of(context).colorScheme.outlineVariant,
               ),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Column(
-              children: results.take(_maxVisibleResults).map((client) {
+            clipBehavior: Clip.antiAlias,
+            child: ListView.builder(
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              itemCount: results.length,
+              itemBuilder: (context, index) {
+                final client = results[index];
                 final String subtitleText;
                 if (client.phone.trim().isNotEmpty) {
                   subtitleText = client.phone;
@@ -105,7 +113,7 @@ class ClientSearchField extends StatelessWidget {
                     onSelect(client);
                   },
                 );
-              }).toList(),
+              },
             ),
           ),
 

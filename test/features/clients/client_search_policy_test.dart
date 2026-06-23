@@ -2,19 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 
-// Mirrors the filter predicate in ClientsListView._buildSearchResults exactly,
-// so these tests break if the search fields change.
-bool _matches(ClientRecord c, String query) {
-  final q = ClientSearchPolicy.normalize(query);
-  final qDigits = ClientSearchPolicy.digitsOnly(query);
-  final text = ClientSearchPolicy.normalize(
-    '${c.displayName} ${c.firstName} ${c.lastName}',
-  );
-  final phoneDigits = ClientSearchPolicy.digitsOnly('${c.phone} ${c.mobile}');
-  final matchesText = q.isNotEmpty && text.contains(q);
-  final matchesPhone = qDigits.isNotEmpty && phoneDigits.contains(qDigits);
-  return matchesText || matchesPhone;
-}
+// The clients list filters its loaded pages through this exact policy method,
+// so these tests exercise the real matcher (no hand-copied mirror to drift).
+bool _matches(ClientRecord c, String query) =>
+    ClientSearchPolicy.matchesClient(c, query);
 
 void main() {
   group('ClientSearchPolicy.shouldSearch', () {
@@ -83,16 +74,26 @@ void main() {
     });
   });
 
-  // These tests lock in the reshaped search fields (firstName, mobile) that
-  // replaced the old businessName field in the client record.
-  group('client list search filter (_matches)', () {
+  // These tests lock in the client-side fallback search fields. The matcher
+  // covers the same fields the comprehensive server search indexes, so a client
+  // is findable by name, contact, address, email, or phone.
+  group('ClientSearchPolicy.matchesClient', () {
     const sophie = ClientRecord(
       id: 'c1',
       name: 'Tremblay Services',
       firstName: 'Sophie',
       lastName: 'Tremblay',
+      address: '123 Rue Sainte-Catherine',
+      city: 'Montréal',
       mobile: '438-555-0199',
       email: 'sophie@tremblay.com',
+      contacts: [
+        ClientContact(
+          name: 'Marc Lefebvre',
+          phone: '514-555-7777',
+          email: 'marc@lefebvre.ca',
+        ),
+      ],
     );
 
     test('firstName-only query matches the client', () {
@@ -101,6 +102,34 @@ void main() {
 
     test('partial firstName match (case-insensitive) matches the client', () {
       expect(_matches(sophie, 'soph'), isTrue);
+    });
+
+    test('business/display name matches the client', () {
+      expect(_matches(sophie, 'Tremblay Services'), isTrue);
+    });
+
+    test('email query matches the client', () {
+      expect(_matches(sophie, 'sophie@tremblay.com'), isTrue);
+    });
+
+    test('address query matches the client', () {
+      expect(_matches(sophie, 'Sainte-Catherine'), isTrue);
+    });
+
+    test('accent-insensitive city query matches the client', () {
+      expect(_matches(sophie, 'montreal'), isTrue);
+    });
+
+    test('contact name matches the client', () {
+      expect(_matches(sophie, 'Lefebvre'), isTrue);
+    });
+
+    test('contact email matches the client', () {
+      expect(_matches(sophie, 'marc@lefebvre.ca'), isTrue);
+    });
+
+    test('contact phone digits match the client', () {
+      expect(_matches(sophie, '5145557777'), isTrue);
     });
 
     test('mobile-only query matches the client', () {
@@ -113,6 +142,10 @@ void main() {
 
     test('unrelated query does not match', () {
       expect(_matches(sophie, 'Xavier'), isFalse);
+    });
+
+    test('blank query does not match', () {
+      expect(_matches(sophie, '   '), isFalse);
     });
   });
 }
