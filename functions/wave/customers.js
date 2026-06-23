@@ -519,16 +519,24 @@ async function importCustomers(deps = {}) {
       };
 
       const waveId = fields.waveCustomerId;
-      const existingRef = waveId ? existingByWaveId.get(waveId) : undefined;
-      if (existingRef) {
-        batch.set(existingRef, docFields, {merge: true});
+      const existing = waveId ? existingByWaveId.get(waveId) : undefined;
+      if (existing) {
+        // Preserve the original createdAt; only backfill it when the existing
+        // doc lacks one (e.g. a doc from an earlier import that omitted it).
+        const update = {...docFields, updatedAt: now()};
+        if (!existing.hasCreatedAt) update.createdAt = now();
+        batch.set(existing.ref, update, {merge: true});
         summary.updated += 1;
       } else {
         const newRef = db.collection("clients").doc();
-        batch.set(newRef, docFields);
+        // createdAt/updatedAt are required: the clients list orders by
+        // createdAt, and Firestore excludes docs missing that field.
+        batch.set(newRef, {...docFields, createdAt: now(), updatedAt: now()});
         summary.imported += 1;
         // Cache so duplicate Wave ids within the same import collapse to one.
-        if (waveId) existingByWaveId.set(waveId, newRef);
+        if (waveId) {
+          existingByWaveId.set(waveId, {ref: newRef, hasCreatedAt: true});
+        }
       }
       opsInBatch += 1;
       await flushIfFull();
@@ -547,14 +555,16 @@ async function importCustomers(deps = {}) {
 }
 
 /**
- * Builds a `Map<waveCustomerId, docRef>` over the current `clients`
- * collection in a single pass. Docs without a `waveCustomerId` are skipped.
+ * Builds a `Map<waveCustomerId, {ref, hasCreatedAt}>` over the current
+ * `clients` collection in a single pass. Docs without a `waveCustomerId` are
+ * skipped. `hasCreatedAt` lets the import backfill a missing `createdAt` on
+ * re-run without clobbering an existing one.
  *
  * NOTE: loads the entire `clients` collection into memory — safe at the
  * planned ~650-customer scale (one-shot admin import); revisit with a cursor
  * if the client count ever grows large.
  * @param {!Object} db Firestore instance.
- * @return {!Promise<!Map<string, !Object>>}
+ * @return {!Promise<!Map<string, {ref: !Object, hasCreatedAt: boolean}>>}
  */
 async function buildWaveIdIndex(db) {
   const index = new Map();
@@ -563,7 +573,7 @@ async function buildWaveIdIndex(db) {
   for (const doc of docs) {
     const d = doc.data() || {};
     const id = typeof d.waveCustomerId === "string" ? d.waveCustomerId : "";
-    if (id) index.set(id, doc.ref);
+    if (id) index.set(id, {ref: doc.ref, hasCreatedAt: d.createdAt != null});
   }
   return index;
 }

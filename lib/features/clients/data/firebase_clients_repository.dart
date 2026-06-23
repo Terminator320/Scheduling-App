@@ -30,7 +30,9 @@ class FirebaseClientsRepository implements ClientsRepository {
     required int limit,
     ClientRecord? after,
   }) async {
-    var query = _clients.orderBy('createdAt', descending: true);
+    // Alphabetical by name (ascending). NOTE: like any Firestore orderBy this
+    // excludes docs missing `name`; every client write sets it, so that holds.
+    var query = _clients.orderBy('name');
     if (after != null) {
       // Re-fetch the cursor doc so startAfterDocument reads its orderBy fields.
       // One extra read per page boundary — negligible and keeps the domain

@@ -980,6 +980,47 @@ function selectBusiness(businesses, wantId, wantName) {
   throw new HttpsError("failed-precondition", "wave/business-ambiguous");
 }
 
+// 1b) waveListBusinesses — admin-only live list of the token's Wave businesses.
+// Powers the connect-flow business picker: the client lists, then calls
+// waveBootstrap with the chosen businessId. Read-only (no Firestore write).
+exports.waveListBusinesses = onCall(
+    // TODO(pre-ship): set back to `enforceAppCheck: true` once the app ships
+    // through Play Store and Play Integrity can mint verified App Check tokens.
+    {secrets: [WAVE_FULL_ACCESS_TOKEN], enforceAppCheck: false},
+    async (req) => {
+      if (!req.auth || !req.auth.uid) {
+        throw new HttpsError("unauthenticated", "auth-required");
+      }
+      assertPayloadShape(req.data, new Set());
+      await assertAdmin(req.auth.uid);
+
+      // Live Wave calls (whoami + listBusinesses), so it gets its own durable
+      // cap to stop a looping client from burning the Wave request budget.
+      await enforceDurableRateLimit(
+          "wave-list",
+          req.auth.uid,
+          WAVE_BOOTSTRAP_RATE_MAX,
+          WAVE_IMPORT_RATE_WINDOW_MS,
+      );
+
+      let businesses;
+      try {
+        await whoami();
+        businesses = await listBusinesses();
+      } catch (e) {
+        const {code, message} = classifyWaveError(e);
+        logger.warn("WAVE-LIST failed", {uid: req.auth.uid, code, message});
+        throw new HttpsError(code, message);
+      }
+
+      logger.info("WAVE-LIST listed", {
+        uid: req.auth.uid,
+        count: businesses.length,
+      });
+      return {businesses};
+    },
+);
+
 // 2) waveImportCustomers — admin-only one-shot Wave → App seed.
 exports.waveImportCustomers = onCall(
     // TODO(pre-ship): set back to `enforceAppCheck: true` once the app ships
