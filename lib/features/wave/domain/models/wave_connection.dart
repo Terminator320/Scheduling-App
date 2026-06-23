@@ -14,6 +14,10 @@ class WaveConnection {
   final String businessId;
   final String businessName;
 
+  /// True only when a real business is linked. A bootstrap/get that resolves an
+  /// empty businessId is not a usable connection.
+  bool get isConnected => businessId.isNotEmpty;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

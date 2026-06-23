@@ -23,30 +23,13 @@ class WaveSettingsSection extends ConsumerStatefulWidget {
 }
 
 class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
-  // Hydrated on mount from the persisted server-side connection via the
-  // admin-only waveGetConnection callable — the app can't read the
-  // firestore.rules-locked `wave` collection directly. Reflects real
-  // connection status across launches, not just a Connect done this session.
+  // Connection done in the current session. The persisted server-side status is
+  // read separately via [waveConnectionProvider] (a cached callable, since the
+  // app can't read the firestore.rules-locked `wave` collection directly); this
+  // local value takes precedence right after a Connect.
   WaveConnection? _connection;
   bool _connectBusy = false;
   bool _importBusy = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadConnection();
-  }
-
-  Future<void> _loadConnection() async {
-    try {
-      final conn = await ref.read(waveServiceProvider).getConnection();
-      if (!mounted) return;
-      setState(() => _connection = conn);
-    } on WaveFailure {
-      // Status read failed (offline / transient) — leave as not-connected. The
-      // service already logged; don't push a notice on every settings open.
-    }
-  }
 
   Future<void> _connect() async {
     setState(() => _connectBusy = true);
@@ -56,7 +39,16 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
       // never ships in the app.
       final conn = await ref.read(waveServiceProvider).bootstrap();
       if (!mounted) return;
+      if (!conn.isConnected) {
+        // Server returned no business (e.g. misconfigured WAVE_BUSINESS_NAME) —
+        // don't flip the UI to a blank "connected" state.
+        ref
+            .read(noticeServiceProvider)
+            .error(context.l10n.wave_errorBusinessAmbiguous);
+        return;
+      }
       setState(() => _connection = conn);
+      ref.invalidate(waveConnectionProvider);
       ref
           .read(noticeServiceProvider)
           .success(context.l10n.wave_connectedSuccess(conn.businessName));
@@ -93,7 +85,11 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final connected = _connection != null;
+    // A Connect done this session wins; otherwise fall back to the cached
+    // persisted status. `.value` is null while loading or on a read error,
+    // which correctly renders as not-connected without a notice.
+    final connection = _connection ?? ref.watch(waveConnectionProvider).value;
+    final connected = connection != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -114,7 +110,7 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
-                    _connection!.businessName,
+                    connection.businessName,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
@@ -133,7 +129,6 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
             label: context.l10n.wave_connectToWave,
             isLoading: _connectBusy,
             onPressed: _connectBusy || _importBusy ? null : _connect,
-            variant: AnimatedLoadingButtonVariant.filled,
           ),
           const SizedBox(height: AppSpacing.sp8),
         ],

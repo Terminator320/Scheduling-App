@@ -316,7 +316,7 @@ void main() {
         expect(conn.businessName, 'Test Co');
       });
 
-      test('sends businessId in payload when provided', () async {
+      test('sends an empty payload (business chosen server-side)', () async {
         final result = _MockResult();
         when(() => result.data).thenReturn(<String, dynamic>{
           'businessId': 'biz-42',
@@ -326,36 +326,14 @@ void main() {
           () => bootstrapCallable.call<dynamic>(any<Object?>()),
         ).thenAnswer((_) async => result);
 
-        await service.bootstrap(businessId: 'biz-42');
+        await service.bootstrap();
 
         final captured =
             verify(
                   () => bootstrapCallable.call<dynamic>(captureAny<Object?>()),
                 ).captured.single
                 as Map;
-        expect(captured['businessId'], 'biz-42');
-        expect(captured.containsKey('businessName'), isFalse);
-      });
-
-      test('sends businessName in payload when provided', () async {
-        final result = _MockResult();
-        when(() => result.data).thenReturn(<String, dynamic>{
-          'businessId': 'biz-1',
-          'businessName': 'Acme',
-        });
-        when(
-          () => bootstrapCallable.call<dynamic>(any<Object?>()),
-        ).thenAnswer((_) async => result);
-
-        await service.bootstrap(businessName: 'Acme');
-
-        final captured =
-            verify(
-                  () => bootstrapCallable.call<dynamic>(captureAny<Object?>()),
-                ).captured.single
-                as Map;
-        expect(captured['businessName'], 'Acme');
-        expect(captured.containsKey('businessId'), isFalse);
+        expect(captured, isEmpty);
       });
 
       test(

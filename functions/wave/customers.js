@@ -316,7 +316,15 @@ async function upsertCustomer(clientId, deps = {}) {
   }
   const newId = created.customer && typeof created.customer.id === "string" ?
     created.customer.id : "";
-  await writeSyncSuccess(db, ref, now, {hash, waveCustomerId: newId});
+  // When the phone/mobile patch was deferred (create succeeded without them but
+  // the follow-up patch failed), record the hash of what actually landed in
+  // Wave (phone/mobile cleared). The next upsert then sees the live doc's full
+  // hash differ and retries the phone instead of treating it as synced.
+  const syncedHash = created.phoneDeferred ?
+    mappedFieldsHash({...data, phone: "", mobile: ""}) : hash;
+  await writeSyncSuccess(
+      db, ref, now, {hash: syncedHash, waveCustomerId: newId},
+  );
   return {status: "created", waveCustomerId: newId};
 }
 
@@ -367,20 +375,21 @@ async function createCustomerWithPhoneFallback(graphql, businessId,
   if (mobile !== undefined) phoneFields.mobile = mobile;
 
   // Nothing to patch back (defensive — we only get here on a phone error).
+  let phoneDeferred = false;
   if (newId && Object.keys(phoneFields).length > 0) {
-    // Best-effort: the customer exists; a patch failure here would surface as
-    // a validation error on the phone fields again. Patch and ignore its
-    // didSucceed — the create already succeeded and the doc is linked.
-    // NOTE: if this patch fails (didSucceed:false, ignored), the write-back
-    // still records syncState:'synced' with a lastSyncedHash computed over
-    // the full fields INCLUDING phone. A later upsertCustomer will no-op and
-    // never retry the phone — the unretried phone is an accepted narrow edge
-    // (Wave accepted the customer without phone but rejected it on patch).
-    await runCustomerMutation(
+    // Best-effort: the customer exists; patch the phone/mobile back. If this
+    // patch fails, `phoneDeferred` tells the caller to record the hash of what
+    // actually reached Wave (without phone), so a later upsert sees a hash
+    // mismatch and retries the phone rather than no-op'ing forever.
+    const patched = await runCustomerMutation(
         graphql, PATCH_CUSTOMER, {id: newId, ...phoneFields},
     );
+    phoneDeferred = !patched.didSucceed;
+  } else {
+    // Had phone/mobile to set but no usable id to patch onto — also deferred.
+    phoneDeferred = Object.keys(phoneFields).length > 0;
   }
-  return retry;
+  return {...retry, phoneDeferred};
 }
 
 /**

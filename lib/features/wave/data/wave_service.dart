@@ -13,17 +13,14 @@ class WaveService {
   final FirebaseFunctions _functions;
   final AppLogger _logger;
 
-  Future<WaveConnection> bootstrap({
-    String? businessId,
-    String? businessName,
-  }) async {
-    final payload = <String, dynamic>{};
-    if (businessId != null) payload['businessId'] = businessId;
-    if (businessName != null) payload['businessName'] = businessName;
-
+  /// Connects to Wave. The target business is resolved server-side from the
+  /// `WAVE_BUSINESS_NAME` secret, so the client sends no selector.
+  Future<WaveConnection> bootstrap() async {
     final HttpsCallableResult<dynamic> result;
     try {
-      result = await _functions.httpsCallable('waveBootstrap').call(payload);
+      result = await _functions
+          .httpsCallable('waveBootstrap')
+          .call(<String, dynamic>{});
     } catch (e, st) {
       _logger.warn('WAVE-BOOT waveBootstrap callable failed', e, st);
       throw WaveErrorMapper.map(e);
