@@ -346,8 +346,6 @@
   "settings_integrations": "Intégrations",
   "wave_connectToWave": "Connecter à Wave",
   "wave_importCustomers": "Importer les clients depuis Wave",
-  "wave_pickBusinessTitle": "Choisissez une entreprise Wave",
-  "wave_noBusinessesFound": "Aucune entreprise Wave trouvée pour ce compte.",
   "wave_connectedSuccess": "Connecté à {businessName}",
   "wave_importSuccess": "Importation Wave terminée — {imported} ajouté(s), {updated} mis à jour, {skipped} ignoré(s).",
   "wave_syncedWithWave": "Synchronisé avec Wave",

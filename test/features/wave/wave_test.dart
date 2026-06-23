@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/features/wave/data/wave_service.dart';
-import 'package:scheduling/features/wave/domain/models/wave_business.dart';
 import 'package:scheduling/features/wave/domain/models/wave_connection.dart';
 import 'package:scheduling/features/wave/domain/wave_error_mapper.dart';
 import 'package:scheduling/features/wave/domain/wave_failure.dart';
@@ -234,14 +233,14 @@ void main() {
     late _MockFunctions functions;
     late _MockCallable bootstrapCallable;
     late _MockCallable importCallable;
-    late _MockCallable listCallable;
+    late _MockCallable getConnectionCallable;
     late WaveService service;
 
     setUp(() {
       functions = _MockFunctions();
       bootstrapCallable = _MockCallable();
       importCallable = _MockCallable();
-      listCallable = _MockCallable();
+      getConnectionCallable = _MockCallable();
       when(
         () => functions.httpsCallable('waveBootstrap'),
       ).thenReturn(bootstrapCallable);
@@ -249,9 +248,56 @@ void main() {
         () => functions.httpsCallable('waveImportCustomers'),
       ).thenReturn(importCallable);
       when(
-        () => functions.httpsCallable('waveListBusinesses'),
-      ).thenReturn(listCallable);
+        () => functions.httpsCallable('waveGetConnection'),
+      ).thenReturn(getConnectionCallable);
       service = WaveService(functions: functions);
+    });
+
+    group('getConnection', () {
+      test('returns WaveConnection when server reports connected', () async {
+        final result = _MockResult();
+        when(() => result.data).thenReturn(<String, dynamic>{
+          'connected': true,
+          'businessId': 'biz-7',
+          'businessName': 'Connected Co',
+        });
+        when(
+          () => getConnectionCallable.call<dynamic>(any<Object?>()),
+        ).thenAnswer((_) async => result);
+
+        final conn = await service.getConnection();
+        expect(conn, isNotNull);
+        expect(conn!.businessId, 'biz-7');
+        expect(conn.businessName, 'Connected Co');
+      });
+
+      test('returns null when server reports not connected', () async {
+        final result = _MockResult();
+        when(() => result.data).thenReturn(<String, dynamic>{
+          'connected': false,
+          'businessId': '',
+          'businessName': '',
+        });
+        when(
+          () => getConnectionCallable.call<dynamic>(any<Object?>()),
+        ).thenAnswer((_) async => result);
+
+        expect(await service.getConnection(), isNull);
+      });
+
+      test(
+        'FirebaseFunctionsException → mapped WaveFailure is thrown',
+        () async {
+          when(
+            () => getConnectionCallable.call<dynamic>(any<Object?>()),
+          ).thenThrow(_fnEx('unavailable', 'wave/network'));
+
+          await expectLater(
+            () => service.getConnection(),
+            throwsA(isA<WaveNetwork>()),
+          );
+        },
+      );
     });
 
     group('bootstrap', () {
@@ -387,52 +433,6 @@ void main() {
           throwsA(isA<WaveUnknown>()),
         );
       });
-    });
-
-    group('listBusinesses', () {
-      test('parses businesses from the nested callable result', () async {
-        final result = _MockResult();
-        // Android callables return Map<dynamic, dynamic> nested maps.
-        when(() => result.data).thenReturn(<dynamic, dynamic>{
-          'businesses': <dynamic>[
-            <dynamic, dynamic>{'id': 'biz-1', 'name': 'Alpha Co'},
-            <dynamic, dynamic>{'id': 'biz-2', 'name': 'Beta LLC'},
-          ],
-        });
-        when(
-          () => listCallable.call<dynamic>(any<Object?>()),
-        ).thenAnswer((_) async => result);
-
-        final businesses = await service.listBusinesses();
-        expect(businesses, [
-          const WaveBusiness(id: 'biz-1', name: 'Alpha Co'),
-          const WaveBusiness(id: 'biz-2', name: 'Beta LLC'),
-        ]);
-      });
-
-      test('returns an empty list when none are present', () async {
-        final result = _MockResult();
-        when(() => result.data).thenReturn(<String, dynamic>{});
-        when(
-          () => listCallable.call<dynamic>(any<Object?>()),
-        ).thenAnswer((_) async => result);
-
-        expect(await service.listBusinesses(), isEmpty);
-      });
-
-      test(
-        'FirebaseFunctionsException → mapped WaveFailure is thrown',
-        () async {
-          when(() => listCallable.call<dynamic>(any<Object?>())).thenThrow(
-            _fnEx('failed-precondition', 'wave/token-invalid'),
-          );
-
-          await expectLater(
-            () => service.listBusinesses(),
-            throwsA(isA<WaveAuthInvalid>()),
-          );
-        },
-      );
     });
   });
 
