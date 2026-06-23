@@ -253,12 +253,23 @@ function fromWaveCustomer(node) {
         addr.country : null,
   );
 
+  const firstName = typeof n.firstName === "string" ? n.firstName : "";
+  const lastName = typeof n.lastName === "string" ? n.lastName : "";
+  const email = typeof n.email === "string" ? n.email : "";
+  // Derive a non-empty display name: Wave's `name` when present, else the
+  // first/last name, else the email. The app lists clients ordered by `name`,
+  // so a blank name would float the doc to the top with no label.
+  const rawName = typeof n.name === "string" ? n.name.trim() : "";
+  const name = rawName ||
+    [firstName.trim(), lastName.trim()].filter(Boolean).join(" ") ||
+    email.trim();
+
   return {
     waveCustomerId: typeof n.id === "string" ? n.id : "",
-    name: typeof n.name === "string" ? n.name : "",
-    firstName: typeof n.firstName === "string" ? n.firstName : "",
-    lastName: typeof n.lastName === "string" ? n.lastName : "",
-    email: typeof n.email === "string" ? n.email : "",
+    name,
+    firstName,
+    lastName,
+    email,
     phone: typeof n.phone === "string" ? n.phone : "",
     mobile: typeof n.mobile === "string" ? n.mobile : "",
     address,

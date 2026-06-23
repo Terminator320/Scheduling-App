@@ -75,10 +75,9 @@ class DetailsViewBody extends ConsumerWidget {
         .map((m) => m.trim())
         .where((m) => m.isNotEmpty)
         .toList();
-    // contacts[0] mirrors the primary client already named above — only the
-    // remaining business contacts are worth listing again.
+    // `contacts` holds only the extra contacts (no primary mirror); list them
+    // all — the primary client is already named in the header above.
     final extraContacts = (client?.contacts ?? const <ClientContact>[])
-        .skip(1)
         .toList();
 
     return Column(

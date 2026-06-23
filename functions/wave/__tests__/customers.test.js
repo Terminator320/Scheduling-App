@@ -133,6 +133,10 @@ const patchOk = (id) => ({
   },
 });
 
+const patchFail = (inputErrors) => ({
+  customerPatch: {didSucceed: false, inputErrors, customer: null},
+});
+
 // ---------------------------------------------------------------------------
 // upsertCustomer — no-op
 // ---------------------------------------------------------------------------
@@ -346,6 +350,35 @@ describe("upsertCustomer phone/mobile create fallback", () => {
         const u = ref.updates[0];
         expect(u["wave.syncState"]).toBe("synced");
         expect(u.waveCustomerId).toBe("wave-new");
+      });
+
+  test("phone patch fails → synced hash excludes phone (retries later)",
+      async () => {
+        const data = {...CLIENT};
+        const ref = clientRef(data);
+        const phoneErrors = [
+          {code: "GENERIC_ERROR", message: "bad", path: ["phone"]},
+        ];
+        // create-with-phone fails, create-without-phone OK, phone patch FAILS.
+        const graphql = graphqlSeq(
+            createFail(phoneErrors),
+            createOk("wave-new"),
+            patchFail(phoneErrors),
+        );
+        const result = await upsertCustomer("c1", {
+          db: upsertDb(ref), graphql, businessId: "biz-1", now,
+        });
+
+        expect(result).toEqual({status: "created", waveCustomerId: "wave-new"});
+        const u = ref.updates[0];
+        // The customer is linked + synced, but the recorded hash reflects what
+        // actually reached Wave (no phone), so a later upsert detects the diff
+        // and retries the phone instead of no-op'ing forever.
+        expect(u["wave.syncState"]).toBe("synced");
+        expect(u["wave.lastSyncedHash"]).toBe(
+            mappedFieldsHash({...CLIENT, phone: "", mobile: ""}),
+        );
+        expect(u["wave.lastSyncedHash"]).not.toBe(mappedFieldsHash(CLIENT));
       });
 
   test("mixed errors (phone + email) → not treated as phone fallback",

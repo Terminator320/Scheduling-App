@@ -10,12 +10,35 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
-## [1.17.0+29] - 2026-06-23
-### Added
-- **Pick which Wave business to connect.** If your Wave account has more than
-  one business, connecting now shows a short list so you can choose the right
-  one; if there's only one, it connects automatically as before.
+## [1.18.1+31] - 2026-06-23
+### Fixed
+- **Appointment details show the right client contacts.** The appointment view
+  was dropping a client's first extra contact (and showed none when the client
+  had only one); every extra contact now appears.
+- **Clients identified only by a business name sort correctly in the A–Z list.**
+  After the switch to alphabetical ordering, clients whose name came from the
+  old "Business name" field clustered at the very top of the list; a one-time
+  repair files them under their actual name so they appear in the right place.
+- **Connecting to Wave fails cleanly when no business is configured.** Instead
+  of showing a blank "Connected to" status, Connect now reports the problem and
+  stays on the Connect button.
+- **Wave customers imported without a name get a usable label.** Such customers
+  now fall back to their first/last name or email instead of importing as a
+  blank, unsortable row.
 
+## [1.18.0+30] - 2026-06-23
+### Added
+- **The Wave section now shows you're connected.** Once an admin connects the
+  business's Wave account, Settings shows a "Connected to <business>" status
+  every time you open it — on any device, not just right after connecting.
+
+### Changed
+- **Connecting to Wave is now a single tap.** Connect links the business's Wave
+  account directly, with no business to choose. Once connected, the Connect
+  button is replaced by the connected status, leaving just "Import customers
+  from Wave."
+
+## [1.17.0+29] - 2026-06-23
 ### Changed
 - **Clients are now listed alphabetically by name.** The client list is sorted
   A–Z instead of newest-first, making it easier to scan and find someone.

@@ -198,6 +198,32 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('Connect with a blank business stays not-connected', (
+      tester,
+    ) async {
+      final service = _mockService();
+      final notices = NoticeService();
+      final emitted = <AppNotice>[];
+      notices.stream.listen(emitted.add);
+
+      // Server resolved no business (e.g. misconfigured WAVE_BUSINESS_NAME).
+      when(service.bootstrap).thenAnswer(
+        (_) async => const WaveConnection(businessId: '', businessName: ''),
+      );
+
+      await tester.pumpWidget(_wrapSection(service, noticeService: notices));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Connect to Wave'));
+      await tester.pumpAndSettle();
+
+      // No flip to a blank "connected" state — Connect remains visible and an
+      // error notice is surfaced.
+      expect(find.text('Connect to Wave'), findsOneWidget);
+      expect(emitted.last, isA<NoticeError>());
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('Connect failure surfaces an error notice', (tester) async {
       final service = _mockService();
       final notices = NoticeService();

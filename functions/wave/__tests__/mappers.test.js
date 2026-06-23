@@ -321,6 +321,27 @@ describe("fromWaveCustomer", () => {
     });
   });
 
+  test("empty Wave name → falls back to first + last name", () => {
+    const result = fromWaveCustomer({
+      ...FULL_WAVE_NODE,
+      name: "",
+      firstName: "Jane",
+      lastName: "Doe",
+    });
+    expect(result.name).toBe("Jane Doe");
+  });
+
+  test("empty name and no first/last → falls back to email", () => {
+    const result = fromWaveCustomer({
+      ...FULL_WAVE_NODE,
+      name: "",
+      firstName: "",
+      lastName: "",
+      email: "jane@example.com",
+    });
+    expect(result.name).toBe("jane@example.com");
+  });
+
   test("CA-QC province code → stored as QC", () => {
     const result = fromWaveCustomer({
       ...FULL_WAVE_NODE,

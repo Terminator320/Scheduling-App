@@ -57,6 +57,9 @@ function bridgeBody(userId, data) {
   };
 }
 
+// Rules can only `get` documents by full path, and `users` docs use Firestore-
+// generated IDs — this trigger mirrors `users` into `usersByUid/{uid}` so
+// security rules can resolve a caller's role from their auth uid alone.
 exports.syncUsersByUid = onDocumentWritten(
     "users/{userId}",
     async (event) => {
@@ -127,9 +130,21 @@ exports.syncUsersByUid = onDocumentWritten(
 );
 
 // ----- Google Places callables ----------------------------------------------
+//
+// Both callables proxy the Places API v1 so the billing-sensitive key never
+// ships in the Flutter binary. The key lives in Secret Manager; clients must
+// be authenticated and pass App Check.
 
 const GOOGLE_MAP_API_KEY = defineSecret("GOOGLE_MAP_API_KEY");
 
+// Per-uid sliding-window rate limit. In-memory, per function instance.
+// IMPORTANT: Set a GCP billing alert on the Maps Platform API in the Firebase
+// Console — this in-memory limit is per-instance and is not a hard billing cap.
+// With maxInstances: 10, the effective ceiling is RATE_LIMIT_MAX × instance
+// count requests per window. RATE_LIMIT_MAX is kept low to bound that product.
+// This is a cheap, latency-free cost guard appropriate for the high-volume
+// autocomplete path; auth-sensitive routes use the durable Firestore limiter
+// below instead (see enforceDurableRateLimit).
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const rateBuckets = new Map();
@@ -167,16 +182,34 @@ const PLACE_ID_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const SESSION_TOKEN_MAX_LEN = 64;
 const INPUT_MAX_LEN = 200;
 
+// Hard cap on a callable payload once serialized. Every payload here is a
+// couple of short strings; anything larger is malformed or abusive.
 const MAX_PAYLOAD_BYTES = 4 * 1024;
 
+// Auth-sensitive callables (resolveMyInvite, deleteAccount) are capped at
+// AUTH_RATE_MAX attempts per AUTH_RATE_WINDOW_MS. Unlike the in-memory Places
+// limiter above, this is enforced in Firestore so the cap holds across
+// function instances and cold starts — a brute-force caller cannot multiply
+// it by maxInstances.
 const AUTH_RATE_MAX = 5;
 const AUTH_RATE_WINDOW_MS = 15 * 60 * 1000;
 
+// placesGetDetails is low-volume (one billable call per address the user
+// actually selects), so it gets the durable Firestore cap rather than the
+// in-memory limiter — that one resets on cold start and multiplies by
+// maxInstances, giving no real ceiling on the per-detail Places cost. The
+// limit is generous enough for an admin entering many appointments at once.
 const PLACES_DETAILS_RATE_MAX = 40;
 const PLACES_DETAILS_RATE_WINDOW_MS = 15 * 60 * 1000;
 
+// deleteAccount requires the caller to have re-authenticated within this
+// window. Firebase ID tokens are valid ~1 hour, so without this check a
+// stolen-but-not-yet-expired token could trigger irreversible deletion.
 const REAUTH_MAX_AGE_SECONDS = 5 * 60;
 
+// waveImportCustomers is a heavy one-shot admin op (it paginates ~650 customers
+// across ~7 Wave pages). A modest durable cap keeps a stuck/retried admin from
+// hammering Wave: 5 imports per hour is ample for a setup/reconcile action.
 const WAVE_IMPORT_RATE_MAX = 5;
 const WAVE_IMPORT_RATE_WINDOW_MS = 60 * 60 * 1000;
 // waveBootstrap's not-yet-connected path makes live Wave calls (whoami +
@@ -295,7 +328,9 @@ async function enforceDurableRateLimit(route, uid, max, windowMs) {
     const snap = await tx.get(ref);
     const data = snap.exists ? snap.data() : null;
     const prior = data && Array.isArray(data.attempts) ? data.attempts : [];
-
+    // True sliding window: keep only the attempt timestamps still inside the
+    // window. A single windowStart counter would reset at the boundary and let
+    // a caller burst 2×max across it; per-attempt timestamps cannot.
     const recent = prior.filter(
         (t) => typeof t === "number" && now - t < windowMs,
     );
@@ -547,14 +582,34 @@ exports.validateUploadedImage = onObjectFinalized(async (event) => {
 
 // ----- deleteAccount callable ------------------------------------------------
 //
+// Implements C6 from the production-readiness plan and satisfies the in-app
+// deletion requirement from Apple App Store Guideline 5.1.1(v) and the Google
+// Play Account Deletion policy. The Flutter client re-authenticates the user
+// immediately before invoking this; the server also re-checks the ID token's
+// auth_time against REAUTH_MAX_AGE_SECONDS so a live-but-stale token cannot
+// trigger deletion without going through the in-app re-auth flow.
+// App Check + auth are required.
+//
+// Scope of deletion (intentionally narrow — see plan §C6):
+//   1. The caller's `users/{docId}` Firestore document. The syncUsersByUid
+//      Firestore trigger then clears `usersByUid/{uid}` automatically.
+//   2. The Firebase Auth user.
+// We do NOT touch shared business data (appointments, clients, appointment
+// images): those are owned by the business, not the individual account.
 exports.deleteAccount = onCall(
     // TODO(pre-ship): set back to `enforceAppCheck: true` once the app ships
+    // through Play Store and Play Integrity can mint verified App Check
+    // tokens. Temporarily false so testers on Firebase App Distribution
+    // sideloads (UNRECOGNIZED_VERSION verdict) aren't blocked.
     {enforceAppCheck: false},
     async (req) => {
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
       }
       assertPayloadShape(req.data, new Set());
+      // Stale-auth is checked BEFORE the rate limiter so a stale-but-cheap
+      // rejection doesn't burn one of the caller's 5 deletion slots (which
+      // would let a few reauth retries lock them out of deletion entirely).
       const authTime = req.auth.token?.auth_time;
       const nowSec = Math.floor(Date.now() / 1000);
       if (typeof authTime !== "number" ||
@@ -601,6 +656,9 @@ exports.deleteAccount = onCall(
           throw new HttpsError("internal", "delete-user-doc-failed");
         }
       } else {
+        // No bridge row — it may simply be stale/missing while a users doc
+        // still exists. Fall back to a direct uid lookup so we don't strand
+        // the profile doc (account-deletion completeness for store policy).
         logger.warn("deleteAccount: no bridge for uid; querying users by uid", {
           uid,
         });
@@ -641,10 +699,17 @@ exports.deleteAccount = onCall(
     },
 );
 
-
+// Server-side resolver for the freshly-registered-user invite lookup.
+// Replaces the client-side Firestore query that hits permission-denied because
+// Firestore's rules engine cannot prove `resource.data.email ==
+// request.auth.token.email` from a list query's email-literal where clause.
+// Admin SDK bypasses rules; authority comes from `auth.token.email`, never
+// from a client-supplied string.
 exports.resolveMyInvite = onCall(
     // TODO(pre-ship): set back to `enforceAppCheck: true` once the app ships
-
+    // through Play Store and Play Integrity can mint verified App Check
+    // tokens. Temporarily false so testers on Firebase App Distribution
+    // sideloads (UNRECOGNIZED_VERSION verdict) aren't blocked.
     {enforceAppCheck: false},
     async (req) => {
       if (!req.auth || !req.auth.uid) {
@@ -655,7 +720,9 @@ exports.resolveMyInvite = onCall(
       if (typeof tokenEmail !== "string" || tokenEmail === "") {
         throw new HttpsError("failed-precondition", "no-email-claim");
       }
-
+      // Rate-limit AFTER the cheap precondition checks (mirrors deleteAccount):
+      // a tokenless/precondition-failing retry must not record an attempt and
+      // burn one of the caller's own limited slots.
       await enforceDurableRateLimit(
           "resolveMyInvite",
           req.auth.uid,
@@ -664,7 +731,9 @@ exports.resolveMyInvite = onCall(
       );
       const email = tokenEmail.trim().toLowerCase();
       const db = getFirestore();
-
+      // Invites are employee-only — admin is granted post-activation, and
+      // firestore.rules forbids invited-admin self-activation. Resolving only
+      // employee invites keeps the callable consistent with that rule.
       const snap = await db
           .collection("users")
           .where("email", "==", email)
@@ -677,7 +746,9 @@ exports.resolveMyInvite = onCall(
       }
       const doc = snap.docs[0];
       const d = doc.data();
-
+      // Project only the fields the signup/activation flow consumes — never
+      // return the whole users doc, so internal fields can't leak to the
+      // pre-activation account.
       return {
         found: true,
         docId: doc.id,
@@ -693,10 +764,19 @@ exports.resolveMyInvite = onCall(
 );
 
 // ----- Scheduled history purge ----------------------------------------------
-
+//
+// History retention: done/cancelled appointments stay in history for
+// HISTORY_RETENTION_YEARS, then are purged automatically — the Firestore doc
+// AND its Storage images — once (and only once) that long has elapsed. The
+// cutoff is anchored on `startTime` (the visit date, which is what the history
+// view is keyed on) and is strict, so nothing is removed before the full
+// window passes. Non-terminal appointments are never touched, however old —
+// only history is purged. Image cleanup mirrors the manual delete path in
+// EventDetailsController.deleteAppointment so a purged appointment leaves no
+// orphaned bytes. Admin SDK bypasses security rules; this runs unattended.
 const HISTORY_RETENTION_YEARS = 2;
 const PURGE_STATUSES = ["done", "cancelled"];
-
+// Well under Firestore's 500-writes-per-batch ceiling, with headroom.
 const PURGE_BATCH_SIZE = 200;
 
 /**
@@ -736,7 +816,8 @@ exports.purgeExpiredHistory = onSchedule(
 
       let purged = 0;
       let imageFailures = 0;
-
+      // Every fetched doc is deleted, so the next page's oldest terminal visit
+      // simply takes its place — a plain limit loop advances without a cursor.
       for (;;) {
         const snap = await col
             .where("status", "in", PURGE_STATUSES)
@@ -768,7 +849,76 @@ exports.purgeExpiredHistory = onSchedule(
     },
 );
 
+// ----- One-time legacy client-name backfill ---------------------------------
+//
+// Pre-Wave-reshape "business-only" client docs stored their label under
+// `businessName` with an empty `name`. The clients list now orders by `name`
+// (alphabetical), so those docs sort to the very top with a blank key (and a
+// doc missing `name` entirely would be excluded). This idempotent migration
+// copies `businessName` -> `name` wherever `name` is empty, records a guard
+// doc, and no-ops on every subsequent run. Admin SDK bypasses rules; it runs
+// unattended and can be removed once it has completed in production.
+const CLIENT_NAME_BACKFILL_GUARD = "maintenance/clientNameBackfill";
+// Well under Firestore's 500-writes-per-batch ceiling, with headroom.
+const CLIENT_NAME_BACKFILL_BATCH = 200;
+
+exports.backfillLegacyClientNames = onSchedule(
+    {schedule: "every 24 hours", maxInstances: 1},
+    async () => {
+      const db = getFirestore();
+      const guardRef = db.doc(CLIENT_NAME_BACKFILL_GUARD);
+      const guard = await guardRef.get();
+      if (guard.exists && guard.data() && guard.data().done === true) {
+        logger.debug("backfillLegacyClientNames: already done");
+        return;
+      }
+
+      // Full scan is safe at the planned ~650-client scale (mirrors the import
+      // index); the doc-id read order never excludes a doc missing `name`.
+      const snap = await db.collection("clients").get();
+      const docs = (snap && Array.isArray(snap.docs)) ? snap.docs : [];
+      let batch = db.batch();
+      let opsInBatch = 0;
+      let fixed = 0;
+      for (const doc of docs) {
+        const d = doc.data() || {};
+        const name = typeof d.name === "string" ? d.name.trim() : "";
+        const businessName =
+          typeof d.businessName === "string" ? d.businessName.trim() : "";
+        if (name !== "" || businessName === "") continue;
+        batch.update(doc.ref, {
+          name: businessName,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        opsInBatch += 1;
+        fixed += 1;
+        if (opsInBatch >= CLIENT_NAME_BACKFILL_BATCH) {
+          await batch.commit();
+          batch = db.batch();
+          opsInBatch = 0;
+        }
+      }
+      if (opsInBatch > 0) await batch.commit();
+
+      await guardRef.set({
+        done: true,
+        fixed,
+        completedAt: FieldValue.serverTimestamp(),
+      });
+      logger.info("backfillLegacyClientNames: done",
+          {fixed, scanned: docs.length});
+    },
+);
+
 // ----- Wave Accounting integration ------------------------------------------
+//
+// These functions wire the app's `clients` collection to Wave Accounting
+// customers (plan Task 5). The single `wave/connection` doc holds the selected
+// business id; `waveSyncQueue` is a durable outbox drained on a schedule. The
+// heavy lifting (GraphQL transport, mapping, queue mechanics) lives in the
+// `wave/*` modules — these functions are thin orchestrators that add auth,
+// admin, and rate-limit guards and translate Wave errors into HttpsErrors.
+//
 // App Check posture mirrors deleteAccount/resolveMyInvite: the two admin
 // callables run enforceAppCheck:false with a TODO(pre-ship) until Play
 // Integrity can mint verified tokens for store builds.
@@ -785,6 +935,7 @@ async function readWaveBusinessId() {
   return data && typeof data.businessId === "string" ? data.businessId : "";
 }
 
+// 1) waveBootstrap — admin-only, idempotent get-or-create of wave/connection.
 exports.waveBootstrap = onCall(
     // TODO(pre-ship): set back to `enforceAppCheck: true` once the app ships
     // through Play Store and Play Integrity can mint verified App Check tokens.
@@ -796,7 +947,7 @@ exports.waveBootstrap = onCall(
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
       }
-      assertPayloadShape(req.data, new Set(["businessId", "businessName"]));
+      assertPayloadShape(req.data, new Set());
       await assertAdmin(req.auth.uid);
 
       const db = getFirestore();
@@ -815,15 +966,10 @@ exports.waveBootstrap = onCall(
         return {businessId: d.businessId, businessName: d.businessName || ""};
       }
 
-      const wantId = typeof req.data?.businessId === "string" ?
-        req.data.businessId.trim() : "";
-      // Fall back to the server-side configured business name (Secret Manager)
-      // when the client sends none — the app connects without ever naming the
-      // business. `|| ""` guards an unset/empty secret against a trim() throw.
-      const configuredName = (WAVE_BUSINESS_NAME.value() || "").trim();
-      const wantName = (typeof req.data?.businessName === "string" &&
-        req.data.businessName.trim()) ?
-        req.data.businessName.trim() : configuredName;
+      // The target business is chosen server-side from the Secret Manager
+      // value — the app never names the business. `|| ""` guards an unset/empty
+      // secret against a trim() throw.
+      const wantName = (WAVE_BUSINESS_NAME.value() || "").trim();
 
       // Only the not-yet-connected path (live Wave calls) is rate-limited.
       await enforceDurableRateLimit(
@@ -840,7 +986,7 @@ exports.waveBootstrap = onCall(
       try {
         await whoami();
         const businesses = await listBusinesses();
-        selected = selectBusiness(businesses, wantId, wantName);
+        selected = selectBusiness(businesses, wantName);
       } catch (e) {
         if (e instanceof HttpsError) throw e;
         const {code, message} = classifyWaveError(e);
@@ -875,24 +1021,21 @@ exports.waveBootstrap = onCall(
 
 /**
  * Selects the intended Wave business from the listed businesses. Selection
- * order: by id when `wantId` is given, else by name when `wantName` is given,
- * else the single business when exactly one exists. Never blindly takes the
- * first of several.
+ * order: by name when `wantName` (the server-configured business name) is
+ * given, else the single business when exactly one exists. Never blindly takes
+ * the first of several.
  * @param {!Array<{id: string, name: string}>} businesses Listed businesses.
- * @param {string} wantId Requested business id ("" when not provided).
- * @param {string} wantName Requested business name ("" when not provided).
+ * @param {string} wantName Configured business name ("" when not set).
  * @return {{id: string, name: string}} The selected business.
- * @throws {HttpsError} not-found when a given id/name has no match;
+ * @throws {HttpsError} not-found when a given name has no match;
  *   failed-precondition when ambiguous (several businesses, no selector).
  */
-function selectBusiness(businesses, wantId, wantName) {
+function selectBusiness(businesses, wantName) {
   const list = Array.isArray(businesses) ? businesses : [];
-  if (wantId) {
-    const match = list.find((b) => b && b.id === wantId);
-    if (!match) throw new HttpsError("not-found", "wave/business-not-found");
-    return match;
-  }
   if (wantName) {
+    // NOTE: name match is case-insensitive and trims surrounding whitespace so
+    // "acme co" / "  Acme Co  " both reach the same business. Id match above
+    // stays exact (ids are opaque tokens).
     const want = wantName.trim().toLowerCase();
     const match = list.find((b) => b && b.name.trim().toLowerCase() === want);
     if (!match) throw new HttpsError("not-found", "wave/business-not-found");
@@ -901,43 +1044,6 @@ function selectBusiness(businesses, wantId, wantName) {
   if (list.length === 1) return list[0];
   throw new HttpsError("failed-precondition", "wave/business-ambiguous");
 }
-
-exports.waveListBusinesses = onCall(
-    // TODO(pre-ship): set back to `enforceAppCheck: true` once the app ships
-    // through Play Store and Play Integrity can mint verified App Check tokens.
-    {secrets: [WAVE_FULL_ACCESS_TOKEN], enforceAppCheck: false},
-    async (req) => {
-      if (!req.auth || !req.auth.uid) {
-        throw new HttpsError("unauthenticated", "auth-required");
-      }
-      assertPayloadShape(req.data, new Set());
-      await assertAdmin(req.auth.uid);
-
-
-      await enforceDurableRateLimit(
-          "wave-list",
-          req.auth.uid,
-          WAVE_BOOTSTRAP_RATE_MAX,
-          WAVE_IMPORT_RATE_WINDOW_MS,
-      );
-
-      let businesses;
-      try {
-        await whoami();
-        businesses = await listBusinesses();
-      } catch (e) {
-        const {code, message} = classifyWaveError(e);
-        logger.warn("WAVE-LIST failed", {uid: req.auth.uid, code, message});
-        throw new HttpsError(code, message);
-      }
-
-      logger.info("WAVE-LIST listed", {
-        uid: req.auth.uid,
-        count: businesses.length,
-      });
-      return {businesses};
-    },
-);
 
 exports.waveGetConnection = onCall(
     // TODO(pre-ship): set back to `enforceAppCheck: true` once the app ships
@@ -961,7 +1067,7 @@ exports.waveGetConnection = onCall(
     },
 );
 
-
+// 2) waveImportCustomers — admin-only one-shot Wave → App seed.
 exports.waveImportCustomers = onCall(
     // TODO(pre-ship): set back to `enforceAppCheck: true` once the app ships
     // through Play Store and Play Integrity can mint verified App Check tokens.
@@ -1017,6 +1123,8 @@ exports.waveImportCustomers = onCall(
     },
 );
 
+// 3) waveUpsertCustomer — enqueues a Wave write-back when a client doc's mapped
+// fields change. No secret needed (it only writes to the Firestore outbox).
 exports.waveUpsertCustomer = onDocumentWritten(
     "clients/{clientId}",
     async (event) => {
@@ -1031,6 +1139,9 @@ exports.waveUpsertCustomer = onDocumentWritten(
       const before = beforeSnap?.exists ? beforeSnap.data() : null;
       if (!shouldEnqueueClientWrite(before, after)) return;
 
+      // NOTE: this write touches only wave.* fields, so
+      // shouldEnqueueClientWrite returns false when the trigger re-fires
+      // (mappedFieldsHash is unchanged) — no second pending-write or loop.
       const clientId = event.params.clientId;
       try {
         await getFirestore()
@@ -1056,7 +1167,9 @@ exports.waveUpsertCustomer = onDocumentWritten(
     },
 );
 
-
+// 4) waveSyncWorker — drains the Wave outbox on a schedule. Single instance so
+// Wave pacing stays simple; the worker's lease reaper + transactional claim
+// handle robustness. 1/min × default batchLimit 30 = 30 Wave calls/min (< 60).
 exports.waveSyncWorker = onSchedule(
     {
       schedule: "every 1 minutes",
@@ -1069,7 +1182,9 @@ exports.waveSyncWorker = onSchedule(
         logger.debug("waveSyncWorker: not bootstrapped — nothing to do");
         return;
       }
-
+      // `graphql`/`upsertCustomer` intentionally omitted: drainQueue defaults
+      // to the real Wave client (WAVE_FULL_ACCESS_TOKEN is in scope via this
+      // function's `secrets` binding).
       const summary = await drainQueue({businessId});
       logger.info("waveSyncWorker: drain done", {
         processed: summary.processed,
