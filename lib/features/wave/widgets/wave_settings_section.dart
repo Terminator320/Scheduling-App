@@ -5,7 +5,6 @@ import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/wave/application/wave_providers.dart';
-import 'package:scheduling/features/wave/domain/models/wave_business.dart';
 import 'package:scheduling/features/wave/domain/models/wave_connection.dart';
 import 'package:scheduling/features/wave/domain/wave_failure.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -24,41 +23,38 @@ class WaveSettingsSection extends ConsumerStatefulWidget {
 }
 
 class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
-  // NOTE: session-only. The app intentionally never reads Wave connection state
-  // (firestore.rules locks the `wave` collection to clients), so this resets to
-  // null on every fresh mount. The connected row/affordance therefore reflects
-  // only a Connect performed in the current session, not server-side state.
+  // Hydrated on mount from the persisted server-side connection via the
+  // admin-only waveGetConnection callable — the app can't read the
+  // firestore.rules-locked `wave` collection directly. Reflects real
+  // connection status across launches, not just a Connect done this session.
   WaveConnection? _connection;
   bool _connectBusy = false;
   bool _importBusy = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _loadConnection();
+  }
+
+  Future<void> _loadConnection() async {
+    try {
+      final conn = await ref.read(waveServiceProvider).getConnection();
+      if (!mounted) return;
+      setState(() => _connection = conn);
+    } on WaveFailure {
+      // Status read failed (offline / transient) — leave as not-connected. The
+      // service already logged; don't push a notice on every settings open.
+    }
+  }
+
   Future<void> _connect() async {
     setState(() => _connectBusy = true);
     try {
-      final service = ref.read(waveServiceProvider);
-      final businesses = await service.listBusinesses();
-      if (!mounted) return;
-
-      if (businesses.isEmpty) {
-        ref
-            .read(noticeServiceProvider)
-            .error(context.l10n.wave_noBusinessesFound);
-        return;
-      }
-
-      final WaveBusiness target;
-      if (businesses.length == 1) {
-        target = businesses.first;
-      } else {
-        final picked = await showDialog<WaveBusiness>(
-          context: context,
-          builder: (_) => _WaveBusinessPickerDialog(businesses: businesses),
-        );
-        if (picked == null) return; // dismissed — connect quietly aborts
-        target = picked;
-      }
-
-      final conn = await service.bootstrap(businessId: target.id);
+      // No business is chosen client-side — waveBootstrap resolves the target
+      // from its server-side WAVE_BUSINESS_NAME config, so the business name
+      // never ships in the app.
+      final conn = await ref.read(waveServiceProvider).bootstrap();
       if (!mounted) return;
       setState(() => _connection = conn);
       ref
@@ -130,43 +126,23 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
             ),
           ),
         ],
-        AnimatedLoadingButton(
-          label: context.l10n.wave_connectToWave,
-          isLoading: _connectBusy,
-          onPressed: _connectBusy || _importBusy ? null : _connect,
-          variant: connected
-              ? AnimatedLoadingButtonVariant.outlined
-              : AnimatedLoadingButtonVariant.filled,
-        ),
-        const SizedBox(height: AppSpacing.sp8),
+        // Connect is first-time setup only — once connected, the persisted
+        // status row replaces it and only Import remains.
+        if (!connected) ...[
+          AnimatedLoadingButton(
+            label: context.l10n.wave_connectToWave,
+            isLoading: _connectBusy,
+            onPressed: _connectBusy || _importBusy ? null : _connect,
+            variant: AnimatedLoadingButtonVariant.filled,
+          ),
+          const SizedBox(height: AppSpacing.sp8),
+        ],
         AnimatedLoadingButton(
           label: context.l10n.wave_importCustomers,
           isLoading: _importBusy,
           onPressed: !_connectBusy && !_importBusy ? _import : null,
           variant: AnimatedLoadingButtonVariant.outlined,
         ),
-      ],
-    );
-  }
-}
-
-/// Lets the admin pick which Wave business to connect when the token's account
-/// exposes several. Pops the chosen [WaveBusiness], or null when dismissed.
-class _WaveBusinessPickerDialog extends StatelessWidget {
-  const _WaveBusinessPickerDialog({required this.businesses});
-
-  final List<WaveBusiness> businesses;
-
-  @override
-  Widget build(BuildContext context) {
-    return SimpleDialog(
-      title: Text(context.l10n.wave_pickBusinessTitle),
-      children: [
-        for (final business in businesses)
-          SimpleDialogOption(
-            onPressed: () => Navigator.of(context).pop(business),
-            child: Text(business.name.isEmpty ? business.id : business.name),
-          ),
       ],
     );
   }

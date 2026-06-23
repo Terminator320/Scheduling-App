@@ -1403,14 +1403,6 @@
   "@wave_importCustomers": {
     "description": "Button label: triggers Wave customer import"
   },
-  "wave_pickBusinessTitle": "Choose a Wave business",
-  "@wave_pickBusinessTitle": {
-    "description": "Title of the dialog that lets an admin pick which Wave business to connect when the account has several"
-  },
-  "wave_noBusinessesFound": "No Wave businesses found for this account.",
-  "@wave_noBusinessesFound": {
-    "description": "Error notice shown when the Wave token's account exposes no businesses to connect"
-  },
   "wave_connectedSuccess": "Connected to {businessName}",
   "@wave_connectedSuccess": {
     "description": "Success notice shown after a successful Wave bootstrap",

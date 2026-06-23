@@ -12,7 +12,6 @@ import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/settings/screens/settings_screen.dart';
 import 'package:scheduling/features/wave/application/wave_providers.dart';
 import 'package:scheduling/features/wave/data/wave_service.dart';
-import 'package:scheduling/features/wave/domain/models/wave_business.dart';
 import 'package:scheduling/features/wave/domain/models/wave_connection.dart';
 import 'package:scheduling/features/wave/domain/wave_failure.dart';
 import 'package:scheduling/features/wave/widgets/wave_settings_section.dart';
@@ -27,6 +26,14 @@ class _MockWaveService extends Mock implements WaveService {}
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// A mock service whose mount-time status read defaults to not-connected.
+/// Tests that need a connected state re-stub [WaveService.getConnection].
+_MockWaveService _mockService() {
+  final service = _MockWaveService();
+  when(service.getConnection).thenAnswer((_) async => null);
+  return service;
+}
 
 Widget _wrapSection(
   WaveService service, {
@@ -103,7 +110,7 @@ void main() {
 
   group('WaveSettingsSection', () {
     testWidgets('shows Connect and Import buttons', (tester) async {
-      final service = _MockWaveService();
+      final service = _mockService();
       await tester.pumpWidget(_wrapSection(service));
       await tester.pumpAndSettle();
 
@@ -112,10 +119,31 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('shows persisted connected business on mount', (tester) async {
+      final service = _mockService();
+      // Server reports an already-connected business — no Connect tap needed.
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+        ),
+      );
+
+      await tester.pumpWidget(_wrapSection(service));
+      await tester.pumpAndSettle();
+
+      verify(service.getConnection).called(1);
+      expect(find.text('Persisted Co'), findsOneWidget);
+      // Connect is hidden once connected; only Import remains.
+      expect(find.text('Connect to Wave'), findsNothing);
+      expect(find.text('Import customers from Wave'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('Import button is enabled without connecting first', (
       tester,
     ) async {
-      final service = _MockWaveService();
+      final service = _mockService();
       final notices = NoticeService();
       final emitted = <AppNotice>[];
       notices.stream.listen(emitted.add);
@@ -139,20 +167,16 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('single business auto-connects without showing a picker', (
+    testWidgets('Connect bootstraps without showing a picker', (
       tester,
     ) async {
-      final service = _MockWaveService();
+      final service = _mockService();
       final notices = NoticeService();
       final emitted = <String>[];
       notices.stream.listen((n) => emitted.add(n.message));
 
-      when(service.listBusinesses).thenAnswer(
-        (_) async => const [WaveBusiness(id: 'biz-1', name: 'Acme Corp')],
-      );
-      when(
-        () => service.bootstrap(businessId: any(named: 'businessId')),
-      ).thenAnswer(
+      // The target business is resolved server-side; the client passes nothing.
+      when(service.bootstrap).thenAnswer(
         (_) async => const WaveConnection(
           businessId: 'biz-1',
           businessName: 'Acme Corp',
@@ -165,130 +189,22 @@ void main() {
       await tester.tap(find.text('Connect to Wave'));
       await tester.pumpAndSettle();
 
-      // No picker dialog for a single business.
-      expect(find.text('Choose a Wave business'), findsNothing);
-      // Bootstrap was called with the only business's id.
-      verify(() => service.bootstrap(businessId: 'biz-1')).called(1);
-      // Business name appears in the connected-state indicator.
+      // Bootstrap was called with no client-side business selector.
+      verify(service.bootstrap).called(1);
+      // Business name (from the server response) shows in the connected row.
       expect(find.text('Acme Corp'), findsOneWidget);
       // Success notice was emitted.
       expect(emitted, anyElement(contains('Acme Corp')));
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('multiple businesses show picker; choice drives bootstrap', (
-      tester,
-    ) async {
-      final service = _MockWaveService();
-      final notices = NoticeService();
-      final emitted = <String>[];
-      notices.stream.listen((n) => emitted.add(n.message));
-
-      when(service.listBusinesses).thenAnswer(
-        (_) async => const [
-          WaveBusiness(id: 'biz-1', name: 'Acme Corp'),
-          WaveBusiness(id: 'biz-2', name: 'Beta LLC'),
-        ],
-      );
-      when(
-        () => service.bootstrap(businessId: any(named: 'businessId')),
-      ).thenAnswer(
-        (_) async => const WaveConnection(
-          businessId: 'biz-2',
-          businessName: 'Beta LLC',
-        ),
-      );
-
-      await tester.pumpWidget(_wrapSection(service, noticeService: notices));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Connect to Wave'));
-      // The Connect button shows a spinner while the picker is open, so pump
-      // fixed durations to open the dialog instead of settling on it.
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-
-      // Picker is shown listing both businesses.
-      expect(find.text('Choose a Wave business'), findsOneWidget);
-      expect(find.text('Beta LLC'), findsOneWidget);
-
-      await tester.tap(find.text('Beta LLC'));
-      await tester.pumpAndSettle();
-
-      // Only the chosen business is bootstrapped.
-      verify(() => service.bootstrap(businessId: 'biz-2')).called(1);
-      expect(emitted, anyElement(contains('Beta LLC')));
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('dismissing the picker aborts without connecting', (
-      tester,
-    ) async {
-      final service = _MockWaveService();
-
-      when(service.listBusinesses).thenAnswer(
-        (_) async => const [
-          WaveBusiness(id: 'biz-1', name: 'Acme Corp'),
-          WaveBusiness(id: 'biz-2', name: 'Beta LLC'),
-        ],
-      );
-
-      await tester.pumpWidget(_wrapSection(service));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Connect to Wave'));
-      // Spinner stays on Connect while the picker is open — pump fixed
-      // durations to open it rather than settling on the spinner.
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-
-      expect(find.text('Choose a Wave business'), findsOneWidget);
-
-      // Dismiss the dialog by tapping the barrier.
-      await tester.tapAt(const Offset(10, 10));
-      await tester.pumpAndSettle();
-
-      // Nothing was bootstrapped and Connect re-enabled (no spinner stuck).
-      verifyNever(
-        () => service.bootstrap(businessId: any(named: 'businessId')),
-      );
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('empty business list surfaces an error notice', (tester) async {
-      final service = _MockWaveService();
-      final notices = NoticeService();
-      final emitted = <AppNotice>[];
-      notices.stream.listen(emitted.add);
-
-      when(service.listBusinesses).thenAnswer((_) async => const []);
-
-      await tester.pumpWidget(_wrapSection(service, noticeService: notices));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Connect to Wave'));
-      await tester.pumpAndSettle();
-
-      verifyNever(
-        () => service.bootstrap(businessId: any(named: 'businessId')),
-      );
-      expect(emitted, isNotEmpty);
-      expect(emitted.last, isA<NoticeError>());
-      expect(tester.takeException(), isNull);
-    });
-
     testWidgets('Connect failure surfaces an error notice', (tester) async {
-      final service = _MockWaveService();
+      final service = _mockService();
       final notices = NoticeService();
       final emitted = <String>[];
       notices.stream.listen((n) => emitted.add(n.message));
 
-      when(service.listBusinesses).thenAnswer(
-        (_) async => const [WaveBusiness(id: 'biz-1', name: 'Acme Corp')],
-      );
-      when(
-        () => service.bootstrap(businessId: any(named: 'businessId')),
-      ).thenThrow(const WaveAuthInvalid());
+      when(service.bootstrap).thenThrow(const WaveAuthInvalid());
 
       await tester.pumpWidget(_wrapSection(service, noticeService: notices));
       await tester.pumpAndSettle();
@@ -298,7 +214,7 @@ void main() {
 
       // An error notice is emitted (exact text from WaveAuthInvalid l10n key).
       expect(emitted, isNotEmpty);
-      // Business name is NOT shown (connection was not established).
+      // No business name shown (connection was not established).
       expect(find.text('Acme Corp'), findsNothing);
       expect(tester.takeException(), isNull);
     });
@@ -306,17 +222,12 @@ void main() {
     testWidgets('Import success after Connect shows success notice', (
       tester,
     ) async {
-      final service = _MockWaveService();
+      final service = _mockService();
       final notices = NoticeService();
       final emitted = <String>[];
       notices.stream.listen((n) => emitted.add(n.message));
 
-      when(service.listBusinesses).thenAnswer(
-        (_) async => const [WaveBusiness(id: 'biz-1', name: 'Test Biz')],
-      );
-      when(
-        () => service.bootstrap(businessId: any(named: 'businessId')),
-      ).thenAnswer(
+      when(service.bootstrap).thenAnswer(
         (_) async => const WaveConnection(
           businessId: 'biz-1',
           businessName: 'Test Biz',
@@ -348,7 +259,7 @@ void main() {
     });
 
     testWidgets('Import failure surfaces an error notice', (tester) async {
-      final service = _MockWaveService();
+      final service = _mockService();
       final notices = NoticeService();
       final emitted = <AppNotice>[];
       notices.stream.listen(emitted.add);
@@ -377,7 +288,11 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
 
-      await tester.pumpWidget(_wrapSettings(role: 'admin'));
+      // The section reads connection status on mount, so supply a stubbed
+      // service (the default real provider would hit Firebase Functions).
+      await tester.pumpWidget(
+        _wrapSettings(role: 'admin', service: _mockService()),
+      );
       await tester.pumpAndSettle();
 
       expect(find.textContaining('INTEGRATIONS'), findsOneWidget);
