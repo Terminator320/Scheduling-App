@@ -1,3 +1,5 @@
+import 'package:scheduling/features/clients/domain/models/client_record.dart';
+
 class ClientSearchPolicy {
   const ClientSearchPolicy._();
 
@@ -36,4 +38,41 @@ class ClientSearchPolicy {
   }
 
   static String digitsOnly(String value) => value.replaceAll(_nonDigit, '');
+
+  // Client-side fallback matcher used by the clients list for instant results
+  // while the comprehensive server-backed search loads. Matches the same fields
+  // the server search indexes, as far as a loaded ClientRecord exposes them
+  // (accent-folded text + digits-only phone). Single source of truth so the
+  // list view and its test can't drift.
+  static bool matchesClient(ClientRecord client, String query) {
+    final q = normalize(query);
+    final qDigits = digitsOnly(query);
+    if (q.isEmpty && qDigits.isEmpty) return false;
+
+    final text = normalize(
+      [
+        client.name,
+        client.firstName,
+        client.lastName,
+        client.email,
+        client.address,
+        client.city,
+        client.province,
+        client.postalCode,
+        client.country,
+        for (final c in client.contacts) '${c.name} ${c.email}',
+      ].join(' '),
+    );
+    final phoneDigits = digitsOnly(
+      [
+        client.phone,
+        client.mobile,
+        for (final c in client.contacts) c.phone,
+      ].join(' '),
+    );
+
+    final matchesText = q.isNotEmpty && text.contains(q);
+    final matchesPhone = qDigits.isNotEmpty && phoneDigits.contains(qDigits);
+    return matchesText || matchesPhone;
+  }
 }

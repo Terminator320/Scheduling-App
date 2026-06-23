@@ -31,3 +31,15 @@ final appointmentByIdProvider = FutureProvider.family
       final repo = ref.watch(appointmentsRepositoryProvider);
       return repo.getAppointmentById(id);
     });
+
+/// Database-backed history search: finds terminal appointments across the whole
+/// history window, not just the pages loaded into the list. AutoDispose so each
+/// distinct query instance is freed once no longer watched.
+final historySearchProvider = FutureProvider.autoDispose
+    .family<List<AppointmentRecord>, String>((
+      ref,
+      query,
+    ) async {
+      final repo = ref.watch(appointmentsRepositoryProvider);
+      return repo.searchHistory(query);
+    });

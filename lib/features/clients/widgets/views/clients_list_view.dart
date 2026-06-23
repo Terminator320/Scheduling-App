@@ -4,6 +4,7 @@ import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/core/utils/sheet_focus.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -36,6 +37,11 @@ class ClientsListView extends ConsumerStatefulWidget {
 
 class _ClientsListViewState extends ConsumerState<ClientsListView> {
   static const int _pageSize = 50;
+  // Debounce before firing the comprehensive (up-to-1000-doc) server search so
+  // a per-keystroke read storm doesn't happen; the instant local-page filter
+  // covers the gap so typing still feels immediate.
+  final _searchDebounce = Debouncer(const Duration(milliseconds: 250));
+  String _committedQuery = '';
 
   late final PagingController<int, ClientRecord> _pagingController =
       PagingController<int, ClientRecord>(
@@ -65,7 +71,31 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
   }
 
   @override
+  void didUpdateWidget(covariant ClientsListView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.searchQuery.trim() == oldWidget.searchQuery.trim()) return;
+    _scheduleSearch();
+  }
+
+  // Restart the debounce on every query change. Clearing commits instantly so
+  // returning to the paged list has no lag.
+  void _scheduleSearch() {
+    final next = widget.searchQuery.trim();
+    if (next.isEmpty) {
+      _searchDebounce.cancel();
+      if (_committedQuery.isNotEmpty) setState(() => _committedQuery = '');
+      return;
+    }
+    _searchDebounce.run(() {
+      if (mounted && next != _committedQuery) {
+        setState(() => _committedQuery = next);
+      }
+    });
+  }
+
+  @override
   void dispose() {
+    _searchDebounce.dispose();
     _pagingController.dispose();
     super.dispose();
   }
@@ -146,36 +176,45 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     ),
   );
 
-  // Search filters the already-loaded pages (client-side), preserving the
-  // app's intentional client-side search behavior on top of pagination.
-  Widget _buildSearchResults(String query) {
+  // Instant fallback over the already-loaded pages while the comprehensive
+  // server search resolves. Matches the full field set via the shared policy.
+  List<ClientRecord> _localFilter(String query) {
     final loaded = _pagingController.value.items ?? const <ClientRecord>[];
-    // Accent-folded text + digits-only phone matching — same rule as the
-    // server-side client search.
-    final q = ClientSearchPolicy.normalize(query);
-    final qDigits = ClientSearchPolicy.digitsOnly(query);
-    final filtered = loaded.where((c) {
-      final text = ClientSearchPolicy.normalize(
-        '${c.displayName} ${c.firstName} ${c.lastName}',
-      );
-      final phoneDigits = ClientSearchPolicy.digitsOnly(
-        '${c.phone} ${c.mobile}',
-      );
-      final matchesText = q.isNotEmpty && text.contains(q);
-      final matchesPhone = qDigits.isNotEmpty && phoneDigits.contains(qDigits);
-      return matchesText || matchesPhone;
-    }).toList();
-
-    if (filtered.isEmpty) return _emptyState(query: query);
-
-    return ListView.separated(
-      padding: const EdgeInsets.only(bottom: 16),
-      itemCount: filtered.length,
-      separatorBuilder: (context, index) =>
-          const Divider(height: 1, indent: 64),
-      itemBuilder: (context, index) => _clientTile(filtered[index], index),
-    );
+    return loaded
+        .where((c) => ClientSearchPolicy.matchesClient(c, query))
+        .toList();
   }
+
+  // Comprehensive search runs on the debounced (committed) query and finds
+  // clients across all fields and all pages. The instant local filter fills the
+  // gap until the debounce settles and the server result arrives, so results
+  // appear immediately and then expand to the full set.
+  Widget _buildSearchResults(String query) {
+    final local = _localFilter(query);
+
+    if (_committedQuery != query) {
+      // Still typing — show instant local results (skeleton if none yet).
+      return local.isEmpty ? _skeleton() : _resultsList(local);
+    }
+
+    return ref
+        .watch(clientSearchProvider(query))
+        .when(
+          data: (results) => results.isEmpty
+              ? _emptyState(query: query)
+              : _resultsList(results),
+          loading: () => local.isEmpty ? _skeleton() : _resultsList(local),
+          error: (_, _) =>
+              local.isEmpty ? _emptyState(query: query) : _resultsList(local),
+        );
+  }
+
+  Widget _resultsList(List<ClientRecord> items) => ListView.separated(
+    padding: const EdgeInsets.only(bottom: 16),
+    itemCount: items.length,
+    separatorBuilder: (context, index) => const Divider(height: 1, indent: 64),
+    itemBuilder: (context, index) => _clientTile(items[index], index),
+  );
 
   @override
   Widget build(BuildContext context) {

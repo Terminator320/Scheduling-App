@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_tile.dart';
@@ -32,9 +33,14 @@ class AppointmentHistoryView extends ConsumerStatefulWidget {
 class _AppointmentHistoryViewState
     extends ConsumerState<AppointmentHistoryView> {
   static const int _pageSize = 25;
+  // Debounce before firing the comprehensive history search (mirrors the
+  // clients list); the loaded-page filter covers the gap so typing feels instant.
+  final _searchDebounce = Debouncer(const Duration(milliseconds: 250));
 
   int? _year;
   String? _employeeId;
+
+  String _committedQuery = '';
 
   late final PagingController<int, AppointmentRecord> _pagingController =
       PagingController<int, AppointmentRecord>(
@@ -76,7 +82,30 @@ class _AppointmentHistoryViewState
   }
 
   @override
+  void didUpdateWidget(covariant AppointmentHistoryView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.searchQuery.trim() == oldWidget.searchQuery.trim()) return;
+    _scheduleSearch();
+  }
+
+  // Restart the debounce on every query change; clearing commits instantly.
+  void _scheduleSearch() {
+    final next = widget.searchQuery.trim();
+    if (next.isEmpty) {
+      _searchDebounce.cancel();
+      if (_committedQuery.isNotEmpty) setState(() => _committedQuery = '');
+      return;
+    }
+    _searchDebounce.run(() {
+      if (mounted && next != _committedQuery) {
+        setState(() => _committedQuery = next);
+      }
+    });
+  }
+
+  @override
   void dispose() {
+    _searchDebounce.dispose();
     _pagingController.dispose();
     super.dispose();
   }
@@ -120,33 +149,39 @@ class _AppointmentHistoryViewState
       _year != null ||
       _employeeId != null;
 
+  // Year/employee chip filters only (no text search). Applied on top of either
+  // the loaded pages or the server-backed search results.
+  List<AppointmentRecord> _applyChips(List<AppointmentRecord> appointments) {
+    return appointments.where((a) {
+      if (_year != null && a.startTime.year != _year) return false;
+      if (_employeeId != null && !a.employeeIds.contains(_employeeId)) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
   List<AppointmentRecord> _applyFilters(List<AppointmentRecord> appointments) {
     final hasQuery = widget.searchQuery.trim().isNotEmpty;
     // Accent-folded text + digits-only phone matching — same rule as the
     // clients list, so a client's phone number finds their appointments.
     final qText = ClientSearchPolicy.normalize(widget.searchQuery);
     final qDigits = ClientSearchPolicy.digitsOnly(widget.searchQuery);
-    return appointments.where((a) {
-      if (_year != null && a.startTime.year != _year) return false;
-      if (_employeeId != null && !a.employeeIds.contains(_employeeId)) {
-        return false;
-      }
-      if (hasQuery) {
-        if (qText.isEmpty && qDigits.isEmpty) return false;
-        final matchesClient =
-            qText.isNotEmpty &&
-            ClientSearchPolicy.normalize(a.clientName).contains(qText);
-        final matchesEmployee =
-            qText.isNotEmpty &&
-            a.employeeNames.any(
-              (e) => ClientSearchPolicy.normalize(e).contains(qText),
-            );
-        final matchesPhone =
-            qDigits.isNotEmpty &&
-            ClientSearchPolicy.digitsOnly(a.clientPhone).contains(qDigits);
-        if (!matchesClient && !matchesEmployee && !matchesPhone) return false;
-      }
-      return true;
+    return _applyChips(appointments).where((a) {
+      if (!hasQuery) return true;
+      if (qText.isEmpty && qDigits.isEmpty) return false;
+      final matchesClient =
+          qText.isNotEmpty &&
+          ClientSearchPolicy.normalize(a.clientName).contains(qText);
+      final matchesEmployee =
+          qText.isNotEmpty &&
+          a.employeeNames.any(
+            (e) => ClientSearchPolicy.normalize(e).contains(qText),
+          );
+      final matchesPhone =
+          qDigits.isNotEmpty &&
+          ClientSearchPolicy.digitsOnly(a.clientPhone).contains(qDigits);
+      return matchesClient || matchesEmployee || matchesPhone;
     }).toList();
   }
 
@@ -289,7 +324,39 @@ class _AppointmentHistoryViewState
     Map<String, Color> colorMap,
     DateFormat dayFormat,
   ) {
-    final filtered = _applyFilters(loaded);
+    final query = widget.searchQuery.trim();
+    // No text query — chip filters alone operate over the loaded pages.
+    if (query.isEmpty) {
+      return _filteredList(_applyFilters(loaded), colorMap, dayFormat);
+    }
+
+    // A search reaches the whole history window via the database (not just the
+    // loaded pages). The loaded-page filter fills the gap until the debounce
+    // settles and the server result arrives.
+    final local = _applyFilters(loaded);
+    if (_committedQuery != query) {
+      return local.isEmpty
+          ? _skeleton()
+          : _filteredList(local, colorMap, dayFormat);
+    }
+
+    return ref
+        .watch(historySearchProvider(query))
+        .when(
+          data: (results) =>
+              _filteredList(_applyChips(results), colorMap, dayFormat),
+          loading: () => local.isEmpty
+              ? _skeleton()
+              : _filteredList(local, colorMap, dayFormat),
+          error: (_, _) => _filteredList(local, colorMap, dayFormat),
+        );
+  }
+
+  Widget _filteredList(
+    List<AppointmentRecord> filtered,
+    Map<String, Color> colorMap,
+    DateFormat dayFormat,
+  ) {
     if (filtered.isEmpty) return _buildEmptyState(context);
     return ListView.builder(
       padding: const EdgeInsets.all(AppSpacing.sp12),

@@ -25,11 +25,17 @@ class ClientsRefresh extends Notifier<int> {
   void bump() => state++;
 }
 
-final clientSearchProvider = FutureProvider.family<List<ClientRecord>, String>((
-  ref,
-  query,
-) async {
-  if (!ClientSearchPolicy.shouldSearch(query)) return const [];
-  final repo = ref.watch(clientsRepositoryProvider);
-  return repo.searchClients(query);
-});
+/// Comprehensive client search: reads up to [ClientSearchPolicy.serverReadLimit]
+/// docs and matches across all fields (name, business name, email, address,
+/// contacts, phone) with relevance scoring — unlike the loaded-page filter, it
+/// finds clients regardless of which page they're on. AutoDispose so each
+/// distinct query instance is freed once no longer watched.
+final clientSearchProvider = FutureProvider.autoDispose
+    .family<List<ClientRecord>, String>((
+      ref,
+      query,
+    ) async {
+      if (!ClientSearchPolicy.shouldSearch(query)) return const [];
+      final repo = ref.watch(clientsRepositoryProvider);
+      return repo.searchClients(query);
+    });

@@ -56,6 +56,12 @@ abstract class AppointmentsRepository {
     AppointmentRecord? after,
   });
 
+  /// Searches terminal (done/cancelled) appointments across the database — not
+  /// just the pages already loaded into the list — by client name, client
+  /// phone, or employee name. Scans the most-recent window of history and
+  /// returns the matches newest-first.
+  Future<List<AppointmentRecord>> searchHistory(String query);
+
   Stream<List<AppointmentRecord>> watchForEmployeeInRange(
     String employeeId,
     AppointmentDateRange range,

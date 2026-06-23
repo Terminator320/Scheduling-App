@@ -6,6 +6,7 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
@@ -18,7 +19,7 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-class DetailsEditBody extends ConsumerWidget {
+class DetailsEditBody extends ConsumerStatefulWidget {
   const DetailsEditBody({
     required this.appointment,
     required this.controllers,
@@ -33,8 +34,37 @@ class DetailsEditBody extends ConsumerWidget {
   final VoidCallback onClose;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DetailsEditBody> createState() => _DetailsEditBodyState();
+}
+
+class _DetailsEditBodyState extends ConsumerState<DetailsEditBody> {
+  final _clientSearchDebounce = Debouncer(const Duration(milliseconds: 300));
+
+  @override
+  void dispose() {
+    _clientSearchDebounce.dispose();
+    super.dispose();
+  }
+
+  // Mirrors the add sheet: debounce so the comprehensive client search doesn't
+  // fire a Firestore read on every keystroke.
+  void _onClientSearchChanged(String query) {
+    final notifier = ref.read(
+      eventDetailsControllerProvider(widget.appointment).notifier,
+    );
+    if (query.trim().isEmpty) {
+      _clientSearchDebounce.cancel();
+      notifier.searchClients('');
+      return;
+    }
+    _clientSearchDebounce.run(() => notifier.searchClients(query));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final appointment = widget.appointment;
+    final controllers = widget.controllers;
     final state = ref.watch(eventDetailsControllerProvider(appointment));
     final notifier = ref.read(
       eventDetailsControllerProvider(appointment).notifier,
@@ -69,7 +99,7 @@ class DetailsEditBody extends ConsumerWidget {
           materialsHint: context.l10n.calendar_eGPipeWrenchTapeCommaSeparated,
           editingStatus: state.editingStatus,
           onStatusChanged: notifier.setStatus,
-          onSearchClients: notifier.searchClients,
+          onSearchClients: _onClientSearchChanged,
           onSelectClient: notifier.selectClient,
           onClearClient: notifier.clearClient,
           onToggleEmployee: notifier.toggleEmployee,
@@ -104,7 +134,7 @@ class DetailsEditBody extends ConsumerWidget {
       lastDate: DateTime(2100),
     );
     if (picked == null) return;
-    controllers.date.text = DateUtilsHelper.formatDate(picked);
+    widget.controllers.date.text = DateUtilsHelper.formatDate(picked);
     notifier.selectDate(picked);
   }
 
@@ -118,7 +148,7 @@ class DetailsEditBody extends ConsumerWidget {
       initialTime: state.selectedStartTime,
     );
     if (picked == null || !context.mounted) return;
-    controllers.startTime.text = picked.format(context);
+    widget.controllers.startTime.text = picked.format(context);
     notifier.selectStartTime(picked);
   }
 
@@ -132,11 +162,12 @@ class DetailsEditBody extends ConsumerWidget {
       initialTime: state.selectedEndTime,
     );
     if (picked == null || !context.mounted) return;
-    controllers.endTime.text = picked.format(context);
+    widget.controllers.endTime.text = picked.format(context);
     notifier.selectEndTime(picked);
   }
 
   Future<void> _save(BuildContext context, WidgetRef ref) async {
+    final appointment = widget.appointment;
     final provider = eventDetailsControllerProvider(appointment);
     final notifier = ref.read(provider.notifier);
 
@@ -166,10 +197,10 @@ class DetailsEditBody extends ConsumerWidget {
 
     final outcome = await notifier.save(
       appointment,
-      title: controllers.title.text,
-      address: AddressParser.toCanonical(controllers.address.text),
-      notes: controllers.notes.text,
-      materialsNeeded: controllers.materials.text,
+      title: widget.controllers.title.text,
+      address: AddressParser.toCanonical(widget.controllers.address.text),
+      notes: widget.controllers.notes.text,
+      materialsNeeded: widget.controllers.materials.text,
       applyToSeries: applyToSeries,
     );
     if (!context.mounted) return;
@@ -191,7 +222,7 @@ class DetailsEditBody extends ConsumerWidget {
             ? l10n.calendar_changesAppliedToSeries(updatedSiblings)
             : l10n.common_appointmentChangesSaved;
         ref.read(noticeServiceProvider).success(message);
-        onSaved(appointment);
+        widget.onSaved(appointment);
       case EventDetailsFailed(:final error):
         ref
             .read(noticeServiceProvider)
@@ -207,6 +238,7 @@ class DetailsEditBody extends ConsumerWidget {
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final appointment = widget.appointment;
     final choice = await showDeleteAppointmentDialog(
       context,
       isSeries: appointment.seriesId.isNotEmpty,
@@ -224,7 +256,7 @@ class DetailsEditBody extends ConsumerWidget {
       ref
           .read(noticeServiceProvider)
           .success(context.l10n.common_appointmentDeleted);
-      onClose();
+      widget.onClose();
     } else {
       ref
           .read(noticeServiceProvider)

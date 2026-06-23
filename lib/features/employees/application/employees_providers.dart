@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
+import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -40,12 +41,17 @@ final employeesStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
 final filteredEmployeesProvider = Provider.family<List<EmployeeRecord>, String>(
   (ref, query) {
     final list = ref.watch(allUsersStreamProvider).asData?.value ?? const [];
-    final q = query.trim().toLowerCase();
-    if (q.isEmpty) return list;
+    // Accent-folded text + digits-only phone matching — same rule as the
+    // client search, so accented names and formatted phone numbers still match.
+    final q = ClientSearchPolicy.normalize(query);
+    final qDigits = ClientSearchPolicy.digitsOnly(query);
+    if (q.isEmpty && qDigits.isEmpty) return list;
     return list.where((e) {
-      return e.name.toLowerCase().contains(q) ||
-          e.email.toLowerCase().contains(q) ||
-          e.phone.toLowerCase().contains(q);
+      final text = ClientSearchPolicy.normalize('${e.name} ${e.email}');
+      final phoneDigits = ClientSearchPolicy.digitsOnly(e.phone);
+      final matchesText = q.isNotEmpty && text.contains(q);
+      final matchesPhone = qDigits.isNotEmpty && phoneDigits.contains(qDigits);
+      return matchesText || matchesPhone;
     }).toList();
   },
 );

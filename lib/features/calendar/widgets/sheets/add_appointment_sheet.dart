@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
@@ -7,6 +5,7 @@ import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
@@ -39,7 +38,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     notes: TextEditingController(),
     materials: TextEditingController(),
   );
-  Timer? _clientSearchDebounce;
+  final _clientSearchDebounce = Debouncer(const Duration(milliseconds: 300));
   late final _provider = addEventControllerProvider(widget.initialDate);
 
   AddEventController get _notifier => ref.read(_provider.notifier);
@@ -55,21 +54,18 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
 
   @override
   void dispose() {
-    _clientSearchDebounce?.cancel();
+    _clientSearchDebounce.dispose();
     _controllers.dispose();
     super.dispose();
   }
 
   void _onClientSearchChanged(String query) {
-    _clientSearchDebounce?.cancel();
     if (query.trim().isEmpty) {
+      _clientSearchDebounce.cancel();
       _notifier.searchClients('');
       return;
     }
-    _clientSearchDebounce = Timer(
-      const Duration(milliseconds: 300),
-      () => _notifier.searchClients(query),
-    );
+    _clientSearchDebounce.run(() => _notifier.searchClients(query));
   }
 
   Future<void> _pickDate() async {

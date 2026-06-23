@@ -10,6 +10,24 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.19.0+32] - 2026-06-23
+### Added
+- **Appointment history search now covers your entire history.** Searching past
+  appointments by client name, phone, or staff member finds matches across all
+  of your history — not just the appointments already scrolled into view — while
+  still showing instant results as you type.
+
+### Changed
+- **Client search matches more of a client's details.** Typing in the clients
+  list now finds people by business name, email, address, extra contacts, and
+  mobile or contact phone numbers, on top of their name and main phone.
+- **Every client suggestion on the appointment form is now reachable.** The
+  client picker used to show only the first five matches; the list now scrolls
+  so you can reach every one.
+- **Employee search now matches accented names and formatted phone numbers.**
+  Searching "Jose" finds "José", and a run of digits like "5145550199" finds a
+  staff member whose number is saved as "(514) 555-0199".
+
 ## [1.18.1+31] - 2026-06-23
 ### Fixed
 - **Appointment details show the right client contacts.** The appointment view
