@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/errors/failure.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/maps/application/maps_providers.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
@@ -49,7 +50,6 @@ class _AddressAutocompleteFieldState
   String? _sessionToken;
   String _lastTypedApt = '';
   String _lastFetched = '';
-
 
   static const _minQueryLength = 3;
   static const _debounceDelay = Duration(milliseconds: 700);
@@ -229,7 +229,10 @@ class _AddressAutocompleteFieldState
           ),
         if (_serviceError != null)
           Padding(
-            padding: const EdgeInsets.only(top: 6, left: 4),
+            padding: const EdgeInsets.only(
+              top: AppSpacing.sp8,
+              left: AppSpacing.sp4,
+            ),
             child: Text(
               _serviceError!,
               style: Theme.of(

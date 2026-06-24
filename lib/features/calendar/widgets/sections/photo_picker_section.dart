@@ -232,12 +232,12 @@ class PhotoPickerSection extends StatelessWidget {
           ),
 
         if (failedCount > 0) ...[
-          const SizedBox(height: 6),
+          const SizedBox(height: AppSpacing.sp8),
           _UploadFailedRow(count: failedCount, onRetry: onRetry),
         ],
 
         for (final name in tooLargeFileNames) ...[
-          const SizedBox(height: 6),
+          const SizedBox(height: AppSpacing.sp8),
           _TooLargeBanner(fileName: name),
         ],
       ],
@@ -289,7 +289,7 @@ class _UploadFailedRow extends StatelessWidget {
     return Row(
       children: [
         Icon(Icons.info_outline_rounded, size: 13, color: scheme.error),
-        const SizedBox(width: 5),
+        const SizedBox(width: AppSpacing.sp4),
         Text(
           context.l10n.calendar_nPhotosFailedToUpload(count),
           style: TextStyle(
@@ -299,7 +299,7 @@ class _UploadFailedRow extends StatelessWidget {
           ),
         ),
         if (onRetry != null) ...[
-          const SizedBox(width: 6),
+          const SizedBox(width: AppSpacing.sp8),
           GestureDetector(
             onTap: onRetry,
             child: Text(
@@ -361,7 +361,10 @@ class _TooLargeBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sp12,
+        vertical: AppSpacing.sp8,
+      ),
       decoration: BoxDecoration(
         color: scheme.tertiaryContainer,
         border: Border.all(color: scheme.tertiary),

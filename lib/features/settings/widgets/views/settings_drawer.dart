@@ -90,7 +90,12 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.fromLTRB(20, statusBarHeight + 24, 20, 22),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.sp24,
+        statusBarHeight + AppSpacing.sp24,
+        AppSpacing.sp24,
+        AppSpacing.sp24,
+      ),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
@@ -131,11 +136,14 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 7),
+          const SizedBox(height: AppSpacing.sp8),
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sp8,
+                  vertical: AppSpacing.sp4,
+                ),
                 decoration: BoxDecoration(
                   color: scheme.onPrimary.withValues(alpha: 0.22),
                   borderRadius: BorderRadius.circular(AppRadius.rFull),
@@ -185,7 +193,10 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
         _goTo(context, destination, displayName, displayEmail);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sp12,
+        vertical: AppSpacing.sp8,
+      ),
       child: Column(
         children: [
           _NavItem(
@@ -279,7 +290,10 @@ class _NavItem extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.r12),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sp8,
+          vertical: AppSpacing.sp8,
+        ),
         child: Row(
           children: [
             Container(
@@ -293,7 +307,7 @@ class _NavItem extends StatelessWidget {
               ),
               child: Icon(icon, size: 19, color: iconColor),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: AppSpacing.sp16),
             Text(
               label,
               style: theme.textTheme.bodyLarge?.copyWith(

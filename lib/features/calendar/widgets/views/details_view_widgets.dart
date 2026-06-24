@@ -27,7 +27,7 @@ class DetailsSectionRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionLabel(label),
-        const SizedBox(height: 6),
+        const SizedBox(height: AppSpacing.sp8),
         customValue ??
             Text(
               value,
@@ -57,8 +57,11 @@ class DetailsEmployeePill extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      margin: const EdgeInsets.only(bottom: AppSpacing.sp8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sp12,
+        vertical: AppSpacing.sp8,
+      ),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(AppRadius.r8 + 2),

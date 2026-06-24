@@ -213,7 +213,7 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
         EntityFormHeader(name: widget.client.displayName),
         const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpacing.sp16),
 
         // --- Names ---
         SheetFocusScroll(

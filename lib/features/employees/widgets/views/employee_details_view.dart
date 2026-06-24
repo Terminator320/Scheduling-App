@@ -145,7 +145,7 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
         ),
         const SizedBox(height: 16),
         const Divider(height: 1),
-        const SizedBox(height: 20),
+        const SizedBox(height: AppSpacing.sp24),
         _DetailField(
           icon: Icons.person_outline,
           label: context.l10n.employees_name,

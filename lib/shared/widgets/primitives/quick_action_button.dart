@@ -58,7 +58,7 @@ class QuickActionButton extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 22, color: scheme.onPrimaryContainer),
-              const SizedBox(height: 6),
+              const SizedBox(height: AppSpacing.sp8),
               Text(
                 label,
                 maxLines: 1,

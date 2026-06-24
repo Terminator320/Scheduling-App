@@ -16,7 +16,7 @@ class SettingsSectionCard extends StatelessWidget {
     final theme = Theme.of(context);
     return Container(
       decoration: appCardDecoration(theme, color: theme.colorScheme.surface),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp16),
       child: child,
     );
   }
@@ -65,7 +65,10 @@ class SettingsTrailingPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sp8,
+        vertical: AppSpacing.sp4,
+      ),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(AppRadius.rFull),
@@ -124,7 +127,7 @@ class SettingsTile extends StatelessWidget {
                 ),
                 child: Icon(icon, size: 18, color: iconColor),
               ),
-              const SizedBox(width: 13),
+              const SizedBox(width: AppSpacing.sp12),
             ],
             Expanded(
               // NOTE: bodyLarge (16) is the nearest role; original 15 sits
@@ -270,7 +273,10 @@ class SettingsProfileCard extends StatelessWidget {
                 child: Align(
                   alignment: Alignment.bottomRight,
                   child: Padding(
-                    padding: const EdgeInsets.only(right: 20, bottom: 10),
+                    padding: const EdgeInsets.only(
+                      right: AppSpacing.sp24,
+                      bottom: AppSpacing.sp12,
+                    ),
                     child: FaIcon(
                       FontAwesomeIcons.droplet,
                       size: 40,
@@ -280,7 +286,7 @@ class SettingsProfileCard extends StatelessWidget {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+                padding: const EdgeInsets.all(AppSpacing.sp16),
                 child: Row(
                   children: [
                     AppAvatar(
@@ -288,7 +294,7 @@ class SettingsProfileCard extends StatelessWidget {
                       color: scheme.primary,
                       size: AvatarSize.lg,
                     ),
-                    const SizedBox(width: 14),
+                    const SizedBox(width: AppSpacing.sp16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -302,12 +308,13 @@ class SettingsProfileCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 5),
+                          const SizedBox(height: AppSpacing.sp4),
                           Row(
                             children: [
                               if (role != null) ...[
                                 _RoleBadge(role: role!),
-                                if (email.isNotEmpty) const SizedBox(width: 6),
+                                if (email.isNotEmpty)
+                                  const SizedBox(width: AppSpacing.sp8),
                               ],
                               if (email.isNotEmpty)
                                 Flexible(
@@ -346,7 +353,10 @@ class _RoleBadge extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final label = roleLabel(context.l10n, isAdmin: role == 'admin');
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sp8,
+        vertical: AppSpacing.sp4,
+      ),
       decoration: BoxDecoration(
         color: scheme.primaryContainer,
         borderRadius: BorderRadius.circular(AppRadius.rFull),

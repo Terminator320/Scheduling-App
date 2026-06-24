@@ -336,9 +336,9 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
         if (_isEdit) ...[
           const SizedBox(height: AppSpacing.sp4),
           _buildEditHeader(),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpacing.sp16),
         ] else
-          const SizedBox(height: 20),
+          const SizedBox(height: AppSpacing.sp24),
         ..._buildIdentityFields(),
         // Admin access is grantable only after activation — an invited
         // admin can't self-activate (firestore.rules), so the toggle is

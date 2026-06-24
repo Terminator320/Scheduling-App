@@ -215,7 +215,7 @@ class _AppointmentHistoryViewState
           ),
         if (showDay)
           Padding(
-            padding: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.only(bottom: AppSpacing.sp12),
             child: SectionLabel(dayFormat.format(day).toUpperCase()),
           ),
         Padding(

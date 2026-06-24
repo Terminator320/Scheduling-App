@@ -70,7 +70,7 @@ class SkeletonAppointmentRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
+      margin: const EdgeInsets.only(bottom: AppSpacing.sp8),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sp12,
         vertical: AppSpacing.sp8 + 2,
@@ -113,7 +113,7 @@ class SkeletonListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
+      margin: const EdgeInsets.only(bottom: AppSpacing.sp8),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sp12,
         vertical: AppSpacing.sp8 + 2,

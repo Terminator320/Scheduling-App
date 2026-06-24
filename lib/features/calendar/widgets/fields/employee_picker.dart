@@ -54,7 +54,12 @@ class EmployeePicker extends StatelessWidget {
               return GestureDetector(
                 onTap: selectable ? () => onToggle?.call(employee) : null,
                 child: Container(
-                  padding: const EdgeInsets.fromLTRB(6, 4, 10, 4),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.sp8,
+                    AppSpacing.sp4,
+                    AppSpacing.sp12,
+                    AppSpacing.sp4,
+                  ),
                   decoration: BoxDecoration(
                     color: isSelected
                         ? scheme.primaryContainer
@@ -77,7 +82,7 @@ class EmployeePicker extends StatelessWidget {
                         color: employee.color,
                         size: AvatarSize.xs,
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: AppSpacing.sp8),
                       Text(
                         employee.name.split(' ').first,
                         style: TextStyle(

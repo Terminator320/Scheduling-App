@@ -195,7 +195,10 @@ class _EditChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sp12,
+          vertical: AppSpacing.sp4,
+        ),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHighest,
           border: Border.all(color: scheme.outlineVariant, width: 1.5),
@@ -205,7 +208,7 @@ class _EditChip extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.edit_outlined, size: 13, color: scheme.onSurface),
-            const SizedBox(width: 5),
+            const SizedBox(width: AppSpacing.sp4),
             Text(
               context.l10n.common_edit,
               style: theme.textTheme.labelSmall?.copyWith(

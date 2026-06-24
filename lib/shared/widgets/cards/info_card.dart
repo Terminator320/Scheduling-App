@@ -64,7 +64,10 @@ class InfoCardRow extends StatelessWidget {
     final chipColor = iconColor ?? scheme.primary;
 
     final content = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sp16,
+        vertical: AppSpacing.sp12,
+      ),
       child: Row(
         children: [
           Container(
@@ -76,7 +79,7 @@ class InfoCardRow extends StatelessWidget {
             ),
             child: Icon(icon, size: 18, color: chipColor),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.sp12),
           Expanded(
             child: Text(
               text,
@@ -92,7 +95,7 @@ class InfoCardRow extends StatelessWidget {
             ),
           ),
           if (trailingIcon != null) ...[
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.sp8),
             Icon(trailingIcon, size: 18, color: scheme.onSurfaceVariant),
           ],
         ],
