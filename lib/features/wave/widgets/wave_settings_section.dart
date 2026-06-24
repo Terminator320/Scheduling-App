@@ -107,7 +107,7 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
                   size: 14,
                   color: Theme.of(context).statusColors.success,
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: AppSpacing.sp8),
                 Flexible(
                   child: Text(
                     connection.businessName,

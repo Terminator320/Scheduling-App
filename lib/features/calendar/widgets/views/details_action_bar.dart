@@ -71,7 +71,7 @@ class DetailsActionBar extends StatelessWidget {
             icon: const Icon(Icons.close, size: 15),
             label: Text(context.l10n.calendar_cancelAppointment),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: AppSpacing.sp4),
           Center(
             child: Text(
               context.l10n.calendar_cancelledJobsAreSavedToHistory,

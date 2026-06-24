@@ -21,14 +21,17 @@ class AppointmentStatusPicker extends StatelessWidget {
     final selected = AppointmentStatus.fromRaw(currentStatus);
 
     return Wrap(
-      spacing: 6,
-      runSpacing: 6,
+      spacing: AppSpacing.sp8,
+      runSpacing: AppSpacing.sp8,
       children: AppointmentStatus.appointmentValues.map((s) {
         final isSelected = selected == s;
         return GestureDetector(
           onTap: () => onChanged(s.raw),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sp12,
+              vertical: AppSpacing.sp4,
+            ),
             decoration: BoxDecoration(
               color: isSelected ? scheme.primaryContainer : Colors.transparent,
               border: Border.all(

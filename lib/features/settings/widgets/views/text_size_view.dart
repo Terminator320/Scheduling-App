@@ -105,7 +105,7 @@ class _TextSizeViewState extends State<TextSizeView> {
             );
           },
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: AppSpacing.sp8),
         Text(
           context.l10n.settings_textSizeAppliesAppWide,
           textAlign: TextAlign.center,
@@ -180,7 +180,10 @@ class _SizeRow extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.r8),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 6),
+          padding: const EdgeInsets.symmetric(
+            vertical: AppSpacing.sp12,
+            horizontal: AppSpacing.sp8,
+          ),
           child: Row(
             children: [
               SizedBox(

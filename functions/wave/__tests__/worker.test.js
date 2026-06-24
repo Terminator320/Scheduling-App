@@ -999,6 +999,9 @@ function reclaimDb(staleJobs, opts = {}) {
         get: jest.fn((ref) =>
           Promise.resolve(snap(ref.id, {...ref._data}, ref))),
         update: jest.fn((ref, fields) => {
+          // Record the reclaim's transactional write so tests can assert on
+          // ref.updates, and mutate _data so a re-read reflects it.
+          ref.updates.push(fields);
           Object.assign(ref._data, fields);
         }),
       };
@@ -1154,6 +1157,61 @@ describe("drainQueue reclaim pass", () => {
         const [msg, meta] = logger.error.mock.calls[0];
         expect(typeof msg).toBe("string");
         expect(meta.jobId).toBe("customerUpsert__c1");
+      });
+
+  test("stale job re-enqueued before the reclaim write is NOT clobbered",
+      async () => {
+        // The reclaim query returns this job as a stale inflight, but by the
+        // time the reclaim transaction re-reads it a client edit has
+        // re-enqueued it (status flipped back to queued, attempts reset). The
+        // reclaim must leave it alone so the newer edit still syncs — it must
+        // not overwrite it to queued/dead or bump the reclaimed counter.
+        const staleJob = {
+          id: "customerUpsert__c1",
+          data: {
+            type: "customerUpsert",
+            refPath: "clients/c1",
+            status: "inflight",
+            attempts: 1,
+            claimedAt: staleClaimedAt,
+            nextAttemptAt: new Date("2024-01-01"),
+            lastError: null,
+            idempotencyKey: "customerUpsert__c1",
+          },
+        };
+        const {db, staleRefs} = reclaimDb([staleJob]);
+        const logger = fakeLogger();
+
+        // The transactional re-read sees the re-enqueued (queued) state, so the
+        // in-transaction guard `status !== "inflight"` bails before any write.
+        db.runTransaction = jest.fn(async (fn) => {
+          const txn = {
+            get: jest.fn((ref) =>
+              Promise.resolve(snap(ref.id, {
+                ...ref._data,
+                status: "queued",
+                attempts: 0,
+              }, ref))),
+            update: jest.fn((ref, fields) => {
+              ref.updates.push(fields);
+              Object.assign(ref._data, fields);
+            }),
+          };
+          return fn(txn);
+        });
+
+        const summary = await drainQueue({
+          db, now: nowFn, logger,
+          upsertCustomer: jest.fn(),
+          maxAttempts: 5,
+          backoffFn: fixedBackoff(),
+          leaseMs: TEST_LEASE_MS,
+        });
+
+        expect(summary.reclaimed).toBe(0);
+        // No clobbering write went through.
+        expect(staleRefs[0].updates).toHaveLength(0);
+        expect(logger.error).not.toHaveBeenCalled();
       });
 });
 

@@ -35,7 +35,10 @@
  * of `drainQueue` fixes this: it finds jobs whose `claimedAt` is older than
  * `LEASE_MS` and treats each as a failed dispatch (same retry/dead-letter path
  * as a normal failure). `attempts` is bumped so a crash-looping job eventually
- * dead-letters instead of cycling indefinitely.
+ * dead-letters instead of cycling indefinitely. The reclaim re-reads and
+ * rewrites each stale job inside ONE transaction — it has no Wave call to span,
+ * unlike the main path — so a concurrent reclaim or a client re-enqueue in the
+ * same window can't be clobbered.
  *
  * ## Outcome-write guard
  * The outcome write (`done`/`queued`/`dead`) is itself transactional
@@ -417,19 +420,52 @@ async function drainQueue(deps = {}) {
 
   for (const staleDoc of staleDocs) {
     const jobId = staleDoc.id;
-    let reclaimedData = null;
+    // Atomic reclaim: re-read and rewrite the job in ONE transaction, writing
+    // only while it is STILL inflight past its lease. The read and the outcome
+    // write share a transaction (the reclaim has no Wave call to span), so a
+    // concurrent reclaim or a client re-enqueue that flips the status in the
+    // meantime is detected on the transactional re-read and left untouched
+    // instead of being clobbered. `outcome` carries the result out for logging.
+    let outcome = null;
 
     try {
       await db.runTransaction(async (tx) => {
-        reclaimedData = null;
+        outcome = null; // reset per transaction retry
         const fresh = await tx.get(staleDoc.ref);
         if (!fresh || !fresh.exists) return;
         const freshData = fresh.data() || {};
-        // Only reclaim if STILL inflight AND claimedAt still beyond the lease.
+        // Only reclaim if STILL inflight AND claimedAt still beyond the lease
+        // (a fresh re-claim by another worker resets claimedAt and is skipped).
         if (freshData.status !== "inflight") return;
         const claimedAtMs = timestampToMs(freshData.claimedAt);
         if (!claimedAtMs || claimedAtMs > nowMs - leaseMs) return;
-        reclaimedData = freshData;
+
+        const newAttempts =
+          (typeof freshData.attempts === "number" ?
+            freshData.attempts : 0) + 1;
+        const sanitized = "reclaimed: lease expired";
+
+        if (newAttempts < maxAttempts) {
+          const delayMs = backoffFn(newAttempts - 1);
+          tx.update(staleDoc.ref, {
+            status: "queued",
+            attempts: newAttempts,
+            nextAttemptAt: new Date(nowMs + delayMs),
+            lastError: sanitized,
+          });
+          outcome = {dead: false, newAttempts};
+        } else {
+          tx.update(staleDoc.ref, {
+            status: "dead",
+            attempts: newAttempts,
+            lastError: sanitized,
+          });
+          outcome = {
+            dead: true,
+            newAttempts,
+            clientId: clientIdFromRefPath(freshData.refPath),
+          };
+        }
       });
     } catch (txErr) {
       logger.warn("WAVE-WORKER reclaim transaction failed", {
@@ -439,34 +475,16 @@ async function drainQueue(deps = {}) {
       continue;
     }
 
-    if (!reclaimedData) continue;
+    // No outcome → the job was no longer a stale inflight (re-enqueued or
+    // re-claimed in the window); leave it for the owning path to resolve.
+    if (!outcome) continue;
 
-    const newAttempts =
-      (typeof reclaimedData.attempts === "number" ?
-        reclaimedData.attempts : 0) + 1;
-    const sanitized = "reclaimed: lease expired";
-
-    if (newAttempts < maxAttempts) {
-      const delayMs = backoffFn(newAttempts - 1);
-      const nextAttemptAt = new Date(nowMs + delayMs);
-      await staleDoc.ref.update({
-        status: "queued",
-        attempts: newAttempts,
-        nextAttemptAt,
-        lastError: sanitized,
-      });
-    } else {
-      const clientId = clientIdFromRefPath(reclaimedData.refPath);
+    if (outcome.dead) {
       logger.error("WAVE-WORKER dead-lettering reclaimed job", {
         jobId,
-        clientId,
-        attempts: newAttempts,
-        reason: sanitized,
-      });
-      await staleDoc.ref.update({
-        status: "dead",
-        attempts: newAttempts,
-        lastError: sanitized,
+        clientId: outcome.clientId,
+        attempts: outcome.newAttempts,
+        reason: "reclaimed: lease expired",
       });
     }
     summary.reclaimed += 1;

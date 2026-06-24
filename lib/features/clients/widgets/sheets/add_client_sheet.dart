@@ -151,9 +151,9 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
     return FormSheetScaffold(
       title: context.l10n.clients_newClient,
       children: [
-        const SizedBox(height: 20),
+        const SizedBox(height: AppSpacing.sp24),
         const Divider(height: 1),
-        const SizedBox(height: 20),
+        const SizedBox(height: AppSpacing.sp24),
         SheetFocusScroll(
           child: LabeledTextField(
             label: context.l10n.clients_customerName,
@@ -288,7 +288,7 @@ class _AddClientActions extends StatelessWidget {
             child: Text(context.l10n.common_cancel),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: AppSpacing.sp12),
         Expanded(
           child: AnimatedLoadingButton(
             label: context.l10n.clients_saveClient,
