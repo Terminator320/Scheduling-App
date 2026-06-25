@@ -13,6 +13,21 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   final CollectionReference<Map<String, dynamic>> _appointments;
 
+  // Bounded LRU of recent history-search results. The repository is a
+  // long-lived singleton (it outlives the autoDispose historySearchProvider),
+  // so re-searching a term reuses the result instead of re-reading up to
+  // _historySearchScanLimit docs. Mirrors FirebaseClientsRepository.
+  static const int _searchCacheMax = 50;
+  final Map<String, List<AppointmentRecord>> _searchCache = {};
+
+  void _cacheSearch(String key, List<AppointmentRecord> results) {
+    _searchCache.remove(key);
+    if (_searchCache.length >= _searchCacheMax) {
+      _searchCache.remove(_searchCache.keys.first);
+    }
+    _searchCache[key] = results;
+  }
+
   @override
   String newDocId() => _appointments.doc().id;
 
@@ -224,6 +239,13 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     final q = query.trim();
     if (!ClientSearchPolicy.shouldSearch(q)) return const [];
 
+    final cacheKey = ClientSearchPolicy.cacheKey(q);
+    final cached = _searchCache[cacheKey];
+    if (cached != null) {
+      _cacheSearch(cacheKey, cached); // mark most-recently-used
+      return cached;
+    }
+
     final normalizedQuery = ClientSearchPolicy.normalize(q);
     final queryDigits = ClientSearchPolicy.digitsOnly(q);
 
@@ -258,6 +280,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
           ClientSearchPolicy.digitsOnly(a.clientPhone).contains(queryDigits);
       if (matchesClient || matchesEmployee || matchesPhone) matches.add(a);
     }
+    _cacheSearch(cacheKey, matches);
     return matches;
   }
 

@@ -59,13 +59,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
       ),
-      body: ListenableBuilder(
-        listenable: _searchController,
-        builder: (context, _) => AdaptiveShell(
-          currentDestination: AdaptiveDestination.history,
-          isAdmin: widget.isAdmin,
-          employeeId: widget.employeeId,
-          child: AppointmentHistoryView(searchQuery: _searchController.text),
+      // The nav shell is built once; only the history view rebuilds per
+      // keystroke, so typing doesn't rebuild the NavigationRail + chrome.
+      body: AdaptiveShell(
+        currentDestination: AdaptiveDestination.history,
+        isAdmin: widget.isAdmin,
+        employeeId: widget.employeeId,
+        child: ListenableBuilder(
+          listenable: _searchController,
+          builder: (context, _) =>
+              AppointmentHistoryView(searchQuery: _searchController.text),
         ),
       ),
     );
