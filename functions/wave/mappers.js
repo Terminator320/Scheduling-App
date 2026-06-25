@@ -139,12 +139,21 @@ function fromCountry(country) {
 function toWaveCustomerInput(clientFields) {
   const f = clientFields || {};
 
-  // Build addressLine1: when apt is present prefix it to the street address.
-  // Stored as the combined form "12-3450 Main St" passed straight to Wave.
-  // addressLine2 is intentionally omitted (Wave has it; the app does not).
+  // addressLine1 holds ONLY the street line. The app stores `address` as a
+  // full display address ("[apt-]street, city, province postal, country")
+  // for its own map/display use, but Wave keeps city/province/country/
+  // postalCode as separate structured fields, so the whole string would
+  // duplicate them here. Take the first comma-segment (the street line); for
+  // app-saved clients it already carries the apt prefix, so only prepend `apt`
+  // for legacy docs that kept it separate, never doubling it. addressLine2 is
+  // omitted (the app lacks it).
   const apt = typeof f.apt === "string" ? f.apt.trim() : "";
-  const street = typeof f.address === "string" ? f.address.trim() : "";
-  const addressLine1 = apt.length > 0 ? `${apt}-${street}` : street;
+  const fullAddress = typeof f.address === "string" ? f.address.trim() : "";
+  const street = fullAddress.split(",")[0].trim();
+  let addressLine1 = street;
+  if (apt && !street.startsWith(`${apt}-`)) {
+    addressLine1 = street ? `${apt}-${street}` : apt;
+  }
 
   const addr = {};
   if (addressLine1) addr.addressLine1 = addressLine1;

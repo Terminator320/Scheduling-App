@@ -10,6 +10,13 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.19.1+33] - 2026-06-24
+### Fixed
+- **Wave customer sync no longer risks dropping an edit.** If a client was
+  changed while an earlier sync to Wave was still being retried after an
+  interruption, that newer edit could be overwritten; syncs are now reconciled
+  so your most recent change always reaches Wave.
+
 ## [1.19.0+32] - 2026-06-23
 ### Added
 - **Appointment history search now covers your entire history.** Searching past

@@ -100,6 +100,45 @@ describe("toWaveCustomerInput", () => {
     expect(result.address.addressLine1).toBe("3450 Main St");
   });
 
+  test("full display address → addressLine1 is the street line only", () => {
+    // The app stores `address` as a full display address; city/province/
+    // country/postalCode are sent as their own fields, so addressLine1 must
+    // NOT repeat them.
+    const result = toWaveCustomerInput({
+      name: "Test",
+      address: "3450 Main St, Montreal, QC H3Z 2Y7, Canada",
+      city: "Montreal",
+      province: "QC",
+      country: "Canada",
+      postalCode: "H3Z 2Y7",
+    });
+    expect(result.address.addressLine1).toBe("3450 Main St");
+    expect(result.address.city).toBe("Montreal");
+    expect(result.address.provinceCode).toBe("CA-QC");
+    expect(result.address.countryCode).toBe("CA");
+    expect(result.address.postalCode).toBe("H3Z 2Y7");
+  });
+
+  test("full address with apt already in street → apt not doubled", () => {
+    // App-saved clients bake the apt into `address` (e.g. "12-3450 Main St,
+    // ...") AND keep it in `apt`; addressLine1 must keep a single apt prefix.
+    const result = toWaveCustomerInput({
+      name: "Test",
+      address: "12-3450 Main St, Montreal, QC H3Z 2Y7, Canada",
+      apt: "12",
+    });
+    expect(result.address.addressLine1).toBe("12-3450 Main St");
+  });
+
+  test("full address, apt stored separately → apt prepended once", () => {
+    const result = toWaveCustomerInput({
+      name: "Test",
+      address: "3450 Main St, Montreal, QC H3Z 2Y7, Canada",
+      apt: "12",
+    });
+    expect(result.address.addressLine1).toBe("12-3450 Main St");
+  });
+
   test("province QC → provinceCode CA-QC", () => {
     const result = toWaveCustomerInput({name: "T", province: "QC"});
     expect(result.address.provinceCode).toBe("CA-QC");
