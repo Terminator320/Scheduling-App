@@ -105,10 +105,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildMaster() {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final scheme = Theme.of(context).colorScheme;
     final notifier = ThemeNotifier.of(context);
-    final isDark = notifier.isDark;
     final langCode = Localizations.localeOf(context).languageCode;
 
     return ListView(
@@ -123,107 +121,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         SettingsSectionHeader(
           label: context.l10n.settings_appearance.toUpperCase(),
         ),
-        SettingsSectionCard(
-          child: Column(
-            children: [
-              SettingsTile(
-                iconBg: scheme.primaryContainer,
-                icon: isDark
-                    ? Icons.dark_mode_rounded
-                    : Icons.light_mode_rounded,
-                iconColor: scheme.primary,
-                label: context.l10n.settings_darkMode,
-                trailing: Switch.adaptive(
-                  value: isDark,
-                  onChanged: (_) => notifier.toggleTheme(),
-                  activeTrackColor: scheme.primary,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ),
-              const SettingsTileDivider(),
-              SettingsTile(
-                iconBg: scheme.tertiaryContainer,
-                icon: Icons.text_fields_rounded,
-                iconColor: scheme.tertiary,
-                label: context.l10n.settings_textSize,
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SettingsTrailingPill(
-                      label: _textScaleLabel(context, notifier.textScale),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      size: 18,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ],
-                ),
-                onTap: _onTextSizeTap,
-              ),
-              const SettingsTileDivider(),
-              SettingsTile(
-                iconBg: scheme.secondaryContainer,
-                icon: Icons.language_rounded,
-                iconColor: scheme.secondary,
-                label: context.l10n.common_language,
-                trailing: LanguageToggle(
-                  currentCode: langCode,
-                  onChanged: notifier.setLanguage,
-                ),
-                isLast: true,
-              ),
-            ],
-          ),
-        ),
+        _appearanceCard(scheme, notifier, langCode: langCode),
         const SizedBox(height: AppSpacing.sp24),
         SettingsSectionHeader(
           label: context.l10n.settings_account.toUpperCase(),
         ),
-        SettingsSectionCard(
-          child: Column(
-            children: [
-              SettingsTile(
-                iconBg: scheme.errorContainer,
-                icon: Icons.logout_rounded,
-                iconColor: scheme.error,
-                label: context.l10n.settings_logOut,
-                labelColor: scheme.error,
-                onTap: _signOut,
-              ),
-              const SettingsTileDivider(),
-              SettingsTile(
-                iconBg: scheme.errorContainer,
-                icon: Icons.delete_forever_rounded,
-                iconColor: scheme.error,
-                label: context.l10n.settings_deleteAccount,
-                labelColor: scheme.error,
-                isLast: true,
-                onTap: _confirmDeleteAccount,
-              ),
-            ],
-          ),
-        ),
+        _accountCard(scheme),
         const SizedBox(height: AppSpacing.sp24),
         SettingsSectionHeader(
           label: context.l10n.settings_security.toUpperCase(),
         ),
-        SettingsSectionCard(
-          child: SettingsTile(
-            iconBg: scheme.primaryContainer,
-            icon: Icons.fingerprint_rounded,
-            iconColor: scheme.primary,
-            label: context.l10n.settings_appLock,
-            isLast: true,
-            trailing: Switch.adaptive(
-              value: ref.watch(appLockEnabledProvider),
-              onChanged: (value) => _toggleAppLock(value: value),
-              activeTrackColor: scheme.primary,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-          ),
-        ),
+        _securityCard(scheme),
         if (_isAdmin) ...[
           const SizedBox(height: AppSpacing.sp24),
           SettingsSectionHeader(
@@ -240,6 +148,111 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _buildVersionFooter(scheme),
         const SizedBox(height: AppSpacing.sp32),
       ],
+    );
+  }
+
+  Widget _appearanceCard(
+    ColorScheme scheme,
+    ThemeNotifier notifier, {
+    required String langCode,
+  }) {
+    final isDark = notifier.isDark;
+    return SettingsSectionCard(
+      child: Column(
+        children: [
+          SettingsTile(
+            iconBg: scheme.primaryContainer,
+            icon: isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+            iconColor: scheme.primary,
+            label: context.l10n.settings_darkMode,
+            trailing: Switch.adaptive(
+              value: isDark,
+              onChanged: (_) => notifier.toggleTheme(),
+              activeTrackColor: scheme.primary,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+          const SettingsTileDivider(),
+          SettingsTile(
+            iconBg: scheme.tertiaryContainer,
+            icon: Icons.text_fields_rounded,
+            iconColor: scheme.tertiary,
+            label: context.l10n.settings_textSize,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SettingsTrailingPill(
+                  label: _textScaleLabel(context, notifier.textScale),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+            onTap: _onTextSizeTap,
+          ),
+          const SettingsTileDivider(),
+          SettingsTile(
+            iconBg: scheme.secondaryContainer,
+            icon: Icons.language_rounded,
+            iconColor: scheme.secondary,
+            label: context.l10n.common_language,
+            trailing: LanguageToggle(
+              currentCode: langCode,
+              onChanged: notifier.setLanguage,
+            ),
+            isLast: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _accountCard(ColorScheme scheme) {
+    return SettingsSectionCard(
+      child: Column(
+        children: [
+          SettingsTile(
+            iconBg: scheme.errorContainer,
+            icon: Icons.logout_rounded,
+            iconColor: scheme.error,
+            label: context.l10n.settings_logOut,
+            labelColor: scheme.error,
+            onTap: _signOut,
+          ),
+          const SettingsTileDivider(),
+          SettingsTile(
+            iconBg: scheme.errorContainer,
+            icon: Icons.delete_forever_rounded,
+            iconColor: scheme.error,
+            label: context.l10n.settings_deleteAccount,
+            labelColor: scheme.error,
+            isLast: true,
+            onTap: _confirmDeleteAccount,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _securityCard(ColorScheme scheme) {
+    return SettingsSectionCard(
+      child: SettingsTile(
+        iconBg: scheme.primaryContainer,
+        icon: Icons.fingerprint_rounded,
+        iconColor: scheme.primary,
+        label: context.l10n.settings_appLock,
+        isLast: true,
+        trailing: Switch.adaptive(
+          value: ref.watch(appLockEnabledProvider),
+          onChanged: (value) => _toggleAppLock(value: value),
+          activeTrackColor: scheme.primary,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      ),
     );
   }
 
