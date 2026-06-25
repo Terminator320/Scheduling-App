@@ -305,7 +305,7 @@ These must not be broken:
 
 6. **All Firestore writes go through service/repository classes.** Never call `FirebaseFirestore.instance` from UI widgets.
 
-7. **Cloud Function endpoints are rate-limited and input-validated.** Auth-sensitive callables (`deleteAccount`, `resolveMyInvite`) cap callers at 5 attempts / 15 min via the Firestore-backed `enforceDurableRateLimit` (counters in `rateLimits/*`, denied to all clients). Every callable runs `assertPayloadShape` (rejects non-object, >4 KB, or unexpected-key payloads) and validates string fields (trim, length cap, control-char reject) before use. See `functions/index.js`.
+7. **Cloud Function endpoints are rate-limited and input-validated.** Auth-sensitive callables (`deleteAccount`, `resolveMyInvite`) cap callers at 5 attempts / 15 min via the Firestore-backed `enforceDurableRateLimit` (counters in `rateLimits/*`, denied to all clients). Every callable runs `assertPayloadShape` (rejects non-object, >4 KB, or unexpected-key payloads) and validates string fields (trim, length cap, control-char reject) before use. These shared guards live in `functions/security.js`; `functions/index.js` is thin wiring that re-exports each function from its domain module.
 
 ---
 

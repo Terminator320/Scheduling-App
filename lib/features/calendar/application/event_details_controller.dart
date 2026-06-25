@@ -356,10 +356,15 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       // never shown in the picker (disabled/removed staff), so the user could
       // not have deselected them. Dropping them would silently unassign and
       // change who can see this visit (visibility keys on employeeIds).
-      final activeIds =
-          (ref.read(employeesStreamProvider).value ?? const <EmployeeRecord>[])
-              .map((e) => e.id)
-              .toSet();
+      // Resolve the active set the same way seeding does: an empty/null cached
+      // value means the stream hasn't settled (authUid lag), not that there are
+      // no active staff — fall back to a fresh read so a deselected employee
+      // isn't mistaken for a never-shown one and silently re-added.
+      final cachedEmployees = ref.read(employeesStreamProvider).value;
+      final activeEmployees = cachedEmployees == null || cachedEmployees.isEmpty
+          ? await ref.read(employeesRepositoryProvider).watchEmployees().first
+          : cachedEmployees;
+      final activeIds = activeEmployees.map((e) => e.id).toSet();
       final selectedIds = state.selectedEmployees.map((e) => e.id).toList();
       final selectedNames = state.selectedEmployees.map((e) => e.name).toList();
       final retainedIds = <String>[];
@@ -519,27 +524,27 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       excludeId: id,
       after: appointment.startTime,
     );
-    final propagated = [
-      for (final v in siblings)
-        v.copyWith(
-          title: updated.title,
-          clientId: updated.clientId,
-          clientName: updated.clientName,
-          clientPhone: updated.clientPhone,
-          address: updated.address,
-          employeeIds: updated.employeeIds,
-          employeeNames: updated.employeeNames,
-          notes: updated.notes,
-          materialsNeeded: updated.materialsNeeded,
-          repeat: updated.repeat,
-          startTime: _withTimeOfDay(v.startTime, start),
-          endTime: occurrenceEnd(
-            originalStart: start,
-            originalEnd: end,
-            copyStart: _withTimeOfDay(v.startTime, start),
-          ),
+    final propagated = siblings.map((v) {
+      final copyStart = _withTimeOfDay(v.startTime, start);
+      return v.copyWith(
+        title: updated.title,
+        clientId: updated.clientId,
+        clientName: updated.clientName,
+        clientPhone: updated.clientPhone,
+        address: updated.address,
+        employeeIds: updated.employeeIds,
+        employeeNames: updated.employeeNames,
+        notes: updated.notes,
+        materialsNeeded: updated.materialsNeeded,
+        repeat: updated.repeat,
+        startTime: copyStart,
+        endTime: occurrenceEnd(
+          originalStart: start,
+          originalEnd: end,
+          copyStart: copyStart,
         ),
-    ];
+      );
+    }).toList();
     await repo.updateAppointments([updated, ...propagated]);
     return propagated.length;
   }
