@@ -210,7 +210,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
   }
 
   Widget _resultsList(List<ClientRecord> items) => ListView.separated(
-    padding: const EdgeInsets.only(bottom: 16),
+    padding: const EdgeInsets.only(bottom: AppSpacing.sp16),
     itemCount: items.length,
     separatorBuilder: (context, index) => const Divider(height: 1, indent: 64),
     itemBuilder: (context, index) => _clientTile(items[index], index),
@@ -231,7 +231,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
             PagedListView<int, ClientRecord>.separated(
               state: state,
               fetchNextPage: fetchNextPage,
-              padding: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.only(bottom: AppSpacing.sp16),
               separatorBuilder: (context, index) =>
                   const Divider(height: 1, indent: 64),
               builderDelegate: PagedChildBuilderDelegate<ClientRecord>(

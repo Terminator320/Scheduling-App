@@ -187,7 +187,7 @@ class _AddressAutocompleteFieldState
           onChanged: _onTextChanged,
           suffixIcon: _isLoading
               ? const Padding(
-                  padding: EdgeInsets.all(12),
+                  padding: EdgeInsets.all(AppSpacing.sp12),
                   child: SizedBox(
                     width: 16,
                     height: 16,
