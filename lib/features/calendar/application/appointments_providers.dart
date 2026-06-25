@@ -26,12 +26,6 @@ final myAppointmentsProvider = StreamProvider.family
           .watchForEmployeeInRange(key.employeeId, key.range);
     });
 
-final appointmentByIdProvider = FutureProvider.family
-    .autoDispose<AppointmentRecord?, String>((ref, id) {
-      final repo = ref.watch(appointmentsRepositoryProvider);
-      return repo.getAppointmentById(id);
-    });
-
 /// Database-backed history search: finds terminal appointments across the whole
 /// history window, not just the pages loaded into the list. AutoDispose so each
 /// distinct query instance is freed once no longer watched.
