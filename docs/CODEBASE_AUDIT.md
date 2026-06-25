@@ -25,6 +25,45 @@ Functions incl. `wave/*`), `firestore.rules`, `storage.rules`,
 
 ---
 
+## Status — actioned 2026-06-24 (branch `wave-integration`)
+Everything below was implemented this session **except the pre-ship App Check
+flips** (left intact per instruction). Committed in milestones; final state:
+`flutter analyze` clean · **551 Dart tests** pass · functions lint clean · **164
+jest tests** pass.
+
+**Done:**
+- **S1** — `bash.exe.stackdump` untracked + `*.skill`/stackdump gitignored;
+  removed `flutter_lints` + `device_preview` deps. (commit M1)
+- **B1, B2, B3, B5, B6** — disabled-assignee preservation, onboarding-gate +
+  AppLock storage guards, ClientEditForm double-submit guard, client search
+  ordered by `name`. (M2)
+- **P1–P4** — history-search LRU cache, nav-shell lifted out of per-keystroke
+  rebuild (×2 screens), memoized history filter options, carousel decode-width
+  cap. (M3)
+- **I1** — `functions/index.js` split into `security/bridge/places/account/
+  maintenance/wave-callables` modules (same 13 exports). (M4b)
+- **I3, I4, I11, I2(settings)** — series helpers extracted from `save()`, shared
+  date-picker bounds, full-width button const, settings_screen section cards.
+- **I6, I7, I9 + B1 regression** — functions security-guard tests, findBusyEmployees
+  chunking test, Wave error-mapper test, disabled-assignee test. (M5)
+- **Q1, Q2** — on-scale spacing/radius tokenized. (M6)
+
+**Deferred (with rationale) — recommended as separate, reviewed passes:**
+- **Pre-ship App Check flips (S2)** — intentionally NOT done (per instruction).
+- **B4** (displayStatus endTime clamp) — contradicts an existing test that
+  intentionally asserts `in_progress` for a just-ended visit; product decision.
+- **Remaining I2 build-method extractions + I10** (photo_picker_section,
+  main_calendar, details_view_body, appointment_form_fields, add_client_sheet,
+  settings_drawer, settings_tiles) — pure-readability refactors in
+  untested/central widgets (main_calendar houses the prior login-crash
+  role-upgrade logic); deferred to a focused, separately-reviewed pass to avoid
+  regressions for a style-only gain.
+- **l10n orphan-key prune** — the audit itself flags this for a deliberate l10n
+  pass; some `error_*` keys are intentional reserve strings.
+- **Q3 shadow + Q1/Q2 off-scale values (6/10/14)** — no matching token; swapping
+  would change appearance / needs a design decision.
+- **P5** — bounded (not a leak), marginal, and would conflict with the B1 model.
+
 ## Auto-applied cleanups (review the diff)
 All four are top-level Riverpod `Provider` declarations with **zero** `ref.watch/
 read` consumers anywhere in `lib/` or `test/`. Unused lazy providers never
