@@ -76,11 +76,11 @@ class PhotoPickerSection extends StatelessWidget {
                   return Stack(
                     children: [
                       Padding(
-                        padding: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.only(right: AppSpacing.sp8),
                         child: GestureDetector(
                           onTap: () => _openViewer(context, entry.key),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(AppRadius.r8),
                             child: CachedNetworkImage(
                               imageUrl: entry.value.url,
                               width: 90,
@@ -111,11 +111,11 @@ class PhotoPickerSection extends StatelessWidget {
                   return Stack(
                     children: [
                       Padding(
-                        padding: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.only(right: AppSpacing.sp8),
                         child: GestureDetector(
                           onTap: () => _openViewer(context, viewerIndex),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(AppRadius.r8),
                             child: Image.file(
                               entry.value,
                               width: 90,
@@ -142,7 +142,7 @@ class PhotoPickerSection extends StatelessWidget {
                 ...List.generate(
                   failedCount,
                   (_) => const Padding(
-                    padding: EdgeInsets.only(right: 8),
+                    padding: EdgeInsets.only(right: AppSpacing.sp8),
                     child: _FailedPhotoThumb(),
                   ),
                 ),
@@ -154,7 +154,7 @@ class PhotoPickerSection extends StatelessWidget {
                       height: 90,
                       decoration: BoxDecoration(
                         border: Border.all(color: scheme.outlineVariant),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(AppRadius.r8),
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -179,7 +179,7 @@ class PhotoPickerSection extends StatelessWidget {
             onTap: onPickImages,
             borderRadius: BorderRadius.circular(10),
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sp16),
               decoration: BoxDecoration(
                 border: Border.all(color: scheme.outlineVariant),
                 borderRadius: BorderRadius.circular(10),
@@ -257,7 +257,7 @@ class _FailedPhotoThumb extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.errorContainer,
         border: Border.all(color: scheme.error, width: 1.5),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.r8),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
