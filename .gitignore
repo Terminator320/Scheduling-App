@@ -142,6 +142,7 @@ agentdb.rvf
 *.rvf
 ruvector.db
 *.stackdump
+*.skill
 .playwright-mcp/
 UsersGeorgeVogasAppDataLocalTempvibe-security-skill/
 .agents/
