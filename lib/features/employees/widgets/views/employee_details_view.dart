@@ -38,6 +38,9 @@ class EmployeeDetailsView extends ConsumerStatefulWidget {
 }
 
 class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
+  // Shared min-size for the full-width action buttons in this view.
+  static const _fullWidthButton = Size(double.infinity, 48);
+
   bool _isDeleting = false;
   bool _isDisabling = false;
 
@@ -214,7 +217,7 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
           icon: const Icon(Icons.edit_outlined, size: 18),
           label: Text(context.l10n.common_edit),
           style: FilledButton.styleFrom(
-            minimumSize: const Size(double.infinity, 48),
+            minimumSize: _fullWidthButton,
           ),
         ),
         if (widget.isCurrentUserAdmin) ...[
@@ -237,7 +240,7 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
                   : context.l10n.employees_disableEmployee,
             ),
             style: FilledButton.styleFrom(
-              minimumSize: const Size(double.infinity, 48),
+              minimumSize: _fullWidthButton,
               backgroundColor: isDisabled ? null : theme.colorScheme.error,
               foregroundColor: isDisabled ? null : theme.colorScheme.onError,
             ),
@@ -255,7 +258,7 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
           ),
           label: Text(context.l10n.employees_deleteEmployee),
           style: OutlinedButton.styleFrom(
-            minimumSize: const Size(double.infinity, 48),
+            minimumSize: _fullWidthButton,
             foregroundColor: theme.colorScheme.error,
             side: BorderSide(color: theme.colorScheme.error),
           ),
