@@ -271,6 +271,42 @@ void main() {
       verify(() => appointments.updateAppointment(any())).called(1);
     });
 
+    test('preserves a disabled assignee not in the active list (B1)', () async {
+      final withDisabled = _appointment.copyWith(
+        employeeIds: const ['e1', 'e9'],
+        employeeNames: const ['Alex', 'Zoe'],
+      );
+      container.listen(
+        eventDetailsControllerProvider(withDisabled),
+        (_, _) {},
+      );
+      final c = container.read(
+        eventDetailsControllerProvider(withDisabled).notifier,
+      );
+      await waitForSeed();
+      // Only the active assignee is resolvable into the picker.
+      expect(
+        container
+            .read(eventDetailsControllerProvider(withDisabled))
+            .selectedEmployees
+            .map((e) => e.id),
+        ['e1'],
+      );
+
+      final outcome = await c.save(
+        withDisabled,
+        title: 'x',
+        address: 'y',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      // e9 (disabled, never shown in the picker) is retained, not dropped.
+      final saved = (outcome as EventDetailsSaved).appointment;
+      expect(saved.employeeIds, ['e1', 'e9']);
+      expect(saved.employeeNames, ['Alex', 'Zoe']);
+    });
+
     test('uses freshly-picked client over the loaded one', () async {
       readNotifier();
       await waitForSeed();
