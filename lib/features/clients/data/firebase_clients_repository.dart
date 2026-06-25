@@ -92,8 +92,12 @@ class FirebaseClientsRepository implements ClientsRepository {
 
     final QuerySnapshot<Map<String, dynamic>> snapshot;
     try {
+      // Order by `name` (like fetchClientsPage), NOT createdAt: Firestore
+      // excludes any doc missing the orderBy field, and legacy business-only
+      // docs may lack createdAt — ordering by createdAt made them unsearchable.
+      // `name` is set on every write, so this keeps all clients in scope.
       snapshot = await _clients
-          .orderBy('createdAt', descending: true)
+          .orderBy('name')
           .limit(ClientSearchPolicy.serverReadLimit)
           .get();
     } on FirebaseException catch (e, st) {

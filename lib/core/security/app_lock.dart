@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/security/biometric_auth_service.dart';
 import 'package:scheduling/core/storage/secure_storage_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -37,9 +38,19 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
   }
 
   Future<void> _lockOnStartIfEnabled() async {
-    final enabled = await ref
-        .read(secureStorageServiceProvider)
-        .readFlag(SecureStorageKeys.biometricEnabled);
+    bool enabled;
+    try {
+      enabled = await ref
+          .read(secureStorageServiceProvider)
+          .readFlag(SecureStorageKeys.biometricEnabled);
+    } catch (e, st) {
+      // Encrypted-storage reads can throw on Android (keystore/cipher failure).
+      // Record it rather than failing silently, and don't engage the lock —
+      // locking on an unreadable flag risks bricking a user who never enabled
+      // biometrics behind a prompt they can't satisfy.
+      ref.read(loggerProvider).warn('APPLOCK read flag failed', e, st);
+      return;
+    }
     if (!enabled || !mounted) return;
     setState(() => _locked = true);
     await _authenticate();
