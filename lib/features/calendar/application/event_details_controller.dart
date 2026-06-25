@@ -394,88 +394,32 @@ class EventDetailsController extends Notifier<EventDetailsState> {
         seriesId: appointment.seriesId,
       );
 
-      final repo = ref.read(appointmentsRepositoryProvider);
       var futureBookings = 0;
       var removedBookings = 0;
       var updatedSiblings = 0;
       if (state.repeat != state.savedRepeat) {
-        // The rule changed — rewrite the series like a real calendar: drop
-        // the old future visits and book the new cadence in one atomic
-        // batch. Done/cancelled visits are kept as records, and copies
-        // start 'pending' without sharing pictures.
-        final seriesId = appointment.seriesId.isEmpty
-            ? id
-            : appointment.seriesId;
-        updated = updated.copyWith(seriesId: seriesId);
-        final existing = appointment.seriesId.isEmpty
-            ? const <AppointmentRecord>[]
-            : await repo.getSeries(seriesId);
-        final deleteIds = _futureSeriesIds(
-          existing,
-          excludeId: id,
-          after: start,
-        );
-        final copies = [
-          for (final copyStart in state.repeat.occurrenceStartsAfter(start))
-            updated.copyWith(
-              id: repo.newDocId(),
-              startTime: copyStart,
-              endTime: occurrenceEnd(
-                originalStart: start,
-                originalEnd: end,
-                copyStart: copyStart,
-              ),
-              status: 'pending',
-              pictures: const [],
-            ),
-        ];
-        await repo.rewriteSeries(
+        final result = await _rewriteSeries(
           updated: updated,
-          deleteIds: deleteIds,
-          copies: copies,
+          appointment: appointment,
+          id: id,
+          start: start,
+          end: end,
         );
-        futureBookings = copies.length;
-        removedBookings = deleteIds.length;
+        updated = result.updated;
+        futureBookings = result.futureBookings;
+        removedBookings = result.removedBookings;
       } else if (applyToSeries && appointment.seriesId.isNotEmpty) {
-        // Apply-to-all: propagate the edited details and time-of-day to this
-        // visit and every future non-terminal sibling, keeping each sibling's
-        // own calendar date so the schedule isn't disturbed. Status stays
-        // per-visit (never propagated), and each visit keeps its own pictures.
-        // Past and done/cancelled visits are left untouched.
-        final series = await repo.getSeries(appointment.seriesId);
-        final siblings = _futureSeriesRecords(
-          series,
-          excludeId: id,
-          after: appointment.startTime,
+        updatedSiblings = await _propagateToSeries(
+          updated: updated,
+          appointment: appointment,
+          id: id,
+          start: start,
+          end: end,
         );
-        final propagated = <AppointmentRecord>[];
-        for (final v in siblings) {
-          final copyStart = _withTimeOfDay(v.startTime, start);
-          propagated.add(
-            v.copyWith(
-              title: updated.title,
-              clientId: updated.clientId,
-              clientName: updated.clientName,
-              clientPhone: updated.clientPhone,
-              address: updated.address,
-              employeeIds: updated.employeeIds,
-              employeeNames: updated.employeeNames,
-              notes: updated.notes,
-              materialsNeeded: updated.materialsNeeded,
-              repeat: updated.repeat,
-              startTime: copyStart,
-              endTime: occurrenceEnd(
-                originalStart: start,
-                originalEnd: end,
-                copyStart: copyStart,
-              ),
-            ),
-          );
-        }
-        await repo.updateAppointments([updated, ...propagated]);
-        updatedSiblings = propagated.length;
       } else {
-        await repo.updateAppointment(updated);
+        await ref
+            .read(appointmentsRepositoryProvider)
+            .updateAppointment(updated);
       }
       // The doc now stores state.repeat — make it the new baseline.
       state = state.copyWith(savedRepeat: state.repeat);
@@ -509,6 +453,95 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       state = state.copyWith(isSaving: false);
       return EventDetailsFailed(e);
     }
+  }
+
+  /// The repeat rule changed — rewrite the series like a real calendar: drop
+  /// the old future visits and book the new cadence in one atomic batch.
+  /// Done/cancelled visits are kept as records; copies start 'pending' without
+  /// sharing pictures. Returns the series-stamped record plus the counts.
+  Future<({AppointmentRecord updated, int futureBookings, int removedBookings})>
+  _rewriteSeries({
+    required AppointmentRecord updated,
+    required AppointmentRecord appointment,
+    required String id,
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final repo = ref.read(appointmentsRepositoryProvider);
+    final seriesId = appointment.seriesId.isEmpty ? id : appointment.seriesId;
+    final withSeries = updated.copyWith(seriesId: seriesId);
+    final existing = appointment.seriesId.isEmpty
+        ? const <AppointmentRecord>[]
+        : await repo.getSeries(seriesId);
+    final deleteIds = _futureSeriesIds(existing, excludeId: id, after: start);
+    final copies = [
+      for (final copyStart in state.repeat.occurrenceStartsAfter(start))
+        withSeries.copyWith(
+          id: repo.newDocId(),
+          startTime: copyStart,
+          endTime: occurrenceEnd(
+            originalStart: start,
+            originalEnd: end,
+            copyStart: copyStart,
+          ),
+          status: 'pending',
+          pictures: const [],
+        ),
+    ];
+    await repo.rewriteSeries(
+      updated: withSeries,
+      deleteIds: deleteIds,
+      copies: copies,
+    );
+    return (
+      updated: withSeries,
+      futureBookings: copies.length,
+      removedBookings: deleteIds.length,
+    );
+  }
+
+  /// Apply-to-all: propagate the edited details and time-of-day to this visit
+  /// and every future non-terminal sibling, keeping each sibling's own calendar
+  /// date so the schedule isn't disturbed. Status stays per-visit (never
+  /// propagated) and each visit keeps its own pictures. Past and done/cancelled
+  /// visits are left untouched. Returns the number of siblings updated.
+  Future<int> _propagateToSeries({
+    required AppointmentRecord updated,
+    required AppointmentRecord appointment,
+    required String id,
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final repo = ref.read(appointmentsRepositoryProvider);
+    final series = await repo.getSeries(appointment.seriesId);
+    final siblings = _futureSeriesRecords(
+      series,
+      excludeId: id,
+      after: appointment.startTime,
+    );
+    final propagated = [
+      for (final v in siblings)
+        v.copyWith(
+          title: updated.title,
+          clientId: updated.clientId,
+          clientName: updated.clientName,
+          clientPhone: updated.clientPhone,
+          address: updated.address,
+          employeeIds: updated.employeeIds,
+          employeeNames: updated.employeeNames,
+          notes: updated.notes,
+          materialsNeeded: updated.materialsNeeded,
+          repeat: updated.repeat,
+          startTime: _withTimeOfDay(v.startTime, start),
+          endTime: occurrenceEnd(
+            originalStart: start,
+            originalEnd: end,
+            copyStart: _withTimeOfDay(v.startTime, start),
+          ),
+        ),
+    ];
+    await repo.updateAppointments([updated, ...propagated]);
+    return propagated.length;
   }
 
   /// Returns null on success, or the error that caused the failure. With

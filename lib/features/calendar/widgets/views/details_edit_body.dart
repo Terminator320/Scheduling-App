@@ -9,6 +9,7 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/series_scope_dialog.dart';
@@ -130,8 +131,8 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody> {
     final picked = await showDatePicker(
       context: context,
       initialDate: state.selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
+      firstDate: AppointmentDraftDefaults.datePickerFirstDate,
+      lastDate: AppointmentDraftDefaults.datePickerLastDate,
     );
     if (picked == null) return;
     widget.controllers.date.text = DateUtilsHelper.formatDate(picked);

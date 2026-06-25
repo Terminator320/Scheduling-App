@@ -73,8 +73,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     final picked = await showDatePicker(
       context: context,
       initialDate: state.selectedDate ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
+      firstDate: AppointmentDraftDefaults.datePickerFirstDate,
+      lastDate: AppointmentDraftDefaults.datePickerLastDate,
     );
     if (picked == null) return;
     _controllers.date.text = DateUtilsHelper.formatDate(picked);
