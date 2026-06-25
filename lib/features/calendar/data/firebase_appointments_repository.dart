@@ -28,6 +28,11 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     _searchCache[key] = results;
   }
 
+  // Any write can change which docs a query matches, so drop the cache rather
+  // than serve stale results — or list a just-deleted appointment that opens a
+  // detail view for a doc that no longer exists.
+  void _invalidateSearchCache() => _searchCache.clear();
+
   @override
   String newDocId() => _appointments.doc().id;
 
@@ -56,6 +61,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       });
     }
     await batch.commit();
+    _invalidateSearchCache();
   }
 
   @override
@@ -90,6 +96,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       });
     }
     await batch.commit();
+    _invalidateSearchCache();
   }
 
   @override
@@ -99,6 +106,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       ..._toFirestoreMap(appointment),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    _invalidateSearchCache();
   }
 
   @override
@@ -123,6 +131,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         });
       }
     });
+    _invalidateSearchCache();
   }
 
   @override
@@ -134,6 +143,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       'pictures': pictures.map(_imageToFirestoreMap).toList(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    _invalidateSearchCache();
   }
 
   static const _allowedStatuses = {
@@ -161,6 +171,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       'status': trimmed,
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    _invalidateSearchCache();
   }
 
   @override
@@ -173,6 +184,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       batch.delete(_appointments.doc(id));
     }
     await batch.commit();
+    _invalidateSearchCache();
   }
 
   @override

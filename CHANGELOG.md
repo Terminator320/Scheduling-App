@@ -10,6 +10,26 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.19.2+34] - 2026-06-25
+### Changed
+- **Searching and scrolling the clients and appointment-history lists is now
+  faster and smoother.** Repeating a recent search reuses its results, and
+  typing in the search box no longer rebuilds the surrounding screen, so large
+  lists stay responsive.
+
+### Fixed
+- **Editing an appointment now keeps everyone assigned to it.** Staff who were
+  disabled or removed after being assigned to a visit were silently dropped when
+  you saved an edit; they now keep their assignment — and their access to that
+  appointment.
+- **Client search finds clients that were previously missing.** Older client
+  records that never showed up in search results are now included.
+- **The Save button can't submit a client edit twice.** It now disables while a
+  save is in progress, so a quick double-tap can't create duplicate updates.
+- **The app no longer gets stuck on the coloured launch screen.** If a saved
+  setting can't be read at startup, the app now continues to the normal screen
+  instead of hanging.
+
 ## [1.19.1+33] - 2026-06-24
 ### Fixed
 - **Wave customer sync no longer risks dropping an edit.** If a client was

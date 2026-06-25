@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/storage/secure_storage_service.dart';
 
 /// Whether the biometric app-lock is enabled. Backed by the encrypted
@@ -12,9 +13,16 @@ class AppLockController extends Notifier<bool> {
   }
 
   Future<void> _load() async {
-    state = await ref
-        .read(secureStorageServiceProvider)
-        .readFlag(SecureStorageKeys.biometricEnabled);
+    try {
+      state = await ref
+          .read(secureStorageServiceProvider)
+          .readFlag(SecureStorageKeys.biometricEnabled);
+    } catch (e, st) {
+      // Encrypted-storage reads can throw on Android (keystore/cipher failure).
+      // This Future is fired unawaited from build(), so an uncaught throw would
+      // become an unhandled async error — log it and leave the lock disabled.
+      ref.read(loggerProvider).warn('APPLOCK read flag failed', e, st);
+    }
   }
 
   Future<void> setEnabled({required bool value}) async {
