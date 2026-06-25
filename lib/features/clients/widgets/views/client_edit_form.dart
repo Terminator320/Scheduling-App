@@ -57,6 +57,10 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
   late final TextEditingController _countryController;
   late final TextEditingController _postalCodeController;
 
+  // Guards against a double-tap firing two concurrent writes (mirrors
+  // AddClientSheet) — the Save button disables while this is true.
+  bool _isSaving = false;
+
   // Prefers the explicit apt field over an apt embedded in the street text.
   String _buildFullAddress() {
     final parsed = AddressParser.splitApt(_addressController.text);
@@ -128,6 +132,7 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
   ];
 
   Future<void> _save() async {
+    if (_isSaving) return;
     final name = _nameController.text.trim();
     final firstName = _firstNameController.text.trim();
     final lastName = _lastNameController.text.trim();
@@ -158,6 +163,8 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
     });
 
     if (errors.values.any((e) => e != null)) return;
+
+    setState(() => _isSaving = true);
 
     // --- Build & persist ---
     // Preserves the Wave projection fields (waveCustomerId / waveSyncState /
@@ -201,6 +208,8 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
               error: e,
             ),
           );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -320,17 +329,26 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
           ),
         ],
         const SizedBox(height: AppSpacing.sp24),
-        _EditActions(onSave: _save, onDelete: widget.onDelete),
+        _EditActions(
+          onSave: _save,
+          onDelete: widget.onDelete,
+          isSaving: _isSaving,
+        ),
       ],
     );
   }
 }
 
 class _EditActions extends StatelessWidget {
-  const _EditActions({required this.onSave, required this.onDelete});
+  const _EditActions({
+    required this.onSave,
+    required this.onDelete,
+    required this.isSaving,
+  });
 
   final VoidCallback onSave;
   final VoidCallback? onDelete;
+  final bool isSaving;
 
   @override
   Widget build(BuildContext context) {
@@ -341,7 +359,7 @@ class _EditActions extends StatelessWidget {
           style: FilledButton.styleFrom(
             minimumSize: const Size(double.infinity, 46),
           ),
-          onPressed: onSave,
+          onPressed: isSaving ? null : onSave,
           child: Text(context.l10n.common_saveChanges),
         ),
         const SizedBox(height: AppSpacing.sp8),

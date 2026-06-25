@@ -352,6 +352,29 @@ class EventDetailsController extends Notifier<EventDetailsState> {
 
     try {
       final pickedClient = state.selectedClient;
+      // Preserve assignees that aren't in the active-employee list: they were
+      // never shown in the picker (disabled/removed staff), so the user could
+      // not have deselected them. Dropping them would silently unassign and
+      // change who can see this visit (visibility keys on employeeIds).
+      final activeIds =
+          (ref.read(employeesStreamProvider).value ?? const <EmployeeRecord>[])
+              .map((e) => e.id)
+              .toSet();
+      final selectedIds = state.selectedEmployees.map((e) => e.id).toList();
+      final selectedNames = state.selectedEmployees.map((e) => e.name).toList();
+      final retainedIds = <String>[];
+      final retainedNames = <String>[];
+      for (var i = 0; i < appointment.employeeIds.length; i++) {
+        final origId = appointment.employeeIds[i];
+        if (!activeIds.contains(origId) && !selectedIds.contains(origId)) {
+          retainedIds.add(origId);
+          retainedNames.add(
+            i < appointment.employeeNames.length
+                ? appointment.employeeNames[i]
+                : '',
+          );
+        }
+      }
       var updated = AppointmentRecord(
         id: id,
         title: title.trim(),
@@ -361,8 +384,8 @@ class EventDetailsController extends Notifier<EventDetailsState> {
         clientName: pickedClient?.displayName ?? appointment.clientName,
         clientPhone: pickedClient?.phone ?? appointment.clientPhone,
         address: address.trim(),
-        employeeIds: state.selectedEmployees.map((e) => e.id).toList(),
-        employeeNames: state.selectedEmployees.map((e) => e.name).toList(),
+        employeeIds: [...selectedIds, ...retainedIds],
+        employeeNames: [...selectedNames, ...retainedNames],
         notes: notes.trim(),
         materialsNeeded: materialsNeeded.trim(),
         pictures: state.existingImages,
