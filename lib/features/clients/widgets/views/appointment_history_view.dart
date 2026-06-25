@@ -42,6 +42,13 @@ class _AppointmentHistoryViewState
 
   String _committedQuery = '';
 
+  // Memoized year/employee filter options — recomputed only when a new page
+  // arrives (keyed on PagingState.pages identity), not on every rebuild from
+  // a search/filter setState. Mirrors main_calendar_screen's _dayIndex memo.
+  List<List<AppointmentRecord>>? _filterOptionsPages;
+  List<int> _cachedYears = const [];
+  List<HistoryEmployeeOption> _cachedEmployees = const [];
+
   late final PagingController<int, AppointmentRecord> _pagingController =
       PagingController<int, AppointmentRecord>(
         getNextPageKey: (state) {
@@ -244,8 +251,15 @@ class _AppointmentHistoryViewState
         controller: _pagingController,
         builder: (context, state, fetchNextPage) {
           final loaded = state.items ?? const <AppointmentRecord>[];
-          final years = _yearsOf(loaded);
-          final employees = _employeesOf(loaded);
+          // PagingState.items rebuilds a fresh list each access, so memoize on
+          // the underlying pages identity, which only changes on a new page.
+          if (!identical(state.pages, _filterOptionsPages)) {
+            _filterOptionsPages = state.pages;
+            _cachedYears = _yearsOf(loaded);
+            _cachedEmployees = _employeesOf(loaded);
+          }
+          final years = _cachedYears;
+          final employees = _cachedEmployees;
           final showFilters = HistoryFilterBar.hasFilters(
             years: years,
             employees: employees,

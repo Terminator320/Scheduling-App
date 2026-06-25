@@ -105,31 +105,32 @@ class _ListInformationState extends State<ListInformation> {
               child: const Icon(Icons.add),
             )
           : null,
-      body: ListenableBuilder(
-        listenable: _searchController,
-        builder: (context, _) {
-          final body = MasterDetailScaffold(
-            master: ClientsListView(
-              searchQuery: _searchController.text,
-              isAdmin: widget.isAdmin,
-              selectedClientId: _selectedClient?.id,
-              onClientTap: _onClientTap,
-            ),
-            detail: _selectedClient != null
-                ? ClientDetailView(
-                    key: ValueKey(_selectedClient!.id),
-                    client: _selectedClient!,
-                  )
-                : null,
-            placeholder: _buildDetailPlaceholder(),
-          );
-          return AdaptiveShell(
-            currentDestination: AdaptiveDestination.clients,
-            isAdmin: widget.isAdmin,
-            employeeId: widget.employeeId,
-            child: body,
-          );
-        },
+      // The nav shell is built once; only the master/detail subtree rebuilds
+      // per keystroke, so typing doesn't rebuild the NavigationRail + chrome.
+      body: AdaptiveShell(
+        currentDestination: AdaptiveDestination.clients,
+        isAdmin: widget.isAdmin,
+        employeeId: widget.employeeId,
+        child: ListenableBuilder(
+          listenable: _searchController,
+          builder: (context, _) {
+            return MasterDetailScaffold(
+              master: ClientsListView(
+                searchQuery: _searchController.text,
+                isAdmin: widget.isAdmin,
+                selectedClientId: _selectedClient?.id,
+                onClientTap: _onClientTap,
+              ),
+              detail: _selectedClient != null
+                  ? ClientDetailView(
+                      key: ValueKey(_selectedClient!.id),
+                      client: _selectedClient!,
+                    )
+                  : null,
+              placeholder: _buildDetailPlaceholder(),
+            );
+          },
+        ),
       ),
     );
   }
