@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 
+bool _isShortSheetViewport(BuildContext context) =>
+    MediaQuery.sizeOf(context).height < 700;
+
 class DraggableSheetFrame extends StatelessWidget {
   const DraggableSheetFrame({
     required this.builder,
@@ -19,11 +22,12 @@ class DraggableSheetFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isShort = _isShortSheetViewport(context);
 
     return DraggableScrollableSheet(
-      initialChildSize: initialChildSize,
-      minChildSize: minChildSize,
-      maxChildSize: maxChildSize,
+      initialChildSize: isShort ? 0.82 : initialChildSize,
+      minChildSize: isShort ? 0.58 : minChildSize,
+      maxChildSize: isShort ? 0.98 : maxChildSize,
       expand: false,
       builder: (sheetContext, scrollController) {
         return GestureDetector(
@@ -173,6 +177,7 @@ class FormSheetScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isShort = _isShortSheetViewport(context);
     return DraggableSheetFrame(
       initialChildSize: initialChildSize,
       minChildSize: minChildSize,
@@ -189,8 +194,13 @@ class FormSheetScaffold extends StatelessWidget {
           ),
           children: [
             const SheetHandle(),
-            const SizedBox(height: AppSpacing.sp16),
-            Text(title, style: Theme.of(sheetContext).textTheme.headlineLarge),
+            SizedBox(height: isShort ? AppSpacing.sp12 : AppSpacing.sp16),
+            Text(
+              title,
+              style: isShort
+                  ? Theme.of(sheetContext).textTheme.headlineSmall
+                  : Theme.of(sheetContext).textTheme.headlineLarge,
+            ),
             ...children,
           ],
         );

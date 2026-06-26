@@ -115,7 +115,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
   void _clearSearch() {
     FocusManager.instance.primaryFocus?.unfocus();
     if (_searchController.text.isEmpty) return;
-    setState(_searchController.clear);
+    _searchController.clear();
   }
 
   PreferredSizeWidget _buildAppBar() {
@@ -130,7 +130,6 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
       ),
       bottom: AppSearchBar(
         controller: _searchController,
-        onChanged: (_) => setState(() {}),
         hintText: context.l10n.employees_searchEmployees,
       ),
     );
@@ -233,19 +232,6 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
   @override
   Widget build(BuildContext context) {
     final selected = _selectedEmployee;
-    final body = MasterDetailScaffold(
-      master: _buildMasterList(),
-      detail: selected == null
-          ? null
-          : EmployeeDetailsView(
-              key: ValueKey(selected.id),
-              employee: selected,
-              isCurrentUserAdmin: widget.isAdmin,
-              onAction: (action) => _handleEmployeeAction(action, selected),
-            ),
-      placeholder: _buildDetailPlaceholder(),
-    );
-
     return Scaffold(
       appBar: _buildAppBar(),
       endDrawer: SettingsDrawer.endDrawerFor(
@@ -263,7 +249,24 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         currentDestination: AdaptiveDestination.employees,
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
-        child: body,
+        child: ListenableBuilder(
+          listenable: _searchController,
+          builder: (context, _) {
+            return MasterDetailScaffold(
+              master: _buildMasterList(),
+              detail: selected == null
+                  ? null
+                  : EmployeeDetailsView(
+                      key: ValueKey(selected.id),
+                      employee: selected,
+                      isCurrentUserAdmin: widget.isAdmin,
+                      onAction: (action) =>
+                          _handleEmployeeAction(action, selected),
+                    ),
+              placeholder: _buildDetailPlaceholder(),
+            );
+          },
+        ),
       ),
     );
   }

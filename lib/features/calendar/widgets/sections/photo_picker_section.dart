@@ -57,9 +57,6 @@ class PhotoPickerSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasPhotos =
         existingImages.isNotEmpty || newImages.isNotEmpty || failedCount > 0;
-    final scheme = Theme.of(context).colorScheme;
-    // Decode 90px thumbnails at device resolution, not the source's full size.
-    final thumbCache = (90 * MediaQuery.devicePixelRatioOf(context)).round();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,169 +64,19 @@ class PhotoPickerSection extends StatelessWidget {
         if (hasPhotos && !isEditing)
           _readOnlyGallery()
         else if (hasPhotos)
-          SizedBox(
-            height: 90,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                ...existingImages.asMap().entries.map((entry) {
-                  return Stack(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(right: AppSpacing.sp8),
-                        child: GestureDetector(
-                          onTap: () => _openViewer(context, entry.key),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(AppRadius.r8),
-                            child: CachedNetworkImage(
-                              imageUrl: entry.value.url,
-                              width: 90,
-                              height: 90,
-                              memCacheWidth: thumbCache,
-                              memCacheHeight: thumbCache,
-                              fit: BoxFit.cover,
-                              placeholder: (ctx, _) => _photoPlaceholder(ctx),
-                              errorWidget: (ctx, _, _) => _photoErrorTile(ctx),
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (isEditing)
-                        Positioned(
-                          top: 4,
-                          right: 12,
-                          child: GestureDetector(
-                            onTap: () => onRemoveExisting(entry.key),
-                            child: formRemoveButton(context),
-                          ),
-                        ),
-                    ],
-                  );
-                }),
-                ...newImages.asMap().entries.map((entry) {
-                  final viewerIndex = existingImages.length + entry.key;
-                  return Stack(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(right: AppSpacing.sp8),
-                        child: GestureDetector(
-                          onTap: () => _openViewer(context, viewerIndex),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(AppRadius.r8),
-                            child: Image.file(
-                              entry.value,
-                              width: 90,
-                              height: 90,
-                              cacheWidth: thumbCache,
-                              cacheHeight: thumbCache,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (isEditing)
-                        Positioned(
-                          top: 4,
-                          right: 12,
-                          child: GestureDetector(
-                            onTap: () => onRemoveNew(entry.key),
-                            child: formRemoveButton(context),
-                          ),
-                        ),
-                    ],
-                  );
-                }),
-                ...List.generate(
-                  failedCount,
-                  (_) => const Padding(
-                    padding: EdgeInsets.only(right: AppSpacing.sp8),
-                    child: _FailedPhotoThumb(),
-                  ),
-                ),
-                if (isEditing)
-                  GestureDetector(
-                    onTap: onPickImages,
-                    child: Container(
-                      width: 90,
-                      height: 90,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: scheme.outlineVariant),
-                        borderRadius: BorderRadius.circular(AppRadius.r8),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.add, color: scheme.onSurfaceVariant),
-                          Text(
-                            context.l10n.calendar_addMore,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+          _EditablePhotoStrip(
+            existingImages: existingImages,
+            newImages: newImages,
+            failedCount: failedCount,
+            onOpenViewer: _openViewer,
+            onRemoveExisting: onRemoveExisting,
+            onRemoveNew: onRemoveNew,
+            onPickImages: onPickImages,
           )
         else if (isEditing)
-          InkWell(
-            onTap: onPickImages,
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sp16),
-              decoration: BoxDecoration(
-                border: Border.all(color: scheme.outlineVariant),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.image_outlined, color: scheme.onSurfaceVariant),
-                    const SizedBox(height: 4),
-                    Text(
-                      context.l10n.calendar_tapToAddPhotos,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          )
+          _EditableEmptyPhotoState(onPickImages: onPickImages)
         else
-          Container(
-            height: 90,
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: scheme.outlineVariant),
-            ),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.photo_library_outlined,
-                    color: scheme.onSurfaceVariant,
-                    size: 24,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    context.l10n.calendar_noPhotos,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          const _ReadOnlyEmptyPhotoState(),
 
         if (failedCount > 0) ...[
           const SizedBox(height: AppSpacing.sp8),
@@ -245,12 +92,226 @@ class PhotoPickerSection extends StatelessWidget {
   }
 }
 
+class _EditablePhotoStrip extends StatelessWidget {
+  const _EditablePhotoStrip({
+    required this.existingImages,
+    required this.newImages,
+    required this.failedCount,
+    required this.onOpenViewer,
+    required this.onRemoveExisting,
+    required this.onRemoveNew,
+    required this.onPickImages,
+  });
+
+  final List<AppointmentImage> existingImages;
+  final List<File> newImages;
+  final int failedCount;
+  final void Function(BuildContext context, int tappedIndex) onOpenViewer;
+  final void Function(int index) onRemoveExisting;
+  final void Function(int index) onRemoveNew;
+  final VoidCallback onPickImages;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final labelStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+      fontWeight: FontWeight.w600,
+    );
+    final thumbCache = (90 * MediaQuery.devicePixelRatioOf(context)).round();
+
+    return SizedBox(
+      height: 90,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          ...existingImages.asMap().entries.map((entry) {
+            return Stack(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(right: AppSpacing.sp8),
+                  child: GestureDetector(
+                    onTap: () => onOpenViewer(context, entry.key),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadius.r8),
+                      child: CachedNetworkImage(
+                        imageUrl: entry.value.url,
+                        width: 90,
+                        height: 90,
+                        memCacheWidth: thumbCache,
+                        memCacheHeight: thumbCache,
+                        fit: BoxFit.cover,
+                        placeholder: (ctx, _) => _photoPlaceholder(ctx),
+                        errorWidget: (ctx, _, _) => _photoErrorTile(ctx),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 12,
+                  child: GestureDetector(
+                    onTap: () => onRemoveExisting(entry.key),
+                    child: formRemoveButton(context),
+                  ),
+                ),
+              ],
+            );
+          }),
+          ...newImages.asMap().entries.map((entry) {
+            final viewerIndex = existingImages.length + entry.key;
+            return Stack(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(right: AppSpacing.sp8),
+                  child: GestureDetector(
+                    onTap: () => onOpenViewer(context, viewerIndex),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadius.r8),
+                      child: Image.file(
+                        entry.value,
+                        width: 90,
+                        height: 90,
+                        cacheWidth: thumbCache,
+                        cacheHeight: thumbCache,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 12,
+                  child: GestureDetector(
+                    onTap: () => onRemoveNew(entry.key),
+                    child: formRemoveButton(context),
+                  ),
+                ),
+              ],
+            );
+          }),
+          ...List.generate(
+            failedCount,
+            (_) => const Padding(
+              padding: EdgeInsets.only(right: AppSpacing.sp8),
+              child: _FailedPhotoThumb(),
+            ),
+          ),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onPickImages,
+              borderRadius: BorderRadius.circular(AppRadius.r8),
+              child: Ink(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  border: Border.all(color: scheme.outlineVariant),
+                  borderRadius: BorderRadius.circular(AppRadius.r8),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add, color: scheme.onSurfaceVariant),
+                    Text(
+                      context.l10n.calendar_addMore,
+                      style: labelStyle,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EditableEmptyPhotoState extends StatelessWidget {
+  const _EditableEmptyPhotoState({required this.onPickImages});
+
+  final VoidCallback onPickImages;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return InkWell(
+      onTap: onPickImages,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sp16),
+        decoration: BoxDecoration(
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Center(
+          child: Column(
+            children: [
+              Icon(Icons.image_outlined, color: scheme.onSurfaceVariant),
+              const SizedBox(height: 4),
+              Text(
+                context.l10n.calendar_tapToAddPhotos,
+                style: textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReadOnlyEmptyPhotoState extends StatelessWidget {
+  const _ReadOnlyEmptyPhotoState();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Container(
+      height: 90,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.photo_library_outlined,
+              color: scheme.onSurfaceVariant,
+              size: 24,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              context.l10n.calendar_noPhotos,
+              style: textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _FailedPhotoThumb extends StatelessWidget {
   const _FailedPhotoThumb();
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
+      fontWeight: FontWeight.w700,
+      color: scheme.error,
+    );
     return Container(
       width: 90,
       height: 90,
@@ -264,14 +325,7 @@ class _FailedPhotoThumb extends StatelessWidget {
         children: [
           Icon(Icons.info_outline_rounded, size: 22, color: scheme.error),
           const SizedBox(height: 4),
-          Text(
-            context.l10n.calendar_photoFailedBadge,
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              color: scheme.error,
-            ),
-          ),
+          Text(context.l10n.calendar_photoFailedBadge, style: style),
         ],
       ),
     );
@@ -286,26 +340,43 @@ class _UploadFailedRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(Icons.info_outline_rounded, size: 13, color: scheme.error),
-        const SizedBox(width: AppSpacing.sp4),
-        Text(
-          context.l10n.calendar_nPhotosFailedToUpload(count),
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
+        Padding(
+          padding: const EdgeInsets.only(top: 3),
+          child: Icon(
+            Icons.info_outline_rounded,
+            size: 13,
             color: scheme.error,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sp4),
+        Expanded(
+          child: Text(
+            context.l10n.calendar_nPhotosFailedToUpload(count),
+            style: textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: scheme.error,
+            ),
           ),
         ),
         if (onRetry != null) ...[
           const SizedBox(width: AppSpacing.sp8),
-          GestureDetector(
-            onTap: onRetry,
+          TextButton(
+            onPressed: onRetry,
+            style: TextButton.styleFrom(
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sp8,
+                vertical: AppSpacing.sp4,
+              ),
+            ),
             child: Text(
               context.l10n.common_retry,
-              style: TextStyle(
-                fontSize: 11,
+              style: textTheme.labelSmall?.copyWith(
                 fontWeight: FontWeight.w700,
                 color: scheme.primary,
               ),
@@ -360,6 +431,7 @@ class _TooLargeBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sp12,
@@ -382,8 +454,7 @@ class _TooLargeBanner extends StatelessWidget {
           Expanded(
             child: Text(
               context.l10n.calendar_fileTooLargeWarning(fileName),
-              style: TextStyle(
-                fontSize: 11,
+              style: textTheme.bodySmall?.copyWith(
                 fontWeight: FontWeight.w500,
                 color: scheme.onTertiaryContainer,
                 height: 1.4,
