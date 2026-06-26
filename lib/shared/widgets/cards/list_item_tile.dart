@@ -1,5 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
@@ -33,9 +34,7 @@ class ListItemTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final compact =
-        MediaQuery.sizeOf(context).width < 360 ||
-        MediaQuery.textScalerOf(context).scale(1) > 1.4;
+    final compact = context.isCompact;
 
     Widget row = Material(
       color: selected ? scheme.secondaryContainer : Colors.transparent,
@@ -85,9 +84,8 @@ class ListItemTile extends StatelessWidget {
               if (!compact && trailing != null) ...[
                 const SizedBox(width: AppSpacing.sp8),
                 trailing!,
-                const SizedBox(width: AppSpacing.sp8),
-              ] else
-                const SizedBox(width: AppSpacing.sp8),
+              ],
+              const SizedBox(width: AppSpacing.sp8),
               Icon(
                 Icons.chevron_right,
                 size: 18,

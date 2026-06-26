@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 
 bool _isShortSheetViewport(BuildContext context) =>
-    MediaQuery.sizeOf(context).height < 700;
+    MediaQuery.sizeOf(context).height < Breakpoints.shortViewportHeight;
 
 class DraggableSheetFrame extends StatelessWidget {
   const DraggableSheetFrame({

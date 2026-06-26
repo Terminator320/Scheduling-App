@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/shared/widgets/fields/clear_text_button.dart';
 
@@ -33,7 +33,6 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
         controller: controller,
         focusNode: focusNode,
         onChanged: onChanged ?? (_) {},
-        maxLines: 1,
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
           color: scheme.onSurface,
         ),

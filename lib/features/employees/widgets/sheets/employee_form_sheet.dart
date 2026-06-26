@@ -1,7 +1,8 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -45,9 +46,6 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
   final Map<String, String?> _errors = {};
 
   bool get _isEdit => widget.employee != null;
-  bool get _compact =>
-      MediaQuery.sizeOf(context).width < 360 ||
-      MediaQuery.textScalerOf(context).scale(1) > 1.4;
 
   @override
   void initState() {
@@ -259,7 +257,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
       children: [
         const Divider(height: 1),
         const SizedBox(height: AppSpacing.sp16),
-        if (_compact)
+        if (context.isCompact)
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

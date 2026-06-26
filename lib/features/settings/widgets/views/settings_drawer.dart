@@ -1,4 +1,4 @@
-﻿import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
@@ -210,7 +210,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
           onTap: () => go(AdaptiveDestination.calendar),
         ),
       ),
-      if (widget.isAdmin)
+      if (widget.isAdmin) ...[
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp12),
           child: _NavItem(
@@ -220,7 +220,6 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             onTap: () => go(AdaptiveDestination.clients),
           ),
         ),
-      if (widget.isAdmin)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp12),
           child: _NavItem(
@@ -230,7 +229,6 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             onTap: () => go(AdaptiveDestination.employees),
           ),
         ),
-      if (widget.isAdmin)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp12),
           child: _NavItem(
@@ -240,6 +238,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             onTap: () => go(AdaptiveDestination.history),
           ),
         ),
+      ],
       const SizedBox(height: AppSpacing.sp8),
       const Padding(
         padding: EdgeInsets.symmetric(horizontal: AppSpacing.sp12),

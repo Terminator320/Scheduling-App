@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
@@ -154,7 +155,30 @@ class AppointmentFormFields extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final showStatus = editingStatus != null && onStatusChanged != null;
-    final isNarrowPhone = MediaQuery.sizeOf(context).width < 360;
+    final isNarrowPhone = context.isNarrowWidth;
+
+    final startTimeField = SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.calendar_startTime,
+        hint: l10n.calendar_start,
+        controller: controllers.startTime,
+        required: true,
+        readOnly: true,
+        errorText: _err(context, 'startTime'),
+        onTap: onPickStartTime,
+      ),
+    );
+    final endTimeField = SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.calendar_endTime,
+        hint: l10n.calendar_end,
+        controller: controllers.endTime,
+        required: true,
+        readOnly: true,
+        errorText: _err(context, 'endTime'),
+        onTap: onPickEndTime,
+      ),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -215,62 +239,18 @@ class AppointmentFormFields extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SheetFocusScroll(
-                child: LabeledTextField(
-                  label: l10n.calendar_startTime,
-                  hint: l10n.calendar_start,
-                  controller: controllers.startTime,
-                  required: true,
-                  readOnly: true,
-                  errorText: _err(context, 'startTime'),
-                  onTap: onPickStartTime,
-                ),
-              ),
+              startTimeField,
               const SizedBox(height: AppSpacing.sp16),
-              SheetFocusScroll(
-                child: LabeledTextField(
-                  label: l10n.calendar_endTime,
-                  hint: l10n.calendar_end,
-                  controller: controllers.endTime,
-                  required: true,
-                  readOnly: true,
-                  errorText: _err(context, 'endTime'),
-                  onTap: onPickEndTime,
-                ),
-              ),
+              endTimeField,
             ],
           )
         else
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: SheetFocusScroll(
-                  child: LabeledTextField(
-                    label: l10n.calendar_startTime,
-                    hint: l10n.calendar_start,
-                    controller: controllers.startTime,
-                    required: true,
-                    readOnly: true,
-                    errorText: _err(context, 'startTime'),
-                    onTap: onPickStartTime,
-                  ),
-                ),
-              ),
+              Expanded(child: startTimeField),
               const SizedBox(width: AppSpacing.sp12),
-              Expanded(
-                child: SheetFocusScroll(
-                  child: LabeledTextField(
-                    label: l10n.calendar_endTime,
-                    hint: l10n.calendar_end,
-                    controller: controllers.endTime,
-                    required: true,
-                    readOnly: true,
-                    errorText: _err(context, 'endTime'),
-                    onTap: onPickEndTime,
-                  ),
-                ),
-              ),
+              Expanded(child: endTimeField),
             ],
           ),
         const SizedBox(height: AppSpacing.sp16),
