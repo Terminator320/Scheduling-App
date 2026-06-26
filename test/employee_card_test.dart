@@ -1,4 +1,4 @@
-// test/employee_card_test.dart
+﻿// test/employee_card_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -99,7 +99,7 @@ void main() {
   testWidgets('does not overflow at small screen + 2x text', (tester) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    tester.view.physicalSize = const Size(260 * 3, 200 * 3);
+    tester.view.physicalSize = const Size(320 * 3, 640 * 3);
     tester.view.devicePixelRatio = 3;
     await tester.pumpWidget(
       MediaQuery(

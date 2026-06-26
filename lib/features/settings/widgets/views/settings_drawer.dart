@@ -1,4 +1,4 @@
-import 'package:firebase_auth/firebase_auth.dart';
+﻿import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
@@ -70,10 +70,11 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.horizontal(left: Radius.circular(24)),
       ),
-      child: Column(
+      child: ListView(
+        padding: EdgeInsets.zero,
         children: [
           _buildHeader(context, displayName, displayEmail),
-          Expanded(child: _buildNav(context, displayName, displayEmail)),
+          ..._buildNavItems(context, displayName, displayEmail),
         ],
       ),
     );
@@ -137,7 +138,10 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: AppSpacing.sp8),
-          Row(
+          Wrap(
+            spacing: AppSpacing.sp8,
+            runSpacing: AppSpacing.sp8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -158,12 +162,12 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
                   ),
                 ),
               ),
-              if (displayEmail.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Flexible(
+              if (displayEmail.isNotEmpty)
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 220),
                   child: Text(
                     displayEmail,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: scheme.onPrimary.withValues(alpha: 0.75),
@@ -171,7 +175,6 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
                     ),
                   ),
                 ),
-              ],
             ],
           ),
         ],
@@ -179,7 +182,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
     );
   }
 
-  Widget _buildNav(
+  List<Widget> _buildNavItems(
     BuildContext context,
     String displayName,
     String displayEmail,
@@ -192,53 +195,72 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
     void go(AdaptiveDestination destination) =>
         _goTo(context, destination, displayName, displayEmail);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sp12,
-        vertical: AppSpacing.sp8,
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.sp12,
+          AppSpacing.sp8,
+          AppSpacing.sp12,
+          0,
+        ),
+        child: _NavItem(
+          icon: Icons.calendar_today_rounded,
+          iconColor: scheme.primary,
+          label: context.l10n.common_calendar,
+          onTap: () => go(AdaptiveDestination.calendar),
+        ),
       ),
-      child: Column(
-        children: [
-          _NavItem(
-            icon: Icons.calendar_today_rounded,
-            iconColor: scheme.primary,
-            label: context.l10n.common_calendar,
-            onTap: () => go(AdaptiveDestination.calendar),
+      if (widget.isAdmin)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp12),
+          child: _NavItem(
+            icon: Icons.people_rounded,
+            iconColor: statusColors.success,
+            label: context.l10n.common_clients,
+            onTap: () => go(AdaptiveDestination.clients),
           ),
-          if (widget.isAdmin) ...[
-            _NavItem(
-              icon: Icons.people_rounded,
-              iconColor: statusColors.success,
-              label: context.l10n.common_clients,
-              onTap: () => go(AdaptiveDestination.clients),
-            ),
-            _NavItem(
-              icon: Icons.badge_rounded,
-              iconColor: statusColors.accent,
-              label: context.l10n.common_employees,
-              onTap: () => go(AdaptiveDestination.employees),
-            ),
-            _NavItem(
-              icon: Icons.history_rounded,
-              iconColor: statusColors.warning,
-              label: context.l10n.common_history,
-              onTap: () => go(AdaptiveDestination.history),
-            ),
-          ],
-          const Spacer(),
-
-          const Divider(height: 1),
-          const SizedBox(height: 4),
-          _NavItem(
-            icon: Icons.settings_rounded,
-            iconColor: scheme.onSurfaceVariant,
-            label: context.l10n.common_settings,
-            onTap: () => go(AdaptiveDestination.settings),
+        ),
+      if (widget.isAdmin)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp12),
+          child: _NavItem(
+            icon: Icons.badge_rounded,
+            iconColor: statusColors.accent,
+            label: context.l10n.common_employees,
+            onTap: () => go(AdaptiveDestination.employees),
           ),
-          SizedBox(height: bottomPadding + 4),
-        ],
+        ),
+      if (widget.isAdmin)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp12),
+          child: _NavItem(
+            icon: Icons.history_rounded,
+            iconColor: statusColors.warning,
+            label: context.l10n.common_history,
+            onTap: () => go(AdaptiveDestination.history),
+          ),
+        ),
+      const SizedBox(height: AppSpacing.sp8),
+      const Padding(
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.sp12),
+        child: Divider(height: 1),
       ),
-    );
+      Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.sp12,
+          4,
+          AppSpacing.sp12,
+          0,
+        ),
+        child: _NavItem(
+          icon: Icons.settings_rounded,
+          iconColor: scheme.onSurfaceVariant,
+          label: context.l10n.common_settings,
+          onTap: () => go(AdaptiveDestination.settings),
+        ),
+      ),
+      SizedBox(height: bottomPadding + 4),
+    ];
   }
 
   void _goTo(
@@ -255,7 +277,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
       userName: displayName,
       userEmail: displayEmail,
     );
-    // The calendar is the root screen — replace it instead of stacking.
+    // The calendar is the root screen - replace it instead of stacking.
     if (destination == AdaptiveDestination.calendar) {
       Navigator.pushReplacementNamed(
         context,
@@ -308,12 +330,16 @@ class _NavItem extends StatelessWidget {
               child: Icon(icon, size: 19, color: iconColor),
             ),
             const SizedBox(width: AppSpacing.sp16),
-            Text(
-              label,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: scheme.onSurface,
-                fontSize: 15,
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurface,
+                  fontSize: 15,
+                ),
               ),
             ),
           ],

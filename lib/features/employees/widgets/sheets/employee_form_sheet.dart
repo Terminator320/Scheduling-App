@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
@@ -45,6 +45,9 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
   final Map<String, String?> _errors = {};
 
   bool get _isEdit => widget.employee != null;
+  bool get _compact =>
+      MediaQuery.sizeOf(context).width < 360 ||
+      MediaQuery.textScalerOf(context).scale(1) > 1.4;
 
   @override
   void initState() {
@@ -202,6 +205,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
             vertical: 10,
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Column(
@@ -223,6 +227,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
                   ],
                 ),
               ),
+              const SizedBox(width: AppSpacing.sp8),
               Switch(
                 value: _isAdmin,
                 onChanged: (v) => setState(() => _isAdmin = v),
@@ -254,38 +259,63 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
       children: [
         const Divider(height: 1),
         const SizedBox(height: AppSpacing.sp16),
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.l10n.employees_accountStatus,
-                    // NOTE: source size 13 is between bodySmall (12) and
-                    // bodyMedium (14); bodySmall is the nearer role.
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    context.l10n.employees_accountStatusDescription,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
+        if (_compact)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.l10n.employees_accountStatus,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-            const SizedBox(width: AppSpacing.sp8),
-            StatusChip(
-              status: _isDisabled
-                  ? AppointmentStatus.disabled
-                  : AppointmentStatus.active,
-            ),
-          ],
-        ),
+              const SizedBox(height: 2),
+              Text(
+                context.l10n.employees_accountStatusDescription,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sp8),
+              StatusChip(
+                status: _isDisabled
+                    ? AppointmentStatus.disabled
+                    : AppointmentStatus.active,
+              ),
+            ],
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.l10n.employees_accountStatus,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      context.l10n.employees_accountStatusDescription,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sp8),
+              StatusChip(
+                status: _isDisabled
+                    ? AppointmentStatus.disabled
+                    : AppointmentStatus.active,
+              ),
+            ],
+          ),
         const SizedBox(height: AppSpacing.sp12),
         OutlinedButton.icon(
           onPressed: _isTogglingStatus ? null : _toggleStatus,
@@ -340,9 +370,6 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
         ] else
           const SizedBox(height: AppSpacing.sp24),
         ..._buildIdentityFields(),
-        // Admin access is grantable only after activation — an invited
-        // admin can't self-activate (firestore.rules), so the toggle is
-        // edit-only.
         if (_isEdit) ...[
           const SizedBox(height: AppSpacing.sp16),
           _buildPermissionsCard(theme),

@@ -62,6 +62,9 @@ class InfoCardRow extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final chipColor = iconColor ?? scheme.primary;
+    final compact =
+        MediaQuery.sizeOf(context).width < 360 ||
+        MediaQuery.textScalerOf(context).scale(1) > 1.4;
 
     final content = Padding(
       padding: const EdgeInsets.symmetric(
@@ -69,6 +72,9 @@ class InfoCardRow extends StatelessWidget {
         vertical: AppSpacing.sp12,
       ),
       child: Row(
+        crossAxisAlignment: compact
+            ? CrossAxisAlignment.start
+            : CrossAxisAlignment.center,
         children: [
           Container(
             width: 34,
@@ -96,7 +102,14 @@ class InfoCardRow extends StatelessWidget {
           ),
           if (trailingIcon != null) ...[
             const SizedBox(width: AppSpacing.sp8),
-            Icon(trailingIcon, size: 18, color: scheme.onSurfaceVariant),
+            Padding(
+              padding: EdgeInsets.only(top: compact ? 2 : 0),
+              child: Icon(
+                trailingIcon,
+                size: 18,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
           ],
         ],
       ),

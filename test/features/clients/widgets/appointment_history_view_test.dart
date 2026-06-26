@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -136,6 +136,25 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('No appointments found'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('history view does not overflow on phone width at 2x text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 760);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+        child: _wrap([_aliceJob, _bobJob]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
     expect(tester.takeException(), isNull);
   });
 }

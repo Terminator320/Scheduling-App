@@ -26,6 +26,9 @@ class AppointmentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final compact =
+        MediaQuery.sizeOf(context).width < 360 ||
+        MediaQuery.textScalerOf(context).scale(1) > 1.4;
 
     return TapScale(
       child: Card(
@@ -52,24 +55,43 @@ class AppointmentCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
+                        if (compact)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
                                 appointment.title,
-                                maxLines: 2,
+                                maxLines: 3,
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.titleMedium,
                               ),
-                            ),
-                            const SizedBox(width: AppSpacing.sp8),
-                            StatusChip(
-                              status: AppointmentStatus.fromRaw(
-                                appointment.displayStatus,
+                              const SizedBox(height: AppSpacing.sp8),
+                              StatusChip(
+                                status: AppointmentStatus.fromRaw(
+                                  appointment.displayStatus,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
+                            ],
+                          )
+                        else
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  appointment.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.titleMedium,
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.sp8),
+                              StatusChip(
+                                status: AppointmentStatus.fromRaw(
+                                  appointment.displayStatus,
+                                ),
+                              ),
+                            ],
+                          ),
                         const SizedBox(height: AppSpacing.sp4),
                         Row(
                           children: [
@@ -79,10 +101,14 @@ class AppointmentCard extends StatelessWidget {
                               color: scheme.onSurfaceVariant,
                             ),
                             const SizedBox(width: AppSpacing.sp4),
-                            Text(
-                              '${DateUtilsHelper.formatTime(appointment.startTime)} – ${DateUtilsHelper.formatTime(appointment.endTime)}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
+                            Expanded(
+                              child: Text(
+                                '${DateUtilsHelper.formatTime(appointment.startTime)} - ${DateUtilsHelper.formatTime(appointment.endTime)}',
+                                maxLines: compact ? 2 : 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
                               ),
                             ),
                           ],
@@ -100,10 +126,14 @@ class AppointmentCard extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: AppSpacing.sp4),
-                              Text(
-                                employeeName!,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: scheme.onSurfaceVariant,
+                              Expanded(
+                                child: Text(
+                                  employeeName!,
+                                  maxLines: compact ? 2 : 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
                                 ),
                               ),
                             ],

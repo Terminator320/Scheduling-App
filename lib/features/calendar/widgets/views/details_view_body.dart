@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/launchers/phone_call_launcher.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -49,9 +49,10 @@ class DetailsViewBody extends ConsumerWidget {
         appointment.startTime.year == now.year &&
         appointment.startTime.month == now.month &&
         appointment.startTime.day == now.day;
+    final compactHeader =
+        MediaQuery.sizeOf(context).width < 360 ||
+        MediaQuery.textScalerOf(context).scale(1) > 1.4;
 
-    // Call / Directions handlers are built here (where `ref` lives); the phone
-    // and address themselves move into these quick actions rather than rows.
     final clientName = client?.displayName ?? appointment.clientName;
     final phone = (client?.phone.isNotEmpty ?? false)
         ? client!.phone
@@ -75,20 +76,21 @@ class DetailsViewBody extends ConsumerWidget {
         .map((m) => m.trim())
         .where((m) => m.isNotEmpty)
         .toList();
-    // `contacts` holds only the extra contacts (no primary mirror); list them
-    // all — the primary client is already named in the header above.
-    final extraContacts = (client?.contacts ?? const <ClientContact>[])
-        .toList();
+    final extraContacts = (client?.contacts ?? const <ClientContact>[]).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (showActions && !isCancelled)
           Align(
-            alignment: Alignment.centerRight,
+            alignment: compactHeader ? Alignment.centerLeft : Alignment.centerRight,
             child: _EditChip(onTap: notifier.enterEditing),
           ),
-        _Header(appointment: appointment, status: status),
+        _Header(
+          appointment: appointment,
+          status: status,
+          compact: compactHeader,
+        ),
         const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
         const SizedBox(height: AppSpacing.sp16),
@@ -192,31 +194,35 @@ class _EditChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sp12,
-          vertical: AppSpacing.sp4,
-        ),
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerHighest,
-          border: Border.all(color: scheme.outlineVariant, width: 1.5),
-          borderRadius: BorderRadius.circular(AppRadius.r8),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.edit_outlined, size: 13, color: scheme.onSurface),
-            const SizedBox(width: AppSpacing.sp4),
-            Text(
-              context.l10n.common_edit,
-              style: theme.textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: scheme.onSurface,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.r8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sp12,
+            vertical: AppSpacing.sp4,
+          ),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest,
+            border: Border.all(color: scheme.outlineVariant, width: 1.5),
+            borderRadius: BorderRadius.circular(AppRadius.r8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.edit_outlined, size: 13, color: scheme.onSurface),
+              const SizedBox(width: AppSpacing.sp4),
+              Text(
+                context.l10n.common_edit,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurface,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -224,10 +230,15 @@ class _EditChip extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.appointment, required this.status});
+  const _Header({
+    required this.appointment,
+    required this.status,
+    required this.compact,
+  });
 
   final AppointmentRecord appointment;
   final AppointmentStatus status;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -239,7 +250,9 @@ class _Header extends StatelessWidget {
         children: [
           Text(
             appointment.title,
-            style: theme.textTheme.headlineLarge,
+            style: compact
+                ? theme.textTheme.headlineSmall
+                : theme.textTheme.headlineLarge,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: AppSpacing.sp8),
@@ -248,7 +261,7 @@ class _Header extends StatelessWidget {
           Wrap(
             alignment: WrapAlignment.center,
             spacing: 16,
-            runSpacing: 4,
+            runSpacing: 6,
             children: [
               _IconLabel(
                 icon: Icons.calendar_today_outlined,
@@ -294,18 +307,26 @@ class _IconLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 13, color: scheme.onSurfaceVariant),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: scheme.onSurfaceVariant,
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.sizeOf(context).width * 0.8,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              text,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
