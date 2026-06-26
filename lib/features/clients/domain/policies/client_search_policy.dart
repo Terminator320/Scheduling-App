@@ -1,4 +1,4 @@
-import 'package:scheduling/features/clients/domain/models/client_record.dart';
+﻿import 'package:scheduling/features/clients/domain/models/client_record.dart';
 
 class ClientSearchPolicy {
   const ClientSearchPolicy._();
@@ -6,14 +6,14 @@ class ClientSearchPolicy {
   static const int serverReadLimit = 1000;
   static const int resultDisplayLimit = 25;
 
-  // Compiled once — normalize/digitsOnly run per row per keystroke in the
+  // Compiled once; normalize/digitsOnly run per row per keystroke in the
   // client-side search paths.
-  static final _accentA = RegExp('[àáâãäå]');
-  static final _accentE = RegExp('[èéêë]');
-  static final _accentI = RegExp('[ìíîï]');
-  static final _accentO = RegExp('[òóôõö]');
-  static final _accentU = RegExp('[ùúûü]');
-  static final _accentC = RegExp('[ç]');
+  static final _accentA = RegExp('[\u00E0\u00E1\u00E2\u00E3\u00E4\u00E5]');
+  static final _accentE = RegExp('[\u00E8\u00E9\u00EA\u00EB]');
+  static final _accentI = RegExp('[\u00EC\u00ED\u00EE\u00EF]');
+  static final _accentO = RegExp('[\u00F2\u00F3\u00F4\u00F5\u00F6]');
+  static final _accentU = RegExp('[\u00F9\u00FA\u00FB\u00FC]');
+  static final _accentC = RegExp('[\u00E7]');
   static final _nonAlphanumeric = RegExp('[^a-z0-9]+');
   static final _nonDigit = RegExp(r'\D');
 

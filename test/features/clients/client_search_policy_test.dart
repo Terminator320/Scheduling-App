@@ -1,4 +1,4 @@
-import 'package:flutter_test/flutter_test.dart';
+﻿import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 
@@ -19,12 +19,12 @@ void main() {
       expect(ClientSearchPolicy.shouldSearch('---'), isFalse);
     });
 
-    test('searches from the first character — single letters trigger it', () {
+    test('searches from the first character; single letters trigger it', () {
       expect(ClientSearchPolicy.shouldSearch('a'), isTrue);
-      expect(ClientSearchPolicy.shouldSearch('é'), isTrue);
+      expect(ClientSearchPolicy.shouldSearch('\u00E9'), isTrue);
     });
 
-    test('searches from the first digit — single digits trigger it', () {
+    test('searches from the first digit; single digits trigger it', () {
       expect(ClientSearchPolicy.shouldSearch('5'), isTrue);
     });
 
@@ -42,12 +42,16 @@ void main() {
     });
 
     test('strips accents', () {
-      expect(ClientSearchPolicy.normalize('Montréal'), 'montreal');
-      expect(ClientSearchPolicy.normalize('Façade'), 'facade');
-      // Accents are replaced character-for-character (no spacing between);
-      // word-spacing comes from the final non-alphanumeric collapse step.
+      expect(ClientSearchPolicy.normalize('Montr\u00E9al'), 'montreal');
+      expect(ClientSearchPolicy.normalize('Fa\u00E7ade'), 'facade');
       expect(
-        ClientSearchPolicy.normalize('àáâãäå èéêë ìíîï òóôõö ùúûü'),
+        ClientSearchPolicy.normalize(
+          '\u00E0\u00E1\u00E2\u00E3\u00E4\u00E5 '
+          '\u00E8\u00E9\u00EA\u00EB '
+          '\u00EC\u00ED\u00EE\u00EF '
+          '\u00F2\u00F3\u00F4\u00F5\u00F6 '
+          '\u00F9\u00FA\u00FB\u00FC',
+        ),
         'aaaaaa eeee iiii ooooo uuuu',
       );
     });
@@ -68,15 +72,12 @@ void main() {
   group('ClientSearchPolicy.cacheKey', () {
     test('two queries that normalize identically share a cache key', () {
       expect(
-        ClientSearchPolicy.cacheKey('Montréal'),
+        ClientSearchPolicy.cacheKey('Montr\u00E9al'),
         ClientSearchPolicy.cacheKey('  MONTREAL  '),
       );
     });
   });
 
-  // These tests lock in the client-side fallback search fields. The matcher
-  // covers the same fields the comprehensive server search indexes, so a client
-  // is findable by name, contact, address, email, or phone.
   group('ClientSearchPolicy.matchesClient', () {
     const sophie = ClientRecord(
       id: 'c1',
@@ -84,7 +85,7 @@ void main() {
       firstName: 'Sophie',
       lastName: 'Tremblay',
       address: '123 Rue Sainte-Catherine',
-      city: 'Montréal',
+      city: 'Montr\u00E9al',
       mobile: '438-555-0199',
       email: 'sophie@tremblay.com',
       contacts: [

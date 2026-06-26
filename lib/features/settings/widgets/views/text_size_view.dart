@@ -33,6 +33,9 @@ class _TextSizeViewState extends State<TextSizeView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final compact =
+        MediaQuery.sizeOf(context).width < 360 ||
+        MediaQuery.textScalerOf(context).scale(1) > 1.4;
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.sp16),
@@ -65,12 +68,12 @@ class _TextSizeViewState extends State<TextSizeView> {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Tuesday, May 12 · 9:00 – 9:45 AM',
+                      'Tuesday, May 12 - 9:00 - 9:45 AM',
                       style: theme.textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Sarah Johnson · 514-555-0101',
+                      'Sarah Johnson - 514-555-0101',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
@@ -82,7 +85,6 @@ class _TextSizeViewState extends State<TextSizeView> {
           ),
         ),
         const SizedBox(height: AppSpacing.sp12),
-
         Builder(
           builder: (context) {
             final options = _buildOptions(context.l10n);
@@ -95,6 +97,7 @@ class _TextSizeViewState extends State<TextSizeView> {
                       label: options[i].$1,
                       scale: options[i].$2,
                       isSelected: (_selected - options[i].$2).abs() < 0.01,
+                      compact: compact,
                       onTap: () => setState(() => _selected = options[i].$2),
                     ),
                     if (i < options.length - 1)
@@ -114,7 +117,6 @@ class _TextSizeViewState extends State<TextSizeView> {
           ),
         ),
         const SizedBox(height: AppSpacing.sp24),
-
         FilledButton(
           style: FilledButton.styleFrom(
             backgroundColor: scheme.primary,
@@ -160,12 +162,14 @@ class _SizeRow extends StatelessWidget {
     required this.label,
     required this.scale,
     required this.isSelected,
+    required this.compact,
     required this.onTap,
   });
 
   final String label;
   final double scale;
   final bool isSelected;
+  final bool compact;
   final VoidCallback onTap;
 
   @override
@@ -184,43 +188,109 @@ class _SizeRow extends StatelessWidget {
             vertical: AppSpacing.sp12,
             horizontal: AppSpacing.sp8,
           ),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 40,
-                child: Center(
-                  child: Text(
-                    'A',
-                    style: TextStyle(
-                      fontSize: 11 + (scale - 0.8) * 16,
-                      fontWeight: FontWeight.w800,
+          child: compact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _ScaleGlyph(
+                          scale: scale,
+                          isSelected: isSelected,
+                          primary: scheme.primary,
+                          muted: scheme.onSurfaceVariant,
+                        ),
+                        const Spacer(),
+                        Icon(
+                          isSelected
+                              ? Icons.radio_button_checked_rounded
+                              : Icons.radio_button_unchecked_rounded,
+                          size: 20,
+                          color: isSelected
+                              ? scheme.primary
+                              : scheme.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sp8),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 48),
+                      child: Text(
+                        label,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                          color: isSelected ? scheme.primary : null,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    _ScaleGlyph(
+                      scale: scale,
+                      isSelected: isSelected,
+                      primary: scheme.primary,
+                      muted: scheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                          color: isSelected ? scheme.primary : null,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      isSelected
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      size: 20,
                       color: isSelected
                           ? scheme.primary
                           : scheme.onSurfaceVariant,
-                      height: 1,
                     ),
-                  ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  label,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    color: isSelected ? scheme.primary : null,
-                    fontSize: 15,
-                  ),
-                ),
-              ),
-              Icon(
-                isSelected
-                    ? Icons.radio_button_checked_rounded
-                    : Icons.radio_button_unchecked_rounded,
-                size: 20,
-                color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
-              ),
-            ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScaleGlyph extends StatelessWidget {
+  const _ScaleGlyph({
+    required this.scale,
+    required this.isSelected,
+    required this.primary,
+    required this.muted,
+  });
+
+  final double scale;
+  final bool isSelected;
+  final Color primary;
+  final Color muted;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 40,
+      child: Center(
+        child: Text(
+          'A',
+          style: TextStyle(
+            fontSize: 11 + (scale - 0.8) * 16,
+            fontWeight: FontWeight.w800,
+            color: isSelected ? primary : muted,
+            height: 1,
           ),
         ),
       ),

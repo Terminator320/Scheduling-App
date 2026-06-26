@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/shared/widgets/fields/clear_text_button.dart';
 
@@ -6,10 +6,12 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
   const AppSearchBar({
     super.key,
     this.onChanged,
-    this.hintText = 'Search…',
+    this.hintText = 'Search...',
     this.controller,
     this.focusNode,
   });
+
+  static const double preferredHeight = 60;
 
   final ValueChanged<String>? onChanged;
   final String hintText;
@@ -17,7 +19,7 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
   final FocusNode? focusNode;
 
   @override
-  Size get preferredSize => const Size.fromHeight(52);
+  Size get preferredSize => const Size.fromHeight(preferredHeight);
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +33,7 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
         controller: controller,
         focusNode: focusNode,
         onChanged: onChanged ?? (_) {},
+        maxLines: 1,
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
           color: scheme.onSurface,
         ),
@@ -47,7 +50,7 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
             borderRadius: BorderRadius.circular(AppRadius.r12),
             borderSide: BorderSide.none,
           ),
-          contentPadding: const EdgeInsets.symmetric(vertical: AppSpacing.sp8),
+          contentPadding: const EdgeInsets.symmetric(vertical: AppSpacing.sp12),
           suffixIcon: controller != null
               ? ClearTextButton(
                   controller: controller!,

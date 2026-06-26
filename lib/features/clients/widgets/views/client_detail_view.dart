@@ -71,7 +71,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
       await _unlinkPhoneContact();
       ref.read(clientsRefreshProvider.notifier).bump();
       if (!mounted) return;
-      // A scrollController means we're inside a bottom sheet â€” close it.
+      // A scrollController means we're inside a bottom sheet; close it.
       if (widget.scrollController != null) {
         Navigator.pop(context);
       }
@@ -199,31 +199,45 @@ class _ViewActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact =
+        MediaQuery.sizeOf(context).width < 360 ||
+        MediaQuery.textScalerOf(context).scale(1) > 1.4;
+
+    final editButton = FilledButton.icon(
+      onPressed: onEdit,
+      icon: const Icon(Icons.edit_outlined, size: 18),
+      label: Text(context.l10n.common_edit),
+    );
+    final deleteButton = OutlinedButton.icon(
+      style: destructiveOutlinedButtonStyle(context),
+      onPressed: onDelete,
+      icon: BusyButtonIcon(
+        isBusy: isDeleting,
+        icon: Icons.delete_outline,
+      ),
+      label: Text(
+        isDeleting
+            ? context.l10n.clients_deleting
+            : context.l10n.common_delete,
+      ),
+    );
+
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          editButton,
+          const SizedBox(height: 12),
+          deleteButton,
+        ],
+      );
+    }
+
     return Row(
       children: [
-        Expanded(
-          child: FilledButton.icon(
-            onPressed: onEdit,
-            icon: const Icon(Icons.edit_outlined, size: 18),
-            label: Text(context.l10n.common_edit),
-          ),
-        ),
+        Expanded(child: editButton),
         const SizedBox(width: 12),
-        Expanded(
-          child: OutlinedButton.icon(
-            style: destructiveOutlinedButtonStyle(context),
-            onPressed: onDelete,
-            icon: BusyButtonIcon(
-              isBusy: isDeleting,
-              icon: Icons.delete_outline,
-            ),
-            label: Text(
-              isDeleting
-                  ? context.l10n.clients_deleting
-                  : context.l10n.common_delete,
-            ),
-          ),
-        ),
+        Expanded(child: deleteButton),
       ],
     );
   }
