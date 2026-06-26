@@ -1,6 +1,7 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/settings/domain/role_label.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -109,11 +110,9 @@ class SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final narrowOrLarge =
-        MediaQuery.sizeOf(context).width < 360 ||
-        MediaQuery.textScalerOf(context).scale(1) > 1.4;
+    final narrowOrLarge = context.isCompact;
 
-    final leading = icon != null && iconBg != null && iconColor != null
+    final Widget? leading = icon != null && iconBg != null && iconColor != null
         ? Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -129,7 +128,7 @@ class SettingsTile extends StatelessWidget {
               const SizedBox(width: AppSpacing.sp12),
             ],
           )
-        : const SizedBox.shrink();
+        : null;
 
     return InkWell(
       onTap: onTap,
@@ -143,8 +142,7 @@ class SettingsTile extends StatelessWidget {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (icon != null && iconBg != null && iconColor != null)
-                        leading,
+                      ?leading,
                       Expanded(
                         child: Text(
                           label,
@@ -164,8 +162,7 @@ class SettingsTile extends StatelessWidget {
               )
             : Row(
                 children: [
-                  if (icon != null && iconBg != null && iconColor != null)
-                    leading,
+                  ?leading,
                   Expanded(
                     child: Text(
                       label,
@@ -283,9 +280,13 @@ class SettingsProfileCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final narrowOrLarge =
-        MediaQuery.sizeOf(context).width < 360 ||
-        MediaQuery.textScalerOf(context).scale(1) > 1.4;
+    final narrowOrLarge = context.isCompact;
+
+    final avatar = AppAvatar(
+      name: name,
+      color: scheme.primary,
+      size: AvatarSize.lg,
+    );
 
     final identity = Column(
       crossAxisAlignment: narrowOrLarge
@@ -371,11 +372,7 @@ class SettingsProfileCard extends StatelessWidget {
                 child: narrowOrLarge
                     ? Column(
                         children: [
-                          AppAvatar(
-                            name: name,
-                            color: scheme.primary,
-                            size: AvatarSize.lg,
-                          ),
+                          avatar,
                           const SizedBox(height: AppSpacing.sp12),
                           identity,
                         ],
@@ -383,11 +380,7 @@ class SettingsProfileCard extends StatelessWidget {
                     : Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          AppAvatar(
-                            name: name,
-                            color: scheme.primary,
-                            size: AvatarSize.lg,
-                          ),
+                          avatar,
                           const SizedBox(width: AppSpacing.sp16),
                           Expanded(child: identity),
                         ],
@@ -429,4 +422,3 @@ class _RoleBadge extends StatelessWidget {
     );
   }
 }
-

@@ -1,6 +1,7 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/launchers/phone_call_launcher.dart';
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
@@ -49,9 +50,7 @@ class DetailsViewBody extends ConsumerWidget {
         appointment.startTime.year == now.year &&
         appointment.startTime.month == now.month &&
         appointment.startTime.day == now.day;
-    final compactHeader =
-        MediaQuery.sizeOf(context).width < 360 ||
-        MediaQuery.textScalerOf(context).scale(1) > 1.4;
+    final compactHeader = context.isCompact;
 
     final clientName = client?.displayName ?? appointment.clientName;
     final phone = (client?.phone.isNotEmpty ?? false)
@@ -76,14 +75,17 @@ class DetailsViewBody extends ConsumerWidget {
         .map((m) => m.trim())
         .where((m) => m.isNotEmpty)
         .toList();
-    final extraContacts = (client?.contacts ?? const <ClientContact>[]).toList();
+    final extraContacts = (client?.contacts ?? const <ClientContact>[])
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (showActions && !isCancelled)
           Align(
-            alignment: compactHeader ? Alignment.centerLeft : Alignment.centerRight,
+            alignment: compactHeader
+                ? Alignment.centerLeft
+                : Alignment.centerRight,
             child: _EditChip(onTap: notifier.enterEditing),
           ),
         _Header(

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,7 +13,6 @@ const _employee = EmployeeRecord(
   name: 'Alexandria Beaumont',
   email: 'alexandria@example.com',
   phone: '555-0101',
-  role: 'employee',
   status: 'active',
   uid: 'uid1',
   color: Color(0xFF6366F1),
@@ -46,17 +45,22 @@ Widget _wrap(Widget child) => ProviderScope(
 );
 
 void main() {
-  testWidgets('employee form sheet does not overflow at 2x text on phone width', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(320, 760);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets(
+    'employee form sheet does not overflow at 2x text on phone width',
+    (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 760);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(_wrap(const EmployeeFormSheet(employee: _employee)));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        _wrap(const EmployeeFormSheet(employee: _employee)),
+      );
+      await tester.pumpAndSettle();
 
-    expect(tester.takeException(), isNull);
-  });
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

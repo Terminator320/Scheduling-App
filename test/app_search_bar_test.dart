@@ -1,4 +1,4 @@
-﻿// test/app_search_bar_test.dart
+// test/app_search_bar_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';

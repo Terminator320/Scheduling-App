@@ -1,6 +1,7 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
@@ -199,9 +200,7 @@ class _ViewActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final compact =
-        MediaQuery.sizeOf(context).width < 360 ||
-        MediaQuery.textScalerOf(context).scale(1) > 1.4;
+    final compact = context.isCompact;
 
     final editButton = FilledButton.icon(
       onPressed: onEdit,
@@ -216,9 +215,7 @@ class _ViewActions extends StatelessWidget {
         icon: Icons.delete_outline,
       ),
       label: Text(
-        isDeleting
-            ? context.l10n.clients_deleting
-            : context.l10n.common_delete,
+        isDeleting ? context.l10n.clients_deleting : context.l10n.common_delete,
       ),
     );
 

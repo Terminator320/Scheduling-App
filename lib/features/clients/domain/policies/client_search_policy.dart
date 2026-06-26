@@ -1,4 +1,4 @@
-﻿import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_record.dart';
 
 class ClientSearchPolicy {
   const ClientSearchPolicy._();

@@ -1,6 +1,7 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -123,9 +124,17 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDisabled = widget.employee.isDisabled;
-    final stackedHeader =
-        MediaQuery.sizeOf(context).width < 360 ||
-        MediaQuery.textScalerOf(context).scale(1) > 1.4;
+    final stackedHeader = context.isCompact;
+
+    final headerTitle = Text(
+      context.l10n.employees_employeeDetails,
+      style: theme.textTheme.headlineLarge,
+    );
+    final statusChip = StatusChip(
+      status: isDisabled
+          ? AppointmentStatus.disabled
+          : AppointmentStatus.active,
+    );
 
     return DetailSheetListView(
       scrollController: widget.scrollController,
@@ -136,33 +145,17 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                context.l10n.employees_employeeDetails,
-                style: theme.textTheme.headlineLarge,
-              ),
+              headerTitle,
               const SizedBox(height: AppSpacing.sp8),
-              StatusChip(
-                status: isDisabled
-                    ? AppointmentStatus.disabled
-                    : AppointmentStatus.active,
-              ),
+              statusChip,
             ],
           )
         else
           Row(
             children: [
-              Expanded(
-                child: Text(
-                  context.l10n.employees_employeeDetails,
-                  style: theme.textTheme.headlineLarge,
-                ),
-              ),
+              Expanded(child: headerTitle),
               const SizedBox(width: 8),
-              StatusChip(
-                status: isDisabled
-                    ? AppointmentStatus.disabled
-                    : AppointmentStatus.active,
-              ),
+              statusChip,
             ],
           ),
         const SizedBox(height: 16),
