@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/shared/widgets/primitives/app_back_button.dart';
 
@@ -60,7 +60,12 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
       automaticallyImplyLeading: false,
       toolbarHeight: compact ? _compactToolbarHeight : null,
       leading: onBack == null ? null : AppBackButton(onTap: onBack!),
-      title: Text(title, style: titleStyle),
+      title: Text(
+        title,
+        style: titleStyle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       actions: actions,
       bottom: bottom,
     );

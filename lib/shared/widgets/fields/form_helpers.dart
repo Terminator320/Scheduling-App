@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -9,22 +9,25 @@ Widget formLabel(
   bool optional = false,
   bool required = false,
 }) {
+  final baseStyle = Theme.of(context).textTheme.labelLarge;
   return Padding(
     padding: const EdgeInsets.only(bottom: AppSpacing.sp8),
-    child: Row(
+    child: Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      runSpacing: 2,
       children: [
-        Text(text, style: Theme.of(context).textTheme.labelLarge),
+        Text(text, style: baseStyle),
         if (required)
           Text(
             ' *',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            style: baseStyle?.copyWith(
               color: Theme.of(context).colorScheme.error,
             ),
           ),
         if (optional)
           Text(
             ' (${context.l10n.common_optional})',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            style: baseStyle?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),

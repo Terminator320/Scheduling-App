@@ -154,6 +154,7 @@ class AppointmentFormFields extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final showStatus = editingStatus != null && onStatusChanged != null;
+    final isNarrowPhone = MediaQuery.sizeOf(context).width < 360;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -210,11 +211,11 @@ class AppointmentFormFields extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.sp16),
         // --- Start / end time ---
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: SheetFocusScroll(
+        if (isNarrowPhone)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SheetFocusScroll(
                 child: LabeledTextField(
                   label: l10n.calendar_startTime,
                   hint: l10n.calendar_start,
@@ -225,10 +226,8 @@ class AppointmentFormFields extends StatelessWidget {
                   onTap: onPickStartTime,
                 ),
               ),
-            ),
-            const SizedBox(width: AppSpacing.sp12),
-            Expanded(
-              child: SheetFocusScroll(
+              const SizedBox(height: AppSpacing.sp16),
+              SheetFocusScroll(
                 child: LabeledTextField(
                   label: l10n.calendar_endTime,
                   hint: l10n.calendar_end,
@@ -239,9 +238,41 @@ class AppointmentFormFields extends StatelessWidget {
                   onTap: onPickEndTime,
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: SheetFocusScroll(
+                  child: LabeledTextField(
+                    label: l10n.calendar_startTime,
+                    hint: l10n.calendar_start,
+                    controller: controllers.startTime,
+                    required: true,
+                    readOnly: true,
+                    errorText: _err(context, 'startTime'),
+                    onTap: onPickStartTime,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sp12),
+              Expanded(
+                child: SheetFocusScroll(
+                  child: LabeledTextField(
+                    label: l10n.calendar_endTime,
+                    hint: l10n.calendar_end,
+                    controller: controllers.endTime,
+                    required: true,
+                    readOnly: true,
+                    errorText: _err(context, 'endTime'),
+                    onTap: onPickEndTime,
+                  ),
+                ),
+              ),
+            ],
+          ),
         const SizedBox(height: AppSpacing.sp16),
         // --- Status (edit flow only) ---
         if (showStatus) ...[

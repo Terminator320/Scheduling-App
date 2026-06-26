@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -38,7 +38,6 @@ class EmployeeDetailsView extends ConsumerStatefulWidget {
 }
 
 class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
-  // Shared min-size for the full-width action buttons in this view.
   static const _fullWidthButton = Size(double.infinity, 48);
 
   bool _isDeleting = false;
@@ -124,28 +123,48 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDisabled = widget.employee.isDisabled;
+    final stackedHeader =
+        MediaQuery.sizeOf(context).width < 360 ||
+        MediaQuery.textScalerOf(context).scale(1) > 1.4;
 
     return DetailSheetListView(
       scrollController: widget.scrollController,
       showHandle: widget.showHandle,
       bottomPadding: widget.bottomPadding,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
+        if (stackedHeader)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
                 context.l10n.employees_employeeDetails,
                 style: theme.textTheme.headlineLarge,
               ),
-            ),
-            const SizedBox(width: 8),
-            StatusChip(
-              status: isDisabled
-                  ? AppointmentStatus.disabled
-                  : AppointmentStatus.active,
-            ),
-          ],
-        ),
+              const SizedBox(height: AppSpacing.sp8),
+              StatusChip(
+                status: isDisabled
+                    ? AppointmentStatus.disabled
+                    : AppointmentStatus.active,
+              ),
+            ],
+          )
+        else
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  context.l10n.employees_employeeDetails,
+                  style: theme.textTheme.headlineLarge,
+                ),
+              ),
+              const SizedBox(width: 8),
+              StatusChip(
+                status: isDisabled
+                    ? AppointmentStatus.disabled
+                    : AppointmentStatus.active,
+              ),
+            ],
+          ),
         const SizedBox(height: 16),
         const Divider(height: 1),
         const SizedBox(height: AppSpacing.sp24),
@@ -211,14 +230,11 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
         const SizedBox(height: 24),
         const Divider(height: 1),
         const SizedBox(height: 16),
-
         FilledButton.icon(
           onPressed: () => widget.onAction('edit'),
           icon: const Icon(Icons.edit_outlined, size: 18),
           label: Text(context.l10n.common_edit),
-          style: FilledButton.styleFrom(
-            minimumSize: _fullWidthButton,
-          ),
+          style: FilledButton.styleFrom(minimumSize: _fullWidthButton),
         ),
         if (widget.isCurrentUserAdmin) ...[
           const SizedBox(height: AppSpacing.sp8),
@@ -246,7 +262,6 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
             ),
           ),
         ],
-        // TODO(pre-ship): Remove the SizedBox and OutlinedButton below — testing only.
         const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: _isDeleting ? null : _confirmDelete,

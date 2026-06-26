@@ -1,4 +1,4 @@
-import 'package:firebase_auth/firebase_auth.dart';
+﻿import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
@@ -178,13 +178,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             icon: Icons.text_fields_rounded,
             iconColor: scheme.tertiary,
             label: context.l10n.settings_textSize,
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
+            trailing: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 4,
+              runSpacing: 4,
               children: [
                 SettingsTrailingPill(
                   label: _textScaleLabel(context, notifier.textScale),
                 ),
-                const SizedBox(width: 4),
                 Icon(
                   Icons.chevron_right_rounded,
                   size: 18,
