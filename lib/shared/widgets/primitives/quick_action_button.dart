@@ -49,7 +49,10 @@ class QuickActionButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.r12),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(
+            vertical: 12,
+            horizontal: AppSpacing.sp8,
+          ),
           decoration: BoxDecoration(
             color: scheme.primaryContainer,
             borderRadius: BorderRadius.circular(AppRadius.r12),
@@ -61,12 +64,13 @@ class QuickActionButton extends StatelessWidget {
               const SizedBox(height: AppSpacing.sp8),
               Text(
                 label,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.labelMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                   color: scheme.onPrimaryContainer,
+                  height: 1.2,
                 ),
               ),
             ],

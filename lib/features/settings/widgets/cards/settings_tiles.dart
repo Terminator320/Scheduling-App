@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -109,15 +109,14 @@ class SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final narrowOrLarge =
+        MediaQuery.sizeOf(context).width < 360 ||
+        MediaQuery.textScalerOf(context).scale(1) > 1.4;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.r8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
-          children: [
-            if (icon != null && iconBg != null && iconColor != null) ...[
+    final leading = icon != null && iconBg != null && iconColor != null
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               Container(
                 width: 36,
                 height: 36,
@@ -129,22 +128,58 @@ class SettingsTile extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.sp12),
             ],
-            Expanded(
-              // NOTE: bodyLarge (16) is the nearest role; original 15 sits
-              // between bodyMedium (14) and bodyLarge — let the role drive size.
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w500,
-                  color: labelColor,
-                ),
+          )
+        : const SizedBox.shrink();
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.r8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: narrowOrLarge
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (icon != null && iconBg != null && iconColor != null)
+                        leading,
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w500,
+                            color: labelColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (trailing != null) ...[
+                    const SizedBox(height: AppSpacing.sp8),
+                    Align(alignment: Alignment.centerLeft, child: trailing),
+                  ],
+                ],
+              )
+            : Row(
+                children: [
+                  if (icon != null && iconBg != null && iconColor != null)
+                    leading,
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: labelColor,
+                      ),
+                    ),
+                  ),
+                  ?trailing,
+                ],
               ),
-            ),
-            ?trailing,
-          ],
-        ),
       ),
     );
   }
@@ -168,15 +203,15 @@ class LanguageToggle extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.r8),
       ),
       padding: const EdgeInsets.all(3),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Wrap(
+        spacing: 2,
+        runSpacing: 2,
         children: [
           _LangBtn(
             label: 'EN',
             isActive: currentCode == 'en',
             onTap: () => onChanged('en'),
           ),
-          const SizedBox(width: 2),
           _LangBtn(
             label: 'FR',
             isActive: currentCode == 'fr',
@@ -248,6 +283,52 @@ class SettingsProfileCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final narrowOrLarge =
+        MediaQuery.sizeOf(context).width < 360 ||
+        MediaQuery.textScalerOf(context).scale(1) > 1.4;
+
+    final identity = Column(
+      crossAxisAlignment: narrowOrLarge
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          name.isNotEmpty ? name : '—',
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: narrowOrLarge ? TextAlign.center : TextAlign.start,
+        ),
+        const SizedBox(height: AppSpacing.sp4),
+        Wrap(
+          alignment: narrowOrLarge ? WrapAlignment.center : WrapAlignment.start,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: AppSpacing.sp8,
+          runSpacing: AppSpacing.sp4,
+          children: [
+            if (role != null) _RoleBadge(role: role!),
+            if (email.isNotEmpty)
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: narrowOrLarge ? 260 : 220,
+                ),
+                child: Text(
+                  email,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: narrowOrLarge ? TextAlign.center : TextAlign.start,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
 
     return Container(
       decoration: appCardDecoration(theme, radius: AppRadius.r16),
@@ -287,53 +368,30 @@ class SettingsProfileCard extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.all(AppSpacing.sp16),
-                child: Row(
-                  children: [
-                    AppAvatar(
-                      name: name,
-                      color: scheme.primary,
-                      size: AvatarSize.lg,
-                    ),
-                    const SizedBox(width: AppSpacing.sp16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
+                child: narrowOrLarge
+                    ? Column(
                         children: [
-                          Text(
-                            name.isNotEmpty ? name : '—',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          AppAvatar(
+                            name: name,
+                            color: scheme.primary,
+                            size: AvatarSize.lg,
                           ),
-                          const SizedBox(height: AppSpacing.sp4),
-                          Row(
-                            children: [
-                              if (role != null) ...[
-                                _RoleBadge(role: role!),
-                                if (email.isNotEmpty)
-                                  const SizedBox(width: AppSpacing.sp8),
-                              ],
-                              if (email.isNotEmpty)
-                                Flexible(
-                                  child: Text(
-                                    email,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: scheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ),
-                            ],
+                          const SizedBox(height: AppSpacing.sp12),
+                          identity,
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppAvatar(
+                            name: name,
+                            color: scheme.primary,
+                            size: AvatarSize.lg,
                           ),
+                          const SizedBox(width: AppSpacing.sp16),
+                          Expanded(child: identity),
                         ],
                       ),
-                    ),
-                  ],
-                ),
               ),
             ],
           ),
@@ -371,3 +429,4 @@ class _RoleBadge extends StatelessWidget {
     );
   }
 }
+

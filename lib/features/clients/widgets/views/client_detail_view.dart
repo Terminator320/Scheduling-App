@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -71,7 +71,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
       await _unlinkPhoneContact();
       ref.read(clientsRefreshProvider.notifier).bump();
       if (!mounted) return;
-      // A scrollController means we're inside a bottom sheet — close it.
+      // A scrollController means we're inside a bottom sheet â€” close it.
       if (widget.scrollController != null) {
         Navigator.pop(context);
       }
