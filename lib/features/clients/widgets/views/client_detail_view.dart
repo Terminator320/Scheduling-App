@@ -224,7 +224,7 @@ class _ViewActions extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           editButton,
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sp12),
           deleteButton,
         ],
       );
