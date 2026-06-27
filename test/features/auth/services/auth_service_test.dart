@@ -103,25 +103,4 @@ void main() {
       );
     });
   });
-
-  group('resendVerificationEmail', () {
-    test('returns true when the verification email is sent', () async {
-      when(() => user.sendEmailVerification()).thenAnswer((_) async {});
-
-      final sent = await service.resendVerificationEmail(user);
-
-      expect(sent, isTrue);
-      verify(() => user.sendEmailVerification()).called(1);
-    });
-
-    test('returns false when sending throws (e.g. rate-limited)', () async {
-      when(
-        () => user.sendEmailVerification(),
-      ).thenThrow(FirebaseAuthException(code: 'too-many-requests'));
-
-      final sent = await service.resendVerificationEmail(user);
-
-      expect(sent, isFalse);
-    });
-  });
 }

@@ -926,14 +926,6 @@
   "@auth_accountCreatedYouCanNowSignIn": {
     "description": "Account created. You can now sign in."
   },
-  "auth_accountCreated": "Account created",
-  "@auth_accountCreated": {
-    "description": "Account created"
-  },
-  "auth_youCanNowSignInWithThisEmailAndPassword": "Check your inbox and spam folder to verify your email, then sign in.",
-  "@auth_youCanNowSignInWithThisEmailAndPassword": {
-    "description": "Create-account success subtitle telling the user to verify their email before signing in."
-  },
   "auth_useTheEmailYourAdminAddedToTheEmployeeList": "Use the email your admin added to the employee list.",
   "@auth_useTheEmailYourAdminAddedToTheEmployeeList": {
     "description": "Use the email your admin added to the employee list."
@@ -941,22 +933,6 @@
   "error_noUserProfileFoundForThisAccount": "No user profile found for this account",
   "@error_noUserProfileFoundForThisAccount": {
     "description": "No user profile found for this account"
-  },
-  "auth_pleaseVerifyYourEmailBeforeSigningIn": "Please verify your email before signing in.",
-  "@auth_pleaseVerifyYourEmailBeforeSigningIn": {
-    "description": "Please verify your email before signing in."
-  },
-  "auth_verificationEmailResentCheckInboxAndSpam": "Your email isn't verified yet. We sent a new verification link — check your inbox and spam folder, then sign in.",
-  "@auth_verificationEmailResentCheckInboxAndSpam": {
-    "description": "Shown on sign-in when an unverified invited user's account triggered an automatic resend of the email-verification link."
-  },
-  "auth_resendVerificationEmail": "Resend verification email",
-  "@auth_resendVerificationEmail": {
-    "description": "Button on the account-created screen to send the email-verification link again."
-  },
-  "auth_verificationEmailSentCheckInboxAndSpam": "Verification email sent — check your inbox and spam folder.",
-  "@auth_verificationEmailSentCheckInboxAndSpam": {
-    "description": "Confirmation shown after the user taps Resend verification email."
   },
   "auth_pleaseLogInAgainAndRetry": "Please log in again and retry",
   "@auth_pleaseLogInAgainAndRetry": {

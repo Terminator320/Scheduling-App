@@ -30,11 +30,7 @@ abstract class EmployeesRepository {
 
   Future<void> deleteEmployee(String docId);
 
-  Future<InvitedEmployeeMatch?> findInvitedEmployeeForCurrentUser();
-
   Future<UserUidMatch?> findUserByUid(String uid);
-
-  Future<void> activateEmployee({required String docId, required String uid});
 
   Future<void> deactivateEmployee(String docId);
 
@@ -44,12 +40,6 @@ abstract class EmployeesRepository {
   /// none). One listener feeds name + status + role so the app doesn't open
   /// three separate snapshot listeners on the same document.
   Stream<Map<String, dynamic>> watchUserDoc(String uid);
-}
-
-class InvitedEmployeeMatch {
-  const InvitedEmployeeMatch({required this.docId, required this.data});
-  final String docId;
-  final Map<String, dynamic> data;
 }
 
 class UserUidMatch {
