@@ -145,13 +145,11 @@ void main() {
   );
 
   testWidgets(
-    'does not attempt invite activation when the user already has a uid-keyed '
-    'profile (keeps routine logins off the resolveMyInvite rate limit)',
+    'routes to calendar when the profile is found on first read',
     (tester) async {
       final credential = _MockUserCredential();
       final user = _MockUser();
       when(() => user.uid).thenReturn('u1');
-      when(() => user.emailVerified).thenReturn(true);
       when(() => credential.user).thenReturn(user);
       when(
         () => auth.signIn(
@@ -182,6 +180,37 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('CALENDAR_REACHED'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'signs out and shows no-profile error when findUserByUid returns null',
+    (tester) async {
+      final credential = _MockUserCredential();
+      final user = _MockUser();
+      when(() => user.uid).thenReturn('u1');
+      when(() => credential.user).thenReturn(user);
+      when(
+        () => auth.signIn(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        ),
+      ).thenAnswer((_) async => credential);
+      when(() => repo.findUserByUid('u1')).thenAnswer((_) async => null);
+      when(() => auth.signOut()).thenAnswer((_) async {});
+
+      await tester.pumpWidget(_wrap(auth, repo));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).at(0), 'user@test.com');
+      await tester.enterText(find.byType(TextField).at(1), 'password123');
+
+      await tester.tap(find.byType(FilledButton).first);
+      await tester.pumpAndSettle();
+
+      verify(() => auth.signOut()).called(1);
+      expect(find.text('CALENDAR_REACHED'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
