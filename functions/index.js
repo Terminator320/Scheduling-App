@@ -24,7 +24,6 @@ exports.placesGetDetails = places.placesGetDetails;
 exports.validateUploadedImage = maintenance.validateUploadedImage;
 exports.deleteAccount = account.deleteAccount;
 exports.createEmployeeInvite = invites.createEmployeeInvite;
-exports.regenerateSignupCode = invites.regenerateSignupCode;
 exports.redeemSignupCode = invites.redeemSignupCode;
 exports.purgeExpiredHistory = maintenance.purgeExpiredHistory;
 exports.backfillLegacyClientNames = maintenance.backfillLegacyClientNames;

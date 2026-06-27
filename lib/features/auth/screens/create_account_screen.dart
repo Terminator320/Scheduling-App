@@ -242,7 +242,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
           enabled: !_isLoading,
           errorText: _codeError,
           maxLength: TextLimits.signupCode,
-          textInputAction: TextInputAction.done,
           onSubmitted: _createAccount,
           onChanged: _onFieldChanged,
         ),

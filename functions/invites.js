@@ -47,12 +47,37 @@ const createEmployeeInvite = onCall(APP_CHECK, async (req) => {
   const db = getFirestore();
   const dup = await db.collection("users")
       .where("email", "==", email).limit(1).get();
-  if (!dup.empty) throw new HttpsError("already-exists", "email-exists");
+  const existing = dup.empty ? null : dup.docs[0];
+  // A real (claimed) account blocks re-use; a still-pending invite is
+  // re-issued instead (idempotent — covers a lost/expired code and seeds a
+  // code for invites created before signup codes existed).
+  if (existing && existing.data().status !== "invited") {
+    throw new HttpsError("already-exists", "email-exists");
+  }
 
   const code = generateSignupCode();
-  const inviteRef = db.collection("users").doc();
   const codeRef = db.collection("signupCodes").doc(hashSignupCode(code));
   const expiresAt = new Date(Date.now() + INVITE_CODE_TTL_MS);
+
+  if (existing) {
+    // Re-issue: refresh the editable fields and replace the invite's code.
+    const prior = await db.collection("signupCodes")
+        .where("inviteDocId", "==", existing.id).get();
+    const batch = db.batch();
+    prior.forEach((d) => batch.delete(d.ref));
+    batch.update(existing.ref, {
+      name, phone, colorValue,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    batch.set(codeRef, {
+      inviteDocId: existing.id, email, expiresAt,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return {code};
+  }
+
+  const inviteRef = db.collection("users").doc();
   await db.runTransaction(async (tx) => {
     tx.set(inviteRef, {
       name, email, phone, colorValue,
@@ -65,34 +90,6 @@ const createEmployeeInvite = onCall(APP_CHECK, async (req) => {
       createdAt: FieldValue.serverTimestamp(),
     });
   });
-  return {code};
-});
-
-const regenerateSignupCode = onCall(APP_CHECK, async (req) => {
-  if (!req.auth || !req.auth.uid) {
-    throw new HttpsError("unauthenticated", "auth-required");
-  }
-  await assertAdmin(req.auth.uid);
-  assertPayloadShape(req.data, new Set(["inviteDocId"]));
-  const inviteDocId = requireString(req.data, "inviteDocId", 200);
-
-  const db = getFirestore();
-  const inviteSnap = await db.collection("users").doc(inviteDocId).get();
-  const invite = inviteSnap.exists ? inviteSnap.data() : null;
-  if (!invite || invite.status !== "invited") {
-    throw new HttpsError("failed-precondition", "not-a-pending-invite");
-  }
-  const prior = await db.collection("signupCodes")
-      .where("inviteDocId", "==", inviteDocId).get();
-  const code = generateSignupCode();
-  const batch = db.batch();
-  prior.forEach((d) => batch.delete(d.ref));
-  batch.set(db.collection("signupCodes").doc(hashSignupCode(code)), {
-    inviteDocId, email: invite.email || "",
-    expiresAt: new Date(Date.now() + INVITE_CODE_TTL_MS),
-    createdAt: FieldValue.serverTimestamp(),
-  });
-  await batch.commit();
   return {code};
 });
 
@@ -145,6 +142,4 @@ const redeemSignupCode = onCall(APP_CHECK, async (req) => {
   return {role: outcome.role, name: outcome.name};
 });
 
-module.exports = {
-  createEmployeeInvite, regenerateSignupCode, redeemSignupCode,
-};
+module.exports = {createEmployeeInvite, redeemSignupCode};

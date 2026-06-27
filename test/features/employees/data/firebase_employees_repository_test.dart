@@ -89,7 +89,7 @@ void main() {
       ).thenReturn(callable);
       when(() => result.data).thenReturn({'code': 'K7Q2-9MZ4-XR8T'});
       when(
-        () => callable.call<dynamic>(any()),
+        () => callable.call<dynamic>(any<Object?>()),
       ).thenAnswer((_) async => result);
 
       final repo = FirebaseEmployeesRepository(firestore, functions: functions);
@@ -102,7 +102,7 @@ void main() {
 
       expect(code, 'K7Q2-9MZ4-XR8T');
       final captured = verify(
-        () => callable.call<dynamic>(captureAny()),
+        () => callable.call<dynamic>(captureAny<Object?>()),
       ).captured.single;
       expect(
         (captured as Map).cast<String, dynamic>()['email'],
@@ -117,7 +117,7 @@ void main() {
         when(
           () => functions.httpsCallable('createEmployeeInvite'),
         ).thenReturn(callable);
-        when(() => callable.call<dynamic>(any())).thenThrow(
+        when(() => callable.call<dynamic>(any<Object?>())).thenThrow(
           FirebaseFunctionsException(
             message: 'email-exists',
             code: 'already-exists',
@@ -149,14 +149,14 @@ void main() {
       ).thenReturn(callable);
       when(() => result.data).thenReturn({'role': 'employee', 'name': 'A'});
       when(
-        () => callable.call<dynamic>(any()),
+        () => callable.call<dynamic>(any<Object?>()),
       ).thenAnswer((_) async => result);
 
       final repo = FirebaseEmployeesRepository(firestore, functions: functions);
       await repo.redeemSignupCode('K7Q2-9MZ4-XR8T');
 
       final captured = verify(
-        () => callable.call<dynamic>(captureAny()),
+        () => callable.call<dynamic>(captureAny<Object?>()),
       ).captured.single;
       expect(
         (captured as Map).cast<String, dynamic>()['code'],
