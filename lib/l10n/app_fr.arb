@@ -358,5 +358,9 @@
   "wave_syncPending": "Synchronisation en attente",
   "wave_syncError": "Erreur de synchronisation",
   "auth_signupCode": "Code d'inscription",
-  "validation_pleaseEnterYourSignupCode": "Veuillez saisir votre code d'inscription."
+  "validation_pleaseEnterYourSignupCode": "Veuillez saisir votre code d'inscription.",
+  "employees_signupCodeTitle": "Code d'inscription",
+  "employees_shareThisCodeWith": "Partagez ce code avec {name}. Il lui faudra ce code et son adresse e-mail pour se connecter.",
+  "employees_copyCode": "Copier le code",
+  "common_copied": "Copié"
 }

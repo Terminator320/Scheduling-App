@@ -1470,5 +1470,26 @@
   "validation_pleaseEnterYourSignupCode": "Please enter your signup code.",
   "@validation_pleaseEnterYourSignupCode": {
     "description": "Validation error shown when the signup code field is empty."
+  },
+  "employees_signupCodeTitle": "Signup code",
+  "@employees_signupCodeTitle": {
+    "description": "Title of the dialog showing the admin the employee's signup code"
+  },
+  "employees_shareThisCodeWith": "Share this code with {name}. They'll need it and their email to sign in.",
+  "@employees_shareThisCodeWith": {
+    "description": "Body of the signup-code dialog telling the admin to share the code with the new employee",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "employees_copyCode": "Copy code",
+  "@employees_copyCode": {
+    "description": "Button in the signup-code dialog that copies the code to the clipboard"
+  },
+  "common_copied": "Copied",
+  "@common_copied": {
+    "description": "Inline confirmation shown after copying text to the clipboard"
   }
 }
