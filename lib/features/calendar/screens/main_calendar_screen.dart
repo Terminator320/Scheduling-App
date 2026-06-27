@@ -159,6 +159,53 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     }
   }
 
+  // Error logging/surfacing for the appointments stream — fires only on the
+  // data→error transition. A `.when` error branch would re-log every rebuild.
+  void _onAppointmentsAsyncChange(
+    AsyncValue<List<AppointmentRecord>>? previous,
+    AsyncValue<List<AppointmentRecord>> next,
+  ) {
+    if (next is! AsyncError || previous is AsyncError) return;
+    ref
+        .read(loggerProvider)
+        .warn(
+          'APPT-LOAD appointments stream error',
+          next.error,
+          next.stackTrace,
+        );
+    ref
+        .read(noticeServiceProvider)
+        .error(
+          composeErrorNotice(
+            context,
+            intro: context.l10n.error_introLoadAppointments,
+            tag: 'APPT-LOAD',
+            error: next.error ?? Exception('unknown'),
+          ),
+        );
+  }
+
+  // A non-admin whose role becomes 'admin' is routed to the admin calendar
+  // after the current frame (guarded so it fires once).
+  void _upgradeIfAdmin(String? role) {
+    if (role != 'admin' || !mounted || _upgradingToAdmin) return;
+    _upgradingToAdmin = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      navigateToDestination(
+        context,
+        AdaptiveDestination.calendar,
+        isAdmin: true,
+        employeeId: widget.employeeId,
+      );
+    });
+  }
+
+  Future<void> _pickMonth() async {
+    final picked = await MonthYearPicker.show(context, _focusedDay);
+    if (picked != null) _setFocusedDay(picked);
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -171,57 +218,24 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         : ref.watch(myAppointmentsProvider(myAppointmentsKey));
     final userName = ref.watch(currentUserNameProvider);
 
-    void onAsyncChange(
-      AsyncValue<List<AppointmentRecord>>? previous,
-      AsyncValue<List<AppointmentRecord>> next,
-    ) {
-      if (next is AsyncError && previous is! AsyncError) {
-        ref
-            .read(loggerProvider)
-            .warn(
-              'APPT-LOAD appointments stream error',
-              next.error,
-              next.stackTrace,
-            );
-        ref
-            .read(noticeServiceProvider)
-            .error(
-              composeErrorNotice(
-                context,
-                intro: context.l10n.error_introLoadAppointments,
-                tag: 'APPT-LOAD',
-                error: next.error ?? Exception('unknown'),
-              ),
-            );
-      }
-    }
-
     if (widget.isAdmin) {
-      ref.listen(appointmentsInRangeProvider(_appointmentRange), onAsyncChange);
+      ref.listen(
+        appointmentsInRangeProvider(_appointmentRange),
+        _onAppointmentsAsyncChange,
+      );
     } else {
-      ref.listen(myAppointmentsProvider(myAppointmentsKey), onAsyncChange);
+      ref.listen(
+        myAppointmentsProvider(myAppointmentsKey),
+        _onAppointmentsAsyncChange,
+      );
     }
 
     if (!widget.isAdmin) {
-      void upgradeIfAdmin(String? role) {
-        if (role != 'admin' || !mounted || _upgradingToAdmin) return;
-        _upgradingToAdmin = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          navigateToDestination(
-            context,
-            AdaptiveDestination.calendar,
-            isAdmin: true,
-            employeeId: widget.employeeId,
-          );
-        });
-      }
-
       ref.listen<AsyncValue<String>>(
         userRoleProvider,
-        (_, next) => upgradeIfAdmin(next.value),
+        (_, next) => _upgradeIfAdmin(next.value),
       );
-      upgradeIfAdmin(ref.read(userRoleProvider).value);
+      _upgradeIfAdmin(ref.read(userRoleProvider).value);
     }
 
     final colorMap = ref.watch(employeeColorMapProvider);
@@ -266,45 +280,10 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         ],
         bottom: PreferredSize(
           preferredSize: Size.fromHeight(context.isLandscape ? 22 : 28),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              0,
-              16,
-              context.isLandscape ? 4 : 8,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Semantics(
-                  button: true,
-                  label: context.l10n.calendar_selectDate,
-                  child: GestureDetector(
-                    onTap: () async {
-                      final picked = await MonthYearPicker.show(
-                        context,
-                        _focusedDay,
-                      );
-                      if (picked != null) _setFocusedDay(picked);
-                    },
-                    child: Text(
-                      monthLabel,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                        color: scheme.onPrimary.withValues(alpha: 0.82),
-                      ),
-                    ),
-                  ),
-                ),
-                Text(
-                  jobLabel,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                    color: scheme.onPrimary.withValues(alpha: 0.82),
-                  ),
-                ),
-              ],
-            ),
+          child: _CalendarMonthBar(
+            monthLabel: monthLabel,
+            jobLabel: jobLabel,
+            onPickMonth: _pickMonth,
           ),
         ),
       ),
@@ -342,22 +321,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
               Positioned(
                 bottom: 16,
                 left: 16,
-                child: AnimatedScale(
-                  scale: _showTodayButton ? 1.0 : 0.75,
-                  duration: AppDuration.normal,
-                  curve: Curves.easeInOut,
-                  child: AnimatedOpacity(
-                    opacity: _showTodayButton ? 1.0 : 0.0,
-                    duration: AppDuration.normal,
-                    child: IgnorePointer(
-                      ignoring: !_showTodayButton,
-                      child: FloatingActionButton(
-                        heroTag: 'todayFab',
-                        onPressed: _goToToday,
-                        child: const Icon(Icons.today),
-                      ),
-                    ),
-                  ),
+                child: _TodayFab(
+                  visible: _showTodayButton,
+                  onPressed: _goToToday,
                 ),
               ),
             ],
@@ -426,6 +392,76 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         const Divider(),
         eventList,
       ],
+    );
+  }
+}
+
+/// The app-bar bottom row: tappable month label (opens the month picker) and
+/// the selected day's appointment count.
+class _CalendarMonthBar extends StatelessWidget {
+  const _CalendarMonthBar({
+    required this.monthLabel,
+    required this.jobLabel,
+    required this.onPickMonth,
+  });
+
+  final String monthLabel;
+  final String jobLabel;
+  final VoidCallback onPickMonth;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final labelStyle = theme.textTheme.labelMedium?.copyWith(
+      fontWeight: FontWeight.w500,
+      color: theme.colorScheme.onPrimary.withValues(alpha: 0.82),
+    );
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, context.isLandscape ? 4 : 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Semantics(
+            button: true,
+            label: context.l10n.calendar_selectDate,
+            child: GestureDetector(
+              onTap: onPickMonth,
+              child: Text(monthLabel, style: labelStyle),
+            ),
+          ),
+          Text(jobLabel, style: labelStyle),
+        ],
+      ),
+    );
+  }
+}
+
+/// The "jump to today" FAB — scales/fades out (and stops absorbing taps) when
+/// today is already in view. Wrap in a [Positioned] inside the body stack.
+class _TodayFab extends StatelessWidget {
+  const _TodayFab({required this.visible, required this.onPressed});
+
+  final bool visible;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedScale(
+      scale: visible ? 1.0 : 0.75,
+      duration: AppDuration.normal,
+      curve: Curves.easeInOut,
+      child: AnimatedOpacity(
+        opacity: visible ? 1.0 : 0.0,
+        duration: AppDuration.normal,
+        child: IgnorePointer(
+          ignoring: !visible,
+          child: FloatingActionButton(
+            heroTag: 'todayFab',
+            onPressed: onPressed,
+            child: const Icon(Icons.today),
+          ),
+        ),
+      ),
     );
   }
 }

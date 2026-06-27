@@ -1,15 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 
 class FirebaseClientsRepository implements ClientsRepository {
-  FirebaseClientsRepository(FirebaseFirestore firestore)
-    : _clients = firestore.collection('clients');
+  FirebaseClientsRepository(FirebaseFirestore firestore, {AppLogger? logger})
+    : _clients = firestore.collection('clients'),
+      _logger = logger ?? AppLogger();
 
   final CollectionReference<Map<String, dynamic>> _clients;
+  final AppLogger _logger;
 
   // Bounded LRU of recent search results. The repository is a long-lived
   // singleton, so an unbounded map would grow one entry per distinct query for
@@ -109,8 +111,7 @@ class FirebaseClientsRepository implements ClientsRepository {
           .limit(ClientSearchPolicy.serverReadLimit)
           .get();
     } on FirebaseException catch (e, st) {
-      debugPrint('[FirebaseClientsRepository] searchClients failed: $e');
-      debugPrintStack(stackTrace: st);
+      _logger.warn('CLI-SEARCH searchClients failed', e, st);
       return const [];
     }
 

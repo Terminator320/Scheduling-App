@@ -158,6 +158,15 @@ const resolveMyInvite = onCall(
       if (typeof tokenEmail !== "string" || tokenEmail === "") {
         throw new HttpsError("failed-precondition", "no-email-claim");
       }
+      // Only a verified email proves ownership. Anyone can register an
+      // unverified account with a guessed email, so an unverified caller must
+      // not learn whether an invite exists or read its name/color/role — return
+      // the empty result, never the invite. The app only calls this after the
+      // user verifies (tryActivateInvitedEmployee gates on emailVerified and
+      // forces a fresh token), so the legitimate flow is unaffected.
+      if (req.auth.token?.email_verified !== true) {
+        return {found: false};
+      }
       // Rate-limit AFTER the cheap precondition checks (mirrors deleteAccount):
       // a tokenless/precondition-failing retry must not record an attempt and
       // burn one of the caller's own limited slots.

@@ -6,6 +6,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/features/calendar/application/appointment_series_editor.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
@@ -87,10 +88,19 @@ class EventDetailsController extends Notifier<EventDetailsState> {
 
   final AppointmentRecord appointment;
 
+  // Completes when the active-employee seed has settled. save() awaits it
+  // before validating/resolving, so a save fired before seeding resolves can't
+  // read an empty selection — which would spuriously fail "employees required"
+  // and, if the user toggled meanwhile, drop original assignees (visibility
+  // keys on employeeIds).
+  Future<void>? _seedFuture;
+
   @override
   EventDetailsState build() {
     Future.microtask(() => _loadClientIfNeeded(appointment.clientId));
-    Future.microtask(() => _seedSelectedEmployees(appointment.employeeIds));
+    _seedFuture = Future.microtask(
+      () => _seedSelectedEmployees(appointment.employeeIds),
+    );
     return EventDetailsState(
       selectedDate: appointment.startTime,
       selectedStartTime: TimeOfDay.fromDateTime(appointment.startTime),
@@ -105,13 +115,7 @@ class EventDetailsController extends Notifier<EventDetailsState> {
   Future<void> _seedSelectedEmployees(List<String> employeeIds) async {
     if (employeeIds.isEmpty) return;
     try {
-      // Prefer the already-live employees stream over opening a throwaway
-      // Firestore listener just to read one value. An empty cached list is
-      // treated as a miss — the provider emits const [] while authUid lags.
-      final cached = ref.read(employeesStreamProvider).value;
-      final all = cached == null || cached.isEmpty
-          ? await ref.read(employeesRepositoryProvider).watchEmployees().first
-          : cached;
+      final all = await _resolveActiveEmployees();
       final selected = all.where((e) => employeeIds.contains(e.id)).toList();
       if (state.selectedEmployees.isEmpty) {
         state = state.copyWith(selectedEmployees: selected);
@@ -119,6 +123,18 @@ class EventDetailsController extends Notifier<EventDetailsState> {
     } catch (e, st) {
       ref.read(loggerProvider).warn('seedSelectedEmployees failed', e, st);
     }
+  }
+
+  /// The active-staff set, resolved identically for seeding and assignee
+  /// resolution — keeping the two in lockstep is a correctness requirement
+  /// (CLAUDE.md). Prefer the already-live employees stream over opening a
+  /// throwaway Firestore listener just to read one value; an empty/null cached
+  /// value means the stream hasn't settled (authUid lag), not that there are
+  /// zero active staff — so fall back to a fresh read.
+  Future<List<EmployeeRecord>> _resolveActiveEmployees() async {
+    final cached = ref.read(employeesStreamProvider).value;
+    if (cached != null && cached.isNotEmpty) return cached;
+    return ref.read(employeesRepositoryProvider).watchEmployees().first;
   }
 
   Future<void> _loadClientIfNeeded(String clientId) async {
@@ -308,17 +324,13 @@ class EventDetailsController extends Notifier<EventDetailsState> {
   /// list. Those were never shown in the picker (disabled/removed staff), so
   /// the user couldn't have deselected them — dropping them would silently
   /// unassign and change who can see this visit (visibility keys on
-  /// `employeeIds`). The active set is resolved the same way seeding does: an
-  /// empty/null cached value means the stream hasn't settled (authUid lag), not
-  /// that there are no active staff — so fall back to a fresh read, or a
-  /// deselected employee would be mistaken for a never-shown one and re-added.
+  /// `employeeIds`). [_resolveActiveEmployees] resolves the active set the same
+  /// way seeding does, or a deselected employee would be mistaken for a
+  /// never-shown one and re-added.
   Future<({List<String> ids, List<String> names})> _resolveAssignees(
     AppointmentRecord appointment,
   ) async {
-    final cachedEmployees = ref.read(employeesStreamProvider).value;
-    final activeEmployees = cachedEmployees == null || cachedEmployees.isEmpty
-        ? await ref.read(employeesRepositoryProvider).watchEmployees().first
-        : cachedEmployees;
+    final activeEmployees = await _resolveActiveEmployees();
     final activeIds = activeEmployees.map((e) => e.id).toSet();
     final selectedIds = state.selectedEmployees.map((e) => e.id).toList();
     final selectedNames = state.selectedEmployees.map((e) => e.name).toList();
@@ -349,6 +361,11 @@ class EventDetailsController extends Notifier<EventDetailsState> {
     required String materialsNeeded,
     bool applyToSeries = false,
   }) async {
+    // Let the active-employee seed settle before validating — otherwise a save
+    // fired during the seed's read sees an empty selection and spuriously fails
+    // "employees required" (or drops originals). Almost always already done.
+    await _seedFuture;
+
     final clientForValidation =
         state.selectedClient ??
         (!state.clientCleared && appointment.clientId.trim().isNotEmpty
@@ -409,22 +426,26 @@ class EventDetailsController extends Notifier<EventDetailsState> {
         seriesId: appointment.seriesId,
       );
 
+      final seriesEditor = AppointmentSeriesEditor(
+        ref.read(appointmentsRepositoryProvider),
+      );
       var futureBookings = 0;
       var removedBookings = 0;
       var updatedSiblings = 0;
       if (state.repeat != state.savedRepeat) {
-        final result = await _rewriteSeries(
+        final result = await seriesEditor.rewrite(
           updated: updated,
           appointment: appointment,
           id: id,
           start: start,
           end: end,
+          repeat: state.repeat,
         );
         updated = result.updated;
         futureBookings = result.futureBookings;
         removedBookings = result.removedBookings;
       } else if (applyToSeries && appointment.seriesId.isNotEmpty) {
-        updatedSiblings = await _propagateToSeries(
+        updatedSiblings = await seriesEditor.propagate(
           updated: updated,
           appointment: appointment,
           id: id,
@@ -468,95 +489,6 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       state = state.copyWith(isSaving: false);
       return EventDetailsFailed(e);
     }
-  }
-
-  /// The repeat rule changed — rewrite the series like a real calendar: drop
-  /// the old future visits and book the new cadence in one atomic batch.
-  /// Done/cancelled visits are kept as records; copies start 'pending' without
-  /// sharing pictures. Returns the series-stamped record plus the counts.
-  Future<({AppointmentRecord updated, int futureBookings, int removedBookings})>
-  _rewriteSeries({
-    required AppointmentRecord updated,
-    required AppointmentRecord appointment,
-    required String id,
-    required DateTime start,
-    required DateTime end,
-  }) async {
-    final repo = ref.read(appointmentsRepositoryProvider);
-    final seriesId = appointment.seriesId.isEmpty ? id : appointment.seriesId;
-    final withSeries = updated.copyWith(seriesId: seriesId);
-    final existing = appointment.seriesId.isEmpty
-        ? const <AppointmentRecord>[]
-        : await repo.getSeries(seriesId);
-    final deleteIds = futureSeriesIds(existing, excludeId: id, after: start);
-    final copies = [
-      for (final copyStart in state.repeat.occurrenceStartsAfter(start))
-        withSeries.copyWith(
-          id: repo.newDocId(),
-          startTime: copyStart,
-          endTime: occurrenceEnd(
-            originalStart: start,
-            originalEnd: end,
-            copyStart: copyStart,
-          ),
-          status: 'pending',
-          pictures: const [],
-        ),
-    ];
-    await repo.rewriteSeries(
-      updated: withSeries,
-      deleteIds: deleteIds,
-      copies: copies,
-    );
-    return (
-      updated: withSeries,
-      futureBookings: copies.length,
-      removedBookings: deleteIds.length,
-    );
-  }
-
-  /// Apply-to-all: propagate the edited details and time-of-day to this visit
-  /// and every future non-terminal sibling, keeping each sibling's own calendar
-  /// date so the schedule isn't disturbed. Status stays per-visit (never
-  /// propagated) and each visit keeps its own pictures. Past and done/cancelled
-  /// visits are left untouched. Returns the number of siblings updated.
-  Future<int> _propagateToSeries({
-    required AppointmentRecord updated,
-    required AppointmentRecord appointment,
-    required String id,
-    required DateTime start,
-    required DateTime end,
-  }) async {
-    final repo = ref.read(appointmentsRepositoryProvider);
-    final series = await repo.getSeries(appointment.seriesId);
-    final siblings = futureSeriesRecords(
-      series,
-      excludeId: id,
-      after: appointment.startTime,
-    );
-    final propagated = siblings.map((v) {
-      final copyStart = withTimeOfDay(v.startTime, start);
-      return v.copyWith(
-        title: updated.title,
-        clientId: updated.clientId,
-        clientName: updated.clientName,
-        clientPhone: updated.clientPhone,
-        address: updated.address,
-        employeeIds: updated.employeeIds,
-        employeeNames: updated.employeeNames,
-        notes: updated.notes,
-        materialsNeeded: updated.materialsNeeded,
-        repeat: updated.repeat,
-        startTime: copyStart,
-        endTime: occurrenceEnd(
-          originalStart: start,
-          originalEnd: end,
-          copyStart: copyStart,
-        ),
-      );
-    }).toList();
-    await repo.updateAppointments([updated, ...propagated]);
-    return propagated.length;
   }
 
   /// Returns null on success, or the error that caused the failure. With

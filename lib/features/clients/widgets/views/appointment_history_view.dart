@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
-import 'package:intl/intl.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -199,7 +199,6 @@ class _AppointmentHistoryViewState
     List<AppointmentRecord> items,
     int index,
     Map<String, Color> colorMap,
-    DateFormat dayFormat,
   ) {
     final app = items[index];
     final day = DateUtils.dateOnly(app.startTime);
@@ -223,7 +222,9 @@ class _AppointmentHistoryViewState
         if (showDay)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sp12),
-            child: SectionLabel(dayFormat.format(day).toUpperCase()),
+            child: SectionLabel(
+              DateUtilsHelper.formatDayHeader(day).toUpperCase(),
+            ),
           ),
         Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sp8),
@@ -242,8 +243,6 @@ class _AppointmentHistoryViewState
   @override
   Widget build(BuildContext context) {
     final colorMap = ref.watch(employeeColorMapProvider);
-    final locale = Intl.defaultLocale ?? 'en_CA';
-    final dayFormat = DateFormat('EEEE, MMMM d', locale);
 
     return ColoredBox(
       color: Theme.of(context).scaffoldBackgroundColor,
@@ -287,8 +286,8 @@ class _AppointmentHistoryViewState
                 ),
               Expanded(
                 child: _hasActiveFilter
-                    ? _buildFiltered(loaded, colorMap, dayFormat)
-                    : _buildPaged(state, fetchNextPage, colorMap, dayFormat),
+                    ? _buildFiltered(loaded, colorMap)
+                    : _buildPaged(state, fetchNextPage, colorMap),
               ),
             ],
           );
@@ -301,7 +300,6 @@ class _AppointmentHistoryViewState
     PagingState<int, AppointmentRecord> state,
     void Function() fetchNextPage,
     Map<String, Color> colorMap,
-    DateFormat dayFormat,
   ) {
     return RefreshIndicator(
       onRefresh: () async => _pagingController.refresh(),
@@ -311,7 +309,7 @@ class _AppointmentHistoryViewState
         padding: const EdgeInsets.all(AppSpacing.sp12),
         builderDelegate: PagedChildBuilderDelegate<AppointmentRecord>(
           itemBuilder: (context, _, index) =>
-              _historyItem(state.items ?? const [], index, colorMap, dayFormat),
+              _historyItem(state.items ?? const [], index, colorMap),
           firstPageProgressIndicatorBuilder: (_) => _skeleton(),
           firstPageErrorIndicatorBuilder: (_) => Center(
             child: Text(
@@ -336,38 +334,37 @@ class _AppointmentHistoryViewState
   Widget _buildFiltered(
     List<AppointmentRecord> loaded,
     Map<String, Color> colorMap,
-    DateFormat dayFormat,
   ) {
     final query = widget.searchQuery.trim();
     // No text query — chip filters alone operate over the loaded pages.
     if (query.isEmpty) {
-      return _filteredList(_applyFilters(loaded), colorMap, dayFormat);
+      return _filteredList(_applyFilters(loaded), colorMap);
     }
 
     // A search reaches the whole history window via the database (not just the
     // loaded pages). The loaded-page filter fills the gap until the debounce
     // settles and the server result arrives.
-    final local = _applyFilters(loaded);
+    // The loaded-page fallback, computed lazily: the steady-state `data` branch
+    // renders the server results and never needs it, so don't filter the loaded
+    // pages on every rebuild once the search has settled.
+    Widget localOr(Widget Function() onEmpty) {
+      final local = _applyFilters(loaded);
+      return local.isEmpty ? onEmpty() : _filteredList(local, colorMap);
+    }
+
     if (_committedQuery != query) {
-      return local.isEmpty
-          ? _skeleton()
-          : _filteredList(local, colorMap, dayFormat);
+      return localOr(_skeleton);
     }
 
     return ref
         .watch(historySearchProvider(query))
         .when(
-          data: (results) =>
-              _filteredList(_applyChips(results), colorMap, dayFormat),
-          loading: () => local.isEmpty
-              ? _skeleton()
-              : _filteredList(local, colorMap, dayFormat),
+          data: (results) => _filteredList(_applyChips(results), colorMap),
+          loading: () => localOr(_skeleton),
           // A failed search shouldn't read as "no history": when the local
           // fallback is also empty, surface an error, not the empty state.
           // Composes without logging (this is a builder).
-          error: (e, _) => local.isEmpty
-              ? _searchError(e)
-              : _filteredList(local, colorMap, dayFormat),
+          error: (e, _) => localOr(() => _searchError(e)),
         );
   }
 
@@ -389,14 +386,12 @@ class _AppointmentHistoryViewState
   Widget _filteredList(
     List<AppointmentRecord> filtered,
     Map<String, Color> colorMap,
-    DateFormat dayFormat,
   ) {
     if (filtered.isEmpty) return _buildEmptyState(context);
     return ListView.builder(
       padding: const EdgeInsets.all(AppSpacing.sp12),
       itemCount: filtered.length,
-      itemBuilder: (context, index) =>
-          _historyItem(filtered, index, colorMap, dayFormat),
+      itemBuilder: (context, index) => _historyItem(filtered, index, colorMap),
     );
   }
 

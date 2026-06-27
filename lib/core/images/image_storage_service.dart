@@ -1,15 +1,18 @@
 import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart';
 
 import 'package:scheduling/core/images/image_upload_failure.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 
 class ImageStorageService {
+  ImageStorageService({AppLogger? logger}) : _logger = logger ?? AppLogger();
+
   static const int maxUploadBytes = 8 * 1024 * 1024;
 
   final FirebaseStorage _storage = FirebaseStorage.instance;
+  final AppLogger _logger;
 
   Future<bool> _isValidImageFile(File file) async {
     final raf = await file.open();
@@ -64,8 +67,7 @@ class ImageStorageService {
         try {
           return await uploadImage(appointmentId, f);
         } catch (e, st) {
-          debugPrint('[ImageStorageService] upload failed for ${f.path}: $e');
-          debugPrintStack(stackTrace: st);
+          _logger.warn('IMG-UPLOAD uploadImage failed for ${f.path}', e, st);
           return null;
         }
       }),
@@ -96,24 +98,25 @@ class ImageStorageService {
         try {
           await deleteImage(img);
         } catch (e, st) {
-          debugPrint(
-            '[ImageStorageService] delete failed for ${img.storagePath}: $e',
+          _logger.warn(
+            'IMG-DEL deleteImage failed (orphaned bytes): ${img.storagePath}',
+            e,
+            st,
           );
-          debugPrintStack(stackTrace: st);
         }
       }),
     );
   }
 
-  static String _pathFromUrl(String url) {
+  String _pathFromUrl(String url) {
     if (url.isEmpty) return '';
     try {
       final parts = url.split('/o/');
       if (parts.length < 2) return '';
       final encoded = parts[1].split('?').first;
       return Uri.decodeComponent(encoded);
-    } catch (e) {
-      debugPrint('[ImageStorageService] _pathFromUrl failed for "$url": $e');
+    } catch (e, st) {
+      _logger.warn('IMG-DEL pathFromUrl failed', e, st);
       return '';
     }
   }

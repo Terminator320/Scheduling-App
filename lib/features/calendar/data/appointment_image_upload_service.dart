@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/images/image_storage_service.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
@@ -14,13 +14,16 @@ class AppointmentImageUploadService {
     required AppointmentsRepository appointments,
     required PhotoUploadNotifier notifier,
     ImageStorageService? storage,
+    AppLogger? logger,
   }) : _appointments = appointments,
        _notifier = notifier,
-       _storage = storage ?? ImageStorageService();
+       _storage = storage ?? ImageStorageService(),
+       _logger = logger ?? AppLogger();
 
   final AppointmentsRepository _appointments;
   final PhotoUploadNotifier _notifier;
   final ImageStorageService _storage;
+  final AppLogger _logger;
 
   void uploadInBackground({
     required String appointmentId,
@@ -59,11 +62,13 @@ class AppointmentImageUploadService {
           tooLargeFileNames: tooLargeNames,
         );
       }
-      debugPrint('[AppointmentImageUpload] done for $appointmentId');
     } catch (e, st) {
       _notifier.reportFailure(appointmentId, failedCount: newImages.length);
-      debugPrint('[AppointmentImageUpload] FAILED for $appointmentId: $e');
-      debugPrintStack(stackTrace: st);
+      _logger.warn(
+        'IMG-UPLOAD background run failed for $appointmentId',
+        e,
+        st,
+      );
     }
   }
 
@@ -104,10 +109,8 @@ class AppointmentImageUploadService {
       for (final f in newImages) {
         try {
           await f.delete();
-        } catch (e) {
-          debugPrint(
-            '[AppointmentImageUpload] temp-cleanup failed for ${f.path}: $e',
-          );
+        } catch (e, st) {
+          _logger.warn('IMG-UPLOAD temp cleanup failed for ${f.path}', e, st);
         }
       }
     }

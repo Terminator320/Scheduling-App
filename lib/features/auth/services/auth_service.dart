@@ -163,6 +163,10 @@ class AuthService {
     // be stale, so re-read the verified flag from the instance.
     final refreshed = _auth.currentUser ?? user;
     if (!refreshed.emailVerified) return;
+    // reload() refreshes emailVerified on the User but not the ID token's
+    // email_verified claim, which the resolveMyInvite callable now requires.
+    // Force a fresh token so the claim is current for that call.
+    await refreshed.getIdToken(true);
     final invite = await _employees.findInvitedEmployeeForCurrentUser();
     if (invite == null) return;
     await _employees.activateEmployee(docId: invite.docId, uid: user.uid);
