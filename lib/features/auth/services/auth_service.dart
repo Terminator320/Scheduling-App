@@ -94,6 +94,9 @@ class AuthService {
         case 'invalid-code':
           return const AuthFailureInvalidSignupCode();
       }
+      if (e.code == 'resource-exhausted') {
+        return const AuthFailureTooManyRequests();
+      }
       if (e.code == 'unavailable' || e.code == 'deadline-exceeded') {
         return const AuthFailureNetwork();
       }
