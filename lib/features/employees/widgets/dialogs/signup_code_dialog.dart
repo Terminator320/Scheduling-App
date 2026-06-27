@@ -43,7 +43,6 @@ class _SignupCodeDialogState extends State<_SignupCodeDialog> {
       title: Text(context.l10n.employees_signupCodeTitle),
       content: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(context.l10n.employees_shareThisCodeWith(widget.name)),
           const SizedBox(height: AppSpacing.sp16),

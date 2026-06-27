@@ -84,17 +84,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }
 
   @override
-  Future<String> regenerateSignupCode(String inviteDocId) async {
-    final res = await _functions
-        .httpsCallable('regenerateSignupCode')
-        .call<dynamic>({'inviteDocId': inviteDocId});
-    final data = (res.data as Map?)?.cast<String, dynamic>();
-    final code = data?['code'] as String?;
-    if (code == null || code.isEmpty) throw const EmployeesFailureUnknown();
-    return code;
-  }
-
-  @override
   Future<void> redeemSignupCode(String code) async {
     await _functions.httpsCallable('redeemSignupCode').call<dynamic>({
       'code': code,

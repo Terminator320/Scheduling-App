@@ -16,9 +16,6 @@ abstract class EmployeesRepository {
     required String colorValue,
   });
 
-  /// Issues a fresh code for a pending invite; returns it.
-  Future<String> regenerateSignupCode(String inviteDocId);
-
   /// Redeems a signup code for the current user (activates the invite).
   Future<void> redeemSignupCode(String code);
 
