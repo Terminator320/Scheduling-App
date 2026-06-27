@@ -10,6 +10,23 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.19.3+35] - 2026-06-26
+### Changed
+- **The app now adapts to small phones and large text sizes.** Appointment
+  cards, the appointment and client detail views, the add/edit forms, the
+  employee screens, and Settings now rearrange their contents — stacking
+  titles, buttons, and fields vertically — when the screen is narrow or you've
+  turned up the system text size, so everything stays readable and tappable.
+- **The slide-out menu now scrolls and never cuts off.** On shorter screens
+  (including phones held sideways) the navigation menu scrolls instead of
+  pushing items off-screen, and add/edit panels open taller so more of the form
+  is visible at once.
+
+### Fixed
+- **Long names, times, and labels no longer run off the edge.** Text that could
+  overflow or get clipped on appointment cards, list rows, and the top bar now
+  wraps or trims cleanly.
+
 ## [1.19.2+34] - 2026-06-25
 ### Changed
 - **Searching and scrolling the clients and appointment-history lists is now

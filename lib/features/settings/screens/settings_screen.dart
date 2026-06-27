@@ -180,8 +180,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             label: context.l10n.settings_textSize,
             trailing: Wrap(
               crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 4,
-              runSpacing: 4,
+              spacing: AppSpacing.sp4,
+              runSpacing: AppSpacing.sp4,
               children: [
                 SettingsTrailingPill(
                   label: _textScaleLabel(context, notifier.textScale),

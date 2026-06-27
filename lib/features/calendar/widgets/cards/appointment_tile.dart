@@ -116,7 +116,7 @@ class AppointmentTile extends StatelessWidget {
                           Container(
                             width: 7,
                             height: 7,
-                            margin: const EdgeInsets.only(top: 4),
+                            margin: const EdgeInsets.only(top: AppSpacing.sp4),
                             decoration: BoxDecoration(
                               color: accent,
                               shape: BoxShape.circle,

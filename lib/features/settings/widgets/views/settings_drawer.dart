@@ -247,7 +247,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
       Padding(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.sp12,
-          4,
+          AppSpacing.sp4,
           AppSpacing.sp12,
           0,
         ),
