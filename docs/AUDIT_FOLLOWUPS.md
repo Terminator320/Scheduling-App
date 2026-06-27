@@ -134,6 +134,15 @@ harness).
 
 ## 4. Redesign invited-employee signup — `resolveMyInvite` deploy blocker
 
+> **✅ DONE (2026-06-27).** Implemented as the one-time signup-code redesign — but
+> NOT the "defer to first verified sign-in" sketch below. Instead: an admin-only
+> `createEmployeeInvite` callable issues a per-invite code; `redeemSignupCode`
+> validates it server-side and activates the account immediately (no email
+> verification). `resolveMyInvite` was deleted, so the deploy blocker is gone.
+> See `docs/INVITED_SIGNUP_REDESIGN.md` (design) and
+> `docs/INVITED_SIGNUP_REDESIGN_PLAN.md` (implementation). The original sketch is
+> kept below for history.
+
 **Problem (DEPLOY BLOCKER).** The audit security fix made `resolveMyInvite`
 (`functions/account.js`) return `{found:false}` whenever
 `req.auth.token.email_verified !== true`, so an unverified caller can't learn

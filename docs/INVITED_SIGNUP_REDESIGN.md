@@ -1,8 +1,16 @@
 # Invited-employee signup redesign — one-time signup codes
 
 **Date:** 2026-06-27
-**Status:** Approved design, ready for implementation plan
+**Status:** ✅ Implemented (branch `moblie`).
 **Supersedes:** `docs/AUDIT_FOLLOWUPS.md` §4 (the deferred "redesign signup" item)
+
+> **Implementation delta:** the separate `regenerateSignupCode` callable and the
+> "Regenerate code" admin action (§3.2, §3.5, §5) were **dropped**. Instead,
+> `createEmployeeInvite` is **idempotent**: re-inviting an email that still has a
+> pending (`invited`) doc re-issues a fresh code (refreshing the editable fields
+> and replacing the code doc); an active/claimed account still errors
+> `email-exists`. This covers lost/expired codes and the migration of pre-existing
+> pending invites without a dedicated pending-invites UI.
 
 ---
 
