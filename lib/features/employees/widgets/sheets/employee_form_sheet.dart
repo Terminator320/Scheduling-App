@@ -12,6 +12,7 @@ import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/widgets/fields/employee_color_picker_row.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/features/employees/widgets/dialogs/signup_code_dialog.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
@@ -107,17 +108,20 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
           colorValue: colorValue,
           isAdmin: _isAdmin,
         );
+        if (!mounted) return;
+        Navigator.pop(context, true);
       } else {
-        await repo.addEmployee(
+        final code = await repo.createEmployeeInvite(
           name: name,
           email: email,
           phone: phone,
           colorValue: colorValue,
         );
+        if (!mounted) return;
+        await showSignupCodeDialog(context, name: name, code: code);
+        if (!mounted) return;
+        Navigator.pop(context, true);
       }
-
-      if (!mounted) return;
-      Navigator.pop(context, true);
     } catch (e, st) {
       if (e is EmployeesFailureEmailAlreadyExists) {
         if (!mounted) return;
