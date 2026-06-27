@@ -1,7 +1,11 @@
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {
-  assertPayloadShape, requireString, assertAdmin, enforceDurableRateLimit,
+  assertPayloadShape,
+  requireString,
+  assertAdmin,
+  enforceDurableRateLimit,
+  hasControlChar,
 } = require("./security");
 const {
   INVITE_CODE_TTL_MS, generateSignupCode, hashSignupCode, validateRedemption,
@@ -22,7 +26,7 @@ const REDEEM_RATE_WINDOW_MS = 15 * 60 * 1000;
  */
 function optionalString(data, key, maxLen) {
   const v = typeof data?.[key] === "string" ? data[key].trim() : "";
-  if (v.length > maxLen) {
+  if (v.length > maxLen || hasControlChar(v)) {
     throw new HttpsError("invalid-argument", `invalid-${key}`);
   }
   return v;
@@ -103,8 +107,13 @@ const redeemSignupCode = onCall(APP_CHECK, async (req) => {
   if (typeof tokenEmail !== "string" || tokenEmail === "") {
     throw new HttpsError("failed-precondition", "no-email-claim");
   }
+  // Key the limit by the target email, not the caller uid: an attacker can
+  // delete + re-register the same email to mint a fresh uid (the signup flow
+  // does exactly that on a failed attempt), which would reset a uid-keyed
+  // counter. The email pins the cap to the invite being guessed.
+  const rateKey = tokenEmail.trim().toLowerCase();
   await enforceDurableRateLimit(
-      "redeemSignupCode", req.auth.uid, REDEEM_RATE_MAX, REDEEM_RATE_WINDOW_MS);
+      "redeemSignupCode", rateKey, REDEEM_RATE_MAX, REDEEM_RATE_WINDOW_MS);
 
   const db = getFirestore();
   const codeRef = db.collection("signupCodes").doc(hashSignupCode(code));
