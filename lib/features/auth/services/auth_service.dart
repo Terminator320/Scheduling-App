@@ -134,19 +134,6 @@ class AuthService {
     } catch (_) {}
   }
 
-  // Best-effort resend of the email-verification link. Returns false (instead
-  // of throwing) when the send fails — e.g. Firebase rate-limits repeated
-  // requests — so the caller can fall back to a plain "please verify" message.
-  Future<bool> resendVerificationEmail(User user) async {
-    try {
-      await user.sendEmailVerification();
-      return true;
-    } catch (e, st) {
-      _logger.warn('resendVerificationEmail failed', e, st);
-      return false;
-    }
-  }
-
   Future<void> signOut() async {
     try {
       await _auth.signOut();

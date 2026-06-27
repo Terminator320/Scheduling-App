@@ -134,36 +134,11 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }
 
   @override
-  Future<InvitedEmployeeMatch?> findInvitedEmployeeForCurrentUser() async {
-    final response = await _functions
-        .httpsCallable('resolveMyInvite')
-        .call<dynamic>();
-    final payload = (response.data as Map?)?.cast<String, dynamic>();
-    if (payload == null || payload['found'] != true) return null;
-    final docId = payload['docId'] as String?;
-    final data = (payload['data'] as Map?)?.cast<String, dynamic>();
-    if (docId == null || data == null) return null;
-    return InvitedEmployeeMatch(docId: docId, data: data);
-  }
-
-  @override
   Future<UserUidMatch?> findUserByUid(String uid) async {
     final result = await _users.where('uid', isEqualTo: uid).limit(1).get();
     if (result.docs.isEmpty) return null;
     final doc = result.docs.first;
     return UserUidMatch(id: doc.id, data: doc.data());
-  }
-
-  @override
-  Future<void> activateEmployee({
-    required String docId,
-    required String uid,
-  }) async {
-    await _users.doc(docId).update({
-      'uid': uid,
-      'status': 'active',
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
   }
 
   @override

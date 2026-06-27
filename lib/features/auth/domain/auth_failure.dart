@@ -141,12 +141,10 @@ class AuthFailureUnknown extends AuthFailure {
       c.l10n.error_somethingWentWrongPleaseTryAgain;
 }
 
-// Thrown when createEmployeeAccount succeeded in creating the Firebase Auth
-// user but the follow-up rollback delete failed after the invite lookup
-// returned null (or errored). The Auth account is now orphaned: it has no
-// matching Firestore users doc and can't sign in successfully, but it does
-// block re-registration with the same email. Surface a message that tells
-// the admin what to do (delete the Auth user in console + re-invite).
+// Thrown when signUpWithCode created the Firebase Auth user but the rollback
+// delete failed after code redemption errored. The Auth account is now
+// orphaned: no matching Firestore users doc, blocks re-registration with the
+// same email. Tell the admin to delete the Auth user in console and re-invite.
 class AuthFailureAccountCreationIncomplete extends AuthFailure {
   const AuthFailureAccountCreationIncomplete();
   @override

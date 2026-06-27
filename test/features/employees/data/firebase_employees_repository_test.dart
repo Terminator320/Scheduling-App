@@ -205,17 +205,6 @@ void main() {
   });
 
   group('status transitions', () {
-    test('activateEmployee writes uid, active status, and updatedAt', () async {
-      await repo().activateEmployee(docId: 'e1', uid: 'uid-1');
-
-      final captured =
-          (verify(() => docRef.update(captureAny())).captured.single as Map)
-              .cast<String, dynamic>();
-      expect(captured['uid'], 'uid-1');
-      expect(captured['status'], 'active');
-      expect(captured.containsKey('updatedAt'), isTrue);
-    });
-
     test('deactivateEmployee writes disabled status and updatedAt', () async {
       await repo().deactivateEmployee('e1');
 
