@@ -49,9 +49,9 @@ const WAVE_BUSINESS_NAME = defineSecret("WAVE_BUSINESS_NAME");
 // `wave/*` modules — these functions are thin orchestrators that add auth,
 // admin, and rate-limit guards and translate Wave errors into HttpsErrors.
 //
-// App Check posture mirrors deleteAccount/resolveMyInvite: the two admin
-// callables run enforceAppCheck:false with a TODO(pre-ship) until Play
-// Integrity can mint verified tokens for store builds.
+// App Check posture mirrors deleteAccount: admin callables run
+// enforceAppCheck:false with a TODO(pre-ship) until Play Integrity can mint
+// verified tokens for store builds.
 
 /**
  * Reads the connected Wave `businessId` from the `wave/connection` doc, or

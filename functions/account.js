@@ -5,11 +5,10 @@ const {getFirestore} = require("firebase-admin/firestore");
 
 const {assertPayloadShape, enforceDurableRateLimit} = require("./security");
 
-// Auth-sensitive callables (resolveMyInvite, deleteAccount) are capped at
-// AUTH_RATE_MAX attempts per AUTH_RATE_WINDOW_MS. Unlike the in-memory Places
-// limiter, this is enforced in Firestore so the cap holds across function
-// instances and cold starts — a brute-force caller cannot multiply it by
-// maxInstances.
+// deleteAccount is an auth-sensitive callable capped at AUTH_RATE_MAX attempts
+// per AUTH_RATE_WINDOW_MS. Unlike the in-memory Places limiter, this is
+// enforced in Firestore so the cap holds across function instances and cold
+// starts — a brute-force caller cannot multiply it by maxInstances.
 const AUTH_RATE_MAX = 5;
 const AUTH_RATE_WINDOW_MS = 15 * 60 * 1000;
 
@@ -137,79 +136,4 @@ const deleteAccount = onCall(
     },
 );
 
-// Server-side resolver for the freshly-registered-user invite lookup.
-// Replaces the client-side Firestore query that hits permission-denied because
-// Firestore's rules engine cannot prove `resource.data.email ==
-// request.auth.token.email` from a list query's email-literal where clause.
-// Admin SDK bypasses rules; authority comes from `auth.token.email`, never
-// from a client-supplied string.
-const resolveMyInvite = onCall(
-    // TODO(pre-ship): set back to `enforceAppCheck: true` once the app ships
-    // through Play Store and Play Integrity can mint verified App Check
-    // tokens. Temporarily false so testers on Firebase App Distribution
-    // sideloads (UNRECOGNIZED_VERSION verdict) aren't blocked.
-    {enforceAppCheck: false},
-    async (req) => {
-      if (!req.auth || !req.auth.uid) {
-        throw new HttpsError("unauthenticated", "auth-required");
-      }
-      assertPayloadShape(req.data, new Set());
-      const tokenEmail = req.auth.token?.email;
-      if (typeof tokenEmail !== "string" || tokenEmail === "") {
-        throw new HttpsError("failed-precondition", "no-email-claim");
-      }
-      // Only a verified email proves ownership. Anyone can register an
-      // unverified account with a guessed email, so an unverified caller must
-      // not learn whether an invite exists or read its name/color/role — return
-      // the empty result, never the invite.
-      // FIXME(pre-deploy): createEmployeeAccount still looks up the invite
-      // BEFORE verification, so this gate breaks invited-employee signup once
-      // deployed. Do NOT deploy functions until signup defers invite
-      // resolution to first verified sign-in — see docs/AUDIT_FOLLOWUPS.md #4.
-      if (req.auth.token?.email_verified !== true) {
-        return {found: false};
-      }
-      // Rate-limit AFTER the cheap precondition checks (mirrors deleteAccount):
-      // a tokenless/precondition-failing retry must not record an attempt and
-      // burn one of the caller's own limited slots.
-      await enforceDurableRateLimit(
-          "resolveMyInvite",
-          req.auth.uid,
-          AUTH_RATE_MAX,
-          AUTH_RATE_WINDOW_MS,
-      );
-      const email = tokenEmail.trim().toLowerCase();
-      const db = getFirestore();
-      // Invites are employee-only — admin is granted post-activation, and
-      // firestore.rules forbids invited-admin self-activation. Resolving only
-      // employee invites keeps the callable consistent with that rule.
-      const snap = await db
-          .collection("users")
-          .where("email", "==", email)
-          .where("status", "==", "invited")
-          .where("role", "==", "employee")
-          .limit(1)
-          .get();
-      if (snap.empty) {
-        return {found: false};
-      }
-      const doc = snap.docs[0];
-      const d = doc.data();
-      // Project only the fields the signup/activation flow consumes — never
-      // return the whole users doc, so internal fields can't leak to the
-      // pre-activation account.
-      return {
-        found: true,
-        docId: doc.id,
-        data: {
-          name: d.name || "",
-          colorValue: d.colorValue || null,
-          role: d.role || "",
-          status: d.status || "",
-          email: d.email || "",
-        },
-      };
-    },
-);
-
-module.exports = {deleteAccount, resolveMyInvite};
+module.exports = {deleteAccount};
