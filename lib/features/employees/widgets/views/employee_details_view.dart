@@ -39,8 +39,6 @@ class EmployeeDetailsView extends ConsumerStatefulWidget {
 }
 
 class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
-  static const _fullWidthButton = Size(double.infinity, 48);
-
   bool _isDeleting = false;
   bool _isDisabling = false;
 
@@ -187,54 +185,109 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
               : context.l10n.common_employeeRoleValue,
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Icon(
-                Icons.palette_outlined,
-                size: 16,
-                color: theme.colorScheme.primary,
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.l10n.employees_employeeColor,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: widget.employee.color,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: theme.colorScheme.outlineVariant),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+        _ColorRow(color: widget.employee.color),
         const SizedBox(height: 24),
         const Divider(height: 1),
         const SizedBox(height: 16),
+        _ActionButtons(
+          isCurrentUserAdmin: widget.isCurrentUserAdmin,
+          isDisabled: isDisabled,
+          isDeleting: _isDeleting,
+          isDisabling: _isDisabling,
+          onEdit: () => widget.onAction('edit'),
+          onToggleStatus: _confirmDisable,
+          onDelete: _confirmDelete,
+        ),
+      ],
+    );
+  }
+}
+
+/// The employee colour swatch row (icon + label + colour dot).
+class _ColorRow extends StatelessWidget {
+  const _ColorRow({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: Icon(
+            Icons.palette_outlined,
+            size: 16,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.l10n.employees_employeeColor,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                border: Border.all(color: theme.colorScheme.outlineVariant),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Edit / (admin) Disable-or-Enable / Delete action stack for the detail view.
+class _ActionButtons extends StatelessWidget {
+  const _ActionButtons({
+    required this.isCurrentUserAdmin,
+    required this.isDisabled,
+    required this.isDeleting,
+    required this.isDisabling,
+    required this.onEdit,
+    required this.onToggleStatus,
+    required this.onDelete,
+  });
+
+  final bool isCurrentUserAdmin;
+  final bool isDisabled;
+  final bool isDeleting;
+  final bool isDisabling;
+  final VoidCallback onEdit;
+  final VoidCallback onToggleStatus;
+  final VoidCallback onDelete;
+
+  static const _fullWidthButton = Size(double.infinity, 48);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         FilledButton.icon(
-          onPressed: () => widget.onAction('edit'),
+          onPressed: onEdit,
           icon: const Icon(Icons.edit_outlined, size: 18),
           label: Text(context.l10n.common_edit),
           style: FilledButton.styleFrom(minimumSize: _fullWidthButton),
         ),
-        if (widget.isCurrentUserAdmin) ...[
+        if (isCurrentUserAdmin) ...[
           const SizedBox(height: AppSpacing.sp8),
           FilledButton.icon(
-            onPressed: _isDisabling ? null : _confirmDisable,
+            onPressed: isDisabling ? null : onToggleStatus,
             icon: BusyButtonIcon(
-              isBusy: _isDisabling,
+              isBusy: isDisabling,
               icon: isDisabled
                   ? Icons.lock_open_outlined
                   : Icons.block_outlined,
@@ -257,9 +310,9 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
         ],
         const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: _isDeleting ? null : _confirmDelete,
+          onPressed: isDeleting ? null : onDelete,
           icon: BusyButtonIcon(
-            isBusy: _isDeleting,
+            isBusy: isDeleting,
             icon: Icons.delete_outline,
             spinnerSize: 16,
             color: theme.colorScheme.error,

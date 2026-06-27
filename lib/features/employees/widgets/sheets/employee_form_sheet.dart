@@ -12,6 +12,7 @@ import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/widgets/fields/employee_color_picker_row.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
@@ -139,6 +140,21 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
   }
 
   Future<void> _toggleStatus() async {
+    final willDisable = !_isDisabled;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: willDisable
+          ? context.l10n.employees_disableEmployee
+          : context.l10n.employees_enableEmployee,
+      message: willDisable
+          ? context.l10n.employees_disableEmployeeConfirmBody
+          : context.l10n.employees_enableEmployeeConfirmBody,
+      confirmLabel: willDisable
+          ? context.l10n.employees_disableEmployee
+          : context.l10n.employees_enableEmployee,
+      destructive: willDisable,
+    );
+    if (!mounted || !confirmed) return;
     setState(() => _isTogglingStatus = true);
     final repo = ref.read(employeesRepositoryProvider);
     try {
@@ -147,7 +163,15 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
       } else {
         await repo.deactivateEmployee(widget.employee!.id);
       }
-      if (mounted) setState(() => _isDisabled = !_isDisabled);
+      if (!mounted) return;
+      setState(() => _isDisabled = !_isDisabled);
+      ref
+          .read(noticeServiceProvider)
+          .success(
+            _isDisabled
+                ? context.l10n.employees_employeeDisabledSuccessfully
+                : context.l10n.employees_employeeEnabledSuccessfully,
+          );
     } catch (e, st) {
       ref
           .read(loggerProvider)
@@ -401,6 +425,8 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
           label: context.l10n.employees_name,
           controller: _nameController,
           required: !_isEdit,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.next,
           maxLength: TextLimits.personName,
           errorText: _errors['name'],
           onChanged: (_) {
@@ -417,6 +443,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
           controller: _emailController,
           keyboard: TextInputType.emailAddress,
           required: !_isEdit,
+          textInputAction: TextInputAction.next,
           maxLength: TextLimits.email,
           errorText: _errors['email'],
           onChanged: (_) {

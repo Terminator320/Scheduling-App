@@ -14,15 +14,6 @@ class AppLogger {
   FirebaseCrashlytics get _crashlytics =>
       _crashlyticsOverride ?? FirebaseCrashlytics.instance;
 
-  void debug(String message) {
-    if (kDebugMode) _logger.d(message);
-  }
-
-  void info(String message) {
-    if (kDebugMode) _logger.i(message);
-    if (kReleaseMode) _crashlytics.log(message);
-  }
-
   void warn(String message, [Object? error, StackTrace? stack]) {
     if (kDebugMode) _logger.w(message, error: error, stackTrace: stack);
     if (kReleaseMode) {
@@ -30,24 +21,6 @@ class AppLogger {
       if (error != null) {
         _crashlytics.recordError(error, stack);
       }
-    }
-  }
-
-  void error(String message, [Object? error, StackTrace? stack]) {
-    if (kDebugMode) _logger.e(message, error: error, stackTrace: stack);
-    if (kReleaseMode) {
-      _crashlytics
-        ..log(message)
-        ..recordError(error ?? message, stack);
-    }
-  }
-
-  void fatal(Object error, StackTrace stack, {String? reason}) {
-    if (kDebugMode) {
-      _logger.e(reason ?? 'Fatal error', error: error, stackTrace: stack);
-    }
-    if (kReleaseMode) {
-      _crashlytics.recordError(error, stack, reason: reason, fatal: true);
     }
   }
 }

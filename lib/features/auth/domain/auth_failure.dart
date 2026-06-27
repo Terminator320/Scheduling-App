@@ -7,7 +7,6 @@ enum AuthErrorContext {
   login,
   register,
   forgotPassword,
-  passwordReset,
   reauthentication,
   general,
 }

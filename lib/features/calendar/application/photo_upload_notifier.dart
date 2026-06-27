@@ -11,8 +11,6 @@ class PhotoUploadFailure {
   final String appointmentId;
   final int failedCount;
   final List<String> tooLargeFileNames;
-
-  bool get hasErrors => failedCount > 0 || tooLargeFileNames.isNotEmpty;
 }
 
 class PhotoUploadNotifier {

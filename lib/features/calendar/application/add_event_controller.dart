@@ -190,6 +190,9 @@ class AddEventController extends Notifier<AddEventState> {
     required String materialsNeeded,
     bool forceBusy = false,
   }) async {
+    // Reentrancy guard: a second tap while a submit (including the conflict
+    // check round-trip) is in flight must not create a duplicate appointment.
+    if (state.isSubmitting) return const AddEventInvalid();
     final errors = AppointmentFormValidator.validate(
       AppointmentFormInput(
         title: title,
@@ -215,6 +218,10 @@ class AddEventController extends Notifier<AddEventState> {
 
     final repo = ref.read(appointmentsRepositoryProvider);
 
+    // Mark in-flight before the conflict-check round-trip so the Save button
+    // disables on the first tap and the guard above blocks a second tap.
+    state = state.copyWith(isSubmitting: true);
+
     if (!forceBusy) {
       final busy = await repo.findBusyEmployees(
         candidates: state.selectedEmployees,
@@ -222,6 +229,9 @@ class AddEventController extends Notifier<AddEventState> {
         end: end,
       );
       if (busy.isNotEmpty) {
+        // Hand off to the busy-confirm dialog — not an error — so clear the
+        // in-flight flag and let the user decide whether to force.
+        state = state.copyWith(isSubmitting: false);
         return AddEventBusyEmployees(
           busyEmployees: busy,
           start: start,
@@ -229,8 +239,6 @@ class AddEventController extends Notifier<AddEventState> {
         );
       }
     }
-
-    state = state.copyWith(isSubmitting: true);
 
     try {
       final docId = repo.newDocId();

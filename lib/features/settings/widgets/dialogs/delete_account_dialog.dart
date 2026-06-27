@@ -64,6 +64,9 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
               labelText: context.l10n.common_password,
               border: const OutlineInputBorder(),
               suffixIcon: IconButton(
+                tooltip: _obscure
+                    ? context.l10n.auth_showPassword
+                    : context.l10n.auth_hidePassword,
                 icon: Icon(
                   _obscure
                       ? Icons.visibility_outlined

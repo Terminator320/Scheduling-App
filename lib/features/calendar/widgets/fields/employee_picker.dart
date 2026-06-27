@@ -51,51 +51,59 @@ class EmployeePicker extends StatelessWidget {
                 (e) => e.id == employee.id,
               );
 
-              return GestureDetector(
-                onTap: selectable ? () => onToggle?.call(employee) : null,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.sp8,
-                    AppSpacing.sp4,
-                    AppSpacing.sp12,
-                    AppSpacing.sp4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? scheme.primaryContainer
-                        : scheme.surfaceContainerHighest,
-                    border: Border.all(
-                      color: hasError && !isSelected
-                          ? scheme.error
-                          : isSelected
-                          ? scheme.primary
-                          : scheme.outlineVariant,
-                      width: 1.5,
+              return Semantics(
+                button: selectable,
+                selected: isSelected,
+                label: employee.name,
+                excludeSemantics: true,
+                child: GestureDetector(
+                  onTap: selectable ? () => onToggle?.call(employee) : null,
+                  child: Container(
+                    alignment: Alignment.center,
+                    constraints: const BoxConstraints(minHeight: 44),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.sp8,
+                      AppSpacing.sp4,
+                      AppSpacing.sp12,
+                      AppSpacing.sp4,
                     ),
-                    borderRadius: BorderRadius.circular(AppRadius.rFull),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AppAvatar(
-                        name: employee.name,
-                        color: employee.color,
-                        size: AvatarSize.xs,
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? scheme.primaryContainer
+                          : scheme.surfaceContainerHighest,
+                      border: Border.all(
+                        color: hasError && !isSelected
+                            ? scheme.error
+                            : isSelected
+                            ? scheme.primary
+                            : scheme.outlineVariant,
+                        width: 1.5,
                       ),
-                      const SizedBox(width: AppSpacing.sp8),
-                      Text(
-                        employee.name.split(' ').first,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: isSelected
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                          color: isSelected
-                              ? scheme.primary
-                              : scheme.onSurfaceVariant,
+                      borderRadius: BorderRadius.circular(AppRadius.rFull),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AppAvatar(
+                          name: employee.name,
+                          color: employee.color,
+                          size: AvatarSize.xs,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: AppSpacing.sp8),
+                        Text(
+                          employee.name.split(' ').first,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                            color: isSelected
+                                ? scheme.primary
+                                : scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               );

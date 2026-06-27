@@ -109,13 +109,17 @@ void main() {
   // ── WaveSettingsSection widget ────────────────────────────────────────────
 
   group('WaveSettingsSection', () {
-    testWidgets('shows Connect and Import buttons', (tester) async {
+    testWidgets('shows Connect and hides Import when not connected', (
+      tester,
+    ) async {
       final service = _mockService();
       await tester.pumpWidget(_wrapSection(service));
       await tester.pumpAndSettle();
 
       expect(find.text('Connect to Wave'), findsOneWidget);
-      expect(find.text('Import customers from Wave'), findsOneWidget);
+      // Import is gated on a live connection — a tap while disconnected is
+      // guaranteed to fail, so it isn't offered until Connect succeeds.
+      expect(find.text('Import customers from Wave'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
@@ -140,30 +144,16 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('Import button is enabled without connecting first', (
-      tester,
-    ) async {
+    testWidgets('Import is not offered before connecting', (tester) async {
       final service = _mockService();
-      final notices = NoticeService();
-      final emitted = <AppNotice>[];
-      notices.stream.listen(emitted.add);
 
-      // Server returns not-bootstrapped — surfaces as a WaveValidation notice.
-      when(service.importCustomers).thenThrow(
-        const WaveValidation(reason: 'notConnected'),
-      );
-
-      await tester.pumpWidget(_wrapSection(service, noticeService: notices));
+      await tester.pumpWidget(_wrapSection(service));
       await tester.pumpAndSettle();
 
-      // Tap Import without ever tapping Connect — should call the service.
-      await tester.tap(find.text('Import customers from Wave'));
-      await tester.pumpAndSettle();
-
-      verify(service.importCustomers).called(1);
-      // The not-connected failure surfaces as an error notice.
-      expect(emitted, isNotEmpty);
-      expect(emitted.last, isA<NoticeError>());
+      // Import only appears once connected, so a disconnected admin can't
+      // trigger a guaranteed-to-fail import in the first place.
+      expect(find.text('Import customers from Wave'), findsNothing);
+      verifyNever(service.importCustomers);
       expect(tester.takeException(), isNull);
     });
 
@@ -290,9 +280,19 @@ void main() {
       final emitted = <AppNotice>[];
       notices.stream.listen(emitted.add);
 
+      // Connect first so Import is offered, then make the import fail.
+      when(service.bootstrap).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Test Biz',
+        ),
+      );
       when(service.importCustomers).thenThrow(const WaveAuthInvalid());
 
       await tester.pumpWidget(_wrapSection(service, noticeService: notices));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Connect to Wave'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Import customers from Wave'));

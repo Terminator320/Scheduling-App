@@ -7,6 +7,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -17,8 +18,6 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart'
-    show AppointmentStatus;
 
 part 'event_details_controller.freezed.dart';
 
@@ -304,6 +303,44 @@ class EventDetailsController extends Notifier<EventDetailsState> {
   void setSaving({required bool busy}) =>
       state = state.copyWith(isSaving: busy);
 
+  /// Builds the final assignee id/name lists for a save: the picker's active
+  /// selection plus any original assignees that aren't in the active-employee
+  /// list. Those were never shown in the picker (disabled/removed staff), so
+  /// the user couldn't have deselected them — dropping them would silently
+  /// unassign and change who can see this visit (visibility keys on
+  /// `employeeIds`). The active set is resolved the same way seeding does: an
+  /// empty/null cached value means the stream hasn't settled (authUid lag), not
+  /// that there are no active staff — so fall back to a fresh read, or a
+  /// deselected employee would be mistaken for a never-shown one and re-added.
+  Future<({List<String> ids, List<String> names})> _resolveAssignees(
+    AppointmentRecord appointment,
+  ) async {
+    final cachedEmployees = ref.read(employeesStreamProvider).value;
+    final activeEmployees = cachedEmployees == null || cachedEmployees.isEmpty
+        ? await ref.read(employeesRepositoryProvider).watchEmployees().first
+        : cachedEmployees;
+    final activeIds = activeEmployees.map((e) => e.id).toSet();
+    final selectedIds = state.selectedEmployees.map((e) => e.id).toList();
+    final selectedNames = state.selectedEmployees.map((e) => e.name).toList();
+    final retainedIds = <String>[];
+    final retainedNames = <String>[];
+    for (var i = 0; i < appointment.employeeIds.length; i++) {
+      final origId = appointment.employeeIds[i];
+      if (!activeIds.contains(origId) && !selectedIds.contains(origId)) {
+        retainedIds.add(origId);
+        retainedNames.add(
+          i < appointment.employeeNames.length
+              ? appointment.employeeNames[i]
+              : '',
+        );
+      }
+    }
+    return (
+      ids: [...selectedIds, ...retainedIds],
+      names: [...selectedNames, ...retainedNames],
+    );
+  }
+
   Future<EventDetailsSaveOutcome> save(
     AppointmentRecord appointment, {
     required String title,
@@ -315,7 +352,7 @@ class EventDetailsController extends Notifier<EventDetailsState> {
     final clientForValidation =
         state.selectedClient ??
         (!state.clientCleared && appointment.clientId.trim().isNotEmpty
-            ? state.client ?? _placeholderClient(appointment)
+            ? state.client ?? placeholderClient(appointment)
             : null);
 
     final errors = AppointmentFormValidator.validate(
@@ -352,34 +389,7 @@ class EventDetailsController extends Notifier<EventDetailsState> {
 
     try {
       final pickedClient = state.selectedClient;
-      // Preserve assignees that aren't in the active-employee list: they were
-      // never shown in the picker (disabled/removed staff), so the user could
-      // not have deselected them. Dropping them would silently unassign and
-      // change who can see this visit (visibility keys on employeeIds).
-      // Resolve the active set the same way seeding does: an empty/null cached
-      // value means the stream hasn't settled (authUid lag), not that there are
-      // no active staff — fall back to a fresh read so a deselected employee
-      // isn't mistaken for a never-shown one and silently re-added.
-      final cachedEmployees = ref.read(employeesStreamProvider).value;
-      final activeEmployees = cachedEmployees == null || cachedEmployees.isEmpty
-          ? await ref.read(employeesRepositoryProvider).watchEmployees().first
-          : cachedEmployees;
-      final activeIds = activeEmployees.map((e) => e.id).toSet();
-      final selectedIds = state.selectedEmployees.map((e) => e.id).toList();
-      final selectedNames = state.selectedEmployees.map((e) => e.name).toList();
-      final retainedIds = <String>[];
-      final retainedNames = <String>[];
-      for (var i = 0; i < appointment.employeeIds.length; i++) {
-        final origId = appointment.employeeIds[i];
-        if (!activeIds.contains(origId) && !selectedIds.contains(origId)) {
-          retainedIds.add(origId);
-          retainedNames.add(
-            i < appointment.employeeNames.length
-                ? appointment.employeeNames[i]
-                : '',
-          );
-        }
-      }
+      final assignees = await _resolveAssignees(appointment);
       var updated = AppointmentRecord(
         id: id,
         title: title.trim(),
@@ -389,8 +399,8 @@ class EventDetailsController extends Notifier<EventDetailsState> {
         clientName: pickedClient?.displayName ?? appointment.clientName,
         clientPhone: pickedClient?.phone ?? appointment.clientPhone,
         address: address.trim(),
-        employeeIds: [...selectedIds, ...retainedIds],
-        employeeNames: [...selectedNames, ...retainedNames],
+        employeeIds: assignees.ids,
+        employeeNames: assignees.names,
         notes: notes.trim(),
         materialsNeeded: materialsNeeded.trim(),
         pictures: state.existingImages,
@@ -478,7 +488,7 @@ class EventDetailsController extends Notifier<EventDetailsState> {
     final existing = appointment.seriesId.isEmpty
         ? const <AppointmentRecord>[]
         : await repo.getSeries(seriesId);
-    final deleteIds = _futureSeriesIds(existing, excludeId: id, after: start);
+    final deleteIds = futureSeriesIds(existing, excludeId: id, after: start);
     final copies = [
       for (final copyStart in state.repeat.occurrenceStartsAfter(start))
         withSeries.copyWith(
@@ -519,13 +529,13 @@ class EventDetailsController extends Notifier<EventDetailsState> {
   }) async {
     final repo = ref.read(appointmentsRepositoryProvider);
     final series = await repo.getSeries(appointment.seriesId);
-    final siblings = _futureSeriesRecords(
+    final siblings = futureSeriesRecords(
       series,
       excludeId: id,
       after: appointment.startTime,
     );
     final propagated = siblings.map((v) {
-      final copyStart = _withTimeOfDay(v.startTime, start);
+      final copyStart = withTimeOfDay(v.startTime, start);
       return v.copyWith(
         title: updated.title,
         clientId: updated.clientId,
@@ -566,7 +576,7 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       final orphanedImages = <AppointmentImage>[...appointment.pictures];
       if (includeFuture && appointment.seriesId.isNotEmpty) {
         final series = await repo.getSeries(appointment.seriesId);
-        final futureIds = _futureSeriesIds(
+        final futureIds = futureSeriesIds(
           series,
           excludeId: id,
           after: appointment.startTime,
@@ -613,53 +623,6 @@ class EventDetailsController extends Notifier<EventDetailsState> {
     }
   }
 }
-
-/// Ids of the series visits after [after], skipping [excludeId] and any
-/// visit already done or cancelled (those stay as records).
-List<String> _futureSeriesIds(
-  List<AppointmentRecord> series, {
-  required String excludeId,
-  required DateTime after,
-}) => [
-  for (final a in _futureSeriesRecords(
-    series,
-    excludeId: excludeId,
-    after: after,
-  ))
-    a.id!,
-];
-
-/// Series visits after [after], skipping [excludeId] and any visit already
-/// done or cancelled (those stay as records) — the targets an edit or delete
-/// propagates to.
-List<AppointmentRecord> _futureSeriesRecords(
-  List<AppointmentRecord> series, {
-  required String excludeId,
-  required DateTime after,
-}) => [
-  for (final a in series)
-    if (a.id != null &&
-        a.id != excludeId &&
-        a.startTime.isAfter(after) &&
-        !AppointmentStatus.fromRaw(a.status).isTerminal)
-      a,
-];
-
-/// [date]'s calendar day carrying [timeSource]'s time of day.
-DateTime _withTimeOfDay(DateTime date, DateTime timeSource) => DateTime(
-  date.year,
-  date.month,
-  date.day,
-  timeSource.hour,
-  timeSource.minute,
-);
-
-ClientRecord _placeholderClient(AppointmentRecord a) => ClientRecord(
-  id: a.clientId,
-  name: a.clientName,
-  phone: a.clientPhone,
-  address: a.address,
-);
 
 final eventDetailsControllerProvider = NotifierProvider.autoDispose
     .family<EventDetailsController, EventDetailsState, AppointmentRecord>(

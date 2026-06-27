@@ -44,8 +44,6 @@ abstract class AppointmentsRepository {
   /// Deletes every appointment in [ids] atomically (all-or-nothing).
   Future<void> deleteAppointments(List<String> ids);
 
-  Stream<List<AppointmentRecord>> watchAll();
-
   Stream<List<AppointmentRecord>> watchInRange(AppointmentDateRange range);
 
   /// One newest-first page of terminal (done/cancelled) appointments.

@@ -19,6 +19,7 @@ import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/info_card.dart';
+import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/quick_action_button.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
@@ -173,6 +174,14 @@ class DetailsViewBody extends ConsumerWidget {
             }
           },
           onCancel: () async {
+            final confirmed = await showConfirmDialog(
+              context,
+              title: context.l10n.calendar_cancelAppointment,
+              message: context.l10n.calendar_cancelledJobsAreSavedToHistory,
+              confirmLabel: context.l10n.calendar_cancelAppointment,
+              destructive: true,
+            );
+            if (!confirmed || !context.mounted) return;
             if (await notifier.cancelAppointment(appointment)) {
               if (!context.mounted) return;
               ref

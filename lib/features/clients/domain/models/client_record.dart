@@ -110,6 +110,4 @@ abstract class ClientRecord with _$ClientRecord {
   };
 
   String get displayName => name;
-
-  List<ClientContact> get displayContact => contacts;
 }
