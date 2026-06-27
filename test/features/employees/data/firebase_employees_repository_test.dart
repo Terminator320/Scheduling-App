@@ -13,6 +13,11 @@ class _MockFirestore extends Mock implements FirebaseFirestore {}
 
 class _MockFirebaseFunctions extends Mock implements FirebaseFunctions {}
 
+class _MockHttpsCallable extends Mock implements HttpsCallable {}
+
+class _MockHttpsCallableResult extends Mock
+    implements HttpsCallableResult<dynamic> {}
+
 class _MockCollection extends Mock
     implements CollectionReference<Map<String, dynamic>> {}
 
@@ -75,43 +80,88 @@ void main() {
   FirebaseEmployeesRepository repo() =>
       FirebaseEmployeesRepository(firestore, functions: functions);
 
-  group('addEmployee', () {
-    test(
-      'throws EmployeesFailureEmailAlreadyExists when email already in use',
-      () async {
-        final existingDoc = _MockQueryDocSnapshot();
-        when(() => snapshot.docs).thenReturn([existingDoc]);
+  group('createEmployeeInvite', () {
+    test('returns the code and lowercases the email', () async {
+      final callable = _MockHttpsCallable();
+      final result = _MockHttpsCallableResult();
+      when(
+        () => functions.httpsCallable('createEmployeeInvite'),
+      ).thenReturn(callable);
+      when(() => result.data).thenReturn({'code': 'K7Q2-9MZ4-XR8T'});
+      when(
+        () => callable.call<dynamic>(any()),
+      ).thenAnswer((_) async => result);
 
+      final repo = FirebaseEmployeesRepository(firestore, functions: functions);
+      final code = await repo.createEmployeeInvite(
+        name: 'A',
+        email: 'A@B.com',
+        phone: '',
+        colorValue: '1',
+      );
+
+      expect(code, 'K7Q2-9MZ4-XR8T');
+      final captured = verify(
+        () => callable.call<dynamic>(captureAny()),
+      ).captured.single;
+      expect(
+        (captured as Map).cast<String, dynamic>()['email'],
+        'a@b.com',
+      );
+    });
+
+    test(
+      'maps email-exists to EmployeesFailureEmailAlreadyExists',
+      () async {
+        final callable = _MockHttpsCallable();
+        when(
+          () => functions.httpsCallable('createEmployeeInvite'),
+        ).thenReturn(callable);
+        when(() => callable.call<dynamic>(any())).thenThrow(
+          FirebaseFunctionsException(
+            message: 'email-exists',
+            code: 'already-exists',
+          ),
+        );
+        final repo = FirebaseEmployeesRepository(
+          firestore,
+          functions: functions,
+        );
         expect(
-          () => repo().addEmployee(
-            name: 'Alice',
-            email: 'alice@example.com',
-            phone: '555-1234',
-            colorValue: '0xFF0000FF',
+          () => repo.createEmployeeInvite(
+            name: 'A',
+            email: 'a@b.com',
+            phone: '',
+            colorValue: '1',
           ),
           throwsA(isA<EmployeesFailureEmailAlreadyExists>()),
         );
       },
     );
+  });
 
-    test('writes normalized email and createdAt when no duplicate', () async {
-      when(() => snapshot.docs).thenReturn(const []);
+  group('redeemSignupCode', () {
+    test('forwards the code to the callable', () async {
+      final callable = _MockHttpsCallable();
+      final result = _MockHttpsCallableResult();
+      when(
+        () => functions.httpsCallable('redeemSignupCode'),
+      ).thenReturn(callable);
+      when(() => result.data).thenReturn({'role': 'employee', 'name': 'A'});
+      when(
+        () => callable.call<dynamic>(any()),
+      ).thenAnswer((_) async => result);
 
-      await repo().addEmployee(
-        name: 'Bob',
-        email: '  BOB@EXAMPLE.COM  ',
-        phone: '555-0000',
-        colorValue: '0xFF0000FF',
+      final repo = FirebaseEmployeesRepository(firestore, functions: functions);
+      await repo.redeemSignupCode('K7Q2-9MZ4-XR8T');
+
+      final captured = verify(
+        () => callable.call<dynamic>(captureAny()),
+      ).captured.single;
+      expect(
+        (captured as Map).cast<String, dynamic>()['code'],
+        'K7Q2-9MZ4-XR8T',
       );
-
-      final captured =
-          (verify(() => collection.add(captureAny())).captured.single as Map)
-              .cast<String, dynamic>();
-      expect(captured['email'], 'bob@example.com');
-      expect(captured['name'], 'Bob');
-      expect(captured['status'], 'invited');
-      expect(captured['role'], 'employee');
-      expect(captured.containsKey('createdAt'), isTrue);
     });
   });
 

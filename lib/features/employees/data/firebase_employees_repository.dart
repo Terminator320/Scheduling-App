@@ -54,34 +54,50 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }
 
   @override
-  Future<void> addEmployee({
+  Future<String> createEmployeeInvite({
     required String name,
     required String email,
     required String phone,
     required String colorValue,
   }) async {
-    final normalizedEmail = email.trim().toLowerCase();
-
-    final existing = await _users
-        .where('email', isEqualTo: normalizedEmail)
-        .limit(1)
-        .get();
-
-    if (existing.docs.isNotEmpty) {
-      throw const EmployeesFailureEmailAlreadyExists();
+    try {
+      final res = await _functions
+          .httpsCallable('createEmployeeInvite')
+          .call<dynamic>({
+            'name': name.trim(),
+            'email': email.trim().toLowerCase(),
+            'phone': phone.trim(),
+            'colorValue': colorValue,
+          });
+      final data = (res.data as Map?)?.cast<String, dynamic>();
+      final code = data?['code'] as String?;
+      if (code == null || code.isEmpty) {
+        throw const EmployeesFailureUnknown();
+      }
+      return code;
+    } on FirebaseFunctionsException catch (e) {
+      if (e.message == 'email-exists') {
+        throw const EmployeesFailureEmailAlreadyExists();
+      }
+      rethrow;
     }
+  }
 
-    await _users.add({
-      'name': name.trim(),
-      'email': normalizedEmail,
-      'phone': phone.trim(),
-      // Always employee — admin is granted post-activation via updateEmployee
-      // (invite self-activation is employee-only in firestore.rules).
-      'role': 'employee',
-      'status': 'invited',
-      'uid': '',
-      'colorValue': colorValue,
-      'createdAt': FieldValue.serverTimestamp(),
+  @override
+  Future<String> regenerateSignupCode(String inviteDocId) async {
+    final res = await _functions
+        .httpsCallable('regenerateSignupCode')
+        .call<dynamic>({'inviteDocId': inviteDocId});
+    final data = (res.data as Map?)?.cast<String, dynamic>();
+    final code = data?['code'] as String?;
+    if (code == null || code.isEmpty) throw const EmployeesFailureUnknown();
+    return code;
+  }
+
+  @override
+  Future<void> redeemSignupCode(String code) async {
+    await _functions.httpsCallable('redeemSignupCode').call<dynamic>({
+      'code': code,
     });
   }
 
