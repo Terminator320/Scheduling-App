@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -51,68 +52,53 @@ class AuthService {
     return _auth.sendPasswordResetEmail(email: email.trim().toLowerCase());
   }
 
-  Future<UserCredential> createEmployeeAccount({
+  /// Invited-employee signup. Registers (or adopts an existing account), then
+  /// redeems the admin-issued one-time code, which activates the account
+  /// server-side. On redemption failure the freshly-created Auth user is rolled
+  /// back so no orphan is left.
+  Future<void> signUpWithCode({
     required String email,
     required String password,
+    required String code,
   }) async {
-    // A previous attempt can orphan an Auth user (the invite lookup or the
-    // rollback delete failed), and that orphan then blocks re-registration
-    // with `email-already-in-use`. Adopt it by signing in so we can re-check
-    // the invite and resend verification instead of dead-ending the user.
-    // signIn rethrows wrong-password / invalid-credential when the email is
-    // someone else's, which surfaces as the usual auth failure.
+    final normalizedEmail = email.trim().toLowerCase();
     UserCredential credential;
     var freshlyCreated = true;
     try {
-      credential = await register(email: email, password: password);
+      credential = await register(email: normalizedEmail, password: password);
     } on FirebaseAuthException catch (e) {
       if (e.code != 'email-already-in-use') rethrow;
-      credential = await signIn(email: email, password: password);
+      credential = await signIn(email: normalizedEmail, password: password);
       freshlyCreated = false;
     }
 
-    final user = credential.user!;
-
-    // FIXME(pre-deploy): this pre-verification invite lookup resolves to null
-    // once the resolveMyInvite email_verified gate deploys, breaking signup.
-    // Redesign to defer invite resolution to first verified sign-in before
-    // deploying functions — see docs/AUDIT_FOLLOWUPS.md #4.
-    InvitedEmployeeMatch? invitedEmployee;
     try {
-      invitedEmployee = await _employees.findInvitedEmployeeForCurrentUser();
+      await _employees.redeemSignupCode(code.trim());
     } catch (e, st) {
-      _logger.warn(
-        'createEmployeeAccount: findInvitedEmployeeForCurrentUser failed',
-        e,
-        st,
-      );
-      // Only roll back an account we freshly created this call — never delete
-      // an adopted pre-existing account on a transient lookup failure.
+      _logger.warn('signUpWithCode: redeemSignupCode failed', e, st);
+      final failure = _mapRedemptionError(e);
       if (freshlyCreated) {
-        await _rollbackOrFailLoud(credential, reason: 'invite-lookup-failed');
+        await _rollbackOrFailLoud(credential, reason: 'code-redemption-failed');
       } else {
         await _signOutQuietly();
       }
-      rethrow;
+      throw failure;
     }
+  }
 
-    if (invitedEmployee != null) {
-      await user.sendEmailVerification();
-      return credential;
-    }
-
-    // No invite matches this email. An adopted account that's already
-    // provisioned (has a `users` doc keyed by uid) is a real account — tell
-    // them to sign in, never delete it. Only a true orphan gets cleaned up.
-    if (!freshlyCreated) {
-      final provisioned = await _employees.findUserByUid(user.uid);
-      if (provisioned != null) {
-        await _signOutQuietly();
-        throw const AuthFailureEmailAlreadyInUse();
+  AuthFailure _mapRedemptionError(Object e) {
+    if (e is FirebaseFunctionsException) {
+      switch (e.message) {
+        case 'code-expired':
+          return const AuthFailureSignupCodeExpired();
+        case 'invalid-code':
+          return const AuthFailureInvalidSignupCode();
+      }
+      if (e.code == 'unavailable' || e.code == 'deadline-exceeded') {
+        return const AuthFailureNetwork();
       }
     }
-    await _rollbackOrFailLoud(credential, reason: 'no-invite-found');
-    throw const AuthFailureNotAuthorized();
+    return const AuthFailureUnknown();
   }
 
   // Best-effort cleanup of the Auth user we just created. When this delete
@@ -132,7 +118,7 @@ class AuthService {
       await user.delete();
     } catch (e, st) {
       _logger.warn(
-        'createEmployeeAccount: rollback delete failed ($reason); '
+        'signUpWithCode: rollback delete failed ($reason); '
         'orphan Auth user left for uid=${user.uid}',
         e,
         st,
@@ -159,21 +145,6 @@ class AuthService {
       _logger.warn('resendVerificationEmail failed', e, st);
       return false;
     }
-  }
-
-  Future<void> tryActivateInvitedEmployee(User user) async {
-    await user.reload();
-    // reload() refreshes the auth instance's user; the passed-in snapshot can
-    // be stale, so re-read the verified flag from the instance.
-    final refreshed = _auth.currentUser ?? user;
-    if (!refreshed.emailVerified) return;
-    // reload() refreshes emailVerified on the User but not the ID token's
-    // email_verified claim, which the resolveMyInvite callable now requires.
-    // Force a fresh token so the claim is current for that call.
-    await refreshed.getIdToken(true);
-    final invite = await _employees.findInvitedEmployeeForCurrentUser();
-    if (invite == null) return;
-    await _employees.activateEmployee(docId: invite.docId, uid: user.uid);
   }
 
   Future<void> signOut() async {
