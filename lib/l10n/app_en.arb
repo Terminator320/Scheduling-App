@@ -1391,6 +1391,10 @@
   "@error_introLoadHistory": {"description": "Error intro for HIST-LOAD"},
   "error_introLoadClients": "Couldn't load clients",
   "@error_introLoadClients": {"description": "Error intro for CLI-LIST"},
+  "error_thatCodeIsntValidAskYourAdmin": "That code isn't valid. Ask your admin for a new one.",
+  "@error_thatCodeIsntValidAskYourAdmin": { "description": "Shown when a signup code is wrong, already used, or for a different email." },
+  "error_thatCodeHasExpiredAskYourAdmin": "That code has expired. Ask your admin for a new one.",
+  "@error_thatCodeHasExpiredAskYourAdmin": { "description": "Shown when a signup code is past its expiry." },
   "wave_errorAuthInvalid": "Wave connection token is missing or has been revoked. Please reconnect.",
   "@wave_errorAuthInvalid": {
     "description": "WaveAuthInvalid failure: the Wave access token is missing or revoked"

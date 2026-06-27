@@ -113,6 +113,20 @@ class AuthFailureNotAuthorized extends AuthFailure {
       c.l10n.error_thisEmailIsNotAuthorizedToSignUp;
 }
 
+class AuthFailureInvalidSignupCode extends AuthFailure {
+  const AuthFailureInvalidSignupCode();
+  @override
+  String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
+      c.l10n.error_thatCodeIsntValidAskYourAdmin;
+}
+
+class AuthFailureSignupCodeExpired extends AuthFailure {
+  const AuthFailureSignupCodeExpired();
+  @override
+  String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
+      c.l10n.error_thatCodeHasExpiredAskYourAdmin;
+}
+
 class AuthFailurePermissionDenied extends AuthFailure {
   const AuthFailurePermissionDenied();
   @override
