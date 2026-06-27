@@ -106,32 +106,31 @@ class _ListInformationState extends State<ListInformation> {
               child: const Icon(Icons.add),
             )
           : null,
-      // The nav shell is built once; only the master/detail subtree rebuilds
-      // per keystroke, so typing doesn't rebuild the NavigationRail + chrome.
+      // The nav shell is built once. Only the master list listens to the search
+      // controller, so typing rebuilds just the list — not the chrome, and not
+      // the (search-independent) detail pane in the split layout.
       body: AdaptiveShell(
         currentDestination: AdaptiveDestination.clients,
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
-        child: ListenableBuilder(
-          listenable: _searchController,
-          builder: (context, _) {
-            return MasterDetailScaffold(
-              master: ClientsListView(
-                searchQuery: _searchController.text,
-                isAdmin: widget.isAdmin,
-                selectedClientId: _selectedClient?.id,
-                onClientTap: _onClientTap,
-              ),
-              detail: _selectedClient != null
-                  ? ClientDetailView(
-                      key: ValueKey(_selectedClient!.id),
-                      client: _selectedClient!,
-                      onDeleted: () => setState(() => _selectedClient = null),
-                    )
-                  : null,
-              placeholder: _buildDetailPlaceholder(),
-            );
-          },
+        child: MasterDetailScaffold(
+          master: ListenableBuilder(
+            listenable: _searchController,
+            builder: (context, _) => ClientsListView(
+              searchQuery: _searchController.text,
+              isAdmin: widget.isAdmin,
+              selectedClientId: _selectedClient?.id,
+              onClientTap: _onClientTap,
+            ),
+          ),
+          detail: _selectedClient != null
+              ? ClientDetailView(
+                  key: ValueKey(_selectedClient!.id),
+                  client: _selectedClient!,
+                  onDeleted: () => setState(() => _selectedClient = null),
+                )
+              : null,
+          placeholder: _buildDetailPlaceholder(),
         ),
       ),
     );

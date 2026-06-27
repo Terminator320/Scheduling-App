@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -8,10 +8,14 @@ import 'package:scheduling/features/clients/domain/policies/client_search_policy
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 class FirebaseAppointmentsRepository implements AppointmentsRepository {
-  FirebaseAppointmentsRepository(FirebaseFirestore firestore)
-    : _appointments = firestore.collection('appointments');
+  FirebaseAppointmentsRepository(
+    FirebaseFirestore firestore, {
+    AppLogger? logger,
+  }) : _appointments = firestore.collection('appointments'),
+       _logger = logger ?? AppLogger();
 
   final CollectionReference<Map<String, dynamic>> _appointments;
+  final AppLogger _logger;
 
   // Bounded LRU of recent history-search results. The repository is a
   // long-lived singleton (it outlives the autoDispose historySearchProvider),
@@ -259,8 +263,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
           .limit(_historySearchScanLimit)
           .get();
     } on FirebaseException catch (e, st) {
-      debugPrint('[FirebaseAppointmentsRepository] searchHistory failed: $e');
-      debugPrintStack(stackTrace: st);
+      _logger.warn('HIST-SEARCH searchHistory failed', e, st);
       return const [];
     }
 

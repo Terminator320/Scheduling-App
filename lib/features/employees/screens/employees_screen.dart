@@ -247,27 +247,26 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
               child: const Icon(Icons.add),
             )
           : null,
+      // Only the master list listens to the search controller, so typing
+      // rebuilds just the list — not the (search-independent) detail pane.
       body: AdaptiveShell(
         currentDestination: AdaptiveDestination.employees,
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
-        child: ListenableBuilder(
-          listenable: _searchController,
-          builder: (context, _) {
-            return MasterDetailScaffold(
-              master: _buildMasterList(),
-              detail: selected == null
-                  ? null
-                  : EmployeeDetailsView(
-                      key: ValueKey(selected.id),
-                      employee: selected,
-                      isCurrentUserAdmin: widget.isAdmin,
-                      onAction: (action) =>
-                          _handleEmployeeAction(action, selected),
-                    ),
-              placeholder: _buildDetailPlaceholder(),
-            );
-          },
+        child: MasterDetailScaffold(
+          master: ListenableBuilder(
+            listenable: _searchController,
+            builder: (context, _) => _buildMasterList(),
+          ),
+          detail: selected == null
+              ? null
+              : EmployeeDetailsView(
+                  key: ValueKey(selected.id),
+                  employee: selected,
+                  isCurrentUserAdmin: widget.isAdmin,
+                  onAction: (action) => _handleEmployeeAction(action, selected),
+                ),
+          placeholder: _buildDetailPlaceholder(),
         ),
       ),
     );

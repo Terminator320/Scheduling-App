@@ -164,35 +164,44 @@ class DetailsViewBody extends ConsumerWidget {
           isCancelled: isCancelled,
           isSaving: isSaving,
           showCancel: showActions,
-          onMarkDone: () async {
-            if (await notifier.markAsDone(appointment)) {
-              if (!context.mounted) return;
-              ref
-                  .read(noticeServiceProvider)
-                  .success(context.l10n.common_appointmentMarkedAsDone);
-              onClose();
-            }
-          },
-          onCancel: () async {
-            final confirmed = await showConfirmDialog(
-              context,
-              title: context.l10n.calendar_cancelAppointment,
-              message: context.l10n.calendar_cancelledJobsAreSavedToHistory,
-              confirmLabel: context.l10n.calendar_cancelAppointment,
-              destructive: true,
-            );
-            if (!confirmed || !context.mounted) return;
-            if (await notifier.cancelAppointment(appointment)) {
-              if (!context.mounted) return;
-              ref
-                  .read(noticeServiceProvider)
-                  .success(context.l10n.common_appointmentCancelled);
-              onClose();
-            }
-          },
+          onMarkDone: () => _onMarkDone(context, ref, notifier),
+          onCancel: () => _onCancel(context, ref, notifier),
         ),
       ],
     );
+  }
+
+  Future<void> _onMarkDone(
+    BuildContext context,
+    WidgetRef ref,
+    EventDetailsController notifier,
+  ) async {
+    if (!(await notifier.markAsDone(appointment))) return;
+    if (!context.mounted) return;
+    ref
+        .read(noticeServiceProvider)
+        .success(context.l10n.common_appointmentMarkedAsDone);
+    onClose();
+  }
+
+  Future<void> _onCancel(
+    BuildContext context,
+    WidgetRef ref,
+    EventDetailsController notifier,
+  ) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: context.l10n.calendar_cancelAppointment,
+      message: context.l10n.calendar_cancelledJobsAreSavedToHistory,
+      confirmLabel: context.l10n.calendar_cancelAppointment,
+    );
+    if (!confirmed || !context.mounted) return;
+    if (!(await notifier.cancelAppointment(appointment))) return;
+    if (!context.mounted) return;
+    ref
+        .read(noticeServiceProvider)
+        .success(context.l10n.common_appointmentCancelled);
+    onClose();
   }
 }
 

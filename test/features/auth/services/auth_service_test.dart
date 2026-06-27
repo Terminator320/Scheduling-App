@@ -293,6 +293,7 @@ void main() {
     setUp(() {
       when(() => user.reload()).thenAnswer((_) async {});
       when(() => user.email).thenReturn('invited@example.com');
+      when(() => user.getIdToken(any())).thenAnswer((_) async => 'token');
     });
 
     test('does nothing when email is not verified', () async {
@@ -345,6 +346,20 @@ void main() {
           uid: any(named: 'uid'),
         ),
       );
+    });
+
+    test('forces a fresh ID token before resolving the invite', () async {
+      // resolveMyInvite now requires a verified email_verified token claim;
+      // reload() doesn't refresh that claim, so a forced token refresh must
+      // precede the lookup.
+      when(() => user.emailVerified).thenReturn(true);
+      when(
+        () => employees.findInvitedEmployeeForCurrentUser(),
+      ).thenAnswer((_) async => null);
+
+      await service.tryActivateInvitedEmployee(user);
+
+      verify(() => user.getIdToken(true)).called(1);
     });
   });
 }

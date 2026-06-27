@@ -307,6 +307,34 @@ void main() {
       expect(saved.employeeNames, ['Alex', 'Zoe']);
     });
 
+    test(
+      'awaits the employee seed before validating (B1 race): a save fired '
+      'before seeding settles keeps active assignees, not "employees required"',
+      () async {
+        final fresh = _appointment.copyWith(id: 'appt-race');
+        container.listen(eventDetailsControllerProvider(fresh), (_, _) {});
+        final c = container.read(
+          eventDetailsControllerProvider(fresh).notifier,
+        );
+
+        // Intentionally NO waitForSeed: save() must settle the seed itself.
+        // Without the guard, validation sees an empty selection and returns
+        // EventDetailsInvalid (employeesRequired) before any save happens.
+        final outcome = await c.save(
+          fresh,
+          title: 'x',
+          address: 'y',
+          notes: '',
+          materialsNeeded: '',
+        );
+
+        expect(outcome, isA<EventDetailsSaved>());
+        final saved = (outcome as EventDetailsSaved).appointment;
+        expect(saved.employeeIds, ['e1']);
+        expect(saved.employeeNames, ['Alex']);
+      },
+    );
+
     test('uses freshly-picked client over the loaded one', () async {
       readNotifier();
       await waitForSeed();
