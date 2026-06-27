@@ -43,7 +43,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('does not call createEmployeeAccount when fields are empty', (
+  testWidgets('does not call signUpWithCode when fields are empty', (
     tester,
   ) async {
     await tester.pumpWidget(_wrap(auth));
@@ -53,9 +53,10 @@ void main() {
     await tester.pumpAndSettle();
 
     verifyNever(
-      () => auth.createEmployeeAccount(
-        email: any(named: 'email'),
-        password: any(named: 'password'),
+      () => auth.signUpWithCode(
+        email: any<String>(named: 'email'),
+        password: any<String>(named: 'password'),
+        code: any<String>(named: 'code'),
       ),
     );
     expect(tester.takeException(), isNull);

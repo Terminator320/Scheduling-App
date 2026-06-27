@@ -106,10 +106,6 @@ void main() {
           password: any(named: 'password'),
         ),
       ).thenAnswer((_) async => credential);
-      when(
-        () => auth.tryActivateInvitedEmployee(user),
-      ).thenAnswer((_) async {});
-
       var reads = 0;
       when(() => repo.findUserByUid('u1')).thenAnswer((_) async {
         reads++;
@@ -163,9 +159,6 @@ void main() {
           password: any(named: 'password'),
         ),
       ).thenAnswer((_) async => credential);
-      when(
-        () => auth.tryActivateInvitedEmployee(user),
-      ).thenAnswer((_) async {});
       when(() => repo.findUserByUid('u1')).thenAnswer(
         (_) async => const UserUidMatch(
           id: 'doc1',
@@ -189,8 +182,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('CALENDAR_REACHED'), findsOneWidget);
-      // The provisioned doc is found first, so the invite callable never runs.
-      verifyNever(() => auth.tryActivateInvitedEmployee(user));
       expect(tester.takeException(), isNull);
     },
   );
