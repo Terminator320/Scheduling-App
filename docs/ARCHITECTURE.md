@@ -323,7 +323,7 @@ These must not be broken:
 
 6. **All Firestore writes go through service/repository classes.** Never call `FirebaseFirestore.instance` from UI widgets.
 
-7. **Cloud Function endpoints are rate-limited and input-validated.** Auth-sensitive callables (`deleteAccount`, `resolveMyInvite`) cap callers at 5 attempts / 15 min via the Firestore-backed `enforceDurableRateLimit` (counters in `rateLimits/*`, denied to all clients). Every callable runs `assertPayloadShape` (rejects non-object, >4 KB, or unexpected-key payloads) and validates string fields (trim, length cap, control-char reject) before use. These shared guards live in `functions/security.js`; `functions/index.js` is thin wiring that re-exports each function from its domain module.
+7. **Cloud Function endpoints are rate-limited and input-validated.** Auth-sensitive callables (`deleteAccount`, `redeemSignupCode`) cap callers at 5 attempts / 15 min via the Firestore-backed `enforceDurableRateLimit` (counters in `rateLimits/*`, denied to all clients). Every callable runs `assertPayloadShape` (rejects non-object, >4 KB, or unexpected-key payloads) and validates string fields (trim, length cap, control-char reject) before use. These shared guards live in `functions/security.js`; `functions/index.js` is thin wiring that re-exports each function from its domain module.
 
 ---
 
@@ -352,7 +352,6 @@ SplashScreen → splashDestinationProvider (FutureProvider<SplashDestination>)
 ```
 login_screen._signIn()
   ├── FirebaseAuth.signInWithEmailAndPassword
-  ├── AuthService.tryActivateInvitedEmployee(user)   [claims a verified invited doc]
   ├── findUserByUid == null → signOut → banner: error_noUserProfileFoundForThisAccount
   ├── !employee.isActive → signOut → AuthFailureUserDisabled banner   [status gate]
   └── else → AuthCache().save(employee) → MainCalendar
@@ -360,7 +359,29 @@ login_screen._signIn()
 
 The status gate uses `!employee.isActive` (not `isDisabled`) so it also catches
 `invited`, `''`, and any future non-active status — see the matching CLAUDE.md
-invariant.
+invariant. Sign-in no longer activates invites — that's server-side now (below).
+
+### Invited-employee signup (one-time codes)
+
+```
+admin "Invite" → createEmployeeInvite callable (admin-only, assertAdmin)
+  └── creates users/{id} (status:'invited') + signupCodes/{sha256(code)};
+      returns the plaintext code ONCE (copy dialog, shared out-of-band).
+      Idempotent: re-inviting a still-'invited' email re-issues a fresh code.
+
+create_account_screen → AuthService.signUpWithCode(email, password, code)
+  ├── register (or adopt on email-already-in-use)
+  ├── redeemSignupCode callable → validates (14-day expiry; token email ==
+  │     invite email), atomically sets uid + status:'active', consumes the
+  │     code   [Admin SDK only — no client self-activation]
+  └── on failure → roll back the new Auth user;
+        AuthFailureInvalidSignupCode / AuthFailureSignupCodeExpired
+On success the user is active + signed in; login routes them into MainCalendar.
+```
+
+There is no email-verification step. `signupCodes` (doc id = `sha256(code)`,
+holding `{inviteDocId, email, expiresAt}`) is denied to all clients in
+`firestore.rules` — only the Admin SDK reads/writes it.
 
 ### Live Kick-Out (already logged in)
 
@@ -403,10 +424,10 @@ users/{docId}
   name: string
   email: string
   phone: string
-  role: 'admin' | 'employee'   invites are always created 'employee' — admin is
-                       granted only after activation (the form's Admin toggle is
-                       edit-only), because firestore.rules self-activation requires
-                       role == 'employee'
+  role: 'admin' | 'employee'   invites are always created 'employee'; admin is
+                       granted later via the edit form (the Admin toggle is
+                       edit-only). Invite activation is server-side
+                       (redeemSignupCode) — there is no client self-activation.
   status: 'active' | 'disabled' | 'invited'
   colorValue: string   int-as-string; drives appointment card borders and avatars
 
@@ -450,10 +471,17 @@ usersByUid/{uid}       Bridge maintained by the syncUsersByUid Cloud Function.
   status: 'active' | 'disabled'
 
 rateLimits/{route__uid}  True sliding window written by enforceDurableRateLimit.
-  route: string        endpoint id ('deleteAccount' | 'resolveMyInvite')
+  route: string        endpoint id ('deleteAccount' | 'redeemSignupCode')
   attempts: [number]   epoch-ms timestamps; entries older than the window are
                        dropped each call, and a call is rejected when >= max remain
   expiresAt: timestamp optional Firestore TTL target
+
+signupCodes/{sha256(code)}  One-time invited-signup codes (hash only — the
+                       plaintext is returned once at creation, never stored).
+                       Created by createEmployeeInvite, consumed by redeemSignupCode.
+  inviteDocId: string  → users/{docId}
+  email: string        must equal the redeemer's auth token email
+  expiresAt: timestamp 14-day lifetime; expired codes rejected (read+write denied)
 
 wave/{docId}           Wave Accounting connection metadata (e.g. wave/connection:
                        status, businessId, last-sync timestamps). Token lives only
@@ -478,7 +506,7 @@ relaxed for pre-ship testing:
 
 | File | What to revert |
 |---|---|
-| `functions/account.js` | `enforceAppCheck: false` on `deleteAccount` and `resolveMyInvite` — set back to `true` once the app ships |
+| `functions/account.js` + `invites.js` | `enforceAppCheck: false` on `deleteAccount`, `createEmployeeInvite`, `redeemSignupCode` — set back to `true` once the app ships |
 | `functions/wave/callables.js` | `enforceAppCheck: false` on the Wave callables — set back to `true` once the app ships |
 
 Locate them with `grep -rn "TODO(pre-ship)" functions lib` — markers are
