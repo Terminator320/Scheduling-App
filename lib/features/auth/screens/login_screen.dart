@@ -127,39 +127,16 @@ class _LoginState extends ConsumerState<Login> {
         return;
       }
 
-      // Already-provisioned users have a uid-keyed users doc. Look that up
-      // first and only fall back to invite activation (the rate-limited
-      // resolveMyInvite callable) when there's no doc yet — i.e. a freshly
-      // verified invited employee whose doc is still keyed by email, not uid.
-      // This keeps every routine sign-in off the auth-route rate limit.
-      var userDoc = await _retryOnAuthPropagation(
+      // A provisioned user has a uid-keyed users doc. Invited employees are
+      // activated server-side at signup (redeemSignupCode), so there is no
+      // client-side activation fallback here.
+      final userDoc = await _retryOnAuthPropagation(
         () => ref.read(employeesRepositoryProvider).findUserByUid(user.uid),
       );
-
-      if (userDoc == null) {
-        await _authService.tryActivateInvitedEmployee(user);
-        userDoc = await _retryOnAuthPropagation(
-          () => ref.read(employeesRepositoryProvider).findUserByUid(user.uid),
-        );
-      }
       if (!mounted) return;
 
       if (userDoc == null) {
-        // An invited user who hasn't verified yet has no uid-keyed users doc.
-        // Their first verification email may never have arrived, so resend it
-        // before signing out and point them at their inbox/spam folder.
-        if (!user.emailVerified) {
-          final resent = await _authService.resendVerificationEmail(user);
-          await _authService.signOut();
-          if (!mounted) return;
-          setState(() {
-            _bannerError = resent
-                ? context.l10n.auth_verificationEmailResentCheckInboxAndSpam
-                : context.l10n.auth_pleaseVerifyYourEmailBeforeSigningIn;
-            _isLoading = false;
-          });
-          return;
-        }
+        // Signed in, but no profile doc — not a provisioned account.
         await _authService.signOut();
         if (!mounted) return;
         setState(() {
@@ -203,14 +180,7 @@ class _LoginState extends ConsumerState<Login> {
             }),
       );
 
-      await Navigator.pushReplacementNamed(
-        context,
-        AppRoutes.mainCalendar,
-        arguments: MainCalendarArgs(
-          isAdmin: employee.isAdmin,
-          employeeId: employee.id,
-        ),
-      );
+      await _routeToCalendar(employee);
     } catch (error, stackTrace) {
       ref.read(loggerProvider).warn('login.sign_in', error, stackTrace);
       if (!mounted) return;
@@ -236,21 +206,51 @@ class _LoginState extends ConsumerState<Login> {
 
     if (!mounted) return;
 
+    if (result?.created == true) {
+      await _routeAfterSignUp();
+      return;
+    }
+
     setState(() {
       _submitted = false;
       _emailError = null;
       _passwordError = null;
       _bannerError = null;
-      _bannerSuccess = result?.created ?? false
-          ? context.l10n.auth_accountCreatedYouCanNowSignIn
-          : null;
+      _bannerSuccess = null;
     });
+  }
 
-    if (result?.email != null && result!.email!.trim().isNotEmpty) {
-      _emailController.text = result.email!.trim().toLowerCase();
-      _passwordController.clear();
-      _passwordFocus.requestFocus();
+  Future<void> _routeToCalendar(EmployeeRecord employee) async {
+    await Navigator.pushReplacementNamed(
+      context,
+      AppRoutes.mainCalendar,
+      arguments: MainCalendarArgs(
+        isAdmin: employee.isAdmin,
+        employeeId: employee.id,
+      ),
+    );
+  }
+
+  // The create-account flow signs the user in and activates their account via
+  // the signup code, then pops `created:true`. They're already authenticated and
+  // active, so route them straight into the app instead of asking them to sign
+  // in again.
+  Future<void> _routeAfterSignUp() async {
+    final user = _authService.currentUser;
+    if (user == null) return;
+    final userDoc = await _retryOnAuthPropagation(
+      () => ref.read(employeesRepositoryProvider).findUserByUid(user.uid),
+    );
+    if (!mounted) return;
+    if (userDoc == null) {
+      setState(() {
+        _bannerSuccess = context.l10n.auth_accountCreatedYouCanNowSignIn;
+      });
+      return;
     }
+    final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
+    TextInput.finishAutofillContext();
+    await _routeToCalendar(employee);
   }
 
   Future<void> _openForgotPassword() async {
