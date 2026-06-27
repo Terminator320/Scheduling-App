@@ -17,7 +17,7 @@ lib/
 │   ├── errors/                      Base Failure class + error_cause.dart (sanitized cause classifier + tagged notice composer)
 │   ├── images/                      Image picker (native resize/compress at pick time) + Firebase Storage upload service
 │   ├── launchers/                   phone_call_launcher.dart (launchPhoneCall — shared tel: dialer; parallels AddressMapLauncher / EmailComposeLauncher)
-│   ├── layout/                      Responsive shell — AdaptiveShell (nav rail), MasterDetailScaffold, breakpoints (context.isWide / isLandscape / isSplitLayout)
+│   ├── layout/                      Responsive shell — AdaptiveShell (nav rail), MasterDetailScaffold, breakpoints (context.isWide / isLandscape / isSplitLayout for the split chrome; isCompact / isNarrowWidth for small-phone & large-text row folding)
 │   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics)
 │   ├── notices/                     In-app toast system: AppNotice types, NoticeService (stream), NoticeListener (widget)
 │   ├── permissions/                 MediaPermissionService — camera permission gate (permission_handler)
@@ -30,9 +30,9 @@ lib/
 │
 ├── shared/widgets/                  Reusable UI components used across ≥2 features, grouped by type
 │   ├── app_bars/                    app_top_bar (AppTopBar — the standard primary app bar every screen uses; slims in landscape)
-│   ├── primitives/                  app_avatar (contrast-aware initials circle), busy_button_icon (spinner-or-icon slot for *.icon buttons), entity_form_header (avatar + name + optional status, for edit forms), fade_in_item, quick_action_button (QuickActionsRow + QuickActionButton — tinted Call/Email/Directions tiles), section_label (uppercase mini-header)
+│   ├── primitives/                  app_avatar (contrast-aware initials circle), app_back_button (shared leading back arrow), busy_button_icon (spinner-or-icon slot for *.icon buttons), entity_form_header (avatar + name + optional status, for edit forms), fade_in_item, quick_action_button (QuickActionsRow + QuickActionButton — tinted Call/Email/Directions tiles), section_label (uppercase mini-header)
 │   ├── feedback/                    app_empty_state, error_snack_bar (errorSnackBar — shared error SnackBar for the sites that bypass NoticeService), skeleton_loader (shimmer), status_chip (+ AppointmentStatus.fromRaw, the canonical status mapper)
-│   ├── fields/                      address_autocomplete_field, labeled_text_field (built-in shake + animated error row), app_search_bar, form_helpers
+│   ├── fields/                      address_autocomplete_field, labeled_text_field (built-in shake + animated error row), app_search_bar, clear_text_button (ClearTextButton — the one clear-"x" suffix), form_helpers
 │   ├── cards/                       list_item_tile (shared row layout behind client/employee tiles), info_card (InfoCard + InfoCardRow — bordered card of tappable rows with tinted icon chips)
 │   ├── dialogs/                     confirm_dialog (showConfirmDialog — shared Cancel/confirm, destructive variant)
 │   └── sheets/                      sheet_widgets (DraggableSheetFrame, SheetHandle, DetailSheetListView — detail-view scroll shell; FormSheetScaffold — add/edit form-sheet chrome)
@@ -54,7 +54,8 @@ lib/
     ├── maps/                        Google Places address autocomplete and map launcher
     ├── onboarding/                  First-launch intro carousel (OnboardingGate = app home) + onboardingSeen gate
     ├── settings/                    Theme, text scale, language, app version, biometric app-lock toggle
-    └── splash/                      Auth resolution on cold start (screen + routing logic)
+    ├── splash/                      Auth resolution on cold start (screen + routing logic)
+    └── wave/                        Wave Accounting integration — read-only connection status + per-client sync badge (all writes are Cloud-Function-owned)
 ```
 
 ---
@@ -267,8 +268,9 @@ Cross-destination navigation has a second SSOT in `adaptive_shell.dart`: `destin
 
 `lib/core/layout/` adapts the UI to screen size **and orientation**. `Breakpoints`
 defines `tablet` (840) and `expanded` (1200). The `context` extensions are
-`isWide` (`width >= 840`), `isLandscape` (orientation), and `isSplitLayout`
-(`isWide || isLandscape`) — the last is the trigger for the desktop-style chrome.
+`isWide` (`width >= 840`), `isExpanded` (`width >= 1200`), `isLandscape`
+(orientation), and `isSplitLayout` (`isWide || isLandscape`) — the last is the
+trigger for the desktop-style chrome.
 On a portrait phone screens render single-column with a hamburger drawer; in
 landscape or on a tablet `AdaptiveShell` wraps them with a navigation rail over
 the `AdaptiveDestination` enum (`calendar`, `clients`, `employees`, `history`,
@@ -286,6 +288,22 @@ screen's app bar is the shared `AppTopBar`, which also slims itself in landscape
 day and filters by year/employee via the reusable `HistoryFilterBar`
 (`clients/widgets/sections/`). It is no longer a `ClientsMode` of the clients
 screen.
+
+A second, **independent** axis handles small phones and large text. `Breakpoints`
+also defines `compactWidth` (360), `compactTextScale` (1.4), and
+`shortViewportHeight` (700), surfaced as `context.isCompact`
+(`width < 360 || textScale > 1.4`) and `context.isNarrowWidth` (the width-only
+variant). Dense horizontal rows — appointment cards/tiles, the appointment
+detail action bar and view body, the add/edit form fields, the employee
+form/details, the settings tiles and drawer, and the shared `InfoCard`,
+`ListItemTile`, and `EntityFormHeader` rows — read `isCompact` to **stack their
+contents vertically** rather than overflow when the screen is narrow or the user
+has turned up the system text size; `isNarrowWidth` is for layouts that should
+fold on screen width alone. `shortViewportHeight` lets bottom sheets and the
+slide-out menu grow taller / scroll on short landscape-phone viewports so their
+contents aren't clipped. These gates live beside `isWide`/`isSplitLayout` in
+`core/layout/breakpoints.dart` — never re-inline the `width < 360 || scale > 1.4`
+predicate at a call site.
 
 ---
 
@@ -349,11 +367,15 @@ invariant.
 Two `ref.listen` hooks in `_PaulAppState` watch the signed-in user and force a
 logout the moment their access changes:
 
+Both derive from one shared listener — `currentUserDocProvider`
+(`watchUserDoc(uid)`, a single live `users/{uid}` snapshot) — so status, role,
+and name all come from one Firestore stream:
+
 ```
-_listenForAccountDisabled → accountDisabledProvider → watchUserStatus(uid)
+_listenForAccountDisabled → accountDisabledProvider → currentUserDocProvider → watchUserDoc(uid)
       status == 'disabled' (false→true) → signOut → route to login + disabled snackbar
 
-_listenForRoleRevocation  → userRoleProvider (live role stream)
+_listenForRoleRevocation  → userRoleProvider → currentUserDocProvider → watchUserDoc(uid)
       admin role downgraded → signOut → route to login
 ```
 
@@ -400,17 +422,26 @@ appointments/{docId}
   createdAt, updatedAt     server timestamps
 
 clients/{docId}
-  businessName, name           only a name is required; email and phone are optional
-  email, phone                 (a typed email is still format-checked)
+  name                         only a name is required; everything else optional
+  firstName, lastName          structured name parts (Wave-aligned model)
+  email, phone, mobile         (a typed email is still format-checked)
   address, apt, city, province, country, postalCode   (structured address)
   noFixedAddress: bool         when true the structured address is left blank and
                        the address requirement is skipped (city/many-location
                        clients); the address is entered per appointment instead
   contacts: [{name, phone, email}]   (field is `contacts`, not `additionalContacts`)
+  businessName                 LEGACY read-only — pre-Wave-reshape docs stored a
+                       business client's name here; `ClientRecord.fromMap` falls
+                       back `name ← businessName`, but `toMap` NEVER writes it
+                       (kept until a one-time backfill copies it into `name`)
+  waveCustomerId, wave         Wave projection — read-only, written ONLY by Cloud
+                       Functions (Admin SDK). The app reads `wave.syncState` /
+                       `wave.syncError` for the per-client sync badge; `toMap`
+                       must never emit these (firestore.rules rejects it)
 ```
 
 Backend-managed collections (Admin SDK only — `firestore.rules` denies client writes;
-`rateLimits` denies client reads too):
+`rateLimits`, `wave`, and `waveSyncQueue` deny client reads too):
 
 ```
 usersByUid/{uid}       Bridge maintained by the syncUsersByUid Cloud Function.
@@ -423,21 +454,35 @@ rateLimits/{route__uid}  True sliding window written by enforceDurableRateLimit.
   attempts: [number]   epoch-ms timestamps; entries older than the window are
                        dropped each call, and a call is rejected when >= max remain
   expiresAt: timestamp optional Firestore TTL target
+
+wave/{docId}           Wave Accounting connection metadata (e.g. wave/connection:
+                       status, businessId, last-sync timestamps). Token lives only
+                       in Secret Manager. Read only via the waveGetConnection
+                       callable — never client-side (read+write denied).
+
+waveSyncQueue/{jobId}  Outbox for Wave sync jobs — enqueued by the waveUpsertCustomer
+                       clients trigger, drained by the scheduled waveSyncWorker.
+                       Job claim + outcome write are transactional (read+write denied
+                       to clients).
 ```
 
 ---
 
 ## Pre-Ship Cleanup (`TODO(pre-ship)`)
 
-Delete scaffolding exists for testing only — **not production-ready**:
+Temporary scaffolding marked `TODO(pre-ship)` must be reverted before store
+release. The Flutter-side test scaffolding has all been removed (the employee
+delete/disable flow is now a real shipped feature with the `EMP-DEL` error tag).
+The only markers left are in **Cloud Functions**, where App Check enforcement is
+relaxed for pre-ship testing:
 
-| File | What to remove |
+| File | What to revert |
 |---|---|
-| `lib/features/auth/services/auth_service.dart` | Signup-failure diagnostics logging (~line 66) — remove once release-APK signup failures are diagnosed |
-| `lib/features/calendar/widgets/views/details_view_body.dart` | `_DeleteTestButton` testing-delete widget (~line 155). NOTE: keep `showDeleteAppointmentDialog` (`widgets/dialogs/delete_appointment_dialog.dart`) — the edit sheet's shipped delete flow uses it |
-| `lib/features/employees/widgets/views/employee_details_view.dart` | `_isDeleting`, `_confirmDelete()`, testing delete button (~line 271). NOTE: keep the `ConsumerStatefulWidget` base + `flutter_riverpod`/`employees_providers` imports — the shipped disable/enable feature uses them |
+| `functions/account.js` | `enforceAppCheck: false` on `deleteAccount` and `resolveMyInvite` — set back to `true` once the app ships |
+| `functions/wave/callables.js` | `enforceAppCheck: false` on the Wave callables — set back to `true` once the app ships |
 
-Locate them with `grep -rn "TODO(pre-ship)" lib` — markers are authoritative; line numbers drift.
+Locate them with `grep -rn "TODO(pre-ship)" functions lib` — markers are
+authoritative; line numbers drift.
 
 ---
 
@@ -448,7 +493,7 @@ Locate them with `grep -rn "TODO(pre-ship)" lib` — markers are authoritative; 
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (385 test cases as of 2026-06-07). `flutter analyze` is
+Run: `flutter test` (563 test cases as of 2026-06-26). `flutter analyze` is
 clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.
