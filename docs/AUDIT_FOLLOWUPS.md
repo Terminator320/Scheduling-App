@@ -129,3 +129,55 @@ harness).
    (contact appears + link persists), save with permission declined (OS insert
    screen opens), edit-sync updates the linked contact without erasing its
    photo/account, and a deleted contact unlinks cleanly on the next sync.
+
+---
+
+## 4. Redesign invited-employee signup — `resolveMyInvite` deploy blocker
+
+**Problem (DEPLOY BLOCKER).** The audit security fix made `resolveMyInvite`
+(`functions/account.js`) return `{found:false}` whenever
+`req.auth.token.email_verified !== true`, so an unverified caller can't learn
+whether an invite exists or read its name/color/role. But `createEmployeeAccount`
+(`lib/features/auth/services/auth_service.dart`) calls
+`findInvitedEmployeeForCurrentUser()` → `resolveMyInvite` **immediately after
+`register()`, before the email is verified**, to decide whether to send the
+verification email or roll the account back. Once the updated functions deploy,
+every invited-employee signup resolves to `null` → rollback →
+`AuthFailureNotAuthorized`: **signup is fully broken**. It is not broken in
+production today only because the functions aren't deployed yet.
+
+The strict `email_verified` gate is intentional and **stays**. The signup flow
+must stop depending on a pre-verification invite lookup. **Do not deploy the
+`functions` target until this redesign lands** — deploying alone breaks signup.
+
+**Redesign (defer to a follow-up branch).** Move invite resolution out of the
+pre-verification path:
+
+1. `createEmployeeAccount` keeps `register()` (and the `email-already-in-use`
+   adopt path), but **stops calling `findInvitedEmployeeForCurrentUser()`**.
+   Send `user.sendEmailVerification()` unconditionally, sign out, and return —
+   the UI tells the user to check their email. No pre-check, no invite-based
+   rollback (we can't know invite status pre-verification).
+2. Resolve + activate (or clean up) entirely at first post-verification sign-in.
+   `tryActivateInvitedEmployee` already gates on `emailVerified` and forces a
+   fresh token, so on a verified token it calls `resolveMyInvite` and:
+   - invite found → `activateEmployee` (as today);
+   - invite **not** found → non-invited / wrong-email account: sign out and
+     surface "not authorized"; optionally `user.delete()` the orphan (the caller
+     is freshly signed in, so recent-login is satisfied).
+
+**Consequences to handle in the redesign:**
+- Anyone can now create an *unverified* Auth account for any email (no pre-gate).
+  The orphan is harmless (no `users` doc → `SplashScreen`/login signs them out)
+  but squats the email until cleaned up. Clean it at the first verified
+  sign-in's "no invite" branch; for users who verify but never sign in the
+  orphan persists — accept it, or add a scheduled unverified-orphan cleanup.
+- The `email-already-in-use` → adopt → `findUserByUid` orphan-recovery path
+  still applies for a verified-but-unprovisioned adopted account.
+- Tests: `auth_service_test.dart` currently mocks
+  `findInvitedEmployeeForCurrentUser` inside the `createEmployeeAccount` cases;
+  after the redesign that expectation moves to the `tryActivateInvitedEmployee`
+  path.
+- Update the **CLAUDE.md "Employee activation flow" invariant** to describe the
+  new flow (verification sent unconditionally at signup; invite resolution +
+  cleanup at first verified sign-in).

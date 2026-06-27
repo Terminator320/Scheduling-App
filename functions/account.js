@@ -161,9 +161,11 @@ const resolveMyInvite = onCall(
       // Only a verified email proves ownership. Anyone can register an
       // unverified account with a guessed email, so an unverified caller must
       // not learn whether an invite exists or read its name/color/role — return
-      // the empty result, never the invite. The app only calls this after the
-      // user verifies (tryActivateInvitedEmployee gates on emailVerified and
-      // forces a fresh token), so the legitimate flow is unaffected.
+      // the empty result, never the invite.
+      // FIXME(pre-deploy): createEmployeeAccount still looks up the invite
+      // BEFORE verification, so this gate breaks invited-employee signup once
+      // deployed. Do NOT deploy functions until signup defers invite
+      // resolution to first verified sign-in — see docs/AUDIT_FOLLOWUPS.md #4.
       if (req.auth.token?.email_verified !== true) {
         return {found: false};
       }

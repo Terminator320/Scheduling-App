@@ -185,22 +185,22 @@ occurrence renders, filters, and completes like any other appointment.
 
 Changing the rule in the edit sheet rewrites the series like a real calendar:
 `EventDetailsController.save` detects a change against the stored baseline
-(`savedRepeat` in state) and calls `rewriteSeries` — one atomic batch that
-updates the edited doc, deletes the old future visits, and books the new
-cadence from the edited date. Unchanged saves never re-book. **Editing a series
+(`savedRepeat` in state) and calls `AppointmentSeriesEditor.rewrite` — one
+atomic batch that updates the edited doc, deletes the old future visits, and
+books the new cadence from the edited date. Unchanged saves never re-book. **Editing a series
 visit mirrors delete:** when the rule is unchanged, `DetailsEditBody._save` asks
 (via the shared `showSeriesScopeDialog`, also used by the delete flow) whether to
 apply the edit to this visit only or to this and future visits. Apply-to-all (`save(applyToSeries: true)`) propagates
 the edited details **and the new start/end time-of-day** to this visit plus every
 future non-terminal sibling through `updateAppointments` (one atomic batch),
-keeping each sibling's own calendar date (`_withTimeOfDay`) and its own status
+keeping each sibling's own calendar date (`withTimeOfDay`) and its own status
 (status is never propagated). Deleting a series
 visit asks (via `showDeleteAppointmentDialog`) whether to remove this visit
 only or this and future visits (`deleteAppointment(includeFuture: true)` →
 `deleteAppointments` batch). Past visits and anything already done/cancelled
 are never touched by a rewrite, an apply-to-all edit, or a series delete
-(`_futureSeriesIds` / `_futureSeriesRecords` filters, which use
-`AppointmentStatus.isTerminal`); series copies are created
+(`futureSeriesIds` / `futureSeriesRecords` filters in `event_series_helpers.dart`,
+which use `AppointmentStatus.isTerminal`); series copies are created
 `status: 'pending'` and never share pictures with the source visit. A copy's
 `endTime` is derived by `occurrenceEnd(...)` (wall-clock day-span + the
 original's end time-of-day), not by adding the raw elapsed `Duration` — so a
@@ -493,7 +493,7 @@ authoritative; line numbers drift.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (563 test cases as of 2026-06-26). `flutter analyze` is
+Run: `flutter test` (587 test cases as of 2026-06-27). `flutter analyze` is
 clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.

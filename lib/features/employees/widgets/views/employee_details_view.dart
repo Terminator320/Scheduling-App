@@ -99,6 +99,11 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
       }
       if (!mounted) return;
       widget.onAction(isDisabled ? 'enabled' : 'disabled');
+      // In the split-layout detail pane the view stays mounted after the
+      // action (only a delete clears the selection), so the flag must be reset
+      // or the button stays stuck spinning. In the sheet variant onAction pops
+      // the sheet, so guard with mounted.
+      if (mounted) setState(() => _isDisabling = false);
     } catch (e, st) {
       ref
           .read(loggerProvider)
