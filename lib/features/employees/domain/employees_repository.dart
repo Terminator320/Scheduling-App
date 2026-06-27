@@ -7,16 +7,20 @@ abstract class EmployeesRepository {
 
   Stream<List<EmployeeRecord>> watchAssignableUsers();
 
-  /// Creates an invited employee. Invites are always `role: 'employee'` —
-  /// admin is granted only after activation via [updateEmployee], because
-  /// `firestore.rules` restricts invite self-activation to employees (an
-  /// invited admin could never activate; see the rule comment).
-  Future<void> addEmployee({
+  /// Creates an invite via the createEmployeeInvite callable; returns the
+  /// one-time signup code to show the admin once.
+  Future<String> createEmployeeInvite({
     required String name,
     required String email,
     required String phone,
     required String colorValue,
   });
+
+  /// Issues a fresh code for a pending invite; returns it.
+  Future<String> regenerateSignupCode(String inviteDocId);
+
+  /// Redeems a signup code for the current user (activates the invite).
+  Future<void> redeemSignupCode(String code);
 
   Future<void> updateEmployee({
     required String docId,
