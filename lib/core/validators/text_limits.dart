@@ -18,4 +18,6 @@ class TextLimits {
   static const int province = 100;
   static const int postalCode = 16;
   static const int country = 100;
+
+  static const int signupCode = 32;
 }

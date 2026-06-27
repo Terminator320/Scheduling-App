@@ -1462,5 +1462,13 @@
   "wave_syncError": "Sync error",
   "@wave_syncError": {
     "description": "Badge label shown on a client whose Wave sync has failed"
+  },
+  "auth_signupCode": "Signup code",
+  "@auth_signupCode": {
+    "description": "Label for the signup code field on the create-account screen."
+  },
+  "validation_pleaseEnterYourSignupCode": "Please enter your signup code.",
+  "@validation_pleaseEnterYourSignupCode": {
+    "description": "Validation error shown when the signup code field is empty."
   }
 }

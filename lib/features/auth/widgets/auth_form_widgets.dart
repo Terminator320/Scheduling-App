@@ -281,6 +281,64 @@ class AuthPasswordField extends StatelessWidget {
   }
 }
 
+/// A text input for a one-time code (signup code), styled to match the other
+/// auth fields: shake-on-error, a key prefix icon, and the standard clear
+/// button suffix.
+class AuthCodeField extends StatelessWidget {
+  const AuthCodeField({
+    required this.label,
+    required this.controller,
+    required this.enabled,
+    required this.onSubmitted,
+    required this.onChanged,
+    this.focusNode,
+    this.errorText,
+    this.maxLength,
+    this.textInputAction = TextInputAction.done,
+    super.key,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final FocusNode? focusNode;
+  final bool enabled;
+  final String? errorText;
+  final int? maxLength;
+  final TextInputAction textInputAction;
+  final VoidCallback onSubmitted;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedFormFieldWrapper(
+      hasError: errorText != null,
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        textInputAction: textInputAction,
+        autocorrect: false,
+        enableSuggestions: false,
+        maxLength: maxLength,
+        buildCounter: maxLength != null
+            ? (_, {required currentLength, required isFocused, maxLength}) =>
+                  null
+            : null,
+        enabled: enabled,
+        onSubmitted: (_) => onSubmitted(),
+        onChanged: (_) => onChanged(),
+        decoration: formInputDecoration(context, label).copyWith(
+          errorText: errorText,
+          prefixIcon: const Icon(Icons.key_outlined, size: 20),
+          suffixIcon: ClearTextButton(
+            controller: controller,
+            onCleared: onChanged,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// The staggered entrance shared by every auth column: each child fades in and
 /// rises with a 65ms stagger. Apply to the column's `children` list.
 extension AuthStaggerIn on List<Widget> {
