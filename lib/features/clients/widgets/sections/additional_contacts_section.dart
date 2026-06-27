@@ -211,6 +211,7 @@ class _AdditionalContactCard extends StatelessWidget {
               label: context.l10n.clients_contactName,
               controller: contact.nameController,
               required: true,
+              textCapitalization: TextCapitalization.words,
               autofillHints: const [AutofillHints.name],
               maxLength: TextLimits.personName,
               errorText: errors['contact_${index}_name'],

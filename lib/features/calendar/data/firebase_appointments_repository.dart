@@ -188,18 +188,6 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }
 
   @override
-  Stream<List<AppointmentRecord>> watchAll() {
-    return _appointments
-        .orderBy('startTime', descending: true)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
-              .toList(),
-        );
-  }
-
-  @override
   Stream<List<AppointmentRecord>> watchInRange(AppointmentDateRange range) {
     return _appointments
         .where(

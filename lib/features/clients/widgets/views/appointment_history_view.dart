@@ -362,9 +362,29 @@ class _AppointmentHistoryViewState
           loading: () => local.isEmpty
               ? _skeleton()
               : _filteredList(local, colorMap, dayFormat),
-          error: (_, _) => _filteredList(local, colorMap, dayFormat),
+          // A failed search shouldn't read as "no history": when the local
+          // fallback is also empty, surface an error, not the empty state.
+          // Composes without logging (this is a builder).
+          error: (e, _) => local.isEmpty
+              ? _searchError(e)
+              : _filteredList(local, colorMap, dayFormat),
         );
   }
+
+  Widget _searchError(Object error) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(AppSpacing.sp24),
+      child: Text(
+        composeErrorNotice(
+          context,
+          intro: context.l10n.error_introLoadHistory,
+          tag: 'HIST-LOAD',
+          error: error,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    ),
+  );
 
   Widget _filteredList(
     List<AppointmentRecord> filtered,

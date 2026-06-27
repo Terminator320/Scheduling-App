@@ -54,6 +54,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       widget.accountDeletionService ?? AccountDeletionService();
 
   _SettingsDetail? _selectedDetail;
+  bool _isSigningOut = false;
+  bool _isDeletingAccount = false;
 
   String get _displayName {
     if (widget.name.isNotEmpty) return widget.name;
@@ -293,34 +295,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppTopBar(
-        title: context.l10n.common_settings,
-        compact: context.isLandscape,
-        onBack: () => navigateToDestination(
-          context,
-          AdaptiveDestination.calendar,
-          isAdmin: _isAdmin,
-          employeeId: widget.employeeId,
+    return Stack(
+      children: [
+        Scaffold(
+          appBar: AppTopBar(
+            title: context.l10n.common_settings,
+            compact: context.isLandscape,
+            onBack: () => navigateToDestination(
+              context,
+              AdaptiveDestination.calendar,
+              isAdmin: _isAdmin,
+              employeeId: widget.employeeId,
+            ),
+          ),
+          body: AdaptiveShell(
+            currentDestination: AdaptiveDestination.settings,
+            isAdmin: _isAdmin,
+            employeeId: widget.employeeId,
+            userName: _displayName,
+            userEmail: _email,
+            child: MasterDetailScaffold(
+              master: _buildMaster(),
+              detail: _buildDetail(),
+              placeholder: _buildDetailPlaceholder(),
+            ),
+          ),
         ),
-      ),
-      body: AdaptiveShell(
-        currentDestination: AdaptiveDestination.settings,
-        isAdmin: _isAdmin,
-        employeeId: widget.employeeId,
-        userName: _displayName,
-        userEmail: _email,
-        child: MasterDetailScaffold(
-          master: _buildMaster(),
-          detail: _buildDetail(),
-          placeholder: _buildDetailPlaceholder(),
-        ),
-      ),
+        // Blocks the UI during the multi-second, irreversible account
+        // deletion so it can't be re-triggered and the user sees progress.
+        if (_isDeletingAccount)
+          _BlockingProgressOverlay(
+            label: context.l10n.settings_deletingAccount,
+          ),
+      ],
     );
   }
 
   Future<void> _signOut() async {
-    await AuthService().signOut();
+    if (_isSigningOut) return;
+    setState(() => _isSigningOut = true);
+    try {
+      await AuthService().signOut();
+    } catch (e, st) {
+      // signOut clears local state and effectively never throws; if it does,
+      // log it but still route to login so the user isn't stuck signed in.
+      ref.read(loggerProvider).warn('ACCT-SIGNOUT signOut failed', e, st);
+    }
     if (!mounted) return;
     await Navigator.pushNamedAndRemoveUntil(
       context,
@@ -330,6 +350,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _confirmDeleteAccount() async {
+    if (_isDeletingAccount) return;
     final result = await showConfirmDialog(
       context,
       title: context.l10n.settings_deleteAccountConfirmTitle,
@@ -348,6 +369,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _runDeletion(String password) async {
+    setState(() => _isDeletingAccount = true);
     final notices = ref.read(noticeServiceProvider);
     final logger = ref.read(loggerProvider);
     try {
@@ -355,11 +377,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await _deletionService.deleteAccount();
     } on AuthFailure catch (e) {
       if (!mounted) return;
+      setState(() => _isDeletingAccount = false);
       notices.error(e.toLocalizedMessage(context));
       return;
     } catch (e, st) {
       logger.warn('ACCT-DEL settings.delete_account', e, st);
       if (!mounted) return;
+      setState(() => _isDeletingAccount = false);
       notices.error(
         composeErrorNotice(
           context,
@@ -378,5 +402,48 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       (_) => false,
     );
     notices.success(message);
+  }
+}
+
+/// Full-screen modal barrier + spinner shown while a blocking, irreversible
+/// operation runs. The [ModalBarrier] absorbs all input so the action behind
+/// it can't be re-triggered.
+class _BlockingProgressOverlay extends StatelessWidget {
+  const _BlockingProgressOverlay({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Positioned.fill(
+      child: Stack(
+        children: [
+          ModalBarrier(
+            dismissible: false,
+            color: scheme.scrim.withValues(alpha: 0.54),
+          ),
+          Center(
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.sp24),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: AppSpacing.sp16),
+                    Flexible(child: Text(label)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

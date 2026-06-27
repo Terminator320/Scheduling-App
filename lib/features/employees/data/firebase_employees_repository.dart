@@ -54,13 +54,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }
 
   @override
-  Future<EmployeeRecord?> getEmployeeById(String docId) async {
-    final doc = await _users.doc(docId).get();
-    if (!doc.exists) return null;
-    return EmployeeRecord.fromMap(doc.id, doc.data() ?? {});
-  }
-
-  @override
   Future<void> addEmployee({
     required String name,
     required String email,

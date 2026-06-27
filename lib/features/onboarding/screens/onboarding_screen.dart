@@ -149,34 +149,40 @@ class _SlideView extends StatelessWidget {
     final scheme = theme.colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 96,
-            height: 96,
-            decoration: BoxDecoration(
-              color: scheme.primaryContainer,
-              borderRadius: BorderRadius.circular(AppRadius.r16),
-            ),
-            alignment: Alignment.center,
-            child: FaIcon(slide.icon, size: 40, color: scheme.primary),
+      // Center when the content fits; scroll instead of overflowing on short
+      // (landscape-phone) viewports or at large accessibility text scales.
+      child: Center(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  color: scheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(AppRadius.r16),
+                ),
+                alignment: Alignment.center,
+                child: FaIcon(slide.icon, size: 40, color: scheme.primary),
+              ),
+              const SizedBox(height: AppSpacing.sp24),
+              Text(
+                slide.title,
+                style: theme.textTheme.headlineSmall,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppSpacing.sp12),
+              Text(
+                slide.body,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.sp24),
-          Text(
-            slide.title,
-            style: theme.textTheme.headlineSmall,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppSpacing.sp12),
-          Text(
-            slide.body,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+        ),
       ),
     );
   }

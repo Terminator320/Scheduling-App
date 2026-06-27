@@ -27,12 +27,18 @@ class ClientDetailView extends ConsumerStatefulWidget {
     this.scrollController,
     this.showHandle = false,
     this.bottomPadding = 24,
+    this.onDeleted,
   });
 
   final ClientRecord client;
   final ScrollController? scrollController;
   final bool showHandle;
   final double bottomPadding;
+
+  /// Called after a successful delete so a host that keeps this view mounted
+  /// (the split-layout detail pane) can clear the now-deleted selection.
+  /// In sheet mode the sheet pops itself instead.
+  final VoidCallback? onDeleted;
 
   @override
   ConsumerState<ClientDetailView> createState() => _ClientDetailViewState();
@@ -72,11 +78,16 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
       await _unlinkPhoneContact();
       ref.read(clientsRefreshProvider.notifier).bump();
       if (!mounted) return;
+      setState(() => _isDeleting = false);
+      notices.success(context.l10n.clients_clientDeletedSuccessfully);
       // A scrollController means we're inside a bottom sheet; close it.
+      // Otherwise (split-layout detail pane) ask the host to clear the pane,
+      // which still renders the just-deleted client until told to.
       if (widget.scrollController != null) {
         Navigator.pop(context);
+      } else {
+        widget.onDeleted?.call();
       }
-      notices.success(context.l10n.clients_clientDeletedSuccessfully);
     } catch (e, st) {
       ref.read(loggerProvider).warn('CLI-DEL deleteClient failed', e, st);
       if (!mounted) return;

@@ -25,6 +25,11 @@ class FirebaseClientsRepository implements ClientsRepository {
     _searchCache[key] = results;
   }
 
+  // Every write path must clear the cache, or search keeps serving the
+  // pre-write snapshot — including a just-deleted client whose detail view
+  // would then open on a doc that no longer exists.
+  void _invalidateSearchCache() => _searchCache.clear();
+
   @override
   Future<List<ClientRecord>> fetchClientsPage({
     required int limit,
@@ -60,6 +65,7 @@ class FirebaseClientsRepository implements ClientsRepository {
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    _invalidateSearchCache();
   }
 
   @override
@@ -68,11 +74,13 @@ class FirebaseClientsRepository implements ClientsRepository {
       ..._normalizedMap(client),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    _invalidateSearchCache();
   }
 
   @override
   Future<void> deleteClient(String id) async {
     await _clients.doc(id).delete();
+    _invalidateSearchCache();
   }
 
   @override

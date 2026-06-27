@@ -92,6 +92,14 @@
   "@common_cancel": {
     "description": "Cancel"
   },
+  "common_close": "Close",
+  "@common_close": {
+    "description": "Accessibility label / tooltip for a close button."
+  },
+  "common_remove": "Remove",
+  "@common_remove": {
+    "description": "Accessibility label / tooltip for a remove button."
+  },
   "common_clearText": "Clear text",
   "@common_clearText": {
     "description": "Tooltip on the x button that empties a text field"
@@ -882,6 +890,10 @@
   "@common_clientAdded": {
     "description": "Client added"
   },
+  "common_changesSaved": "Changes saved",
+  "@common_changesSaved": {
+    "description": "Success notice shown after saving edits to a record."
+  },
   "common_appointmentCreated": "Appointment created",
   "@common_appointmentCreated": {
     "description": "Appointment created"
@@ -1327,6 +1339,10 @@
   "settings_accountDeleted": "Your account has been deleted.",
   "@settings_accountDeleted": {
     "description": "Your account has been deleted."
+  },
+  "settings_deletingAccount": "Deleting your account…",
+  "@settings_deletingAccount": {
+    "description": "Progress label shown while the account is being deleted."
   },
   "error_couldNotDeleteAccount": "Could not delete your account. Please try again.",
   "@error_couldNotDeleteAccount": {

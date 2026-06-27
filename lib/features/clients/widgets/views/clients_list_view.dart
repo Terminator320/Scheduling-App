@@ -204,10 +204,28 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
               ? _emptyState(query: query)
               : _resultsList(results),
           loading: () => local.isEmpty ? _skeleton() : _resultsList(local),
-          error: (_, _) =>
-              local.isEmpty ? _emptyState(query: query) : _resultsList(local),
+          // A failed search must not look like "no such client": when the
+          // instant local fallback is also empty, show an error, not the
+          // empty state. Composes without logging (this is a builder).
+          error: (e, _) =>
+              local.isEmpty ? _searchError(e) : _resultsList(local),
         );
   }
+
+  Widget _searchError(Object error) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(AppSpacing.sp24),
+      child: Text(
+        composeErrorNotice(
+          context,
+          intro: context.l10n.error_introLoadClients,
+          tag: 'CLI-LIST',
+          error: error,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    ),
+  );
 
   Widget _resultsList(List<ClientRecord> items) => ListView.separated(
     padding: const EdgeInsets.only(bottom: AppSpacing.sp16),

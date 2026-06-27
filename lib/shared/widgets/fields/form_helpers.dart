@@ -46,13 +46,31 @@ InputDecoration formInputDecoration(BuildContext context, String hint) {
   );
 }
 
-Widget formRemoveButton(BuildContext context) {
-  return Container(
-    padding: const EdgeInsets.all(2),
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.54),
-      shape: BoxShape.circle,
+Widget formRemoveButton(BuildContext context, {required VoidCallback onTap}) {
+  return Semantics(
+    button: true,
+    label: context.l10n.common_remove,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      // 32px tap target around the small visual chip (the bare chip was ~18px,
+      // below the Material minimum and easy to miss on a thumbnail corner).
+      child: SizedBox(
+        width: 32,
+        height: 32,
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: Theme.of(
+                context,
+              ).colorScheme.scrim.withValues(alpha: 0.54),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.close, size: 16, color: Colors.white),
+          ),
+        ),
+      ),
     ),
-    child: const Icon(Icons.close, size: 14, color: Colors.white),
   );
 }

@@ -38,20 +38,23 @@ final employeesStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
   return ref.watch(employeesRepositoryProvider).watchEmployees();
 });
 
-final filteredEmployeesProvider = Provider.family<List<EmployeeRecord>, String>(
-  (ref, query) {
-    final list = ref.watch(allUsersStreamProvider).asData?.value ?? const [];
-    // Accent-folded text + digits-only phone matching — same rule as the
-    // client search, so accented names and formatted phone numbers still match.
-    final q = ClientSearchPolicy.normalize(query);
-    final qDigits = ClientSearchPolicy.digitsOnly(query);
-    if (q.isEmpty && qDigits.isEmpty) return list;
-    return list.where((e) {
-      final text = ClientSearchPolicy.normalize('${e.name} ${e.email}');
-      final phoneDigits = ClientSearchPolicy.digitsOnly(e.phone);
-      final matchesText = q.isNotEmpty && text.contains(q);
-      final matchesPhone = qDigits.isNotEmpty && phoneDigits.contains(qDigits);
-      return matchesText || matchesPhone;
-    }).toList();
-  },
-);
+final filteredEmployeesProvider = Provider.autoDispose
+    .family<List<EmployeeRecord>, String>(
+      (ref, query) {
+        final list =
+            ref.watch(allUsersStreamProvider).asData?.value ?? const [];
+        // Accent-folded text + digits-only phone matching — same rule as the
+        // client search, so accented names and formatted phone numbers still match.
+        final q = ClientSearchPolicy.normalize(query);
+        final qDigits = ClientSearchPolicy.digitsOnly(query);
+        if (q.isEmpty && qDigits.isEmpty) return list;
+        return list.where((e) {
+          final text = ClientSearchPolicy.normalize('${e.name} ${e.email}');
+          final phoneDigits = ClientSearchPolicy.digitsOnly(e.phone);
+          final matchesText = q.isNotEmpty && text.contains(q);
+          final matchesPhone =
+              qDigits.isNotEmpty && phoneDigits.contains(qDigits);
+          return matchesText || matchesPhone;
+        }).toList();
+      },
+    );

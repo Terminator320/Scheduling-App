@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 class ImageViewer extends StatefulWidget {
   const ImageViewer({required this.images, super.key, this.initialIndex = 0});
@@ -100,6 +101,7 @@ class _ImageViewerState extends State<ImageViewer> {
               child: Padding(
                 padding: const EdgeInsets.all(8),
                 child: IconButton(
+                  tooltip: context.l10n.common_close,
                   icon: const Icon(Icons.close, color: foreground),
                   onPressed: () => Navigator.of(context).pop(),
                 ),

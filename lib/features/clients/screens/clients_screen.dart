@@ -102,6 +102,7 @@ class _ListInformationState extends State<ListInformation> {
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton(
               onPressed: _onAddClient,
+              tooltip: context.l10n.clients_addClient,
               child: const Icon(Icons.add),
             )
           : null,
@@ -125,6 +126,7 @@ class _ListInformationState extends State<ListInformation> {
                   ? ClientDetailView(
                       key: ValueKey(_selectedClient!.id),
                       client: _selectedClient!,
+                      onDeleted: () => setState(() => _selectedClient = null),
                     )
                   : null,
               placeholder: _buildDetailPlaceholder(),

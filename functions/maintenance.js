@@ -126,10 +126,12 @@ const purgeExpiredHistory = onSchedule(
         await batch.commit();
         purged += snap.size;
 
-        for (const doc of snap.docs) {
-          const ok = await deleteAppointmentImages(doc.id);
-          if (!ok) imageFailures += 1;
-        }
+        // Delete each doc's image prefix concurrently rather than awaiting one
+        // network round-trip at a time across the whole batch.
+        const results = await Promise.all(
+            snap.docs.map((doc) => deleteAppointmentImages(doc.id)),
+        );
+        imageFailures += results.filter((ok) => !ok).length;
 
         if (snap.size < PURGE_BATCH_SIZE) break;
       }

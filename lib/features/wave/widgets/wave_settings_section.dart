@@ -85,11 +85,23 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final connectionAsync = ref.watch(waveConnectionProvider);
     // A Connect done this session wins; otherwise fall back to the cached
-    // persisted status. `.value` is null while loading or on a read error,
-    // which correctly renders as not-connected without a notice.
-    final connection = _connection ?? ref.watch(waveConnectionProvider).value;
+    // persisted status.
+    final connection = _connection ?? connectionAsync.value;
     final connected = connection != null;
+
+    // Distinguish "still loading" and "read failed" from "not connected" so an
+    // already-connected admin doesn't see the Connect CTA flash, and a genuine
+    // failure offers a retry instead of masquerading as never-connected.
+    if (_connection == null && connectionAsync.isLoading) {
+      return const _WaveStatusLoading();
+    }
+    if (_connection == null && connectionAsync.hasError) {
+      return _WaveStatusError(
+        onRetry: () => ref.invalidate(waveConnectionProvider),
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -124,19 +136,71 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
         ],
         // Connect is first-time setup only — once connected, the persisted
         // status row replaces it and only Import remains.
-        if (!connected) ...[
+        if (!connected)
           AnimatedLoadingButton(
             label: context.l10n.wave_connectToWave,
             isLoading: _connectBusy,
             onPressed: _connectBusy || _importBusy ? null : _connect,
+          )
+        else
+          // Import only makes sense once connected — a tap while disconnected
+          // is guaranteed to fail.
+          AnimatedLoadingButton(
+            label: context.l10n.wave_importCustomers,
+            isLoading: _importBusy,
+            onPressed: !_connectBusy && !_importBusy ? _import : null,
+            variant: AnimatedLoadingButtonVariant.outlined,
           ),
-          const SizedBox(height: AppSpacing.sp8),
-        ],
-        AnimatedLoadingButton(
-          label: context.l10n.wave_importCustomers,
-          isLoading: _importBusy,
-          onPressed: !_connectBusy && !_importBusy ? _import : null,
-          variant: AnimatedLoadingButtonVariant.outlined,
+      ],
+    );
+  }
+}
+
+/// Subtle placeholder while the persisted Wave status is still loading.
+class _WaveStatusLoading extends StatelessWidget {
+  const _WaveStatusLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: AppSpacing.sp12),
+      child: Center(
+        child: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+    );
+  }
+}
+
+/// Inline error + retry shown when the Wave status read fails (rather than
+/// silently rendering "not connected").
+class _WaveStatusError extends StatelessWidget {
+  const _WaveStatusError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Row(
+      children: [
+        Icon(Icons.error_outline_rounded, size: 18, color: scheme.error),
+        const SizedBox(width: AppSpacing.sp8),
+        Expanded(
+          child: Text(
+            context.l10n.error_somethingWentWrong,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: onRetry,
+          child: Text(context.l10n.common_retry),
         ),
       ],
     );

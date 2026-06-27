@@ -7,8 +7,6 @@ abstract class EmployeesRepository {
 
   Stream<List<EmployeeRecord>> watchAssignableUsers();
 
-  Future<EmployeeRecord?> getEmployeeById(String docId);
-
   /// Creates an invited employee. Invites are always `role: 'employee'` —
   /// admin is granted only after activation via [updateEmployee], because
   /// `firestore.rules` restricts invite self-activation to employees (an

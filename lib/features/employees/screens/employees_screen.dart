@@ -109,6 +109,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
 
     if (!mounted) return;
     await SheetFocus.unfocusAfterSheet();
+    if (!mounted) return;
     if (result is String) _handleEmployeeAction(result, employee);
   }
 
@@ -242,6 +243,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton(
               onPressed: _openEmployeeSheet,
+              tooltip: context.l10n.employees_inviteEmployee,
               child: const Icon(Icons.add),
             )
           : null,

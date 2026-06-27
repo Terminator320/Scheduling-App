@@ -150,9 +150,9 @@ class _EditablePhotoStrip extends StatelessWidget {
                 Positioned(
                   top: 4,
                   right: 12,
-                  child: GestureDetector(
+                  child: formRemoveButton(
+                    context,
                     onTap: () => onRemoveExisting(entry.key),
-                    child: formRemoveButton(context),
                   ),
                 ),
               ],
@@ -182,9 +182,9 @@ class _EditablePhotoStrip extends StatelessWidget {
                 Positioned(
                   top: 4,
                   right: 12,
-                  child: GestureDetector(
+                  child: formRemoveButton(
+                    context,
                     onTap: () => onRemoveNew(entry.key),
-                    child: formRemoveButton(context),
                   ),
                 ),
               ],
