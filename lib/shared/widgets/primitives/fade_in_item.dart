@@ -17,7 +17,7 @@ class _FadeInItemState extends State<FadeInItem>
   static const _perItemDelay = Duration(milliseconds: 30);
 
   AnimationController? _ctrl;
-  Animation<double>? _opacity;
+  CurvedAnimation? _opacity;
   bool _didSetup = false;
 
   @override
@@ -49,6 +49,7 @@ class _FadeInItemState extends State<FadeInItem>
 
   @override
   void dispose() {
+    _opacity?.dispose();
     _ctrl?.dispose();
     super.dispose();
   }

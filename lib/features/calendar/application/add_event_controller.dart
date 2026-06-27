@@ -222,25 +222,28 @@ class AddEventController extends Notifier<AddEventState> {
     // disables on the first tap and the guard above blocks a second tap.
     state = state.copyWith(isSubmitting: true);
 
-    if (!forceBusy) {
-      final busy = await repo.findBusyEmployees(
-        candidates: state.selectedEmployees,
-        start: start,
-        end: end,
-      );
-      if (busy.isNotEmpty) {
-        // Hand off to the busy-confirm dialog — not an error — so clear the
-        // in-flight flag and let the user decide whether to force.
-        state = state.copyWith(isSubmitting: false);
-        return AddEventBusyEmployees(
-          busyEmployees: busy,
+    try {
+      // Keep the conflict check inside the try: a throw here (offline /
+      // permission-denied) must reset isSubmitting, or Save stays stuck
+      // disabled and the reentrancy guard rejects every retry.
+      if (!forceBusy) {
+        final busy = await repo.findBusyEmployees(
+          candidates: state.selectedEmployees,
           start: start,
           end: end,
         );
+        if (busy.isNotEmpty) {
+          // Hand off to the busy-confirm dialog — not an error — so clear the
+          // in-flight flag and let the user decide whether to force.
+          state = state.copyWith(isSubmitting: false);
+          return AddEventBusyEmployees(
+            busyEmployees: busy,
+            start: start,
+            end: end,
+          );
+        }
       }
-    }
 
-    try {
       final docId = repo.newDocId();
       final client = state.selectedClient!;
       final appointment = AppointmentRecord(

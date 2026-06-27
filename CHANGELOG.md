@@ -10,6 +10,30 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.19.4+36] - 2026-06-27
+### Changed
+- **Risky actions now confirm before they happen.** Cancelling an appointment
+  and disabling or re-enabling a staff member ask for confirmation first, and
+  deleting your account shows a full-screen progress overlay so it can't be
+  triggered twice.
+- **Forms are quicker to fill in.** Name fields capitalise automatically, the
+  keyboard's "next" key moves you through a form field by field, and the status
+  and staff-member chips are bigger, with clearer labels for screen readers.
+
+### Fixed
+- **Saving an appointment can't accidentally book it twice.** Quickly
+  double-tapping Save when adding or editing an appointment no longer creates a
+  duplicate visit (or duplicate repeats), even on a slow connection.
+- **Buttons no longer get stuck after a failure.** If checking for scheduling
+  conflicts or changing a staff member's status failed, the button could stay
+  greyed-out and spinning; it now resets so you can try again.
+- **Search no longer shows clients or appointments that were just changed or
+  deleted.** Client and appointment-history search results stay in sync after an
+  edit or deletion.
+- **Removing a client on a tablet clears the side panel.** Deleting a client in
+  the two-pane layout no longer leaves their details on screen with a frozen
+  button.
+
 ## [1.19.3+35] - 2026-06-26
 ### Changed
 - **The app now adapts to small phones and large text sizes.** Appointment

@@ -73,6 +73,10 @@ class AuthService {
 
     final user = credential.user!;
 
+    // FIXME(pre-deploy): this pre-verification invite lookup resolves to null
+    // once the resolveMyInvite email_verified gate deploys, breaking signup.
+    // Redesign to defer invite resolution to first verified sign-in before
+    // deploying functions — see docs/AUDIT_FOLLOWUPS.md #4.
     InvitedEmployeeMatch? invitedEmployee;
     try {
       invitedEmployee = await _employees.findInvitedEmployeeForCurrentUser();

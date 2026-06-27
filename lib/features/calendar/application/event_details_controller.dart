@@ -361,6 +361,13 @@ class EventDetailsController extends Notifier<EventDetailsState> {
     required String materialsNeeded,
     bool applyToSeries = false,
   }) async {
+    // Reentrancy guard: mark in-flight before the seed-settle await, so a
+    // second tap during a cold-cache seed read can't start a concurrent save
+    // (which would double-write a series rewrite). The Save button and its
+    // call-site guard both read state.isSaving.
+    if (state.isSaving) return const EventDetailsInvalid();
+    state = state.copyWith(isSaving: true);
+
     // Let the active-employee seed settle before validating — otherwise a save
     // fired during the seed's read sees an empty selection and spuriously fails
     // "employees required" (or drops originals). Almost always already done.
@@ -383,10 +390,14 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       ),
     );
     state = state.copyWith(errors: errors);
-    if (errors.isNotEmpty) return const EventDetailsInvalid();
+    if (errors.isNotEmpty) {
+      state = state.copyWith(isSaving: false);
+      return const EventDetailsInvalid();
+    }
 
     final id = appointment.id;
     if (id == null) {
+      state = state.copyWith(isSaving: false);
       return EventDetailsFailed(
         StateError('Cannot save an appointment without an id.'),
       );
@@ -401,8 +412,6 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       state.selectedEndTime,
       state.selectedStartTime,
     );
-
-    state = state.copyWith(isSaving: true);
 
     try {
       final pickedClient = state.selectedClient;
