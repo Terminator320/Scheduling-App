@@ -92,4 +92,75 @@ void main() {
       });
     });
   });
+
+  group('retryStream', () {
+    test('re-subscribes on a retryable error then yields the values', () {
+      fakeAsync((async) {
+        var subscriptions = 0;
+        final emitted = <int>[];
+
+        retryStream<int>(
+          () {
+            subscriptions++;
+            if (subscriptions < 3) {
+              return Stream<int>.error(StateError('not ready'));
+            }
+            return Stream<int>.fromIterable([1, 2]);
+          },
+          retryWhen: (e) => e is StateError,
+          delays: const [
+            Duration(milliseconds: 400),
+            Duration(milliseconds: 1200),
+          ],
+        ).listen(emitted.add);
+
+        async.elapse(const Duration(seconds: 3));
+        expect(subscriptions, 3);
+        expect(emitted, [1, 2]);
+      });
+    });
+
+    test('does not retry an error the predicate rejects', () {
+      fakeAsync((async) {
+        var subscriptions = 0;
+        Object? caught;
+
+        retryStream<int>(
+          () {
+            subscriptions++;
+            return Stream<int>.error(ArgumentError('nope'));
+          },
+          retryWhen: (e) => e is StateError,
+          delays: const [Duration(milliseconds: 400)],
+        ).listen(null, onError: (Object e) => caught = e);
+
+        async.elapse(const Duration(seconds: 2));
+        expect(subscriptions, 1);
+        expect(caught, isA<ArgumentError>());
+      });
+    });
+
+    test('surfaces the error after exhausting every retry', () {
+      fakeAsync((async) {
+        var subscriptions = 0;
+        Object? caught;
+
+        retryStream<int>(
+          () {
+            subscriptions++;
+            return Stream<int>.error(StateError('still down'));
+          },
+          retryWhen: (e) => e is StateError,
+          delays: const [
+            Duration(milliseconds: 400),
+            Duration(milliseconds: 1200),
+          ],
+        ).listen(null, onError: (Object e) => caught = e);
+
+        async.elapse(const Duration(seconds: 5));
+        expect(subscriptions, 3);
+        expect(caught, isA<StateError>());
+      });
+    });
+  });
 }

@@ -127,6 +127,16 @@ class AuthFailureSignupCodeExpired extends AuthFailure {
       c.l10n.error_thatCodeHasExpiredAskYourAdmin;
 }
 
+// The code is valid but was issued for a different email than the one the user
+// signed up with — a common admin/employee typo. Distinct from "invalid code"
+// so the message points at the email, not the code.
+class AuthFailureSignupEmailMismatch extends AuthFailure {
+  const AuthFailureSignupEmailMismatch();
+  @override
+  String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
+      c.l10n.error_thatCodeWasIssuedForADifferentEmail;
+}
+
 class AuthFailurePermissionDenied extends AuthFailure {
   const AuthFailurePermissionDenied();
   @override

@@ -38,4 +38,10 @@ void main() {
       contains('expired'),
     );
   });
+  testWidgets('email-mismatch signup code message', (t) async {
+    expect(
+      await messageFor(t, const AuthFailureSignupEmailMismatch()),
+      contains('different email'),
+    );
+  });
 }
