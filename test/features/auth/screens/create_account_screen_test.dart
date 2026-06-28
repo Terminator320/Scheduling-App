@@ -50,7 +50,10 @@ void main() {
     await tester.pumpWidget(_wrap(auth));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(FilledButton).first);
+    final submit = find.byType(FilledButton).first;
+    await tester.ensureVisible(submit);
+    await tester.pumpAndSettle();
+    await tester.tap(submit);
     await tester.pumpAndSettle();
 
     verifyNever(
@@ -81,7 +84,10 @@ void main() {
     await tester.enterText(fields.at(2), 'Password1!');
     await tester.enterText(fields.at(3), 'BADCODE');
 
-    await tester.tap(find.byType(FilledButton).first);
+    final submit = find.byType(FilledButton).first;
+    await tester.ensureVisible(submit);
+    await tester.pumpAndSettle();
+    await tester.tap(submit);
     await tester.pumpAndSettle();
 
     expect(find.textContaining("isn't valid"), findsOneWidget);

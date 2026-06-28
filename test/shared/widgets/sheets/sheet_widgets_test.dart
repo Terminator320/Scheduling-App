@@ -36,4 +36,3 @@ void main() {
     expect(sheet.maxChildSize, 0.98);
   });
 }
-

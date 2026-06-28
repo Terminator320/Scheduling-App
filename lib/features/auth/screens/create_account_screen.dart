@@ -186,9 +186,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const AuthLogo(),
-        const SizedBox(height: AppSpacing.sp24),
-        AuthHeaderText(
+        AuthBrandHeader(
           title: context.l10n.auth_createAccount,
           subtitle:
               context.l10n.auth_useTheEmailYourAdminAddedToTheEmployeeList,
@@ -264,7 +262,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
             ),
           ),
         ),
-      ].authStaggerIn(),
+      ],
     );
   }
 }

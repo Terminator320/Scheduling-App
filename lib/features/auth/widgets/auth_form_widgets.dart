@@ -4,6 +4,7 @@ import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/branding/brand_logo.dart';
 import 'package:scheduling/shared/widgets/fields/clear_text_button.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
@@ -27,6 +28,23 @@ class AuthScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+
+    // One gentle entrance for the whole form (a single fade + small rise),
+    // rather than staggering every field in separately. Collapses to instant
+    // under the OS reduce-motion setting.
+    Widget content = AutofillGroup(child: child);
+    if (!MediaQuery.disableAnimationsOf(context)) {
+      content = content
+          .animate()
+          .fadeIn(duration: 360.ms, curve: Curves.easeOut)
+          .slideY(
+            begin: 0.04,
+            end: 0,
+            duration: 360.ms,
+            curve: AppAnimationCurves.entrance,
+          );
+    }
+
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
@@ -38,7 +56,15 @@ class AuthScaffold extends StatelessWidget {
               horizontal: AppSpacing.sp24,
               vertical: AppSpacing.sp32,
             ),
-            child: AutofillGroup(child: child),
+            // Cap the form width and center it so it reads as a tidy column on
+            // tablets / landscape instead of fields stretched edge to edge.
+            // Phones are narrower than the cap, so this is a no-op there.
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: content,
+              ),
+            ),
           ),
         ),
       ),
@@ -74,8 +100,9 @@ class AuthFormSwitcher extends StatelessWidget {
   }
 }
 
-/// A headline + supporting line, the standard heading used at the top of each
-/// auth form and success panel.
+/// A centered headline + supporting line, the standard heading used under the
+/// brand mark on each auth form and success panel. Full-width so it centers
+/// across the form regardless of the parent column's cross-axis alignment.
 class AuthHeaderText extends StatelessWidget {
   const AuthHeaderText({
     required this.title,
@@ -88,13 +115,50 @@ class AuthHeaderText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    return SizedBox(
+      width: double.infinity,
+      child: Column(
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.headlineLarge,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.sp4),
+          Text(
+            subtitle,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The centered brand header shared by the three auth screens: the mascot mark
+/// above a [AuthHeaderText]. Replaces the old left-aligned logo-badge +
+/// heading stack.
+class AuthBrandHeader extends StatelessWidget {
+  const AuthBrandHeader({
+    required this.title,
+    required this.subtitle,
+    super.key,
+  });
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: textTheme.headlineLarge),
-        const SizedBox(height: 4),
-        Text(subtitle, style: textTheme.bodyMedium),
+        const BrandMark(size: 84),
+        const SizedBox(height: AppSpacing.sp16),
+        AuthHeaderText(title: title, subtitle: subtitle),
       ],
     );
   }
@@ -128,15 +192,6 @@ class AuthIconBadge extends StatelessWidget {
       child: Icon(icon, color: foreground ?? scheme.onPrimary, size: 22),
     );
   }
-}
-
-/// The square branded app mark shown at the top of every auth screen.
-class AuthLogo extends StatelessWidget {
-  const AuthLogo({super.key});
-
-  @override
-  Widget build(BuildContext context) =>
-      const AuthIconBadge(icon: Icons.calendar_today_rounded);
 }
 
 /// The email input used by all three auth forms: a shake-on-error wrapper
@@ -337,12 +392,4 @@ class AuthCodeField extends StatelessWidget {
       ),
     );
   }
-}
-
-/// The staggered entrance shared by every auth column: each child fades in and
-/// rises with a 65ms stagger. Apply to the column's `children` list.
-extension AuthStaggerIn on List<Widget> {
-  AnimateList<dynamic> authStaggerIn() => animate(interval: 65.ms)
-      .fadeIn(duration: 425.ms, curve: Curves.easeOutCubic)
-      .slideY(begin: 0.28, duration: 425.ms, curve: Curves.easeOutCubic);
 }

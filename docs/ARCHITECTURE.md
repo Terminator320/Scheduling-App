@@ -25,7 +25,7 @@ lib/
 │   ├── security/                    BiometricAuthService (local_auth) + AppLock app-wide biometric gate
 │   ├── storage/                     SecureStorageService + SecureStorageKeys — encrypted local storage (flutter_secure_storage)
 │   ├── theme/                       Design tokens (AppColors, AppSpacing, AppRadius), button_styles (destructiveOutlinedButtonStyle), ThemeData, ThemeNotifier
-│   ├── utils/                       l10n_extensions.dart (context.l10n), date helpers, language controller, sheet focus
+│   ├── utils/                       l10n_extensions.dart (context.l10n), date helpers, language controller, sheet focus, retry.dart (retryAsync/retryStream — one post-sign-in permission-denied retry while the auth token propagates)
 │   └── validators/                  Auth input validators (email format, password rules)
 │
 ├── shared/widgets/                  Reusable UI components used across ≥2 features, grouped by type
@@ -35,7 +35,8 @@ lib/
 │   ├── fields/                      address_autocomplete_field, labeled_text_field (built-in shake + animated error row), app_search_bar, clear_text_button (ClearTextButton — the one clear-"x" suffix), form_helpers
 │   ├── cards/                       list_item_tile (shared row layout behind client/employee tiles), info_card (InfoCard + InfoCardRow — bordered card of tappable rows with tinted icon chips)
 │   ├── dialogs/                     confirm_dialog (showConfirmDialog — shared Cancel/confirm, destructive variant)
-│   └── sheets/                      sheet_widgets (DraggableSheetFrame, SheetHandle, DetailSheetListView — detail-view scroll shell; FormSheetScaffold — add/edit form-sheet chrome)
+│   ├── sheets/                      sheet_widgets (DraggableSheetFrame, SheetHandle, DetailSheetListView — detail-view scroll shell; FormSheetScaffold — add/edit form-sheet chrome)
+│   └── branding/                    brand_logo (BrandMark — the plumber-mascot app logo from assets/images/icon.png + the brandName const; pass decorative:true where a visible wordmark sits beside it)
 │
 ├── routes/
 │   └── app_routes.dart              Single onGenerateRoute; typed arg classes per route; page transitions
@@ -339,6 +340,15 @@ persists non-sensitive identity (uid, docId, name, colour) so the calendar can
 render immediately; role and status are always re-read live from Firestore (see
 Security Invariant #1).
 
+The three auth screens (sign-in, create-account, password-reset) share
+`AuthScaffold` (`auth/widgets/auth_form_widgets.dart`): a surface scroll view
+that centres the form, caps it at 440px on wide/landscape, and plays one
+reduce-motion-gated fade/rise entrance for the whole form (not a per-field
+stagger). Each leads with `AuthBrandHeader` (the `BrandMark` mascot above a
+centred title). The splash renders the company wordmark as `onPrimary` text —
+the navy logo image would be illegible on the brand-blue background — and the
+onboarding carousel adds a Back action once past the first slide.
+
 ```
 SplashScreen → splashDestinationProvider (FutureProvider<SplashDestination>)
   ├── auth.currentUser == null → SplashGoToLogin
@@ -360,6 +370,11 @@ login_screen._signIn()
 The status gate uses `!employee.isActive` (not `isDisabled`) so it also catches
 `invited`, `''`, and any future non-active status — see the matching CLAUDE.md
 invariant. Sign-in no longer activates invites — that's server-side now (below).
+The first authorized read fired right after sign-in can come back
+`permission-denied` until the freshly minted token propagates; `findUserByUid`
+goes through `_retryOnAuthPropagation` (login) and the appointments stream
+through `retryStream` (`core/utils/retry.dart`), each retrying that one case
+once so the calendar loads on the first try.
 
 ### Invited-employee signup (one-time codes)
 
@@ -374,8 +389,12 @@ create_account_screen → AuthService.signUpWithCode(email, password, code)
   ├── redeemSignupCode callable → validates (14-day expiry; token email ==
   │     invite email), atomically sets uid + status:'active', consumes the
   │     code   [Admin SDK only — no client self-activation]
-  └── on failure → roll back the new Auth user;
-        AuthFailureInvalidSignupCode / AuthFailureSignupCodeExpired
+  │     [rate-limited by token email, not caller uid — see Security Invariant]
+  └── on failure → roll back the just-created Auth user (re-auth then delete;
+        AuthFailureAccountCreationIncomplete if the rollback itself fails):
+        AuthFailureInvalidSignupCode / AuthFailureSignupCodeExpired /
+        AuthFailureSignupEmailMismatch (valid code, wrong email — distinct from
+        invalid-code) / AuthFailureTooManyRequests
 On success the user is active + signed in; login routes them into MainCalendar.
 ```
 
@@ -521,7 +540,7 @@ authoritative; line numbers drift.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (587 test cases as of 2026-06-27). `flutter analyze` is
+Run: `flutter test` (587 test cases as of 2026-06-28). `flutter analyze` is
 clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.
