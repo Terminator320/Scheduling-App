@@ -126,11 +126,7 @@ class AuthService {
     required String reason,
   }) async {
     try {
-      await _deleteFreshlyCreatedUser(
-        credential: credential,
-        email: email,
-        password: password,
-      );
+      await _deleteFreshlyCreatedUser(email: email, password: password);
     } catch (e, st) {
       final uid = _auth.currentUser?.uid ?? credential.user?.uid;
       _logger.warn(
@@ -147,14 +143,11 @@ class AuthService {
   // Deletes the just-created user, re-authenticating first when the session was
   // already torn down (current user null) or the delete needs a recent login.
   Future<void> _deleteFreshlyCreatedUser({
-    required UserCredential credential,
     required String email,
     required String password,
   }) async {
-    var user = _auth.currentUser ?? credential.user;
-    if (_auth.currentUser == null) {
-      user = (await signIn(email: email, password: password)).user;
-    }
+    var user = _auth.currentUser;
+    user ??= (await signIn(email: email, password: password)).user;
     if (user == null) return;
     try {
       await user.delete();

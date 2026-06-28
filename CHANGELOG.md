@@ -10,6 +10,49 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.21.0+38] - 2026-06-28
+### Added
+- **The first-launch walkthrough now has a Back button.** You can step back to a
+  slide you moved past instead of only going forward or skipping.
+
+### Changed
+- **A refreshed, on-brand welcome.** The sign-in, create-account, password-reset,
+  and intro screens now lead with the Plombier Eau Secours logo and a cleaner,
+  centered layout that also looks right on tablets and in landscape.
+- **Sign-in is easier to scan.** "Forgot password?" now sits directly under the
+  password field, and creating an account is a clear prompt at the bottom of the
+  screen.
+- **Calmer screen transitions.** The sign-in and account screens now ease in
+  smoothly as a whole rather than animating each field one at a time, and the
+  loading splash shows the company name beneath the logo.
+
+## [1.20.0+37] - 2026-06-28
+### Added
+- **Inviting a staff member now gives you a one-time code to share with them.**
+  When you invite someone, the app shows a code you can copy and pass on however
+  you like — they use it to set up their own login. Re-inviting a person who
+  hasn't signed up yet hands you a fresh code, so a lost or expired one is easy
+  to replace.
+
+### Changed
+- **Joining as an invited staff member is simpler and works right away.** New
+  staff create their account with their email, a password, and the code from
+  their admin — there's no separate email-verification step, and the account is
+  ready to use the moment they finish.
+
+### Fixed
+- **Signing up with the wrong email now gives a clear message.** If the email
+  you enter doesn't match the one your admin invited, the app tells you to use
+  the exact invited email instead of a confusing "invalid code".
+- **A failed sign-up no longer leaves a broken half-made account behind.** If
+  setting up the account doesn't go through, the partially-created login is
+  cleaned up so you can simply try again.
+- **Too many wrong-code attempts are now blocked for a short while**, so an
+  invite can't be guessed at.
+- **Your appointments load reliably right after you sign in.** A timing hiccup
+  that could briefly stop the calendar from loading on the very first try after
+  signing in now sorts itself out automatically.
+
 ## [1.19.4+36] - 2026-06-27
 ### Changed
 - **Risky actions now confirm before they happen.** Cancelling an appointment

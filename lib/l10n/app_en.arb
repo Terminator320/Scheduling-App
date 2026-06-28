@@ -1006,6 +1006,10 @@
   "@auth_signInToYourAccount": {
     "description": "Sign in to your account"
   },
+  "auth_dontHaveAnAccount": "Don't have an account?",
+  "@auth_dontHaveAnAccount": {
+    "description": "Prompt before the Create account link on the sign-in screen"
+  },
   "common_tapToScheduleAnAppointment": "Tap + to schedule an appointment.",
   "@common_tapToScheduleAnAppointment": {
     "description": "Tap + to schedule an appointment."
@@ -1101,6 +1105,10 @@
   "onboarding_getStarted": "Get Started",
   "@onboarding_getStarted": {
     "description": "Final-slide button that finishes onboarding"
+  },
+  "onboarding_back": "Back",
+  "@onboarding_back": {
+    "description": "Back button shown after the first onboarding slide"
   },
   "settings_version": "Version {version} ({buildNumber})",
   "@settings_version": {

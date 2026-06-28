@@ -278,13 +278,11 @@ class _LoginState extends ConsumerState<Login> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const AuthLogo(),
-          const SizedBox(height: AppSpacing.sp24),
-          AuthHeaderText(
+          AuthBrandHeader(
             title: context.l10n.auth_welcomeBack,
             subtitle: context.l10n.auth_signInToYourAccount,
           ),
-          const SizedBox(height: AppSpacing.sp16),
+          const SizedBox(height: AppSpacing.sp24),
           AuthBanner(
             message: _bannerError ?? _bannerSuccess,
             kind: _bannerError != null
@@ -314,19 +312,26 @@ class _LoginState extends ConsumerState<Login> {
             onChanged: _onFieldChanged,
             onToggleObscured: () => setState(() => _isObscured = !_isObscured),
           ),
-          const SizedBox(height: AppSpacing.sp24),
+          const SizedBox(height: AppSpacing.sp8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _isLoading ? null : _openForgotPassword,
+              child: Text(context.l10n.auth_forgotPassword),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sp8),
           AnimatedLoadingButton(
             label: context.l10n.auth_signIn,
             isLoading: _isLoading,
             onPressed: _signIn,
           ),
-          const SizedBox(height: AppSpacing.sp16),
-          _LoginFooterActions(
+          const SizedBox(height: AppSpacing.sp24),
+          _CreateAccountPrompt(
             enabled: !_isLoading,
-            onForgotPassword: _openForgotPassword,
             onCreateAccount: _openCreateAccount,
           ),
-        ].authStaggerIn(),
+        ],
       ),
     );
   }
@@ -347,15 +352,16 @@ Future<T> _retryOnAuthPropagation<T>(Future<T> Function() read) async {
   }
 }
 
-class _LoginFooterActions extends StatelessWidget {
-  const _LoginFooterActions({
+/// Bottom call-to-action on the sign-in screen: a muted prompt next to a
+/// primary "Create account" link. A [Wrap] so the two pieces flow to a second
+/// line at large text scale instead of overflowing the row.
+class _CreateAccountPrompt extends StatelessWidget {
+  const _CreateAccountPrompt({
     required this.enabled,
-    required this.onForgotPassword,
     required this.onCreateAccount,
   });
 
   final bool enabled;
-  final VoidCallback onForgotPassword;
   final VoidCallback onCreateAccount;
 
   @override
@@ -363,31 +369,23 @@ class _LoginFooterActions extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final textTheme = theme.textTheme;
-    // Wrap so the two action labels can flow to a second line
-    // at 1.4× / 2.0× text scale instead of overflowing the row.
-    // alignment: spaceBetween keeps the original single-line
-    // visual at normal scale.
     return Wrap(
-      alignment: WrapAlignment.spaceBetween,
+      alignment: WrapAlignment.center,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        TextButton(
-          onPressed: enabled ? onForgotPassword : null,
-          child: Text(
-            context.l10n.auth_forgotPassword,
-            style: textTheme.bodySmall?.copyWith(
-              color: scheme.primary,
-              fontWeight: FontWeight.w500,
-            ),
+        Text(
+          context.l10n.auth_dontHaveAnAccount,
+          style: textTheme.bodyMedium?.copyWith(
+            color: scheme.onSurfaceVariant,
           ),
         ),
         TextButton(
           onPressed: enabled ? onCreateAccount : null,
           child: Text(
             context.l10n.auth_createAccount,
-            style: textTheme.bodySmall?.copyWith(
+            style: textTheme.bodyMedium?.copyWith(
               color: scheme.primary,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),

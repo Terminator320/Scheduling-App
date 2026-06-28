@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/splash/application/splash_controller.dart';
 import 'package:scheduling/routes/app_routes.dart';
+import 'package:scheduling/shared/widgets/branding/brand_logo.dart';
 
 /// Auth-gate splash. Visually matches the OS native splash
 /// (`flutter_native_splash`) so the handoff is seamless: same logo, same
@@ -96,7 +100,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-
     if (_useAuthoritative) {
       ref.listen<AsyncValue<SplashDestination>>(splashDestinationProvider, (
         _,
@@ -115,26 +118,18 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       ref.read(splashDestinationProvider).whenData(_go);
     }
 
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Scaffold(
       backgroundColor: scheme.primary,
       body: SafeArea(
         child: Column(
           children: [
-            Expanded(
-              child: Center(
-                child: Image.asset(
-                  'assets/images/logo_splash.png',
-                  width: 180,
-                  height: 180,
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
+            Expanded(child: Center(child: _buildHero(theme))),
             Padding(
               padding: const EdgeInsets.only(bottom: 48, left: 48, right: 48),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(AppRadius.rFull),
                 child: LinearProgressIndicator(
                   backgroundColor: scheme.onPrimary.withValues(alpha: 0.2),
                   valueColor: AlwaysStoppedAnimation<Color>(scheme.onPrimary),
@@ -144,6 +139,49 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Mascot mark + the company wordmark in white. The mark stays static and
+  /// opaque so it lines up with the OS native splash (no fade-back-in pop at
+  /// handoff); only the wordmark — rendered as text, since the navy logo image
+  /// would be illegible on brand-blue — fades/rises in. Scroll-wrapped so it
+  /// can't overflow at large text scale on a short viewport, and the reveal
+  /// collapses to instant under reduce-motion.
+  Widget _buildHero(ThemeData theme) {
+    Widget wordmark = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp24),
+      child: Text(
+        brandName,
+        textAlign: TextAlign.center,
+        style: theme.textTheme.headlineSmall?.copyWith(
+          color: theme.colorScheme.onPrimary,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+
+    if (!MediaQuery.disableAnimationsOf(context)) {
+      wordmark = wordmark
+          .animate()
+          .fadeIn(duration: 450.ms, curve: Curves.easeOut)
+          .slideY(
+            begin: 0.4,
+            end: 0,
+            duration: 450.ms,
+            curve: AppAnimationCurves.entrance,
+          );
+    }
+
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const BrandMark(size: 156, decorative: true),
+          const SizedBox(height: AppSpacing.sp24),
+          wordmark,
+        ],
       ),
     );
   }

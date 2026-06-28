@@ -2,7 +2,7 @@ name: scheduling
 description: "Paul App"
 publish_to: 'none'
 
-version: 1.19.4+36
+version: 1.21.0+38
 
 environment:
   sdk: ^3.10.7
@@ -99,7 +99,7 @@ flutter:
 
   assets:
     - dev/.env
-    - assets/images/logo_splash.png
+    - assets/images/icon.png
 
 # Native splash config consumed by `dart run flutter_native_splash:create`.
 # Brand color #005CC8 matches AppColors.primary (lib/core/theme/design_tokens.dart).
