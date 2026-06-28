@@ -62,10 +62,16 @@ describe("validateRedemption", () => {
       tokenEmail: "a@b.com", nowMs: 1_500_000,
     })).toEqual({ok: false, reason: "invalid"});
   });
-  test("invalid when the token email does not match the invite", () => {
+  test("email-mismatch when the token email does not match the invite", () => {
     expect(validateRedemption({
       codeData: code, inviteData: invite,
       tokenEmail: "other@b.com", nowMs: 1_500_000,
+    })).toEqual({ok: false, reason: "email-mismatch"});
+  });
+  test("invalid (not email-mismatch) when there is no token email", () => {
+    expect(validateRedemption({
+      codeData: code, inviteData: invite,
+      tokenEmail: "", nowMs: 1_500_000,
     })).toEqual({ok: false, reason: "invalid"});
   });
   test("expired when past expiresAt", () => {

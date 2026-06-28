@@ -78,7 +78,12 @@ class AuthService {
       _logger.warn('signUpWithCode: redeemSignupCode failed', e, st);
       final failure = _mapRedemptionError(e);
       if (freshlyCreated) {
-        await _rollbackOrFailLoud(credential, reason: 'code-redemption-failed');
+        await _rollbackOrFailLoud(
+          credential,
+          email: normalizedEmail,
+          password: password,
+          reason: 'code-redemption-failed',
+        );
       } else {
         await _signOutQuietly();
       }
@@ -91,6 +96,8 @@ class AuthService {
       switch (e.message) {
         case 'code-expired':
           return const AuthFailureSignupCodeExpired();
+        case 'code-email-mismatch':
+          return const AuthFailureSignupEmailMismatch();
         case 'invalid-code':
           return const AuthFailureInvalidSignupCode();
       }
@@ -104,30 +111,59 @@ class AuthService {
     return const AuthFailureUnknown();
   }
 
-  // Best-effort cleanup of the Auth user we just created. When this delete
-  // fails (App Check hiccup, network blip, requires-recent-login edge case)
-  // the user is left orphaned: an Auth identity with no Firestore users doc
-  // backing it, which blocks future Create-Account attempts with the same
-  // email. Sign the session out so we never leave a half-signed-in orphan,
-  // log the failure for Crashlytics, and throw a distinct failure so the UI
-  // tells the admin how to recover.
+  // Cleanup of the Auth user we just created. The global account guard signs
+  // out any signed-in user with no Firestore users doc (which is exactly this
+  // half-created user before redemption), so by the time we get here
+  // `currentUser` is often already null and a plain `user.delete()` throws
+  // `no-current-user`, leaving an orphan. We re-authenticate with the same
+  // credentials before deleting so the cleanup actually lands. If it still
+  // fails, sign out, log the orphan for Crashlytics, and throw a distinct
+  // failure so the UI tells the admin how to recover.
   Future<void> _rollbackOrFailLoud(
     UserCredential credential, {
+    required String email,
+    required String password,
     required String reason,
   }) async {
-    final user = credential.user;
-    if (user == null) return;
     try {
-      await user.delete();
+      await _deleteFreshlyCreatedUser(
+        credential: credential,
+        email: email,
+        password: password,
+      );
     } catch (e, st) {
+      final uid = _auth.currentUser?.uid ?? credential.user?.uid;
       _logger.warn(
         'signUpWithCode: rollback delete failed ($reason); '
-        'orphan Auth user left for uid=${user.uid}',
+        'orphan Auth user left for uid=$uid',
         e,
         st,
       );
       await _signOutQuietly();
       throw const AuthFailureAccountCreationIncomplete();
+    }
+  }
+
+  // Deletes the just-created user, re-authenticating first when the session was
+  // already torn down (current user null) or the delete needs a recent login.
+  Future<void> _deleteFreshlyCreatedUser({
+    required UserCredential credential,
+    required String email,
+    required String password,
+  }) async {
+    var user = _auth.currentUser ?? credential.user;
+    if (_auth.currentUser == null) {
+      user = (await signIn(email: email, password: password)).user;
+    }
+    if (user == null) return;
+    try {
+      await user.delete();
+    } on FirebaseAuthException catch (e) {
+      if (e.code != 'requires-recent-login' && e.code != 'no-current-user') {
+        rethrow;
+      }
+      final reauthed = (await signIn(email: email, password: password)).user;
+      await reauthed?.delete();
     }
   }
 

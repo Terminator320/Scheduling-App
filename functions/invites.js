@@ -146,6 +146,9 @@ const redeemSignupCode = onCall(APP_CHECK, async (req) => {
     if (outcome.reason === "expired") {
       throw new HttpsError("failed-precondition", "code-expired");
     }
+    if (outcome.reason === "email-mismatch") {
+      throw new HttpsError("failed-precondition", "code-email-mismatch");
+    }
     throw new HttpsError("invalid-argument", "invalid-code");
   }
   return {role: outcome.role, name: outcome.name};

@@ -31,6 +31,7 @@ void main() {
     when(() => credential.user).thenReturn(user);
     when(() => user.uid).thenReturn('uid-001');
     when(() => user.delete()).thenAnswer((_) async {});
+    when(() => auth.currentUser).thenReturn(user);
     when(() => auth.signOut()).thenAnswer((_) async {});
   });
 
@@ -79,6 +80,76 @@ void main() {
           throwsA(isA<AuthFailureInvalidSignupCode>()),
         );
         verify(() => user.delete()).called(1);
+      },
+    );
+
+    test(
+      'maps code-email-mismatch to AuthFailureSignupEmailMismatch',
+      () async {
+        when(
+          () => auth.createUserWithEmailAndPassword(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+          ),
+        ).thenAnswer((_) async => credential);
+        when(() => employees.redeemSignupCode(any())).thenThrow(
+          FirebaseFunctionsException(
+            message: 'code-email-mismatch',
+            code: 'failed-precondition',
+          ),
+        );
+
+        await expectLater(
+          service.signUpWithCode(email: 'a@b.com', password: 'pw', code: 'x'),
+          throwsA(isA<AuthFailureSignupEmailMismatch>()),
+        );
+      },
+    );
+
+    test(
+      'rollback re-authenticates and deletes when the guard signed the '
+      'fresh user out',
+      () async {
+        when(
+          () => auth.createUserWithEmailAndPassword(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+          ),
+        ).thenAnswer((_) async => credential);
+        when(() => employees.redeemSignupCode(any())).thenThrow(
+          FirebaseFunctionsException(
+            message: 'invalid-code',
+            code: 'invalid-argument',
+          ),
+        );
+        // The account guard already tore the session down before rollback.
+        when(() => auth.currentUser).thenReturn(null);
+        final reauthCredential = _MockUserCredential();
+        final reauthUser = _MockUser();
+        when(() => reauthCredential.user).thenReturn(reauthUser);
+        when(reauthUser.delete).thenAnswer((_) async {});
+        when(
+          () => auth.signInWithEmailAndPassword(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+          ),
+        ).thenAnswer((_) async => reauthCredential);
+
+        await expectLater(
+          service.signUpWithCode(
+            email: 'a@b.com',
+            password: 'pw123456',
+            code: 'bad',
+          ),
+          throwsA(isA<AuthFailureInvalidSignupCode>()),
+        );
+        verify(
+          () => auth.signInWithEmailAndPassword(
+            email: 'a@b.com',
+            password: 'pw123456',
+          ),
+        ).called(1);
+        verify(reauthUser.delete).called(1);
       },
     );
 

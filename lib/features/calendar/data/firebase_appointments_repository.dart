@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -193,19 +194,22 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   @override
   Stream<List<AppointmentRecord>> watchInRange(AppointmentDateRange range) {
-    return _appointments
-        .where(
-          'startTime',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(range.start),
-        )
-        .where('startTime', isLessThan: Timestamp.fromDate(range.end))
-        .orderBy('startTime')
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
-              .toList(),
-        );
+    return retryStream(
+      () => _appointments
+          .where(
+            'startTime',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(range.start),
+          )
+          .where('startTime', isLessThan: Timestamp.fromDate(range.end))
+          .orderBy('startTime')
+          .snapshots()
+          .map(
+            (snapshot) => snapshot.docs
+                .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
+                .toList(),
+          ),
+      retryWhen: _isAuthPropagationDenied,
+    );
   }
 
   @override
@@ -292,20 +296,23 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     String employeeId,
     AppointmentDateRange range,
   ) {
-    return _appointments
-        .where('employeeIds', arrayContains: employeeId)
-        .where(
-          'startTime',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(range.start),
-        )
-        .where('startTime', isLessThan: Timestamp.fromDate(range.end))
-        .orderBy('startTime')
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
-              .toList(),
-        );
+    return retryStream(
+      () => _appointments
+          .where('employeeIds', arrayContains: employeeId)
+          .where(
+            'startTime',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(range.start),
+          )
+          .where('startTime', isLessThan: Timestamp.fromDate(range.end))
+          .orderBy('startTime')
+          .snapshots()
+          .map(
+            (snapshot) => snapshot.docs
+                .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
+                .toList(),
+          ),
+      retryWhen: _isAuthPropagationDenied,
+    );
   }
 
   @override
@@ -362,3 +369,11 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     };
   }
 }
+
+// A freshly signed-in user's ID token and `usersByUid` role bridge can lag the
+// auth state, so the first appointments listen comes back permission-denied even
+// though the read is authorized (the same race login's _retryOnAuthPropagation
+// guards). Re-subscribing after a short delay succeeds; a genuine denial simply
+// survives every retry and surfaces as before.
+bool _isAuthPropagationDenied(Object error) =>
+    error is FirebaseException && error.code == 'permission-denied';
