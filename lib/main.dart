@@ -14,6 +14,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:scheduling/core/adaptive/app_scroll_behavior.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/security/app_lock.dart';
@@ -246,6 +247,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
               theme: lightTheme(),
               darkTheme: darkTheme(),
               themeMode: _themeMode,
+              scrollBehavior: const AppScrollBehavior(),
               home: const OnboardingGate(),
               onGenerateRoute: AppRoutes.onGenerateRoute,
               builder: (context, child) {
