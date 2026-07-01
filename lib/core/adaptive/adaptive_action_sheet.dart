@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 /// One selectable option in [showAdaptiveActionSheet].
@@ -25,6 +26,7 @@ class AdaptiveSheetAction<T> {
 
 /// Platform-adaptive chooser: a `CupertinoActionSheet` (with a Cancel button)
 /// on iOS, and the app's Material `showModalBottomSheet` list on Android.
+/// Optional [title]/[message] render as the sheet header on both platforms.
 /// Returns the chosen action's value, or null if dismissed/cancelled.
 Future<T?> showAdaptiveActionSheet<T>(
   BuildContext context, {
@@ -57,11 +59,34 @@ Future<T?> showAdaptiveActionSheet<T>(
   return showModalBottomSheet<T>(
     context: context,
     builder: (ctx) {
-      final error = Theme.of(ctx).colorScheme.error;
+      final theme = Theme.of(ctx);
+      final error = theme.colorScheme.error;
       return SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (title != null || message != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.sp16,
+                  AppSpacing.sp16,
+                  AppSpacing.sp16,
+                  AppSpacing.sp8,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (title != null)
+                      Text(title, style: theme.textTheme.titleMedium),
+                    if (message != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.sp4),
+                        child: Text(message, style: theme.textTheme.bodySmall),
+                      ),
+                  ],
+                ),
+              ),
             for (final action in actions)
               ListTile(
                 leading: action.icon == null ? null : Icon(action.icon),
