@@ -301,7 +301,7 @@ class _AppointmentHistoryViewState
     void Function() fetchNextPage,
     Map<String, Color> colorMap,
   ) {
-    return RefreshIndicator(
+    return RefreshIndicator.adaptive(
       onRefresh: () async => _pagingController.refresh(),
       child: PagedListView<int, AppointmentRecord>(
         state: state,
