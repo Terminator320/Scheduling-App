@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -165,11 +166,7 @@ class _WaveStatusLoading extends StatelessWidget {
     return const Padding(
       padding: EdgeInsets.symmetric(vertical: AppSpacing.sp12),
       child: Center(
-        child: SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
+        child: AdaptiveProgressIndicator(),
       ),
     );
   }
