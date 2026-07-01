@@ -38,23 +38,45 @@ final employeesStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
   return ref.watch(employeesRepositoryProvider).watchEmployees();
 });
 
+typedef _EmployeeSearchEntry = ({
+  EmployeeRecord employee,
+  String text,
+  String phoneDigits,
+});
+
+// Pre-normalized search index, memoized so per-keystroke filtering only has to
+// normalize the (short) query — not every employee's name/email/phone. Recomputes
+// only when the users stream emits; mirrors employeeColorMapProvider above.
+final _employeeSearchIndexProvider = Provider<List<_EmployeeSearchEntry>>((
+  ref,
+) {
+  final employees = ref.watch(allUsersStreamProvider).asData?.value ?? const [];
+  return [
+    for (final e in employees)
+      (
+        employee: e,
+        text: ClientSearchPolicy.normalize('${e.name} ${e.email}'),
+        phoneDigits: ClientSearchPolicy.digitsOnly(e.phone),
+      ),
+  ];
+});
+
 final filteredEmployeesProvider = Provider.autoDispose
     .family<List<EmployeeRecord>, String>(
       (ref, query) {
-        final list =
-            ref.watch(allUsersStreamProvider).asData?.value ?? const [];
+        final index = ref.watch(_employeeSearchIndexProvider);
         // Accent-folded text + digits-only phone matching — same rule as the
         // client search, so accented names and formatted phone numbers still match.
         final q = ClientSearchPolicy.normalize(query);
         final qDigits = ClientSearchPolicy.digitsOnly(query);
-        if (q.isEmpty && qDigits.isEmpty) return list;
-        return list.where((e) {
-          final text = ClientSearchPolicy.normalize('${e.name} ${e.email}');
-          final phoneDigits = ClientSearchPolicy.digitsOnly(e.phone);
-          final matchesText = q.isNotEmpty && text.contains(q);
-          final matchesPhone =
-              qDigits.isNotEmpty && phoneDigits.contains(qDigits);
-          return matchesText || matchesPhone;
-        }).toList();
+        if (q.isEmpty && qDigits.isEmpty) {
+          return [for (final entry in index) entry.employee];
+        }
+        return [
+          for (final entry in index)
+            if ((q.isNotEmpty && entry.text.contains(q)) ||
+                (qDigits.isNotEmpty && entry.phoneDigits.contains(qDigits)))
+              entry.employee,
+        ];
       },
     );

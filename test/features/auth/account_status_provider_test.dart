@@ -145,12 +145,14 @@ void main() {
 
   group('isAccountDeletionSignal', () {
     const emptyData = AsyncData<Map<String, dynamic>>({});
+    const populated = AsyncData<Map<String, dynamic>>({'status': 'active'});
 
     test('false when not signed in', () {
       expect(
         isAccountDeletionSignal(
           isSignedIn: false,
           resolvedUid: 'uid1',
+          previous: populated,
           docState: emptyData,
         ),
         isFalse,
@@ -164,54 +166,92 @@ void main() {
         isAccountDeletionSignal(
           isSignedIn: true,
           resolvedUid: null,
+          previous: populated,
           docState: emptyData,
         ),
         isFalse,
       );
     });
 
-    test(
-      'false for the reload transition that retains the empty placeholder',
-      () {
-        // uid just resolved: provider rebuilds into AsyncLoading retaining the
-        // previous empty doc via copyWithPrevious — not an authoritative delete.
-        final reloading = const AsyncLoading<Map<String, dynamic>>()
-            // copyWithPrevious is @internal in Riverpod 3, but this test must
-            // reproduce the exact reload transition the framework emits.
-            // ignore: invalid_use_of_internal_member
-            .copyWithPrevious(emptyData);
-        expect(
-          isAccountDeletionSignal(
-            isSignedIn: true,
-            resolvedUid: 'uid1',
-            docState: reloading,
-          ),
-          isFalse,
-        );
-      },
-    );
+    test('false while the doc is reloading (isLoading)', () {
+      final reloading = const AsyncLoading<Map<String, dynamic>>()
+          // copyWithPrevious is @internal in Riverpod 3, but this test must
+          // reproduce the exact reload transition the framework emits.
+          // ignore: invalid_use_of_internal_member
+          .copyWithPrevious(populated);
+      expect(
+        isAccountDeletionSignal(
+          isSignedIn: true,
+          resolvedUid: 'uid1',
+          previous: populated,
+          docState: reloading,
+        ),
+        isFalse,
+      );
+    });
 
     test('false when the settled doc is non-empty', () {
       expect(
         isAccountDeletionSignal(
           isSignedIn: true,
           resolvedUid: 'uid1',
-          docState: const AsyncData({'status': 'active'}),
+          previous: emptyData,
+          docState: populated,
         ),
         isFalse,
       );
     });
 
+    test('true for a populated -> empty transition (real deletion)', () {
+      expect(
+        isAccountDeletionSignal(
+          isSignedIn: true,
+          resolvedUid: 'uid1',
+          previous: populated,
+          docState: emptyData,
+        ),
+        isTrue,
+      );
+    });
+
+    test('true across a loading blip: retained-populated -> empty', () {
+      final reloadingPopulated = const AsyncLoading<Map<String, dynamic>>()
+          // ignore: invalid_use_of_internal_member
+          .copyWithPrevious(populated);
+      expect(
+        isAccountDeletionSignal(
+          isSignedIn: true,
+          resolvedUid: 'uid1',
+          previous: reloadingPopulated,
+          docState: emptyData,
+        ),
+        isTrue,
+      );
+    });
+
     test(
-      'true for a settled empty doc with a resolved uid (real deletion)',
+      'false for a settled empty doc that was never populated (fresh sign-in '
+      'lag / invited-signup bootstrap window)',
       () {
+        // No prior data (first emission), or a prior empty placeholder: the
+        // empty doc is a bootstrap window, not a populated->empty deletion.
         expect(
           isAccountDeletionSignal(
             isSignedIn: true,
             resolvedUid: 'uid1',
+            previous: null,
             docState: emptyData,
           ),
-          isTrue,
+          isFalse,
+        );
+        expect(
+          isAccountDeletionSignal(
+            isSignedIn: true,
+            resolvedUid: 'uid1',
+            previous: emptyData,
+            docState: emptyData,
+          ),
+          isFalse,
         );
       },
     );

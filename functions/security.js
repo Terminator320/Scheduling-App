@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const {HttpsError} = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const {getFirestore} = require("firebase-admin/firestore");
@@ -98,13 +99,17 @@ function readSessionToken(data) {
  * Throws HttpsError("resource-exhausted") when the caller exceeds `max`
  * attempts within `windowMs`.
  * @param {string} route stable endpoint identifier (part of the doc key).
- * @param {string} uid Firebase Auth uid of the caller.
+ * @param {string} key per-caller limiter key — usually the Auth uid, but the
+ *   token email for redeemSignupCode (a failed signup re-mints the uid).
  * @param {number} max max attempts per window.
  * @param {number} windowMs window length in milliseconds.
+ * @param {string} [keyKind] label for `key` ("uid" | "email"); email keys are
+ *   PII, so only a hash is logged. Purely for log discrimination.
  */
-async function enforceDurableRateLimit(route, uid, max, windowMs) {
+async function enforceDurableRateLimit(route, key, max, windowMs,
+    keyKind = "uid") {
   const db = getFirestore();
-  const ref = db.collection("rateLimits").doc(`${route}__${uid}`);
+  const ref = db.collection("rateLimits").doc(`${route}__${key}`);
   const now = Date.now();
   let overLimit = false;
   await db.runTransaction(async (tx) => {
@@ -132,7 +137,13 @@ async function enforceDurableRateLimit(route, uid, max, windowMs) {
     });
   });
   if (overLimit) {
-    logger.warn("enforceDurableRateLimit: limit exceeded", {route, uid});
+    // Never log the raw key: for the email-keyed route it is PII. Log a short
+    // sha256 prefix so operators can still correlate breaches without storing
+    // the address.
+    const keyHash = crypto.createHash("sha256").update(key)
+        .digest("hex").slice(0, 12);
+    logger.warn("enforceDurableRateLimit: limit exceeded",
+        {route, keyKind, keyHash});
     throw new HttpsError("resource-exhausted", "too-many-attempts");
   }
 }

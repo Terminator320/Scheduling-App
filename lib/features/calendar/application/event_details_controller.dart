@@ -414,58 +414,27 @@ class EventDetailsController extends Notifier<EventDetailsState> {
     );
 
     try {
-      final pickedClient = state.selectedClient;
       final assignees = await _resolveAssignees(appointment);
-      var updated = AppointmentRecord(
+      final updated = _buildUpdatedRecord(
+        appointment,
         id: id,
-        title: title.trim(),
-        startTime: start,
-        endTime: end,
-        clientId: pickedClient?.id ?? appointment.clientId,
-        clientName: pickedClient?.displayName ?? appointment.clientName,
-        clientPhone: pickedClient?.phone ?? appointment.clientPhone,
-        address: address.trim(),
-        employeeIds: assignees.ids,
-        employeeNames: assignees.names,
-        notes: notes.trim(),
-        materialsNeeded: materialsNeeded.trim(),
-        pictures: state.existingImages,
-        status: state.editingStatus,
-        repeat: state.repeat,
-        seriesId: appointment.seriesId,
+        title: title,
+        address: address,
+        notes: notes,
+        materialsNeeded: materialsNeeded,
+        start: start,
+        end: end,
+        assignees: assignees,
       );
 
-      final seriesEditor = AppointmentSeriesEditor(
-        ref.read(appointmentsRepositoryProvider),
+      final saved = await _applySeriesChange(
+        appointment,
+        updated: updated,
+        id: id,
+        start: start,
+        end: end,
+        applyToSeries: applyToSeries,
       );
-      var futureBookings = 0;
-      var removedBookings = 0;
-      var updatedSiblings = 0;
-      if (state.repeat != state.savedRepeat) {
-        final result = await seriesEditor.rewrite(
-          updated: updated,
-          appointment: appointment,
-          id: id,
-          start: start,
-          end: end,
-          repeat: state.repeat,
-        );
-        updated = result.updated;
-        futureBookings = result.futureBookings;
-        removedBookings = result.removedBookings;
-      } else if (applyToSeries && appointment.seriesId.isNotEmpty) {
-        updatedSiblings = await seriesEditor.propagate(
-          updated: updated,
-          appointment: appointment,
-          id: id,
-          start: start,
-          end: end,
-        );
-      } else {
-        await ref
-            .read(appointmentsRepositoryProvider)
-            .updateAppointment(updated);
-      }
       // The doc now stores state.repeat — make it the new baseline.
       state = state.copyWith(savedRepeat: state.repeat);
 
@@ -487,17 +456,92 @@ class EventDetailsController extends Notifier<EventDetailsState> {
       }
 
       state = state.copyWith(isSaving: false);
-      return EventDetailsSaved(
-        updated,
-        futureBookings: futureBookings,
-        removedBookings: removedBookings,
-        updatedSiblings: updatedSiblings,
-      );
+      return saved;
     } catch (e, st) {
       ref.read(loggerProvider).warn('APPT-SAVE saveChanges failed', e, st);
       state = state.copyWith(isSaving: false);
       return EventDetailsFailed(e);
     }
+  }
+
+  // Builds the edited AppointmentRecord from the form fields + resolved
+  // assignees; the client falls back to the appointment's stored values when the
+  // user didn't pick a new one.
+  AppointmentRecord _buildUpdatedRecord(
+    AppointmentRecord appointment, {
+    required String id,
+    required String title,
+    required String address,
+    required String notes,
+    required String materialsNeeded,
+    required DateTime start,
+    required DateTime end,
+    required ({List<String> ids, List<String> names}) assignees,
+  }) {
+    final pickedClient = state.selectedClient;
+    return AppointmentRecord(
+      id: id,
+      title: title.trim(),
+      startTime: start,
+      endTime: end,
+      clientId: pickedClient?.id ?? appointment.clientId,
+      clientName: pickedClient?.displayName ?? appointment.clientName,
+      clientPhone: pickedClient?.phone ?? appointment.clientPhone,
+      address: address.trim(),
+      employeeIds: assignees.ids,
+      employeeNames: assignees.names,
+      notes: notes.trim(),
+      materialsNeeded: materialsNeeded.trim(),
+      pictures: state.existingImages,
+      status: state.editingStatus,
+      repeat: state.repeat,
+      seriesId: appointment.seriesId,
+    );
+  }
+
+  // Persists the edit according to how the repeat changed: a full series rewrite
+  // when the interval itself changed, a propagate across the series when
+  // [applyToSeries] is set, otherwise a plain single-doc update. Returns the
+  // resulting [EventDetailsSaved] outcome (the possibly-rewritten record plus the
+  // one non-zero per-branch count for the result banner; the rest default to 0).
+  Future<EventDetailsSaved> _applySeriesChange(
+    AppointmentRecord appointment, {
+    required AppointmentRecord updated,
+    required String id,
+    required DateTime start,
+    required DateTime end,
+    required bool applyToSeries,
+  }) async {
+    final seriesEditor = AppointmentSeriesEditor(
+      ref.read(appointmentsRepositoryProvider),
+    );
+    if (state.repeat != state.savedRepeat) {
+      final result = await seriesEditor.rewrite(
+        updated: updated,
+        appointment: appointment,
+        id: id,
+        start: start,
+        end: end,
+        repeat: state.repeat,
+      );
+      return EventDetailsSaved(
+        result.updated,
+        futureBookings: result.futureBookings,
+        removedBookings: result.removedBookings,
+      );
+    }
+    if (applyToSeries && appointment.seriesId.isNotEmpty) {
+      final updatedSiblings = await seriesEditor.propagate(
+        updated: updated,
+        appointment: appointment,
+        id: id,
+        start: start,
+        end: end,
+      );
+      return EventDetailsSaved(updated, updatedSiblings: updatedSiblings);
+    }
+    await ref.read(appointmentsRepositoryProvider).updateAppointment(updated);
+    return EventDetailsSaved(updated);
   }
 
   /// Returns null on success, or the error that caused the failure. With

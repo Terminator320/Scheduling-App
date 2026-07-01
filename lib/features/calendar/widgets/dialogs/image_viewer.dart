@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 class ImageViewer extends StatefulWidget {
@@ -99,7 +100,7 @@ class _ImageViewerState extends State<ImageViewer> {
             child: Align(
               alignment: Alignment.topRight,
               child: Padding(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(AppSpacing.sp8),
                 child: IconButton(
                   tooltip: context.l10n.common_close,
                   icon: const Icon(Icons.close, color: foreground),
@@ -113,7 +114,7 @@ class _ImageViewerState extends State<ImageViewer> {
               child: Align(
                 alignment: Alignment.topCenter,
                 child: Padding(
-                  padding: const EdgeInsets.only(top: 12),
+                  padding: const EdgeInsets.only(top: AppSpacing.sp12),
                   child: Text(
                     '${_currentIndex + 1} / ${widget.images.length}',
                     style: theme.textTheme.bodyMedium?.copyWith(
