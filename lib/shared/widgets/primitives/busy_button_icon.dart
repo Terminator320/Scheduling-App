@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 
 /// Leading slot for a `*.icon` button: shows a small spinner while [isBusy],
 /// otherwise [icon]. Consolidates the spinner-or-icon pattern repeated across
@@ -27,11 +28,9 @@ class BusyButtonIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!isBusy) return Icon(icon, size: iconSize, color: color);
-    final size = spinnerSize ?? iconSize;
-    return SizedBox(
-      width: size,
-      height: size,
-      child: CircularProgressIndicator(strokeWidth: 2, color: color),
+    return AdaptiveProgressIndicator(
+      size: spinnerSize ?? iconSize,
+      color: color,
     );
   }
 }
