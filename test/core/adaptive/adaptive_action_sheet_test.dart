@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-Widget _host(TargetPlatform platform) => MaterialApp(
+Widget _host(TargetPlatform platform, {String? title}) => MaterialApp(
   theme: ThemeData(platform: platform),
   localizationsDelegates: const [
     AppLocalizations.delegate,
@@ -20,6 +20,7 @@ Widget _host(TargetPlatform platform) => MaterialApp(
         child: ElevatedButton(
           onPressed: () => showAdaptiveActionSheet<int>(
             context,
+            title: title,
             actions: const [
               AdaptiveSheetAction(
                 value: 1,
@@ -56,5 +57,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(CupertinoActionSheet), findsNothing);
     expect(find.byType(ListTile), findsNWidgets(2));
+  });
+
+  testWidgets('renders title header in the Android sheet', (tester) async {
+    await tester.pumpWidget(
+      _host(TargetPlatform.android, title: 'Choose source'),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose source'), findsOneWidget);
   });
 }
