@@ -249,7 +249,7 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
         // --- Address ---
         Material(
           type: MaterialType.transparency,
-          child: SwitchListTile(
+          child: SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
             title: Text(context.l10n.clients_noFixedAddress),
             subtitle: Text(context.l10n.clients_noFixedAddressHint),
