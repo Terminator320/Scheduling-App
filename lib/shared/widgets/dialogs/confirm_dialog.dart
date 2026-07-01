@@ -24,12 +24,15 @@ Future<bool> showConfirmDialog(
         content: content ?? Text(message!),
         actions: [
           CupertinoDialogAction(
-            isDefaultAction: true,
+            // Destructive: Cancel is the bold, safe default (iOS convention).
+            // Non-destructive: the confirm action is the default instead.
+            isDefaultAction: destructive,
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(ctx.l10n.common_cancel),
           ),
           CupertinoDialogAction(
             isDestructiveAction: destructive,
+            isDefaultAction: !destructive,
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(confirmLabel),
           ),

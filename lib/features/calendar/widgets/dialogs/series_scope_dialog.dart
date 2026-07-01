@@ -1,7 +1,7 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/adaptive/adaptive.dart';
+import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -24,30 +24,22 @@ Future<SeriesScopeChoice?> showSeriesScopeDialog(
   bool destructive = false,
 }) {
   if (context.isCupertino) {
-    return showCupertinoModalPopup<SeriesScopeChoice>(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: Text(title),
-        message: Text(message),
-        actions: [
-          CupertinoActionSheetAction(
-            isDestructiveAction: destructive,
-            onPressed: () => Navigator.pop(ctx, SeriesScopeChoice.thisOnly),
-            child: Text(thisOnlyLabel),
-          ),
-          CupertinoActionSheetAction(
-            isDestructiveAction: destructive,
-            onPressed: () =>
-                Navigator.pop(ctx, SeriesScopeChoice.thisAndFuture),
-            child: Text(thisAndFutureLabel),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.pop(ctx),
-          child: Text(ctx.l10n.common_cancel),
+    return showAdaptiveActionSheet<SeriesScopeChoice>(
+      context,
+      title: title,
+      message: message,
+      actions: [
+        AdaptiveSheetAction(
+          value: SeriesScopeChoice.thisOnly,
+          label: thisOnlyLabel,
+          isDestructive: destructive,
         ),
-      ),
+        AdaptiveSheetAction(
+          value: SeriesScopeChoice.thisAndFuture,
+          label: thisAndFutureLabel,
+          isDestructive: destructive,
+        ),
+      ],
     );
   }
   return showDialog<SeriesScopeChoice>(

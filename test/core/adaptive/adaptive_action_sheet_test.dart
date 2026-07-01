@@ -47,6 +47,7 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(find.byType(CupertinoActionSheet), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('shows Material bottom sheet with ListTiles on Android', (
@@ -57,6 +58,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(CupertinoActionSheet), findsNothing);
     expect(find.byType(ListTile), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('renders title header in the Android sheet', (tester) async {
@@ -66,5 +68,6 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(find.text('Choose source'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
