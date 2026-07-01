@@ -241,7 +241,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     final query = widget.searchQuery.trim();
     if (query.isNotEmpty) return _buildSearchResults(query);
 
-    return RefreshIndicator(
+    return RefreshIndicator.adaptive(
       onRefresh: () async => _pagingController.refresh(),
       child: PagingListener<int, ClientRecord>(
         controller: _pagingController,
