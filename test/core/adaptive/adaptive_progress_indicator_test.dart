@@ -5,7 +5,7 @@ import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 
 Widget _host(TargetPlatform platform) => MaterialApp(
   theme: ThemeData(platform: platform),
-  home: const Scaffold(body: AdaptiveProgressIndicator(size: 20)),
+  home: const Scaffold(body: AdaptiveProgressIndicator()),
 );
 
 void main() {

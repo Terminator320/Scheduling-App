@@ -75,7 +75,12 @@ class AddressMapLauncher {
 
           return SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.sp16,
+                AppSpacing.sp4,
+                AppSpacing.sp16,
+                AppSpacing.sp16,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -86,14 +91,14 @@ class AddressMapLauncher {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.sp4),
                   Text(
                     displayAddress,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.sp12),
                   ...options.map(
                     (option) => ListTile(
                       leading: Icon(option.icon),

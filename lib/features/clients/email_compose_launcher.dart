@@ -73,7 +73,12 @@ class EmailComposeLauncher {
 
           return SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.sp16,
+                AppSpacing.sp4,
+                AppSpacing.sp16,
+                AppSpacing.sp16,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -84,14 +89,14 @@ class EmailComposeLauncher {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.sp4),
                   Text(
                     address,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.sp12),
                   ...options.map(
                     (option) => ListTile(
                       leading: Icon(option.icon),
@@ -108,7 +113,7 @@ class EmailComposeLauncher {
       );
     }
 
-    if (chosen == null) return;
+    if (chosen == null || !context.mounted) return;
     try {
       final opened = await launchUrl(
         chosen,
