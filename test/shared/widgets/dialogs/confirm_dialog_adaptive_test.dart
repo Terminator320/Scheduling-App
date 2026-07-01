@@ -38,6 +38,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(CupertinoAlertDialog), findsOneWidget);
     expect(find.byType(AlertDialog), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('shows Material AlertDialog on Android', (tester) async {
@@ -46,5 +47,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsOneWidget);
     expect(find.byType(CupertinoAlertDialog), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }

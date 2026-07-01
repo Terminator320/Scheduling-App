@@ -17,10 +17,16 @@ class AppScrollBehavior extends MaterialScrollBehavior {
     switch (getPlatform(context)) {
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
-        return CupertinoScrollbar(
-          controller: details.controller,
-          child: child,
-        );
+        // Only vertical scrollables get the iOS scrollbar. Horizontal pagers
+        // (image carousels, onboarding) show no indicator, matching native iOS.
+        if (details.direction == AxisDirection.up ||
+            details.direction == AxisDirection.down) {
+          return CupertinoScrollbar(
+            controller: details.controller,
+            child: child,
+          );
+        }
+        return super.buildScrollbar(context, child, details);
       case TargetPlatform.android:
       case TargetPlatform.fuchsia:
       case TargetPlatform.linux:

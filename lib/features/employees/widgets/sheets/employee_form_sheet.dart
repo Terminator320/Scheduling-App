@@ -256,6 +256,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
               const SizedBox(width: AppSpacing.sp8),
               Switch.adaptive(
                 value: _isAdmin,
+                activeTrackColor: theme.colorScheme.primary,
                 onChanged: (v) => setState(() => _isAdmin = v),
               ),
             ],

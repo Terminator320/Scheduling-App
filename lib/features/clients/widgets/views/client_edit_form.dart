@@ -254,6 +254,7 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
             title: Text(context.l10n.clients_noFixedAddress),
             subtitle: Text(context.l10n.clients_noFixedAddressHint),
             value: noFixedAddress,
+            activeTrackColor: Theme.of(context).colorScheme.primary,
             onChanged: (value) => setNoFixedAddress(value: value),
           ),
         ),
