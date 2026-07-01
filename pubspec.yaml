@@ -2,7 +2,7 @@ name: scheduling
 description: "Paul App"
 publish_to: 'none'
 
-version: 1.21.0+38
+version: 1.22.0+39
 
 environment:
   sdk: ^3.10.7

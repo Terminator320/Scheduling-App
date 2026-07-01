@@ -10,6 +10,24 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.22.0+39] - 2026-07-01
+### Added
+- **On iPhone, the app now feels native.** Confirmation dialogs, the
+  camera/gallery and map/email choosers, the "just this appointment or the whole
+  series" prompt, on/off switches, loading spinners, and pull-to-refresh all
+  follow iOS conventions, with an iOS-style scrollbar on long lists and an iOS
+  back arrow. On Android, everything looks and works exactly as before.
+
+### Changed
+- **The Text Size screen now matches the rest of the app.** Its header uses the
+  same standard top bar as every other screen, so the title, back button, and
+  landscape behaviour stay consistent.
+
+### Fixed
+- **No more false "account disabled" message just after signing up.** A rare
+  timing issue that could briefly flash the account-disabled screen while a
+  newly invited account was still finishing activation is resolved.
+
 ## [1.21.0+38] - 2026-06-28
 ### Added
 - **The first-launch walkthrough now has a Back button.** You can step back to a

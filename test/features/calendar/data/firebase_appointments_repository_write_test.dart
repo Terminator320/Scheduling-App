@@ -104,7 +104,7 @@ void main() {
       when(
         () => batch.set<Map<String, dynamic>>(any(), any()),
       ).thenReturn(null);
-      when(() => batch.commit()).thenAnswer((_) async {});
+      when(batch.commit).thenAnswer((_) async {});
 
       await repo().addAppointment(_record());
 
@@ -147,7 +147,7 @@ void main() {
         });
 
         await repo().updateAppointments([
-          _record(id: 'a1'),
+          _record(),
           _record(id: 'a2'),
         ]);
 

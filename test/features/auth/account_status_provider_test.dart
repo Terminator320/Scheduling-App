@@ -216,6 +216,8 @@ void main() {
 
     test('true across a loading blip: retained-populated -> empty', () {
       final reloadingPopulated = const AsyncLoading<Map<String, dynamic>>()
+          // No public API builds a loading state that retains prior data;
+          // copyWithPrevious mirrors a live reload blip over a populated doc.
           // ignore: invalid_use_of_internal_member
           .copyWithPrevious(populated);
       expect(
