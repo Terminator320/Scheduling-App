@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -54,11 +55,7 @@ class ClientSearchField extends StatelessWidget {
                     : isSearching
                     ? const Padding(
                         padding: EdgeInsets.all(AppSpacing.sp12),
-                        child: SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
+                        child: AdaptiveProgressIndicator(size: 16),
                       )
                     // Typed-but-unselected: an "x" wipes the query in one tap
                     // (clearing results too); empty shows the search affordance.

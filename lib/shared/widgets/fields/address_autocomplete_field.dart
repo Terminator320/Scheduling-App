@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/errors/failure.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
@@ -188,11 +189,7 @@ class _AddressAutocompleteFieldState
           suffixIcon: _isLoading
               ? const Padding(
                   padding: EdgeInsets.all(AppSpacing.sp12),
-                  child: SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+                  child: AdaptiveProgressIndicator(size: 16),
                 )
               : Icon(
                   Icons.location_on_outlined,

@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
@@ -430,11 +431,7 @@ class _BlockingProgressOverlay extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
+                    const AdaptiveProgressIndicator(),
                     const SizedBox(width: AppSpacing.sp16),
                     Flexible(child: Text(label)),
                   ],

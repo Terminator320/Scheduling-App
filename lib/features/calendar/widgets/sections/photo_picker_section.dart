@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/image_viewer.dart';
@@ -395,14 +396,7 @@ Widget _photoPlaceholder(BuildContext context) {
     height: 90,
     color: scheme.surfaceContainerHighest,
     alignment: Alignment.center,
-    child: SizedBox(
-      width: 18,
-      height: 18,
-      child: CircularProgressIndicator(
-        strokeWidth: 2,
-        valueColor: AlwaysStoppedAnimation<Color>(scheme.outline),
-      ),
-    ),
+    child: AdaptiveProgressIndicator(size: 18, color: scheme.outline),
   );
 }
 
