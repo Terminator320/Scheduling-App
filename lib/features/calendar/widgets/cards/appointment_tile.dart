@@ -83,58 +83,18 @@ class AppointmentTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              appointment.title,
-                              maxLines: compact ? 3 : 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                decoration: isCancelled
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                                color: isCancelled
-                                    ? scheme.onSurfaceVariant
-                                    : null,
-                              ),
-                            ),
-                          ),
-                          if (!compact && showChip) ...[
-                            const SizedBox(width: AppSpacing.sp8),
-                            StatusChip(status: status),
-                          ],
-                        ],
+                      _TitleRow(
+                        title: appointment.title,
+                        compact: compact,
+                        showChip: showChip,
+                        isCancelled: isCancelled,
+                        status: status,
                       ),
                       const SizedBox(height: AppSpacing.sp4),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 7,
-                            height: 7,
-                            margin: const EdgeInsets.only(top: AppSpacing.sp4),
-                            decoration: BoxDecoration(
-                              color: accent,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.sp4),
-                          Expanded(
-                            child: Text(
-                              timeLabel,
-                              maxLines: compact ? 2 : 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ],
+                      _TimeRow(
+                        timeLabel: timeLabel,
+                        accent: accent,
+                        compact: compact,
                       ),
                       if (compact && showChip) ...[
                         const SizedBox(height: AppSpacing.sp8),
@@ -165,5 +125,90 @@ class AppointmentTile extends StatelessWidget {
     );
 
     return isCancelled ? Opacity(opacity: 0.75, child: card) : card;
+  }
+}
+
+class _TitleRow extends StatelessWidget {
+  const _TitleRow({
+    required this.title,
+    required this.compact,
+    required this.showChip,
+    required this.isCancelled,
+    required this.status,
+  });
+
+  final String title;
+  final bool compact;
+  final bool showChip;
+  final bool isCancelled;
+  final AppointmentStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            maxLines: compact ? 3 : 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              decoration: isCancelled ? TextDecoration.lineThrough : null,
+              color: isCancelled ? scheme.onSurfaceVariant : null,
+            ),
+          ),
+        ),
+        if (!compact && showChip) ...[
+          const SizedBox(width: AppSpacing.sp8),
+          StatusChip(status: status),
+        ],
+      ],
+    );
+  }
+}
+
+class _TimeRow extends StatelessWidget {
+  const _TimeRow({
+    required this.timeLabel,
+    required this.accent,
+    required this.compact,
+  });
+
+  final String timeLabel;
+  final Color accent;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          margin: const EdgeInsets.only(top: AppSpacing.sp4),
+          decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: AppSpacing.sp4),
+        Expanded(
+          child: Text(
+            timeLabel,
+            maxLines: compact ? 2 : 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

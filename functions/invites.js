@@ -11,7 +11,7 @@ const {
   INVITE_CODE_TTL_MS, generateSignupCode, hashSignupCode, validateRedemption,
 } = require("./signup_code_utils");
 
-// Mirrors account.js: auth-sensitive redemption is throttled per uid.
+// Mirrors account.js's throttle; redeem is keyed by token email (below).
 const REDEEM_RATE_MAX = 5;
 const REDEEM_RATE_WINDOW_MS = 15 * 60 * 1000;
 
@@ -113,7 +113,8 @@ const redeemSignupCode = onCall(APP_CHECK, async (req) => {
   // counter. The email pins the cap to the invite being guessed.
   const rateKey = tokenEmail.trim().toLowerCase();
   await enforceDurableRateLimit(
-      "redeemSignupCode", rateKey, REDEEM_RATE_MAX, REDEEM_RATE_WINDOW_MS);
+      "redeemSignupCode", rateKey, REDEEM_RATE_MAX, REDEEM_RATE_WINDOW_MS,
+      "email");
 
   const db = getFirestore();
   const codeRef = db.collection("signupCodes").doc(hashSignupCode(code));

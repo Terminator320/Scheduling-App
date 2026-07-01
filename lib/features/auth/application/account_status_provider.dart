@@ -28,26 +28,35 @@ final userRoleProvider = Provider<AsyncValue<String>>((ref) {
       .whenData((doc) => (doc['role'] ?? '').toString().trim());
 });
 
-/// Whether a [currentUserDocProvider] emission means the signed-in user's
+/// Whether a [currentUserDocProvider] transition means the signed-in user's
 /// account doc was deleted server-side, as opposed to a transient empty
 /// placeholder.
 ///
-/// On a fresh sign-in `FirebaseAuth.currentUser` is set immediately, but the
-/// `authStateChanges()` stream behind [authUidProvider] lags, so
-/// [currentUserDocProvider] still serves the empty doc from its `uid == null`
-/// branch; the reload into `watchUserDoc` then retains that empty value as
-/// `AsyncLoading`'s previous data (an `AsyncData` flagged `isLoading`). Neither
-/// is a deletion. A real deletion is a *settled* empty doc for an
-/// already-resolved uid.
+/// A real deletion is a *settled* empty doc that follows a previously-populated
+/// one — a populated→empty transition for an already-resolved uid. An empty doc
+/// that was never populated is a bootstrap window, not a deletion: the fresh
+/// sign-in lag (where [authUidProvider] serves the `uid == null` empty branch
+/// before `watchUserDoc` resolves) and the invited-signup window (signed in
+/// before `redeemSignupCode` activates the doc) both start empty and only later
+/// become populated. A cold-start already-deleted account is caught earlier by
+/// `SplashScreen`'s `!isActive` sign-out, so this live listener only needs to
+/// catch the runtime transition. [previous] is the prior emission from
+/// `ref.listen`.
 bool isAccountDeletionSignal({
   required bool isSignedIn,
   required String? resolvedUid,
+  required AsyncValue<Map<String, dynamic>>? previous,
   required AsyncValue<Map<String, dynamic>> docState,
 }) {
   if (!isSignedIn || resolvedUid == null) return false;
   if (docState.isLoading) return false;
   final doc = docState.value;
-  return doc != null && doc.isEmpty;
+  if (doc == null || doc.isNotEmpty) return false;
+  // Only a populated→empty transition is a deletion; the last known doc must
+  // have had data. `previous?.value` keeps the retained data even across a
+  // loading blip, so a real delete that momentarily reloads is still caught.
+  final previousDoc = previous?.value;
+  return previousDoc != null && previousDoc.isNotEmpty;
 }
 
 /// The signed-in user's display name (empty until the doc loads).

@@ -211,6 +211,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
       if (isAccountDeletionSignal(
         isSignedIn: FirebaseAuth.instance.currentUser != null,
         resolvedUid: ref.read(authUidProvider).value,
+        previous: prev,
         docState: next,
       )) {
         _handleAccountDisabled((l10n) => l10n.error_thisAccountHasBeenDisabled);
