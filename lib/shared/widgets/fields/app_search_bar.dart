@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/clear_text_button.dart';
 
 class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
   const AppSearchBar({
     super.key,
     this.onChanged,
-    this.hintText = 'Search...',
+    this.hintText,
     this.controller,
     this.focusNode,
   });
@@ -14,7 +15,10 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
   static const double preferredHeight = 60;
 
   final ValueChanged<String>? onChanged;
-  final String hintText;
+
+  /// Placeholder shown in the field; defaults to the localized generic
+  /// "Search..." when null.
+  final String? hintText;
   final TextEditingController? controller;
   final FocusNode? focusNode;
 
@@ -37,7 +41,7 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
           color: scheme.onSurface,
         ),
         decoration: InputDecoration(
-          hintText: hintText,
+          hintText: hintText ?? context.l10n.common_search,
           prefixIcon: Icon(
             Icons.search,
             size: 18,

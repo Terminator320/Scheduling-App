@@ -991,6 +991,10 @@
   "@error_couldNotLoadAddressDetails": {
     "description": "Could not load address details"
   },
+  "common_search": "Search...",
+  "@common_search": {
+    "description": "Generic search field placeholder (default AppSearchBar hint)"
+  },
   "common_searchAddress": "Search address",
   "@common_searchAddress": {
     "description": "Search address"
