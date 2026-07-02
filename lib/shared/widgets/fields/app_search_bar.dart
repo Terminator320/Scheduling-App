@@ -10,9 +10,17 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
     this.hintText,
     this.controller,
     this.focusNode,
+    this.textScaler = TextScaler.noScaling,
   });
 
-  static const double preferredHeight = 60;
+  /// Vertical margins around the field — fixed chrome that doesn't grow with
+  /// the user's text size.
+  static const double _verticalMargins = AppSpacing.sp8 * 2;
+
+  /// The field itself (text + content padding + border) at text scale 1.0.
+  static const double _fieldHeight = 44;
+
+  static const double preferredHeight = _verticalMargins + _fieldHeight;
 
   final ValueChanged<String>? onChanged;
 
@@ -22,8 +30,15 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
   final TextEditingController? controller;
   final FocusNode? focusNode;
 
+  /// Pass `MediaQuery.textScalerOf(context)` from the call site so the
+  /// app-bar bottom slot reserves enough height at large text sizes instead
+  /// of clipping the field ([preferredSize] has no BuildContext to read the
+  /// scale itself).
+  final TextScaler textScaler;
+
   @override
-  Size get preferredSize => const Size.fromHeight(preferredHeight);
+  Size get preferredSize =>
+      Size.fromHeight(_verticalMargins + textScaler.scale(_fieldHeight));
 
   @override
   Widget build(BuildContext context) {
