@@ -7,7 +7,6 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
-import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 
 class AppointmentImageUploadService {
   AppointmentImageUploadService({
@@ -28,29 +27,19 @@ class AppointmentImageUploadService {
   void uploadInBackground({
     required String appointmentId,
     required List<File> newImages,
-    List<AppointmentImage> existingImages = const [],
   }) {
-    _run(
-      appointmentId: appointmentId,
-      newImages: List.of(newImages),
-      existingImages: List.of(existingImages),
-    );
+    _run(appointmentId: appointmentId, newImages: List.of(newImages));
   }
 
   Future<void> _run({
     required String appointmentId,
     required List<File> newImages,
-    required List<AppointmentImage> existingImages,
   }) async {
     try {
       var failedCount = 0;
       final tooLargeNames = <String>[];
       if (newImages.isNotEmpty) {
-        final result = await _uploadAndPatch(
-          appointmentId,
-          newImages,
-          existingImages,
-        );
+        final result = await _uploadAndPatch(appointmentId, newImages);
         tooLargeNames.addAll(result.tooLargeNames);
         failedCount += result.failedCount;
       }
@@ -75,7 +64,6 @@ class AppointmentImageUploadService {
   Future<_UploadOutcome> _uploadAndPatch(
     String appointmentId,
     List<File> newImages,
-    List<AppointmentImage> existingImages,
   ) async {
     try {
       final sizes = await Future.wait(newImages.map((f) => f.length()));
@@ -94,10 +82,13 @@ class AppointmentImageUploadService {
       var failedCount = 0;
       if (uploadable.isNotEmpty) {
         final result = await _storage.uploadImages(appointmentId, uploadable);
-        await _appointments.updateAppointmentPictures(appointmentId, [
-          ...existingImages,
-          ...result.uploaded,
-        ]);
+        // Append (arrayUnion) rather than rewriting the whole array from a
+        // submit-time snapshot: an edit saved while this upload was in flight
+        // would otherwise be overwritten with the stale base (C1).
+        await _appointments.appendAppointmentPictures(
+          appointmentId,
+          result.uploaded,
+        );
         failedCount = result.failedCount;
       }
 

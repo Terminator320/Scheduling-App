@@ -38,7 +38,9 @@ class DetailsViewBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final provider = eventDetailsControllerProvider(appointment);
+    final provider = eventDetailsControllerProvider(
+      EventDetailsKey(appointment),
+    );
     final client = ref.watch(provider.select((s) => s.client));
     final isSaving = ref.watch(provider.select((s) => s.isSaving));
     final notifier = ref.read(provider.notifier);
@@ -402,7 +404,7 @@ class _EmployeesView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedEmployees = ref.watch(
       eventDetailsControllerProvider(
-        appointment,
+        EventDetailsKey(appointment),
       ).select((s) => s.selectedEmployees),
     );
     if (selectedEmployees.isEmpty) return const SizedBox.shrink();
@@ -439,7 +441,9 @@ class _PhotosView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final provider = eventDetailsControllerProvider(appointment);
+    final provider = eventDetailsControllerProvider(
+      EventDetailsKey(appointment),
+    );
     final existingImages = ref.watch(provider.select((s) => s.existingImages));
     final newImages = ref.watch(provider.select((s) => s.newImages));
     final notifier = ref.watch(photoUploadNotifierProvider);

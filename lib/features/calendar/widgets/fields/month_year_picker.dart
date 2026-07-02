@@ -60,10 +60,14 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
     final bodyLarge = theme.textTheme.bodyLarge;
     final monthFormat = DateFormat.MMMM(locale);
 
+    // Sized past the bottom view padding + SafeArea so the wheels don't sit
+    // under the home indicator.
     return SizedBox(
-      height: 300,
-      child: Column(
-        children: [
+      height: 300 + MediaQuery.viewPaddingOf(context).bottom,
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
@@ -146,7 +150,8 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
               ],
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }

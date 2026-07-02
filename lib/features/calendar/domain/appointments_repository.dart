@@ -29,7 +29,18 @@ abstract class AppointmentsRepository {
   /// Used to propagate an edit across this visit and its future series siblings.
   Future<void> updateAppointments(List<AppointmentRecord> appointments);
 
-  Future<void> updateAppointmentPictures(
+  /// Appends [pictures] to the appointment's stored pictures without
+  /// rewriting the array (server-side union), so a background upload landing
+  /// after a concurrent edit can't clobber photos it never saw — and vice
+  /// versa.
+  Future<void> appendAppointmentPictures(
+    String id,
+    List<AppointmentImage> pictures,
+  );
+
+  /// Removes exactly [pictures] from the appointment's stored pictures
+  /// (server-side array-remove), leaving concurrently appended photos intact.
+  Future<void> removeAppointmentPictures(
     String id,
     List<AppointmentImage> pictures,
   );

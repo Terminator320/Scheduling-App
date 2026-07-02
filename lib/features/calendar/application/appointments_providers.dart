@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/providers/firebase_providers.dart';
@@ -10,9 +12,24 @@ final appointmentsRepositoryProvider = Provider<AppointmentsRepository>((ref) {
   return FirebaseAppointmentsRepository(firestore);
 });
 
+/// How long an unwatched month keeps its Firestore listener warm, so paging
+/// back within this window reuses the stream instead of re-opening (and
+/// re-reading) the same range query on every month swipe.
+const _monthRangeKeepAlive = Duration(minutes: 3);
+
 final appointmentsInRangeProvider = StreamProvider.family
     .autoDispose<List<AppointmentRecord>, AppointmentDateRange>((ref, range) {
       if (ref.authUid == null) return Stream.value(const []);
+      final link = ref.keepAlive();
+      Timer? evictTimer;
+      ref
+        ..onCancel(() {
+          // Last watcher gone: close the keep-alive link after a grace period
+          // so a quick page-back doesn't re-subscribe.
+          evictTimer = Timer(_monthRangeKeepAlive, link.close);
+        })
+        ..onResume(() => evictTimer?.cancel())
+        ..onDispose(() => evictTimer?.cancel());
       return ref.watch(appointmentsRepositoryProvider).watchInRange(range);
     });
 

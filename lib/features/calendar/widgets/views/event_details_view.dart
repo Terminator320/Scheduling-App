@@ -46,7 +46,11 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
       Future.microtask(() {
         if (!mounted) return;
         ref
-            .read(eventDetailsControllerProvider(widget.appointment).notifier)
+            .read(
+              eventDetailsControllerProvider(
+                EventDetailsKey(widget.appointment),
+              ).notifier,
+            )
             .enterEditing();
       });
     }
@@ -87,7 +91,9 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(eventDetailsControllerProvider(widget.appointment));
+    final state = ref.watch(
+      eventDetailsControllerProvider(EventDetailsKey(widget.appointment)),
+    );
     final isCancelled = AppointmentStatus.fromRaw(
       widget.appointment.status,
     ).isCancelled;
