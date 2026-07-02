@@ -8,6 +8,16 @@ other needs GCP billing access. Both are written here ready to apply.
 
 ## 1. Bundle the Inter font (startup latency)
 
+> **✅ DONE (2026-07-02).** Implemented per the plan below, with one addition:
+> the theme also uses `FontWeight.w800` (`displayLarge` in
+> `lib/core/theme/themes.dart`), so **five** static weights are bundled —
+> Regular 400, Medium 500, SemiBold 600, Bold 700, **ExtraBold 800** — under
+> `assets/fonts/` (TTFs fetched from `fonts.gstatic.com`, the same files
+> `google_fonts` would have downloaded at runtime). The `fonts:` section is
+> declared in `pubspec.yaml` and `GoogleFonts.config.allowRuntimeFetching =
+> false;` is set at the top of `main()`. Step 5 (fresh-install, network-off
+> rendering check on a real device) remains the one on-device verification.
+
 **Problem.** `lib/core/theme/themes.dart` uses `GoogleFonts.inter*`. With no
 bundled copy, `google_fonts` fetches the Inter TTF from Google's CDN on first
 launch before it can paint text — a network round trip on the cold-start path

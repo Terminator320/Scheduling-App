@@ -1,10 +1,11 @@
 # First iOS Build on a Mac — Set-by-Set
 
-The config side of the iOS port is **done** (deployment target 15.0 in all three
-places, committed `Podfile` with the permission-handler macros, `Info.plist` +
-`PrivacyInfo.xcprivacy` in place). What's left is Mac-only: native tooling, the
-two gitignored secret files, the Crashlytics build phase, and device
-verification.
+The config side of the iOS port is **done** (deployment target 15.0 in
+`project.pbxproj` and `AppFrameworkInfo.plist`, `Info.plist` +
+`PrivacyInfo.xcprivacy` in place, `main.dart` already using
+`DefaultFirebaseOptions.currentPlatform`). What's left is Mac-only: native
+tooling, the generated `Podfile` (see Phase C), the two gitignored secret
+files, the Crashlytics build phase, and device verification.
 
 Bundle id: `net.vogas.scheduling`. iOS Firebase app:
 `1:914958291749:ios:c0f5d0899187badf0d00cc`.
@@ -54,8 +55,30 @@ AirDrop/USB/secure channel; **never commit them**:
 flutter pub get
 flutter gen-l10n                                          # generated l10n is gitignored
 dart run build_runner build --delete-conflicting-outputs # only if freezed models changed
+flutter build ios --config-only                           # generates ios/Podfile on first run
 cd ios && pod install                                     # first native install
 ```
+
+`ios/Podfile` is **not committed** — the Flutter tool generates it on the
+first iOS build. After it appears, edit it before `pod install`:
+
+- Uncomment/set `platform :ios, '15.0'` (must match the 15.0 deployment
+  target in `project.pbxproj` / `AppFrameworkInfo.plist`).
+- `permission_handler` needs its macros in the `post_install` hook so only
+  the used permissions compile in — inside `post_install do |installer|`,
+  per target add:
+
+  ```ruby
+  target.build_configurations.each do |config|
+    config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
+      '$(inherited)',
+      'PERMISSION_CAMERA=1',
+      'PERMISSION_PHOTOS=1',
+    ]
+  end
+  ```
+
+Then commit the resulting `Podfile` (and `Podfile.lock`).
 
 ## Phase D — Xcode config (the Mac-only GUI bits)
 
@@ -75,9 +98,14 @@ cd ios && pod install                                     # first native install
    - **Input Files:**
      ```
      ${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}
+     $(SRCROOT)/$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)
      ```
-4. **Verify** the deployment target shows **iOS 15.0** (already set in `Podfile`,
-   `project.pbxproj`, `AppFrameworkInfo.plist` — keep all three in sync).
+4. **dSYM build settings** (Runner target → *Build Settings*): *Debug
+   Information Format* = `DWARF with dSYM File` for the Release
+   configuration, so Crashlytics gets symbol files to upload.
+5. **Verify** the deployment target shows **iOS 15.0** (set in
+   `project.pbxproj` and `AppFrameworkInfo.plist`; keep the generated
+   `Podfile` in sync — see Phase C).
 
 ## Phase E — App Check debug token
 
@@ -113,3 +141,19 @@ Walk the **device-only checklist** (none covered by the test harness):
    build.
 2. Bump `+BUILD` in `pubspec.yaml` + add a `CHANGELOG.md` entry, then **Archive**
    in Xcode (*Product → Archive*) and upload.
+3. **Verify Crashlytics symbolication:** on the first TestFlight build,
+   trigger a test crash and confirm the symbolicated report appears in the
+   Firebase Crashlytics console within ~10 minutes (proves the Run Script
+   phase + dSYM settings from Phase D are correct).
+
+## App Store compliance notes (only if the app changes)
+
+Neither applies today — recorded so they aren't forgotten:
+
+- **App Tracking Transparency:** if an analytics/ads SDK with cross-app
+  tracking is ever added, present the ATT prompt and add
+  `NSUserTrackingUsageDescription` to `Info.plist`. (`PrivacyInfo.xcprivacy`
+  currently declares `NSPrivacyTracking: false`.)
+- **Sign in with Apple:** required by Apple as soon as any third-party
+  sign-in provider (Google, Facebook, …) is offered. Not required for the
+  current Firebase email/password-only auth.

@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  flutter:
+    name: Flutter analyze + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # dev/.env is gitignored but declared as a Flutter asset in pubspec.yaml,
+      # so the build needs a file to exist. Placeholders are fine: tests never
+      # talk to real Firebase.
+      - name: Bootstrap dev/.env from template
+        run: cp dev/.env.example dev/.env
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # pubspec.yaml sets `generate: true`, so pub get already runs gen-l10n;
+      # run it explicitly anyway so a stale tool cache can't skip it.
+      - name: Generate localizations
+        run: flutter gen-l10n
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+  functions:
+    name: Cloud Functions lint + test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches "engines.node" in functions/package.json.
+          node-version: 24
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npx jest
