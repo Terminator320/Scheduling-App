@@ -49,14 +49,20 @@ final _bobJob = _appt(
   employeeName: 'Bob',
 );
 
-Widget _wrap(List<AppointmentRecord> history, {String searchQuery = ''}) {
-  final repo = _MockAppointmentsRepository();
-  when(
-    () => repo.fetchHistoryPage(
-      limit: any(named: 'limit'),
-      after: any(named: 'after'),
-    ),
-  ).thenAnswer((_) async => history);
+Widget _wrap(
+  List<AppointmentRecord> history, {
+  String searchQuery = '',
+  AppointmentsRepository? repository,
+}) {
+  final repo = repository ?? _MockAppointmentsRepository();
+  if (repository == null) {
+    when(
+      () => repo.fetchHistoryPage(
+        limit: any(named: 'limit'),
+        after: any(named: 'after'),
+      ),
+    ).thenAnswer((_) async => history);
+  }
   return ProviderScope(
     overrides: [appointmentsRepositoryProvider.overrideWithValue(repo)],
     child: ThemeNotifier(
@@ -136,6 +142,72 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('No appointments found'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('first-page error offers a Retry that reloads history', (
+    tester,
+  ) async {
+    final repo = _MockAppointmentsRepository();
+    var calls = 0;
+    when(
+      () => repo.fetchHistoryPage(
+        limit: any(named: 'limit'),
+        after: any(named: 'after'),
+      ),
+    ).thenAnswer((_) async {
+      if (calls++ == 0) throw Exception('boom');
+      return [_aliceJob];
+    });
+
+    await tester.pumpWidget(_wrap(const [], repository: repo));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining("Couldn't load the appointment history"),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alice Job'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('search error offers a Retry that re-runs the search', (
+    tester,
+  ) async {
+    final repo = _MockAppointmentsRepository();
+    when(
+      () => repo.fetchHistoryPage(
+        limit: any(named: 'limit'),
+        after: any(named: 'after'),
+      ),
+    ).thenAnswer((_) async => [_aliceJob]);
+    when(() => repo.searchHistory(any())).thenThrow(Exception('boom'));
+
+    // Start unfiltered, then type a query that no loaded row matches, so the
+    // committed database search (and its failure) is what gets rendered.
+    await tester.pumpWidget(_wrap(const [], repository: repo));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      _wrap(const [], repository: repo, searchQuery: 'zzz'),
+    );
+    // Let the search debounce commit, then the provider fail.
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining("Couldn't load the appointment history"),
+      findsOneWidget,
+    );
+
+    when(() => repo.searchHistory(any())).thenAnswer((_) async => [_bobJob]);
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bob Job'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

@@ -1,5 +1,14 @@
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 
+/// Pre-normalized searchable projection of one client. Built once per data
+/// change (see the clients list's memoized index) so per-keystroke filtering
+/// only has to normalize the query — not every field of every loaded client.
+typedef ClientSearchEntry = ({
+  ClientRecord client,
+  String text,
+  String phoneDigits,
+});
+
 class ClientSearchPolicy {
   const ClientSearchPolicy._();
 
@@ -48,8 +57,15 @@ class ClientSearchPolicy {
     final q = normalize(query);
     final qDigits = digitsOnly(query);
     if (q.isEmpty && qDigits.isEmpty) return false;
+    return entryMatches(index(client), queryText: q, queryDigits: qDigits);
+  }
 
-    final text = normalize(
+  /// Normalizes one client into a [ClientSearchEntry] — the expensive half of
+  /// [matchesClient], hoisted out so callers can run it once per data change
+  /// instead of once per client per keystroke.
+  static ClientSearchEntry index(ClientRecord client) => (
+    client: client,
+    text: normalize(
       [
         client.name,
         client.firstName,
@@ -62,17 +78,27 @@ class ClientSearchPolicy {
         client.country,
         for (final c in client.contacts) '${c.name} ${c.email}',
       ].join(' '),
-    );
-    final phoneDigits = digitsOnly(
+    ),
+    phoneDigits: digitsOnly(
       [
         client.phone,
         client.mobile,
         for (final c in client.contacts) c.phone,
       ].join(' '),
-    );
+    ),
+  );
 
-    final matchesText = q.isNotEmpty && text.contains(q);
-    final matchesPhone = qDigits.isNotEmpty && phoneDigits.contains(qDigits);
+  /// The cheap half of [matchesClient]: both the entry and the query are
+  /// already normalized ([normalize]/[digitsOnly]), so this is just two
+  /// substring checks.
+  static bool entryMatches(
+    ClientSearchEntry entry, {
+    required String queryText,
+    required String queryDigits,
+  }) {
+    final matchesText = queryText.isNotEmpty && entry.text.contains(queryText);
+    final matchesPhone =
+        queryDigits.isNotEmpty && entry.phoneDigits.contains(queryDigits);
     return matchesText || matchesPhone;
   }
 }
