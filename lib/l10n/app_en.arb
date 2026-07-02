@@ -136,9 +136,22 @@
   "@common_clients": {
     "description": "Clients"
   },
-  "calendar_appointments": "Appointments",
-  "@calendar_appointments": {
-    "description": "Appointments"
+  "calendar_appointmentCount": "{count, plural, =1{1 appointment} other{{count} appointments}}",
+  "@calendar_appointmentCount": {
+    "description": "Appointment count for a day, shown in the calendar app bar and used in day-cell accessibility labels.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_openMenuTooltip": "Open menu",
+  "@calendar_openMenuTooltip": {
+    "description": "Tooltip for the calendar app-bar button that opens the settings drawer."
+  },
+  "calendar_noAppointmentsForDay": "No appointments for this day.",
+  "@calendar_noAppointmentsForDay": {
+    "description": "Empty-state body shown to employees (who cannot create appointments) when the selected day has none."
   },
   "common_language": "Language",
   "@common_language": {

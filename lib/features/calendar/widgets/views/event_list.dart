@@ -59,7 +59,11 @@ class EventList extends StatelessWidget {
                   return AppEmptyState(
                     icon: Icons.event_outlined,
                     title: context.l10n.common_noAppointmentsFound,
-                    body: context.l10n.common_tapToScheduleAnAppointment,
+                    // Only admins have the "+" FAB, so don't tell employees
+                    // to tap a button that isn't there.
+                    body: isAdmin
+                        ? context.l10n.common_tapToScheduleAnAppointment
+                        : context.l10n.calendar_noAppointmentsForDay,
                   );
                 }
 
