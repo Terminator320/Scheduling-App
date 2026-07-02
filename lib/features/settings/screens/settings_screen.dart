@@ -54,7 +54,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final AccountDeletionService _deletionService =
-      widget.accountDeletionService ?? AccountDeletionService();
+      widget.accountDeletionService ??
+      ref.read(accountDeletionServiceProvider);
 
   _SettingsDetail? _selectedDetail;
   bool _isSigningOut = false;
@@ -338,7 +339,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (_isSigningOut) return;
     setState(() => _isSigningOut = true);
     try {
-      await AuthService().signOut();
+      await ref.read(authServiceProvider).signOut();
     } catch (e, st) {
       // signOut clears local state and effectively never throws; if it does,
       // log it but still route to login so the user isn't stuck signed in.

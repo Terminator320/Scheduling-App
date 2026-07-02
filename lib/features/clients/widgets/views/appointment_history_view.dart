@@ -6,9 +6,9 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
-import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_tile.dart';
+import 'package:scheduling/features/clients/application/appointment_history_providers.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/clients/widgets/sections/history_filter_bar.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
@@ -92,8 +92,8 @@ class _AppointmentHistoryViewState
           ? null
           : items.last;
       return await ref
-          .read(appointmentsRepositoryProvider)
-          .fetchHistoryPage(after: after, limit: _pageSize);
+          .read(historyPagerProvider)
+          .fetchPage(after: after, limit: _pageSize);
     } catch (e, st) {
       ref
           .read(loggerProvider)

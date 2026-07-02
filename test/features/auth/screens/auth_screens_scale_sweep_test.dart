@@ -89,8 +89,11 @@ void main() {
         tester,
         _scaled(
           scale: scale,
-          home: Login(authService: auth),
-          overrides: [employeesRepositoryProvider.overrideWithValue(repo)],
+          home: const Login(),
+          overrides: [
+            authServiceProvider.overrideWithValue(auth),
+            employeesRepositoryProvider.overrideWithValue(repo),
+          ],
         ),
       );
       expect(tester.takeException(), isNull);

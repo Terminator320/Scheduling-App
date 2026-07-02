@@ -11,7 +11,7 @@ import 'package:scheduling/l10n/l10n.dart';
 /// full detail still goes to Crashlytics via the catch site's logger.warn.
 enum ErrorCause { offline, permissionDenied, notFound, unknown }
 
-ErrorCause classifyError(Object error) {
+ErrorCause _classifyError(Object error) {
   if (error is FirebaseException) {
     return switch (error.code) {
       'unavailable' ||
@@ -37,7 +37,7 @@ String composeErrorNotice(
   required Object error,
 }) {
   final l10n = context.l10n;
-  final cause = switch (classifyError(error)) {
+  final cause = switch (_classifyError(error)) {
     ErrorCause.offline => l10n.error_causeOffline,
     ErrorCause.permissionDenied => l10n.error_causePermissionDenied,
     ErrorCause.notFound => l10n.error_causeNotFound,

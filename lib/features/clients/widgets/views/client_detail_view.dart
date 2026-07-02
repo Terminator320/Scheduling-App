@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
-import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/clients/application/clients_providers.dart';
-import 'package:scheduling/features/clients/data/contact_link_store.dart';
+import 'package:scheduling/features/clients/application/client_form_controller.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/views/client_edit_form.dart';
 import 'package:scheduling/features/clients/widgets/views/client_view_body.dart';
@@ -46,7 +44,6 @@ class ClientDetailView extends ConsumerStatefulWidget {
 
 class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
   bool _isEditing = false;
-  bool _isDeleting = false;
   late ClientRecord _client;
 
   @override
@@ -70,52 +67,38 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
 
     if (!shouldDelete || !mounted) return;
 
-    setState(() => _isDeleting = true);
-
     final notices = ref.read(noticeServiceProvider);
-    try {
-      await ref.read(clientsRepositoryProvider).deleteClient(_client.id);
-      await _unlinkPhoneContact();
-      ref.read(clientsRefreshProvider.notifier).bump();
-      if (!mounted) return;
-      setState(() => _isDeleting = false);
-      notices.success(context.l10n.clients_clientDeletedSuccessfully);
-      // A scrollController means we're inside a bottom sheet; close it.
-      // Otherwise (split-layout detail pane) ask the host to clear the pane,
-      // which still renders the just-deleted client until told to.
-      if (widget.scrollController != null) {
-        Navigator.pop(context);
-      } else {
-        widget.onDeleted?.call();
-      }
-    } catch (e, st) {
-      ref.read(loggerProvider).warn('CLI-DEL deleteClient failed', e, st);
-      if (!mounted) return;
-      setState(() => _isDeleting = false);
-      notices.error(
-        composeErrorNotice(
-          context,
-          intro: context.l10n.error_introDeleteClient,
-          tag: 'CLI-DEL',
-          error: e,
-        ),
-      );
-    }
-  }
-
-  /// Drops the device-local phone-contact link for the deleted client.
-  /// Best-effort (mirrors CLI-CONTACT-SYNC): a failure must not fail the delete.
-  Future<void> _unlinkPhoneContact() async {
-    try {
-      await ref.read(contactLinkStoreProvider).unlink(_client.id);
-    } catch (e, st) {
-      ref.read(loggerProvider).warn('CLI-DEL contact unlink failed', e, st);
+    final outcome = await ref
+        .read(clientFormControllerProvider.notifier)
+        .deleteClient(_client.id);
+    if (!mounted) return;
+    switch (outcome) {
+      case ClientDeleted():
+        notices.success(context.l10n.clients_clientDeletedSuccessfully);
+        // A scrollController means we're inside a bottom sheet; close it.
+        // Otherwise (split-layout detail pane) ask the host to clear the pane,
+        // which still renders the just-deleted client until told to.
+        if (widget.scrollController != null) {
+          Navigator.pop(context);
+        } else {
+          widget.onDeleted?.call();
+        }
+      case ClientDeleteFailed(:final error):
+        notices.error(
+          composeErrorNotice(
+            context,
+            intro: context.l10n.error_introDeleteClient,
+            tag: 'CLI-DEL',
+            error: error,
+          ),
+        );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDeleting = ref.watch(clientFormControllerProvider).isDeleting;
 
     return DetailSheetListView(
       scrollController: widget.scrollController,
@@ -135,8 +118,8 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
         if (_isEditing)
           ClientEditForm(
             client: _client,
-            isDeleting: _isDeleting,
-            onDelete: _isDeleting ? null : _confirmDelete,
+            isDeleting: isDeleting,
+            onDelete: isDeleting ? null : _confirmDelete,
             onSaved: (updated) => setState(() {
               _client = updated;
               _isEditing = false;
@@ -146,11 +129,9 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
           ClientDetailViewBody(client: _client),
           const SizedBox(height: 24),
           _ViewActions(
-            isDeleting: _isDeleting,
-            onEdit: _isDeleting
-                ? null
-                : () => setState(() => _isEditing = true),
-            onDelete: _isDeleting ? null : _confirmDelete,
+            isDeleting: isDeleting,
+            onEdit: isDeleting ? null : () => setState(() => _isEditing = true),
+            onDelete: isDeleting ? null : _confirmDelete,
           ),
         ],
       ],

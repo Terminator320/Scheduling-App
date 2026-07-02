@@ -6,6 +6,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart';
 import 'package:scheduling/features/calendar/application/appointment_series_editor.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
@@ -17,14 +18,15 @@ import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart'
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
-import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 part 'event_details_controller.freezed.dart';
 
 @freezed
-abstract class EventDetailsState with _$EventDetailsState {
+abstract class EventDetailsState
+    with _$EventDetailsState
+    implements AppointmentFormFields {
   const factory EventDetailsState({
     required DateTime selectedDate,
     required TimeOfDay selectedStartTime,
@@ -84,7 +86,8 @@ class EventDetailsFailed extends EventDetailsSaveOutcome {
   final Object error;
 }
 
-class EventDetailsController extends Notifier<EventDetailsState> {
+class EventDetailsController extends Notifier<EventDetailsState>
+    with AppointmentFormConcerns<EventDetailsState> {
   EventDetailsController(EventDetailsKey key) : appointment = key.appointment;
 
   final AppointmentRecord appointment;
@@ -219,81 +222,47 @@ class EventDetailsController extends Notifier<EventDetailsState> {
     state = state.copyWith(repeat: value);
   }
 
-  Future<void> searchClients(String query) async {
-    final trimmed = query.trim();
-    if (!ClientSearchPolicy.shouldSearch(trimmed)) {
-      state = state.copyWith(clientResults: const [], isSearchingClient: false);
-      return;
-    }
-    state = state.copyWith(isSearchingClient: true);
-    final logger = ref.read(loggerProvider);
-    final clientsRepo = ref.read(clientsRepositoryProvider);
-    try {
-      final results = await clientsRepo.searchClients(trimmed);
-      if (!ref.mounted) return;
-      state = state.copyWith(clientResults: results, isSearchingClient: false);
-    } catch (e, st) {
-      logger.warn('searchClients failed', e, st);
-      if (!ref.mounted) return;
-      state = state.copyWith(isSearchingClient: false);
-    }
-  }
+  // --- AppointmentFormConcerns adapters ---
 
-  void selectClient(ClientRecord client) {
-    state = state.copyWith(
-      selectedClient: client,
-      client: client,
-      clientResults: const [],
-      useCustomAddress: client.noFixedAddress || client.address.trim().isEmpty,
-      clientCleared: false,
-      errors: withoutKey(state.errors, 'client'),
+  @override
+  EventDetailsState applyFormUpdate(
+    EventDetailsState current,
+    AppointmentFormUpdate update,
+  ) {
+    var next = current.copyWith(
+      clientResults: update.clientResults ?? current.clientResults,
+      isSearchingClient: update.isSearchingClient ?? current.isSearchingClient,
+      useCustomAddress: update.useCustomAddress ?? current.useCustomAddress,
+      selectedEmployees: update.selectedEmployees ?? current.selectedEmployees,
+      errors: update.errors ?? current.errors,
+      newImages: update.pendingImages ?? current.newImages,
     );
-  }
-
-  void clearClient() {
-    state = state.copyWith(
-      selectedClient: null,
-      client: null,
-      clientResults: const [],
-      useCustomAddress: false,
-      clientCleared: true,
-    );
-  }
-
-  void setUseCustomAddress({required bool value}) {
-    state = state.copyWith(useCustomAddress: value);
-  }
-
-  void toggleEmployee(EmployeeRecord employee) {
-    final next = [...state.selectedEmployees];
-    final idx = next.indexWhere((e) => e.id == employee.id);
-    if (idx >= 0) {
-      next.removeAt(idx);
-    } else {
-      next.add(employee);
+    // Unlike the add flow, this state also tracks the loaded `client` and the
+    // explicit-clear flag (which blocks the placeholder fallback in save()).
+    if (update.selectedClient != null) {
+      next = next.copyWith(
+        selectedClient: update.selectedClient,
+        client: update.selectedClient,
+        clientCleared: false,
+      );
+    } else if (update.clearSelectedClient) {
+      next = next.copyWith(
+        selectedClient: null,
+        client: null,
+        clientCleared: true,
+      );
     }
-    state = state.copyWith(
-      selectedEmployees: next,
-      errors: next.isEmpty
-          ? state.errors
-          : withoutKey(state.errors, 'employees'),
-    );
+    return next;
   }
 
-  static const int maxImagesPerAppointment = 10;
+  @override
+  int get usedImageCount =>
+      state.existingImages.length + state.newImages.length;
 
-  void addImages(List<File> files) {
-    final used = state.existingImages.length + state.newImages.length;
-    final remaining = maxImagesPerAppointment - used;
-    if (remaining <= 0) return;
-    final accepted = files.take(remaining).toList();
-    state = state.copyWith(newImages: [...state.newImages, ...accepted]);
-  }
+  @override
+  List<File> get pendingImages => state.newImages;
 
-  void removeNewImage(int index) {
-    final next = [...state.newImages]..removeAt(index);
-    state = state.copyWith(newImages: next);
-  }
+  void removeNewImage(int index) => removePendingImageAt(index);
 
   void removeExistingImage(int index) {
     final removed = state.existingImages[index];

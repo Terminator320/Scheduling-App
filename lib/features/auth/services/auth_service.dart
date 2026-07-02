@@ -1,12 +1,27 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
+import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+
+/// App-wide [AuthService], wired through the shared providers so tests can
+/// override any collaborator (or this provider itself) instead of the
+/// widgets newing up their own instances.
+final authServiceProvider = Provider<AuthService>(
+  (ref) => AuthService(
+    firebaseAuth: ref.watch(firebaseAuthProvider),
+    employeesRepository: ref.watch(employeesRepositoryProvider),
+    authCache: ref.watch(authCacheProvider),
+    logger: ref.watch(loggerProvider),
+  ),
+);
 
 class AuthService {
   AuthService({

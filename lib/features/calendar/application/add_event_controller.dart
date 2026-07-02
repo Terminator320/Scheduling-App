@@ -5,21 +5,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
-import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
-import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 part 'add_event_controller.freezed.dart';
 
 @freezed
-abstract class AddEventState with _$AddEventState {
+abstract class AddEventState with _$AddEventState implements AppointmentFormFields {
   const factory AddEventState({
     DateTime? selectedDate,
     TimeOfDay? selectedStartTime,
@@ -70,7 +69,8 @@ class AddEventFailed extends AddEventSubmitOutcome {
   final Object error;
 }
 
-class AddEventController extends Notifier<AddEventState> {
+class AddEventController extends Notifier<AddEventState>
+    with AppointmentFormConcerns<AddEventState> {
   AddEventController(this.initialDate);
 
   final DateTime? initialDate;
@@ -79,6 +79,37 @@ class AddEventController extends Notifier<AddEventState> {
   AddEventState build() {
     return AddEventState(selectedDate: initialDate);
   }
+
+  // --- AppointmentFormConcerns adapters ---
+
+  @override
+  AddEventState applyFormUpdate(
+    AddEventState current,
+    AppointmentFormUpdate update,
+  ) {
+    var next = current.copyWith(
+      clientResults: update.clientResults ?? current.clientResults,
+      isSearchingClient: update.isSearchingClient ?? current.isSearchingClient,
+      useCustomAddress: update.useCustomAddress ?? current.useCustomAddress,
+      selectedEmployees: update.selectedEmployees ?? current.selectedEmployees,
+      errors: update.errors ?? current.errors,
+      selectedImages: update.pendingImages ?? current.selectedImages,
+    );
+    if (update.selectedClient != null) {
+      next = next.copyWith(selectedClient: update.selectedClient);
+    } else if (update.clearSelectedClient) {
+      next = next.copyWith(selectedClient: null);
+    }
+    return next;
+  }
+
+  @override
+  int get usedImageCount => state.selectedImages.length;
+
+  @override
+  List<File> get pendingImages => state.selectedImages;
+
+  void removeImage(int index) => removePendingImageAt(index);
 
   void selectDate(DateTime date) {
     state = state.copyWith(
@@ -108,83 +139,8 @@ class AddEventController extends Notifier<AddEventState> {
     );
   }
 
-  Future<void> searchClients(String query) async {
-    final trimmed = query.trim();
-    if (!ClientSearchPolicy.shouldSearch(trimmed)) {
-      state = state.copyWith(clientResults: const [], isSearchingClient: false);
-      return;
-    }
-    state = state.copyWith(isSearchingClient: true);
-    // Resolved before the await: the sheet can be dismissed mid-search, and
-    // using the Ref of a disposed notifier throws in Riverpod 3.
-    final logger = ref.read(loggerProvider);
-    final clientsRepo = ref.read(clientsRepositoryProvider);
-    try {
-      final results = await clientsRepo.searchClients(trimmed);
-      if (!ref.mounted) return;
-      state = state.copyWith(clientResults: results, isSearchingClient: false);
-    } catch (e, st) {
-      logger.warn('searchClients failed', e, st);
-      if (!ref.mounted) return;
-      state = state.copyWith(isSearchingClient: false);
-    }
-  }
-
-  void selectClient(ClientRecord client) {
-    state = state.copyWith(
-      selectedClient: client,
-      clientResults: const [],
-      useCustomAddress: client.noFixedAddress || client.address.trim().isEmpty,
-      errors: withoutKey(state.errors, 'client'),
-    );
-  }
-
-  void clearClient() {
-    state = state.copyWith(
-      selectedClient: null,
-      clientResults: const [],
-      useCustomAddress: false,
-    );
-  }
-
-  void setUseCustomAddress({required bool value}) {
-    state = state.copyWith(useCustomAddress: value);
-  }
-
   void selectRepeat(RepeatInterval value) {
     state = state.copyWith(repeat: value);
-  }
-
-  void toggleEmployee(EmployeeRecord employee) {
-    final next = [...state.selectedEmployees];
-    final idx = next.indexWhere((e) => e.id == employee.id);
-    if (idx >= 0) {
-      next.removeAt(idx);
-    } else {
-      next.add(employee);
-    }
-    state = state.copyWith(
-      selectedEmployees: next,
-      errors: next.isEmpty
-          ? state.errors
-          : withoutKey(state.errors, 'employees'),
-    );
-  }
-
-  static const int maxImagesPerAppointment = 10;
-
-  void addImages(List<File> files) {
-    final remaining = maxImagesPerAppointment - state.selectedImages.length;
-    if (remaining <= 0) return;
-    final accepted = files.take(remaining).toList();
-    state = state.copyWith(
-      selectedImages: [...state.selectedImages, ...accepted],
-    );
-  }
-
-  void removeImage(int index) {
-    final next = [...state.selectedImages]..removeAt(index);
-    state = state.copyWith(selectedImages: next);
   }
 
   Future<AddEventSubmitOutcome> submit({
