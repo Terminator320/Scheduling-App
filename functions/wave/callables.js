@@ -65,6 +65,32 @@ async function readWaveBusinessId() {
   return data && typeof data.businessId === "string" ? data.businessId : "";
 }
 
+// Per-instance cache for the scheduled worker's connection gate. The worker
+// fires every minute forever, so an installation that never connects Wave
+// would otherwise pay a Firestore read per minute per warm instance. A found
+// businessId is cached for the instance's lifetime (bootstrap is
+// set-once-never-changed); a NOT-connected result is cached for a short TTL
+// so a fresh bootstrap is still picked up within a few minutes.
+const NOT_CONNECTED_CACHE_MS = 5 * 60 * 1000;
+let cachedBusinessId = "";
+let notConnectedUntilMs = 0;
+
+/**
+ * Cached wrapper around readWaveBusinessId for the every-minute scheduler.
+ * @return {!Promise<string>} The business id, or "" if not connected.
+ */
+async function readWaveBusinessIdCached() {
+  if (cachedBusinessId) return cachedBusinessId;
+  if (Date.now() < notConnectedUntilMs) return "";
+  const businessId = await readWaveBusinessId();
+  if (businessId) {
+    cachedBusinessId = businessId;
+  } else {
+    notConnectedUntilMs = Date.now() + NOT_CONNECTED_CACHE_MS;
+  }
+  return businessId;
+}
+
 /**
  * Selects the intended Wave business from the listed businesses. Selection
  * order: by name when `wantName` (the server-configured business name) is
@@ -255,8 +281,11 @@ const waveImportCustomers = onCall(
 
 // 3) waveUpsertCustomer — enqueues a Wave write-back when a client doc's mapped
 // fields change. No secret needed (it only writes to the Firestore outbox).
+// `retry: true` is safe: the handler is idempotent (deterministic jobId via
+// set-merge; the mark-pending update writes absolute values) and hash-guarded
+// (shouldEnqueueClientWrite absorbs echoes), so a crash-retry converges.
 const waveUpsertCustomer = onDocumentWritten(
-    "clients/{clientId}",
+    {document: "clients/{clientId}", retry: true},
     async (event) => {
       const beforeSnap = event.data?.before;
       const afterSnap = event.data?.after;
@@ -269,30 +298,40 @@ const waveUpsertCustomer = onDocumentWritten(
       const before = beforeSnap?.exists ? beforeSnap.data() : null;
       if (!shouldEnqueueClientWrite(before, after)) return;
 
-      // NOTE: this write touches only wave.* fields, so
+      // NOTE: the mark-pending write touches only wave.* fields, so
       // shouldEnqueueClientWrite returns false when the trigger re-fires
       // (mappedFieldsHash is unchanged) — no second pending-write or loop.
       const clientId = event.params.clientId;
-      try {
-        await getFirestore()
-            .doc("clients/" + clientId)
-            .update({"wave.syncState": "pending", "wave.syncError": null});
-      } catch (e) {
-        // Best-effort: the doc may have been deleted between the trigger
-        // firing and this update. Log and continue — never fail the trigger.
-        logger.warn("waveUpsertCustomer: could not mark pending",
-            {clientId, err: e.message});
-      }
+      const db = getFirestore();
 
       // Compute once here; shouldEnqueueClientWrite also hashes internally
       // but does not expose its result, so this call is the single explicit
       // hash at the enqueue site.
       const hash = mappedFieldsHash(after);
-      await enqueueCustomerUpsert(clientId, {
-        // payloadHash is diagnostic only: the worker re-reads the live doc
-        // and recomputes before writing — the doc is the source of truth.
-        payloadHash: hash,
+
+      // Mark-pending + enqueue land in ONE WriteBatch so a crash between the
+      // two can't leave the doc stuck at 'pending' with no queued job (or a
+      // queued job with no visible pending state).
+      const batch = db.batch();
+      batch.update(db.doc("clients/" + clientId), {
+        "wave.syncState": "pending",
+        "wave.syncError": null,
       });
+      // payloadHash is diagnostic only: the worker re-reads the live doc
+      // and recomputes before writing — the doc is the source of truth.
+      await enqueueCustomerUpsert(clientId, {batch, payloadHash: hash});
+      try {
+        await batch.commit();
+      } catch (e) {
+        // The batch fails atomically when the doc was deleted between the
+        // trigger firing and the commit (update precondition). Fall back to
+        // enqueue-only: the worker resolves a missing doc as a clean skip,
+        // and nothing is left half-written. Any other failure surfaces the
+        // same way; retry:true re-runs the (idempotent) handler.
+        logger.warn("waveUpsertCustomer: batched mark-pending failed; " +
+            "enqueueing without it", {clientId, err: e.message});
+        await enqueueCustomerUpsert(clientId, {payloadHash: hash});
+      }
       logger.debug("waveUpsertCustomer: enqueued", {clientId});
     },
 );
@@ -300,14 +339,26 @@ const waveUpsertCustomer = onDocumentWritten(
 // 4) waveSyncWorker — drains the Wave outbox on a schedule. Single instance so
 // Wave pacing stays simple; the worker's lease reaper + transactional claim
 // handle robustness. 1/min × default batchLimit 30 = 30 Wave calls/min (< 60).
+//
+// timeoutSeconds is raised to 540 because a worst-case drain is minutes long
+// (up to 30 serial jobs, each with client-level Retry-After sleeps of up to
+// 60s × 3 retries); the default 60s timeout would kill the run mid-dispatch.
+// drainQueue additionally gets a wall-clock deadline at ~70% of the timeout
+// so it stops claiming new jobs in time to finish its outcome writes cleanly.
+const WORKER_TIMEOUT_SECONDS = 540;
+const WORKER_DEADLINE_FRACTION = 0.7;
+
 const waveSyncWorker = onSchedule(
     {
       schedule: "every 1 minutes",
       secrets: [WAVE_FULL_ACCESS_TOKEN],
       maxInstances: 1,
+      timeoutSeconds: WORKER_TIMEOUT_SECONDS,
     },
     async () => {
-      const businessId = await readWaveBusinessId();
+      // Cheap gate: skip the run entirely while Wave is not connected (the
+      // cached read avoids a Firestore read per minute on idle installs).
+      const businessId = await readWaveBusinessIdCached();
       if (!businessId) {
         logger.debug("waveSyncWorker: not bootstrapped — nothing to do");
         return;
@@ -315,7 +366,9 @@ const waveSyncWorker = onSchedule(
       // `graphql`/`upsertCustomer` intentionally omitted: drainQueue defaults
       // to the real Wave client (WAVE_FULL_ACCESS_TOKEN is in scope via this
       // function's `secrets` binding).
-      const summary = await drainQueue({businessId});
+      const deadlineMs = Date.now() +
+        WORKER_TIMEOUT_SECONDS * 1000 * WORKER_DEADLINE_FRACTION;
+      const summary = await drainQueue({businessId, deadlineMs});
       logger.info("waveSyncWorker: drain done", {
         processed: summary.processed,
         done: summary.done,

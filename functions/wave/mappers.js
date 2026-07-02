@@ -117,6 +117,56 @@ function fromCountry(country) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Extracts the street line (Wave `addressLine1`) from the app's stored
+ * `address` display string.
+ *
+ * App-saved clients store `address` as a full display address
+ * ("[apt-]street, city, province postal, country") while Wave keeps
+ * city/province/country/postalCode as separate structured fields. Rather than
+ * blindly taking the first comma-segment (which destroys street lines that
+ * legitimately contain commas, e.g. "100 Main St, Building A"), trailing
+ * segments are stripped ONLY when they duplicate the doc's structured
+ * locality fields (city / "province postal" / province / postalCode /
+ * country, in any trailing order) and the remaining segments — commas and
+ * all — form the street line. Docs with NO structured locality fields at all
+ * (legacy full-display addresses) fall back to the historical first-segment
+ * behaviour so city names never leak into addressLine1.
+ *
+ * @param {string} fullAddress Trimmed stored address display string.
+ * @param {!Object} f The client document fields (for city/province/etc.).
+ * @return {string} The street line.
+ */
+function streetFromAddress(fullAddress, f) {
+  if (!fullAddress) return "";
+  const segments = fullAddress.split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+  if (segments.length <= 1) return segments[0] || "";
+
+  const norm = (s) => s.replace(/\s+/g, " ").trim().toLowerCase();
+  const city = typeof f.city === "string" ? norm(f.city) : "";
+  const province = typeof f.province === "string" ? norm(f.province) : "";
+  const postalCode = typeof f.postalCode === "string" ?
+    norm(f.postalCode) : "";
+  const country = typeof f.country === "string" ? norm(f.country) : "";
+  const localityTails = new Set([
+    city, province, postalCode, country,
+    province && postalCode ? `${province} ${postalCode}` : "",
+  ].filter(Boolean));
+
+  // No structured locality fields to identify a tail (legacy docs): keep the
+  // historical behaviour (first segment) so a full display address doesn't
+  // dump the city into line1.
+  if (localityTails.size === 0) return segments[0];
+
+  let end = segments.length;
+  while (end > 1 && localityTails.has(norm(segments[end - 1]))) {
+    end -= 1;
+  }
+  return segments.slice(0, end).join(", ");
+}
+
+/**
  * Converts a Firestore client document's fields to a Wave customer input
  * object suitable for the Wave GraphQL `CustomerCreateInput` /
  * `CustomerPatchInput`. The caller is responsible for adding `businessId`
@@ -143,13 +193,16 @@ function toWaveCustomerInput(clientFields) {
   // full display address ("[apt-]street, city, province postal, country")
   // for its own map/display use, but Wave keeps city/province/country/
   // postalCode as separate structured fields, so the whole string would
-  // duplicate them here. Take the first comma-segment (the street line); for
-  // app-saved clients it already carries the apt prefix, so only prepend `apt`
-  // for legacy docs that kept it separate, never doubling it. addressLine2 is
-  // omitted (the app lacks it).
+  // duplicate them here. streetFromAddress strips the locality tail while
+  // preserving commas inside the street itself; for app-saved clients the
+  // street already carries the apt prefix, so only prepend `apt` for legacy
+  // docs that kept it separate, never doubling it. addressLine2 round-trips
+  // through the function-owned `addressLine2` doc field (written by the Wave
+  // import, never emitted by the Flutter client's toMap) so a Wave customer's
+  // second address line survives an app-side edit → patch cycle.
   const apt = typeof f.apt === "string" ? f.apt.trim() : "";
   const fullAddress = typeof f.address === "string" ? f.address.trim() : "";
-  const street = fullAddress.split(",")[0].trim();
+  const street = streetFromAddress(fullAddress, f);
   let addressLine1 = street;
   if (apt && !street.startsWith(`${apt}-`)) {
     addressLine1 = street ? `${apt}-${street}` : apt;
@@ -157,6 +210,8 @@ function toWaveCustomerInput(clientFields) {
 
   const addr = {};
   if (addressLine1) addr.addressLine1 = addressLine1;
+  const addressLine2 = presence(f.addressLine2);
+  if (addressLine2) addr.addressLine2 = addressLine2;
   const city = presence(f.city);
   if (city) addr.city = city;
   const provinceCode = toProvinceCode(f.province);
@@ -233,8 +288,11 @@ function stableStringify(value) {
  * Defensive against sparse/null sub-objects: a missing `address` or nested
  * `province`/`country` never throws.
  *
- * `apt` is always returned as `''` — Wave's `addressLine2` is written blank
- * for app-origin customers, so the round-trip is lossless for that field.
+ * `apt` is always returned as `''`; Wave's `addressLine2` is preserved in the
+ * dedicated `addressLine2` doc field (NOT joined into `address`) so the
+ * round-trip is lossless: `toWaveCustomerInput` re-emits it as
+ * `addressLine2` on patch, and the street line is never truncated at the
+ * first comma of a joined string.
  *
  * @param {!Object} node Wave customer GraphQL node. Expected shape:
  *   { id, name, firstName, lastName, email, phone, mobile, isArchived,
@@ -247,12 +305,14 @@ function fromWaveCustomer(node) {
   const addr = (n.address && typeof n.address === "object") ?
     n.address : {};
 
-  // Join addressLine1 and addressLine2 (non-empty only) with ", ".
+  // `address` carries ONLY the street line (addressLine1). addressLine2 is
+  // kept in its own field so a later write-back can re-emit it faithfully —
+  // joining the two with ", " would make the patch path truncate line2 away.
   const line1 = typeof addr.addressLine1 === "string" ?
     addr.addressLine1.trim() : "";
   const line2 = typeof addr.addressLine2 === "string" ?
     addr.addressLine2.trim() : "";
-  const address = [line1, line2].filter(Boolean).join(", ");
+  const address = line1;
 
   const prov = (addr.province && typeof addr.province === "object") ?
     addr.province : {};
@@ -282,6 +342,7 @@ function fromWaveCustomer(node) {
     phone: typeof n.phone === "string" ? n.phone : "",
     mobile: typeof n.mobile === "string" ? n.mobile : "",
     address,
+    addressLine2: line2,
     apt: "",
     city: typeof addr.city === "string" ? addr.city.trim() : "",
     province,

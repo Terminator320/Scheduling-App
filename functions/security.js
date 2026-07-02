@@ -105,6 +105,11 @@ function readSessionToken(data) {
  * @param {number} windowMs window length in milliseconds.
  * @param {string} [keyKind] label for `key` ("uid" | "email"); email keys are
  *   PII, so only a hash is logged. Purely for log discrimination.
+ * @return {!Promise<{refund: function(): !Promise<void>}>} A handle whose
+ *   `refund()` removes the attempt just recorded (best-effort, never throws).
+ *   Callers may use it so a server-side (`internal`) failure does not burn one
+ *   of the caller's limited slots; caller-attributable failures must NOT be
+ *   refunded. Existing callers that ignore the return value are unaffected.
  */
 async function enforceDurableRateLimit(route, key, max, windowMs,
     keyKind = "uid") {
@@ -146,6 +151,30 @@ async function enforceDurableRateLimit(route, key, max, windowMs,
         {route, keyKind, keyHash});
     throw new HttpsError("resource-exhausted", "too-many-attempts");
   }
+
+  // Best-effort refund of the single attempt recorded above (one occurrence
+  // of `now`). Swallows its own errors: refunding is an optimization, never
+  // worth failing the caller's error path over.
+  const refund = async () => {
+    try {
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        const data = snap.exists ? snap.data() : null;
+        const prior = data && Array.isArray(data.attempts) ?
+          data.attempts : [];
+        const idx = prior.indexOf(now);
+        if (idx === -1) return;
+        const next = prior.slice(0, idx).concat(prior.slice(idx + 1));
+        tx.set(ref, {route, attempts: next}, {merge: true});
+      });
+    } catch (err) {
+      logger.warn("enforceDurableRateLimit: refund failed", {
+        route,
+        err: err.message,
+      });
+    }
+  };
+  return {refund};
 }
 
 /**

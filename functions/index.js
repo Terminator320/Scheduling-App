@@ -17,8 +17,10 @@ const account = require("./account");
 const invites = require("./invites");
 const maintenance = require("./maintenance");
 const waveCallables = require("./wave/callables");
+const clientPropagation = require("./client_propagation");
 
 exports.syncUsersByUid = bridge.syncUsersByUid;
+exports.propagateClientEdits = clientPropagation.propagateClientEdits;
 exports.placesAutocomplete = places.placesAutocomplete;
 exports.placesGetDetails = places.placesGetDetails;
 exports.validateUploadedImage = maintenance.validateUploadedImage;

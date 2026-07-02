@@ -262,8 +262,12 @@ function readMutationPayload(payload) {
  *
  * @param {string} clientId Firestore `clients` document id.
  * @param {Object=} deps Injectable dependencies — `db`, `graphql`,
- *   `businessId`, `now`. Defaults: db=getFirestore(), graphql=the real client,
- *   businessId=read from wave/connection, now=FieldValue.serverTimestamp.
+ *   `businessId`, `now`, `priorAttempts`. Defaults: db=getFirestore(),
+ *   graphql=the real client, businessId=read from wave/connection,
+ *   now=FieldValue.serverTimestamp. `priorAttempts` (number, default 0) is
+ *   the outbox job's failed-attempt count: when > 0 an unlinked create first
+ *   searches Wave for a customer a crashed previous attempt may already have
+ *   created (see step 5) and links it instead of duplicating.
  *   No default touches real Firestore/network during a unit test.
  * @return {!Promise<!Object>} A status object (see decision flow).
  * @throws {WaveValidationError} On a Wave validation rejection.
@@ -307,6 +311,39 @@ async function upsertCustomer(clientId, deps = {}) {
   }
 
   // Step 5 — create a new Wave customer.
+  //
+  // Crash-retry idempotency: a previous dispatch may have created the Wave
+  // customer and died BEFORE the write-back linked it (the create and the
+  // link are separated by a network call, so a function crash between them is
+  // possible). On a retry (`priorAttempts > 0`) of an unlinked doc, first
+  // search Wave for a customer matching this doc's stable identity
+  // (name + email) and link it instead of creating a duplicate. The search
+  // runs OUTSIDE any transaction (module invariant: no Wave network call
+  // inside a Firestore transaction) and only on the rare retry path, so the
+  // steady-state create costs no extra Wave requests.
+  const priorAttempts =
+    typeof deps.priorAttempts === "number" ? deps.priorAttempts : 0;
+  if (priorAttempts > 0) {
+    const existing = await findCustomerByIdentity(
+        graphql, businessId, mappedFields,
+    );
+    if (existing) {
+      // Patch the found customer so the doc's CURRENT fields land in Wave
+      // (the crashed attempt may have written stale data), then link it.
+      const payload = await runCustomerMutation(
+          graphql, PATCH_CUSTOMER, {id: existing.id, ...mappedFields},
+      );
+      if (!payload.didSucceed) {
+        await writeSyncError(db, ref, now, payload.inputErrors);
+        throw new WaveValidationError(payload.inputErrors);
+      }
+      await writeSyncSuccess(
+          db, ref, now, {hash, waveCustomerId: existing.id},
+      );
+      return {status: "linked", waveCustomerId: existing.id};
+    }
+  }
+
   const created = await createCustomerWithPhoneFallback(
       graphql, businessId, mappedFields,
   );
@@ -326,6 +363,58 @@ async function upsertCustomer(clientId, deps = {}) {
       db, ref, now, {hash: syncedHash, waveCustomerId: newId},
   );
   return {status: "created", waveCustomerId: newId};
+}
+
+/**
+ * Searches the connected business's Wave customers for one matching the
+ * mapped identity of a client doc — used ONLY on the crash-retry path of an
+ * unlinked create (see `upsertCustomer` step 5). Wave's public API has no
+ * server-side name/email filter, so this paginates `LIST_CUSTOMERS` and
+ * matches locally on normalized name AND email (both must be equal; an empty
+ * email only matches an empty email). Archived customers are skipped.
+ * Transport errors (`WaveApiError`) propagate — the outbox worker treats them
+ * with its normal retry taxonomy.
+ * @param {!Function} graphql Injected graphql function.
+ * @param {string} businessId Connected Wave business id.
+ * @param {!Object} mappedFields Mapped Wave customer fields for the doc.
+ * @param {number=} pageSize Page size for the listing (default 100).
+ * @return {!Promise<?{id: string}>} The matching customer, or null.
+ */
+async function findCustomerByIdentity(graphql, businessId, mappedFields,
+    pageSize = 100) {
+  const norm = (v) => (typeof v === "string" ? v.trim().toLowerCase() : "");
+  const wantName = norm(mappedFields.name);
+  const wantEmail = norm(mappedFields.email);
+  // A blank name can never identify "our" customer — bail out rather than
+  // linking an arbitrary blank-named record.
+  if (!wantName) return null;
+
+  let page = 1;
+  for (;;) {
+    const data = await graphql(
+        LIST_CUSTOMERS, {id: businessId, page, pageSize},
+    );
+    const customers = data && data.business ? data.business.customers : null;
+    const pageInfo = (customers && customers.pageInfo) || {};
+    const edges = (customers && Array.isArray(customers.edges)) ?
+      customers.edges : [];
+
+    for (const edge of edges) {
+      const node = edge && edge.node;
+      if (!node || node.isArchived === true) continue;
+      if (typeof node.id !== "string" || !node.id) continue;
+      if (norm(node.name) === wantName && norm(node.email) === wantEmail) {
+        return {id: node.id};
+      }
+    }
+
+    const current = typeof pageInfo.currentPage === "number" ?
+      pageInfo.currentPage : page;
+    const total = typeof pageInfo.totalPages === "number" ?
+      pageInfo.totalPages : current;
+    if (current >= total) return null;
+    page = current + 1;
+  }
 }
 
 /**
