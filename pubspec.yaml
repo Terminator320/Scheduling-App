@@ -21,7 +21,6 @@ dependencies:
   firebase_storage: ^13.3.0
   firebase_app_check: ^0.4.3
   firebase_crashlytics: ^5.0.0
-  firebase_performance: ^0.11.4+2
   cloud_functions: ^6.0.0
 
   # Calendar / dates / i18n
@@ -57,7 +56,6 @@ dependencies:
   flutter_dotenv: ^6.0.1
 
   # UI
-  cupertino_icons: ^1.0.8
   google_fonts: ^8.1.0
   flutter_animate: ^4.5.0
   flex_color_picker: ^3.8.0
@@ -92,7 +90,7 @@ dev_dependencies:
   # Launcher icon generator (run: `dart run flutter_launcher_icons`)
   flutter_launcher_icons: ^0.14.4
 
-  fake_async: any
+  fake_async: ^1.3.3
 flutter:
   generate: true
   uses-material-design: true
@@ -100,6 +98,24 @@ flutter:
   assets:
     - dev/.env
     - assets/images/icon.png
+
+  # Bundled Inter so google_fonts resolves locally instead of fetching from
+  # the CDN on first launch (GoogleFonts.config.allowRuntimeFetching is false
+  # in main.dart). Weights match the GoogleFonts.inter* usages in
+  # lib/core/theme/themes.dart (400/500/600/700/800).
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Inter-ExtraBold.ttf
+          weight: 800
 
 # Native splash config consumed by `dart run flutter_native_splash:create`.
 # Brand color #005CC8 matches AppColors.primary (lib/core/theme/design_tokens.dart).

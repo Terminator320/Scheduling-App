@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/core/adaptive/app_scroll_behavior.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
@@ -51,6 +52,8 @@ Future<void> main() async {
   await runZonedGuarded<Future<void>>(
     () async {
       final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+      // Inter is bundled (assets/fonts/) — never fetch fonts from the CDN.
+      GoogleFonts.config.allowRuntimeFetching = false;
       FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
       final settingsFuture = SharedPrefsSettingsRepository().load();
