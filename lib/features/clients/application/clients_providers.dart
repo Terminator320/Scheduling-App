@@ -36,6 +36,11 @@ final clientSearchProvider = FutureProvider.autoDispose
       query,
     ) async {
       if (!ClientSearchPolicy.shouldSearch(query)) return const [];
+      // A bump (any client add/update/delete) must invalidate committed search
+      // results too, not just the paged list — otherwise a deleted client
+      // stays listed and tappable in the rendered search results until the
+      // query changes.
+      ref.watch(clientsRefreshProvider);
       final repo = ref.watch(clientsRepositoryProvider);
       return repo.searchClients(query);
     });
