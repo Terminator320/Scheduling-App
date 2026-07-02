@@ -795,6 +795,10 @@
   "@error_networkErrorCheckYourConnectionAndTryAgain": {
     "description": "Network error. Check your connection and try again."
   },
+  "common_offlineBanner": "Offline — changes will sync when you're back online",
+  "@common_offlineBanner": {
+    "description": "Persistent app-wide banner shown while the device has no network connection."
+  },
   "auth_checkYourInbox": "Check your inbox",
   "@auth_checkYourInbox": {
     "description": "Check your inbox"

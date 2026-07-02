@@ -56,6 +56,7 @@ Widget _wrap(
 }) {
   final repo = repository ?? _MockAppointmentsRepository();
   if (repository == null) {
+    when(() => repo.onLocalWrite).thenAnswer((_) => const Stream<void>.empty());
     when(
       () => repo.fetchHistoryPage(
         limit: any(named: 'limit'),
@@ -149,6 +150,7 @@ void main() {
     tester,
   ) async {
     final repo = _MockAppointmentsRepository();
+    when(() => repo.onLocalWrite).thenAnswer((_) => const Stream<void>.empty());
     var calls = 0;
     when(
       () => repo.fetchHistoryPage(
@@ -179,6 +181,7 @@ void main() {
     tester,
   ) async {
     final repo = _MockAppointmentsRepository();
+    when(() => repo.onLocalWrite).thenAnswer((_) => const Stream<void>.empty());
     when(
       () => repo.fetchHistoryPage(
         limit: any(named: 'limit'),

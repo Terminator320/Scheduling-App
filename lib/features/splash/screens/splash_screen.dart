@@ -50,6 +50,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   /// Optimistic fast path. On a cache hit we route immediately (as employee);
   /// on a miss we fall back to the authoritative [splashDestinationProvider].
   Future<void> _decideRoute() async {
+    // P10: Crashlytics/App Check activation completes after runApp (main.dart
+    // defers it into firebaseReadyProvider). Every Firestore-reading surface
+    // is reached through this splash, so awaiting here guarantees no request
+    // races App Check token issuance. An activation failure is already
+    // recorded by the zone handler — log and proceed rather than wedge
+    // startup on it.
+    try {
+      await ref.read(firebaseReadyProvider.future);
+    } catch (e, st) {
+      ref.read(loggerProvider).warn('splash.firebase_ready', e, st);
+    }
+    if (!mounted || _navigated) return;
+
     final uid = ref.read(firebaseAuthProvider).currentUser?.uid;
     if (uid == null) {
       _go(const SplashGoToLogin());
