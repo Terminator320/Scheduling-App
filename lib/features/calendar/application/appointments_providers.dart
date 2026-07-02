@@ -33,28 +33,14 @@ final appointmentsInRangeProvider = StreamProvider.family
       return ref.watch(appointmentsRepositoryProvider).watchInRange(range);
     });
 
-typedef MyAppointmentsKey = ({String employeeId, AppointmentDateRange range});
+/// Family key for [myAppointmentsProvider]. Callers pass the record literal;
+/// records are structural, so the alias stays library-private.
+typedef _MyAppointmentsKey = ({String employeeId, AppointmentDateRange range});
 
 final myAppointmentsProvider = StreamProvider.family
-    .autoDispose<List<AppointmentRecord>, MyAppointmentsKey>((ref, key) {
+    .autoDispose<List<AppointmentRecord>, _MyAppointmentsKey>((ref, key) {
       if (ref.authUid == null) return Stream.value(const []);
       return ref
           .watch(appointmentsRepositoryProvider)
           .watchForEmployeeInRange(key.employeeId, key.range);
-    });
-
-/// Database-backed history search: finds terminal appointments across the whole
-/// history window, not just the pages loaded into the list. AutoDispose so each
-/// distinct query instance is freed once no longer watched.
-final historySearchProvider = FutureProvider.autoDispose
-    .family<List<AppointmentRecord>, String>((
-      ref,
-      query,
-    ) async {
-      final repo = ref.watch(appointmentsRepositoryProvider);
-      // Committed results must not outlive a local write: a deleted visit
-      // would stay listed (and tappable) until this provider was disposed.
-      final sub = repo.onLocalWrite.listen((_) => ref.invalidateSelf());
-      ref.onDispose(sub.cancel);
-      return repo.searchHistory(query);
     });

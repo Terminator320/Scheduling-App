@@ -1,6 +1,3 @@
-import 'dart:async';
-
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,36 +6,29 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/storage/secure_storage_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
-import 'package:scheduling/features/auth/data/auth_cache.dart';
-import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
+import 'package:scheduling/features/auth/application/sign_in_controller.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/screens/create_account_screen.dart';
-import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/auth/widgets/auth_banner.dart';
 import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
-import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 
 class Login extends ConsumerStatefulWidget {
-  const Login({super.key, this.authService});
-
-  final AuthService? authService;
+  const Login({super.key});
 
   @override
   ConsumerState<Login> createState() => _LoginState();
 }
 
 class _LoginState extends ConsumerState<Login> {
-  late final AuthService _authService = widget.authService ?? AuthService();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _emailFocus = FocusNode();
   final FocusNode _passwordFocus = FocusNode();
 
   bool _isObscured = true;
-  bool _isLoading = false;
   bool _submitted = false;
 
   String? _emailError;
@@ -109,89 +99,42 @@ class _LoginState extends ConsumerState<Login> {
 
     if (!_validate()) return;
 
-    setState(() => _isLoading = true);
+    final outcome = await ref
+        .read(signInControllerProvider.notifier)
+        .signIn(
+          email: _emailController.text,
+          password: _passwordController.text,
+        );
+    if (!mounted) return;
 
-    try {
-      final credential = await _authService.signIn(
-        email: _emailController.text,
-        password: _passwordController.text,
-      );
-
-      final user = credential.user;
-      if (user == null) {
-        if (!mounted) return;
+    switch (outcome) {
+      case SignInSuccess(:final employee):
+        // Commit the autofill context so the OS password manager offers to
+        // save the credentials that just worked.
+        TextInput.finishAutofillContext();
+        await _routeToCalendar(employee);
+      case SignInInvalidCredentials():
         setState(() {
           _bannerError = context.l10n.error_invalidEmailOrPassword;
-          _isLoading = false;
         });
-        return;
-      }
-
-      // A provisioned user has a uid-keyed users doc. Invited employees are
-      // activated server-side at signup (redeemSignupCode), so there is no
-      // client-side activation fallback here.
-      final userDoc = await _retryOnAuthPropagation(
-        () => ref.read(employeesRepositoryProvider).findUserByUid(user.uid),
-      );
-      if (!mounted) return;
-
-      if (userDoc == null) {
-        // Signed in, but no profile doc — not a provisioned account.
-        await _authService.signOut();
-        if (!mounted) return;
+      case SignInNoProfile():
         setState(() {
           _bannerError = context.l10n.error_noUserProfileFoundForThisAccount;
-          _isLoading = false;
         });
-        return;
-      }
-
-      final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
-
-      if (!employee.isActive) {
-        await _authService.signOut();
-        if (!mounted) return;
+      case SignInAccountDisabled():
         setState(() {
           _bannerError = context.l10n.error_thisAccountHasBeenDisabled;
-          _isLoading = false;
         });
-        return;
-      }
-
-      // Commit the autofill context so the OS password manager offers to
-      // save the credentials that just worked.
-      TextInput.finishAutofillContext();
-
-      unawaited(
-        AuthCache().save(employee).catchError((Object e, StackTrace st) {
-          ref.read(loggerProvider).warn('login.auth_cache_save', e, st);
-        }),
-      );
-
-      unawaited(
-        ref
-            .read(secureStorageServiceProvider)
-            .write(
-              SecureStorageKeys.rememberedEmail,
-              _emailController.text.trim().toLowerCase(),
-            )
-            .catchError((Object e, StackTrace st) {
-              ref.read(loggerProvider).warn('login.remember_email', e, st);
-            }),
-      );
-
-      await _routeToCalendar(employee);
-    } catch (error, stackTrace) {
-      ref.read(loggerProvider).warn('login.sign_in', error, stackTrace);
-      if (!mounted) return;
-      final failure = AuthErrorMapper.map(error);
-      setState(() {
-        _bannerError = failure.toLocalizedMessageInContext(
-          context,
-          AuthErrorContext.login,
-        );
-        _isLoading = false;
-      });
+      case SignInError(:final failure):
+        setState(() {
+          _bannerError = failure.toLocalizedMessageInContext(
+            context,
+            AuthErrorContext.login,
+          );
+        });
+      // resumeAfterSignUp-only outcomes; signIn() never produces them.
+      case SignInNoSession() || SignInProfilePending():
+        break;
     }
   }
 
@@ -231,26 +174,31 @@ class _LoginState extends ConsumerState<Login> {
     );
   }
 
-  // The create-account flow signs the user in and activates their account via
-  // the signup code, then pops `created:true`. They're already authenticated and
-  // active, so route them straight into the app instead of asking them to sign
-  // in again.
+  // The create-account flow pops `created:true` once the account is live; the
+  // controller resolves the already-authenticated session so we can route
+  // straight into the app instead of asking the user to sign in again.
   Future<void> _routeAfterSignUp() async {
-    final user = _authService.currentUser;
-    if (user == null) return;
-    final userDoc = await _retryOnAuthPropagation(
-      () => ref.read(employeesRepositoryProvider).findUserByUid(user.uid),
-    );
+    final outcome = await ref
+        .read(signInControllerProvider.notifier)
+        .resumeAfterSignUp();
     if (!mounted) return;
-    if (userDoc == null) {
-      setState(() {
-        _bannerSuccess = context.l10n.auth_accountCreatedYouCanNowSignIn;
-      });
-      return;
+    switch (outcome) {
+      case SignInNoSession():
+        return;
+      case SignInProfilePending():
+        setState(() {
+          _bannerSuccess = context.l10n.auth_accountCreatedYouCanNowSignIn;
+        });
+      case SignInSuccess(:final employee):
+        TextInput.finishAutofillContext();
+        await _routeToCalendar(employee);
+      // signIn()-only outcomes; resumeAfterSignUp() never produces them.
+      case SignInInvalidCredentials() ||
+          SignInNoProfile() ||
+          SignInAccountDisabled() ||
+          SignInError():
+        break;
     }
-    final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
-    TextInput.finishAutofillContext();
-    await _routeToCalendar(employee);
   }
 
   Future<void> _openForgotPassword() async {
@@ -274,6 +222,7 @@ class _LoginState extends ConsumerState<Login> {
 
   @override
   Widget build(BuildContext context) {
+    final isLoading = ref.watch(signInControllerProvider).inProgress;
     return AuthScaffold(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -293,7 +242,7 @@ class _LoginState extends ConsumerState<Login> {
           AuthEmailField(
             controller: _emailController,
             focusNode: _emailFocus,
-            enabled: !_isLoading,
+            enabled: !isLoading,
             hasError: _emailError != null,
             errorText: _submitted ? _emailError : null,
             onSubmitted: _passwordFocus.requestFocus,
@@ -304,7 +253,7 @@ class _LoginState extends ConsumerState<Login> {
             label: context.l10n.common_password,
             controller: _passwordController,
             focusNode: _passwordFocus,
-            enabled: !_isLoading,
+            enabled: !isLoading,
             hasError: _passwordError != null,
             errorText: _submitted ? _passwordError : null,
             isObscured: _isObscured,
@@ -316,39 +265,24 @@ class _LoginState extends ConsumerState<Login> {
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
-              onPressed: _isLoading ? null : _openForgotPassword,
+              onPressed: isLoading ? null : _openForgotPassword,
               child: Text(context.l10n.auth_forgotPassword),
             ),
           ),
           const SizedBox(height: AppSpacing.sp8),
           AnimatedLoadingButton(
             label: context.l10n.auth_signIn,
-            isLoading: _isLoading,
+            isLoading: isLoading,
             onPressed: _signIn,
           ),
           const SizedBox(height: AppSpacing.sp24),
           _CreateAccountPrompt(
-            enabled: !_isLoading,
+            enabled: !isLoading,
             onCreateAccount: _openCreateAccount,
           ),
         ],
       ),
     );
-  }
-}
-
-// signInWithEmailAndPassword resolves before the freshly minted ID token has
-// propagated to Firestore's request channel, so the first authorized read fired
-// right after sign-in can come back permission-denied even though the user is
-// signed in — the "have to tap Sign in twice" race. Retry such a read once
-// after a short delay, by which point the token has propagated.
-Future<T> _retryOnAuthPropagation<T>(Future<T> Function() read) async {
-  try {
-    return await read();
-  } on FirebaseException catch (e) {
-    if (e.code != 'permission-denied') rethrow;
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    return read();
   }
 }
 

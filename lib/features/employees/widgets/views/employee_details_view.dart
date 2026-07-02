@@ -2,18 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
-import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/employees/application/employee_form_controller.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
-
-typedef EmployeeDetailsAction = void Function(String action);
 
 class EmployeeDetailsView extends ConsumerStatefulWidget {
   const EmployeeDetailsView({
@@ -28,7 +25,10 @@ class EmployeeDetailsView extends ConsumerStatefulWidget {
 
   final EmployeeRecord employee;
   final bool isCurrentUserAdmin;
-  final EmployeeDetailsAction onAction;
+
+  /// Receives the action name (`'edit'`, `'deleted'`, `'enabled'`,
+  /// `'disabled'`) so the host sheet/pane can react.
+  final ValueChanged<String> onAction;
   final ScrollController? scrollController;
   final bool showHandle;
   final double bottomPadding;
@@ -39,9 +39,6 @@ class EmployeeDetailsView extends ConsumerStatefulWidget {
 }
 
 class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
-  bool _isDeleting = false;
-  bool _isDisabling = false;
-
   Future<void> _confirmDelete() async {
     final confirmed = await showConfirmDialog(
       context,
@@ -50,27 +47,24 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
       confirmLabel: context.l10n.common_delete,
     );
     if (!mounted || !confirmed) return;
-    setState(() => _isDeleting = true);
-    try {
-      await ref
-          .read(employeesRepositoryProvider)
-          .deleteEmployee(widget.employee.id);
-      if (!mounted) return;
-      widget.onAction('deleted');
-    } catch (e, st) {
-      ref.read(loggerProvider).warn('EMP-DEL deleteEmployee failed', e, st);
-      if (!mounted) return;
-      setState(() => _isDeleting = false);
-      ref
-          .read(noticeServiceProvider)
-          .error(
-            composeErrorNotice(
-              context,
-              intro: context.l10n.error_introDeleteEmployee,
-              tag: 'EMP-DEL',
-              error: e,
-            ),
-          );
+    final outcome = await ref
+        .read(employeeFormControllerProvider.notifier)
+        .deleteEmployee(widget.employee.id);
+    if (!mounted) return;
+    switch (outcome) {
+      case EmployeeDeleted():
+        widget.onAction('deleted');
+      case EmployeeDeleteFailed(:final error):
+        ref
+            .read(noticeServiceProvider)
+            .error(
+              composeErrorNotice(
+                context,
+                intro: context.l10n.error_introDeleteEmployee,
+                tag: 'EMP-DEL',
+                error: error,
+              ),
+            );
     }
   }
 
@@ -89,37 +83,24 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
       destructive: !isDisabled,
     );
     if (!mounted || !confirmed) return;
-    setState(() => _isDisabling = true);
-    try {
-      final repo = ref.read(employeesRepositoryProvider);
-      if (isDisabled) {
-        await repo.reactivateEmployee(widget.employee.id);
-      } else {
-        await repo.deactivateEmployee(widget.employee.id);
-      }
-      if (!mounted) return;
-      widget.onAction(isDisabled ? 'enabled' : 'disabled');
-      // In the split-layout detail pane the view stays mounted after the
-      // action (only a delete clears the selection), so the flag must be reset
-      // or the button stays stuck spinning. In the sheet variant onAction pops
-      // the sheet, so guard with mounted.
-      if (mounted) setState(() => _isDisabling = false);
-    } catch (e, st) {
-      ref
-          .read(loggerProvider)
-          .warn('EMP-STATUS toggleEmployeeStatus failed', e, st);
-      if (!mounted) return;
-      setState(() => _isDisabling = false);
-      ref
-          .read(noticeServiceProvider)
-          .error(
-            composeErrorNotice(
-              context,
-              intro: context.l10n.error_introChangeEmployeeStatus,
-              tag: 'EMP-STATUS',
-              error: e,
-            ),
-          );
+    final outcome = await ref
+        .read(employeeFormControllerProvider.notifier)
+        .setEmployeeStatus(docId: widget.employee.id, disable: !isDisabled);
+    if (!mounted) return;
+    switch (outcome) {
+      case EmployeeStatusChanged():
+        widget.onAction(isDisabled ? 'enabled' : 'disabled');
+      case EmployeeStatusChangeFailed(:final error):
+        ref
+            .read(noticeServiceProvider)
+            .error(
+              composeErrorNotice(
+                context,
+                intro: context.l10n.error_introChangeEmployeeStatus,
+                tag: 'EMP-STATUS',
+                error: error,
+              ),
+            );
     }
   }
 
@@ -127,6 +108,7 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDisabled = widget.employee.isDisabled;
+    final activity = ref.watch(employeeFormControllerProvider);
     final stackedHeader = context.isCompact;
 
     final headerTitle = Text(
@@ -197,8 +179,8 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
         _ActionButtons(
           isCurrentUserAdmin: widget.isCurrentUserAdmin,
           isDisabled: isDisabled,
-          isDeleting: _isDeleting,
-          isDisabling: _isDisabling,
+          isDeleting: activity.isDeleting,
+          isDisabling: activity.isTogglingStatus,
           onEdit: () => widget.onAction('edit'),
           onToggleStatus: _confirmDisable,
           onDelete: _confirmDelete,
