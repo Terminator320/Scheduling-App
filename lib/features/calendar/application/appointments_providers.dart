@@ -52,5 +52,9 @@ final historySearchProvider = FutureProvider.autoDispose
       query,
     ) async {
       final repo = ref.watch(appointmentsRepositoryProvider);
+      // Committed results must not outlive a local write: a deleted visit
+      // would stay listed (and tappable) until this provider was disposed.
+      final sub = repo.onLocalWrite.listen((_) => ref.invalidateSelf());
+      ref.onDispose(sub.cancel);
       return repo.searchHistory(query);
     });

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -16,6 +17,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/core/adaptive/app_scroll_behavior.dart';
+import 'package:scheduling/core/connectivity/offline_banner.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/security/app_lock.dart';
@@ -23,6 +26,7 @@ import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
+import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/onboarding/screens/onboarding_gate.dart';
 import 'package:scheduling/features/settings/application/settings_providers.dart';
@@ -68,9 +72,20 @@ Future<void> main() async {
         options: DefaultFirebaseOptions.currentPlatform,
       );
 
+      // P10: only Firebase.initializeApp gates the first frame. Crashlytics
+      // collection setup and App Check activation run in parallel *after*
+      // runApp; their completion is exposed through firebaseReadyProvider,
+      // which SplashScreen (the gateway to every Firestore-reading surface)
+      // and currentUserDocProvider await before the first Firestore read.
+      Future<void> firebaseReady;
       if (_useFirebaseEmulator) {
+        // Dev-only, local and fast — keep it before runApp so no code path
+        // can race a production endpoint.
         await _wireFirebaseEmulator();
+        firebaseReady = Future<void>.value();
       } else {
+        // Error handlers are plain assignments: wire them synchronously so
+        // nothing is missed while the activation futures are in flight.
         final crashlytics = FirebaseCrashlytics.instance;
         FlutterError.onError = crashlytics.recordFlutterFatalError;
         PlatformDispatcher.instance.onError = (error, stack) {
@@ -78,7 +93,10 @@ Future<void> main() async {
           return true;
         };
 
-        await Future.wait([
+        // Deliberately not awaited. If activation fails before anything
+        // subscribes to firebaseReadyProvider, the zone handler below
+        // records it; subscribers observe the same error via the provider.
+        firebaseReady = Future.wait([
           crashlytics.setCrashlyticsCollectionEnabled(!kDebugMode),
           FirebaseAppCheck.instance.activate(
             providerAndroid: kDebugMode
@@ -96,6 +114,9 @@ Future<void> main() async {
       runApp(
         ProviderScope(
           retry: (retryCount, error) => null,
+          overrides: [
+            firebaseReadyProvider.overrideWith((ref) => firebaseReady),
+          ],
           child: PaulApp(settings: settings),
         ),
       );
@@ -172,19 +193,32 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     final navContext = _navigatorKey.currentContext;
     if (navContext == null) return;
     _isHandlingAccountExit = true;
-    final message = selectMessage(AppLocalizations.of(navContext));
-    await AuthService().signOut();
+    // C12: on success the flag is reset by the post-frame callback (keeping
+    // duplicate signals muted until the login redirect lands); on any
+    // failure it must reset here, or every future disabled/deleted signal
+    // for the session would be swallowed.
+    var exitScheduled = false;
+    try {
+      final message = selectMessage(AppLocalizations.of(navContext));
+      await AuthService().signOut();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _navigatorKey.currentState?.pushNamedAndRemoveUntil(
-        AppRoutes.login,
-        (_) => false,
-      );
-      _scaffoldMessengerKey.currentState?.showSnackBar(
-        errorSnackBar(navContext, message),
-      );
-      _isHandlingAccountExit = false;
-    });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          AppRoutes.login,
+          (_) => false,
+        );
+        _scaffoldMessengerKey.currentState?.showSnackBar(
+          errorSnackBar(navContext, message),
+        );
+        _isHandlingAccountExit = false;
+      });
+      exitScheduled = true;
+    } catch (e, st) {
+      // Sign-out failed (network/plugin) — the next signal retries.
+      ref.read(loggerProvider).warn('ACCOUNT-EXIT sign-out failed', e, st);
+    } finally {
+      if (!exitScheduled) _isHandlingAccountExit = false;
+    }
   }
 
   void _listenForAccountDisabled() {
@@ -212,14 +246,39 @@ class _PaulAppState extends ConsumerState<PaulApp> {
       prev,
       next,
     ) {
+      final isSignedIn = FirebaseAuth.instance.currentUser != null;
+      final resolvedUid = ref.read(authUidProvider).value;
       if (isAccountDeletionSignal(
-        isSignedIn: FirebaseAuth.instance.currentUser != null,
-        resolvedUid: ref.read(authUidProvider).value,
+        isSignedIn: isSignedIn,
+        resolvedUid: resolvedUid,
         previous: prev,
         docState: next,
       )) {
         _handleAccountDisabled((l10n) => l10n.error_thisAccountHasBeenDisabled);
+        return;
       }
+      // C3: cold start with a warm AuthCache routes straight to the calendar
+      // without an authoritative read, so an account deleted while the app
+      // was closed yields a *clean empty first emission* — never the
+      // populated→empty transition above. The warm cache (written only after
+      // a completed sign-in, cleared on sign-out) discriminates that case
+      // from the create-account/redeem window, which also runs signed-in
+      // with no users doc but always starts with a cold cache.
+      unawaited(
+        confirmColdStartDeletion(
+          isSignedIn: isSignedIn,
+          resolvedUid: resolvedUid,
+          previous: prev,
+          docState: next,
+          loadWarmCache: AuthCache().loadIfMatch,
+        ).then((deleted) {
+          if (deleted && mounted) {
+            _handleAccountDisabled(
+              (l10n) => l10n.error_thisAccountHasBeenDisabled,
+            );
+          }
+        }),
+      );
     });
   }
 
@@ -254,14 +313,36 @@ class _PaulAppState extends ConsumerState<PaulApp> {
               home: const OnboardingGate(),
               onGenerateRoute: AppRoutes.onGenerateRoute,
               builder: (context, child) {
+                final media = MediaQuery.of(context);
+                // U2: compose the in-app text-size setting (0.8–1.4) with
+                // the OS accessibility scale instead of replacing it, so
+                // users who rely on large system fonts keep them. The OS
+                // scaler can be non-linear (Android 14+); sampling it at the
+                // body size (14) linearizes it closely enough for a
+                // multiplier. Cap the combined factor at 2.2 — past that the
+                // dense calendar/list layouts truncate instead of helping
+                // readability.
+                final systemFactor = media.textScaler.scale(14) / 14;
+                final effectiveScale = math.min(
+                  _textScale * systemFactor,
+                  2.2,
+                );
                 return MediaQuery(
-                  data: MediaQuery.of(
-                    context,
-                  ).copyWith(textScaler: TextScaler.linear(_textScale)),
+                  data: media.copyWith(
+                    textScaler: TextScaler.linear(effectiveScale),
+                  ),
                   child: AppLock(
                     child: NoticeListener(
                       navigatorKey: _navigatorKey,
-                      child: child ?? const SizedBox.shrink(),
+                      // U13: offline banner docked at the bottom window edge
+                      // — NoticeListener's transient banners slide in at the
+                      // top, so the two never cover each other.
+                      child: Column(
+                        children: [
+                          Expanded(child: child ?? const SizedBox.shrink()),
+                          const OfflineBanner(),
+                        ],
+                      ),
                     ),
                   ),
                 );

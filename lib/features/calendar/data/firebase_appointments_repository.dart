@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show compute;
 
@@ -62,7 +64,16 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   void _invalidateSearchCache() {
     _searchCache.clear();
     _scanWindow = null;
+    _localWrites.add(null);
   }
+
+  // Broadcast so historySearchProvider (and any future watcher) can
+  // self-invalidate on local writes; the repository is app-lifetime, so the
+  // controller is never closed.
+  final StreamController<void> _localWrites = StreamController.broadcast();
+
+  @override
+  Stream<void> get onLocalWrite => _localWrites.stream;
 
   @override
   String newDocId() => _appointments.doc().id;

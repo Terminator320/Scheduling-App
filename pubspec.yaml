@@ -73,6 +73,9 @@ dependencies:
   permission_handler: ^12.0.2
   local_auth: ^3.0.1
 
+  # Network reachability (app-wide offline banner)
+  connectivity_plus: ^7.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

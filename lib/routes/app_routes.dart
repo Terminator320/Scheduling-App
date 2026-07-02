@@ -1,18 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/features/auth/screens/forgot_password_screen.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
-import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
-import 'package:scheduling/features/clients/screens/clients_screen.dart';
-import 'package:scheduling/features/clients/screens/history_screen.dart';
-import 'package:scheduling/features/employees/screens/employees_screen.dart';
-import 'package:scheduling/features/settings/screens/settings_screen.dart';
-import 'package:scheduling/features/splash/screens/splash_screen.dart';
+import 'package:scheduling/routes/hub_shell.dart';
 
 class AppRoutes {
   AppRoutes._();
 
-  static const String splash = '/';
   static const String login = '/login';
   static const String forgotPassword = '/forgot-password';
   static const String mainCalendar = '/calendar';
@@ -23,65 +18,71 @@ class AppRoutes {
 
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
-      case splash:
-        return MaterialPageRoute(
-          settings: settings,
-          builder: (_) => const SplashScreen(),
-        );
-
       case login:
-        return MaterialPageRoute(
+        return AppPageRoute(
           settings: settings,
           builder: (_) => const Login(),
         );
 
       case forgotPassword:
         final args = settings.arguments as ForgotPasswordArgs?;
-        return MaterialPageRoute(
+        return AppPageRoute(
           settings: settings,
           builder: (_) =>
               ForgotPasswordScreen(initialEmail: args?.initialEmail),
         );
 
       case mainCalendar:
+        // The post-login entry: hosts the persistent hub shell (U1/P4).
+        // Always builds a fresh shell — this route is only ever the target
+        // of a pushReplacement (login, splash, drawer), so by the time it
+        // builds there is no live shell left to redirect into.
         final args = settings.arguments! as MainCalendarArgs;
-        return _fadeRoute(
-          settings,
-          MainCalendar(isAdmin: args.isAdmin, employeeId: args.employeeId),
+        return AppPageRoute(
+          settings: settings,
+          builder: (_) => HubShell(
+            isAdmin: args.isAdmin,
+            employeeId: args.employeeId,
+          ),
         );
 
       case employees:
         final args = settings.arguments! as MainCalendarArgs;
-        return _fadeRoute(
+        return _hubRoute(
           settings,
-          AddEmployeePage(isAdmin: args.isAdmin, employeeId: args.employeeId),
+          AdaptiveDestination.employees,
+          isAdmin: args.isAdmin,
+          employeeId: args.employeeId,
         );
 
       case clients:
         final args = settings.arguments! as ClientsListArgs;
-        return _fadeRoute(
+        return _hubRoute(
           settings,
-          ListInformation(isAdmin: args.isAdmin, employeeId: args.employeeId),
+          AdaptiveDestination.clients,
+          isAdmin: args.isAdmin,
+          employeeId: args.employeeId,
         );
 
       case history:
         final args = settings.arguments! as HistoryArgs;
-        return _fadeRoute(
+        return _hubRoute(
           settings,
-          HistoryScreen(isAdmin: args.isAdmin, employeeId: args.employeeId),
+          AdaptiveDestination.history,
+          isAdmin: args.isAdmin,
+          employeeId: args.employeeId,
         );
 
       case AppRoutes.settings:
         // Settings is only reachable post-login, so args are always present.
         final args = settings.arguments! as SettingsArgs;
-        return _fadeRoute(
+        return _hubRoute(
           settings,
-          SettingsScreen(
-            name: args.name,
-            email: args.email,
-            role: args.role,
-            employeeId: args.employeeId,
-          ),
+          AdaptiveDestination.settings,
+          isAdmin: args.role == 'admin',
+          employeeId: args.employeeId,
+          userName: args.name,
+          userEmail: args.email,
         );
 
       default:
@@ -89,26 +90,64 @@ class AppRoutes {
     }
   }
 
-  /// A clean cross-fade between hub destinations. The chrome (top bar + nav
-  /// rail) sits in the same place on every hub screen, so fading — with no
-  /// scale or slide — reads as just the body and the rail's selected highlight
-  /// changing, with the frame staying put. Collapses to an instant cut when the
-  /// platform requests reduced motion.
-  static PageRouteBuilder<T> _fadeRoute<T>(
-    RouteSettings settings,
-    Widget page,
+  /// Route for a non-calendar hub destination. The settings drawer still
+  /// pushes these as named routes; when a [HubShell] is live that push is
+  /// redirected into a tab switch on it ([HubTabRedirectRoute]) so the shell
+  /// and its kept-alive screens stay the single navigation root. With no
+  /// live shell (deep entry), a fresh shell opens on the requested tab.
+  static Route<dynamic> _hubRoute(
+    RouteSettings routeSettings,
+    AdaptiveDestination destination, {
+    required bool isAdmin,
+    required String employeeId,
+    String userName = '',
+    String userEmail = '',
+  }) {
+    if (HubShell.liveState != null) {
+      return HubTabRedirectRoute(
+        settings: routeSettings,
+        destination: destination,
+        isAdmin: isAdmin,
+        employeeId: employeeId,
+        userName: userName,
+        userEmail: userEmail,
+      );
+    }
+    return AppPageRoute(
+      settings: routeSettings,
+      builder: (_) => HubShell(
+        initialDestination: destination,
+        isAdmin: isAdmin,
+        employeeId: employeeId,
+        userName: userName,
+        userEmail: userEmail,
+      ),
+    );
+  }
+}
+
+/// The app's standard page route: platform-default transitions (Cupertino
+/// slide with swipe-back on iOS, zoom/predictive-back on Android) that
+/// collapse to an instant cut when the platform requests reduced motion.
+///
+/// Replaces the old bare fade `PageRouteBuilder`, whose custom transition
+/// broke the iOS back-swipe gesture on pushed routes (U1).
+class AppPageRoute<T> extends MaterialPageRoute<T> {
+  AppPageRoute({required super.builder, super.settings});
+
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
   ) {
-    return PageRouteBuilder<T>(
-      settings: settings,
-      reverseTransitionDuration: const Duration(milliseconds: 250),
-      pageBuilder: (_, _, _) => page,
-      transitionsBuilder: (context, animation, _, child) {
-        if (MediaQuery.disableAnimationsOf(context)) return child;
-        return FadeTransition(
-          opacity: animation.drive(CurveTween(curve: Curves.easeInOut)),
-          child: child,
-        );
-      },
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+    return super.buildTransitions(
+      context,
+      animation,
+      secondaryAnimation,
+      child,
     );
   }
 }

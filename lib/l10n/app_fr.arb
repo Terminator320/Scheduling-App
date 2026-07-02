@@ -190,6 +190,7 @@
   "auth_didnTReceiveTheEmailTryAgain": "Vous n’avez pas reçu le courriel ? Réessayez",
   "error_tooManyAttemptsPleaseTryAgainLater": "Trop de tentatives. Veuillez réessayer plus tard.",
   "error_networkErrorCheckYourConnectionAndTryAgain": "Erreur réseau. Vérifiez votre connexion et réessayez.",
+  "common_offlineBanner": "Hors ligne — les modifications seront synchronisées à la reconnexion",
   "auth_checkYourInbox": "Vérifiez votre boîte de réception",
   "auth_ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent": "Si un compte existe pour ce courriel, un lien de réinitialisation a été envoyé.",
   "auth_theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder": "Le courriel peut prendre quelques minutes à arriver. Pensez à vérifier votre dossier de courrier indésirable.",

@@ -41,9 +41,16 @@ class _OnboardingGateState extends ConsumerState<OnboardingGate> {
   }
 
   Future<void> _finish() async {
-    await ref
-        .read(secureStorageServiceProvider)
-        .writeFlag(SecureStorageKeys.onboardingSeen, value: true);
+    try {
+      await ref
+          .read(secureStorageServiceProvider)
+          .writeFlag(SecureStorageKeys.onboardingSeen, value: true);
+    } catch (e, st) {
+      // Mirror _load's fail-safe: a keystore/cipher failure writing the flag
+      // must not make "Done" a dead button. Proceed past onboarding for this
+      // session; worst case the flow shows once more on the next launch.
+      ref.read(loggerProvider).warn('ONBOARD-GATE write flag failed', e, st);
+    }
     if (mounted) setState(() => _seen = true);
   }
 

@@ -71,6 +71,11 @@ abstract class AppointmentsRepository {
   /// returns the matches newest-first.
   Future<List<AppointmentRecord>> searchHistory(String query);
 
+  /// Fires after every local appointment write (add/update/delete/status/
+  /// pictures/series). Lets watched search providers invalidate committed
+  /// results instead of serving a just-deleted appointment until their TTL.
+  Stream<void> get onLocalWrite;
+
   Stream<List<AppointmentRecord>> watchForEmployeeInRange(
     String employeeId,
     AppointmentDateRange range,

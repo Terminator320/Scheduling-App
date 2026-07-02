@@ -89,6 +89,7 @@ void main() {
     tester,
   ) async {
     final repo = _MockAppointmentsRepository();
+    when(() => repo.onLocalWrite).thenAnswer((_) => const Stream<void>.empty());
     when(
       () => repo.fetchHistoryPage(
         limit: any(named: 'limit'),
