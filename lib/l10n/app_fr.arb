@@ -239,6 +239,7 @@
   "common_optional": "facultatif",
   "error_addressLookupFailed": "Échec de la recherche d’adresse",
   "error_couldNotLoadAddressDetails": "Impossible de charger les détails de l’adresse",
+  "common_search": "Rechercher...",
   "common_searchAddress": "Rechercher une adresse",
   "common_typeToSearchAnAddress": "Tapez pour rechercher une adresse",
   "common_street": "Rue",

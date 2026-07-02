@@ -1,30 +1,60 @@
 // test/app_search_bar_test.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
+
+Widget _localized({required Widget body, Locale? locale}) => MaterialApp(
+  locale: locale,
+  localizationsDelegates: const [
+    AppLocalizations.delegate,
+    GlobalMaterialLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+    GlobalCupertinoLocalizations.delegate,
+  ],
+  supportedLocales: AppLocalizations.supportedLocales,
+  home: Scaffold(body: body),
+);
 
 void main() {
   testWidgets('AppSearchBar calls onChanged when typing', (tester) async {
     var result = '';
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
+    await tester.pumpWidget(
+      _localized(
         body: AppSearchBar(
           onChanged: (v) => result = v,
           hintText: 'Search clients...',
         ),
       ),
-    ));
+    );
     await tester.enterText(find.byType(TextField), 'Sarah');
     expect(result, 'Sarah');
   });
 
-  testWidgets('AppSearchBar shows hint text', (tester) async {
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
+  testWidgets('AppSearchBar shows explicit hint text', (tester) async {
+    await tester.pumpWidget(
+      _localized(
         body: AppSearchBar(onChanged: (_) {}, hintText: 'Search employees...'),
       ),
-    ));
+    );
     expect(find.text('Search employees...'), findsOneWidget);
+  });
+
+  testWidgets('AppSearchBar falls back to the localized default hint', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_localized(body: AppSearchBar(onChanged: (_) {})));
+    expect(find.text('Search...'), findsOneWidget);
+
+    await tester.pumpWidget(
+      _localized(
+        body: AppSearchBar(onChanged: (_) {}),
+        locale: const Locale('fr'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Rechercher...'), findsOneWidget);
   });
 
   testWidgets('AppSearchBar preferredSize height is 60', (tester) async {
@@ -43,10 +73,8 @@ void main() {
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(textScaler: TextScaler.linear(2)),
-        child: MaterialApp(
-          home: Scaffold(
-            appBar: AppBar(bottom: AppSearchBar(onChanged: (_) {})),
-          ),
+        child: _localized(
+          body: AppBar(bottom: AppSearchBar(onChanged: (_) {})),
         ),
       ),
     );

@@ -52,6 +52,12 @@ class _AddressAutocompleteFieldState
   String _lastTypedApt = '';
   String _lastFetched = '';
 
+  /// Monotonically increasing id of the newest autocomplete request. A slow
+  /// response whose id no longer matches is stale — the user has typed a newer
+  /// query (or picked a suggestion) since — and is discarded instead of
+  /// overwriting the newer suggestions.
+  int _requestId = 0;
+
   static const _minQueryLength = 3;
   static const _debounceDelay = Duration(milliseconds: 700);
 
@@ -95,10 +101,12 @@ class _AddressAutocompleteFieldState
   }
 
   Future<void> _fetch(String query) async {
-    // Skip a re-fetch of the exact query we last sent (e.g. trailing edits
-    // that trim back to the same text) — it would bill an identical call.
+    // Skip a re-fetch of the exact query we last *successfully* fetched (e.g.
+    // trailing edits that trim back to the same text) — it would bill an
+    // identical call. Set on success only, so a failed query is retried when
+    // the user re-triggers the same text.
     if (query == _lastFetched) return;
-    _lastFetched = query;
+    final requestId = ++_requestId;
     setState(() {
       _isLoading = true;
       _serviceError = null;
@@ -109,13 +117,14 @@ class _AddressAutocompleteFieldState
         query,
         sessionToken: _ensureSessionToken(),
       );
-      if (!mounted) return;
+      if (!mounted || requestId != _requestId) return;
+      _lastFetched = query;
       setState(() {
         _suggestions = results;
         _isLoading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || requestId != _requestId) return;
       setState(() {
         _suggestions = [];
         _isLoading = false;
@@ -129,6 +138,10 @@ class _AddressAutocompleteFieldState
   }
 
   Future<void> _selectSuggestion(AddressSuggestion s) async {
+    // Invalidate any pending debounce/in-flight autocomplete so a late
+    // response can't resurface the suggestion list after this pick.
+    _debounce?.cancel();
+    _requestId++;
     _suppressFetch = true;
     widget.controller.text = s.description;
     setState(() {

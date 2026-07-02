@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
@@ -360,10 +362,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
     if (!result || !mounted) return;
 
-    final password = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => const DeleteAccountReauthDialog(),
-    );
+    // Platform-matched presentation so the re-auth prompt looks like the
+    // adaptive confirm it directly follows.
+    final password = context.isCupertino
+        ? await showCupertinoDialog<String>(
+            context: context,
+            builder: (dialogContext) => const DeleteAccountReauthDialog(),
+          )
+        : await showDialog<String>(
+            context: context,
+            builder: (dialogContext) => const DeleteAccountReauthDialog(),
+          );
     if (password == null || password.isEmpty || !mounted) return;
 
     await _runDeletion(password);
