@@ -9,8 +9,8 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/utils/adaptive_pickers.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
-import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/series_scope_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
@@ -51,7 +51,9 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody> {
   // fire a Firestore read on every keystroke.
   void _onClientSearchChanged(String query) {
     final notifier = ref.read(
-      eventDetailsControllerProvider(widget.appointment).notifier,
+      eventDetailsControllerProvider(
+        EventDetailsKey(widget.appointment),
+      ).notifier,
     );
     if (query.trim().isEmpty) {
       _clientSearchDebounce.cancel();
@@ -66,10 +68,11 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody> {
     final theme = Theme.of(context);
     final appointment = widget.appointment;
     final controllers = widget.controllers;
-    final state = ref.watch(eventDetailsControllerProvider(appointment));
-    final notifier = ref.read(
-      eventDetailsControllerProvider(appointment).notifier,
+    final provider = eventDetailsControllerProvider(
+      EventDetailsKey(appointment),
     );
+    final state = ref.watch(provider);
+    final notifier = ref.read(provider.notifier);
     final allEmployees =
         ref.watch(employeesStreamProvider).asData?.value ?? const [];
 
@@ -128,8 +131,8 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody> {
     EventDetailsState state,
     EventDetailsController notifier,
   ) async {
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await showAdaptiveDatePicker(
+      context,
       initialDate: state.selectedDate,
       firstDate: AppointmentDraftDefaults.datePickerFirstDate,
       lastDate: AppointmentDraftDefaults.datePickerLastDate,
@@ -144,7 +147,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody> {
     EventDetailsState state,
     EventDetailsController notifier,
   ) async {
-    final picked = await showCupertinoTimePicker(
+    final picked = await showAdaptiveTimePicker(
       context,
       initialTime: state.selectedStartTime,
     );
@@ -158,7 +161,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody> {
     EventDetailsState state,
     EventDetailsController notifier,
   ) async {
-    final picked = await showCupertinoTimePicker(
+    final picked = await showAdaptiveTimePicker(
       context,
       initialTime: state.selectedEndTime,
     );
@@ -169,7 +172,9 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody> {
 
   Future<void> _save(BuildContext context, WidgetRef ref) async {
     final appointment = widget.appointment;
-    final provider = eventDetailsControllerProvider(appointment);
+    final provider = eventDetailsControllerProvider(
+      EventDetailsKey(appointment),
+    );
     final notifier = ref.read(provider.notifier);
 
     // Editing a repeating visit asks whether to apply the changes to this
@@ -246,7 +251,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody> {
     );
     if (choice == null || !context.mounted) return;
     final notifier = ref.read(
-      eventDetailsControllerProvider(appointment).notifier,
+      eventDetailsControllerProvider(EventDetailsKey(appointment)).notifier,
     );
     final error = await notifier.deleteAppointment(
       appointment,
@@ -316,7 +321,9 @@ class _EditPhotosSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final provider = eventDetailsControllerProvider(appointment);
+    final provider = eventDetailsControllerProvider(
+      EventDetailsKey(appointment),
+    );
     final existingImages = ref.watch(provider.select((s) => s.existingImages));
     final newImages = ref.watch(provider.select((s) => s.newImages));
     final notifier = ref.read(provider.notifier);

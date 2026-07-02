@@ -115,13 +115,17 @@ class AddEventController extends Notifier<AddEventState> {
       return;
     }
     state = state.copyWith(isSearchingClient: true);
+    // Resolved before the await: the sheet can be dismissed mid-search, and
+    // using the Ref of a disposed notifier throws in Riverpod 3.
+    final logger = ref.read(loggerProvider);
+    final clientsRepo = ref.read(clientsRepositoryProvider);
     try {
-      final results = await ref
-          .read(clientsRepositoryProvider)
-          .searchClients(trimmed);
+      final results = await clientsRepo.searchClients(trimmed);
+      if (!ref.mounted) return;
       state = state.copyWith(clientResults: results, isSearchingClient: false);
     } catch (e, st) {
-      ref.read(loggerProvider).warn('searchClients failed', e, st);
+      logger.warn('searchClients failed', e, st);
+      if (!ref.mounted) return;
       state = state.copyWith(isSearchingClient: false);
     }
   }
@@ -217,6 +221,15 @@ class AddEventController extends Notifier<AddEventState> {
     );
 
     final repo = ref.read(appointmentsRepositoryProvider);
+    // Resolved before the awaits — see searchClients.
+    final logger = ref.read(loggerProvider);
+    final uploader = ref.read(appointmentImageUploadProvider);
+    // Snapshot everything read after an await: state on a disposed notifier
+    // (sheet dismissed mid-submit) is unreadable.
+    final images = state.selectedImages;
+    final client = state.selectedClient!;
+    final selectedEmployees = state.selectedEmployees;
+    final repeat = state.repeat;
 
     // Mark in-flight before the conflict-check round-trip so the Save button
     // disables on the first tap and the guard above blocks a second tap.
@@ -228,14 +241,14 @@ class AddEventController extends Notifier<AddEventState> {
       // disabled and the reentrancy guard rejects every retry.
       if (!forceBusy) {
         final busy = await repo.findBusyEmployees(
-          candidates: state.selectedEmployees,
+          candidates: selectedEmployees,
           start: start,
           end: end,
         );
         if (busy.isNotEmpty) {
           // Hand off to the busy-confirm dialog — not an error — so clear the
           // in-flight flag and let the user decide whether to force.
-          state = state.copyWith(isSubmitting: false);
+          if (ref.mounted) state = state.copyWith(isSubmitting: false);
           return AddEventBusyEmployees(
             busyEmployees: busy,
             start: start,
@@ -245,7 +258,6 @@ class AddEventController extends Notifier<AddEventState> {
       }
 
       final docId = repo.newDocId();
-      final client = state.selectedClient!;
       final appointment = AppointmentRecord(
         id: docId,
         title: title.trim(),
@@ -255,18 +267,18 @@ class AddEventController extends Notifier<AddEventState> {
         clientName: client.displayName,
         clientPhone: client.phone,
         address: address.trim(),
-        employeeIds: state.selectedEmployees.map((e) => e.id).toList(),
-        employeeNames: state.selectedEmployees.map((e) => e.name).toList(),
+        employeeIds: selectedEmployees.map((e) => e.id).toList(),
+        employeeNames: selectedEmployees.map((e) => e.name).toList(),
         notes: notes.trim(),
         materialsNeeded: materialsNeeded.trim(),
-        repeat: state.repeat,
-        seriesId: state.repeat == RepeatInterval.none ? '' : docId,
+        repeat: repeat,
+        seriesId: repeat == RepeatInterval.none ? '' : docId,
       );
 
       // Busy check covers only the first occurrence; repeats are months out.
       // Photos stay on the first visit only.
       final copies = [
-        for (final copyStart in state.repeat.occurrenceStartsAfter(start))
+        for (final copyStart in repeat.occurrenceStartsAfter(start))
           appointment.copyWith(
             id: repo.newDocId(),
             startTime: copyStart,
@@ -284,19 +296,14 @@ class AddEventController extends Notifier<AddEventState> {
         await repo.addAppointments([appointment, ...copies]);
       }
 
-      if (state.selectedImages.isNotEmpty) {
-        ref
-            .read(appointmentImageUploadProvider)
-            .uploadInBackground(
-              appointmentId: docId,
-              newImages: state.selectedImages,
-            );
+      if (images.isNotEmpty) {
+        uploader.uploadInBackground(appointmentId: docId, newImages: images);
       }
 
       return AddEventSubmitted(appointment, futureBookings: copies.length);
     } catch (e, st) {
-      ref.read(loggerProvider).warn('APPT-CREATE submit failed', e, st);
-      state = state.copyWith(isSubmitting: false);
+      logger.warn('APPT-CREATE submit failed', e, st);
+      if (ref.mounted) state = state.copyWith(isSubmitting: false);
       return AddEventFailed(e);
     }
   }

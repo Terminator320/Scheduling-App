@@ -85,17 +85,21 @@ DateTime combineEndDateAndTime(
   final end = combineDateAndTime(date, endTime);
   if (startTime == null) return end;
   final start = combineDateAndTime(date, startTime);
-  // Wall-clock next-day construction (not end.add(Duration(days: 1))) so an
-  // overnight end landing on a DST transition day keeps its time-of-day.
-  return end.isAfter(start)
-      ? end
-      : DateTime(
+  // Bump to the next day only when the end is STRICTLY before the start
+  // (overnight). An end equal to the start stays same-day so the validator
+  // rejects it with endTimeMustBeAfterStart — bumping it would silently book
+  // a ~24h appointment. Wall-clock next-day construction (not
+  // end.add(Duration(days: 1))) so an overnight end landing on a DST
+  // transition day keeps its time-of-day.
+  return end.isBefore(start)
+      ? DateTime(
           date.year,
           date.month,
           date.day + 1,
           endTime.hour,
           endTime.minute,
-        );
+        )
+      : end;
 }
 
 /// Returns [errors] without [key], or the same map untouched when absent —

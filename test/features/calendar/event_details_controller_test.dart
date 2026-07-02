@@ -116,15 +116,15 @@ void main() {
           )
           // Keep the provider alive across reads so autoDispose doesn't tear
           // down the seeded state between assertions.
-          ..listen(eventDetailsControllerProvider(_appointment), (_, _) {});
+          ..listen(eventDetailsControllerProvider(EventDetailsKey(_appointment)), (_, _) {});
     addTearDown(container.dispose);
   });
 
   EventDetailsController readNotifier() =>
-      container.read(eventDetailsControllerProvider(_appointment).notifier);
+      container.read(eventDetailsControllerProvider(EventDetailsKey(_appointment)).notifier);
 
   EventDetailsState readState() =>
-      container.read(eventDetailsControllerProvider(_appointment));
+      container.read(eventDetailsControllerProvider(EventDetailsKey(_appointment)));
 
   Future<void> waitForSeed() async {
     // Allow microtasks for client + employee seeding to complete.
@@ -277,17 +277,17 @@ void main() {
         employeeNames: const ['Alex', 'Zoe'],
       );
       container.listen(
-        eventDetailsControllerProvider(withDisabled),
+        eventDetailsControllerProvider(EventDetailsKey(withDisabled)),
         (_, _) {},
       );
       final c = container.read(
-        eventDetailsControllerProvider(withDisabled).notifier,
+        eventDetailsControllerProvider(EventDetailsKey(withDisabled)).notifier,
       );
       await waitForSeed();
       // Only the active assignee is resolvable into the picker.
       expect(
         container
-            .read(eventDetailsControllerProvider(withDisabled))
+            .read(eventDetailsControllerProvider(EventDetailsKey(withDisabled)))
             .selectedEmployees
             .map((e) => e.id),
         ['e1'],
@@ -312,9 +312,9 @@ void main() {
       'before seeding settles keeps active assignees, not "employees required"',
       () async {
         final fresh = _appointment.copyWith(id: 'appt-race');
-        container.listen(eventDetailsControllerProvider(fresh), (_, _) {});
+        container.listen(eventDetailsControllerProvider(EventDetailsKey(fresh)), (_, _) {});
         final c = container.read(
-          eventDetailsControllerProvider(fresh).notifier,
+          eventDetailsControllerProvider(EventDetailsKey(fresh)).notifier,
         );
 
         // Intentionally NO waitForSeed: save() must settle the seed itself.
@@ -398,7 +398,6 @@ void main() {
         () => uploader.uploadInBackground(
           appointmentId: any(named: 'appointmentId'),
           newImages: any(named: 'newImages'),
-          existingImages: any(named: 'existingImages'),
         ),
       );
     });
@@ -492,9 +491,9 @@ void main() {
         ],
       );
 
-      container.listen(eventDetailsControllerProvider(repeating), (_, _) {});
+      container.listen(eventDetailsControllerProvider(EventDetailsKey(repeating)), (_, _) {});
       final c = container.read(
-        eventDetailsControllerProvider(repeating).notifier,
+        eventDetailsControllerProvider(EventDetailsKey(repeating)).notifier,
       );
       await waitForSeed();
       c.selectRepeat(RepeatInterval.oneYear);
@@ -565,9 +564,9 @@ void main() {
           ],
         );
 
-        container.listen(eventDetailsControllerProvider(repeating), (_, _) {});
+        container.listen(eventDetailsControllerProvider(EventDetailsKey(repeating)), (_, _) {});
         final c = container.read(
-          eventDetailsControllerProvider(repeating).notifier,
+          eventDetailsControllerProvider(EventDetailsKey(repeating)).notifier,
         );
         await waitForSeed();
         // Move the time of day; the repeat rule is unchanged.
@@ -621,9 +620,9 @@ void main() {
         seriesId: 'series-1',
         repeat: RepeatInterval.sixMonths,
       );
-      container.listen(eventDetailsControllerProvider(repeating), (_, _) {});
+      container.listen(eventDetailsControllerProvider(EventDetailsKey(repeating)), (_, _) {});
       final c = container.read(
-        eventDetailsControllerProvider(repeating).notifier,
+        eventDetailsControllerProvider(EventDetailsKey(repeating)).notifier,
       );
       await waitForSeed();
 
@@ -642,16 +641,20 @@ void main() {
     });
 
     test('seeds the stored repeat and does not re-book it unchanged', () async {
+      // Distinct id: the controller family is keyed by appointment id, so
+      // reusing _appointment's id would return the instance the setUp
+      // pre-listened (seeded with repeat: none).
       final repeating = _appointment.copyWith(
+        id: 'repeat-seed-1',
         repeat: RepeatInterval.sixMonths,
       );
-      container.listen(eventDetailsControllerProvider(repeating), (_, _) {});
+      container.listen(eventDetailsControllerProvider(EventDetailsKey(repeating)), (_, _) {});
       final c = container.read(
-        eventDetailsControllerProvider(repeating).notifier,
+        eventDetailsControllerProvider(EventDetailsKey(repeating)).notifier,
       );
       await waitForSeed();
       expect(
-        container.read(eventDetailsControllerProvider(repeating)).repeat,
+        container.read(eventDetailsControllerProvider(EventDetailsKey(repeating))).repeat,
         RepeatInterval.sixMonths,
       );
 
@@ -754,9 +757,9 @@ void main() {
           ),
         ],
       );
-      container.listen(eventDetailsControllerProvider(repeating), (_, _) {});
+      container.listen(eventDetailsControllerProvider(EventDetailsKey(repeating)), (_, _) {});
       final c = container.read(
-        eventDetailsControllerProvider(repeating).notifier,
+        eventDetailsControllerProvider(EventDetailsKey(repeating)).notifier,
       );
 
       final error = await c.deleteAppointment(repeating, includeFuture: true);
