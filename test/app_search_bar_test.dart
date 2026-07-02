@@ -62,6 +62,21 @@ void main() {
     expect(bar.preferredSize.height, AppSearchBar.preferredHeight);
   });
 
+  testWidgets('AppSearchBar preferredSize grows with the text scaler', (
+    tester,
+  ) async {
+    final unscaled = AppSearchBar(onChanged: (_) {});
+    final scaled = AppSearchBar(
+      onChanged: (_) {},
+      textScaler: const TextScaler.linear(2),
+    );
+    // The field portion doubles; the fixed margins don't.
+    expect(
+      scaled.preferredSize.height,
+      unscaled.preferredSize.height + 44,
+    );
+  });
+
   testWidgets('AppSearchBar does not overflow at 2x text on phone width', (
     tester,
   ) async {

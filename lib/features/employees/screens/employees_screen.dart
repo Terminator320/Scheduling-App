@@ -130,6 +130,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         employeeId: widget.employeeId,
       ),
       bottom: AppSearchBar(
+        textScaler: MediaQuery.textScalerOf(context),
         controller: _searchController,
         hintText: context.l10n.employees_searchEmployees,
       ),

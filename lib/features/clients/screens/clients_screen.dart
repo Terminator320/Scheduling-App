@@ -90,6 +90,7 @@ class _ListInformationState extends State<ListInformation> {
         compact: context.isLandscape,
         onBack: _backToCalendar,
         bottom: AppSearchBar(
+          textScaler: MediaQuery.textScalerOf(context),
           controller: _searchController,
           hintText: context.l10n.clients_searchByNameOrPhone,
         ),

@@ -50,6 +50,7 @@ class ClientSearchField extends StatelessWidget {
                 suffixIcon: selectedClient != null
                     ? IconButton(
                         icon: const Icon(Icons.close, size: 18),
+                        tooltip: context.l10n.common_clearText,
                         onPressed: onClear,
                       )
                     : isSearching

@@ -50,6 +50,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         compact: context.isLandscape,
         onBack: _backToCalendar,
         bottom: AppSearchBar(
+          textScaler: MediaQuery.textScalerOf(context),
           controller: _searchController,
           hintText: context.l10n.clients_searchByClientOrEmployee,
         ),
