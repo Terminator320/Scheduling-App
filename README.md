@@ -14,6 +14,23 @@ The application is backed by Google Firebase, giving it a secure, cloud-based fo
 
 ---
 
+## Setup
+
+1. **Environment file** — copy `dev/.env.example` to `dev/.env` and fill in the Firebase client values (Firebase console → *Project settings* → *General* → *Your apps*, or the output of `flutterfire configure`). `dev/.env` is gitignored and bundled as an asset at build time; the app fails fast on startup naming any missing key.
+2. **Dependencies** — run `flutter pub get`. Localizations are generated automatically (`generate: true` in `pubspec.yaml`); run `flutter gen-l10n` manually if needed.
+3. **Run** — `flutter run`.
+4. **Local Firebase emulators (optional)** — start them with `firebase emulators:start`, then run the app with:
+
+   ```bash
+   flutter run --dart-define=USE_FIREBASE_EMULATOR=true
+   # Override the emulator host if not on the Android emulator (default 10.0.2.2):
+   flutter run --dart-define=USE_FIREBASE_EMULATOR=true --dart-define=EMULATOR_HOST=127.0.0.1
+   ```
+
+Building for iOS requires a Mac — see [docs/IOS_MAC_BUILD.md](docs/IOS_MAC_BUILD.md).
+
+---
+
 ## Key Capabilities
 
 ### Appointment Scheduling
