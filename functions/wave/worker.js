@@ -51,7 +51,11 @@
  * ## Retryability taxonomy
  * - `WaveValidationError` — NOT retryable (bad input; dead-letter immediately).
  * - `WaveApiError` kind `rateLimited`|`network` — retryable (transient).
- * - `WaveApiError` kind `auth`|`graphql`|`unknown` — NOT retryable.
+ * - `WaveApiError` kind `graphql` — retryable ONLY when the GraphQL error
+ *   looks like a transient server-side failure (Wave returns e.g. internal /
+ *   timeout / unavailable errors on HTTP 200); genuine validation / query
+ *   errors stay permanent.
+ * - `WaveApiError` kind `auth`|`unknown` — NOT retryable.
  * - Any other (unexpected/infra) error — retryable (bounded by maxAttempts).
  *
  * ## Required Firestore composite indexes
@@ -131,12 +135,42 @@ function defaultBackoffMs(attempts) {
 }
 
 /**
+ * Heuristic: does a `kind === 'graphql'` WaveApiError look like a TRANSIENT
+ * server-side failure? Wave returns some server errors as GraphQL `errors`
+ * on an HTTP 200 (see client.js), so treating every graphql error as a
+ * permanent validation failure dead-letters jobs that a later run would have
+ * completed. Matches on the error messages and `extensions.code` values
+ * carried in `err.details` (the raw GraphQL errors array) plus the summary
+ * message. Anything that doesn't look transient stays permanent.
+ * @param {!WaveApiError} err A WaveApiError with kind 'graphql'.
+ * @return {boolean}
+ */
+function isTransientGraphqlError(err) {
+  const texts = [];
+  if (typeof err.message === "string") texts.push(err.message);
+  const details = Array.isArray(err.details) ? err.details : [];
+  for (const d of details) {
+    if (!d) continue;
+    if (typeof d.message === "string") texts.push(d.message);
+    const code = d.extensions && typeof d.extensions.code === "string" ?
+      d.extensions.code : "";
+    if (code) texts.push(code);
+  }
+  const joined = texts.join(" ").toLowerCase();
+  return /internal|timeout|timed out|unavailable|temporar|overloaded|service error|try again/
+      .test(joined);
+}
+
+/**
  * Returns true when the error is transient and worth retrying.
  *
  * Rules:
  *   - `WaveValidationError` → false (bad input; no retry).
  *   - `WaveApiError` kind `rateLimited`|`network` → true.
- *   - `WaveApiError` kind `auth`|`graphql`|`unknown` → false.
+ *   - `WaveApiError` kind `graphql` → true only for transient-looking
+ *     server-side errors (see `isTransientGraphqlError`); validation/query
+ *     errors stay permanent.
+ *   - `WaveApiError` kind `auth`|`unknown` → false.
  *   - Everything else (unexpected/infra) → true (bounded by maxAttempts).
  * @param {*} err The caught error.
  * @return {boolean}
@@ -144,7 +178,9 @@ function defaultBackoffMs(attempts) {
 function isRetryable(err) {
   if (err instanceof WaveValidationError) return false;
   if (err instanceof WaveApiError) {
-    return err.kind === "rateLimited" || err.kind === "network";
+    if (err.kind === "rateLimited" || err.kind === "network") return true;
+    if (err.kind === "graphql") return isTransientGraphqlError(err);
+    return false;
   }
   // Unexpected / infra errors: retry (bounded).
   return true;
@@ -166,6 +202,34 @@ function sanitizeError(err) {
   }
   const name = (err && err.name) ? String(err.name) : "Error";
   return `${name}: unexpected error`;
+}
+
+/**
+ * Best-effort: flags the client doc behind a dead-lettered job as a sync
+ * error so admins see `error` + a sanitized message instead of a forever-
+ * `pending` state (the queue doc isn't client-readable). Never throws — a
+ * failure here must not disturb the drain loop; the job doc's `dead` status
+ * remains the durable source of truth.
+ * @param {!Object} db Firestore instance.
+ * @param {string} refPath The job's `refPath` (`'clients/<id>'`).
+ * @param {string} message Sanitized, PII-free error summary.
+ * @param {!Object} logger Logging facade.
+ * @return {!Promise<void>}
+ */
+async function markClientSyncError(db, refPath, message, logger) {
+  const clientId = clientIdFromRefPath(refPath);
+  if (!clientId) return;
+  try {
+    await db.collection("clients").doc(clientId).update({
+      "wave.syncState": "error",
+      "wave.syncError": message,
+    });
+  } catch (err) {
+    logger.warn("WAVE-WORKER could not mark client sync error", {
+      clientId,
+      error: sanitizeError(err),
+    });
+  }
 }
 
 /**
@@ -314,7 +378,11 @@ function shouldEnqueueClientWrite(before, after) {
  *   default may be triggered inside a unit test. Optional `payloadHash`
  *   (string) is written to the job doc when provided; omitted when absent so
  *   the Firestore field is not set for callers that don't supply it.
- * @return {!Promise<string>} The jobId that was enqueued.
+ *   Optional `batch` (a Firestore WriteBatch): when provided the enqueue is
+ *   STAGED on the batch instead of written immediately — the caller owns the
+ *   commit, letting it pair the enqueue atomically with other writes (e.g.
+ *   the mark-pending update in the waveUpsertCustomer trigger).
+ * @return {!Promise<string>} The jobId that was enqueued (or staged).
  */
 async function enqueueCustomerUpsert(clientId, deps = {}) {
   const db = deps.db || adminFirestore().getFirestore();
@@ -337,7 +405,11 @@ async function enqueueCustomerUpsert(clientId, deps = {}) {
     docData.payloadHash = deps.payloadHash;
   }
 
-  await ref.set(docData, {merge: true});
+  if (deps.batch) {
+    deps.batch.set(ref, docData, {merge: true});
+  } else {
+    await ref.set(docData, {merge: true});
+  }
 
   return jobId;
 }
@@ -377,6 +449,13 @@ async function enqueueCustomerUpsert(clientId, deps = {}) {
  *   - `leaseMs` {number} Inflight lease duration in ms (default 600000 / 10
  *     min). Jobs still inflight after this long are reclaimed. Must exceed
  *     the function's maximum runtime to avoid reclaiming live jobs.
+ *   - `deadlineMs` {number} Absolute wall-clock epoch-ms budget: no NEW job
+ *     is claimed once `wallClock()` passes it (in-flight work finishes and
+ *     its outcome is still committed). Defaults to Infinity (no budget).
+ *     The scheduler passes ~70% of its timeout so the run always ends with
+ *     clean outcome writes instead of being killed mid-dispatch.
+ *   - `wallClock` {!Function} Returns the current epoch ms (default
+ *     `Date.now`); injectable for deadline tests.
  *   - `logger` {!Object} Logging facade with `.error(msg, meta)` etc.
  *     Defaults to `firebase-functions/logger`. Never use `console`.
  * @return {!Promise<{processed:number, done:number, retried:number,
@@ -395,9 +474,15 @@ async function drainQueue(deps = {}) {
     DEFAULT_BATCH_LIMIT;
   const leaseMs =
     typeof deps.leaseMs === "number" ? deps.leaseMs : DEFAULT_LEASE_MS;
+  const deadlineMs =
+    typeof deps.deadlineMs === "number" ? deps.deadlineMs : Infinity;
+  const wallClock = deps.wallClock || Date.now;
   const dispatchUpsert = deps.upsertCustomer || upsertCustomer;
   const nowValue = deps.now ? deps.now() : new Date();
   const nowMs = +nowValue;
+
+  /** True once the wall-clock budget is exhausted (logged once). */
+  const pastDeadline = () => wallClock() > deadlineMs;
 
   const summary = {
     processed: 0, done: 0, retried: 0, dead: 0, skipped: 0, reclaimed: 0,
@@ -419,6 +504,12 @@ async function drainQueue(deps = {}) {
     staleSnap.docs : [];
 
   for (const staleDoc of staleDocs) {
+    if (pastDeadline()) {
+      logger.warn("WAVE-WORKER deadline budget reached during reclaim", {
+        deadlineMs,
+      });
+      break;
+    }
     const jobId = staleDoc.id;
     // Atomic reclaim: re-read and rewrite the job in ONE transaction, writing
     // only while it is STILL inflight past its lease. The read and the outcome
@@ -436,9 +527,14 @@ async function drainQueue(deps = {}) {
         const freshData = fresh.data() || {};
         // Only reclaim if STILL inflight AND claimedAt still beyond the lease
         // (a fresh re-claim by another worker resets claimedAt and is skipped).
+        // A non-finite claimedAt (missing field, unresolved serverTimestamp
+        // echo, corrupt value) is treated as RECLAIMABLE — skipping it would
+        // strand the job inflight forever, since only claimedAt gates reclaim.
         if (freshData.status !== "inflight") return;
         const claimedAtMs = timestampToMs(freshData.claimedAt);
-        if (!claimedAtMs || claimedAtMs > nowMs - leaseMs) return;
+        if (Number.isFinite(claimedAtMs) && claimedAtMs > nowMs - leaseMs) {
+          return;
+        }
 
         const newAttempts =
           (typeof freshData.attempts === "number" ?
@@ -463,6 +559,7 @@ async function drainQueue(deps = {}) {
           outcome = {
             dead: true,
             newAttempts,
+            refPath: freshData.refPath,
             clientId: clientIdFromRefPath(freshData.refPath),
           };
         }
@@ -486,6 +583,11 @@ async function drainQueue(deps = {}) {
         attempts: outcome.newAttempts,
         reason: "reclaimed: lease expired",
       });
+      // Surface the terminal failure on the client doc (best-effort) so the
+      // admin UI shows 'error' instead of a forever-'pending' sync state.
+      await markClientSyncError(
+          db, outcome.refPath, "Sync failed after repeated attempts.", logger,
+      );
     }
     summary.reclaimed += 1;
   }
@@ -505,10 +607,25 @@ async function drainQueue(deps = {}) {
   const docs = snap && Array.isArray(snap.docs) ? snap.docs : [];
 
   for (const doc of docs) {
+    // Wall-clock budget: stop CLAIMING new jobs once the deadline passes so
+    // the function returns with clean outcome writes instead of being killed
+    // mid-dispatch (unclaimed jobs stay queued for the next run).
+    if (pastDeadline()) {
+      logger.warn("WAVE-WORKER deadline budget reached — stopping early", {
+        deadlineMs,
+        remainingJobs: docs.length - summary.processed - summary.skipped,
+      });
+      break;
+    }
+
     const jobId = doc.id;
     const jobData = doc.data() || {};
 
     // --- Claim the job transactionally ----------------------------------
+    // The claim stamp is the ACTUAL claim time (not the drain-start clock):
+    // with a stale stamp, a long drain could make a job look lease-expired
+    // to a concurrent reclaim pass while it is still being dispatched.
+    const claimStamp = deps.now ? deps.now() : new Date();
     let claimed = false;
     try {
       await db.runTransaction(async (tx) => {
@@ -518,7 +635,7 @@ async function drainQueue(deps = {}) {
         if (!fresh || !fresh.exists) return; // deleted between query and claim
         const freshData = fresh.data() || {};
         if (freshData.status !== "queued") return; // already claimed/done
-        tx.update(doc.ref, {status: "inflight", claimedAt: nowValue});
+        tx.update(doc.ref, {status: "inflight", claimedAt: claimStamp});
         claimed = true;
       });
     } catch (txErr) {
@@ -550,6 +667,10 @@ async function drainQueue(deps = {}) {
           db,
           graphql: deps.graphql,
           businessId: deps.businessId,
+          // Lets the upsert run its crash-retry duplicate check (search Wave
+          // before creating) when a previous attempt may have half-finished.
+          priorAttempts:
+            typeof jobData.attempts === "number" ? jobData.attempts : 0,
         });
       } else {
         // Unknown job type — treat as a permanent failure (non-retryable).
@@ -562,7 +683,7 @@ async function drainQueue(deps = {}) {
     // --- Resolve outcome (guarded against a concurrent re-enqueue) -------
     if (!dispatchError) {
       // Success.
-      const applied = await commitOutcome(db, doc.ref, nowValue, {
+      const applied = await commitOutcome(db, doc.ref, claimStamp, {
         status: "done",
         lastError: null,
       });
@@ -586,7 +707,7 @@ async function drainQueue(deps = {}) {
       const delayMs = backoffFn(newAttempts - 1);
       const nextAttemptAt = new Date(nowMs + delayMs);
 
-      const applied = await commitOutcome(db, doc.ref, nowValue, {
+      const applied = await commitOutcome(db, doc.ref, claimStamp, {
         status: "queued",
         attempts: newAttempts,
         nextAttemptAt,
@@ -605,7 +726,7 @@ async function drainQueue(deps = {}) {
         (dispatchError instanceof WaveValidationError ?
           "validation" : "unexpected");
 
-      const applied = await commitOutcome(db, doc.ref, nowValue, {
+      const applied = await commitOutcome(db, doc.ref, claimStamp, {
         status: "dead",
         attempts: newAttempts,
         lastError: sanitized,
@@ -620,6 +741,13 @@ async function drainQueue(deps = {}) {
           attempts: newAttempts,
           retryable,
         });
+        // Surface the terminal failure on the client doc (best-effort) so
+        // the admin UI shows 'error' + a sanitized reason instead of a
+        // forever-'pending' sync state. WaveValidationError already wrote a
+        // richer message via writeSyncError in customers.js — keep it.
+        if (!(dispatchError instanceof WaveValidationError)) {
+          await markClientSyncError(db, jobData.refPath, sanitized, logger);
+        }
         summary.dead += 1;
       } else {
         logger.info("WAVE-WORKER outcome superseded (dead skipped)", {jobId});

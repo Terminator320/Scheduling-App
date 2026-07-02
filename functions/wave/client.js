@@ -103,6 +103,24 @@ function sleep(sleepFn, ms) {
   return sleepFn(ms);
 }
 
+/**
+ * Consumes (and discards) a response body. Undici/Node fetch keeps the
+ * underlying socket pinned until the body is read or cancelled, so every
+ * non-2xx retry/throw path must drain the body or connections leak across
+ * the retry loop. Errors are swallowed — this is purely a resource release.
+ * @param {*} response A fetch Response (or a test double without `.text`).
+ * @return {!Promise<void>}
+ */
+async function discardBody(response) {
+  try {
+    if (response && typeof response.text === "function") {
+      await response.text();
+    }
+  } catch {
+    // Best-effort drain only; the caller is already on an error path.
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Core transport
 // ---------------------------------------------------------------------------
@@ -170,6 +188,7 @@ async function graphql(query, variables = {}, options = {}) {
 
     // Auth errors: no retry.
     if (status === 401 || status === 403) {
+      await discardBody(response);
       throw new WaveApiError(
           "auth",
           `Wave API returned ${status} — token missing or revoked.`,
@@ -179,6 +198,7 @@ async function graphql(query, variables = {}, options = {}) {
 
     // Rate limit: retry with Retry-After or backoff.
     if (status === 429) {
+      await discardBody(response);
       if (attempt < maxRetries) {
         const headerDelay = retryAfterMs(response.headers);
         // Fix #4: treat 0 as a valid header value (honor it), only fall back
@@ -200,6 +220,7 @@ async function graphql(query, variables = {}, options = {}) {
 
     // Server errors: retry or throw.
     if (status >= 500 && status <= 599) {
+      await discardBody(response);
       if (attempt < maxRetries) {
         await sleep(sleepFn, backoffMs(attempt));
         attempt++;
@@ -214,6 +235,7 @@ async function graphql(query, variables = {}, options = {}) {
 
     // Unexpected non-2xx.
     if (status < 200 || status > 299) {
+      await discardBody(response);
       throw new WaveApiError(
           "unknown",
           `Wave API returned unexpected status ${status}.`,

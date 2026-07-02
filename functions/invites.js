@@ -36,6 +36,82 @@ function optionalString(data, key, maxLen) {
 // stores and Play Integrity can mint verified App Check tokens.
 const APP_CHECK = {enforceAppCheck: false};
 
+/**
+ * Transactional core of createEmployeeInvite, extracted for unit testing.
+ *
+ * EVERYTHING — the duplicate-email lookup, the prior-code sweep, and the
+ * writes — runs inside ONE Firestore transaction (equality queries are
+ * allowed in transactions via `tx.get(query)`), closing two races the old
+ * check-then-write flow had:
+ *   1. Two concurrent invites for the same email both passed the
+ *      out-of-transaction duplicate check and minted two invite docs.
+ *   2. The re-issue branch's query+batch could interleave with a concurrent
+ *      redeemSignupCode transaction (which flips the invite to 'active' and
+ *      deletes the code doc), re-issuing a code for an already-claimed
+ *      account. The transactional read of the invite doc now serializes the
+ *      two: whichever commits second sees the other's write and
+ *      retries/blocks correctly.
+ *
+ * @param {!Object} db Firestore instance.
+ * @param {{name: string, email: string, phone: string, colorValue: string}}
+ *   fields Validated invite fields (email already lowercased).
+ * @param {{code: string, expiresAt: !Date, serverTimestamp: !Function}} opts
+ *   The pre-generated one-time code, its expiry, and a serverTimestamp
+ *   factory (injectable for tests).
+ * @return {!Promise<{ok: boolean, code: (string|undefined)}>} `ok:false`
+ *   means the email belongs to a claimed (non-invited) account.
+ */
+async function performCreateInvite(db, fields, opts) {
+  const {name, email, phone, colorValue} = fields;
+  const {code, expiresAt, serverTimestamp} = opts;
+  const codeRef = db.collection("signupCodes").doc(hashSignupCode(code));
+
+  return db.runTransaction(async (tx) => {
+    // All reads first (Firestore transactions forbid reads after writes).
+    const dup = await tx.get(
+        db.collection("users").where("email", "==", email).limit(1),
+    );
+    const existing = dup.empty ? null : dup.docs[0];
+    // A real (claimed) account blocks re-use; a still-pending invite is
+    // re-issued instead (idempotent — covers a lost/expired code and seeds a
+    // code for invites created before signup codes existed).
+    if (existing && existing.data().status !== "invited") {
+      return {ok: false};
+    }
+
+    if (existing) {
+      const prior = await tx.get(
+          db.collection("signupCodes")
+              .where("inviteDocId", "==", existing.id),
+      );
+      // Re-issue: refresh the editable fields and replace the invite's code.
+      prior.forEach((d) => tx.delete(d.ref));
+      tx.update(existing.ref, {
+        name, phone, colorValue,
+        updatedAt: serverTimestamp(),
+      });
+      tx.set(codeRef, {
+        inviteDocId: existing.id, email, expiresAt,
+        createdAt: serverTimestamp(),
+      });
+      return {ok: true, code};
+    }
+
+    const inviteRef = db.collection("users").doc();
+    tx.set(inviteRef, {
+      name, email, phone, colorValue,
+      role: "employee", status: "invited", uid: "",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    tx.set(codeRef, {
+      inviteDocId: inviteRef.id, email, expiresAt,
+      createdAt: serverTimestamp(),
+    });
+    return {ok: true, code};
+  });
+}
+
 const createEmployeeInvite = onCall(APP_CHECK, async (req) => {
   if (!req.auth || !req.auth.uid) {
     throw new HttpsError("unauthenticated", "auth-required");
@@ -49,51 +125,19 @@ const createEmployeeInvite = onCall(APP_CHECK, async (req) => {
   const colorValue = requireString(req.data, "colorValue", 40);
 
   const db = getFirestore();
-  const dup = await db.collection("users")
-      .where("email", "==", email).limit(1).get();
-  const existing = dup.empty ? null : dup.docs[0];
-  // A real (claimed) account blocks re-use; a still-pending invite is
-  // re-issued instead (idempotent — covers a lost/expired code and seeds a
-  // code for invites created before signup codes existed).
-  if (existing && existing.data().status !== "invited") {
-    throw new HttpsError("already-exists", "email-exists");
-  }
-
+  // The code is generated OUTSIDE the transaction so a transaction retry
+  // reuses the same code/hash (deterministic doc id across retries).
   const code = generateSignupCode();
-  const codeRef = db.collection("signupCodes").doc(hashSignupCode(code));
   const expiresAt = new Date(Date.now() + INVITE_CODE_TTL_MS);
 
-  if (existing) {
-    // Re-issue: refresh the editable fields and replace the invite's code.
-    const prior = await db.collection("signupCodes")
-        .where("inviteDocId", "==", existing.id).get();
-    const batch = db.batch();
-    prior.forEach((d) => batch.delete(d.ref));
-    batch.update(existing.ref, {
-      name, phone, colorValue,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    batch.set(codeRef, {
-      inviteDocId: existing.id, email, expiresAt,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-    await batch.commit();
-    return {code};
+  const outcome = await performCreateInvite(
+      db,
+      {name, email, phone, colorValue},
+      {code, expiresAt, serverTimestamp: () => FieldValue.serverTimestamp()},
+  );
+  if (!outcome.ok) {
+    throw new HttpsError("already-exists", "email-exists");
   }
-
-  const inviteRef = db.collection("users").doc();
-  await db.runTransaction(async (tx) => {
-    tx.set(inviteRef, {
-      name, email, phone, colorValue,
-      role: "employee", status: "invited", uid: "",
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    tx.set(codeRef, {
-      inviteDocId: inviteRef.id, email, expiresAt,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-  });
   return {code};
 });
 
@@ -155,4 +199,9 @@ const redeemSignupCode = onCall(APP_CHECK, async (req) => {
   return {role: outcome.role, name: outcome.name};
 });
 
-module.exports = {createEmployeeInvite, redeemSignupCode};
+module.exports = {
+  createEmployeeInvite,
+  redeemSignupCode,
+  // Exported for unit tests of the transactional invite flow.
+  performCreateInvite,
+};
