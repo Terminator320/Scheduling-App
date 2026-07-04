@@ -18,6 +18,9 @@ class _MockQuery extends Mock implements Query<Map<String, dynamic>> {}
 class _MockQuerySnapshot extends Mock
     implements QuerySnapshot<Map<String, dynamic>> {}
 
+class _MockQueryDocSnap extends Mock
+    implements QueryDocumentSnapshot<Map<String, dynamic>> {}
+
 class _MockDocRef extends Mock
     implements DocumentReference<Map<String, dynamic>> {}
 
@@ -33,7 +36,15 @@ void main() {
   setUpAll(() {
     registerFallbackValue(_FakeFieldValue());
     registerFallbackValue(<String, dynamic>{});
+    registerFallbackValue(<Object?>[]);
   });
+
+  _MockQueryDocSnap doc(String id, Map<String, dynamic> data) {
+    final d = _MockQueryDocSnap();
+    when(() => d.id).thenReturn(id);
+    when(d.data).thenReturn(data);
+    return d;
+  }
 
   setUp(() {
     firestore = _MockFirestore();
@@ -46,29 +57,36 @@ void main() {
     when(
       () => collection.orderBy(any(), descending: any(named: 'descending')),
     ).thenReturn(query);
+    when(
+      () => query.orderBy(any(), descending: any(named: 'descending')),
+    ).thenReturn(query);
+    when(() => query.startAfter(any())).thenReturn(query);
     when(() => query.limit(any())).thenReturn(query);
     when(() => query.get()).thenAnswer((_) async => snapshot);
     when(() => snapshot.docs).thenReturn(const []);
 
     when(() => collection.doc(any())).thenReturn(docRef);
+    when(() => docRef.id).thenReturn('new-id');
     when(() => docRef.update(any())).thenAnswer((_) async {});
     when(() => docRef.delete()).thenAnswer((_) async {});
     when(() => collection.add(any())).thenAnswer((_) async => docRef);
   });
 
-  FirebaseClientsRepository repo() => FirebaseClientsRepository(firestore);
+  FirebaseClientsRepository repo({DateTime Function()? clock}) =>
+      FirebaseClientsRepository(firestore, clock: clock);
 
-  ClientRecord client({String id = 'c1'}) => ClientRecord(
-    id: id,
-    name: 'Test Client',
-    phone: '555-0000',
-    email: 'test@example.com',
-    address: '1 Main St',
-    city: 'Montreal',
-    province: 'QC',
-    country: 'Canada',
-    postalCode: 'H1H 1H1',
-  );
+  ClientRecord client({String id = 'c1', String name = 'Test Client'}) =>
+      ClientRecord(
+        id: id,
+        name: name,
+        phone: '555-0000',
+        email: 'test@example.com',
+        address: '1 Main St',
+        city: 'Montreal',
+        province: 'QC',
+        country: 'Canada',
+        postalCode: 'H1H 1H1',
+      );
 
   group('addClient', () {
     test('writes normalized email with createdAt and updatedAt', () async {
@@ -103,6 +121,65 @@ void main() {
     });
   });
 
+  group('fetchClientsPage', () {
+    test('first page orders by name + doc id without a cursor', () async {
+      await repo().fetchClientsPage(limit: 50);
+
+      verify(() => collection.orderBy('name')).called(1);
+      verify(() => query.orderBy(FieldPath.documentId)).called(1);
+      verify(() => query.limit(50)).called(1);
+      verifyNever(() => query.startAfter(any()));
+      // Field-value cursor pagination must never refetch a boundary doc.
+      verifyNever(() => collection.doc(any()));
+    });
+
+    test(
+      'next page uses a field-value cursor (no boundary-doc re-read)',
+      () async {
+        final r = repo();
+        // Build doc mocks before stubbing `docs` — mocktail forbids calling
+        // `when` (inside the doc() helper) while another stub is being defined.
+        final docs = [
+          doc('c1', {'name': 'Test Client'}),
+        ];
+        when(() => snapshot.docs).thenReturn(docs);
+        final page1 = await r.fetchClientsPage(limit: 1);
+
+        await r.fetchClientsPage(limit: 1, after: page1.last);
+
+        final captured = verify(
+          () => query.startAfter(captureAny()),
+        ).captured.single;
+        expect(captured, ['Test Client', 'c1']);
+        verifyNever(() => collection.doc(any()));
+      },
+    );
+
+    test(
+      'legacy business-only boundary doc: cursor uses the stored (empty) '
+      'name, not the businessName display fallback',
+      () async {
+        final r = repo();
+        final docs = [
+          doc('c9', {'name': '', 'businessName': 'Zebra Corp'}),
+        ];
+        when(() => snapshot.docs).thenReturn(docs);
+        final page1 = await r.fetchClientsPage(limit: 1);
+        // The record's display name falls back to the business name…
+        expect(page1.last.name, 'Zebra Corp');
+
+        await r.fetchClientsPage(limit: 1, after: page1.last);
+
+        // …but the cursor must match the stored orderBy value or Firestore
+        // would skip every doc sorted between '' and 'Zebra Corp'.
+        final captured = verify(
+          () => query.startAfter(captureAny()),
+        ).captured.single;
+        expect(captured, ['', 'c9']);
+      },
+    );
+  });
+
   group('searchClients', () {
     test(
       'returns empty list without querying Firestore for a blank or '
@@ -116,8 +193,6 @@ void main() {
     );
 
     test('searches Firestore from the first character', () async {
-      when(() => snapshot.docs).thenReturn(const []);
-
       final results = await repo().searchClients('a');
 
       expect(results, isEmpty);
@@ -125,14 +200,110 @@ void main() {
     });
 
     test('returns cached result on second call with same query', () async {
-      when(() => snapshot.docs).thenReturn(const []);
-
       final r = repo();
       await r.searchClients('John Smith');
       await r.searchClients('John Smith');
 
       // Firestore read should only fire once — second call uses cache.
       verify(() => query.get()).called(1);
+    });
+
+    test('distinct queries share one scan-window read while fresh', () async {
+      final docs = [
+        doc('c1', {'name': 'John Smith'}),
+        doc('c2', {'name': 'Jane Doe'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      final r = repo();
+      expect((await r.searchClients('John')).map((c) => c.id), ['c1']);
+      expect((await r.searchClients('Jane')).map((c) => c.id), ['c2']);
+
+      // One window read serves both queries.
+      verify(() => query.get()).called(1);
+    });
+
+    test('scan window expires after the TTL and is re-read', () async {
+      var now = DateTime(2026, 7, 2, 12);
+      final r = repo(clock: () => now);
+
+      await r.searchClients('John');
+      now = now.add(const Duration(minutes: 3));
+      await r.searchClients('John');
+
+      verify(() => query.get()).called(2);
+    });
+
+    test(
+      'deleting a client drops it from search without re-reading the window',
+      () async {
+        final docs = [
+          doc('c1', {'name': 'John Smith'}),
+        ];
+        when(() => snapshot.docs).thenReturn(docs);
+
+        final r = repo();
+        expect((await r.searchClients('John')).map((c) => c.id), ['c1']);
+
+        await r.deleteClient('c1');
+
+        expect(await r.searchClients('John'), isEmpty);
+        // The write patched the in-memory window — no second Firestore read.
+        verify(() => query.get()).called(1);
+      },
+    );
+
+    test(
+      'updating a client is reflected in search without re-reading the window',
+      () async {
+        final docs = [
+          doc('c1', {'name': 'John Smith'}),
+        ];
+        when(() => snapshot.docs).thenReturn(docs);
+
+        final r = repo();
+        expect((await r.searchClients('John')).map((c) => c.id), ['c1']);
+
+        await r.updateClient(client(name: 'Renamed Person'));
+
+        expect(await r.searchClients('John'), isEmpty);
+        expect((await r.searchClients('Renamed')).map((c) => c.id), ['c1']);
+        verify(() => query.get()).called(1);
+      },
+    );
+
+    test(
+      'adding a client makes it searchable without re-reading the window',
+      () async {
+        final docs = [
+          doc('c1', {'name': 'John Smith'}),
+        ];
+        when(() => snapshot.docs).thenReturn(docs);
+        when(() => docRef.id).thenReturn('c2');
+
+        final r = repo();
+        expect(await r.searchClients('Zebra'), isEmpty);
+
+        await r.addClient(client(id: 'c2', name: 'Zebra Corp'));
+
+        expect((await r.searchClients('Zebra')).map((c) => c.id), ['c2']);
+        verify(() => query.get()).called(1);
+      },
+    );
+
+    test('ranks exact/prefix matches first, then alphabetical', () async {
+      final docs = [
+        doc('c1', {'name': 'Aaron Johnson', 'phone': '514-555-0101'}),
+        doc('c2', {'name': 'John Smith', 'phone': '514-555-0102'}),
+        doc('c3', {'name': 'Johnny Cash', 'phone': '514-555-0103'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      final results = await repo().searchClients('John');
+
+      // Prefix matches (John Smith, Johnny Cash) rank above the substring
+      // match (Aaron Johnson); ties break alphabetically.
+      expect(results.map((c) => c.id), ['c2', 'c3', 'c1']);
     });
   });
 }

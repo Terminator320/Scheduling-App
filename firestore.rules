@@ -29,6 +29,14 @@ service cloud.firestore {
         && userByUid().data.status == 'active';
     }
 
+    // True when the CALLER is an active user (any role) per the bridge doc.
+    // Conditions here are on the caller, not the resource, so list queries
+    // remain provable by the rules engine.
+    function isActiveUser() {
+      return userByUidExists()
+        && userByUid().data.status == 'active';
+    }
+
     // Returns the Firestore doc ID for the current user (via the bridge doc).
     // Used to check whether a UID is in appointment.employeeIds.
     function myDocId() {
@@ -83,8 +91,15 @@ service cloud.firestore {
       // rejected with permission-denied. Invite resolution and activation run
       // server-side via the signup-code callables (Admin SDK), so this clause
       // can stay tight without breaking the app.
+      // The active-peers clause requires the CALLER to be an active user via
+      // the usersByUid bridge — a merely-signed-in stranger (self-registered
+      // account with no bridge doc) can no longer dump the staff directory.
+      // The caller-side condition keeps the client's
+      // `.where('status', isEqualTo: 'active')` list queries provable (the
+      // resource-side condition matches the query filter; the caller-side
+      // conditions don't depend on resource data at all).
       allow read: if isAdmin()
-        || (isSignedIn() && resource.data.status == 'active')
+        || (isActiveUser() && resource.data.status == 'active')
         || (isSignedIn() && resource.data.uid == request.auth.uid)
         || (isSignedIn()
             && resource.data.status == 'invited'
@@ -113,7 +128,13 @@ service cloud.firestore {
       // auth uid + flipping status to 'active') is done server-side by the
       // redeemSignupCode callable via the Admin SDK — there is no client
       // self-activation path, so an unverified registrant can't claim a doc.
+      // `uid` links the doc to a Firebase Auth account; rewriting it from the
+      // client could hijack the bridge doc of another account. Only the
+      // server-side callables (Admin SDK) may ever set/rotate it.
       allow update: if isAdmin()
+            && !request.resource.data.diff(resource.data)
+                 .affectedKeys()
+                 .hasAny(['uid'])
             && (!('colorValue' in request.resource.data.keys())
                 || isValidColorValue(request.resource.data.colorValue))
             && (!('role' in request.resource.data.keys())

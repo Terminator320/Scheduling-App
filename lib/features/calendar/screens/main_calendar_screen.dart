@@ -262,8 +262,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       _lastLocale = locale;
     }
     final monthLabel = _monthLabelFormat.format(_focusedDay);
-    final jobLabel =
-        '${selectedEvents.length} ${context.l10n.calendar_appointments}';
+    final jobLabel = context.l10n.calendar_appointmentCount(
+      selectedEvents.length,
+    );
 
     return Scaffold(
       key: _scaffoldKey,
@@ -275,11 +276,18 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           if (!context.isSplitLayout)
             IconButton(
               icon: Icon(Icons.menu, color: scheme.onPrimary),
+              tooltip: context.l10n.calendar_openMenuTooltip,
               onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
             ),
         ],
         bottom: PreferredSize(
-          preferredSize: Size.fromHeight(context.isLandscape ? 22 : 28),
+          // Scale with the user's text size so the month bar's single line of
+          // label text doesn't clip at large accessibility scales (1.4x+).
+          preferredSize: Size.fromHeight(
+            MediaQuery.textScalerOf(
+              context,
+            ).scale(context.isLandscape ? 22 : 28),
+          ),
           child: _CalendarMonthBar(
             monthLabel: monthLabel,
             jobLabel: jobLabel,
@@ -290,6 +298,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton(
               heroTag: 'addFab',
+              tooltip: context.l10n.calendar_newAppointment,
               onPressed: () async {
                 await showAddEventPopup(
                   context,
@@ -457,6 +466,7 @@ class _TodayFab extends StatelessWidget {
           ignoring: !visible,
           child: FloatingActionButton(
             heroTag: 'todayFab',
+            tooltip: context.l10n.calendar_today,
             onPressed: onPressed,
             child: const Icon(Icons.today),
           ),

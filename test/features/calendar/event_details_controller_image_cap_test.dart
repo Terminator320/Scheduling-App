@@ -80,7 +80,7 @@ void main() {
             ],
           )
           // Keep the AutoDispose family-keyed provider alive across reads.
-          ..listen(eventDetailsControllerProvider(appointment), (_, _) {});
+          ..listen(eventDetailsControllerProvider(EventDetailsKey(appointment)), (_, _) {});
     addTearDown(c.dispose);
     return c;
   }
@@ -92,10 +92,10 @@ void main() {
     final appt = _appointmentWith(3);
     final c = makeContainer(appt);
     c
-        .read(eventDetailsControllerProvider(appt).notifier)
+        .read(eventDetailsControllerProvider(EventDetailsKey(appt)).notifier)
         .addImages(stubFiles(5));
 
-    final state = c.read(eventDetailsControllerProvider(appt));
+    final state = c.read(eventDetailsControllerProvider(EventDetailsKey(appt)));
     expect(state.existingImages.length, 3);
     expect(state.newImages.length, 5);
   });
@@ -104,10 +104,10 @@ void main() {
     final appt = _appointmentWith(3);
     final c = makeContainer(appt);
     c
-        .read(eventDetailsControllerProvider(appt).notifier)
+        .read(eventDetailsControllerProvider(EventDetailsKey(appt)).notifier)
         .addImages(stubFiles(10));
 
-    final state = c.read(eventDetailsControllerProvider(appt));
+    final state = c.read(eventDetailsControllerProvider(EventDetailsKey(appt)));
     expect(state.existingImages.length, 3);
     expect(state.newImages.length, 7);
   });
@@ -118,10 +118,10 @@ void main() {
       final appt = _appointmentWith(10);
       final c = makeContainer(appt);
       c
-          .read(eventDetailsControllerProvider(appt).notifier)
+          .read(eventDetailsControllerProvider(EventDetailsKey(appt)).notifier)
           .addImages(stubFiles(2));
 
-      final state = c.read(eventDetailsControllerProvider(appt));
+      final state = c.read(eventDetailsControllerProvider(EventDetailsKey(appt)));
       expect(state.existingImages.length, 10);
       expect(state.newImages.length, 0);
     },

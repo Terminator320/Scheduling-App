@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
@@ -52,7 +54,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final AccountDeletionService _deletionService =
-      widget.accountDeletionService ?? AccountDeletionService();
+      widget.accountDeletionService ??
+      ref.read(accountDeletionServiceProvider);
 
   _SettingsDetail? _selectedDetail;
   bool _isSigningOut = false;
@@ -336,7 +339,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (_isSigningOut) return;
     setState(() => _isSigningOut = true);
     try {
-      await AuthService().signOut();
+      await ref.read(authServiceProvider).signOut();
     } catch (e, st) {
       // signOut clears local state and effectively never throws; if it does,
       // log it but still route to login so the user isn't stuck signed in.
@@ -360,10 +363,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
     if (!result || !mounted) return;
 
-    final password = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => const DeleteAccountReauthDialog(),
-    );
+    // Platform-matched presentation so the re-auth prompt looks like the
+    // adaptive confirm it directly follows.
+    final password = context.isCupertino
+        ? await showCupertinoDialog<String>(
+            context: context,
+            builder: (dialogContext) => const DeleteAccountReauthDialog(),
+          )
+        : await showDialog<String>(
+            context: context,
+            builder: (dialogContext) => const DeleteAccountReauthDialog(),
+          );
     if (password == null || password.isEmpty || !mounted) return;
 
     await _runDeletion(password);

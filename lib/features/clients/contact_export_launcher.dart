@@ -72,12 +72,11 @@ Future<void> saveClientToPhoneContacts(
 /// Overwrites only the synced fields (name, organization, phones, emails,
 /// addresses); unfetched properties (photo, groups, account) are preserved
 /// because `update` only writes the properties that were fetched.
-Future<void> updateLinkedPhoneContact(
-  WidgetRef ref,
-  ClientRecord client,
-) async {
-  final linkStore = ref.read(contactLinkStoreProvider);
-  final logger = ref.read(loggerProvider);
+Future<void> updateLinkedPhoneContact({
+  required ContactLinkStore linkStore,
+  required AppLogger logger,
+  required ClientRecord client,
+}) async {
   // The whole sync is guarded: a missing link, declined permission, or any
   // failure (incl. storage/plugin) must leave the client save untouched.
   try {

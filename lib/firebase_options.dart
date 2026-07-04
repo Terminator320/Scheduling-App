@@ -4,16 +4,29 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class DefaultFirebaseOptions {
-  static final String _FIREBASE_API_KEY =
-      dotenv.env['FIREBASE_API_KEY'] ?? 'default_key';
-  static final String _APP_ID = dotenv.env['APP_ID'] ?? 'default_key';
-  static final String _MESSAGING_SENDER_ID =
-      dotenv.env['MESSAGING_SENDER_ID'] ?? 'default_key';
-  static final String _PROJECT_ID = dotenv.env['PROJECT_ID'] ?? 'default_key';
-  static final String _STORAGE_BUCKET =
-      dotenv.env['STORAGE_BUCKET'] ?? 'default_key';
-  static final String _IOS_API_KEY = dotenv.env['IOS_API_KEY'] ?? 'default_key';
-  static final String _IOS_APP_ID = dotenv.env['IOS_APP_ID'] ?? 'default_key';
+  /// Reads [key] from dev/.env, failing fast instead of silently handing
+  /// Firebase a bogus value (which would surface later as opaque auth or
+  /// network errors).
+  static String _requireEnv(String key) {
+    final value = dotenv.env[key];
+    if (value == null || value.isEmpty) {
+      throw StateError(
+        'Missing "$key" in dev/.env — copy dev/.env.example to dev/.env '
+        'and fill in the Firebase values (see README "Setup").',
+      );
+    }
+    return value;
+  }
+
+  static final String _FIREBASE_API_KEY = _requireEnv('FIREBASE_API_KEY');
+  static final String _APP_ID = _requireEnv('APP_ID');
+  static final String _MESSAGING_SENDER_ID = _requireEnv(
+    'MESSAGING_SENDER_ID',
+  );
+  static final String _PROJECT_ID = _requireEnv('PROJECT_ID');
+  static final String _STORAGE_BUCKET = _requireEnv('STORAGE_BUCKET');
+  static final String _IOS_API_KEY = _requireEnv('IOS_API_KEY');
+  static final String _IOS_APP_ID = _requireEnv('IOS_APP_ID');
 
   static FirebaseOptions get currentPlatform {
     switch (defaultTargetPlatform) {

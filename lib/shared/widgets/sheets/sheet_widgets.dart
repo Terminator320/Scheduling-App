@@ -93,8 +93,8 @@ class _SheetFocusScrollState extends State<SheetFocusScroll> {
   }
 }
 
-class SheetHandle extends StatelessWidget {
-  const SheetHandle({super.key});
+class _SheetHandle extends StatelessWidget {
+  const _SheetHandle();
 
   @override
   Widget build(BuildContext context) {
@@ -146,7 +146,7 @@ class DetailSheetListView extends StatelessWidget {
       ),
       children: [
         if (showHandle) ...[
-          const SheetHandle(),
+          const _SheetHandle(),
           SizedBox(height: handleGap),
         ],
         ...children,
@@ -157,7 +157,7 @@ class DetailSheetListView extends StatelessWidget {
 
 /// Standard chrome for an add/edit **form** shown in a bottom sheet: the
 /// [DraggableSheetFrame] container plus a scrollable body with the shared sheet
-/// padding, a drag [SheetHandle], and a [headlineLarge] [title]. Put the
+/// padding, a drag [_SheetHandle], and a [headlineLarge] [title]. Put the
 /// divider and form fields in [children]. Mirrors [DetailSheetListView], which
 /// serves read-only detail views.
 class FormSheetScaffold extends StatelessWidget {
@@ -194,7 +194,7 @@ class FormSheetScaffold extends StatelessWidget {
                 MediaQuery.of(sheetContext).viewInsets.bottom + AppSpacing.sp24,
           ),
           children: [
-            const SheetHandle(),
+            const _SheetHandle(),
             SizedBox(height: isShort ? AppSpacing.sp12 : AppSpacing.sp16),
             Text(
               title,

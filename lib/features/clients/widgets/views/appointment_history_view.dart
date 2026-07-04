@@ -6,9 +6,9 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
-import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_tile.dart';
+import 'package:scheduling/features/clients/application/appointment_history_providers.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/clients/widgets/sections/history_filter_bar.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
@@ -16,6 +16,17 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
+
+/// Pre-normalized searchable projection of one loaded history row, built once
+/// per page load so per-keystroke filtering only normalizes the query.
+/// Employee names stay a list (not joined) so a query can't match across the
+/// boundary of two adjacent names.
+typedef _HistorySearchEntry = ({
+  AppointmentRecord appointment,
+  String clientText,
+  List<String> employeeTexts,
+  String phoneDigits,
+});
 
 /// Paginated (newest-first) history list. Pages load on scroll; year/employee
 /// chip filters and the search query operate over the already-loaded pages
@@ -42,12 +53,15 @@ class _AppointmentHistoryViewState
 
   String _committedQuery = '';
 
-  // Memoized year/employee filter options — recomputed only when a new page
-  // arrives (keyed on PagingState.pages identity), not on every rebuild from
-  // a search/filter setState. Mirrors main_calendar_screen's _dayIndex memo.
+  // Memoized year/employee filter options and pre-normalized search index —
+  // recomputed only when a new page arrives (keyed on PagingState.pages
+  // identity), not on every rebuild from a search/filter setState (the index
+  // otherwise re-normalizes every loaded row per keystroke). Mirrors
+  // main_calendar_screen's _dayIndex memo.
   List<List<AppointmentRecord>>? _filterOptionsPages;
   List<int> _cachedYears = const [];
   List<HistoryEmployeeOption> _cachedEmployees = const [];
+  List<_HistorySearchEntry> _searchIndex = const [];
 
   late final PagingController<int, AppointmentRecord> _pagingController =
       PagingController<int, AppointmentRecord>(
@@ -78,8 +92,8 @@ class _AppointmentHistoryViewState
           ? null
           : items.last;
       return await ref
-          .read(appointmentsRepositoryProvider)
-          .fetchHistoryPage(after: after, limit: _pageSize);
+          .read(historyPagerProvider)
+          .fetchPage(after: after, limit: _pageSize);
     } catch (e, st) {
       ref
           .read(loggerProvider)
@@ -158,38 +172,42 @@ class _AppointmentHistoryViewState
 
   // Year/employee chip filters only (no text search). Applied on top of either
   // the loaded pages or the server-backed search results.
-  List<AppointmentRecord> _applyChips(List<AppointmentRecord> appointments) {
-    return appointments.where((a) {
-      if (_year != null && a.startTime.year != _year) return false;
-      if (_employeeId != null && !a.employeeIds.contains(_employeeId)) {
-        return false;
-      }
-      return true;
-    }).toList();
+  List<AppointmentRecord> _applyChips(List<AppointmentRecord> appointments) =>
+      appointments.where(_matchesChips).toList();
+
+  bool _matchesChips(AppointmentRecord a) {
+    if (_year != null && a.startTime.year != _year) return false;
+    if (_employeeId != null && !a.employeeIds.contains(_employeeId)) {
+      return false;
+    }
+    return true;
   }
 
-  List<AppointmentRecord> _applyFilters(List<AppointmentRecord> appointments) {
+  // Chip + text filtering over the loaded pages, via the memoized
+  // [_searchIndex] so each keystroke only normalizes the (short) query — the
+  // per-row normalization already happened when the page arrived.
+  List<AppointmentRecord> _filterLoaded() {
     final hasQuery = widget.searchQuery.trim().isNotEmpty;
     // Accent-folded text + digits-only phone matching — same rule as the
     // clients list, so a client's phone number finds their appointments.
     final qText = ClientSearchPolicy.normalize(widget.searchQuery);
     final qDigits = ClientSearchPolicy.digitsOnly(widget.searchQuery);
-    return _applyChips(appointments).where((a) {
-      if (!hasQuery) return true;
-      if (qText.isEmpty && qDigits.isEmpty) return false;
-      final matchesClient =
-          qText.isNotEmpty &&
-          ClientSearchPolicy.normalize(a.clientName).contains(qText);
-      final matchesEmployee =
-          qText.isNotEmpty &&
-          a.employeeNames.any(
-            (e) => ClientSearchPolicy.normalize(e).contains(qText),
-          );
-      final matchesPhone =
-          qDigits.isNotEmpty &&
-          ClientSearchPolicy.digitsOnly(a.clientPhone).contains(qDigits);
-      return matchesClient || matchesEmployee || matchesPhone;
-    }).toList();
+    return [
+      for (final entry in _searchIndex)
+        if (_matchesChips(entry.appointment) &&
+            (!hasQuery || _matchesQuery(entry, qText, qDigits)))
+          entry.appointment,
+    ];
+  }
+
+  bool _matchesQuery(_HistorySearchEntry entry, String qText, String qDigits) {
+    if (qText.isEmpty && qDigits.isEmpty) return false;
+    final matchesClient = qText.isNotEmpty && entry.clientText.contains(qText);
+    final matchesEmployee =
+        qText.isNotEmpty && entry.employeeTexts.any((e) => e.contains(qText));
+    final matchesPhone =
+        qDigits.isNotEmpty && entry.phoneDigits.contains(qDigits);
+    return matchesClient || matchesEmployee || matchesPhone;
   }
 
   // Builds one history entry with the year/day headers that open its group,
@@ -256,6 +274,18 @@ class _AppointmentHistoryViewState
             _filterOptionsPages = state.pages;
             _cachedYears = _yearsOf(loaded);
             _cachedEmployees = _employeesOf(loaded);
+            _searchIndex = [
+              for (final a in loaded)
+                (
+                  appointment: a,
+                  clientText: ClientSearchPolicy.normalize(a.clientName),
+                  employeeTexts: [
+                    for (final e in a.employeeNames)
+                      ClientSearchPolicy.normalize(e),
+                  ],
+                  phoneDigits: ClientSearchPolicy.digitsOnly(a.clientPhone),
+                ),
+            ];
           }
           final years = _cachedYears;
           final employees = _cachedEmployees;
@@ -286,7 +316,7 @@ class _AppointmentHistoryViewState
                 ),
               Expanded(
                 child: _hasActiveFilter
-                    ? _buildFiltered(loaded, colorMap)
+                    ? _buildFiltered(colorMap)
                     : _buildPaged(state, fetchNextPage, colorMap),
               ),
             ],
@@ -311,15 +341,9 @@ class _AppointmentHistoryViewState
           itemBuilder: (context, _, index) =>
               _historyItem(state.items ?? const [], index, colorMap),
           firstPageProgressIndicatorBuilder: (_) => _skeleton(),
-          firstPageErrorIndicatorBuilder: (_) => Center(
-            child: Text(
-              composeErrorNotice(
-                context,
-                intro: context.l10n.error_introLoadHistory,
-                tag: 'HIST-LOAD',
-                error: state.error ?? Exception('history page load failed'),
-              ),
-            ),
+          firstPageErrorIndicatorBuilder: (_) => _errorState(
+            state.error ?? Exception('history page load failed'),
+            onRetry: _pagingController.refresh,
           ),
           noItemsFoundIndicatorBuilder: (_) => AppEmptyState(
             icon: Icons.history_outlined,
@@ -331,14 +355,11 @@ class _AppointmentHistoryViewState
     );
   }
 
-  Widget _buildFiltered(
-    List<AppointmentRecord> loaded,
-    Map<String, Color> colorMap,
-  ) {
+  Widget _buildFiltered(Map<String, Color> colorMap) {
     final query = widget.searchQuery.trim();
     // No text query — chip filters alone operate over the loaded pages.
     if (query.isEmpty) {
-      return _filteredList(_applyFilters(loaded), colorMap);
+      return _filteredList(_filterLoaded(), colorMap);
     }
 
     // A search reaches the whole history window via the database (not just the
@@ -348,7 +369,7 @@ class _AppointmentHistoryViewState
     // renders the server results and never needs it, so don't filter the loaded
     // pages on every rebuild once the search has settled.
     Widget localOr(Widget Function() onEmpty) {
-      final local = _applyFilters(loaded);
+      final local = _filterLoaded();
       return local.isEmpty ? onEmpty() : _filteredList(local, colorMap);
     }
 
@@ -364,24 +385,30 @@ class _AppointmentHistoryViewState
           // A failed search shouldn't read as "no history": when the local
           // fallback is also empty, surface an error, not the empty state.
           // Composes without logging (this is a builder).
-          error: (e, _) => localOr(() => _searchError(e)),
+          error: (e, _) => localOr(() => _searchError(e, query)),
         );
   }
 
-  Widget _searchError(Object error) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(AppSpacing.sp24),
-      child: Text(
-        composeErrorNotice(
+  // Retry re-runs the failed search by invalidating its provider instance;
+  // this rebuild is already watching it, so it refetches immediately.
+  Widget _searchError(Object error, String query) => _errorState(
+    error,
+    onRetry: () => ref.invalidate(historySearchProvider(query)),
+  );
+
+  Widget _errorState(Object error, {required VoidCallback onRetry}) =>
+      AppEmptyState(
+        icon: Icons.error_outline,
+        title: context.l10n.error_somethingWentWrong,
+        body: composeErrorNotice(
           context,
           intro: context.l10n.error_introLoadHistory,
           tag: 'HIST-LOAD',
           error: error,
         ),
-        textAlign: TextAlign.center,
-      ),
-    ),
-  );
+        actionLabel: context.l10n.common_retry,
+        onAction: onRetry,
+      );
 
   Widget _filteredList(
     List<AppointmentRecord> filtered,

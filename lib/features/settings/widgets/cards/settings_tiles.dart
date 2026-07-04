@@ -231,32 +231,49 @@ class _LangBtn extends StatelessWidget {
   final bool isActive;
   final VoidCallback onTap;
 
+  /// Minimum tap-target side (Apple HIG / Material a11y): the old
+  /// text-sized GestureDetector was ~24x17px and easy to miss.
+  static const double _minTapTarget = 44;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: AppDuration.fast,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: isActive ? scheme.surface : Colors.transparent,
+    return Semantics(
+      button: true,
+      selected: isActive,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(6),
-          boxShadow: isActive
-              ? const [
-                  BoxShadow(
-                    color: Color(0x1A000000),
-                    blurRadius: 3,
-                    offset: Offset(0, 1),
-                  ),
-                ]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: isActive ? scheme.primary : scheme.onSurfaceVariant,
+          child: AnimatedContainer(
+            duration: AppDuration.fast,
+            constraints: const BoxConstraints(
+              minWidth: _minTapTarget,
+              minHeight: _minTapTarget,
+            ),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp8),
+            decoration: BoxDecoration(
+              color: isActive ? scheme.surface : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+              boxShadow: isActive
+                  ? const [
+                      BoxShadow(
+                        color: Color(0x1A000000),
+                        blurRadius: 3,
+                        offset: Offset(0, 1),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: isActive ? scheme.primary : scheme.onSurfaceVariant,
+              ),
+            ),
           ),
         ),
       ),

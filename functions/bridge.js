@@ -37,8 +37,10 @@ function bridgeBody(userId, data) {
 // Rules can only `get` documents by full path, and `users` docs use Firestore-
 // generated IDs — this trigger mirrors `users` into `usersByUid/{uid}` so
 // security rules can resolve a caller's role from their auth uid alone.
+// `retry: true` is safe: every path writes absolute values (set/delete on
+// deterministic doc ids), so a crash-retry converges on the same bridge state.
 const syncUsersByUid = onDocumentWritten(
-    "users/{userId}",
+    {document: "users/{userId}", retry: true},
     async (event) => {
       const userId = event.params.userId;
       const beforeSnap = event.data?.before;
@@ -63,15 +65,31 @@ const syncUsersByUid = onDocumentWritten(
         return;
       }
 
-      // uid rotation: remove the stale bridge before writing the new one.
-      if (beforeUid && beforeUid !== afterUid) {
-        await bridge.doc(beforeUid).delete().catch((err) => {
-          logger.warn("syncUsersByUid: stale bridge delete failed", {
-            userId,
-            beforeUid,
-            err: err.message,
-          });
+      const staleUid = beforeUid && beforeUid !== afterUid ? beforeUid : "";
+
+      // uid rotation into a valid bridge: the stale delete and the new set
+      // land in ONE WriteBatch so a crash between them can't leave BOTH
+      // bridge docs live (two uids resolving to the same users doc). The
+      // batch error is NOT swallowed — retry:true re-runs the handler.
+      if (after && shouldHaveBridge(after)) {
+        const batch = db.batch();
+        if (staleUid) batch.delete(bridge.doc(staleUid));
+        batch.set(bridge.doc(afterUid), bridgeBody(userId, after));
+        await batch.commit();
+        logger.info("syncUsersByUid: bridge upserted", {
+          userId,
+          uid: afterUid,
+          staleUidRemoved: staleUid || undefined,
+          role: after.role,
+          status: after.status,
         });
+        return;
+      }
+
+      // No new bridge follows — the deletes below are terminal cleanup. They
+      // also stay un-swallowed so retry:true can re-run a failed delete.
+      if (staleUid) {
+        await bridge.doc(staleUid).delete();
       }
 
       if (!after) {
@@ -84,24 +102,13 @@ const syncUsersByUid = onDocumentWritten(
         return;
       }
 
-      if (!shouldHaveBridge(after)) {
-        if (afterUid) {
-          await bridge.doc(afterUid).delete().catch(() => {});
-        }
-        logger.debug("syncUsersByUid: no bridge needed", {
-          userId,
-          status: after.status,
-          hasUid: !!afterUid,
-        });
-        return;
+      if (afterUid) {
+        await bridge.doc(afterUid).delete();
       }
-
-      await bridge.doc(afterUid).set(bridgeBody(userId, after));
-      logger.info("syncUsersByUid: bridge upserted", {
+      logger.debug("syncUsersByUid: no bridge needed", {
         userId,
-        uid: afterUid,
-        role: after.role,
         status: after.status,
+        hasUid: !!afterUid,
       });
     },
 );

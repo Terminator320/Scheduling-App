@@ -27,7 +27,10 @@ void main() {
     notifier = PhotoUploadNotifier();
 
     when(
-      () => appointments.updateAppointmentPictures(any(), any()),
+      () => appointments.appendAppointmentPictures(
+        any<String>(),
+        any<List<AppointmentImage>>(),
+      ),
     ).thenAnswer((_) async {});
   });
 

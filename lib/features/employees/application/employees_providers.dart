@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -21,17 +22,44 @@ final allUsersStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
   return repo.watchAssignableUsers();
 });
 
-// Derived lookup maps, memoized so build() callers don't re-allocate them on
-// every rebuild; they recompute only when the users stream emits.
-final employeeColorMapProvider = Provider<Map<String, Color>>((ref) {
-  final employees = ref.watch(allUsersStreamProvider).asData?.value ?? const [];
-  return {for (final e in employees) e.id: e.color};
-});
+/// Container-scoped mutable holders for the content-equality memo below.
+/// Providers (rather than top-level variables) so each ProviderContainer —
+/// notably each test container — gets its own cache.
+final _colorMapMemoProvider = Provider((ref) => _MapMemo<Color>());
+final _nameMapMemoProvider = Provider((ref) => _MapMemo<String>());
 
-final employeeNameMapProvider = Provider<Map<String, String>>((ref) {
+class _MapMemo<V> {
+  Map<String, V>? value;
+}
+
+// Derived lookup maps, memoized two ways: build() callers don't re-allocate
+// them on every rebuild, and — because the users stream emits a fresh list on
+// ANY user-doc change (phone edits, status flips…) — the newly computed map is
+// compared by content with the previous one and the previous *instance* is
+// returned when equal. Provider.updateShouldNotify is `previous != next`, so
+// returning the identical instance skips notifying every calendar widget that
+// watches these maps.
+Map<String, V> _memoizedEmployeeMap<V>(
+  Ref ref,
+  Provider<_MapMemo<V>> memoProvider,
+  V Function(EmployeeRecord e) valueOf,
+) {
+  final memo = ref.watch(memoProvider);
   final employees = ref.watch(allUsersStreamProvider).asData?.value ?? const [];
-  return {for (final e in employees) e.id: e.name};
-});
+  final next = {for (final e in employees) e.id: valueOf(e)};
+  final previous = memo.value;
+  if (previous != null && mapEquals(previous, next)) return previous;
+  memo.value = next;
+  return next;
+}
+
+final employeeColorMapProvider = Provider<Map<String, Color>>(
+  (ref) => _memoizedEmployeeMap(ref, _colorMapMemoProvider, (e) => e.color),
+);
+
+final employeeNameMapProvider = Provider<Map<String, String>>(
+  (ref) => _memoizedEmployeeMap(ref, _nameMapMemoProvider, (e) => e.name),
+);
 
 final employeesStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
   if (ref.authUid == null) return Stream.value(const []);

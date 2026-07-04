@@ -74,7 +74,7 @@ void main() {
         startTime: DateTime(2026, 6, 6, 9),
         endTime: DateTime(2026, 6, 6, 10),
       );
-      final provider = eventDetailsControllerProvider(appointment);
+      final provider = eventDetailsControllerProvider(EventDetailsKey(appointment));
       // AutoDispose family: keep state alive across reads (testing.md).
       final sub = container.listen(provider, (_, _) {});
       addTearDown(sub.close);
@@ -105,7 +105,7 @@ void main() {
       endTime: DateTime(2026, 6, 6, 10),
       pictures: [_image('appointments/a1/images/p1'), _image('a1/p2')],
     );
-    final provider = eventDetailsControllerProvider(appointment);
+    final provider = eventDetailsControllerProvider(EventDetailsKey(appointment));
     final sub = container.listen(provider, (_, _) {});
     addTearDown(sub.close);
 
@@ -160,7 +160,7 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      final provider = eventDetailsControllerProvider(deleted);
+      final provider = eventDetailsControllerProvider(EventDetailsKey(deleted));
       final sub = container.listen(provider, (_, _) {});
       addTearDown(sub.close);
 

@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -102,6 +103,46 @@ void main() {
       expect(field.obscureText, isTrue);
       expect(find.text('Confirm your password'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('renders the Cupertino variant on iOS', (tester) async {
+      String? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.iOS),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    result = await showCupertinoDialog<String>(
+                      context: context,
+                      builder: (_) => const DeleteAccountReauthDialog(),
+                    );
+                  },
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+      expect(find.byType(AlertDialog), findsNothing);
+      final field = tester.widget<CupertinoTextField>(
+        find.byType(CupertinoTextField),
+      );
+      expect(field.obscureText, isTrue);
+
+      await tester.enterText(find.byType(CupertinoTextField), 'hunter2');
+      await tester.tap(find.text('Delete permanently'));
+      await tester.pumpAndSettle();
+      expect(result, 'hunter2');
     });
   });
 }

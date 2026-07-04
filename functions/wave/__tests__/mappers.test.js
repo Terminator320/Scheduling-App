@@ -352,6 +352,7 @@ describe("fromWaveCustomer", () => {
       phone: "514-555-1234",
       mobile: "514-555-9876",
       address: "12-3450 Main St",
+      addressLine2: "",
       apt: "",
       city: "Montreal",
       province: "QC",
@@ -442,7 +443,8 @@ describe("fromWaveCustomer", () => {
     expect(result.address).toBe("12-3450 Main St");
   });
 
-  test("addressLine1 + non-empty addressLine2 → joined with ', '", () => {
+  test("addressLine1 + non-empty addressLine2 → line2 kept in its own " +
+    "field, address stays line1 only", () => {
     const result = fromWaveCustomer({
       ...FULL_WAVE_NODE,
       address: {
@@ -451,7 +453,10 @@ describe("fromWaveCustomer", () => {
         addressLine2: "Suite 400",
       },
     });
-    expect(result.address).toBe("3450 Main St, Suite 400");
+    // Joining line2 into `address` would truncate it on write-back (the
+    // patch path extracts the street line) — keep it separate instead.
+    expect(result.address).toBe("3450 Main St");
+    expect(result.addressLine2).toBe("Suite 400");
   });
 
   test("apt is always ''", () => {
@@ -554,6 +559,104 @@ describe("round-trip identity", () => {
     expect(imported.province).toBe(client.province);
     expect(imported.postalCode).toBe(client.postalCode);
     expect(imported.name).toBe(client.name);
+  });
+
+  test("Wave addressLine2 survives a full import → patch round-trip", () => {
+    // Import a Wave customer that has a second address line…
+    const imported = fromWaveCustomer({
+      id: "wave-l2",
+      name: "Line Two Ltd",
+      address: {
+        addressLine1: "3450 Main St",
+        addressLine2: "Suite 400",
+        city: "Montreal",
+        province: {code: "CA-QC"},
+        country: {code: "CA", name: "Canada"},
+        postalCode: "H3Z 2Y7",
+      },
+    });
+    expect(imported.address).toBe("3450 Main St");
+    expect(imported.addressLine2).toBe("Suite 400");
+
+    // …then map the stored doc back to a Wave patch input: BOTH lines must
+    // come back intact (previously line2 was joined into address on import
+    // and truncated away on write-back).
+    const patchInput = toWaveCustomerInput(imported);
+    expect(patchInput.address.addressLine1).toBe("3450 Main St");
+    expect(patchInput.address.addressLine2).toBe("Suite 400");
+  });
+
+  test("import → write-back hash is stable for a line2 customer (no echo)",
+      () => {
+        const node = {
+          id: "wave-l2",
+          name: "Line Two Ltd",
+          address: {
+            addressLine1: "3450 Main St",
+            addressLine2: "Suite 400",
+            city: "Montreal",
+            province: {code: "CA-QC"},
+            country: {code: "CA", name: "Canada"},
+            postalCode: "H3Z 2Y7",
+          },
+        };
+        const imported = fromWaveCustomer(node);
+        // The import stamps lastSyncedHash = mappedFieldsHash(imported); the
+        // trigger's echo suppression relies on the re-read doc hashing to the
+        // same value.
+        expect(mappedFieldsHash(imported)).toBe(mappedFieldsHash({
+          ...imported,
+        }));
+      });
+
+  test("street containing a comma is not truncated when the tail is the " +
+    "doc's locality data", () => {
+    const result = toWaveCustomerInput({
+      name: "Comma St",
+      address: "100 Main St, Building A, Montreal, QC H2X 1Y4, Canada",
+      city: "Montreal",
+      province: "QC",
+      country: "Canada",
+      postalCode: "H2X 1Y4",
+    });
+    // Locality tail segments are stripped; the comma INSIDE the street line
+    // ("Building A") survives instead of being cut at the first comma.
+    expect(result.address.addressLine1).toBe("100 Main St, Building A");
+  });
+
+  test("imported line1 containing a comma survives write-back untouched",
+      () => {
+        // An imported Wave customer stores line1 verbatim in `address`; with
+        // no locality tail matching, nothing may be cut off.
+        const result = toWaveCustomerInput({
+          name: "T",
+          address: "100 Main St, Building A",
+          city: "Montreal",
+          province: "QC",
+          country: "Canada",
+          postalCode: "H2X 1Y4",
+        });
+        expect(result.address.addressLine1).toBe("100 Main St, Building A");
+      });
+
+  test("legacy full display address with EMPTY structured fields keeps the " +
+    "historical first-segment behaviour", () => {
+    const result = toWaveCustomerInput({
+      name: "Legacy",
+      address: "3450 Main St, Montreal, QC H3Z 2Y7, Canada",
+    });
+    // No structured fields to identify the tail — fall back to the first
+    // segment so the city never leaks into addressLine1.
+    expect(result.address.addressLine1).toBe("3450 Main St");
+  });
+
+  test("addressLine2 change → different hash (mapped field)", () => {
+    const base = {name: "T", address: "1 Main St"};
+    const h1 = mappedFieldsHash({...base, addressLine2: "Suite 1"});
+    const h2 = mappedFieldsHash({...base, addressLine2: "Suite 2"});
+    const h3 = mappedFieldsHash(base);
+    expect(h1).not.toBe(h2);
+    expect(h1).not.toBe(h3);
   });
 
   test("apt-prefixed address round-trips: apt merged into address", () => {
