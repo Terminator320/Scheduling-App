@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
+import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -368,39 +369,64 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     );
 
     if (_splitCalendar) {
+      // Both panes scroll and are alive at once, so scope each under its own
+      // PrimaryScrollController — otherwise the calendar's SingleChildScrollView
+      // and the event list both attach to the tab's shared controller and the
+      // Scrollbar throws (it needs one ScrollPosition per controller).
       return Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
             flex: 11,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                // Size the month rows to the pane: compact in the short
-                // landscape viewport, comfortable on a tall tablet.
-                final rowHeight = ((constraints.maxHeight - 40) / 6).clamp(
-                  40.0,
-                  88.0,
-                );
-                return SingleChildScrollView(
-                  child: _buildCalendar(colorMap, rowHeight),
-                );
-              },
+            child: PrimaryScrollScope(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Size the month rows to the pane: compact in the short
+                  // landscape viewport, comfortable on a tall tablet.
+                  final rowHeight = ((constraints.maxHeight - 40) / 6).clamp(
+                    40.0,
+                    88.0,
+                  );
+                  return SingleChildScrollView(
+                    child: _buildCalendar(colorMap, rowHeight),
+                  );
+                },
+              ),
             ),
           ),
           const VerticalDivider(width: 1),
           // EventList already returns an Expanded, so wrap it in a Flex.
-          Expanded(flex: 9, child: Column(children: [eventList])),
+          Expanded(
+            flex: 9,
+            child: PrimaryScrollScope(child: Column(children: [eventList])),
+          ),
         ],
       );
     }
 
-    return Column(
-      children: [
-        _buildCalendar(colorMap, MediaQuery.sizeOf(context).height * 0.065),
-        const SizedBox(height: AppSpacing.sp12),
-        const Divider(),
-        eventList,
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Size the six week-rows off the *available* height, not the full
+        // screen. Sizing off MediaQuery.size overshoots whenever the body is
+        // shorter than the screen (keyboard open, split-screen, foldable,
+        // large text scale forcing a six-week grid): the fixed-height month
+        // grid would push past the body and overflow this column, starving
+        // the Expanded event list. Reserve the day-of-week header (36) out of
+        // the calendar's ~55% share, then clamp rows to a tappable band so the
+        // event list always keeps room. Mirrors the split-calendar path above.
+        final rowHeight = ((constraints.maxHeight * 0.55 - 36) / 6).clamp(
+          36.0,
+          56.0,
+        );
+        return Column(
+          children: [
+            _buildCalendar(colorMap, rowHeight),
+            const SizedBox(height: AppSpacing.sp12),
+            const Divider(),
+            eventList,
+          ],
+        );
+      },
     );
   }
 }

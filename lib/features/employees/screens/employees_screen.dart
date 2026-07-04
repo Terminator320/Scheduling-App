@@ -243,6 +243,11 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
       ),
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton(
+              // Unique across the hub: the IndexedStack keeps every tab's
+              // Scaffold (and FAB) mounted at once, so a default/shared hero
+              // tag collides with another tab's FAB ("multiple heroes share
+              // the same tag").
+              heroTag: 'employeesAddFab',
               onPressed: _openEmployeeSheet,
               tooltip: context.l10n.employees_inviteEmployee,
               child: const Icon(Icons.add),

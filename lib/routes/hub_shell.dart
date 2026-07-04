@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
 import 'package:scheduling/features/clients/screens/clients_screen.dart';
 import 'package:scheduling/features/clients/screens/history_screen.dart';
@@ -131,7 +132,12 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
                 // state but they should not burn frames while invisible.
                 TickerMode(
                   enabled: destination == _current,
-                  child: _screenFor(destination),
+                  // Every tab stays mounted in this one IndexedStack under a
+                  // single route, which offers just one PrimaryScrollController.
+                  // Give each tab its own so their (always-attached) primary
+                  // ListViews don't all pile onto the shared one — a Scrollbar
+                  // requires its controller to hold a single ScrollPosition.
+                  child: PrimaryScrollScope(child: _screenFor(destination)),
                 )
               else
                 const SizedBox.shrink(),
