@@ -102,6 +102,11 @@ class _ListInformationState extends State<ListInformation> {
       ),
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton(
+              // Unique across the hub: the IndexedStack keeps every tab's
+              // Scaffold (and FAB) mounted at once, so a default/shared hero
+              // tag collides with another tab's FAB ("multiple heroes share
+              // the same tag").
+              heroTag: 'clientsAddFab',
               onPressed: _onAddClient,
               tooltip: context.l10n.clients_addClient,
               child: const Icon(Icons.add),
