@@ -5,21 +5,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
-import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
-import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 part 'add_event_controller.freezed.dart';
 
 @freezed
-abstract class AddEventState with _$AddEventState {
+abstract class AddEventState with _$AddEventState implements AppointmentFormFields {
   const factory AddEventState({
     DateTime? selectedDate,
     TimeOfDay? selectedStartTime,
@@ -70,7 +69,8 @@ class AddEventFailed extends AddEventSubmitOutcome {
   final Object error;
 }
 
-class AddEventController extends Notifier<AddEventState> {
+class AddEventController extends Notifier<AddEventState>
+    with AppointmentFormConcerns<AddEventState> {
   AddEventController(this.initialDate);
 
   final DateTime? initialDate;
@@ -79,6 +79,37 @@ class AddEventController extends Notifier<AddEventState> {
   AddEventState build() {
     return AddEventState(selectedDate: initialDate);
   }
+
+  // --- AppointmentFormConcerns adapters ---
+
+  @override
+  AddEventState applyFormUpdate(
+    AddEventState current,
+    AppointmentFormUpdate update,
+  ) {
+    var next = current.copyWith(
+      clientResults: update.clientResults ?? current.clientResults,
+      isSearchingClient: update.isSearchingClient ?? current.isSearchingClient,
+      useCustomAddress: update.useCustomAddress ?? current.useCustomAddress,
+      selectedEmployees: update.selectedEmployees ?? current.selectedEmployees,
+      errors: update.errors ?? current.errors,
+      selectedImages: update.pendingImages ?? current.selectedImages,
+    );
+    if (update.selectedClient != null) {
+      next = next.copyWith(selectedClient: update.selectedClient);
+    } else if (update.clearSelectedClient) {
+      next = next.copyWith(selectedClient: null);
+    }
+    return next;
+  }
+
+  @override
+  int get usedImageCount => state.selectedImages.length;
+
+  @override
+  List<File> get pendingImages => state.selectedImages;
+
+  void removeImage(int index) => removePendingImageAt(index);
 
   void selectDate(DateTime date) {
     state = state.copyWith(
@@ -108,79 +139,8 @@ class AddEventController extends Notifier<AddEventState> {
     );
   }
 
-  Future<void> searchClients(String query) async {
-    final trimmed = query.trim();
-    if (!ClientSearchPolicy.shouldSearch(trimmed)) {
-      state = state.copyWith(clientResults: const [], isSearchingClient: false);
-      return;
-    }
-    state = state.copyWith(isSearchingClient: true);
-    try {
-      final results = await ref
-          .read(clientsRepositoryProvider)
-          .searchClients(trimmed);
-      state = state.copyWith(clientResults: results, isSearchingClient: false);
-    } catch (e, st) {
-      ref.read(loggerProvider).warn('searchClients failed', e, st);
-      state = state.copyWith(isSearchingClient: false);
-    }
-  }
-
-  void selectClient(ClientRecord client) {
-    state = state.copyWith(
-      selectedClient: client,
-      clientResults: const [],
-      useCustomAddress: client.noFixedAddress || client.address.trim().isEmpty,
-      errors: withoutKey(state.errors, 'client'),
-    );
-  }
-
-  void clearClient() {
-    state = state.copyWith(
-      selectedClient: null,
-      clientResults: const [],
-      useCustomAddress: false,
-    );
-  }
-
-  void setUseCustomAddress({required bool value}) {
-    state = state.copyWith(useCustomAddress: value);
-  }
-
   void selectRepeat(RepeatInterval value) {
     state = state.copyWith(repeat: value);
-  }
-
-  void toggleEmployee(EmployeeRecord employee) {
-    final next = [...state.selectedEmployees];
-    final idx = next.indexWhere((e) => e.id == employee.id);
-    if (idx >= 0) {
-      next.removeAt(idx);
-    } else {
-      next.add(employee);
-    }
-    state = state.copyWith(
-      selectedEmployees: next,
-      errors: next.isEmpty
-          ? state.errors
-          : withoutKey(state.errors, 'employees'),
-    );
-  }
-
-  static const int maxImagesPerAppointment = 10;
-
-  void addImages(List<File> files) {
-    final remaining = maxImagesPerAppointment - state.selectedImages.length;
-    if (remaining <= 0) return;
-    final accepted = files.take(remaining).toList();
-    state = state.copyWith(
-      selectedImages: [...state.selectedImages, ...accepted],
-    );
-  }
-
-  void removeImage(int index) {
-    final next = [...state.selectedImages]..removeAt(index);
-    state = state.copyWith(selectedImages: next);
   }
 
   Future<AddEventSubmitOutcome> submit({
@@ -217,6 +177,15 @@ class AddEventController extends Notifier<AddEventState> {
     );
 
     final repo = ref.read(appointmentsRepositoryProvider);
+    // Resolved before the awaits — see searchClients.
+    final logger = ref.read(loggerProvider);
+    final uploader = ref.read(appointmentImageUploadProvider);
+    // Snapshot everything read after an await: state on a disposed notifier
+    // (sheet dismissed mid-submit) is unreadable.
+    final images = state.selectedImages;
+    final client = state.selectedClient!;
+    final selectedEmployees = state.selectedEmployees;
+    final repeat = state.repeat;
 
     // Mark in-flight before the conflict-check round-trip so the Save button
     // disables on the first tap and the guard above blocks a second tap.
@@ -228,14 +197,14 @@ class AddEventController extends Notifier<AddEventState> {
       // disabled and the reentrancy guard rejects every retry.
       if (!forceBusy) {
         final busy = await repo.findBusyEmployees(
-          candidates: state.selectedEmployees,
+          candidates: selectedEmployees,
           start: start,
           end: end,
         );
         if (busy.isNotEmpty) {
           // Hand off to the busy-confirm dialog — not an error — so clear the
           // in-flight flag and let the user decide whether to force.
-          state = state.copyWith(isSubmitting: false);
+          if (ref.mounted) state = state.copyWith(isSubmitting: false);
           return AddEventBusyEmployees(
             busyEmployees: busy,
             start: start,
@@ -245,7 +214,6 @@ class AddEventController extends Notifier<AddEventState> {
       }
 
       final docId = repo.newDocId();
-      final client = state.selectedClient!;
       final appointment = AppointmentRecord(
         id: docId,
         title: title.trim(),
@@ -255,18 +223,18 @@ class AddEventController extends Notifier<AddEventState> {
         clientName: client.displayName,
         clientPhone: client.phone,
         address: address.trim(),
-        employeeIds: state.selectedEmployees.map((e) => e.id).toList(),
-        employeeNames: state.selectedEmployees.map((e) => e.name).toList(),
+        employeeIds: selectedEmployees.map((e) => e.id).toList(),
+        employeeNames: selectedEmployees.map((e) => e.name).toList(),
         notes: notes.trim(),
         materialsNeeded: materialsNeeded.trim(),
-        repeat: state.repeat,
-        seriesId: state.repeat == RepeatInterval.none ? '' : docId,
+        repeat: repeat,
+        seriesId: repeat == RepeatInterval.none ? '' : docId,
       );
 
       // Busy check covers only the first occurrence; repeats are months out.
       // Photos stay on the first visit only.
       final copies = [
-        for (final copyStart in state.repeat.occurrenceStartsAfter(start))
+        for (final copyStart in repeat.occurrenceStartsAfter(start))
           appointment.copyWith(
             id: repo.newDocId(),
             startTime: copyStart,
@@ -284,19 +252,14 @@ class AddEventController extends Notifier<AddEventState> {
         await repo.addAppointments([appointment, ...copies]);
       }
 
-      if (state.selectedImages.isNotEmpty) {
-        ref
-            .read(appointmentImageUploadProvider)
-            .uploadInBackground(
-              appointmentId: docId,
-              newImages: state.selectedImages,
-            );
+      if (images.isNotEmpty) {
+        uploader.uploadInBackground(appointmentId: docId, newImages: images);
       }
 
       return AddEventSubmitted(appointment, futureBookings: copies.length);
     } catch (e, st) {
-      ref.read(loggerProvider).warn('APPT-CREATE submit failed', e, st);
-      state = state.copyWith(isSubmitting: false);
+      logger.warn('APPT-CREATE submit failed', e, st);
+      if (ref.mounted) state = state.copyWith(isSubmitting: false);
       return AddEventFailed(e);
     }
   }

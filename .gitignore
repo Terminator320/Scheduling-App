@@ -1,6 +1,8 @@
 # Miscellaneous
 *.class
 *.lock
+# ...but the pub lockfile is committed so app builds are reproducible.
+!pubspec.lock
 *.log
 *.pyc
 *.swp

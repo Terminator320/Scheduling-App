@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
-import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/clients/application/clients_providers.dart';
+import 'package:scheduling/features/clients/application/client_form_controller.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_form_validator.dart';
 import 'package:scheduling/features/clients/widgets/client_form_state.dart';
@@ -37,8 +36,6 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
   final _countryController = TextEditingController();
   final _postalCodeController = TextEditingController();
   final _aptController = TextEditingController();
-
-  bool _isSaving = false;
 
   @override
   void dispose() {
@@ -95,8 +92,6 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
 
     if (errors.values.any((e) => e != null)) return;
 
-    setState(() => _isSaving = true);
-
     final parsedAddress = AddressParser.splitApt(_addressController.text);
     final street = (parsedAddress?.street ?? _addressController.text).trim();
     final apt = _aptController.text.trim().isNotEmpty
@@ -122,31 +117,33 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
       noFixedAddress: noFixedAddress,
     );
 
-    try {
-      await ref.read(clientsRepositoryProvider).addClient(newClient);
-      ref.read(clientsRefreshProvider.notifier).bump();
-      if (!mounted) return;
-      ref.read(noticeServiceProvider).success(context.l10n.common_clientAdded);
-      Navigator.pop(context);
-    } catch (e, st) {
-      ref.read(loggerProvider).warn('CLI-ADD addClient failed', e, st);
-      if (!mounted) return;
-      setState(() => _isSaving = false);
-      ref
-          .read(noticeServiceProvider)
-          .error(
-            composeErrorNotice(
-              context,
-              intro: context.l10n.error_introAddClient,
-              tag: 'CLI-ADD',
-              error: e,
-            ),
-          );
+    final outcome = await ref
+        .read(clientFormControllerProvider.notifier)
+        .addClient(newClient);
+    if (!mounted) return;
+    switch (outcome) {
+      case ClientSaved():
+        ref
+            .read(noticeServiceProvider)
+            .success(context.l10n.common_clientAdded);
+        Navigator.pop(context);
+      case ClientSaveFailed(:final error):
+        ref
+            .read(noticeServiceProvider)
+            .error(
+              composeErrorNotice(
+                context,
+                intro: context.l10n.error_introAddClient,
+                tag: 'CLI-ADD',
+                error: error,
+              ),
+            );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isSaving = ref.watch(clientFormControllerProvider).isSaving;
     return FormSheetScaffold(
       title: context.l10n.clients_newClient,
       children: [
@@ -200,9 +197,9 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
         ],
         const SizedBox(height: AppSpacing.sp24),
         _AddClientActions(
-          isSaving: _isSaving,
-          onCancel: _isSaving ? null : () => Navigator.pop(context),
-          onSave: _isSaving ? null : _save,
+          isSaving: isSaving,
+          onCancel: isSaving ? null : () => Navigator.pop(context),
+          onSave: isSaving ? null : _save,
         ),
       ],
     );

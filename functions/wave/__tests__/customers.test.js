@@ -399,6 +399,128 @@ describe("upsertCustomer phone/mobile create fallback", () => {
 });
 
 // ---------------------------------------------------------------------------
+// upsertCustomer — crash-retry create idempotency (F2)
+// ---------------------------------------------------------------------------
+
+describe("upsertCustomer crash-retry create idempotency", () => {
+  // A Wave list page whose node matches CLIENT's identity (name + email).
+  const matchingNode = {
+    id: "wave-existing",
+    name: "Acme Corp",
+    firstName: "Jane",
+    lastName: "Doe",
+    email: "jane@acme.com",
+    phone: "",
+    mobile: "",
+    isArchived: false,
+    address: null,
+  };
+
+  const listPage1 = (nodes) => ({
+    business: {
+      customers: {
+        pageInfo: {currentPage: 1, totalPages: 1, totalCount: nodes.length},
+        edges: nodes.map((node) => ({node})),
+      },
+    },
+  });
+
+  test("priorAttempts > 0 + matching Wave customer → linked (patched), " +
+    "NO duplicate create", async () => {
+    const data = {...CLIENT}; // unlinked
+    const ref = clientRef(data);
+    // 1) LIST_CUSTOMERS returns the match, 2) patch it with current fields.
+    const graphql = graphqlSeq(
+        listPage1([matchingNode]),
+        patchOk("wave-existing"),
+    );
+    const result = await upsertCustomer("c1", {
+      db: upsertDb(ref), graphql, businessId: "biz-1", now,
+      priorAttempts: 1,
+    });
+
+    expect(result).toEqual({status: "linked", waveCustomerId: "wave-existing"});
+    expect(graphql).toHaveBeenCalledTimes(2);
+    // First call is the list query (has page vars, no input).
+    expect(graphql.mock.calls[0][1]).toEqual(
+        expect.objectContaining({id: "biz-1", page: 1}));
+    // Second call patches the FOUND id with the doc's current fields.
+    const patchInput = graphql.mock.calls[1][1].input;
+    expect(patchInput.id).toBe("wave-existing");
+    expect(patchInput.name).toBe("Acme Corp");
+    expect(patchInput).not.toHaveProperty("businessId");
+    // Write-back links the found customer.
+    const u = ref.updates[0];
+    expect(u.waveCustomerId).toBe("wave-existing");
+    expect(u["wave.syncState"]).toBe("synced");
+  });
+
+  test("priorAttempts > 0 but no match → create proceeds normally",
+      async () => {
+        const data = {...CLIENT};
+        const ref = clientRef(data);
+        const graphql = graphqlSeq(
+            listPage1([{...matchingNode, email: "someone-else@x.com"}]),
+            createOk("wave-new"),
+        );
+        const result = await upsertCustomer("c1", {
+          db: upsertDb(ref), graphql, businessId: "biz-1", now,
+          priorAttempts: 2,
+        });
+
+        expect(result).toEqual({status: "created", waveCustomerId: "wave-new"});
+        // Call 2 is the create (carries businessId).
+        expect(graphql.mock.calls[1][1].input.businessId).toBe("biz-1");
+      });
+
+  test("archived match is ignored (not linked)", async () => {
+    const data = {...CLIENT};
+    const ref = clientRef(data);
+    const graphql = graphqlSeq(
+        listPage1([{...matchingNode, isArchived: true}]),
+        createOk("wave-new"),
+    );
+    const result = await upsertCustomer("c1", {
+      db: upsertDb(ref), graphql, businessId: "biz-1", now,
+      priorAttempts: 1,
+    });
+    expect(result.status).toBe("created");
+  });
+
+  test("first attempt (priorAttempts 0/absent) → NO Wave search before " +
+    "create", async () => {
+    const data = {...CLIENT};
+    const ref = clientRef(data);
+    const graphql = graphqlSeq(createOk("wave-new"));
+    const result = await upsertCustomer("c1", {
+      db: upsertDb(ref), graphql, businessId: "biz-1", now,
+    });
+
+    expect(result).toEqual({status: "created", waveCustomerId: "wave-new"});
+    expect(graphql).toHaveBeenCalledTimes(1);
+    // The single call is the create, not a list.
+    expect(graphql.mock.calls[0][1].input.businessId).toBe("biz-1");
+  });
+
+  test("retry of a LINKED doc is unaffected (patch path, no search)",
+      async () => {
+        const data = {
+          ...CLIENT,
+          waveCustomerId: "wave-1",
+          wave: {syncState: "synced", lastSyncedHash: "stale"},
+        };
+        const ref = clientRef(data);
+        const graphql = graphqlSeq(patchOk("wave-1"));
+        const result = await upsertCustomer("c1", {
+          db: upsertDb(ref), graphql, businessId: "biz-1", now,
+          priorAttempts: 3,
+        });
+        expect(result).toEqual({status: "patched", waveCustomerId: "wave-1"});
+        expect(graphql).toHaveBeenCalledTimes(1);
+      });
+});
+
+// ---------------------------------------------------------------------------
 // upsertCustomer — transport error propagation
 // ---------------------------------------------------------------------------
 

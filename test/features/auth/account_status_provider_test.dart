@@ -9,6 +9,7 @@ import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 class _MockFirebaseAuth extends Mock implements FirebaseAuth {}
 
@@ -257,6 +258,157 @@ void main() {
         );
       },
     );
+  });
+
+  group('confirmColdStartDeletion (C3: deleted while the app was closed)', () {
+    const emptyData = AsyncData<Map<String, dynamic>>({});
+    const populated = AsyncData<Map<String, dynamic>>({'status': 'active'});
+    const cachedIdentity = EmployeeRecord(
+      id: 'doc1',
+      uid: 'uid1',
+      name: 'George',
+      status: 'active',
+    );
+
+    test(
+      'flags a warm-cache cold start whose users doc is confirmed absent',
+      () async {
+        // Cold start after server-side deletion: splash's cache-hit path
+        // routed straight to the calendar, so the doc's first settled
+        // emission is a clean empty with no populated previous.
+        expect(
+          await confirmColdStartDeletion(
+            isSignedIn: true,
+            resolvedUid: 'uid1',
+            previous: null,
+            docState: emptyData,
+            loadWarmCache: (uid) async => uid == 'uid1' ? cachedIdentity : null,
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'does not flag the fresh-signup window (signed in, no doc yet, '
+      'cold cache)',
+      () async {
+        var cacheReads = 0;
+        expect(
+          await confirmColdStartDeletion(
+            isSignedIn: true,
+            resolvedUid: 'uid1',
+            previous: null,
+            docState: emptyData,
+            loadWarmCache: (uid) async {
+              cacheReads++;
+              return null; // The cache only exists after a completed sign-in.
+            },
+          ),
+          isFalse,
+        );
+        expect(cacheReads, 1);
+      },
+    );
+
+    test('does not flag a transient permission-denied (stream error)', () async {
+      var cacheReads = 0;
+      final denied = AsyncError<Map<String, dynamic>>(
+        Exception('permission-denied'),
+        StackTrace.current,
+      );
+      expect(
+        await confirmColdStartDeletion(
+          isSignedIn: true,
+          resolvedUid: 'uid1',
+          previous: null,
+          docState: denied,
+          loadWarmCache: (uid) async {
+            cacheReads++;
+            return cachedIdentity;
+          },
+        ),
+        isFalse,
+      );
+      // An error emission must never even consult the cache.
+      expect(cacheReads, 0);
+    });
+
+    test('does not flag while the doc is still loading or populated', () async {
+      expect(
+        await confirmColdStartDeletion(
+          isSignedIn: true,
+          resolvedUid: 'uid1',
+          previous: null,
+          docState: const AsyncLoading(),
+          loadWarmCache: (uid) async => cachedIdentity,
+        ),
+        isFalse,
+      );
+      expect(
+        await confirmColdStartDeletion(
+          isSignedIn: true,
+          resolvedUid: 'uid1',
+          previous: null,
+          docState: populated,
+          loadWarmCache: (uid) async => cachedIdentity,
+        ),
+        isFalse,
+      );
+    });
+
+    test(
+      'leaves the populated→empty transition to isAccountDeletionSignal',
+      () async {
+        // The live-deletion listener already handles this shape; the
+        // cold-start confirmation only owns the never-populated case.
+        expect(
+          isColdStartDeletionCandidate(
+            isSignedIn: true,
+            resolvedUid: 'uid1',
+            previous: populated,
+            docState: emptyData,
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test('does not flag when signed out or the uid is unresolved', () async {
+      expect(
+        await confirmColdStartDeletion(
+          isSignedIn: false,
+          resolvedUid: 'uid1',
+          previous: null,
+          docState: emptyData,
+          loadWarmCache: (uid) async => cachedIdentity,
+        ),
+        isFalse,
+      );
+      expect(
+        await confirmColdStartDeletion(
+          isSignedIn: true,
+          resolvedUid: null,
+          previous: null,
+          docState: emptyData,
+          loadWarmCache: (uid) async => cachedIdentity,
+        ),
+        isFalse,
+      );
+    });
+
+    test('fails safe when the cache read itself throws', () async {
+      expect(
+        await confirmColdStartDeletion(
+          isSignedIn: true,
+          resolvedUid: 'uid1',
+          previous: null,
+          docState: emptyData,
+          loadWarmCache: (uid) async => throw Exception('keystore'),
+        ),
+        isFalse,
+      );
+    });
   });
 
   group('userRoleProvider', () {

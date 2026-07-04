@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
-import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/clients/application/clients_providers.dart';
-import 'package:scheduling/features/clients/contact_export_launcher.dart';
+import 'package:scheduling/features/clients/application/client_form_controller.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_form_validator.dart';
 import 'package:scheduling/features/clients/widgets/client_form_state.dart';
@@ -54,10 +52,6 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
   late final TextEditingController _provinceController;
   late final TextEditingController _countryController;
   late final TextEditingController _postalCodeController;
-
-  // Guards against a double-tap firing two concurrent writes (mirrors
-  // AddClientSheet) — the Save button disables while this is true.
-  bool _isSaving = false;
 
   // Prefers the explicit apt field over an apt embedded in the street text.
   String _buildFullAddress() {
@@ -130,7 +124,9 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
   ];
 
   Future<void> _save() async {
-    if (_isSaving) return;
+    // Guards against a double-tap firing two concurrent writes (mirrors
+    // AddClientSheet) — the Save button disables while the save is in flight.
+    if (ref.read(clientFormControllerProvider).isSaving) return;
     final name = _nameController.text.trim();
     final firstName = _firstNameController.text.trim();
     final lastName = _lastNameController.text.trim();
@@ -162,8 +158,6 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
 
     if (errors.values.any((e) => e != null)) return;
 
-    setState(() => _isSaving = true);
-
     // --- Build & persist ---
     // Preserves the Wave projection fields (waveCustomerId / waveSyncState /
     // waveSyncError) by copying the loaded record — they're never edited here
@@ -185,30 +179,27 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
       noFixedAddress: noFixedAddress,
     );
 
-    try {
-      await ref.read(clientsRepositoryProvider).updateClient(updated);
-      ref.read(clientsRefreshProvider.notifier).bump();
-      // Mirror the edit onto the phone contact this client was saved as (no-op
-      // unless it was saved on this device). Best-effort — never blocks save.
-      await updateLinkedPhoneContact(ref, updated);
-      if (!mounted) return;
-      ref.read(noticeServiceProvider).success(context.l10n.common_changesSaved);
-      widget.onSaved(updated);
-    } catch (e, st) {
-      ref.read(loggerProvider).warn('CLI-SAVE updateClient failed', e, st);
-      if (!mounted) return;
-      ref
-          .read(noticeServiceProvider)
-          .error(
-            composeErrorNotice(
-              context,
-              intro: context.l10n.error_introSaveClient,
-              tag: 'CLI-SAVE',
-              error: e,
-            ),
-          );
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
+    final outcome = await ref
+        .read(clientFormControllerProvider.notifier)
+        .updateClient(updated);
+    if (!mounted) return;
+    switch (outcome) {
+      case ClientSaved():
+        ref
+            .read(noticeServiceProvider)
+            .success(context.l10n.common_changesSaved);
+        widget.onSaved(updated);
+      case ClientSaveFailed(:final error):
+        ref
+            .read(noticeServiceProvider)
+            .error(
+              composeErrorNotice(
+                context,
+                intro: context.l10n.error_introSaveClient,
+                tag: 'CLI-SAVE',
+                error: error,
+              ),
+            );
     }
   }
 
@@ -276,7 +267,7 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
         _EditActions(
           onSave: _save,
           onDelete: widget.onDelete,
-          isSaving: _isSaving,
+          isSaving: ref.watch(clientFormControllerProvider).isSaving,
         ),
       ],
     );

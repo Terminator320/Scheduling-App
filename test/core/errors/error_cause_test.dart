@@ -11,32 +11,83 @@ FirebaseException _fb(String code) =>
     FirebaseException(plugin: 'cloud_firestore', code: code);
 
 void main() {
-  group('classifyError', () {
-    test('network-ish Firebase codes map to offline', () {
-      expect(classifyError(_fb('unavailable')), ErrorCause.offline);
-      expect(classifyError(_fb('network-request-failed')), ErrorCause.offline);
-      expect(classifyError(_fb('deadline-exceeded')), ErrorCause.offline);
-    });
+  final l10n = lookupAppLocalizations(const Locale('en'));
 
-    test('permission-denied maps to permissionDenied', () {
+  // Classification is exercised through the public composeErrorNotice — the
+  // classifier itself is private to error_cause.dart.
+  late String Function(Object error) noticeFor;
+
+  Future<void> pumpHost(WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Builder(
+          builder: (context) {
+            noticeFor = (error) => composeErrorNotice(
+              context,
+              intro: 'Intro',
+              tag: 'TAG',
+              error: error,
+            );
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+  }
+
+  String expected(String cause) => l10n.error_noticeWithCause(
+    'Intro',
+    cause,
+    'TAG',
+  );
+
+  group('error classification (via composeErrorNotice)', () {
+    testWidgets('network-ish Firebase codes map to offline', (tester) async {
+      await pumpHost(tester);
+      expect(noticeFor(_fb('unavailable')), expected(l10n.error_causeOffline));
       expect(
-        classifyError(_fb('permission-denied')),
-        ErrorCause.permissionDenied,
+        noticeFor(_fb('network-request-failed')),
+        expected(l10n.error_causeOffline),
+      );
+      expect(
+        noticeFor(_fb('deadline-exceeded')),
+        expected(l10n.error_causeOffline),
       );
     });
 
-    test('not-found maps to notFound', () {
-      expect(classifyError(_fb('not-found')), ErrorCause.notFound);
+    testWidgets('permission-denied maps to permissionDenied', (tester) async {
+      await pumpHost(tester);
+      expect(
+        noticeFor(_fb('permission-denied')),
+        expected(l10n.error_causePermissionDenied),
+      );
     });
 
-    test('socket and timeout exceptions map to offline', () {
-      expect(classifyError(const SocketException('x')), ErrorCause.offline);
-      expect(classifyError(TimeoutException('x')), ErrorCause.offline);
+    testWidgets('not-found maps to notFound', (tester) async {
+      await pumpHost(tester);
+      expect(noticeFor(_fb('not-found')), expected(l10n.error_causeNotFound));
     });
 
-    test('anything else maps to unknown', () {
-      expect(classifyError(Exception('boom')), ErrorCause.unknown);
-      expect(classifyError(_fb('aborted')), ErrorCause.unknown);
+    testWidgets('socket and timeout exceptions map to offline', (
+      tester,
+    ) async {
+      await pumpHost(tester);
+      expect(
+        noticeFor(const SocketException('x')),
+        expected(l10n.error_causeOffline),
+      );
+      expect(
+        noticeFor(TimeoutException('x')),
+        expected(l10n.error_causeOffline),
+      );
+    });
+
+    testWidgets('anything else maps to unknown', (tester) async {
+      await pumpHost(tester);
+      expect(noticeFor(Exception('boom')), expected(l10n.error_causeUnknown));
+      expect(noticeFor(_fb('aborted')), expected(l10n.error_causeUnknown));
     });
   });
 

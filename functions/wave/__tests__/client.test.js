@@ -519,3 +519,84 @@ describe("listBusinesses()", () => {
         expect(Object.keys(sent.variables)).toHaveLength(0);
       });
 });
+
+// ---------------------------------------------------------------------------
+// graphql() — non-2xx response bodies are drained (socket release, F10a)
+// ---------------------------------------------------------------------------
+
+describe("graphql() drains non-2xx response bodies", () => {
+  /**
+   * mockResponse variant that records `.text()` consumption.
+   * @param {number} status HTTP status code.
+   * @param {*} body Value returned by `.json()`.
+   * @param {object=} headers Optional header key→value map.
+   * @return {object} Response double with a jest-tracked `text`.
+   */
+  function drainableResponse(status, body, headers = {}) {
+    return {
+      status,
+      headers: {get: (name) => headers[name.toLowerCase()] || null},
+      json: () => Promise.resolve(body),
+      text: jest.fn(() => Promise.resolve("")),
+    };
+  }
+
+  test("429 retry path consumes the body of each rate-limited response",
+      async () => {
+        const limited = drainableResponse(429, {});
+        const ok = drainableResponse(200, {data: {ok: true}});
+        const fetch = sequencedFetch(limited, ok);
+        await graphql("query { x }", {}, opts(fetch));
+        expect(limited.text).toHaveBeenCalledTimes(1);
+        // The success body is consumed via json(), not text().
+        expect(ok.text).not.toHaveBeenCalled();
+      });
+
+  test("5xx retry path consumes each failed response body", async () => {
+    const err1 = drainableResponse(502, {});
+    const err2 = drainableResponse(503, {});
+    const ok = drainableResponse(200, {data: {}});
+    const fetch = sequencedFetch(err1, err2, ok);
+    await graphql("query { x }", {}, opts(fetch));
+    expect(err1.text).toHaveBeenCalledTimes(1);
+    expect(err2.text).toHaveBeenCalledTimes(1);
+  });
+
+  test("terminal 401 consumes the body before throwing", async () => {
+    const denied = drainableResponse(401, {});
+    const fetch = sequencedFetch(denied);
+    await expect(graphql("query { x }", {}, opts(fetch)))
+        .rejects.toMatchObject({kind: "auth"});
+    expect(denied.text).toHaveBeenCalledTimes(1);
+  });
+
+  test("unexpected non-2xx consumes the body before throwing", async () => {
+    const odd = drainableResponse(302, {});
+    const fetch = sequencedFetch(odd);
+    await expect(graphql("query { x }", {}, opts(fetch)))
+        .rejects.toMatchObject({kind: "unknown"});
+    expect(odd.text).toHaveBeenCalledTimes(1);
+  });
+
+  test("a response double WITHOUT .text still works (no throw)", async () => {
+    // mockResponse (no .text) — the drain must be tolerant.
+    const fetch = sequencedFetch(
+        mockResponse(500, {}),
+        mockResponse(200, {data: {fine: true}}),
+    );
+    const result = await graphql("query { x }", {}, opts(fetch));
+    expect(result).toEqual({fine: true});
+  });
+
+  test("a rejecting .text() is swallowed", async () => {
+    const bad = {
+      status: 500,
+      headers: {get: () => null},
+      json: () => Promise.resolve({}),
+      text: jest.fn(() => Promise.reject(new Error("stream destroyed"))),
+    };
+    const fetch = sequencedFetch(bad, mockResponse(200, {data: {}}));
+    await expect(graphql("query { x }", {}, opts(fetch)))
+        .resolves.toEqual({});
+  });
+});

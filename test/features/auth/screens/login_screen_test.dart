@@ -24,7 +24,10 @@ class _MockUser extends Mock implements User {}
 
 Widget _wrap(AuthService auth, EmployeesRepository repo) {
   return ProviderScope(
-    overrides: [employeesRepositoryProvider.overrideWithValue(repo)],
+    overrides: [
+      authServiceProvider.overrideWithValue(auth),
+      employeesRepositoryProvider.overrideWithValue(repo),
+    ],
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
       toggleTheme: () {},
@@ -35,7 +38,7 @@ Widget _wrap(AuthService auth, EmployeesRepository repo) {
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         theme: lightTheme(),
-        home: Login(authService: auth),
+        home: const Login(),
         onGenerateRoute: (settings) => MaterialPageRoute<void>(
           builder: (_) => Scaffold(
             body: Text(

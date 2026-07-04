@@ -1,12 +1,27 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
+import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+
+/// App-wide [AuthService], wired through the shared providers so tests can
+/// override any collaborator (or this provider itself) instead of the
+/// widgets newing up their own instances.
+final authServiceProvider = Provider<AuthService>(
+  (ref) => AuthService(
+    firebaseAuth: ref.watch(firebaseAuthProvider),
+    employeesRepository: ref.watch(employeesRepositoryProvider),
+    authCache: ref.watch(authCacheProvider),
+    logger: ref.watch(loggerProvider),
+  ),
+);
 
 class AuthService {
   AuthService({
@@ -170,7 +185,15 @@ class AuthService {
     try {
       await _auth.signOut();
     } finally {
-      await _authCache.clear();
+      // Best-effort: a keystore/cipher failure clearing the cache must not
+      // make signOut() itself throw once the Firebase session is gone (C12
+      // relies on signOut completing). A stale entry is uid-checked on the
+      // next launch, so it cannot leak across accounts.
+      try {
+        await _authCache.clear();
+      } catch (e, st) {
+        _logger.warn('signOut: auth cache clear failed', e, st);
+      }
     }
   }
 }

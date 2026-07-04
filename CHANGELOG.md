@@ -10,6 +10,57 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.23.0+40] - 2026-07-02
+### Added
+- **The app works sensibly offline.** A slim banner appears whenever the
+  connection drops, so nobody wonders why a change hasn't shown up yet.
+- **Failed lists can be retried in place.** When clients, history, or a search
+  can't load, the screen now shows a clear message with a Retry button instead
+  of bare error text.
+- **Screen-reader and large-text support took a big step.** Calendar days
+  announce their date and appointment count, every icon-only button has a
+  spoken name, the in-app text size now stacks on top of the phone's
+  accessibility font size, and small tap targets (banner dismiss, EN/FR
+  switch) were enlarged to comfortable sizes.
+
+### Changed
+- **Switching sections no longer restarts them.** Calendar, Clients,
+  Employees, History, and Settings stay alive in the background: no more
+  loading flashes, and the Android back button now returns to the calendar
+  instead of exiting the app. On iPhone, swiping back works on pushed screens.
+- **Date and time pickers match the platform.** Android gets Material pickers,
+  iPhone gets the native-style wheels, and the time wheel follows the device's
+  12/24-hour preference.
+- **Searching clients and history is far cheaper and faster.** Searches share
+  one cached read window, match off the main thread, and results update
+  immediately after adding, editing, or deleting a record.
+- **App start is quicker.** The first frame no longer waits on analytics
+  setup, and the app's fonts ship inside the binary instead of being fetched
+  from the internet on first launch.
+
+### Fixed
+- **Appointment photos can no longer vanish.** Saving an edit while photos
+  were still uploading in the background could silently erase them; photo
+  changes are now applied additively so concurrent activity can't clobber them.
+- **Editing a repeating visit right after opening it no longer drops the
+  original assignees**, and picking the same start and end time now shows a
+  validation message instead of silently booking a 24-hour appointment.
+- **Cancelled visits no longer block staff as "busy"** when booking new work.
+- **Client edits reach existing appointments.** Changing a client's name,
+  phone, or address now updates their future appointments automatically.
+- **Deleted or just-edited records no longer linger in search results.**
+- **Account safety nets.** An account deleted while the app was closed now
+  signs out with a clear message instead of a broken calendar; a rare start-up
+  hiccup can no longer disable the admin role or account-status detection for
+  the whole session.
+- **Wave sync is more robust.** Stuck jobs now surface an error badge instead
+  of staying "pending" forever, temporary Wave outages retry instead of giving
+  up, a crash mid-sync can no longer create duplicate Wave customers, and
+  second address lines (e.g. "Suite 5") survive the round trip.
+- **Security hardening.** Staff-directory reads now require an active account
+  — a merely signed-up account can no longer list employee contact details —
+  and client-side updates can never rewrite a user's account link.
+
 ## [1.22.0+39] - 2026-07-01
 ### Added
 - **On iPhone, the app now feels native.** Confirmation dialogs, the

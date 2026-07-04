@@ -176,13 +176,43 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     ),
   );
 
+  // Pre-normalized search index over the loaded pages, memoized on the pages
+  // identity (PagingState.items rebuilds a fresh list each access, but the
+  // underlying pages list only changes when a page loads). Normalizing ~13
+  // fields per client runs once per data change; each keystroke then only
+  // normalizes the query. Mirrors _employeeSearchIndexProvider and the
+  // history view's _filterOptionsPages memo.
+  List<List<ClientRecord>>? _searchIndexPages;
+  List<ClientSearchEntry> _searchIndex = const [];
+
+  List<ClientSearchEntry> _loadedSearchIndex() {
+    final state = _pagingController.value;
+    if (!identical(state.pages, _searchIndexPages)) {
+      _searchIndexPages = state.pages;
+      _searchIndex = [
+        for (final client in state.items ?? const <ClientRecord>[])
+          ClientSearchPolicy.index(client),
+      ];
+    }
+    return _searchIndex;
+  }
+
   // Instant fallback over the already-loaded pages while the comprehensive
-  // server search resolves. Matches the full field set via the shared policy.
+  // server search resolves. Matches the full field set via the shared policy
+  // (ClientSearchPolicy is the single source of matching truth).
   List<ClientRecord> _localFilter(String query) {
-    final loaded = _pagingController.value.items ?? const <ClientRecord>[];
-    return loaded
-        .where((c) => ClientSearchPolicy.matchesClient(c, query))
-        .toList();
+    final q = ClientSearchPolicy.normalize(query);
+    final qDigits = ClientSearchPolicy.digitsOnly(query);
+    if (q.isEmpty && qDigits.isEmpty) return const [];
+    return [
+      for (final entry in _loadedSearchIndex())
+        if (ClientSearchPolicy.entryMatches(
+          entry,
+          queryText: q,
+          queryDigits: qDigits,
+        ))
+          entry.client,
+    ];
   }
 
   // Comprehensive search runs on the debounced (committed) query and finds
@@ -208,24 +238,30 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
           // instant local fallback is also empty, show an error, not the
           // empty state. Composes without logging (this is a builder).
           error: (e, _) =>
-              local.isEmpty ? _searchError(e) : _resultsList(local),
+              local.isEmpty ? _searchError(e, query) : _resultsList(local),
         );
   }
 
-  Widget _searchError(Object error) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(AppSpacing.sp24),
-      child: Text(
-        composeErrorNotice(
+  // Retry re-runs the failed search by invalidating its provider instance;
+  // this rebuild is already watching it, so it refetches immediately.
+  Widget _searchError(Object error, String query) => _errorState(
+    error,
+    onRetry: () => ref.invalidate(clientSearchProvider(query)),
+  );
+
+  Widget _errorState(Object error, {required VoidCallback onRetry}) =>
+      AppEmptyState(
+        icon: Icons.error_outline,
+        title: context.l10n.error_somethingWentWrong,
+        body: composeErrorNotice(
           context,
           intro: context.l10n.error_introLoadClients,
           tag: 'CLI-LIST',
           error: error,
         ),
-        textAlign: TextAlign.center,
-      ),
-    ),
-  );
+        actionLabel: context.l10n.common_retry,
+        onAction: onRetry,
+      );
 
   Widget _resultsList(List<ClientRecord> items) => ListView.separated(
     padding: const EdgeInsets.only(bottom: AppSpacing.sp16),
@@ -256,16 +292,9 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
                 itemBuilder: (context, client, index) =>
                     _clientTile(client, index),
                 firstPageProgressIndicatorBuilder: (_) => _skeleton(),
-                firstPageErrorIndicatorBuilder: (_) => Center(
-                  child: Text(
-                    composeErrorNotice(
-                      context,
-                      intro: context.l10n.error_introLoadClients,
-                      tag: 'CLI-LIST',
-                      error:
-                          state.error ?? Exception('clients page load failed'),
-                    ),
-                  ),
+                firstPageErrorIndicatorBuilder: (_) => _errorState(
+                  state.error ?? Exception('clients page load failed'),
+                  onRetry: _pagingController.refresh,
                 ),
                 noItemsFoundIndicatorBuilder: (_) => _emptyState(query: ''),
               ),

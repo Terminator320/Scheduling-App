@@ -136,9 +136,22 @@
   "@common_clients": {
     "description": "Clients"
   },
-  "calendar_appointments": "Appointments",
-  "@calendar_appointments": {
-    "description": "Appointments"
+  "calendar_appointmentCount": "{count, plural, =1{1 appointment} other{{count} appointments}}",
+  "@calendar_appointmentCount": {
+    "description": "Appointment count for a day, shown in the calendar app bar and used in day-cell accessibility labels.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_openMenuTooltip": "Open menu",
+  "@calendar_openMenuTooltip": {
+    "description": "Tooltip for the calendar app-bar button that opens the settings drawer."
+  },
+  "calendar_noAppointmentsForDay": "No appointments for this day.",
+  "@calendar_noAppointmentsForDay": {
+    "description": "Empty-state body shown to employees (who cannot create appointments) when the selected day has none."
   },
   "common_language": "Language",
   "@common_language": {
@@ -782,6 +795,10 @@
   "@error_networkErrorCheckYourConnectionAndTryAgain": {
     "description": "Network error. Check your connection and try again."
   },
+  "common_offlineBanner": "Offline — changes will sync when you're back online",
+  "@common_offlineBanner": {
+    "description": "Persistent app-wide banner shown while the device has no network connection."
+  },
   "auth_checkYourInbox": "Check your inbox",
   "@auth_checkYourInbox": {
     "description": "Check your inbox"
@@ -973,6 +990,10 @@
   "error_couldNotLoadAddressDetails": "Could not load address details",
   "@error_couldNotLoadAddressDetails": {
     "description": "Could not load address details"
+  },
+  "common_search": "Search...",
+  "@common_search": {
+    "description": "Generic search field placeholder (default AppSearchBar hint)"
   },
   "common_searchAddress": "Search address",
   "@common_searchAddress": {

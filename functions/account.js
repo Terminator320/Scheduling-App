@@ -58,7 +58,7 @@ const deleteAccount = onCall(
         });
         throw new HttpsError("unauthenticated", "stale-auth");
       }
-      await enforceDurableRateLimit(
+      const limiter = await enforceDurableRateLimit(
           "deleteAccount",
           req.auth.uid,
           AUTH_RATE_MAX,
@@ -67,6 +67,9 @@ const deleteAccount = onCall(
       const uid = req.auth.uid;
       const db = getFirestore();
 
+      // Resolve the users doc BEFORE any destructive step: once the Auth user
+      // is gone the caller can no longer retry, so everything that can fail
+      // recoverably happens first.
       const bridgeSnap = await db
           .collection("usersByUid")
           .doc(uid)
@@ -79,20 +82,9 @@ const deleteAccount = onCall(
             return null;
           });
 
-      const docId = bridgeSnap?.exists ? bridgeSnap.data().docId : null;
+      let docId = bridgeSnap?.exists ? bridgeSnap.data().docId : null;
 
-      if (docId) {
-        try {
-          await db.collection("users").doc(docId).delete();
-        } catch (err) {
-          logger.error("deleteAccount: users doc delete failed", {
-            uid,
-            docId,
-            err: err.message,
-          });
-          throw new HttpsError("internal", "delete-user-doc-failed");
-        }
-      } else {
+      if (!docId) {
         // No bridge row — it may simply be stale/missing while a users doc
         // still exists. Fall back to a direct uid lookup so we don't strand
         // the profile doc (account-deletion completeness for store policy).
@@ -105,22 +97,22 @@ const deleteAccount = onCall(
               .where("uid", "==", uid)
               .limit(1)
               .get();
-          if (!q.empty) {
-            await q.docs[0].ref.delete();
-            logger.info("deleteAccount: deleted users doc via uid fallback", {
-              uid,
-              docId: q.docs[0].id,
-            });
-          }
+          if (!q.empty) docId = q.docs[0].id;
         } catch (err) {
-          logger.error("deleteAccount: uid-fallback delete failed", {
+          logger.warn("deleteAccount: uid-fallback lookup failed", {
             uid,
             err: err.message,
           });
-          throw new HttpsError("internal", "delete-user-doc-failed");
         }
       }
 
+      // Delete the Auth user FIRST. Ordering rationale: if the Firestore doc
+      // were deleted first and the Auth delete then failed, the caller would
+      // be left with a live login and no profile — and because their ID token
+      // still works, a retry storm burns their rate-limit slots against a
+      // half-deleted account. The reverse partial failure (Auth gone, doc
+      // delete fails) is recoverable server-side: the doc is orphaned data an
+      // admin/cleanup can remove, and the caller's account is genuinely gone.
       try {
         await getAuth().deleteUser(uid);
       } catch (err) {
@@ -128,7 +120,27 @@ const deleteAccount = onCall(
           uid,
           err: err.message,
         });
+        // Server-side failure — refund the rate-limit slot (best-effort) so
+        // legitimate retries aren't locked out by our own errors.
+        await limiter.refund();
         throw new HttpsError("internal", "delete-auth-user-failed");
+      }
+
+      if (docId) {
+        try {
+          await db.collection("users").doc(docId).delete();
+        } catch (err) {
+          // The Auth user is already gone (the irreversible, policy-relevant
+          // part). A doc-delete failure only leaves recoverable orphaned data
+          // — log loudly for cleanup but report success to the caller, who
+          // could not retry anyway (their credentials no longer work).
+          logger.error("deleteAccount: users doc delete failed after auth " +
+              "delete — orphaned users doc needs cleanup", {
+            uid,
+            docId,
+            err: err.message,
+          });
+        }
       }
 
       logger.info("deleteAccount: user account deleted", {uid, docId});

@@ -75,9 +75,11 @@ const PURGE_BATCH_SIZE = 200;
 
 /**
  * Best-effort deletion of every Storage object under an appointment's image
- * prefix (`appointments/{id}/images/`). Returns false (and logs) on failure —
- * the Firestore doc is already gone by the time this runs, so a Storage error
- * only orphans bytes and must not be treated as a purge failure.
+ * prefix (`appointments/{id}/images/`). Returns false (and logs) on failure.
+ * Images are deleted BEFORE the Firestore doc: a doc whose image prefix
+ * failed to clear is kept so the next nightly run retries it — deleting the
+ * doc first would orphan the PII bytes forever (nothing would ever point at
+ * them again).
  * @param {string} appointmentId Firestore doc id of the purged appointment.
  * @return {!Promise<boolean>} true when the prefix was cleared.
  */
@@ -101,6 +103,10 @@ const purgeExpiredHistory = onSchedule(
       schedule: "every day 03:00",
       timeZone: "America/Toronto",
       maxInstances: 1,
+      // Image deletion is a Storage round-trip per appointment; a large
+      // backlog would blow the 60s default. 540s gives the nightly run room
+      // to finish (leftovers simply carry to the next night).
+      timeoutSeconds: 540,
     },
     async () => {
       const db = getFirestore();
@@ -110,8 +116,11 @@ const purgeExpiredHistory = onSchedule(
 
       let purged = 0;
       let imageFailures = 0;
-      // Every fetched doc is deleted, so the next page's oldest terminal visit
-      // simply takes its place — a plain limit loop advances without a cursor.
+      // Docs whose images cleared are deleted, so the next page's oldest
+      // terminal visit takes its place — a plain limit loop advances without
+      // a cursor. Docs whose image cleanup FAILED are kept (see below) and
+      // would repeat in the next page, so the loop also stops when a page
+      // makes no progress.
       for (;;) {
         const snap = await col
             .where("status", "in", PURGE_STATUSES)
@@ -121,18 +130,32 @@ const purgeExpiredHistory = onSchedule(
             .get();
         if (snap.empty) break;
 
-        const batch = db.batch();
-        for (const doc of snap.docs) batch.delete(doc.ref);
-        await batch.commit();
-        purged += snap.size;
-
-        // Delete each doc's image prefix concurrently rather than awaiting one
-        // network round-trip at a time across the whole batch.
+        // Delete each doc's image prefix FIRST (concurrently rather than one
+        // network round-trip at a time), then delete only the docs whose
+        // prefix actually cleared. Reversed order would orphan the images'
+        // PII forever on a Storage failure: with the doc gone, no later run
+        // would ever retry that prefix.
         const results = await Promise.all(
             snap.docs.map((doc) => deleteAppointmentImages(doc.id)),
         );
-        imageFailures += results.filter((ok) => !ok).length;
 
+        const batch = db.batch();
+        let deletable = 0;
+        snap.docs.forEach((doc, i) => {
+          if (results[i]) {
+            batch.delete(doc.ref);
+            deletable += 1;
+          } else {
+            imageFailures += 1;
+          }
+        });
+        if (deletable > 0) await batch.commit();
+        purged += deletable;
+
+        // No page progress (every image delete failed) — bail out rather
+        // than refetching the same stuck docs forever; the next nightly run
+        // retries them.
+        if (deletable === 0) break;
         if (snap.size < PURGE_BATCH_SIZE) break;
       }
 

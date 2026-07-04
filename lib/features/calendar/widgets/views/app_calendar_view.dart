@@ -3,6 +3,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 class AppCalendar extends StatelessWidget {
@@ -91,6 +92,17 @@ class AppCalendar extends StatelessWidget {
             Theme.of(context).textTheme.titleMedium ?? const TextStyle(),
       ),
 
+      // Accessibility note: table_calendar wraps every day cell — default
+      // cells AND the todayBuilder/selectedBuilder output below — in its own
+      // `Semantics(label: '<weekday>, <full date>', excludeSemantics: true)`,
+      // and the cell's GestureDetector contributes the tap action. That
+      // built-in wrapper gives all cells a localized full-date label, but it
+      // also swallows any Semantics added inside these builders, so the
+      // selected/today state can't be exposed per cell from here. The
+      // appointment count IS announced: markerBuilder output sits beside the
+      // cell's semantics node in the cell Stack, so its label survives and
+      // merges into the cell's announcement, e.g.
+      // "Saturday, May 16, 2026 \n 2 appointments" (see markerBuilder below).
       calendarBuilders: CalendarBuilders(
         todayBuilder: (context, day, focusedDay) {
           final scheme = Theme.of(context).colorScheme;
@@ -133,22 +145,31 @@ class AppCalendar extends StatelessWidget {
           final appointments = events.cast<AppointmentRecord>();
           final fallback = Theme.of(context).colorScheme.outline;
 
+          // The dots are colour-only, so exclude them from semantics and
+          // announce the day's appointment count instead; the label merges
+          // into the cell's full-date node (see the note on calendarBuilders).
+          // `events` is already loaded for this cell, so the label stays O(1)
+          // per cell.
           return Positioned(
             bottom: 2,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final appt in appointments.take(3))
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 1),
-                    width: 5,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: colorFromMap(appt, employeeColorMap) ?? fallback,
-                      shape: BoxShape.circle,
+            child: Semantics(
+              label: context.l10n.calendar_appointmentCount(events.length),
+              excludeSemantics: true,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final appt in appointments.take(3))
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 1),
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: colorFromMap(appt, employeeColorMap) ?? fallback,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           );
         },

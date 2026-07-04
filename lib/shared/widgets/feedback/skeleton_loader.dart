@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 
-class SkeletonBox extends StatefulWidget {
-  const SkeletonBox({
+class _SkeletonBox extends StatefulWidget {
+  const _SkeletonBox({
     required this.width,
     required this.height,
-    super.key,
     this.borderRadius,
   });
 
@@ -14,23 +13,30 @@ class SkeletonBox extends StatefulWidget {
   final double? borderRadius;
 
   @override
-  State<SkeletonBox> createState() => _SkeletonBoxState();
+  State<_SkeletonBox> createState() => _SkeletonBoxState();
 }
 
-class _SkeletonBoxState extends State<SkeletonBox>
+class _SkeletonBoxState extends State<_SkeletonBox>
     with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _anim;
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: AppDuration.shimmer,
+  );
+  late final Animation<double> _anim = Tween<double>(
+    begin: -2,
+    end: 2,
+  ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.linear));
 
   @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: AppDuration.shimmer)
-      ..repeat();
-    _anim = Tween<double>(
-      begin: -2,
-      end: 2,
-    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.linear));
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Honor reduce-motion (same MediaQuery signal as routes/forms): render the
+    // static base color instead of driving a repeating shimmer.
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _ctrl.stop();
+    } else if (!_ctrl.isAnimating) {
+      _ctrl.repeat();
+    }
   }
 
   @override
@@ -44,15 +50,23 @@ class _SkeletonBoxState extends State<SkeletonBox>
     final scheme = Theme.of(context).colorScheme;
     final base = scheme.surfaceContainerHighest;
     final highlight = scheme.outline;
+    final borderRadius = BorderRadius.circular(
+      widget.borderRadius ?? AppRadius.r8,
+    );
+    if (MediaQuery.disableAnimationsOf(context)) {
+      return Container(
+        width: widget.width,
+        height: widget.height,
+        decoration: BoxDecoration(borderRadius: borderRadius, color: base),
+      );
+    }
     return AnimatedBuilder(
       animation: _anim,
       builder: (_, _) => Container(
         width: widget.width,
         height: widget.height,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(
-            widget.borderRadius ?? AppRadius.r8,
-          ),
+          borderRadius: borderRadius,
           gradient: LinearGradient(
             begin: Alignment(_anim.value - 1, 0),
             end: Alignment(_anim.value + 1, 0),
@@ -94,13 +108,13 @@ class SkeletonAppointmentRow extends StatelessWidget {
               children: [
                 // NOTE: 11/9 heights are shimmer line dimensions, not layout
                 // spacing — kept literal so the placeholder bars stay sized.
-                SkeletonBox(width: 130, height: 11),
+                _SkeletonBox(width: 130, height: 11),
                 SizedBox(height: AppSpacing.sp4),
-                SkeletonBox(width: 90, height: 9),
+                _SkeletonBox(width: 90, height: 9),
               ],
             ),
           ),
-          SkeletonBox(width: 62, height: 20, borderRadius: AppRadius.rFull),
+          _SkeletonBox(width: 62, height: 20, borderRadius: AppRadius.rFull),
         ],
       ),
     );
@@ -125,7 +139,7 @@ class SkeletonListTile extends StatelessWidget {
       ),
       child: const Row(
         children: [
-          SkeletonBox(width: 36, height: 36, borderRadius: AppRadius.rFull),
+          _SkeletonBox(width: 36, height: 36, borderRadius: AppRadius.rFull),
           SizedBox(width: AppSpacing.sp12),
           Expanded(
             child: Column(
@@ -133,13 +147,13 @@ class SkeletonListTile extends StatelessWidget {
               children: [
                 // NOTE: 11/9 heights are shimmer line dimensions, not layout
                 // spacing — kept literal so the placeholder bars stay sized.
-                SkeletonBox(width: 110, height: 11),
+                _SkeletonBox(width: 110, height: 11),
                 SizedBox(height: AppSpacing.sp4),
-                SkeletonBox(width: 75, height: 9),
+                _SkeletonBox(width: 75, height: 9),
               ],
             ),
           ),
-          SkeletonBox(width: 52, height: 20, borderRadius: AppRadius.rFull),
+          _SkeletonBox(width: 52, height: 20, borderRadius: AppRadius.rFull),
         ],
       ),
     );

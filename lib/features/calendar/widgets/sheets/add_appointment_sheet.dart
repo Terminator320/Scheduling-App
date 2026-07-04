@@ -7,8 +7,8 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
+import 'package:scheduling/features/calendar/utils/adaptive_pickers.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
-import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
@@ -70,8 +70,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
 
   Future<void> _pickDate() async {
     final state = ref.read(_provider);
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await showAdaptiveDatePicker(
+      context,
       initialDate: state.selectedDate ?? DateTime.now(),
       firstDate: AppointmentDraftDefaults.datePickerFirstDate,
       lastDate: AppointmentDraftDefaults.datePickerLastDate,
@@ -83,7 +83,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
 
   Future<void> _pickStartTime() async {
     final stateBefore = ref.read(_provider);
-    final picked = await showCupertinoTimePicker(
+    final picked = await showAdaptiveTimePicker(
       context,
       initialTime: stateBefore.selectedStartTime,
     );
@@ -98,7 +98,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
 
   Future<void> _pickEndTime() async {
     final state = ref.read(_provider);
-    final picked = await showCupertinoTimePicker(
+    final picked = await showAdaptiveTimePicker(
       context,
       initialTime: state.selectedEndTime,
     );

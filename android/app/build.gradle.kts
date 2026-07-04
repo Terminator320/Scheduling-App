@@ -118,7 +118,9 @@ dependencies {
     implementation("com.google.firebase:firebase-analytics")
 
     // Performance Monitoring library — version managed by the BoM above.
-    // The Dart firebase_performance plugin owns custom traces; this native
-    // dep + the firebase-perf Gradle plugin enable the automatic traces.
+    // Automatic traces only (app start, screen rendering, network requests):
+    // this native dep + the firebase-perf Gradle plugin provide them with no
+    // Dart-side plugin. The Dart firebase_performance package was removed —
+    // the app defines no custom traces.
     implementation("com.google.firebase:firebase-perf")
 }

@@ -1,25 +1,44 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/clear_text_button.dart';
 
 class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
   const AppSearchBar({
     super.key,
     this.onChanged,
-    this.hintText = 'Search...',
+    this.hintText,
     this.controller,
     this.focusNode,
+    this.textScaler = TextScaler.noScaling,
   });
 
-  static const double preferredHeight = 60;
+  /// Vertical margins around the field — fixed chrome that doesn't grow with
+  /// the user's text size.
+  static const double _verticalMargins = AppSpacing.sp8 * 2;
+
+  /// The field itself (text + content padding + border) at text scale 1.0.
+  static const double _fieldHeight = 44;
+
+  static const double preferredHeight = _verticalMargins + _fieldHeight;
 
   final ValueChanged<String>? onChanged;
-  final String hintText;
+
+  /// Placeholder shown in the field; defaults to the localized generic
+  /// "Search..." when null.
+  final String? hintText;
   final TextEditingController? controller;
   final FocusNode? focusNode;
 
+  /// Pass `MediaQuery.textScalerOf(context)` from the call site so the
+  /// app-bar bottom slot reserves enough height at large text sizes instead
+  /// of clipping the field ([preferredSize] has no BuildContext to read the
+  /// scale itself).
+  final TextScaler textScaler;
+
   @override
-  Size get preferredSize => const Size.fromHeight(preferredHeight);
+  Size get preferredSize =>
+      Size.fromHeight(_verticalMargins + textScaler.scale(_fieldHeight));
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +56,7 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
           color: scheme.onSurface,
         ),
         decoration: InputDecoration(
-          hintText: hintText,
+          hintText: hintText ?? context.l10n.common_search,
           prefixIcon: Icon(
             Icons.search,
             size: 18,

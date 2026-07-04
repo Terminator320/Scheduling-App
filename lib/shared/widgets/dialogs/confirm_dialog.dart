@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -67,5 +70,10 @@ Future<bool> showConfirmDialog(
       },
     );
   }
-  return result ?? false;
+  final confirmed = result ?? false;
+  // Central haptic for every destructive confirmation — matches the buzz the
+  // color swatches and notices already give, without scattering
+  // HapticFeedback calls across features.
+  if (confirmed && destructive) unawaited(HapticFeedback.mediumImpact());
+  return confirmed;
 }

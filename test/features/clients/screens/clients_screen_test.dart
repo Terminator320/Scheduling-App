@@ -100,4 +100,31 @@ void main() {
     expect(find.textContaining("Couldn't load clients"), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('first-page error offers a Retry that reloads the list', (
+    tester,
+  ) async {
+    var calls = 0;
+    when(
+      () => repo.fetchClientsPage(
+        after: any(named: 'after'),
+        limit: any(named: 'limit'),
+      ),
+    ).thenAnswer((_) async {
+      if (calls++ == 0) throw Exception('boom');
+      return const [_alice];
+    });
+
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining("Couldn't load clients"), findsOneWidget);
+
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Alice'), findsWidgets);
+    expect(find.textContaining("Couldn't load clients"), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }

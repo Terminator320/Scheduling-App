@@ -1159,6 +1159,40 @@ describe("drainQueue reclaim pass", () => {
         expect(meta.jobId).toBe("customerUpsert__c1");
       });
 
+  test("inflight job with a non-finite claimedAt (missing/corrupt) IS " +
+    "reclaimed instead of being skipped forever", async () => {
+    const staleJob = {
+      id: "customerUpsert__c9",
+      data: {
+        type: "customerUpsert",
+        refPath: "clients/c9",
+        status: "inflight",
+        attempts: 0,
+        // A claimedAt that resolves to NaN (e.g. corrupt / sentinel value).
+        claimedAt: {bogus: true},
+        nextAttemptAt: new Date("2024-01-01"),
+        lastError: null,
+        idempotencyKey: "customerUpsert__c9",
+      },
+    };
+    const {db, staleRefs} = reclaimDb([staleJob]);
+    const logger = fakeLogger();
+
+    const summary = await drainQueue({
+      db, now: nowFn, logger,
+      upsertCustomer: jest.fn(),
+      maxAttempts: 5,
+      backoffFn: fixedBackoff(),
+      leaseMs: TEST_LEASE_MS,
+    });
+
+    expect(summary.reclaimed).toBe(1);
+    const lastUpdate =
+      staleRefs[0].updates[staleRefs[0].updates.length - 1];
+    expect(lastUpdate.status).toBe("queued");
+    expect(lastUpdate.attempts).toBe(1);
+  });
+
   test("stale job re-enqueued before the reclaim write is NOT clobbered",
       async () => {
         // The reclaim query returns this job as a stale inflight, but by the
@@ -1284,6 +1318,442 @@ describe("drainQueue non-retryable errors (additional)", () => {
     expect(logMeta.errorKind).toBe("unknown");
     // Must not echo the raw error message.
     expect(JSON.stringify(logMeta)).not.toContain("something unrecognised");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// enqueueCustomerUpsert — batch staging (waveUpsertCustomer atomicity)
+// ---------------------------------------------------------------------------
+
+describe("enqueueCustomerUpsert batch staging", () => {
+  test("stages set(merge) on the provided batch instead of writing", async () => {
+    const {db, ref} = enqueueDb("customerUpsert__c1");
+    const batch = {set: jest.fn()};
+    const jobId = await enqueueCustomerUpsert("c1", {
+      db, now, batch, payloadHash: "h1",
+    });
+
+    expect(jobId).toBe("customerUpsert__c1");
+    // The direct write path must NOT run — the caller owns the commit.
+    expect(ref.set).not.toHaveBeenCalled();
+    expect(batch.set).toHaveBeenCalledTimes(1);
+    const [batchRef, data, opts] = batch.set.mock.calls[0];
+    expect(batchRef).toBe(ref);
+    expect(opts).toEqual({merge: true});
+    expect(data).toEqual(expect.objectContaining({
+      type: "customerUpsert",
+      refPath: "clients/c1",
+      status: "queued",
+      attempts: 0,
+      lastError: null,
+      payloadHash: "h1",
+    }));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// drainQueue — wall-clock deadline budget
+// ---------------------------------------------------------------------------
+
+describe("drainQueue deadline budget", () => {
+  const makeJob = (i) => ({
+    id: `customerUpsert__c${i}`,
+    data: {
+      type: "customerUpsert",
+      refPath: `clients/c${i}`,
+      status: "queued",
+      attempts: 0,
+      nextAttemptAt: new Date("2024-01-01"),
+      lastError: null,
+      idempotencyKey: `customerUpsert__c${i}`,
+    },
+  });
+
+  test("stops claiming new jobs once deadlineMs passes; in-flight job " +
+    "still gets its outcome", async () => {
+    const jobs = [makeJob(1), makeJob(2), makeJob(3)];
+    const {db, refs} = drainDb(jobs);
+    // The dispatch of job 1 advances the clock past the deadline, so job 2's
+    // pre-claim check must stop the drain.
+    let clock = 0;
+    const wallClock = jest.fn(() => clock);
+    const mockUpsert = jest.fn(() => {
+      clock = 200; // "the Wave call took a long time"
+      return Promise.resolve({status: "patched", waveCustomerId: "wv-1"});
+    });
+    const logger = fakeLogger();
+
+    const summary = await drainQueue({
+      db, now, logger,
+      upsertCustomer: mockUpsert,
+      backoffFn: fixedBackoff(),
+      wallClock,
+      deadlineMs: 150, // job1's check (100) passes; job2's (200) does not.
+    });
+
+    // Only the first job was claimed and dispatched.
+    expect(mockUpsert).toHaveBeenCalledTimes(1);
+    expect(summary.processed).toBe(1);
+    expect(summary.done).toBe(1);
+
+    // Job 1 got a clean outcome; jobs 2 and 3 were left untouched (queued).
+    const lastUpdate = refs[0].updates[refs[0].updates.length - 1];
+    expect(lastUpdate.status).toBe("done");
+    expect(refs[1].updates).toHaveLength(0);
+    expect(refs[2].updates).toHaveLength(0);
+
+    // The early stop is logged.
+    expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("deadline"),
+        expect.objectContaining({deadlineMs: 150}),
+    );
+  });
+
+  test("no deadlineMs → drains everything (default Infinity)", async () => {
+    const jobs = [makeJob(1), makeJob(2)];
+    const {db} = drainDb(jobs);
+    const mockUpsert = jest.fn(() => Promise.resolve({status: "done"}));
+
+    const summary = await drainQueue({
+      db, now, logger: fakeLogger(),
+      upsertCustomer: mockUpsert,
+      backoffFn: fixedBackoff(),
+    });
+
+    expect(mockUpsert).toHaveBeenCalledTimes(2);
+    expect(summary.processed).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// drainQueue — per-claim claimedAt stamping
+// ---------------------------------------------------------------------------
+
+describe("drainQueue per-claim claimedAt stamping", () => {
+  test("each claim stamps its OWN clock reading, not the drain-start value",
+      async () => {
+        const jobs = [1, 2].map((i) => ({
+          id: `customerUpsert__c${i}`,
+          data: {
+            type: "customerUpsert",
+            refPath: `clients/c${i}`,
+            status: "queued",
+            attempts: 0,
+            nextAttemptAt: new Date("2024-01-01"),
+            lastError: null,
+            idempotencyKey: `customerUpsert__c${i}`,
+          },
+        }));
+        const {db} = drainDb(jobs);
+
+        // now() advances 1s per call: call 0 = drain-start nowValue, later
+        // calls = per-claim stamps.
+        const BASE = new Date("2024-06-01T10:00:00Z").getTime();
+        let call = 0;
+        const nowFn = jest.fn(() => new Date(BASE + (call++) * 1000));
+
+        const claimWrites = [];
+        db.runTransaction = jest.fn(async (fn) => {
+          const txn = {
+            get: jest.fn((ref) =>
+              Promise.resolve(snap(ref.id, {...ref._data}, ref))),
+            update: jest.fn((ref, fields) => {
+              if (fields.status === "inflight") {
+                claimWrites.push(fields);
+              }
+              ref.updates.push(fields);
+              Object.assign(ref._data, fields);
+            }),
+          };
+          return fn(txn);
+        });
+
+        const summary = await drainQueue({
+          db, now: nowFn, logger: fakeLogger(),
+          upsertCustomer: jest.fn(() => Promise.resolve({status: "done"})),
+          backoffFn: fixedBackoff(),
+        });
+
+        expect(claimWrites).toHaveLength(2);
+        const drainStartMs = BASE; // first now() call
+        const stamp1 = claimWrites[0].claimedAt.getTime();
+        const stamp2 = claimWrites[1].claimedAt.getTime();
+        // Stamps are actual claim times — strictly after drain start and
+        // distinct per job.
+        expect(stamp1).toBeGreaterThan(drainStartMs);
+        expect(stamp2).toBeGreaterThan(stamp1);
+
+        // Outcomes still commit (the claim-stamp guard matches itself).
+        expect(summary.done).toBe(2);
+      });
+});
+
+// ---------------------------------------------------------------------------
+// drainQueue — graphql retryability heuristics (F7)
+// ---------------------------------------------------------------------------
+
+describe("drainQueue graphql retryability", () => {
+  const makeJob = () => ({
+    id: "customerUpsert__c1",
+    data: {
+      type: "customerUpsert",
+      refPath: "clients/c1",
+      status: "queued",
+      attempts: 0,
+      nextAttemptAt: new Date("2024-01-01"),
+      lastError: null,
+      idempotencyKey: "customerUpsert__c1",
+    },
+  });
+
+  test("graphql error with 'Internal server error' message → retried",
+      async () => {
+        const {db, refs} = drainDb([makeJob()]);
+        const err = new WaveApiError(
+            "graphql",
+            "Wave GraphQL errors: Internal server error",
+            [{message: "Internal server error"}],
+        );
+        const mockUpsert = jest.fn(() => Promise.reject(err));
+
+        const summary = await drainQueue({
+          db, now, logger: fakeLogger(),
+          upsertCustomer: mockUpsert,
+          maxAttempts: 5,
+          backoffFn: fixedBackoff(),
+        });
+
+        expect(summary.retried).toBe(1);
+        expect(summary.dead).toBe(0);
+        const finalUpdate = refs[0].updates[refs[0].updates.length - 1];
+        expect(finalUpdate.status).toBe("queued");
+      });
+
+  test("graphql error with transient extensions.code → retried", async () => {
+    const {db} = drainDb([makeJob()]);
+    const err = new WaveApiError(
+        "graphql",
+        "Wave GraphQL errors: something went wrong",
+        [{message: "something went wrong",
+          extensions: {code: "UNAVAILABLE"}}],
+    );
+    const mockUpsert = jest.fn(() => Promise.reject(err));
+
+    const summary = await drainQueue({
+      db, now, logger: fakeLogger(),
+      upsertCustomer: mockUpsert,
+      maxAttempts: 5,
+      backoffFn: fixedBackoff(),
+    });
+
+    expect(summary.retried).toBe(1);
+    expect(summary.dead).toBe(0);
+  });
+
+  test("graphql timeout message → retried", async () => {
+    const {db} = drainDb([makeJob()]);
+    const err = new WaveApiError(
+        "graphql",
+        "Wave GraphQL errors: upstream request timed out",
+        [{message: "upstream request timed out"}],
+    );
+    const mockUpsert = jest.fn(() => Promise.reject(err));
+
+    const summary = await drainQueue({
+      db, now, logger: fakeLogger(),
+      upsertCustomer: mockUpsert,
+      maxAttempts: 5,
+      backoffFn: fixedBackoff(),
+    });
+
+    expect(summary.retried).toBe(1);
+  });
+
+  test("genuine graphql validation/query error → still dead immediately",
+      async () => {
+        const {db, refs} = drainDb([makeJob()]);
+        const err = new WaveApiError(
+            "graphql",
+            "Wave GraphQL errors: Variable \"$input\" got invalid value",
+            [{message: "Variable \"$input\" got invalid value",
+              extensions: {code: "GRAPHQL_VALIDATION_FAILED"}}],
+        );
+        const mockUpsert = jest.fn(() => Promise.reject(err));
+        const logger = fakeLogger();
+
+        const summary = await drainQueue({
+          db, now, logger,
+          upsertCustomer: mockUpsert,
+          maxAttempts: 5,
+          backoffFn: fixedBackoff(),
+        });
+
+        expect(summary.dead).toBe(1);
+        expect(summary.retried).toBe(0);
+        const finalUpdate = refs[0].updates[refs[0].updates.length - 1];
+        expect(finalUpdate.status).toBe("dead");
+      });
+});
+
+// ---------------------------------------------------------------------------
+// drainQueue — dead-letter writes the client doc's sync error (F4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extends drainDb with a `clients` collection whose doc(id).update is
+ * recorded, so the dead-letter path's best-effort client write is assertable.
+ * @param {!Array<{id:string, data:Object}>} jobs Queue jobs.
+ * @param {Object=} opts `clientUpdateFails` makes the client update reject.
+ * @return {{db:!Object, refs:!Array, clientUpdates:!Array}}
+ */
+function drainDbWithClients(jobs, opts = {}) {
+  const {db, refs} = drainDb(jobs);
+  const clientUpdates = [];
+  const origCollection = db.collection.bind(db);
+  db.collection = jest.fn((col) => {
+    if (col === "clients") {
+      return {
+        doc: jest.fn((id) => ({
+          update: jest.fn((fields) => {
+            if (opts.clientUpdateFails) {
+              return Promise.reject(new Error("client update failed"));
+            }
+            clientUpdates.push({id, fields});
+            return Promise.resolve();
+          }),
+        })),
+      };
+    }
+    return origCollection(col);
+  });
+  return {db, refs, clientUpdates};
+}
+
+describe("drainQueue dead-letter client doc error write", () => {
+  const makeJob = () => ({
+    id: "customerUpsert__c1",
+    data: {
+      type: "customerUpsert",
+      refPath: "clients/c1",
+      status: "queued",
+      attempts: 0,
+      nextAttemptAt: new Date("2024-01-01"),
+      lastError: null,
+      idempotencyKey: "customerUpsert__c1",
+    },
+  });
+
+  test("dead-lettered job flags the client doc 'error' with a sanitized " +
+    "message", async () => {
+    const {db, clientUpdates} = drainDbWithClients([makeJob()]);
+    const authErr = new WaveApiError("auth", "token for jane@x.com revoked");
+    const mockUpsert = jest.fn(() => Promise.reject(authErr));
+
+    const summary = await drainQueue({
+      db, now, logger: fakeLogger(),
+      upsertCustomer: mockUpsert,
+      maxAttempts: 5,
+      backoffFn: fixedBackoff(),
+    });
+
+    expect(summary.dead).toBe(1);
+    expect(clientUpdates).toHaveLength(1);
+    expect(clientUpdates[0].id).toBe("c1");
+    expect(clientUpdates[0].fields["wave.syncState"]).toBe("error");
+    const msg = clientUpdates[0].fields["wave.syncError"];
+    expect(typeof msg).toBe("string");
+    // Sanitized: never the raw Wave message / PII.
+    expect(msg).not.toContain("jane@x.com");
+    expect(msg).not.toContain("revoked");
+  });
+
+  test("WaveValidationError dead-letter does NOT double-write (customers.js " +
+    "already wrote a richer syncError)", async () => {
+    const {db, clientUpdates} = drainDbWithClients([makeJob()]);
+    const validationErr = new WaveValidationError(
+        [{code: "INVALID_EMAIL", message: "bad", path: ["email"]}],
+    );
+    const mockUpsert = jest.fn(() => Promise.reject(validationErr));
+
+    const summary = await drainQueue({
+      db, now, logger: fakeLogger(),
+      upsertCustomer: mockUpsert,
+      maxAttempts: 5,
+      backoffFn: fixedBackoff(),
+    });
+
+    expect(summary.dead).toBe(1);
+    expect(clientUpdates).toHaveLength(0);
+  });
+
+  test("client doc write failure is swallowed (job still dead-letters)",
+      async () => {
+        const {db, refs} = drainDbWithClients([makeJob()],
+            {clientUpdateFails: true});
+        const authErr = new WaveApiError("auth", "revoked");
+        const mockUpsert = jest.fn(() => Promise.reject(authErr));
+        const logger = fakeLogger();
+
+        const summary = await drainQueue({
+          db, now, logger,
+          upsertCustomer: mockUpsert,
+          maxAttempts: 5,
+          backoffFn: fixedBackoff(),
+        });
+
+        expect(summary.dead).toBe(1);
+        const finalUpdate = refs[0].updates[refs[0].updates.length - 1];
+        expect(finalUpdate.status).toBe("dead");
+        expect(logger.warn).toHaveBeenCalled();
+      });
+
+  test("retryable failure does NOT touch the client doc", async () => {
+    const {db, clientUpdates} = drainDbWithClients([makeJob()]);
+    const netErr = new WaveApiError("network", "transient");
+    const mockUpsert = jest.fn(() => Promise.reject(netErr));
+
+    const summary = await drainQueue({
+      db, now, logger: fakeLogger(),
+      upsertCustomer: mockUpsert,
+      maxAttempts: 5,
+      backoffFn: fixedBackoff(),
+    });
+
+    expect(summary.retried).toBe(1);
+    expect(clientUpdates).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// drainQueue — priorAttempts forwarded to the upsert (F2 support)
+// ---------------------------------------------------------------------------
+
+describe("drainQueue forwards priorAttempts", () => {
+  test("dispatch passes the job's attempts as priorAttempts", async () => {
+    const job = {
+      id: "customerUpsert__c1",
+      data: {
+        type: "customerUpsert",
+        refPath: "clients/c1",
+        status: "queued",
+        attempts: 2,
+        nextAttemptAt: new Date("2024-01-01"),
+        lastError: "WaveApiError(network)",
+        idempotencyKey: "customerUpsert__c1",
+      },
+    };
+    const {db} = drainDb([job]);
+    const mockUpsert = jest.fn(() => Promise.resolve({status: "done"}));
+
+    await drainQueue({
+      db, now, logger: fakeLogger(),
+      upsertCustomer: mockUpsert,
+      backoffFn: fixedBackoff(),
+    });
+
+    expect(mockUpsert).toHaveBeenCalledWith("c1", expect.objectContaining({
+      priorAttempts: 2,
+    }));
   });
 });
 
