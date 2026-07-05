@@ -10,6 +10,40 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.23.1+41] - 2026-07-05
+### Changed
+- **Moving between sections feels smoother.** Switching tabs and typing with the
+  keyboard open no longer cause background screens to redraw, so the app stays
+  responsive.
+
+### Fixed
+- **The month calendar no longer crowds out the day's appointments.** On smaller
+  phones — or with the keyboard open, large text turned on, or in split-screen —
+  the month grid now sizes itself to the space available instead of pushing the
+  appointment list off the bottom.
+- **No more crashes on tablets, in landscape, or when moving between sections.**
+  A scrolling error that could blank the screen when two lists were visible at
+  once (calendar split view, client/appointment side-by-side panes, or a kept-
+  alive tab) is resolved, and the add buttons on the Clients and Employees tabs
+  no longer conflict with each other.
+- **Marking a job done or cancelling it now tells you if it fails.** Previously a
+  failed status change was silent; you now get a clear message with the reason.
+- **Adding a client on a tablet no longer jams the next add or edit.** The add
+  form's Save button could stay stuck after a client was added in the two-pane
+  layout; it now resets correctly.
+- **Creating an account is more reliable.** A hiccup reading your profile right
+  after sign-up no longer leaves you stuck with no message — you're guided to
+  sign in normally, which completes the setup.
+- **Client search in the appointment form no longer flashes stale results.** A
+  slow earlier search can no longer overwrite the results of what you just typed.
+- **Search fields no longer get cut off at large text sizes,** and the clear
+  button on the appointment client picker now has a spoken label for screen
+  readers.
+
+### Security
+- **Employee invitations are rate-limited.** Invite creation is now capped per
+  admin, a safeguard against a compromised admin session mass-creating invites.
+
 ## [1.23.0+40] - 2026-07-02
 ### Added
 - **The app works sensibly offline.** A slim banner appears whenever the

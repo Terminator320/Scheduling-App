@@ -117,6 +117,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
 
   @override
   Widget build(BuildContext context) {
+    _refreshScreenCache();
     return HubShellScope(
       shell: this,
       current: _current,
@@ -161,19 +162,26 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
   /// rebuild. Invalidated when the identity args change, which mirrors when
   /// [_screenFor] would produce different widgets.
   final Map<AdaptiveDestination, Widget> _screenCache = {};
-  String _screenCacheIdentity = '';
+  ({bool isAdmin, String employeeId, String userName, String userEmail})?
+  _screenCacheIdentity;
 
-  Widget _cachedScreenFor(AdaptiveDestination destination) {
-    final identity = '$_isAdmin|$_employeeId|$_userName|$_userEmail';
+  /// Drops the cache once per build when the identity args change (records
+  /// compare structurally), so `_cachedScreenFor` stays a plain lookup.
+  void _refreshScreenCache() {
+    final identity = (
+      isAdmin: _isAdmin,
+      employeeId: _employeeId,
+      userName: _userName,
+      userEmail: _userEmail,
+    );
     if (identity != _screenCacheIdentity) {
       _screenCache.clear();
       _screenCacheIdentity = identity;
     }
-    return _screenCache.putIfAbsent(
-      destination,
-      () => _screenFor(destination),
-    );
   }
+
+  Widget _cachedScreenFor(AdaptiveDestination destination) =>
+      _screenCache.putIfAbsent(destination, () => _screenFor(destination));
 
   Widget _screenFor(AdaptiveDestination destination) {
     final builder = widget.screenBuilder;

@@ -18,7 +18,7 @@ lib/
 │   ├── errors/                      Base Failure class + error_cause.dart (sanitized cause classifier + tagged notice composer)
 │   ├── images/                      Image picker (native resize/compress at pick time) + Firebase Storage upload service
 │   ├── launchers/                   phone_call_launcher.dart (launchPhoneCall — shared tel: dialer; parallels AddressMapLauncher / EmailComposeLauncher)
-│   ├── layout/                      Responsive shell — AdaptiveShell (nav rail), MasterDetailScaffold, breakpoints (context.isWide / isLandscape / isSplitLayout for the split chrome; isCompact / isNarrowWidth for small-phone & large-text row folding)
+│   ├── layout/                      Responsive shell — AdaptiveShell (nav rail), MasterDetailScaffold, PrimaryScrollScope (per-pane PrimaryScrollController so simultaneously-alive primary scrollables don't share one — the app-wide Scrollbar needs one ScrollPosition per controller), breakpoints (context.isWide / isLandscape / isSplitLayout for the split chrome; isCompact / isNarrowWidth for small-phone & large-text row folding)
 │   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics)
 │   ├── notices/                     In-app toast system: AppNotice types, NoticeService (stream), NoticeListener (widget)
 │   ├── permissions/                 MediaPermissionService — camera permission gate (permission_handler)
@@ -40,7 +40,8 @@ lib/
 │   └── branding/                    brand_logo (BrandMark — the plumber-mascot app logo from assets/images/icon.png + the brandName const; pass decorative:true where a visible wordmark sits beside it)
 │
 ├── routes/
-│   └── app_routes.dart              Single onGenerateRoute; typed arg classes per route; page transitions
+│   ├── app_routes.dart              Single onGenerateRoute; typed arg classes per route; page transitions
+│   └── hub_shell.dart               HubShell — persistent IndexedStack of the five always-alive tabs (calendar/clients/employees/history/settings); switching tabs keeps state, TickerMode mutes hidden tabs, each tab scoped under its own PrimaryScrollScope + unique FAB heroTag
 │
 ├── l10n/
 │   ├── app_en.arb                   English strings (source of truth — edit this)
@@ -307,6 +308,18 @@ day and filters by year/employee via the reusable `HistoryFilterBar`
 (`clients/widgets/sections/`). It is no longer a `ClientsMode` of the clients
 screen.
 
+The five primary destinations live in one persistent `HubShell`
+(`routes/hub_shell.dart`) — an `IndexedStack` that keeps every tab mounted so
+switching is instant and state survives, with the Android back button returning
+to the calendar tab instead of exiting. Because all tabs are alive at once under
+a single route (which offers one `PrimaryScrollController`), each tab — and each
+pane of the calendar/master-detail splits — is wrapped in `PrimaryScrollScope`
+so their always-attached primary scroll views don't pile onto one controller
+(the app-wide `Scrollbar` throws with more than one `ScrollPosition`), and each
+tab's FAB carries a unique `heroTag` (a shared tag collides across the
+simultaneously-mounted Scaffolds). Hidden tabs pin their `viewInsets` to zero so
+the keyboard animation doesn't rebuild every kept-alive Scaffold per frame.
+
 A second, **independent** axis handles small phones and large text. `Breakpoints`
 also defines `compactWidth` (360), `compactTextScale` (1.4), and
 `shortViewportHeight` (700), surfaced as `context.isCompact`
@@ -341,7 +354,7 @@ These must not be broken:
 
 6. **All Firestore writes go through service/repository classes.** Never call `FirebaseFirestore.instance` from UI widgets.
 
-7. **Cloud Function endpoints are rate-limited and input-validated.** Auth-sensitive callables (`deleteAccount`, `redeemSignupCode`) cap callers at 5 attempts / 15 min via the Firestore-backed `enforceDurableRateLimit` (counters in `rateLimits/*`, denied to all clients). Every callable runs `assertPayloadShape` (rejects non-object, >4 KB, or unexpected-key payloads) and validates string fields (trim, length cap, control-char reject) before use. These shared guards live in `functions/security.js`; `functions/index.js` is thin wiring that re-exports each function from its domain module.
+7. **Cloud Function endpoints are rate-limited and input-validated.** Auth-sensitive callables (`deleteAccount`, `redeemSignupCode`) cap callers at 5 attempts / 15 min via the Firestore-backed `enforceDurableRateLimit` (counters in `rateLimits/*`, denied to all clients); the admin-only `createEmployeeInvite` is capped per admin uid (20 / hour) as defense-in-depth against a compromised session mass-minting invites. Every callable runs `assertPayloadShape` (rejects non-object, >4 KB, or unexpected-key payloads) and validates string fields (trim, length cap, control-char reject) before use. These shared guards live in `functions/security.js`; `functions/index.js` is thin wiring that re-exports each function from its domain module.
 
 ---
 
@@ -499,7 +512,8 @@ clients/{docId}
   businessName                 LEGACY read-only — pre-Wave-reshape docs stored a
                        business client's name here; `ClientRecord.fromMap` falls
                        back `name ← businessName`, but `toMap` NEVER writes it
-                       (kept until a one-time backfill copies it into `name`)
+                       (the read fallback is retained; the one-time
+                       `backfillLegacyClientNames` function has been removed)
   waveCustomerId, wave         Wave projection — read-only, written ONLY by Cloud
                        Functions (Admin SDK). The app reads `wave.syncState` /
                        `wave.syncError` for the per-client sync badge; `toMap`
@@ -566,7 +580,7 @@ authoritative; line numbers drift.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (608 test cases as of 2026-07-01). `flutter analyze` is
+Run: `flutter test` (716 test cases as of 2026-07-05). `flutter analyze` is
 clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.
