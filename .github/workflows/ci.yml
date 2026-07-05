@@ -14,6 +14,9 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
+          # Pinned so a new "latest stable" release can't break CI on an
+          # unrelated push. Bump deliberately; keep >= pubspec's flutter floor.
+          flutter-version: 3.44.1
           channel: stable
           cache: true
 

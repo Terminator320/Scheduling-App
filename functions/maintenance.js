@@ -1,7 +1,7 @@
 const {onObjectFinalized} = require("firebase-functions/v2/storage");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {getStorage} = require("firebase-admin/storage");
-const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getFirestore} = require("firebase-admin/firestore");
 const logger = require("firebase-functions/logger");
 
 // Validates magic bytes of newly uploaded appointment images and deletes any
@@ -168,69 +168,7 @@ const purgeExpiredHistory = onSchedule(
     },
 );
 
-// ----- One-time legacy client-name backfill ---------------------------------
-//
-// Pre-Wave-reshape "business-only" client docs stored their label under
-// `businessName` with an empty `name`. The clients list now orders by `name`
-// (alphabetical), so those docs sort to the very top with a blank key (and a
-// doc missing `name` entirely would be excluded). This idempotent migration
-// copies `businessName` -> `name` wherever `name` is empty, records a guard
-// doc, and no-ops on every subsequent run. Admin SDK bypasses rules; it runs
-// unattended and can be removed once it has completed in production.
-const CLIENT_NAME_BACKFILL_GUARD = "maintenance/clientNameBackfill";
-// Well under Firestore's 500-writes-per-batch ceiling, with headroom.
-const CLIENT_NAME_BACKFILL_BATCH = 200;
-
-const backfillLegacyClientNames = onSchedule(
-    {schedule: "every 24 hours", maxInstances: 1},
-    async () => {
-      const db = getFirestore();
-      const guardRef = db.doc(CLIENT_NAME_BACKFILL_GUARD);
-      const guard = await guardRef.get();
-      if (guard.exists && guard.data() && guard.data().done === true) {
-        logger.debug("backfillLegacyClientNames: already done");
-        return;
-      }
-
-      // Full scan is safe at the planned ~650-client scale (mirrors the import
-      // index); the doc-id read order never excludes a doc missing `name`.
-      const snap = await db.collection("clients").get();
-      const docs = (snap && Array.isArray(snap.docs)) ? snap.docs : [];
-      let batch = db.batch();
-      let opsInBatch = 0;
-      let fixed = 0;
-      for (const doc of docs) {
-        const d = doc.data() || {};
-        const name = typeof d.name === "string" ? d.name.trim() : "";
-        const businessName =
-          typeof d.businessName === "string" ? d.businessName.trim() : "";
-        if (name !== "" || businessName === "") continue;
-        batch.update(doc.ref, {
-          name: businessName,
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-        opsInBatch += 1;
-        fixed += 1;
-        if (opsInBatch >= CLIENT_NAME_BACKFILL_BATCH) {
-          await batch.commit();
-          batch = db.batch();
-          opsInBatch = 0;
-        }
-      }
-      if (opsInBatch > 0) await batch.commit();
-
-      await guardRef.set({
-        done: true,
-        fixed,
-        completedAt: FieldValue.serverTimestamp(),
-      });
-      logger.info("backfillLegacyClientNames: done",
-          {fixed, scanned: docs.length});
-    },
-);
-
 module.exports = {
   validateUploadedImage,
   purgeExpiredHistory,
-  backfillLegacyClientNames,
 };
