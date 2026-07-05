@@ -1326,29 +1326,31 @@ describe("drainQueue non-retryable errors (additional)", () => {
 // ---------------------------------------------------------------------------
 
 describe("enqueueCustomerUpsert batch staging", () => {
-  test("stages set(merge) on the provided batch instead of writing", async () => {
-    const {db, ref} = enqueueDb("customerUpsert__c1");
-    const batch = {set: jest.fn()};
-    const jobId = await enqueueCustomerUpsert("c1", {
-      db, now, batch, payloadHash: "h1",
-    });
+  test(
+      "stages set(merge) on the provided batch instead of writing",
+      async () => {
+        const {db, ref} = enqueueDb("customerUpsert__c1");
+        const batch = {set: jest.fn()};
+        const jobId = await enqueueCustomerUpsert("c1", {
+          db, now, batch, payloadHash: "h1",
+        });
 
-    expect(jobId).toBe("customerUpsert__c1");
-    // The direct write path must NOT run — the caller owns the commit.
-    expect(ref.set).not.toHaveBeenCalled();
-    expect(batch.set).toHaveBeenCalledTimes(1);
-    const [batchRef, data, opts] = batch.set.mock.calls[0];
-    expect(batchRef).toBe(ref);
-    expect(opts).toEqual({merge: true});
-    expect(data).toEqual(expect.objectContaining({
-      type: "customerUpsert",
-      refPath: "clients/c1",
-      status: "queued",
-      attempts: 0,
-      lastError: null,
-      payloadHash: "h1",
-    }));
-  });
+        expect(jobId).toBe("customerUpsert__c1");
+        // The direct write path must NOT run — the caller owns the commit.
+        expect(ref.set).not.toHaveBeenCalled();
+        expect(batch.set).toHaveBeenCalledTimes(1);
+        const [batchRef, data, opts] = batch.set.mock.calls[0];
+        expect(batchRef).toBe(ref);
+        expect(opts).toEqual({merge: true});
+        expect(data).toEqual(expect.objectContaining({
+          type: "customerUpsert",
+          refPath: "clients/c1",
+          status: "queued",
+          attempts: 0,
+          lastError: null,
+          payloadHash: "h1",
+        }));
+      });
 });
 
 // ---------------------------------------------------------------------------

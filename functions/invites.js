@@ -15,6 +15,12 @@ const {
 const REDEEM_RATE_MAX = 5;
 const REDEEM_RATE_WINDOW_MS = 15 * 60 * 1000;
 
+// Invite issuance is bounded per admin uid — defense-in-depth so a
+// compromised admin session can't mass-create invited users + signup codes
+// (matches the other admin callables, e.g. waveBootstrap).
+const INVITE_RATE_MAX = 20;
+const INVITE_RATE_WINDOW_MS = 60 * 60 * 1000;
+
 // Optional trimmed string with a length + control-char guard (phone may be
 // empty; requireString rejects empty, so read it leniently here).
 /**
@@ -117,6 +123,9 @@ const createEmployeeInvite = onCall(APP_CHECK, async (req) => {
     throw new HttpsError("unauthenticated", "auth-required");
   }
   await assertAdmin(req.auth.uid);
+  await enforceDurableRateLimit(
+      "createEmployeeInvite", req.auth.uid, INVITE_RATE_MAX,
+      INVITE_RATE_WINDOW_MS);
   assertPayloadShape(req.data,
       new Set(["name", "email", "phone", "colorValue"]));
   const name = requireString(req.data, "name", 100);

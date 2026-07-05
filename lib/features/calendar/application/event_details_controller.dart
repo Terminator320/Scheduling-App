@@ -6,6 +6,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart';
 import 'package:scheduling/features/calendar/application/appointment_series_editor.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
@@ -159,6 +160,19 @@ class EventDetailsController extends Notifier<EventDetailsState>
   Future<void> _loadClientIfNeeded(String clientId) async {
     final id = clientId.trim();
     if (id.isEmpty || state.client != null) return;
+    // The `clients` read rule is admin-only; for employees this read can never
+    // succeed (guaranteed permission-denied + a Crashlytics warn per detail
+    // open). The enrichment only feeds the admin-only edit body — the
+    // read-only view renders the denormalized fields — so skip it outright
+    // when the session role is known to be non-admin. Gate on `exists`:
+    // initializing the auth-gated user-doc stream from this microtask would
+    // park an error element when nobody is signed in (the hazard
+    // _resolveActiveEmployees documents); main.dart keeps it alive from
+    // startup, so in production the role is available here.
+    if (ref.exists(currentUserDocProvider)) {
+      final role = ref.read(userRoleProvider).value ?? '';
+      if (role.isNotEmpty && role != 'admin') return;
+    }
     final logger = ref.read(loggerProvider);
     final clientsRepo = ref.read(clientsRepositoryProvider);
     try {
@@ -273,31 +287,34 @@ class EventDetailsController extends Notifier<EventDetailsState>
     );
   }
 
-  Future<bool> markAsDone(AppointmentRecord appointment) async {
+  /// Returns null on success, the caught error otherwise (the widget layer
+  /// composes it into an APPT-STATUS notice).
+  Future<Object?> markAsDone(AppointmentRecord appointment) async {
     return _setStatusOnRepo(appointment, 'done');
   }
 
-  Future<bool> cancelAppointment(AppointmentRecord appointment) async {
+  /// Returns null on success, the caught error otherwise.
+  Future<Object?> cancelAppointment(AppointmentRecord appointment) async {
     return _setStatusOnRepo(appointment, 'cancelled');
   }
 
-  Future<bool> _setStatusOnRepo(
+  Future<Object?> _setStatusOnRepo(
     AppointmentRecord appointment,
     String status,
   ) async {
     final id = appointment.id;
-    if (id == null) return false;
+    if (id == null) return StateError('appointment has no id');
     state = state.copyWith(isSaving: true);
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
     try {
       await repo.updateAppointmentStatus(id: id, status: status);
       if (ref.mounted) state = state.copyWith(isSaving: false);
-      return true;
+      return null;
     } catch (e, st) {
-      logger.warn('updateAppointmentStatus($status) failed', e, st);
+      logger.warn('APPT-STATUS updateAppointmentStatus($status) failed', e, st);
       if (ref.mounted) state = state.copyWith(isSaving: false);
-      return false;
+      return e;
     }
   }
 

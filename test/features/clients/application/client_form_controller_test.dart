@@ -63,8 +63,10 @@ void main() {
       expect((outcome as ClientSaved).client, _client);
       verify(() => repo.addClient(_client)).called(1);
       expect(refreshCount(), 1);
-      // Stays saving on success: the sheet keeps its spinner while it pops.
-      expect(activity().isSaving, isTrue);
+      // Resets on success: in the split layout the detail pane keeps this
+      // shared provider alive after the sheet pops, so a lingering isSaving
+      // would disable the add/edit forms for the rest of the session.
+      expect(activity().isSaving, isFalse);
     });
 
     test('reports the failure without bumping the refresh', () async {

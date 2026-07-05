@@ -1,7 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:freezed_annotation/freezed_annotation.dart' show immutable, protected;
+import 'package:freezed_annotation/freezed_annotation.dart'
+    show immutable, protected;
 
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
@@ -82,9 +83,15 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
   void _apply(AppointmentFormUpdate update) =>
       state = applyFormUpdate(state, update);
 
+  /// Monotonic token so only the latest in-flight search publishes: a slow
+  /// older read must not overwrite a newer query's results (same guard as the
+  /// address autocomplete's request id).
+  int _searchRequestId = 0;
+
   Future<void> searchClients(String query) async {
     final trimmed = query.trim();
     if (!ClientSearchPolicy.shouldSearch(trimmed)) {
+      _searchRequestId++;
       _apply(
         const AppointmentFormUpdate(
           clientResults: [],
@@ -93,6 +100,7 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
       );
       return;
     }
+    final requestId = ++_searchRequestId;
     _apply(const AppointmentFormUpdate(isSearchingClient: true));
     // Resolved before the await: the sheet can be dismissed mid-search, and
     // using the Ref of a disposed notifier throws in Riverpod 3.
@@ -100,13 +108,13 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
     final clientsRepo = ref.read(clientsRepositoryProvider);
     try {
       final results = await clientsRepo.searchClients(trimmed);
-      if (!ref.mounted) return;
+      if (!ref.mounted || requestId != _searchRequestId) return;
       _apply(
         AppointmentFormUpdate(clientResults: results, isSearchingClient: false),
       );
     } catch (e, st) {
       logger.warn('searchClients failed', e, st);
-      if (!ref.mounted) return;
+      if (!ref.mounted || requestId != _searchRequestId) return;
       _apply(const AppointmentFormUpdate(isSearchingClient: false));
     }
   }

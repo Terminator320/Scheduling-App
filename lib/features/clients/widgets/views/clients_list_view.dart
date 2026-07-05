@@ -65,7 +65,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
           .read(clientsRepositoryProvider)
           .fetchClientsPage(after: after, limit: _pageSize);
     } catch (e, st) {
-      ref.read(loggerProvider).warn('clients page fetch error', e, st);
+      ref.read(loggerProvider).warn('CLI-LIST clients page fetch error', e, st);
       rethrow;
     }
   }

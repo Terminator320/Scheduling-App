@@ -164,13 +164,22 @@ class SignInController extends Notifier<SignInState> {
   Future<SignInOutcome> resumeAfterSignUp() async {
     final auth = ref.read(authServiceProvider);
     final employees = ref.read(employeesRepositoryProvider);
+    final logger = ref.read(loggerProvider);
     final user = auth.currentUser;
     if (user == null) return const SignInNoSession();
-    final userDoc = await _retryOnAuthPropagation(
-      () => employees.findUserByUid(user.uid),
-    );
-    if (userDoc == null) return const SignInProfilePending();
-    return SignInSuccess(EmployeeRecord.fromMap(userDoc.id, userDoc.data));
+    try {
+      final userDoc = await _retryOnAuthPropagation(
+        () => employees.findUserByUid(user.uid),
+      );
+      if (userDoc == null) return const SignInProfilePending();
+      return SignInSuccess(EmployeeRecord.fromMap(userDoc.id, userDoc.data));
+    } catch (error, stackTrace) {
+      // The account IS created and active server-side — a failed profile read
+      // here must not escape to the zone handler and strand the user with no
+      // message. "Pending" tells them to sign in normally, which recovers.
+      logger.warn('login.resume_after_sign_up', error, stackTrace);
+      return const SignInProfilePending();
+    }
   }
 
   void _settle() {

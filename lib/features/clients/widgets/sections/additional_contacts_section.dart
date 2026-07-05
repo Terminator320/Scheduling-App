@@ -160,7 +160,7 @@ class _AdditionalContactCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.sp12),
       decoration: BoxDecoration(
         color: scheme.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.r12),
         border: Border.all(color: scheme.outlineVariant),
       ),
       child: Column(

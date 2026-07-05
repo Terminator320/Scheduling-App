@@ -144,16 +144,13 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         padding: const EdgeInsets.all(AppSpacing.sp16),
         children: const [
           SkeletonListTile(),
-          SizedBox(height: 12),
+          SizedBox(height: AppSpacing.sp12),
           SkeletonListTile(),
-          SizedBox(height: 12),
+          SizedBox(height: AppSpacing.sp12),
           SkeletonListTile(),
         ],
       ),
-      error: (err, stack) {
-        ref
-            .read(loggerProvider)
-            .warn('employeesStreamProvider error', err, stack);
+      error: (_, _) {
         return Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -233,6 +230,14 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
 
   @override
   Widget build(BuildContext context) {
+    // Log only on the data→error transition — a `.when` error branch would
+    // re-log on every rebuild while the stream stays errored.
+    ref.listen(employeesStreamProvider, (previous, next) {
+      if (next is! AsyncError || previous is AsyncError) return;
+      ref
+          .read(loggerProvider)
+          .warn('employeesStreamProvider error', next.error, next.stackTrace);
+    });
     final selected = _selectedEmployee;
     return Scaffold(
       appBar: _buildAppBar(),

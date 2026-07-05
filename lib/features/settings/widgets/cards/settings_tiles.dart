@@ -245,7 +245,7 @@ class _LangBtn extends StatelessWidget {
         type: MaterialType.transparency,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(AppRadius.r8),
           child: AnimatedContainer(
             duration: AppDuration.fast,
             constraints: const BoxConstraints(
@@ -256,16 +256,8 @@ class _LangBtn extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp8),
             decoration: BoxDecoration(
               color: isActive ? scheme.surface : Colors.transparent,
-              borderRadius: BorderRadius.circular(6),
-              boxShadow: isActive
-                  ? const [
-                      BoxShadow(
-                        color: Color(0x1A000000),
-                        blurRadius: 3,
-                        offset: Offset(0, 1),
-                      ),
-                    ]
-                  : null,
+              borderRadius: BorderRadius.circular(AppRadius.r8),
+              boxShadow: isActive ? AppShadow.pill : null,
             ),
             child: Text(
               label,

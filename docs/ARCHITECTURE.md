@@ -76,7 +76,7 @@ features/<name>/
 │   └── firebase_<name>_repository.dart   Firestore implementation of the domain interface.
 ├── application/
 │   ├── <name>_providers.dart   Riverpod providers that wire repositories into the widget tree.
-│   └── <name>_controller.dart  StateNotifier for form/sheet state (uses Freezed for state shape).
+│   └── <name>_controller.dart  Riverpod Notifier for form/sheet/flow state (Freezed or hand-written state; sealed outcome classes per action).
 ├── screens/             Full-page screens — thin, mostly just Scaffold + feature widget.
 ├── widgets/             Feature-specific widgets, grouped by type into subfolders:
 │                        sheets/ cards/ fields/ dialogs/ sections/ views/.

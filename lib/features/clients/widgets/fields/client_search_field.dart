@@ -72,13 +72,13 @@ class ClientSearchField extends StatelessWidget {
         ),
         if (results.isNotEmpty)
           Container(
-            margin: const EdgeInsets.only(top: 4),
+            margin: const EdgeInsets.only(top: AppSpacing.sp4),
             constraints: const BoxConstraints(maxHeight: _maxDropdownHeight),
             decoration: BoxDecoration(
               border: Border.all(
                 color: Theme.of(context).colorScheme.outlineVariant,
               ),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.r12),
             ),
             clipBehavior: Clip.antiAlias,
             child: ListView.builder(

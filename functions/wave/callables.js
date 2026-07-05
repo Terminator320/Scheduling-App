@@ -66,8 +66,8 @@ async function readWaveBusinessId() {
 }
 
 // Per-instance cache for the scheduled worker's connection gate. The worker
-// fires every minute forever, so an installation that never connects Wave
-// would otherwise pay a Firestore read per minute per warm instance. A found
+// fires every 5 minutes forever, so an installation that never connects Wave
+// would otherwise pay a Firestore read every run per warm instance. A found
 // businessId is cached for the instance's lifetime (bootstrap is
 // set-once-never-changed); a NOT-connected result is cached for a short TTL
 // so a fresh bootstrap is still picked up within a few minutes.
@@ -76,7 +76,7 @@ let cachedBusinessId = "";
 let notConnectedUntilMs = 0;
 
 /**
- * Cached wrapper around readWaveBusinessId for the every-minute scheduler.
+ * Cached wrapper around readWaveBusinessId for the every-5-minutes scheduler.
  * @return {!Promise<string>} The business id, or "" if not connected.
  */
 async function readWaveBusinessIdCached() {
@@ -338,7 +338,9 @@ const waveUpsertCustomer = onDocumentWritten(
 
 // 4) waveSyncWorker — drains the Wave outbox on a schedule. Single instance so
 // Wave pacing stays simple; the worker's lease reaper + transactional claim
-// handle robustness. 1/min × default batchLimit 30 = 30 Wave calls/min (< 60).
+// handle robustness. 1 run / 5 min × default batchLimit 30 = 6 Wave calls/min
+// (< 60); the 5-min cadence is a cost tradeoff — a customer edit syncs within a
+// few minutes rather than ~1, in exchange for ~5x fewer scheduler invocations.
 //
 // timeoutSeconds is raised to 540 because a worst-case drain is minutes long
 // (up to 30 serial jobs, each with client-level Retry-After sleeps of up to
@@ -350,14 +352,14 @@ const WORKER_DEADLINE_FRACTION = 0.7;
 
 const waveSyncWorker = onSchedule(
     {
-      schedule: "every 1 minutes",
+      schedule: "every 5 minutes",
       secrets: [WAVE_FULL_ACCESS_TOKEN],
       maxInstances: 1,
       timeoutSeconds: WORKER_TIMEOUT_SECONDS,
     },
     async () => {
       // Cheap gate: skip the run entirely while Wave is not connected (the
-      // cached read avoids a Firestore read per minute on idle installs).
+      // cached read avoids a Firestore read every run on idle installs).
       const businessId = await readWaveBusinessIdCached();
       if (!businessId) {
         logger.debug("waveSyncWorker: not bootstrapped — nothing to do");
