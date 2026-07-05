@@ -28,7 +28,6 @@ exports.deleteAccount = account.deleteAccount;
 exports.createEmployeeInvite = invites.createEmployeeInvite;
 exports.redeemSignupCode = invites.redeemSignupCode;
 exports.purgeExpiredHistory = maintenance.purgeExpiredHistory;
-exports.backfillLegacyClientNames = maintenance.backfillLegacyClientNames;
 exports.waveBootstrap = waveCallables.waveBootstrap;
 exports.waveGetConnection = waveCallables.waveGetConnection;
 exports.waveImportCustomers = waveCallables.waveImportCustomers;
