@@ -132,18 +132,46 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
                 // state but they should not burn frames while invisible.
                 TickerMode(
                   enabled: destination == _current,
-                  // Every tab stays mounted in this one IndexedStack under a
-                  // single route, which offers just one PrimaryScrollController.
-                  // Give each tab its own so their (always-attached) primary
-                  // ListViews don't all pile onto the shared one — a Scrollbar
-                  // requires its controller to hold a single ScrollPosition.
-                  child: PrimaryScrollScope(child: _screenFor(destination)),
+                  // A hidden tab can never own the focused field, so pin its
+                  // viewInsets: otherwise every kept-alive Scaffold rebuilds
+                  // per frame of the keyboard animation.
+                  child: _TabViewInsets(
+                    active: destination == _current,
+                    // Every tab stays mounted in this one IndexedStack under a
+                    // single route, which offers just one
+                    // PrimaryScrollController. Give each tab its own so their
+                    // (always-attached) primary ListViews don't all pile onto
+                    // the shared one — a Scrollbar requires its controller to
+                    // hold a single ScrollPosition.
+                    child: PrimaryScrollScope(
+                      child: _cachedScreenFor(destination),
+                    ),
+                  ),
                 )
               else
                 const SizedBox.shrink(),
           ],
         ),
       ),
+    );
+  }
+
+  /// Built-screen cache: reusing the identical widget instance across shell
+  /// `setState`s lets unchanged (especially hidden) tabs short-circuit their
+  /// rebuild. Invalidated when the identity args change, which mirrors when
+  /// [_screenFor] would produce different widgets.
+  final Map<AdaptiveDestination, Widget> _screenCache = {};
+  String _screenCacheIdentity = '';
+
+  Widget _cachedScreenFor(AdaptiveDestination destination) {
+    final identity = '$_isAdmin|$_employeeId|$_userName|$_userEmail';
+    if (identity != _screenCacheIdentity) {
+      _screenCache.clear();
+      _screenCacheIdentity = identity;
+    }
+    return _screenCache.putIfAbsent(
+      destination,
+      () => _screenFor(destination),
     );
   }
 
@@ -183,6 +211,29 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
         employeeId: _employeeId,
       ),
     };
+  }
+}
+
+/// Pins a hidden tab's `viewInsets` to zero so the keyboard open/close
+/// animation (per-frame `viewInsets` changes) never dirties it — only the
+/// visible tab can own the focused field, so only it needs to resize.
+///
+/// Always present in every tab's subtree (parameterized by [active] rather
+/// than conditionally inserted) so toggling a tab never changes the element
+/// tree shape, which would drop the kept-alive screen state.
+class _TabViewInsets extends StatelessWidget {
+  const _TabViewInsets({required this.active, required this.child});
+
+  final bool active;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final data = MediaQuery.of(context);
+    return MediaQuery(
+      data: active ? data : data.copyWith(viewInsets: EdgeInsets.zero),
+      child: child,
+    );
   }
 }
 

@@ -96,6 +96,11 @@ class AppShadow {
   static const List<BoxShadow> sheet = [
     BoxShadow(color: Color(0x14000000), blurRadius: 16, offset: Offset(0, -4)),
   ];
+
+  /// Tight lift under a small selected control (segmented pill).
+  static const List<BoxShadow> pill = [
+    BoxShadow(color: Color(0x1A000000), blurRadius: 3, offset: Offset(0, 1)),
+  ];
 }
 
 class AppDuration {

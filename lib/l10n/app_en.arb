@@ -1380,6 +1380,8 @@
   "@error_introCreateAppointment": {"description": "Error intro for APPT-CREATE"},
   "error_introSaveAppointment": "Couldn't save the appointment changes",
   "@error_introSaveAppointment": {"description": "Error intro for APPT-SAVE"},
+  "error_introUpdateAppointmentStatus": "Couldn't update the appointment status",
+  "@error_introUpdateAppointmentStatus": {"description": "Error intro for APPT-STATUS (mark done / cancel)"},
   "error_introDeleteAppointment": "Couldn't delete the appointment",
   "@error_introDeleteAppointment": {"description": "Error intro for APPT-DEL"},
   "error_introLoadAppointments": "Couldn't load appointments",

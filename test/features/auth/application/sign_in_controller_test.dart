@@ -281,5 +281,23 @@ void main() {
       expect((outcome as SignInSuccess).employee.id, 'doc1');
       expect(reads, 2);
     });
+
+    test('maps a throwing profile read to a pending profile instead of '
+        'escaping to the zone handler', () async {
+      final user = _MockUser();
+      when(() => user.uid).thenReturn('u1');
+      when(() => auth.currentUser).thenReturn(user);
+      // Two denials: the propagation retry absorbs only the first, so the
+      // second rethrows — the account is created, and the user must get the
+      // "sign in normally" path, not a silent crash.
+      when(() => repo.findUserByUid('u1')).thenThrow(
+        FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied'),
+      );
+
+      expect(
+        await notifier().resumeAfterSignUp(),
+        isA<SignInProfilePending>(),
+      );
+    });
   });
 }

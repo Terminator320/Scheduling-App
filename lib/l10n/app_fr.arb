@@ -335,6 +335,7 @@
   "error_introSaveEmployee": "Impossible d’enregistrer l’employé",
   "error_introCreateAppointment": "Impossible de créer le rendez-vous",
   "error_introSaveAppointment": "Impossible d’enregistrer les modifications du rendez-vous",
+  "error_introUpdateAppointmentStatus": "Impossible de modifier le statut du rendez-vous",
   "error_introDeleteAppointment": "Impossible de supprimer le rendez-vous",
   "error_introLoadAppointments": "Impossible de charger les rendez-vous",
   "error_introDeleteAccount": "Impossible de supprimer votre compte",

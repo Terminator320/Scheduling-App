@@ -68,7 +68,7 @@
  * ## Throughput sizing
  * The drainQueue schedule frequency × batchLimit must stay under Wave's
  * 60-requests-per-minute limit. With the default batchLimit of 30 and a
- * 1-minute schedule cadence, peak throughput is 30/min — safely below 60/min.
+ * 5-minute schedule cadence, peak throughput is 6/min — well below 60/min.
  * If you increase batchLimit or run on a shorter cadence, adjust accordingly.
  *
  * @module wave/worker
@@ -157,8 +157,10 @@ function isTransientGraphqlError(err) {
     if (code) texts.push(code);
   }
   const joined = texts.join(" ").toLowerCase();
-  return /internal|timeout|timed out|unavailable|temporar|overloaded|service error|try again/
-      .test(joined);
+  const transientRe = new RegExp(
+      "internal|timeout|timed out|unavailable|temporar|" +
+      "overloaded|service error|try again");
+  return transientRe.test(joined);
 }
 
 /**
@@ -481,7 +483,7 @@ async function drainQueue(deps = {}) {
   const nowValue = deps.now ? deps.now() : new Date();
   const nowMs = +nowValue;
 
-  /** True once the wall-clock budget is exhausted (logged once). */
+  // True once the wall-clock budget is exhausted (logged once).
   const pastDeadline = () => wallClock() > deadlineMs;
 
   const summary = {

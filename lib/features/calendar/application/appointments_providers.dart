@@ -40,6 +40,16 @@ typedef _MyAppointmentsKey = ({String employeeId, AppointmentDateRange range});
 final myAppointmentsProvider = StreamProvider.family
     .autoDispose<List<AppointmentRecord>, _MyAppointmentsKey>((ref, key) {
       if (ref.authUid == null) return Stream.value(const []);
+      // Same keep-alive grace as the admin range provider: an employee paging
+      // back within the window reuses the warm listener instead of re-reading.
+      final link = ref.keepAlive();
+      Timer? evictTimer;
+      ref
+        ..onCancel(() {
+          evictTimer = Timer(_monthRangeKeepAlive, link.close);
+        })
+        ..onResume(() => evictTimer?.cancel())
+        ..onDispose(() => evictTimer?.cancel());
       return ref
           .watch(appointmentsRepositoryProvider)
           .watchForEmployeeInRange(key.employeeId, key.range);

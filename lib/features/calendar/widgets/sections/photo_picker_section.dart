@@ -240,12 +240,12 @@ class _EditableEmptyPhotoState extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     return InkWell(
       onTap: onPickImages,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(AppRadius.r8),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.sp16),
         decoration: BoxDecoration(
           border: Border.all(color: scheme.outlineVariant),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppRadius.r8),
         ),
         child: Center(
           child: Column(
@@ -277,7 +277,7 @@ class _ReadOnlyEmptyPhotoState extends StatelessWidget {
       height: 90,
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.r8),
         border: Border.all(color: scheme.outlineVariant),
       ),
       child: Center(

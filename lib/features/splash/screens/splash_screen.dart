@@ -70,7 +70,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     }
     EmployeeRecord? cached;
     try {
-      cached = await AuthCache().loadIfMatch(uid);
+      cached = await ref.read(authCacheProvider).loadIfMatch(uid);
     } catch (e, st) {
       ref.read(loggerProvider).warn('splash.auth_cache_load', e, st);
       cached = null;

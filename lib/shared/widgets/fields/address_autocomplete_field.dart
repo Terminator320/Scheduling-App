@@ -1,10 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/errors/failure.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/maps/application/maps_providers.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
@@ -43,7 +42,7 @@ class _AddressAutocompleteFieldState
     extends ConsumerState<AddressAutocompleteField> {
   late final PlacesRepository _service = ref.read(placesRepositoryProvider);
   static const _uuid = Uuid();
-  Timer? _debounce;
+  final Debouncer _debounce = Debouncer(_debounceDelay);
   List<AddressSuggestion> _suggestions = [];
   bool _isLoading = false;
   String? _serviceError;
@@ -63,7 +62,7 @@ class _AddressAutocompleteFieldState
 
   @override
   void dispose() {
-    _debounce?.cancel();
+    _debounce.dispose();
     super.dispose();
   }
 
@@ -76,7 +75,7 @@ class _AddressAutocompleteFieldState
       return;
     }
 
-    _debounce?.cancel();
+    _debounce.cancel();
     final trimmed = value.trim();
     if (trimmed.length < _minQueryLength) {
       _lastFetched = '';
@@ -88,7 +87,7 @@ class _AddressAutocompleteFieldState
       return;
     }
 
-    _debounce = Timer(_debounceDelay, () => _fetch(value));
+    _debounce.run(() => _fetch(value));
   }
 
   String _localizedErrorFor(
@@ -140,7 +139,7 @@ class _AddressAutocompleteFieldState
   Future<void> _selectSuggestion(AddressSuggestion s) async {
     // Invalidate any pending debounce/in-flight autocomplete so a late
     // response can't resurface the suggestion list after this pick.
-    _debounce?.cancel();
+    _debounce.cancel();
     _requestId++;
     _suppressFetch = true;
     widget.controller.text = s.description;
@@ -212,10 +211,10 @@ class _AddressAutocompleteFieldState
         ),
         if (_suggestions.isNotEmpty)
           Container(
-            margin: const EdgeInsets.only(top: 4),
+            margin: const EdgeInsets.only(top: AppSpacing.sp4),
             decoration: BoxDecoration(
               border: Border.all(color: scheme.outlineVariant),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.r12),
             ),
             child: Column(
               children: _suggestions

@@ -72,9 +72,10 @@ class ClientFormController extends Notifier<ClientFormActivity> {
   @override
   ClientFormActivity build() => const ClientFormActivity();
 
-  /// Persists a new client. On success [state] stays saving so the add
-  /// sheet keeps its spinner while it pops; failure resets it so the form is
-  /// usable again.
+  /// Persists a new client. [state] always resets in `finally`: this provider
+  /// is shared with the detail pane, which keeps it alive in the split layout
+  /// after the add sheet pops — a lingering `isSaving` would brick the next
+  /// add/edit. The sheet pops in the same frame, so no double-tap window opens.
   Future<ClientSaveOutcome> addClient(ClientRecord client) async {
     // Resolve dependencies before the first await: the sheet can be dismissed
     // mid-save, and using the Ref of a disposed notifier throws in Riverpod 3.
@@ -88,8 +89,9 @@ class ClientFormController extends Notifier<ClientFormActivity> {
       return ClientSaved(client);
     } catch (e, st) {
       logger.warn('CLI-ADD addClient failed', e, st);
-      if (ref.mounted) state = state.copyWith(isSaving: false);
       return ClientSaveFailed(e);
+    } finally {
+      if (ref.mounted) state = state.copyWith(isSaving: false);
     }
   }
 

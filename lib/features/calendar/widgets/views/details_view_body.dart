@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/launchers/phone_call_launcher.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -178,8 +179,12 @@ class DetailsViewBody extends ConsumerWidget {
     WidgetRef ref,
     EventDetailsController notifier,
   ) async {
-    if (!(await notifier.markAsDone(appointment))) return;
+    final error = await notifier.markAsDone(appointment);
     if (!context.mounted) return;
+    if (error != null) {
+      _notifyStatusError(context, ref, error);
+      return;
+    }
     ref
         .read(noticeServiceProvider)
         .success(context.l10n.common_appointmentMarkedAsDone);
@@ -198,12 +203,29 @@ class DetailsViewBody extends ConsumerWidget {
       confirmLabel: context.l10n.calendar_cancelAppointment,
     );
     if (!confirmed || !context.mounted) return;
-    if (!(await notifier.cancelAppointment(appointment))) return;
+    final error = await notifier.cancelAppointment(appointment);
     if (!context.mounted) return;
+    if (error != null) {
+      _notifyStatusError(context, ref, error);
+      return;
+    }
     ref
         .read(noticeServiceProvider)
         .success(context.l10n.common_appointmentCancelled);
     onClose();
+  }
+
+  void _notifyStatusError(BuildContext context, WidgetRef ref, Object error) {
+    ref
+        .read(noticeServiceProvider)
+        .error(
+          composeErrorNotice(
+            context,
+            intro: context.l10n.error_introUpdateAppointmentStatus,
+            tag: 'APPT-STATUS',
+            error: error,
+          ),
+        );
   }
 }
 

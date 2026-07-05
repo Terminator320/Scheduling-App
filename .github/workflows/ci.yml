@@ -17,9 +17,6 @@ jobs:
           channel: stable
           cache: true
 
-      # dev/.env is gitignored but declared as a Flutter asset in pubspec.yaml,
-      # so the build needs a file to exist. Placeholders are fine: tests never
-      # talk to real Firebase.
       - name: Bootstrap dev/.env from template
         run: cp dev/.env.example dev/.env
 
