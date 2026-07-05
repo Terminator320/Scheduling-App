@@ -162,4 +162,87 @@ void main() {
       expect(navigator.canPop(), isFalse);
     },
   );
+
+  testWidgets(
+    'the screen cache reuses one instance per tab, so a plain tab switch '
+    'does not rebuild an already-built screen',
+    (tester) async {
+      final buildCounts = <AdaptiveDestination, int>{};
+      Widget countingBuilder(AdaptiveDestination destination) {
+        buildCounts[destination] = (buildCounts[destination] ?? 0) + 1;
+        return Scaffold(body: Text('screen-${destination.name}'));
+      }
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HubShell(
+            isAdmin: true,
+            employeeId: 'e1',
+            screenBuilder: countingBuilder,
+          ),
+        ),
+      );
+      expect(buildCounts[AdaptiveDestination.calendar], 1);
+
+      // Visit employees, then return to calendar — identity unchanged.
+      _shellState(tester).select(
+        AdaptiveDestination.employees,
+        isAdmin: true,
+        employeeId: 'e1',
+      );
+      await tester.pump();
+      _shellState(tester).select(
+        AdaptiveDestination.calendar,
+        isAdmin: true,
+        employeeId: 'e1',
+      );
+      await tester.pump();
+
+      // Employees built once on first visit; calendar never rebuilt despite
+      // three shell builds (without the cache it would rebuild each time).
+      expect(buildCounts[AdaptiveDestination.employees], 1);
+      expect(buildCounts[AdaptiveDestination.calendar], 1);
+    },
+  );
+
+  testWidgets(
+    'changing the identity args (an admin upgrade) invalidates the cache '
+    'so the screen is rebuilt, while a same-identity reselect does not',
+    (tester) async {
+      final buildCounts = <AdaptiveDestination, int>{};
+      Widget countingBuilder(AdaptiveDestination destination) {
+        buildCounts[destination] = (buildCounts[destination] ?? 0) + 1;
+        return Scaffold(body: Text('screen-${destination.name}'));
+      }
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HubShell(
+            isAdmin: false,
+            employeeId: 'e1',
+            screenBuilder: countingBuilder,
+          ),
+        ),
+      );
+      expect(buildCounts[AdaptiveDestination.calendar], 1);
+
+      // Reselecting with the same identity must not rebuild.
+      _shellState(tester).select(
+        AdaptiveDestination.calendar,
+        isAdmin: false,
+        employeeId: 'e1',
+      );
+      await tester.pump();
+      expect(buildCounts[AdaptiveDestination.calendar], 1);
+
+      // Flipping isAdmin changes the identity -> cache clears -> rebuild.
+      _shellState(tester).select(
+        AdaptiveDestination.calendar,
+        isAdmin: true,
+        employeeId: 'e1',
+      );
+      await tester.pump();
+      expect(buildCounts[AdaptiveDestination.calendar], 2);
+    },
+  );
 }

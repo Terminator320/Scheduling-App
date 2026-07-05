@@ -46,22 +46,10 @@ class DetailsViewBody extends ConsumerWidget {
     final isSaving = ref.watch(provider.select((s) => s.isSaving));
     final notifier = ref.read(provider.notifier);
 
-    final status = AppointmentStatus.fromRaw(appointment.status);
-    final isCancelled = status.isCancelled;
-    final isDone = status.isDone;
-    final now = DateTime.now();
-    final isToday =
-        appointment.startTime.year == now.year &&
-        appointment.startTime.month == now.month &&
-        appointment.startTime.day == now.day;
-    final compactHeader = context.isCompact;
-
-    final clientName = client?.displayName ?? appointment.clientName;
-    final phone = (client?.phone.isNotEmpty ?? false)
-        ? client!.phone
-        : appointment.clientPhone;
-    final onCall = phone.isNotEmpty
-        ? () => launchPhoneCall(context, ref, phone)
+    final data = _DetailsViewData.from(context, appointment, client);
+    final displayAddress = data.displayAddress;
+    final onCall = data.phone.isNotEmpty
+        ? () => launchPhoneCall(context, ref, data.phone)
         : null;
     final onDirections = appointment.address.isNotEmpty
         ? () => AddressMapLauncher.showMapChoices(
@@ -69,33 +57,21 @@ class DetailsViewBody extends ConsumerWidget {
             address: appointment.address,
           )
         : null;
-    final displayAddress = appointment.address.isNotEmpty
-        ? AddressParser.canonicalToDisplay(appointment.address)
-        : '';
-
-    final notes = appointment.notes;
-    final materials = appointment.materialsNeeded
-        .split(',')
-        .map((m) => m.trim())
-        .where((m) => m.isNotEmpty)
-        .toList();
-    final extraContacts = (client?.contacts ?? const <ClientContact>[])
-        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (showActions && !isCancelled)
+        if (showActions && !data.isCancelled)
           Align(
-            alignment: compactHeader
+            alignment: data.compactHeader
                 ? Alignment.centerLeft
                 : Alignment.centerRight,
             child: _EditChip(onTap: notifier.enterEditing),
           ),
         _Header(
           appointment: appointment,
-          status: status,
-          compact: compactHeader,
+          status: data.status,
+          compact: data.compactHeader,
         ),
         const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
@@ -125,13 +101,13 @@ class DetailsViewBody extends ConsumerWidget {
           rows: [
             InfoCardRow(
               icon: Icons.person_outline,
-              text: clientName,
+              text: data.clientName,
               emphasize: true,
             ),
-            if (phone.isNotEmpty)
+            if (data.phone.isNotEmpty)
               InfoCardRow(
                 icon: Icons.phone_outlined,
-                text: phone,
+                text: data.phone,
                 onTap: onCall,
                 trailingIcon: Icons.chevron_right,
               ),
@@ -146,25 +122,28 @@ class DetailsViewBody extends ConsumerWidget {
               ),
           ],
         ),
-        ClientContactsCards(contacts: extraContacts, collapsible: true),
-        if (notes.isNotEmpty) ...[
+        ClientContactsCards(contacts: data.extraContacts, collapsible: true),
+        if (data.notes.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sp16),
-          DetailsSectionRow(label: context.l10n.calendar_notes, value: notes),
+          DetailsSectionRow(
+            label: context.l10n.calendar_notes,
+            value: data.notes,
+          ),
         ],
-        if (materials.isNotEmpty) ...[
+        if (data.materials.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sp16),
-          _MaterialsRow(items: materials),
+          _MaterialsRow(items: data.materials),
         ],
         _EmployeesView(appointment: appointment),
         _PhotosView(
           appointment: appointment,
-          isCancelled: isCancelled,
+          isCancelled: data.isCancelled,
           onRetry: notifier.enterEditing,
         ),
         DetailsActionBar(
-          isToday: isToday,
-          isDone: isDone,
-          isCancelled: isCancelled,
+          isToday: data.isToday,
+          isDone: data.isDone,
+          isCancelled: data.isCancelled,
           isSaving: isSaving,
           showCancel: showActions,
           onMarkDone: () => _onMarkDone(context, ref, notifier),
@@ -227,6 +206,71 @@ class DetailsViewBody extends ConsumerWidget {
           ),
         );
   }
+}
+
+/// Pure-data derivations for [DetailsViewBody], computed once per build.
+/// Holds no [BuildContext] — the ref-dependent callbacks stay in `build`.
+class _DetailsViewData {
+  const _DetailsViewData({
+    required this.status,
+    required this.isCancelled,
+    required this.isDone,
+    required this.isToday,
+    required this.compactHeader,
+    required this.clientName,
+    required this.phone,
+    required this.displayAddress,
+    required this.notes,
+    required this.materials,
+    required this.extraContacts,
+  });
+
+  factory _DetailsViewData.from(
+    BuildContext context,
+    AppointmentRecord appointment,
+    ClientRecord? client,
+  ) {
+    final status = AppointmentStatus.fromRaw(appointment.status);
+    final now = DateTime.now();
+    final phone = (client?.phone.isNotEmpty ?? false)
+        ? client!.phone
+        : appointment.clientPhone;
+    final materials = appointment.materialsNeeded
+        .split(',')
+        .map((m) => m.trim())
+        .where((m) => m.isNotEmpty)
+        .toList();
+    return _DetailsViewData(
+      status: status,
+      isCancelled: status.isCancelled,
+      isDone: status.isDone,
+      isToday:
+          appointment.startTime.year == now.year &&
+          appointment.startTime.month == now.month &&
+          appointment.startTime.day == now.day,
+      compactHeader: context.isCompact,
+      clientName: client?.displayName ?? appointment.clientName,
+      phone: phone,
+      displayAddress: appointment.address.isNotEmpty
+          ? AddressParser.canonicalToDisplay(appointment.address)
+          : '',
+      notes: appointment.notes,
+      materials: materials,
+      extraContacts: (client?.contacts ?? const <ClientContact>[]).toList(),
+    );
+  }
+
+  final AppointmentStatus status;
+  final bool isCancelled;
+  final bool isDone;
+  final bool isToday;
+  final bool compactHeader;
+  final String clientName;
+  final String phone;
+  final String displayAddress;
+  final String notes;
+  final List<String> materials;
+  final List<ClientContact> extraContacts;
 }
 
 class _EditChip extends StatelessWidget {
