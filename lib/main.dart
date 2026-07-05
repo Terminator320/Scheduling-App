@@ -207,6 +207,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
       // Sign-out failed (network/plugin) — the next signal retries.
       ref.read(loggerProvider).warn('ACCOUNT-EXIT sign-out failed', e, st);
     } finally {
+      // Reset on failure too, or every later disabled/deleted signal is muted.
       if (!exitScheduled) _isHandlingAccountExit = false;
     }
   }
@@ -238,6 +239,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     ) {
       final isSignedIn = FirebaseAuth.instance.currentUser != null;
       final resolvedUid = ref.read(authUidProvider).value;
+      // Kick-out: populated→empty = runtime delete; cold start handled below.
       if (isAccountDeletionSignal(
         isSignedIn: isSignedIn,
         resolvedUid: resolvedUid,
@@ -297,6 +299,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
               onGenerateRoute: AppRoutes.onGenerateRoute,
               builder: (context, child) {
                 final media = MediaQuery.of(context);
+                // Compose in-app text scale with the OS scale, capped at 2.2.
                 final systemFactor = media.textScaler.scale(14) / 14;
                 final effectiveScale = math.min(
                   _textScale * systemFactor,

@@ -150,7 +150,7 @@ class _Card extends StatelessWidget {
     final theme = Theme.of(context);
     return Container(
       decoration: appCardDecoration(theme, color: theme.colorScheme.surface),
-      padding: padding ?? const EdgeInsets.all(14),
+      padding: padding ?? const EdgeInsets.all(AppSpacing.sp16),
       child: child,
     );
   }

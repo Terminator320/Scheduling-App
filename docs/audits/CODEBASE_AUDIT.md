@@ -25,6 +25,34 @@ fixed everything it found, and the commits since (`3071195` "improving code",
 performance work — all reviewed and verified sound. No confirmed bugs, no new
 security issues, no performance regressions. Everything below is report-only.
 
+## ✅ Resolution — implemented 2026-07-05 (everything except pre-ship)
+On request, every non-pre-ship item below was implemented and verified
+(`flutter analyze` clean · full `flutter test` green):
+- **I1** — added `test/features/calendar/appointment_series_editor_test.dart`
+  (new-series booking, existing-series pruning of only future non-terminal
+  siblings, propagate keeping each sibling's date + per-visit status).
+- **I2** — added two cache tests to `test/routes/hub_shell_test.dart` (plain tab
+  switch reuses the cached instance; an identity change invalidates + rebuilds,
+  a same-identity reselect does not).
+- **I3** — extracted the `details_view_body` derivation into a `_DetailsViewData`
+  value object; guarded by the existing detail-view tests.
+- **I4** — snapped both off-scale `EdgeInsets.all(14)` card paddings to
+  `AppSpacing.sp16`.
+- **l10n** — pruned 14 confirmed-dead keys from both ARBs (`error_couldNot*`
+  superseded by `composeErrorNotice`, the omitted-empty-section `calendar_no*`,
+  the address-field leftovers, and `common_resetPassword` — its smoke test was
+  repointed). **Kept** the two CLAUDE.md-protected reuse-pool spares
+  (`error_couldNotAddClientTryAgain`, `error_couldNotSaveChangesTryAgain`).
+  `flutter gen-l10n` regenerated; `untranslated.json` is empty (no drift).
+- **Quality** — restored one-line invariant pointers in `main.dart` (kick-out
+  transition, flag-reset-on-failure, text-scale composition). The
+  `employee_color_grid` rainbow ring is left as-is (intentional "pick any
+  colour" affordance, not the employee palette).
+
+**Deferred (pre-ship only):** the two ⚠️ items below — the App Check enforcement
+flips and confirming the `backfillLegacyClientNames` migration ran before its
+removal deploys.
+
 ## Auto-applied cleanups (review the diff)
 | File:line | Change | Why |
 |---|---|---|
