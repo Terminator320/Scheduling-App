@@ -46,7 +46,8 @@ class DetailsViewBody extends ConsumerWidget {
     final isSaving = ref.watch(provider.select((s) => s.isSaving));
     final notifier = ref.read(provider.notifier);
 
-    final data = _DetailsViewData.from(context, appointment, client);
+    final data = _DetailsViewData.from(appointment, client);
+    final compactHeader = context.isCompact;
     final displayAddress = data.displayAddress;
     final onCall = data.phone.isNotEmpty
         ? () => launchPhoneCall(context, ref, data.phone)
@@ -63,7 +64,7 @@ class DetailsViewBody extends ConsumerWidget {
       children: [
         if (showActions && !data.isCancelled)
           Align(
-            alignment: data.compactHeader
+            alignment: compactHeader
                 ? Alignment.centerLeft
                 : Alignment.centerRight,
             child: _EditChip(onTap: notifier.enterEditing),
@@ -71,7 +72,7 @@ class DetailsViewBody extends ConsumerWidget {
         _Header(
           appointment: appointment,
           status: data.status,
-          compact: data.compactHeader,
+          compact: compactHeader,
         ),
         const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
@@ -209,14 +210,14 @@ class DetailsViewBody extends ConsumerWidget {
 }
 
 /// Pure-data derivations for [DetailsViewBody], computed once per build.
-/// Holds no [BuildContext] — the ref-dependent callbacks stay in `build`.
+/// Context-free — the layout flag (`compactHeader`) and ref-dependent
+/// callbacks stay in `build`.
 class _DetailsViewData {
   const _DetailsViewData({
     required this.status,
     required this.isCancelled,
     required this.isDone,
     required this.isToday,
-    required this.compactHeader,
     required this.clientName,
     required this.phone,
     required this.displayAddress,
@@ -226,7 +227,6 @@ class _DetailsViewData {
   });
 
   factory _DetailsViewData.from(
-    BuildContext context,
     AppointmentRecord appointment,
     ClientRecord? client,
   ) {
@@ -248,7 +248,6 @@ class _DetailsViewData {
           appointment.startTime.year == now.year &&
           appointment.startTime.month == now.month &&
           appointment.startTime.day == now.day,
-      compactHeader: context.isCompact,
       clientName: client?.displayName ?? appointment.clientName,
       phone: phone,
       displayAddress: appointment.address.isNotEmpty
@@ -264,7 +263,6 @@ class _DetailsViewData {
   final bool isCancelled;
   final bool isDone;
   final bool isToday;
-  final bool compactHeader;
   final String clientName;
   final String phone;
   final String displayAddress;

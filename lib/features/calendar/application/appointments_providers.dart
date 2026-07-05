@@ -17,19 +17,22 @@ final appointmentsRepositoryProvider = Provider<AppointmentsRepository>((ref) {
 /// re-reading) the same range query on every month swipe.
 const _monthRangeKeepAlive = Duration(minutes: 3);
 
+/// Holds an autoDispose provider's keep-alive link open for
+/// [_monthRangeKeepAlive] after its last watcher leaves, so a quick page-back
+/// reuses the warm listener instead of re-subscribing (and re-reading).
+void _keepWarmWithGrace(Ref ref) {
+  final link = ref.keepAlive();
+  Timer? evictTimer;
+  ref
+    ..onCancel(() => evictTimer = Timer(_monthRangeKeepAlive, link.close))
+    ..onResume(() => evictTimer?.cancel())
+    ..onDispose(() => evictTimer?.cancel());
+}
+
 final appointmentsInRangeProvider = StreamProvider.family
     .autoDispose<List<AppointmentRecord>, AppointmentDateRange>((ref, range) {
       if (ref.authUid == null) return Stream.value(const []);
-      final link = ref.keepAlive();
-      Timer? evictTimer;
-      ref
-        ..onCancel(() {
-          // Last watcher gone: close the keep-alive link after a grace period
-          // so a quick page-back doesn't re-subscribe.
-          evictTimer = Timer(_monthRangeKeepAlive, link.close);
-        })
-        ..onResume(() => evictTimer?.cancel())
-        ..onDispose(() => evictTimer?.cancel());
+      _keepWarmWithGrace(ref);
       return ref.watch(appointmentsRepositoryProvider).watchInRange(range);
     });
 
@@ -42,14 +45,7 @@ final myAppointmentsProvider = StreamProvider.family
       if (ref.authUid == null) return Stream.value(const []);
       // Same keep-alive grace as the admin range provider: an employee paging
       // back within the window reuses the warm listener instead of re-reading.
-      final link = ref.keepAlive();
-      Timer? evictTimer;
-      ref
-        ..onCancel(() {
-          evictTimer = Timer(_monthRangeKeepAlive, link.close);
-        })
-        ..onResume(() => evictTimer?.cancel())
-        ..onDispose(() => evictTimer?.cancel());
+      _keepWarmWithGrace(ref);
       return ref
           .watch(appointmentsRepositoryProvider)
           .watchForEmployeeInRange(key.employeeId, key.range);
