@@ -47,7 +47,7 @@ dependencies:
   url_launcher: ^6.3.2
 
   # Device contacts (native pre-filled insert — no runtime permission)
-  flutter_contacts: ^2.2.1
+  flutter_contacts: ^2.2.2
 
   # IDs
   uuid: ^4.5.1

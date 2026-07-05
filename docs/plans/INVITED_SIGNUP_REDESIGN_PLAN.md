@@ -8,7 +8,7 @@
 
 **Tech Stack:** Firebase Cloud Functions (Node, jest), Firestore rules, Flutter/Dart (Riverpod, mocktail), `cloud_functions` callables.
 
-**Spec:** `docs/INVITED_SIGNUP_REDESIGN.md`
+**Spec:** `docs/plans/INVITED_SIGNUP_REDESIGN.md`
 
 **Note on test harness:** `functions/` has jest but no `firebase-functions-test` and no existing function tests. This plan unit-tests **pure helpers** (`functions/signup_code_utils.js`) with jest, and verifies the `onCall` + Firestore flow with the emulator. Firestore rules have no automated harness in this repo; rules changes are verified by careful review + emulator.
 
@@ -960,7 +960,7 @@ git commit -m "refactor(auth): drop invite-activation branch from sign-in"
 
 **Files:**
 - `lib/l10n/app_en.arb`, `lib/l10n/app_fr.arb`
-- `CLAUDE.md`, `docs/AUDIT_FOLLOWUPS.md`, `docs/ARCHITECTURE.md`
+- `CLAUDE.md`, `docs/audits/AUDIT_FOLLOWUPS.md`, `docs/ARCHITECTURE.md`
 
 - [ ] **Step 1: Remove now-unused verification l10n keys**
 
@@ -973,13 +973,13 @@ Grep `InvitedEmployeeMatch` and `resendVerificationEmail`; delete if unreference
 - [ ] **Step 3: Update docs**
 
 - `CLAUDE.md` "Employee activation flow" invariant: rewrite to describe the new flow (admin `createEmployeeInvite` issues a one-time code shared out-of-band; `redeemSignupCode` activates server-side; no email verification; `signupCodes` collection is Cloud-Functions-only). Remove the `resolveMyInvite` pre-deploy blocker note. Update the Cloud Functions section's function list.
-- `docs/AUDIT_FOLLOWUPS.md`: mark §4 done, pointing to the shipped design + this plan.
+- `docs/audits/AUDIT_FOLLOWUPS.md`: mark §4 done, pointing to the shipped design + this plan.
 - `docs/ARCHITECTURE.md`: update the auth/onboarding flow prose and the Cloud Functions list (drop `resolveMyInvite`; add the three new callables + the `signupCodes` collection in the data model).
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add lib/l10n/ CLAUDE.md docs/AUDIT_FOLLOWUPS.md docs/ARCHITECTURE.md
+git add lib/l10n/ CLAUDE.md docs/audits/AUDIT_FOLLOWUPS.md docs/ARCHITECTURE.md
 git commit -m "chore: prune verification keys; document signup-code flow"
 ```
 (CLAUDE.md is gitignored here, so it won't appear in the commit — that's expected; it remains a local-only update.)

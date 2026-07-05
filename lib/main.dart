@@ -72,10 +72,8 @@ Future<void> main() async {
         options: DefaultFirebaseOptions.currentPlatform,
       );
 
-
       Future<void> firebaseReady;
       if (_useFirebaseEmulator) {
-
         await _wireFirebaseEmulator();
         firebaseReady = Future<void>.value();
       } else {
