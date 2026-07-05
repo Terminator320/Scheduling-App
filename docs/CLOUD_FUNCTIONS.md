@@ -69,7 +69,7 @@ Admin-only. Creates (or idempotently re-issues) an `invited` `users` doc plus a
 admin to share out-of-band. Everything — duplicate-email lookup, prior-code
 sweep, writes — runs in one Firestore transaction to close create/redeem races.
 A claimed (non-`invited`) email is rejected. Durable-rate-limited 20/hr per admin
-uid. Full flow: `docs/INVITED_SIGNUP_REDESIGN.md`.
+uid. Full flow: `docs/plans/INVITED_SIGNUP_REDESIGN.md`.
 
 ### `redeemSignupCode` — `invites.js`
 Validates a signup code server-side (14-day expiry; token email must equal the
@@ -144,7 +144,7 @@ Admin-only integration syncing the `clients` collection to Wave customers. The
 full-access Wave token lives in Secret Manager (`WAVE_FULL_ACCESS_TOKEN`); the
 target business is resolved server-side from `WAVE_BUSINESS_NAME`. The app never
 reads the rules-locked `wave` collection directly. Details:
-`docs/WAVE_INTEGRATION_PLAN.md`.
+`docs/plans/WAVE_INTEGRATION_PLAN.md`.
 
 ### `waveBootstrap` — `wave/callables.js`
 Admin-only, idempotent get-or-create of the `wave/connection` doc. An

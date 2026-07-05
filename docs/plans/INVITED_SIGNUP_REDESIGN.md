@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-27
 **Status:** ✅ Implemented (branch `moblie`).
-**Supersedes:** `docs/AUDIT_FOLLOWUPS.md` §4 (the deferred "redesign signup" item)
+**Supersedes:** `docs/audits/AUDIT_FOLLOWUPS.md` §4 (the deferred "redesign signup" item)
 
 > **Implementation delta:** the separate `regenerateSignupCode` callable and the
 > "Regenerate code" admin action (§3.2, §3.5, §5) were **dropped**. Instead,

@@ -3,8 +3,8 @@
 Scope: whole repo — `lib/`, `functions/`, `firestore.rules`, `storage.rules`,
 `test/`. Baseline: clean working tree on branch `moblie` (`fca4d27`).
 Per request, everything flagged or decided in prior audits is **excluded**
-(see `docs/CODEBASE_AUDIT_2026-07-01.md`, `docs/CODEBASE_AUDIT_2026-06-26.md`,
-`docs/WAVE_REVIEW_FINDINGS.md`) — this report contains only NEW findings.
+(see `docs/audits/CODEBASE_AUDIT_2026-07-01.md`, `docs/audits/CODEBASE_AUDIT_2026-06-26.md`,
+`docs/audits/WAVE_REVIEW_FINDINGS.md`) — this report contains only NEW findings.
 Review effort was weighted toward code that postdates the 2026-07-01 audit
 (the application-controller refactor `620fc47`, robustness pass `6be1754`,
 a11y `eb0cd39`, PR #30, and the `fca4d27` "mac" commit), none of which had
@@ -84,12 +84,12 @@ The detailed findings below are retained as the rationale/record.
 | `functions/wave/__tests__/worker.test.js:1329` | wrapped the over-long `test(...)` call; `eslint --fix` re-indented the body | ESLint `max-len` (82 > 80) |
 
 > Full detail is in `git diff`. Nothing below this line was auto-changed.
-> `docs/CODEBASE_AUDIT.md` was archived to `docs/CODEBASE_AUDIT_2026-07-01.md`.
+> `docs/audits/CODEBASE_AUDIT.md` was archived to `docs/audits/CODEBASE_AUDIT_2026-07-01.md`.
 
 ## ⚠️ Pre-ship checklist
 No NEW pre-ship items. The carried-over one still stands: **App Check
 enforcement is OFF on 6 callables** (`TODO(pre-ship)`) — see the checklist in
-`docs/CODEBASE_AUDIT_2026-07-01.md` for the exact lines to flip before the
+`docs/audits/CODEBASE_AUDIT_2026-07-01.md` for the exact lines to flip before the
 store release.
 
 ## 🔴 Security findings (review required)
