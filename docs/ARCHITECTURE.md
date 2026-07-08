@@ -243,8 +243,10 @@ id. `showAddClientSheet` is the single add-client opener (both Clients-tab FABs
 and this flow route through it); it gates its result on `context.mounted` so a
 form torn down mid-sheet never selects into disposed controllers. The affordance
 is admin-only by construction — the appointment add FAB and edit actions are
-already gated on `isAdmin` — and both hosts guard the open with an in-flight
-flag so a double-tap during the settle can't stack two sheets.
+already gated on `isAdmin` — and both hosts guard the open via the shared
+`InlineAddClientHost` mixin (`requestAddClient`,
+`calendar/widgets/sheets/inline_add_client_host.dart`), whose in-flight flag
+stops a double-tap during the settle from stacking two sheets.
 
 ### Error Handling
 
@@ -595,7 +597,7 @@ authoritative; line numbers drift.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (722 test cases as of 2026-07-07). `flutter analyze` is
+Run: `flutter test` (733 test cases as of 2026-07-07). `flutter analyze` is
 clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.

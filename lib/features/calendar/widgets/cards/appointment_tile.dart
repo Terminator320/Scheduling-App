@@ -42,9 +42,11 @@ class AppointmentTile extends StatelessWidget {
     final showChip = alwaysShowChip || status != AppointmentStatus.confirmed;
     final isCancelled = dimWhenCancelled && status.isCancelled;
 
-    final employeeName = appointment.employeeNames.isNotEmpty
-        ? appointment.employeeNames.first
-        : null;
+    // Show every assigned employee, dropping blanks so no stray ", " shows.
+    final joinedNames = appointment.employeeNames
+        .where((name) => name.isNotEmpty)
+        .join(', ');
+    final employeeName = joinedNames.isEmpty ? null : joinedNames;
 
     final timeLabel =
         '${DateUtilsHelper.formatTime(appointment.startTime)} - '

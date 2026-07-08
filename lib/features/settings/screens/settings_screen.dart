@@ -54,8 +54,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final AccountDeletionService _deletionService =
-      widget.accountDeletionService ??
-      ref.read(accountDeletionServiceProvider);
+      widget.accountDeletionService ?? ref.read(accountDeletionServiceProvider);
 
   _SettingsDetail? _selectedDetail;
   bool _isSigningOut = false;
@@ -162,7 +161,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ThemeNotifier notifier, {
     required String langCode,
   }) {
-    final isDark = notifier.isDark;
+    // Resolve against the live OS brightness via MediaQuery so the switch both
+    // matches what's on screen under the default `system` mode and rebuilds if
+    // the OS theme flips while this screen is open.
+    final isDark = isDarkMode(
+      notifier.themeMode,
+      MediaQuery.platformBrightnessOf(context),
+    );
     return SettingsSectionCard(
       child: Column(
         children: [

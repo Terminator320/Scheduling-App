@@ -10,6 +10,22 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.25.0+43] - 2026-07-07
+### Changed
+- **The app now shows as "ES Pro" on your home screen.** The app icon's label
+  was renamed; the branding inside the app is unchanged.
+- **Appointment cards list everyone assigned to a job.** When a visit has more
+  than one person on it, the calendar and history cards now show all of their
+  names instead of only the first.
+
+### Fixed
+- **Re-enabling a disabled employee now updates immediately.** On tablets and in
+  landscape, an employee you just re-enabled no longer keeps showing as
+  "Disabled" in the details pane — it flips to active right away.
+- **The light/dark switch works on the first tap.** If your phone was set to
+  dark mode, the toggle used to start in the wrong position and needed two taps
+  to switch back to light; one tap now does it.
+
 ## [1.24.0+42] - 2026-07-07
 ### Added
 - **Add a new client without leaving the appointment.** When you search for a

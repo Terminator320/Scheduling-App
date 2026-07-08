@@ -155,10 +155,13 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   }
 
   void toggleTheme() {
+    // Flip whatever is on screen now — resolving the default `system` mode
+    // against the live OS brightness — so one tap always changes the
+    // appearance (no more "toggle twice" on a dark phone).
+    final platformBrightness =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
     setState(() {
-      _themeMode = _themeMode == ThemeMode.dark
-          ? ThemeMode.light
-          : ThemeMode.dark;
+      _themeMode = toggledThemeMode(_themeMode, platformBrightness);
     });
     _settingsRepository.save(themeMode: _themeMode);
   }
