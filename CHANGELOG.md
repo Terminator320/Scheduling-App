@@ -10,6 +10,11 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.26.0+45] - 2026-07-08
+### Added
+- **Read the privacy policy from inside the app.** Settings now has a **Legal**
+  section with a **Privacy Policy** link that opens the policy in your browser.
+
 ## [1.25.1+44] - 2026-07-08
 ### Security
 - **Hardened the app's connection to its backend.** Sensitive actions —
