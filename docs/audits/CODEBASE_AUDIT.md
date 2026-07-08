@@ -1,253 +1,180 @@
-# Codebase Audit — 2026-07-07
+# Codebase Audit — 2026-07-08 · App Store Readiness
 
-Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`, `test/`).
-Baseline: working tree (clean) on `moblie` @ `efac0d6`.
+Scope: whole repo (`lib/`, `functions/`, rules, `test/`) **plus** the release
+surface prior audits never covered: `android/` + `ios/` build config, store
+requirements, and the **live deployed Firebase state**.
+Baseline: `moblie` @ `0d6e094` (v1.25.1+44). One uncommitted user change landed
+mid-audit (`lib/main.dart`: `AppleDeviceCheckProvider` → `AppleAppAttestProvider`)
+and is accounted for below.
+
+## Verdict
+
+**The code is ready. The release pipeline is not.** Zero bugs, zero code-side
+security blockers, App Check enforcement and current rules verified live in
+production. What stands between this repo and launch is process: iOS archive
+tasks that need a Mac, App Check console config, and App Store Connect
+paperwork.
+
+> **Launch scope (decided 2026-07-08): App Store ONLY.** Android remains a
+> dev/test target on this Windows box but is never published to Play. The
+> `android/` folder and Android Firebase app stay — they are the local dev
+> harness, not shipped surface. Play-specific findings below are re-marked
+> **N/A (Play)** and only matter if a Play release is ever revisited.
 
 ## Summary
-- **Scanned:** 207 source Dart files in `lib/`, the `functions/` Node.js modules,
-  `firestore.rules` / `storage.rules`, and `test/`.
-- **Auto-fixed (safe, in the diff): 0.** The static level is already clean —
-  `flutter analyze` reports no errors/warnings, `dart fix --dry-run` says
-  "Nothing to fix", and Functions ESLint passes. The only analyzer-invisible dead
-  code found (4 design-token constants) lives in `design_tokens.dart`, a curated
-  design-system API on the "do not touch" list — removing palette/scale entries is
-  a judgment call, so it is **reported, not removed**. Nothing was changed;
-  the tree is untouched.
-- **Reported for your decision:** ⚠️ 1 pre-ship · 🔴 0 security · 🟠 0 bugs ·
-  🔵 5 improvements · 🟡 6 code-quality notes.
-- **Verification:** `flutter analyze` clean (baseline unchanged) · Functions
-  ESLint clean · no edits made, so the test suite is unaffected.
 
-### Top 3 things to look at first
-1. **⚠️ Pre-ship — App Check disabled on 6 callables** (`functions/invites.js`,
-   `account.js`, `wave/callables.js`). Intentional for sideload testing; must be
-   flipped back before store release.
-2. **🔵 I1 — `functions/client_propagation.js` has zero tests.** A live Firestore
-   trigger that fans client edits onto future appointments, deliberately written
-   as pure testable helpers that were never tested. Highest-payoff gap.
-3. **🟡 D1/D2 — two dead `AppColors` constants** (`design_tokens.dart:22,42`),
-   zero references. Cut them or wire them up — your call on the palette.
+- **Scanned:** full static scan (`flutter analyze`, `dart fix --dry-run`,
+  Functions ESLint — all clean), deep review of the delta since the 2026-07-07
+  audit (`efac0d6..HEAD`, 19 files), security ship-gate pass over
+  `functions/` + rules + manifests, Android/iOS store-config audit, and live
+  probes of the deployed backend.
+- **Auto-fixed (safe, in the diff): 1** — dead R8 keep rule for the removed
+  `flutter_image_compress` package (`android/app/proguard-rules.pro`; package
+  absent from `pubspec.lock`, rule provably inert). Also archived yesterday's
+  report to `CODEBASE_AUDIT_2026-07-07.md`.
+- **Reported for your decision:** ⚠️ 7 pre-ship actions · 🔴 2 security (both
+  Low) · 🟠 0 bugs · 🔵 3 improvements.
+- **Verification:** `flutter analyze` clean (errors/warnings: 0) · Functions
+  ESLint pass · deployed functions + rules verified live (below). No Dart or
+  Functions source was changed by this audit.
 
-## ✅ Resolution (2026-07-08) — all findings actioned
-All report-only findings were implemented (commits on `moblie`), and the App
-Check pre-ship gate was flipped at the user's direction:
-- **Tests added** (I1–I4): `client_propagation.test.js`, `maintenance.test.js`,
-  `account.test.js` (functions), `auth_cache_test.dart` (Flutter). Pure helpers
-  `image_magic.js` / `isReauthStale` extracted to make them testable.
-- **Dead tokens removed** (D1–D4); sheet/drawer corner radii tokenized via new
-  `AppRadius.r20`/`r24` (C1).
-- **App Check ENFORCED** on all 6 callables (`enforceAppCheck: true`,
-  `TODO(pre-ship)` notes removed). ⚠️ **Needs `firebase deploy --only functions`
-  to take effect**, and on deploy it blocks clients that can't mint a verified
-  App Check token — cut testers over to Play internal testing / TestFlight first.
-- Verified green: flutter analyze clean · flutter test 751 · functions eslint
-  clean · jest 237.
+## Deployed-state verification (new this audit)
 
-Deferred by design (see notes): C2 spacing-token churn, I5 `build()` extraction,
-L1/L2 reserved l10n keys.
-
----
+- **App Check enforcement is LIVE.** Every callable probed without tokens
+  returns the platform-level `{"message":"Unauthenticated"}` 401 — the code
+  path (`auth-required`) is never reached, which only happens with
+  `enforceAppCheck: true` deployed. The 2026-07-07 memory note "flip not yet
+  deployed" is now stale: **the deploy has happened.**
+- **Firestore rules:** deployed copy is byte-identical to local
+  `firestore.rules`.
+- **Storage rules:** deployed copy matches local `storage.rules`.
+- All 14 functions present in `us-central1` (validateUploadedImage in
+  `us-east1`), nodejs24.
 
 ## Auto-applied cleanups (review the diff)
-None. `flutter analyze`, `dart fix`, and Functions ESLint were all clean, and the
-only dead code found is design-system API surface that is report-only by policy.
-**Nothing below this line was auto-changed.**
 
----
+| File:line | Change | Why |
+|---|---|---|
+| `android/app/proguard-rules.pro:35-36` | Removed `-keep class com.fluttercandies.image_compress.**` | plugin removed from deps; rule inert |
+| `docs/audits/` | `CODEBASE_AUDIT.md` → `CODEBASE_AUDIT_2026-07-07.md` | archive convention |
 
-## ⚠️ Pre-ship checklist (act before release)
-- [x] **App Check enforcement — DONE (2026-07-08).** All 6 callables flipped to
-  `enforceAppCheck: true` and the `TODO(pre-ship)` notes removed
-  (`account.js` — `deleteAccount`; `invites.js` — `createEmployeeInvite` +
-  `redeemSignupCode`; `wave/callables.js` — `waveBootstrap`, `waveGetConnection`,
-  `waveImportCustomers`). The 2 Places callables already enforced.
-  **Still requires `firebase deploy --only functions` to take effect** — until
-  deployed, production runs the old unenforced build. On deploy it blocks any
-  client that can't mint a verified App Check token (App Distribution sideloads),
-  so move testers to Play internal testing / TestFlight first.
+> Nothing below this line was auto-changed.
 
----
+## ⚠️ Pre-ship checklist (act before release — App Store only)
+
+- [ ] **1. Commit the App Attest provider swap.** `lib/main.dart:100`
+  (`AppleAppAttestProvider`) is currently **uncommitted**; CLAUDE.md was updated
+  to match. Commit it before cutting the store build.
+- [ ] **2. Firebase Console App Check must match the code.** Enable
+  **App Attest** for the iOS app (no `.p8`; that's DeviceCheck) and, on the Mac,
+  add the App Attest capability/entitlement
+  (`com.apple.developer.devicecheck.appattest-environment` = `production` for
+  Release). Enforcement is already live server-side, so a store build with an
+  unconfigured provider loses **all** callables. App Attest doesn't work on the
+  Simulator — verify on real hardware. (Android dev builds are unaffected:
+  `kDebugMode` uses `AndroidDebugProvider` with registered debug tokens.)
+- [ ] **3. iOS archive tasks (BLOCKED — needs a Mac).** Add the Crashlytics
+  dSYM upload Run Script phase — the project uses **Swift Package Manager**, so
+  the script lives in the firebase-ios-sdk checkout (`upload-symbols`), *not*
+  `${PODS_ROOT}/FirebaseCrashlytics/run`; set Release Debug Information Format
+  to DWARF with dSYM; archive + upload. Signing itself is configured (team
+  `H5XWLU87AX`, automatic, deployment target 15.0 — satisfies App Attest's 14+).
+- [ ] **4. Carry `ios/GoogleService-Info.plist` to the Mac out-of-band.** It
+  exists at the `ios/` root (where the Xcode project references it, and it IS in
+  the Resources phase) but is gitignored — a fresh clone won't have it.
+- [ ] **5. App Store Connect paperwork.** The **privacy questionnaire**
+  (email/identifiers/crash data). `PrivacyInfo.xcprivacy` and
+  `ITSAppUsesNonExemptEncryption=false` are already in the repo — those halves
+  are done.
+
+### N/A (Play) — parked unless a Play release is ever revisited
+
+- **Android upload keystore / `key.properties`** — absent from disk;
+  `android/app/build.gradle.kts:69-73` falls back to debug signing. Irrelevant
+  while Android is dev-only (debug builds are exactly what dev uses).
+- **Release `appbundle` R8 smoke test** — R8/minify only runs in Android
+  release builds, which no longer ship.
+- **Play Data Safety form** and **Play Integrity registration** (would need the
+  Play app-signing SHA-256, which only exists after a Play upload).
 
 ## 🔴 Security findings (review required)
-**None exploitable.** A full trace of the security-relevant data paths across
-`functions/`, `firestore.rules`, `storage.rules`, and `lib/` found no vulnerability.
-Verified correct: no secrets in source (real `dev/.env` / `google-services.json` /
-`GoogleService-Info.plist` untracked; Wave token + `GOOGLE_MAP_API_KEY` read via
-`defineSecret().value()` in functions only); App Check active in `main()`;
-role/`isAdmin` never cached (`AuthCache` excludes role by design); `!employee.isActive`
-gating; two-layer employee visibility filter; deny-by-default rules with matching
-query constraints; `ClientRecord.toMap` omits `waveCustomerId`/`wave`; server-side
-magic-byte image validation; all callables validate `req.auth.uid` +
-`assertPayloadShape` + `requireString`/`readSessionToken`; rate limits keyed
-correctly (`redeemSignupCode` by token email); no SQL/shell/`eval`; Wave GraphQL
-values passed via `variables`, never interpolated; callable responses use the safe
-loose-cast idiom.
 
-**Defense-in-depth observations (intentional today — no action needed):**
-- `waveGetConnection` has no rate limit (`functions/wave/callables.js:204`) —
-  admin-gated, reads one doc, no secret / Wave call. Intentional, low-risk.
-- Active employees can read active peers' email/phone
-  (`firebase_employees_repository.dart:52`, `firestore.rules:102`) — a documented
-  product decision for the assignee picker/display. Flagged only so it stays a
-  conscious choice.
+### S1 — Release build silently falls back to debug signing · severity: low (N/A while Play is off the table) · confidence: high
+- **Where:** `android/app/build.gradle.kts:69-73`
+- **Risk:** Process, not exploit: a fresh machine or CI produces a debug-signed
+  "release" with no error; Play rejects it at upload (key mismatch), so the
+  failure surfaces late and confusingly. With the Apple-only launch decision
+  (2026-07-08) Android never builds for release, so this is dormant — recorded
+  for a future Play revisit.
+- **Fix (if ever needed):** Replace the fallback with
+  `throw GradleException("key.properties missing — release builds require the upload keystore")`
+  (optionally gated behind `-PallowDebugSigning` for local smoke builds).
 
----
+### S2 — Transitive npm advisories in `functions/` · severity: low · confidence: high
+- **Where:** `functions/package-lock.json` — `npm audit --omit=dev`: 1 High
+  (form-data < 2.5.6, CRLF injection GHSA-hmw2-7cc7-3qxx) + 9 Moderate, all
+  transitive under `firebase-admin`/`@google-cloud/*`.
+- **Risk:** Minimal in this call graph — no first-party function builds
+  multipart requests from user input — but a High advisory shouldn't ship
+  un-triaged.
+- **Fix:** `cd functions && npm audit fix` (non-breaking); the remaining uuid
+  chain needs firebase-admin@14 — defer that breaking bump.
 
-## 🟠 Bug findings (review required)
-**None above the confidence bar.** Every historically bug-prone area was traced
-and confirmed correct: submit/save reentrancy flags set before the first `await`
-and reset on all paths (`add_event_controller.dart:192`,
-`event_details_controller.dart:376`); the populated→empty kick-out signal intact
-(`main.dart:238` passes `previous`); assignee preservation via `_resolveAssignees`;
-`_invalidateSearchCache()` called on every write path; `whereArrayContainsAny`
-chunked by 30 in `findBusyEmployees`; safe callable map casts; subscriptions /
-controllers / debouncers disposed; `mounted` / `ref.mounted` guards after awaits;
-DST-safe date math.
+## 🟠 Bug findings
 
-**Two sub-threshold observations (both ~20–25% confidence, likely unreachable):**
-- `lib/features/employees/screens/employees_screen.dart` — `_liveSelectedEmployee`:
-  if `allUsersStreamProvider` emitted a settled non-null *empty* list, a selected
-  employee not found in it clears the detail pane. This is the documented intent
-  for a deleted employee; unlike `watchUserDoc`, `watchAllUsers()` doesn't filter a
-  transient from-cache empty snapshot. Unreachable in practice (selection requires
-  a warm list, and the admin is always present in `users`).
-- Same file, `_buildMasterList`: the list's loading/error `.when` is driven by
-  `employeesStreamProvider` while contents come from `filteredEmployeesProvider`
-  (backed by `allUsersStreamProvider`); if the two streams' timing diverged the
-  list could momentarily read "no employees." They subscribe together, so no
-  observable effect.
-
-Neither is worth a code change; noted for completeness.
-
----
+**None.** The full delta since the 2026-07-07 audit was reviewed line-by-line:
+the 141-line `month_year_picker.dart` change is pure re-indentation
+(`git diff -w` ≈ empty), removed tokens (`AppColors.disabled`,
+`AppColors.darkDisabled`, `AppRadius.r4`, `AppDuration.slow`) have zero
+remaining references, new tokens `r20`/`r24` exactly match the literals they
+replaced, and the extracted Functions helpers (`isReauthStale`,
+`hasValidImageMagic`) are logic-identical to the inline code they came from.
+All 8 callables set `enforceAppCheck: true` with payload validation
+(`assertPayloadShape`/`requireString`) and durable rate limits intact.
 
 ## 🔵 Areas to improve (review required)
-Ordered by payoff. All report-only — the Functions test gaps are the real prize.
 
-### I1 — `functions/client_propagation.js` has zero tests · impact: high · confidence: high
-- **Where:** `functions/client_propagation.js:60-203` (logic), `:220-227` (exports).
-- **Opportunity:** A live Firestore trigger (`propagateClientEdits`, wired at
-  `index.js:23`) that fans client-doc edits onto the denormalized
-  `clientName`/`clientPhone`/`address` of all *future* appointments. The author
-  deliberately factored the tricky logic into pure, dependency-free functions —
-  `relevantClientChange`, `buildAppointmentPatch`, `clientDisplayName`,
-  `propagateClientChange(deps)` — and annotated them `// Exported for unit tests.`
-  **No test file exists** (only `invites.test.js`, `security.test.js` are present).
-  The edge cases are exactly the kind that silently corrupt data: empty-previous-
-  address must NOT match (`:103`), custom-address detection (`:138`), legacy
-  `businessName` fallback (`:60-65`), idempotency on retry, and pagination. jest is
-  already configured; these take/return plain objects.
-- **Suggested improvement:** Add `functions/__tests__/client_propagation.test.js`
-  covering `relevantClientChange` (name/phone/address change matrix incl. empty-from)
-  and `buildAppointmentPatch` (custom-address skip, already-propagated no-op). Skip
-  the paginated `propagateClientChange` integration unless quick via injected `deps`.
+### I1 — Doc drift: env keys and stale iOS notes · impact: low · confidence: high
+- **Where:** `CLAUDE.md` "Required environment" (says 5 keys; code reads 7 —
+  `IOS_API_KEY`, `IOS_APP_ID` added in `lib/firebase_options.dart:28-29`) and
+  the iOS Phase-0 notes (a `Podfile` will never exist — the project uses Swift
+  Package Manager with `firebase-ios-sdk 12.15.0` pinned; iOS Firebase options
+  are already populated, so the "re-run flutterfire configure" step is done).
+- **Suggested improvement:** Update the two CLAUDE.md passages so the Mac
+  handoff doesn't chase steps that no longer exist.
 
-### I2 — `deleteAccount` callable has no test · impact: medium · confidence: high
-- **Where:** `functions/account.js:36-149`.
-- **Opportunity:** A security-load-bearing, irreversible callable with branches
-  that are easy to regress: stale-`auth_time` rejection *before* the rate limiter
-  (`:47-60`), rate-limit slot **refund** on server-side auth-delete failure
-  (`:125`), and the deliberate "delete Auth user first, then Firestore doc"
-  ordering (`:109-144`). None is exercised by a test.
-- **Suggested improvement:** A `firebase-functions-test`-style unit test (as
-  `invites.test.js` already does) asserting: stale `auth_time` throws without
-  consuming a limiter slot; auth-delete failure triggers `refund()`; success returns
-  `{deleted:true}`. Three focused cases — not full coverage.
+### I2 — `pubspec.yaml:2` description is "Paul App" · impact: low · confidence: high
+- Internal-only (not shipped to stores), but it's the last trace of the old
+  name. One-line fix whenever convenient.
 
-### I3 — `functions/maintenance.js` magic-byte validation + purge loop untested · impact: medium · confidence: high
-- **Where:** `functions/maintenance.js:11-58` (`validateUploadedImage`), `:100-169`
-  (`purgeExpiredHistory`).
-- **Opportunity:** The JPEG/PNG magic-byte check (`:42-46`) is a stated security
-  invariant (the server-side backstop against the Storage rule trusting client
-  `contentType`), and the purge loop has a subtle no-progress bailout (`:158`)
-  guarding against an infinite loop. Both untested.
-- **Suggested improvement:** Extract the byte check into a pure
-  `hasValidImageMagic(buffer)` helper and unit-test it against JPEG / PNG / invalid
-  buffers. Leave the Storage/schedule wrappers untested (integration-heavy).
-
-### I4 — `lib/features/auth/data/auth_cache.dart` untested · impact: low · confidence: high
-- **Where:** `auth_cache.dart:18-54`.
-- **Opportunity:** Security-adjacent (persists signed-in identity to encrypted
-  secure storage; the role-cache invariant is enforced *by omission* here).
-  `loadIfMatch` has real branching — uid mismatch → null, empty docId → null,
-  color-parse fallback (`:43`) — and no test. It takes an injectable
-  `SecureStorageService`, so it's testable with
-  `FlutterSecureStorage.setMockInitialValues({})`.
-- **Suggested improvement:** One small test: `save` → `loadIfMatch` round-trips the
-  record; wrong-uid and missing-docId return null. Low priority.
-
-### I5 — Two `build()` methods exceed the ~60-line guideline · impact: low · confidence: medium
-- **Where:** `main_calendar_screen.dart:211-344` (~133 lines);
-  `details_view_body.dart:41-155` (~114 lines).
-- **Opportunity:** Both exceed the frontend rule's ~60-line target, but both are
-  already decomposed into extracted sub-widgets — what remains is largely
-  declarative assembly. The one honest wart is `main_calendar_screen.build()`,
-  which *interleaves* imperative logic (day-index memoization `:250-253`,
-  `ref.listen` wiring `:222-240`, locale-format caching `:261-264`) with the tree.
-- **Suggested improvement:** Optionally extract that pre-tree logic into
-  `_syncDayIndex()` / `_wireListeners()` so `build()` reads as pure assembly. Do
-  **not** further split the widget trees (the sub-widgets already exist — more
-  indirection would be premature). `details_view_body` is fine as-is.
-
----
-
-## 🟡 Code-quality suggestions (optional)
-Convention/hygiene items that need a real edit, so they're report-only.
-
-- **D1 — `AppColors.disabled` is dead** (`lib/core/theme/design_tokens.dart:22`,
-  `Color(0xFFBFCBDD)`). Zero references in `lib/` or `test/` (the many `disabled`
-  hits elsewhere are the status *string* `'disabled'`). Not fed into any
-  `ColorScheme` / `ThemeExtension`. Remove, or wire a disabled-surface color into
-  the theme.
-- **D2 — `AppColors.darkDisabled` is dead** (`design_tokens.dart:42`,
-  `Color(0xFF1E3260)`). Zero references, including inside `design_tokens.dart`
-  itself (its value duplicates `darkSurfaceAlt`). Dead pair with D1 — remove
-  together.
-- **D3 — `AppRadius.r4` unused** (`design_tokens.dart:84`). No references; the rest
-  of the scale (`r8`/`r12`/`r16`/`rFull`) is used. Remove, or keep as an
-  intentional scale anchor (document the intent).
-- **D4 — `AppDuration.slow` unused** (`design_tokens.dart:110`). No references;
-  `fast`/`normal`/`shimmer` are used. Remove or keep as a deliberate scale anchor.
-- **C1 — Off-`AppRadius` corner radii.** Hardcoded `Radius.circular(20)` at
-  `cupertino_time_picker.dart:79`, `sheet_helpers.dart:18,35`,
-  `month_year_picker.dart:23`; `Radius.circular(24)` at `settings_drawer.dart:71`.
-  The `AppRadius` scale stops at `r16` then jumps to `rFull`, so these sheet/drawer
-  top-corner radii have no token. Add an `AppRadius.r20`/`r24` (or a `sheetTop`
-  token) and reference it, or accept as sheet-specific and document.
-- **C2 — On-scale spacing written as raw literals** (systemic, low priority).
-  Many `SizedBox`/`EdgeInsets` use values that are *on* the AppSpacing scale
-  (12/16/24…) but as literals instead of `AppSpacing.spN`
-  (e.g. `client_detail_view.dart:130`, `employee_details_view.dart:146`,
-  `settings_tiles.dart:137`). No genuinely off-scale value exists (verified — the
-  1–3px nudges, 1px calendar gutter, and 48px splash inset are sanctioned). This is
-  a single optional tokenization pass, not per-line bugs.
-
-**Orphaned-looking l10n keys (deferred — do NOT delete in a code sweep):**
-- **L1 — `error_couldNotSaveChangesTryAgain`** (`app_en.arb:318` + `app_fr.arb`).
-- **L2 — `error_couldNotAddClientTryAgain`** (`app_en.arb:322` + `app_fr.arb`).
-  Both have zero `context.l10n.*` call sites but are explicitly listed in CLAUDE.md
-  as *reserved failure-UX strings* ("reuse before adding new ones"). Treat as
-  reserved-for-reuse; revisit only in a deliberate l10n-pruning pass that also
-  updates the CLAUDE.md reserve list. All other ~350 ARB keys have live call sites.
-
----
+### I3 — No `<monochrome>` layer in the adaptive icon · impact: N/A (Play) · confidence: high
+- **Where:** `android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml`
+- Android 13+ themed icons render a grey default without it. Moot for an
+  Apple-only launch; parked with the other Play items.
 
 ## Notes / uncertainties
-- **Doc drift:** `functions/index.js:23` exports `propagateClientEdits` (from
-  `functions/client_propagation.js`), but the "Cloud Functions" section of
-  `CLAUDE.md` lists the older module set and doesn't mention `client_propagation.js`.
-  Worth a docs refresh. **Caveat:** in this repo `CLAUDE.md` and `.claude/` are
-  gitignored, so that update can't be committed — it's a local-only edit.
-- **Unused-dependency scan false positives (confirmed, not dead weight):** the
-  static scan flagged `build_runner`, `freezed`, and `flutter_launcher_icons` as
-  having no `package:<name>/` import. All three are tooling — `freezed`/`build_runner`
-  generate the `.freezed.dart` files that ARE in active use, and
-  `flutter_launcher_icons` is a manually-run CLI configured in `pubspec.yaml`.
-  Keep all three.
-- **`functions/scripts/backfill.js`** is a one-time `usersByUid` bridge migration
-  (idempotent, run-once) — not the removed `backfillLegacyClientNames`. Likely
-  already executed; kept as an ops runbook.
-- Generated files (`*.g.dart`, `*.freezed.dart`, `lib/l10n/.gen/**`) were excluded
-  from the review per `analysis_options.yaml`.
-- No commented-out code blocks, stray `print`/`debugPrint`, or non-`pre-ship`
-  `TODO`/`FIXME`/`HACK` markers exist in `lib/`.
+
+- **Play Integrity / App Attest console registration state could not be
+  verified from this box** — the Firebase Console App Check page must be checked
+  by eye (pre-ship item 4). Everything else deploy-side was verified directly.
+- The App Attest entitlement file isn't in the repo (no
+  `Runner.entitlements`); adding the capability is a Mac/Xcode step (item 4).
+- `dev/.env` was verified by key **names** only (all 7 present, none
+  placeholder); contents were never read or printed.
+- Store assets (screenshots, feature graphic, listing copy) weren't audited —
+  console-side, out of repo scope.
+
+## Ship-gate PASS list (verified, for the record)
+
+versionCode/Name 44/1.25.1 from pubspec · minSdk 24 / target+compileSdk 36
+(≥ Play's requirement) · minify+shrink+proguard on, Crashlytics mapping upload
+wired · manifest: 4 justified permissions, `allowBackup=false`,
+no cleartext/debuggable, single exported activity · adaptive + legacy icons ·
+`ITSAppUsesNonExemptEncryption=false` · all four iOS usage descriptions ·
+`PrivacyInfo.xcprivacy` tracked + in Resources phase · Xcode team/bundle id
+real, deployment target 15.0 · Crashlytics Dart wiring
+(`FlutterError.onError`, `PlatformDispatcher.onError`, zone) · l10n EN/FR
+parity (`untranslated.json` = `{}`) · zero `TODO(pre-ship)`/`FIXME` in shipping
+code · no secrets tracked in git (`dev/.env`, `google-services.json`,
+`GoogleService-Info.plist`, keystores all ignored; plist has zero commits in
+history) · rules default-deny with all documented clauses intact.

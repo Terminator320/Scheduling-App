@@ -97,7 +97,7 @@ Future<void> main() async {
                 : const AndroidPlayIntegrityProvider(),
             providerApple: kDebugMode
                 ? const AppleDebugProvider()
-                : const AppleDeviceCheckProvider(),
+                : const AppleAppAttestProvider(),
           ),
         ]);
       }
