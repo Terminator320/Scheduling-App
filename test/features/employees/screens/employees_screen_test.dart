@@ -166,6 +166,33 @@ void main() {
   );
 
   testWidgets(
+    'split-layout detail pane clears when the selected employee vanishes '
+    'from the live stream (deleted elsewhere), leaving no ghost actions',
+    (tester) async {
+      _useWideViewport(tester);
+      final users = _seededUsers(const [_disabledJane]);
+      addTearDown(users.controller.close);
+
+      await tester.pumpWidget(_wrap(employees: users.make));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Jane Doe'));
+      await tester.pumpAndSettle();
+      expect(find.text('Enable employee'), findsOneWidget);
+
+      // The employee is deleted (e.g. by another admin) — the live list drops
+      // them entirely.
+      users.emit(const []);
+      await tester.pumpAndSettle();
+
+      // No ghost detail pane with live Enable/Disable/Delete actions.
+      expect(find.text('Enable employee'), findsNothing);
+      expect(find.text('Disable employee'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'tapping Enable in the split-layout detail pane flips the employee to '
     'active (the reported re-enable flow)',
     (tester) async {

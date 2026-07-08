@@ -73,9 +73,17 @@ class EventList extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final e = value[index];
                     final accent = colorFromMap(e, colorMap) ?? scheme.outline;
-                    final employeeName = e.employeeIds.isNotEmpty
-                        ? nameMap[e.employeeIds.first]
-                        : null;
+                    // Show every assigned employee, not just the first —
+                    // dropping any id the name map can't resolve and any blank
+                    // name (so no stray ", " separators).
+                    final joinedNames = e.employeeIds
+                        .map((id) => nameMap[id])
+                        .whereType<String>()
+                        .where((name) => name.isNotEmpty)
+                        .join(', ');
+                    final employeeName = joinedNames.isEmpty
+                        ? null
+                        : joinedNames;
 
                     return FadeInItem(
                       key: ValueKey(e.id),

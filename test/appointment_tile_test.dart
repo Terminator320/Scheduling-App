@@ -62,6 +62,24 @@ void main() {
     expect(find.textContaining('Sarah Johnson'), findsOneWidget);
   });
 
+  testWidgets('lists every assigned employee, not just the first', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentTile(
+          appointment: _fakeAppt(
+            employeeNames: const ['Sarah Johnson', 'Marc Dubois'],
+            employeeIds: const ['e1', 'e2'],
+          ),
+          employeeColorMap: _colorMap,
+        ),
+      ),
+    );
+    expect(find.textContaining('Sarah Johnson, Marc Dubois'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('does NOT show StatusChip for confirmed status', (tester) async {
     await tester.pumpWidget(
       _wrap(

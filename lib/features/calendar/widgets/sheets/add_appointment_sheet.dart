@@ -13,8 +13,7 @@ import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialo
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
-import 'package:scheduling/features/clients/domain/models/client_record.dart';
-import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
+import 'package:scheduling/features/calendar/widgets/sheets/inline_add_client_host.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -29,7 +28,8 @@ class AddEventSheet extends ConsumerStatefulWidget {
   ConsumerState<AddEventSheet> createState() => _AddEventSheetState();
 }
 
-class _AddEventSheetState extends ConsumerState<AddEventSheet> {
+class _AddEventSheetState extends ConsumerState<AddEventSheet>
+    with InlineAddClientHost {
   final _controllers = AppointmentFormControllers(
     title: TextEditingController(),
     date: TextEditingController(),
@@ -42,11 +42,6 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
   );
   final _clientSearchDebounce = Debouncer(const Duration(milliseconds: 300));
   late final _provider = addEventControllerProvider(widget.initialDate);
-
-  // Guards the inline add-client sheet against a double-tap: the sheet-from-
-  // search settle delays the modal barrier ~80ms, leaving the trigger tappable,
-  // so an unguarded second tap would stack a second sheet (duplicate client).
-  bool _addingClient = false;
 
   AddEventController get _notifier => ref.read(_provider.notifier);
 
@@ -64,20 +59,6 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     _clientSearchDebounce.dispose();
     _controllers.dispose();
     super.dispose();
-  }
-
-  Future<ClientRecord?> _onRequestAddClient(String name) async {
-    if (_addingClient) return null;
-    _addingClient = true;
-    try {
-      return await showAddClientSheet(
-        context,
-        initialName: name,
-        settleFocus: true,
-      );
-    } finally {
-      if (mounted) _addingClient = false;
-    }
   }
 
   void _onClientSearchChanged(String query) {
@@ -212,7 +193,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
           onSearchClients: _onClientSearchChanged,
           onSelectClient: _notifier.selectClient,
           onClearClient: _notifier.clearClient,
-          onRequestAddClient: _onRequestAddClient,
+          onRequestAddClient: requestAddClient,
           onToggleEmployee: _notifier.toggleEmployee,
           onPickDate: _pickDate,
           onPickStartTime: _pickStartTime,
