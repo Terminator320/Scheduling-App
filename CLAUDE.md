@@ -9,17 +9,25 @@ would leave no runnable platform on this machine), but don't chase
 Play-release work (keystore, Data Safety, Play Integrity).
 
 iOS notes (Phase 0 of clean-architecture restructure):
-- iOS native build, run, and Crashlytics dSYM upload require a Mac.
-  `flutterfire configure` must be re-run there to populate iOS values in
-  `lib/firebase_options.dart` and drop `ios/Runner/GoogleService-Info.plist`.
-- Add the Crashlytics Run Script build phase
-  (`${PODS_ROOT}/FirebaseCrashlytics/run`) to the Xcode project on first
-  iOS build, and set Build Settings → Debug Information Format to
-  `DWARF with dSYM` for Release.
-- `ios/Podfile` should set `platform :ios, '14.0'` once it's generated —
-  App Check uses **App Attest** (`AppleAppAttestProvider` in `main()`), which
-  requires iOS 14+. Don't lower it back to 13.0 or attestation silently fails
-  on the runtime device.
+- iOS native build, run, and Crashlytics dSYM upload require a Mac. **Do NOT
+  re-run `flutterfire configure`** — `lib/firebase_options.dart` already builds
+  the iOS options from `dev/.env` (`IOS_API_KEY`, `IOS_APP_ID`,
+  `iosBundleId: net.vogas.scheduling`); re-running it rewrites the file into the
+  literal-values style and breaks the env-based setup. Carry
+  `ios/GoogleService-Info.plist` (gitignored) to the Mac out-of-band; it lives
+  at the `ios/` **root**, not `ios/Runner/`.
+- **The project uses Swift Package Manager — there is no Podfile and never will
+  be.** Ignore any older notes mentioning `pod install` or `${PODS_ROOT}`.
+  Xcode resolves `firebase-ios-sdk` (pinned in `Package.resolved`) on first
+  open. Add the Crashlytics dSYM upload Run Script from the SPM checkout
+  (`"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run"`),
+  and set Build Settings → Debug Information Format to `DWARF with dSYM` for
+  Release.
+- Deployment target is **iOS 15.0** (set in the Xcode project, ≥ App Attest's
+  14+ requirement). App Check uses **App Attest** (`AppleAppAttestProvider` in
+  `main()`); don't lower the target below 14 or attestation silently fails on
+  the runtime device. See `docs/plans/IOS_APP_STORE_HANDOFF.md` for the full
+  Mac runbook.
 - App Check via **App Attest** (not DeviceCheck) needs, on the Xcode side:
   the **App Attest** capability / entitlement
   (`com.apple.developer.devicecheck.appattest-environment`, set to `production`
@@ -45,9 +53,10 @@ flutter build apk
 
 ## Required environment
 
-`dev/.env` (gitignored, bundled as asset). Keys: `FIREBASE_API_KEY`,
-`APP_ID`, `MESSAGING_SENDER_ID`, `PROJECT_ID`, `STORAGE_BUCKET`.
-Also needs `google-services.json`.
+`dev/.env` (gitignored, bundled as asset). 7 keys: `FIREBASE_API_KEY`,
+`APP_ID`, `MESSAGING_SENDER_ID`, `PROJECT_ID`, `STORAGE_BUCKET`, plus the iOS
+pair `IOS_API_KEY`, `IOS_APP_ID` (read in `lib/firebase_options.dart` to build
+the iOS `FirebaseOptions`). Android also needs `google-services.json`.
 
 - **Only Firebase client config in `dev/.env`.** It's an asset bundled into the APK/AAB. Server-side keys (Stripe, OpenAI, admin tokens) must live in Google Secret Manager and be read from a Cloud Function.
 

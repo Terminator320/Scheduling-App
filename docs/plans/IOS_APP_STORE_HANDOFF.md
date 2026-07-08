@@ -16,13 +16,13 @@ App Attest steps are the critical path.
 
 ## 0. Before leaving the Windows box
 
-- [ ] **Commit + push `moblie`** so the Mac clone has: the
+- [x] **Commit + push `moblie`** so the Mac clone has: the
   `AppleAppAttestProvider` swap in `lib/main.dart`, the proguard cleanup, the
   updated audit report, and this handoff doc.
-- [ ] **CLAUDE.md is gitignored** (`.gitignore:20`) — committing it needs
+- [x] **CLAUDE.md is gitignored** (`.gitignore:20`) — committing it needs
   `git add -f CLAUDE.md`. (`.claude/` rules/skills are also ignored at
   `.gitignore:151` and will NOT be on the Mac unless force-added too.)
-- [ ] **Carry these gitignored files out-of-band** (AirDrop/USB — not email):
+- [x] **Carry these gitignored files out-of-band** (AirDrop/USB — not email):
   - `dev/.env` → `dev/.env` (all 7 keys incl. `IOS_API_KEY`/`IOS_APP_ID`; it's
     a bundled asset — the app won't boot without it)
   - `ios/GoogleService-Info.plist` → `ios/` **root** (NOT `ios/Runner/` — the
@@ -48,12 +48,12 @@ App Attest steps are the critical path.
 
 ## 2. Clone, restore, first run
 
-- [ ] `git clone` → `git checkout moblie` → drop the two carried files into
+- [x] `git clone` → `git checkout moblie` → drop the two carried files into
   place (step 0).
-- [ ] `flutter pub get`. l10n regenerates automatically on build
+- [x] `flutter pub get`. l10n regenerates automatically on build
   (`generate: true`; `lib/l10n/.gen/` is gitignored — `flutter gen-l10n` runs
   it manually if the IDE complains before the first build).
-- [ ] **Smoke run on the Simulator is fine at this stage** — debug builds use
+- [x] **Smoke run on the Simulator is fine at this stage** — debug builds use
   `AppleDebugProvider`. On first run, the console prints an App Check **debug
   token**: register it in Firebase Console → App Check → apps → iOS app →
   Manage debug tokens. (Unregistered token symptom: every callable and
