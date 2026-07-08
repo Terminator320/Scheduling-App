@@ -17,7 +17,7 @@ lib/
 │   ├── animations/                  Shared animation widgets (FadeInItem, TapScale, AnimatedLoadingButton, AnimatedFormFieldWrapper — transition-only field shake)
 │   ├── errors/                      Base Failure class + error_cause.dart (sanitized cause classifier + tagged notice composer)
 │   ├── images/                      Image picker (native resize/compress at pick time) + Firebase Storage upload service
-│   ├── launchers/                   phone_call_launcher.dart (launchPhoneCall — shared tel: dialer; parallels AddressMapLauncher / EmailComposeLauncher)
+│   ├── launchers/                   phone_call_launcher.dart (launchPhoneCall — shared tel: dialer) + web_url_launcher.dart (launchWebUrl — external https: opener for the Settings privacy-policy link); parallel AddressMapLauncher / EmailComposeLauncher
 │   ├── layout/                      Responsive shell — AdaptiveShell (nav rail), MasterDetailScaffold, PrimaryScrollScope (per-pane PrimaryScrollController so simultaneously-alive primary scrollables don't share one — the app-wide Scrollbar needs one ScrollPosition per controller), breakpoints (context.isWide / isLandscape / isSplitLayout for the split chrome; isCompact / isNarrowWidth for small-phone & large-text row folding)
 │   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics)
 │   ├── notices/                     In-app toast system: AppNotice types, NoticeService (stream), NoticeListener (widget)
