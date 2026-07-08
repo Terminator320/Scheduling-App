@@ -48,11 +48,7 @@ function isReauthStale(authTime, nowSec, maxAgeSeconds) {
 // We do NOT touch shared business data (appointments, clients, appointment
 // images): those are owned by the business, not the individual account.
 const deleteAccount = onCall(
-    // TODO(pre-ship): set back to `enforceAppCheck: true` once the app ships
-    // through Play Store and Play Integrity can mint verified App Check
-    // tokens. Temporarily false so testers on Firebase App Distribution
-    // sideloads (UNRECOGNIZED_VERSION verdict) aren't blocked.
-    {enforceAppCheck: false},
+    {enforceAppCheck: true},
     async (req) => {
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
