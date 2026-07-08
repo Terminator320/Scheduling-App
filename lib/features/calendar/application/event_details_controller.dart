@@ -149,8 +149,8 @@ class EventDetailsController extends Notifier<EventDetailsState>
   }
 
   /// The active-staff set, resolved identically for seeding and assignee
-  /// resolution — keeping the two in lockstep is a correctness requirement
-  /// (CLAUDE.md). Reads the repository directly rather than touching
+  /// resolution — keeping the two in lockstep is a correctness requirement.
+  /// Reads the repository directly rather than touching
   /// [employeesStreamProvider]: initializing that auth-gated provider from a
   /// microtask leaves a pending error element when no user is signed in, and
   /// its first widget-side watch would then flush that error mid-build.
