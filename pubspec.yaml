@@ -1,5 +1,5 @@
 name: scheduling
-description: "Paul App"
+description: "ES Pro — appointment, client, and employee scheduling."
 publish_to: 'none'
 
 version: 1.25.1+44
