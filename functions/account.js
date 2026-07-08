@@ -17,6 +17,20 @@ const AUTH_RATE_WINDOW_MS = 15 * 60 * 1000;
 // stolen-but-not-yet-expired token could trigger irreversible deletion.
 const REAUTH_MAX_AGE_SECONDS = 5 * 60;
 
+/**
+ * True when the caller's re-authentication is missing or too old to permit an
+ * irreversible delete. A live-but-stale ID token (valid ~1 hour) must not be
+ * enough on its own — deletion requires a fresh in-app re-auth. Pure/testable.
+ * @param {*} authTime ID-token `auth_time` (epoch seconds) or undefined.
+ * @param {number} nowSec Current time in epoch seconds.
+ * @param {number} maxAgeSeconds Allowed staleness window in seconds.
+ * @return {boolean}
+ */
+function isReauthStale(authTime, nowSec, maxAgeSeconds) {
+  return typeof authTime !== "number" ||
+      nowSec - authTime > maxAgeSeconds;
+}
+
 // ----- deleteAccount callable ------------------------------------------------
 //
 // Implements C6 from the production-readiness plan and satisfies the in-app
@@ -49,8 +63,7 @@ const deleteAccount = onCall(
       // would let a few reauth retries lock them out of deletion entirely).
       const authTime = req.auth.token?.auth_time;
       const nowSec = Math.floor(Date.now() / 1000);
-      if (typeof authTime !== "number" ||
-          nowSec - authTime > REAUTH_MAX_AGE_SECONDS) {
+      if (isReauthStale(authTime, nowSec, REAUTH_MAX_AGE_SECONDS)) {
         logger.warn("deleteAccount: stale auth_time; reauth required", {
           uid: req.auth.uid,
           authTime,
@@ -148,4 +161,8 @@ const deleteAccount = onCall(
     },
 );
 
-module.exports = {deleteAccount};
+module.exports = {
+  deleteAccount,
+  // Exported for unit tests.
+  isReauthStale,
+};

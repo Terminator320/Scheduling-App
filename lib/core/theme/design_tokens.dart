@@ -19,7 +19,6 @@ class AppColors {
   static const Color subtle = Color(0xFF5A6B8C);
   static const Color muted = Color(0xFF8A99B5);
   static const Color outline = Color(0xFFD8E1EF);
-  static const Color disabled = Color(0xFFBFCBDD);
 
   static const Color success = Color(0xFF22C55E);
   static const Color successTint = Color(0xFFDCFCE7);
@@ -39,7 +38,6 @@ class AppColors {
   static const Color darkSubtle = Color(0xFF8FA3C7);
   static const Color darkMuted = Color(0xFF5A6B8C);
   static const Color darkOutline = Color(0xFF2A3B66);
-  static const Color darkDisabled = Color(0xFF1E3260);
 
   static const Color darkPrimaryTint = Color(0xFF07214F);
   static const Color darkPrimaryOnDark = Color(0xFF7FD3FF); // Light Sky Blue
@@ -81,10 +79,11 @@ class AppSpacing {
 
 class AppRadius {
   AppRadius._();
-  static const double r4 = 4;
   static const double r8 = 8;
   static const double r12 = 12;
   static const double r16 = 16;
+  static const double r20 = 20;
+  static const double r24 = 24;
   static const double rFull = 999;
 }
 
@@ -107,7 +106,6 @@ class AppDuration {
   AppDuration._();
   static const Duration fast = Duration(milliseconds: 150);
   static const Duration normal = Duration(milliseconds: 250);
-  static const Duration slow = Duration(milliseconds: 400);
   static const Duration shimmer = Duration(milliseconds: 1200);
 }
 

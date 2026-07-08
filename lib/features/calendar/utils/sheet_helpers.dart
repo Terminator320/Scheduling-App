@@ -15,7 +15,7 @@ Future<AppointmentRecord?> showAddEventPopup(
     backgroundColor: Colors.transparent,
     sheetAnimationStyle: AppMotion.sheetStyle,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.r20)),
     ),
     builder: (_) => AddEventSheet(initialDate: initialDate),
   );
@@ -32,7 +32,7 @@ Future<void> showEventDetails(
     backgroundColor: Colors.transparent,
     sheetAnimationStyle: AppMotion.sheetStyle,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.r20)),
     ),
     builder: (_) => EventDetailsSheet(appointment: a, showActions: showActions),
   );

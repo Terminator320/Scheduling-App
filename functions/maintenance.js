@@ -3,6 +3,7 @@ const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {getStorage} = require("firebase-admin/storage");
 const {getFirestore} = require("firebase-admin/firestore");
 const logger = require("firebase-functions/logger");
+const {hasValidImageMagic} = require("./image_magic");
 
 // Validates magic bytes of newly uploaded appointment images and deletes any
 // file that is not JPEG (FF D8 FF) or PNG (89 50 4E 47). The Storage rule
@@ -39,12 +40,7 @@ const validateUploadedImage = onObjectFinalized(async (event) => {
     return;
   }
 
-  const isJpeg = buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
-  const isPng =
-    buffer[0] === 0x89 && buffer[1] === 0x50 &&
-    buffer[2] === 0x4E && buffer[3] === 0x47;
-
-  if (!isJpeg && !isPng) {
+  if (!hasValidImageMagic(buffer)) {
     logger.warn("validateUploadedImage: invalid magic bytes — deleting", {
       filePath,
     });
