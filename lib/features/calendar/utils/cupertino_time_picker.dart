@@ -76,7 +76,7 @@ Future<T?> _showCupertinoWheelSheet<T>(
     backgroundColor: Theme.of(context).colorScheme.surface,
     sheetAnimationStyle: AppMotion.sheetStyle,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.r20)),
     ),
     builder: (ctx) {
       return SizedBox(

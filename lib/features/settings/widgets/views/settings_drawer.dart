@@ -68,7 +68,9 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
     return Drawer(
       backgroundColor: scheme.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.horizontal(left: Radius.circular(24)),
+        borderRadius: BorderRadius.horizontal(
+          left: Radius.circular(AppRadius.r24),
+        ),
       ),
       child: ListView(
         padding: EdgeInsets.zero,

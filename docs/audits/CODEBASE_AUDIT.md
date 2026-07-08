@@ -1,184 +1,239 @@
-# Codebase Audit — 2026-07-05
+# Codebase Audit — 2026-07-07
 
-Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
-`test/`), with the parallel deep review weighted on everything that changed since
-the last audit's baseline (`fca4d27`). Baseline: working tree on branch `moblie`
-(HEAD `1d3c7ba`), which already carries the doc reorg (`docs/audits/`,
-`docs/plans/`) and the `flutter_contacts ^2.2.2` bump.
+Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`, `test/`).
+Baseline: working tree (clean) on `moblie` @ `efac0d6`.
 
 ## Summary
-- Scanned: ~35 changed code files across `lib/` + `functions/` (deep review),
-  plus a whole-repo static + l10n + convention sweep.
-- Auto-fixed (safe, in the diff): **1** — removed stray blank-line litter in
-  `lib/main.dart` (leftover from comments trimmed in the `3071195` commit).
-  `dart fix` had nothing to apply; Cloud Functions ESLint was clean.
-- Reported for your decision: **~8** (⚠️ 2 pre-ship · 🔴 0 security · 🟠 0
-  confirmed bugs (2 advisories) · 🔵 4 improvements · 🟡 2 quality · 16
-  orphaned-looking l10n keys deferred).
-- Verification: `flutter analyze` clean (no errors/warnings vs. baseline) ·
-  `flutter test` — see the verification note at the bottom · `functions` ESLint
-  clean.
+- **Scanned:** 207 source Dart files in `lib/`, the `functions/` Node.js modules,
+  `firestore.rules` / `storage.rules`, and `test/`.
+- **Auto-fixed (safe, in the diff): 0.** The static level is already clean —
+  `flutter analyze` reports no errors/warnings, `dart fix --dry-run` says
+  "Nothing to fix", and Functions ESLint passes. The only analyzer-invisible dead
+  code found (4 design-token constants) lives in `design_tokens.dart`, a curated
+  design-system API on the "do not touch" list — removing palette/scale entries is
+  a judgment call, so it is **reported, not removed**. Nothing was changed;
+  the tree is untouched.
+- **Reported for your decision:** ⚠️ 1 pre-ship · 🔴 0 security · 🟠 0 bugs ·
+  🔵 5 improvements · 🟡 6 code-quality notes.
+- **Verification:** `flutter analyze` clean (baseline unchanged) · Functions
+  ESLint clean · no edits made, so the test suite is unaffected.
 
-**Bottom line:** the codebase is in excellent shape. The full 2026-07-04 audit
-fixed everything it found, and the commits since (`3071195` "improving code",
-`1d3c7ba` "fixing cloud functions") are disciplined hardening + net-positive
-performance work — all reviewed and verified sound. No confirmed bugs, no new
-security issues, no performance regressions. Everything below is report-only.
+### Top 3 things to look at first
+1. **⚠️ Pre-ship — App Check disabled on 6 callables** (`functions/invites.js`,
+   `account.js`, `wave/callables.js`). Intentional for sideload testing; must be
+   flipped back before store release.
+2. **🔵 I1 — `functions/client_propagation.js` has zero tests.** A live Firestore
+   trigger that fans client edits onto future appointments, deliberately written
+   as pure testable helpers that were never tested. Highest-payoff gap.
+3. **🟡 D1/D2 — two dead `AppColors` constants** (`design_tokens.dart:22,42`),
+   zero references. Cut them or wire them up — your call on the palette.
 
-## ✅ Resolution — implemented 2026-07-05 (everything except pre-ship)
-On request, every non-pre-ship item below was implemented and verified
-(`flutter analyze` clean · full `flutter test` green):
-- **I1** — added `test/features/calendar/appointment_series_editor_test.dart`
-  (new-series booking, existing-series pruning of only future non-terminal
-  siblings, propagate keeping each sibling's date + per-visit status).
-- **I2** — added two cache tests to `test/routes/hub_shell_test.dart` (plain tab
-  switch reuses the cached instance; an identity change invalidates + rebuilds,
-  a same-identity reselect does not).
-- **I3** — extracted the `details_view_body` derivation into a `_DetailsViewData`
-  value object; guarded by the existing detail-view tests.
-- **I4** — snapped both off-scale `EdgeInsets.all(14)` card paddings to
-  `AppSpacing.sp16`.
-- **l10n** — pruned 14 confirmed-dead keys from both ARBs (`error_couldNot*`
-  superseded by `composeErrorNotice`, the omitted-empty-section `calendar_no*`,
-  the address-field leftovers, and `common_resetPassword` — its smoke test was
-  repointed). **Kept** the two CLAUDE.md-protected reuse-pool spares
-  (`error_couldNotAddClientTryAgain`, `error_couldNotSaveChangesTryAgain`).
-  `flutter gen-l10n` regenerated; `untranslated.json` is empty (no drift).
-- **Quality** — restored one-line invariant pointers in `main.dart` (kick-out
-  transition, flag-reset-on-failure, text-scale composition). The
-  `employee_color_grid` rainbow ring is left as-is (intentional "pick any
-  colour" affordance, not the employee palette).
-
-**Deferred (pre-ship only):** the two ⚠️ items below — the App Check enforcement
-flips and confirming the `backfillLegacyClientNames` migration ran before its
-removal deploys.
+---
 
 ## Auto-applied cleanups (review the diff)
-| File:line | Change | Why |
-|---|---|---|
-| `lib/main.dart:74-78` | Collapsed a stray double blank line and a leading blank inside `if (_useFirebaseEmulator)` | Whitespace litter left when invariant comments were trimmed in `3071195`; behavior-preserving |
-> Full detail is in `git diff`. Nothing below this line was auto-changed.
+None. `flutter analyze`, `dart fix`, and Functions ESLint were all clean, and the
+only dead code found is design-system API surface that is report-only by policy.
+**Nothing below this line was auto-changed.**
+
+---
 
 ## ⚠️ Pre-ship checklist (act before release)
-- [ ] **App Check enforcement is OFF on the admin callables** —
-  `functions/invites.js:43` (`APP_CHECK = {enforceAppCheck: false}`) and
-  `functions/wave/callables.js:126` (`enforceAppCheck: false`), plus the other
-  `TODO(pre-ship)` flips tracked in
-  `docs/audits/CODEBASE_AUDIT_2026-07-01.md`. Callers are still protected by
-  `req.auth` + `assertAdmin` today, but flip these to `true` before the store
-  release. Carried over — unchanged this cycle.
-- [ ] **Confirm `backfillLegacyClientNames` already ran in production before
-  deploying `functions/maintenance.js`.** Commit `1d3c7ba` deleted the one-time
-  `backfillLegacyClientNames` scheduled function. That's safe *if* the backfill
-  completed (its guard doc was written). Documented legacy business-only docs
-  store an empty-string `name` (present, not missing) so they stay visible via
-  the `businessName` fallback — but any legacy doc missing `name` entirely would
-  drop out of the `orderBy('name')` clients list/search. Verify the migration
-  finished, then deploy. (Operational check, not a code defect.)
+- [ ] **App Check enforcement is OFF on 6 callables.** Each carries a
+  `TODO(pre-ship)` explaining it's temporary so Firebase App Distribution sideload
+  testers (whose builds can't mint Play-Integrity-verified App Check tokens) can
+  exercise them:
+  - `functions/invites.js:43` — `createEmployeeInvite`, `redeemSignupCode`
+  - `functions/account.js:41` — `deleteAccount`
+  - `functions/wave/callables.js` — `waveBootstrap`, `waveGetConnection`,
+    `waveImportCustomers`
+
+  Residual risk is bounded (each route still enforces auth + admin/reauth +
+  durable rate limits, and client-side App Check stays active), and the
+  billing-sensitive Places callables correctly keep `enforceAppCheck: true`. Flip
+  these 6 back to `enforceAppCheck: true` before store launch.
+
+---
 
 ## 🔴 Security findings (review required)
-None. The security review verified the full changed surface: image magic-byte
-validation, the durable rate limits, App Check activation in `main()`, the
-role-from-Firestore invariant, `signupCodes`/`wave` rule locks, and the
-callable guards are all intact. The `maintenance.js` shrink only removed a
-completed migration and its now-unused `FieldValue` import. No secrets, keys, or
-PII introduced anywhere in the diff.
+**None exploitable.** A full trace of the security-relevant data paths across
+`functions/`, `firestore.rules`, `storage.rules`, and `lib/` found no vulnerability.
+Verified correct: no secrets in source (real `dev/.env` / `google-services.json` /
+`GoogleService-Info.plist` untracked; Wave token + `GOOGLE_MAP_API_KEY` read via
+`defineSecret().value()` in functions only); App Check active in `main()`;
+role/`isAdmin` never cached (`AuthCache` excludes role by design); `!employee.isActive`
+gating; two-layer employee visibility filter; deny-by-default rules with matching
+query constraints; `ClientRecord.toMap` omits `waveCustomerId`/`wave`; server-side
+magic-byte image validation; all callables validate `req.auth.uid` +
+`assertPayloadShape` + `requireString`/`readSessionToken`; rate limits keyed
+correctly (`redeemSignupCode` by token email); no SQL/shell/`eval`; Wave GraphQL
+values passed via `variables`, never interpolated; callable responses use the safe
+loose-cast idiom.
+
+**Defense-in-depth observations (intentional today — no action needed):**
+- `waveGetConnection` has no rate limit (`functions/wave/callables.js:204`) —
+  admin-gated, reads one doc, no secret / Wave call. Intentional, low-risk.
+- Active employees can read active peers' email/phone
+  (`firebase_employees_repository.dart:52`, `firestore.rules:102`) — a documented
+  product decision for the assignee picker/display. Flagged only so it stays a
+  conscious choice.
+
+---
 
 ## 🟠 Bug findings (review required)
-No confirmed high/medium-severity bugs. The recent defensive changes
-(reentrancy `finally` reset, monotonic search-request-id guard, screen-cache
-identity invalidation, `Object?` status returns threaded through mounted-checked
-callers) all verified correct. Two low-confidence advisories, surfaced for
-awareness:
+**None above the confidence bar.** Every historically bug-prone area was traced
+and confirmed correct: submit/save reentrancy flags set before the first `await`
+and reset on all paths (`add_event_controller.dart:192`,
+`event_details_controller.dart:376`); the populated→empty kick-out signal intact
+(`main.dart:238` passes `previous`); assignee preservation via `_resolveAssignees`;
+`_invalidateSearchCache()` called on every write path; `whereArrayContainsAny`
+chunked by 30 in `findBusyEmployees`; safe callable map casts; subscriptions /
+controllers / debouncers disposed; `mounted` / `ref.mounted` guards after awaits;
+DST-safe date math.
 
-### B-adv1 — `createEmployeeInvite` consumes a rate-limit slot before payload validation · low · ~20%
-- **Where:** `functions/invites.js:126`
-- **Problem:** `enforceDurableRateLimit("createEmployeeInvite", uid, 20, 1h)`
-  runs before `assertPayloadShape`/`requireString`, so malformed requests and
-  idempotent re-invites both consume a slot; a bulk onboarding of >20 employees
-  at once would hit the cap at #21.
-- **Fix:** Intentional (defense-in-depth parity with `waveBootstrap`) — no change
-  needed unless you expect bulk onboarding sessions, in which case raise the cap
-  or move the limit after shape validation.
+**Two sub-threshold observations (both ~20–25% confidence, likely unreachable):**
+- `lib/features/employees/screens/employees_screen.dart` — `_liveSelectedEmployee`:
+  if `allUsersStreamProvider` emitted a settled non-null *empty* list, a selected
+  employee not found in it clears the detail pane. This is the documented intent
+  for a deleted employee; unlike `watchUserDoc`, `watchAllUsers()` doesn't filter a
+  transient from-cache empty snapshot. Unreachable in practice (selection requires
+  a warm list, and the admin is always present in `users`).
+- Same file, `_buildMasterList`: the list's loading/error `.when` is driven by
+  `employeesStreamProvider` while contents come from `filteredEmployeesProvider`
+  (backed by `allUsersStreamProvider`); if the two streams' timing diverged the
+  list could momentarily read "no employees." They subscribe together, so no
+  observable effect.
 
-### B-adv2 — backfill-removal data-shape edge case
-- Covered by the pre-ship checklist item above (verify the migration ran).
+Neither is worth a code change; noted for completeness.
+
+---
 
 ## 🔵 Areas to improve (review required)
-### I1 — `AppointmentSeriesEditor` has no direct unit test · impact: medium · high
-- **Where:** `lib/features/calendar/application/appointment_series_editor.dart`
-  (~108 lines)
-- **Opportunity:** Series rewrite/replace is a load-bearing correctness
-  invariant. It's currently only *indirectly* covered through
-  `event_details_controller_test.dart` save() series cases. It takes the
-  `AppointmentsRepository` interface, so it's trivially mockable.
-- **Suggested improvement:** Add a focused unit test with a mock repo, or
-  consciously accept the integration coverage.
+Ordered by payoff. All report-only — the Functions test gaps are the real prize.
 
-### I2 — `hub_shell` screen-cache invalidation is untested · impact: low-medium · high
-- **Where:** `lib/routes/hub_shell.dart` (the new `_cachedScreenFor` identity
-  cache + `_TabViewInsets` pin added this cycle)
-- **Opportunity:** `hub_shell_test.dart` covers keep-alive but not cache
-  invalidation on `_isAdmin|_employeeId|_userName|_userEmail` change or the
-  hidden-tab `viewInsets` zero-pin.
-- **Suggested improvement:** One widget test asserting the same screen instance
-  survives a shell `setState` and is rebuilt when the identity args change.
+### I1 — `functions/client_propagation.js` has zero tests · impact: high · confidence: high
+- **Where:** `functions/client_propagation.js:60-203` (logic), `:220-227` (exports).
+- **Opportunity:** A live Firestore trigger (`propagateClientEdits`, wired at
+  `index.js:23`) that fans client-doc edits onto the denormalized
+  `clientName`/`clientPhone`/`address` of all *future* appointments. The author
+  deliberately factored the tricky logic into pure, dependency-free functions —
+  `relevantClientChange`, `buildAppointmentPatch`, `clientDisplayName`,
+  `propagateClientChange(deps)` — and annotated them `// Exported for unit tests.`
+  **No test file exists** (only `invites.test.js`, `security.test.js` are present).
+  The edge cases are exactly the kind that silently corrupt data: empty-previous-
+  address must NOT match (`:103`), custom-address detection (`:138`), legacy
+  `businessName` fallback (`:60-65`), idempotency on retry, and pagination. jest is
+  already configured; these take/return plain objects.
+- **Suggested improvement:** Add `functions/__tests__/client_propagation.test.js`
+  covering `relevantClientChange` (name/phone/address change matrix incl. empty-from)
+  and `buildAppointmentPatch` (custom-address skip, already-propagated no-op). Skip
+  the paginated `propagateClientChange` integration unless quick via injected `deps`.
 
-### I3 — `details_view_body.build()` carries a ~35-line derivation preamble · impact: low-medium · high
-- **Where:** `lib/features/calendar/widgets/views/details_view_body.dart:41-83`
-  (135-line `build()`)
-- **Opportunity:** Lines 49-83 derive phone/address/onCall/materials/contacts
-  before a flat `Column` of already-extracted sub-widgets. The tree is fine; the
-  preamble is what pushes it over the ~60-line guideline.
-- **Suggested improvement:** Move the derivation into a small
-  `_DetailsViewModel.from(appointment, client)` value object. Optional — pure
-  readability.
+### I2 — `deleteAccount` callable has no test · impact: medium · confidence: high
+- **Where:** `functions/account.js:36-149`.
+- **Opportunity:** A security-load-bearing, irreversible callable with branches
+  that are easy to regress: stale-`auth_time` rejection *before* the rate limiter
+  (`:47-60`), rate-limit slot **refund** on server-side auth-delete failure
+  (`:125`), and the deliberate "delete Auth user first, then Firestore doc"
+  ordering (`:109-144`). None is exercised by a test.
+- **Suggested improvement:** A `firebase-functions-test`-style unit test (as
+  `invites.test.js` already does) asserting: stale `auth_time` throws without
+  consuming a limiter slot; auth-delete failure triggers `refund()`; success returns
+  `{deleted:true}`. Three focused cases — not full coverage.
 
-### I4 — Two off-scale `EdgeInsets.all(14)` paddings · impact: low · low
-- **Where:** `lib/features/clients/widgets/sections/additional_contacts_section.dart:57`
-  and `lib/features/settings/widgets/views/text_size_view.dart:153`
-- **Opportunity:** `14` sits between `AppSpacing.sp12` and `sp16` (not a
-  sanctioned sub-4px nudge). Not auto-fixed because the target token is
-  ambiguous — snapping it is a design call.
-- **Suggested improvement:** Snap each to `sp12` or `sp16` per your visual
-  preference.
+### I3 — `functions/maintenance.js` magic-byte validation + purge loop untested · impact: medium · confidence: high
+- **Where:** `functions/maintenance.js:11-58` (`validateUploadedImage`), `:100-169`
+  (`purgeExpiredHistory`).
+- **Opportunity:** The JPEG/PNG magic-byte check (`:42-46`) is a stated security
+  invariant (the server-side backstop against the Storage rule trusting client
+  `contentType`), and the purge loop has a subtle no-progress bailout (`:158`)
+  guarding against an infinite loop. Both untested.
+- **Suggested improvement:** Extract the byte check into a pure
+  `hasValidImageMagic(buffer)` helper and unit-test it against JPEG / PNG / invalid
+  buffers. Leave the Storage/schedule wrappers untested (integration-heavy).
+
+### I4 — `lib/features/auth/data/auth_cache.dart` untested · impact: low · confidence: high
+- **Where:** `auth_cache.dart:18-54`.
+- **Opportunity:** Security-adjacent (persists signed-in identity to encrypted
+  secure storage; the role-cache invariant is enforced *by omission* here).
+  `loadIfMatch` has real branching — uid mismatch → null, empty docId → null,
+  color-parse fallback (`:43`) — and no test. It takes an injectable
+  `SecureStorageService`, so it's testable with
+  `FlutterSecureStorage.setMockInitialValues({})`.
+- **Suggested improvement:** One small test: `save` → `loadIfMatch` round-trips the
+  record; wrong-uid and missing-docId return null. Low priority.
+
+### I5 — Two `build()` methods exceed the ~60-line guideline · impact: low · confidence: medium
+- **Where:** `main_calendar_screen.dart:211-344` (~133 lines);
+  `details_view_body.dart:41-155` (~114 lines).
+- **Opportunity:** Both exceed the frontend rule's ~60-line target, but both are
+  already decomposed into extracted sub-widgets — what remains is largely
+  declarative assembly. The one honest wart is `main_calendar_screen.build()`,
+  which *interleaves* imperative logic (day-index memoization `:250-253`,
+  `ref.listen` wiring `:222-240`, locale-format caching `:261-264`) with the tree.
+- **Suggested improvement:** Optionally extract that pre-tree logic into
+  `_syncDayIndex()` / `_wireListeners()` so `build()` reads as pure assembly. Do
+  **not** further split the widget trees (the sub-widgets already exist — more
+  indirection would be premature). `details_view_body` is fine as-is.
+
+---
 
 ## 🟡 Code-quality suggestions (optional)
-- `lib/features/employees/widgets/fields/employee_color_grid.dart:194-200` — the
-  "custom color" `SweepGradient` hardcodes 7 raw `Color(0xFF…)` hex values where
-  `AppColors.employeeColors` exists. **Known/intentional** per prior audits
-  ("employee_color_grid gradient intentionally skipped") — listed for
-  completeness only.
-- `lib/main.dart:74-83` (context) — commit `3071195` trimmed the `C3`
-  cold-start-deletion, `C12` flag-reset, and `U2` text-size-composition
-  invariant comments that `CLAUDE.md` invariants lean on. Behavior is unchanged
-  and improved (DI via `ref.read(...)`), but consider restoring a one-line
-  pointer to those invariants so the load-bearing logic stays self-documenting.
+Convention/hygiene items that need a real edit, so they're report-only.
+
+- **D1 — `AppColors.disabled` is dead** (`lib/core/theme/design_tokens.dart:22`,
+  `Color(0xFFBFCBDD)`). Zero references in `lib/` or `test/` (the many `disabled`
+  hits elsewhere are the status *string* `'disabled'`). Not fed into any
+  `ColorScheme` / `ThemeExtension`. Remove, or wire a disabled-surface color into
+  the theme.
+- **D2 — `AppColors.darkDisabled` is dead** (`design_tokens.dart:42`,
+  `Color(0xFF1E3260)`). Zero references, including inside `design_tokens.dart`
+  itself (its value duplicates `darkSurfaceAlt`). Dead pair with D1 — remove
+  together.
+- **D3 — `AppRadius.r4` unused** (`design_tokens.dart:84`). No references; the rest
+  of the scale (`r8`/`r12`/`r16`/`rFull`) is used. Remove, or keep as an
+  intentional scale anchor (document the intent).
+- **D4 — `AppDuration.slow` unused** (`design_tokens.dart:110`). No references;
+  `fast`/`normal`/`shimmer` are used. Remove or keep as a deliberate scale anchor.
+- **C1 — Off-`AppRadius` corner radii.** Hardcoded `Radius.circular(20)` at
+  `cupertino_time_picker.dart:79`, `sheet_helpers.dart:18,35`,
+  `month_year_picker.dart:23`; `Radius.circular(24)` at `settings_drawer.dart:71`.
+  The `AppRadius` scale stops at `r16` then jumps to `rFull`, so these sheet/drawer
+  top-corner radii have no token. Add an `AppRadius.r20`/`r24` (or a `sheetTop`
+  token) and reference it, or accept as sheet-specific and document.
+- **C2 — On-scale spacing written as raw literals** (systemic, low priority).
+  Many `SizedBox`/`EdgeInsets` use values that are *on* the AppSpacing scale
+  (12/16/24…) but as literals instead of `AppSpacing.spN`
+  (e.g. `client_detail_view.dart:130`, `employee_details_view.dart:146`,
+  `settings_tiles.dart:137`). No genuinely off-scale value exists (verified — the
+  1–3px nudges, 1px calendar gutter, and 48px splash inset are sanctioned). This is
+  a single optional tokenization pass, not per-line bugs.
+
+**Orphaned-looking l10n keys (deferred — do NOT delete in a code sweep):**
+- **L1 — `error_couldNotSaveChangesTryAgain`** (`app_en.arb:318` + `app_fr.arb`).
+- **L2 — `error_couldNotAddClientTryAgain`** (`app_en.arb:322` + `app_fr.arb`).
+  Both have zero `context.l10n.*` call sites but are explicitly listed in CLAUDE.md
+  as *reserved failure-UX strings* ("reuse before adding new ones"). Treat as
+  reserved-for-reuse; revisit only in a deliberate l10n-pruning pass that also
+  updates the CLAUDE.md reserve list. All other ~350 ARB keys have live call sites.
+
+---
 
 ## Notes / uncertainties
-- **16 orphaned-looking l10n keys** in `lib/l10n/app_en.arb` have zero code
-  references — flagged, NOT deleted (many l10n keys are reached via generated
-  getters; ARB keys are never stripped in a code sweep). Likely superseded by
-  the `composeErrorNotice` migration (`error_couldNotDeleteClientTryAgain:318`,
-  `error_couldNotSaveChangesTryAgain:322`, `error_couldNotAddClientTryAgain:326`,
-  `error_somethingWentWrongCreatingTheAppointment:534`,
-  `error_somethingWentWrongSavingChanges:538`, `error_couldNotCreateEmployee:750`,
-  `error_couldNotLoadAppointments:902`, `error_couldNotDeleteAccount:1352`), by
-  the read-only detail view's "omit empty sections" refactor (`calendar_noNumber:566`,
-  `calendar_noNotes:574`, `calendar_noMaterials:578`,
-  `calendar_selectAnAppointmentToViewDetails:674`), test-only
-  (`common_resetPassword:762`, used only in `test/widget_test.dart`), or the
-  address-field refactor (`common_searchAddress:998`, `common_typeToSearchAnAddress:1002`,
-  `common_street:1006`). ⚠️ Caveat: `CLAUDE.md` lists
-  `couldNotAddClientTryAgain`/`couldNotSaveChangesTryAgain` as the canonical
-  "reuse before adding new" failure-string pool — they may be intentionally
-  retained. Confirm against that guidance before pruning. Recommend a deliberate
-  l10n pass that removes confirmed-dead keys from both `app_en.arb` and
-  `app_fr.arb` in lockstep, then `flutter gen-l10n`.
-- Static level was fully clean: `flutter analyze` no errors/warnings, `dart fix`
-  nothing, ESLint clean, no unused files. The only "unused dependency" heuristic
-  hits (`build_runner`, `freezed`, `flutter_launcher_icons`) are codegen/CLI
-  tooling — expected false positives, all legitimately used.
-- Generated files (`*.g.dart`, `*.freezed.dart`, `lib/l10n/.gen/**`) and
-  device-only services (`image_picker_service`, `media_permission_service`,
-  `biometric_auth_service`) were intentionally excluded per project convention.
+- **Doc drift:** `functions/index.js:23` exports `propagateClientEdits` (from
+  `functions/client_propagation.js`), but the "Cloud Functions" section of
+  `CLAUDE.md` lists the older module set and doesn't mention `client_propagation.js`.
+  Worth a docs refresh. **Caveat:** in this repo `CLAUDE.md` and `.claude/` are
+  gitignored, so that update can't be committed — it's a local-only edit.
+- **Unused-dependency scan false positives (confirmed, not dead weight):** the
+  static scan flagged `build_runner`, `freezed`, and `flutter_launcher_icons` as
+  having no `package:<name>/` import. All three are tooling — `freezed`/`build_runner`
+  generate the `.freezed.dart` files that ARE in active use, and
+  `flutter_launcher_icons` is a manually-run CLI configured in `pubspec.yaml`.
+  Keep all three.
+- **`functions/scripts/backfill.js`** is a one-time `usersByUid` bridge migration
+  (idempotent, run-once) — not the removed `backfillLegacyClientNames`. Likely
+  already executed; kept as an ops runbook.
+- Generated files (`*.g.dart`, `*.freezed.dart`, `lib/l10n/.gen/**`) were excluded
+  from the review per `analysis_options.yaml`.
+- No commented-out code blocks, stray `print`/`debugPrint`, or non-`pre-ship`
+  `TODO`/`FIXME`/`HACK` markers exist in `lib/`.
