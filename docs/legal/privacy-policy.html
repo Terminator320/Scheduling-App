@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ES Pro — Privacy Policy</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    max-width: 46rem; margin: 0 auto; padding: 2rem 1.25rem 4rem;
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #1a1a1a; background: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e6e6e6; background: #161616; }
+    a { color: #7db3ff; }
+  }
+  h1 { font-size: 1.9rem; margin-bottom: .25rem; }
+  h2 { font-size: 1.25rem; margin-top: 2.2rem; }
+  h3 { font-size: 1.05rem; margin-top: 1.4rem; }
+  .meta { color: #666; font-size: .9rem; margin-bottom: 2rem; }
+  @media (prefers-color-scheme: dark) { .meta { color: #999; } }
+  ul { padding-left: 1.25rem; }
+  li { margin: .3rem 0; }
+  code { font-size: .9em; }
+</style>
+</head>
+<body>
+
+<h1>ES Pro — Privacy Policy</h1>
+<p class="meta">Effective date: July 8, 2026 · Last updated: July 8, 2026</p>
+
+<p>
+  ES Pro is a scheduling tool that helps a business manage its
+  appointments, clients, and employees. The App is operated by
+  <strong>George Vogas</strong>. This policy explains what
+  information the App handles, how it is used, and the choices you have. If you
+  have questions, contact us at
+  <a href="mailto:george@vogas.net">george@vogas.net</a>.
+</p>
+
+<h2>1. Who this policy covers</h2>
+<p>The App is used by two kinds of people:</p>
+<ul>
+  <li><strong>Account holders</strong> — the business owner/administrator and
+    the employees they invite, who sign in to use the App.</li>
+  <li><strong>Clients</strong> — the customers of that business, whose contact
+    and appointment details are entered into the App <em>by</em> the account
+    holders. Clients do not sign in to the App themselves.</li>
+</ul>
+<p>
+  For client data, the business that uses the App is the party that decides what
+  is collected and why. We process that data on the business’s behalf to provide
+  the service.
+</p>
+
+<h2>2. Information we collect</h2>
+
+<h3>Account information</h3>
+<ul>
+  <li>Email address and password (passwords are handled by Firebase
+    Authentication and are never visible to us in plain text).</li>
+  <li>Display name, phone number, and role (administrator or employee).</li>
+</ul>
+
+<h3>Business and client records you enter</h3>
+<ul>
+  <li>Client name, phone number, email, and address.</li>
+  <li>Appointment details: date/time, assigned employees, status, notes, and
+    location.</li>
+  <li>Photos you attach to appointments or profiles.</li>
+</ul>
+
+<h3>Device permissions (used only when you choose the feature)</h3>
+<ul>
+  <li><strong>Camera</strong> — to take appointment or profile photos.</li>
+  <li><strong>Photo library</strong> — to attach existing images.</li>
+  <li><strong>Contacts</strong> — to open a pre-filled contact card so you can
+    save a client to your phone’s contacts. The App does not read or upload your
+    contact list.</li>
+  <li><strong>Face ID / biometrics</strong> — to unlock the optional in-app lock
+    you enable in Settings. Biometric data never leaves your device and is
+    handled entirely by iOS; we never receive it.</li>
+</ul>
+
+<h3>Address lookup</h3>
+<p>
+  When you type an address, the App sends the partial text to Google Maps
+  Platform (Places API) through our secure backend to return suggestions. We do
+  not send this through advertising services.
+</p>
+
+<h3>Diagnostics and crash data</h3>
+<p>
+  We use Firebase Crashlytics to collect crash reports and basic diagnostic
+  information (device model, operating system version, and the technical state
+  at the time of a crash) so we can fix problems. This data is used solely to
+  keep the App stable and is not used for advertising.
+</p>
+
+<h3>Accounting sync (administrators only)</h3>
+<p>
+  If an administrator connects the optional Wave Accounting integration, client
+  records (name, contact details) may be synced to the business’s Wave account
+  to create or update customers there. This happens only when an administrator
+  enables it.
+</p>
+
+<h2>3. How we use information</h2>
+<ul>
+  <li>To provide core scheduling features — accounts, appointments, clients,
+    and employees.</li>
+  <li>To authenticate users and control who can see which appointments.</li>
+  <li>To store and display the photos and records you create.</li>
+  <li>To verify that requests come from a genuine, untampered copy of the App
+    (Apple App Attest / Firebase App Check).</li>
+  <li>To diagnose crashes and improve reliability.</li>
+</ul>
+<p>
+  <strong>We do not sell your data, we do not use it for advertising, and the
+  App does not track you across other companies’ apps or websites.</strong>
+</p>
+
+<h2>4. How information is stored and protected</h2>
+<ul>
+  <li>Data is stored in Google Firebase (Cloud Firestore, Cloud Storage,
+    Firebase Authentication) hosted on Google Cloud infrastructure.</li>
+  <li>Data is encrypted in transit (HTTPS/TLS) and at rest by the provider.</li>
+  <li>Access is restricted by security rules: an employee can see only the
+    appointments assigned to them; administrative data requires an
+    administrator account.</li>
+  <li>Backend requests require App Attest / App Check verification, which blocks
+    requests from unverified or tampered clients.</li>
+</ul>
+
+<h2>5. Third parties that process data for us</h2>
+<p>We share data only with service providers that help us run the App:</p>
+<ul>
+  <li><strong>Google (Firebase &amp; Google Cloud)</strong> — authentication,
+    database, file storage, crash reporting, and app-integrity checks.</li>
+  <li><strong>Google Maps Platform</strong> — address autocomplete and place
+    details.</li>
+  <li><strong>Wave Financial (Wave Accounting)</strong> — optional customer
+    sync, only if an administrator enables it.</li>
+</ul>
+<p>
+  These providers process data under their own privacy and security terms and
+  are not permitted to use it for their own purposes.
+</p>
+
+<h2>6. Data retention</h2>
+<p>
+  Account and business data is retained while the account is active. When you
+  delete your account (see below), your account record is removed. Clients,
+  appointments, and photos created within a business remain part of that
+  business’s records unless deleted by the business. Crash diagnostics are
+  retained by Firebase Crashlytics for a limited period per Google’s policies.
+</p>
+
+<h2>7. Your choices and rights</h2>
+<ul>
+  <li><strong>Delete your account.</strong> You can delete your account and
+    associated profile from within the App at any time. This action is
+    available in the App and does not require contacting us.</li>
+  <li><strong>Access, correction, and deletion.</strong> You may request access
+    to, correction of, or deletion of your personal information by emailing
+    <a href="mailto:george@vogas.net">george@vogas.net</a>. If you are a client
+    of a business that uses the App, please also contact that business, as they
+    control their records.</li>
+  <li><strong>Permissions.</strong> You can revoke camera, photo, contacts, and
+    Face ID permissions at any time in your device’s Settings; features that
+    rely on them will be limited accordingly.</li>
+</ul>
+<p>
+  Depending on where you live (including Quebec and elsewhere in Canada), you
+  may have additional rights under applicable privacy law. We will honor valid
+  requests to the extent required by law.
+</p>
+
+<h2>8. Children</h2>
+<p>
+  The App is a business tool intended for use by adults. It is not directed to
+  children and we do not knowingly collect personal information from children.
+</p>
+
+<h2>9. International data transfers</h2>
+<p>
+  Data may be processed and stored on servers located outside your province or
+  country (for example, in the United States, where Google Cloud operates).
+  Where required, we rely on our providers’ safeguards for such transfers.
+</p>
+
+<h2>10. Changes to this policy</h2>
+<p>
+  We may update this policy from time to time. Material changes will be
+  reflected by updating the “Last updated” date above and, where appropriate,
+  through the App or by other notice.
+</p>
+
+<h2>11. Contact us</h2>
+<p>
+  Questions or privacy requests:
+  <a href="mailto:george@vogas.net">george@vogas.net</a>.
+</p>
+
+</body>
+</html>

@@ -1378,6 +1378,18 @@
   "@settings_integrations": {
     "description": "Settings section header for third-party integrations (Wave, etc.)"
   },
+  "settings_legal": "Legal",
+  "@settings_legal": {
+    "description": "Settings section header for legal links (privacy policy, etc.)"
+  },
+  "settings_privacyPolicy": "Privacy Policy",
+  "@settings_privacyPolicy": {
+    "description": "Settings tile label that opens the hosted privacy policy in the browser"
+  },
+  "error_couldNotOpenLink": "Couldn't open the link.",
+  "@error_couldNotOpenLink": {
+    "description": "Error notice shown when an external web link fails to open"
+  },
   "wave_connectToWave": "Connect to Wave",
   "@wave_connectToWave": {
     "description": "Button label: initiates the Wave connection bootstrap"
