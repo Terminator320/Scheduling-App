@@ -15,7 +15,10 @@ class _FakeClientsRepository implements ClientsRepository {
   ClientRecord? added;
 
   @override
-  Future<void> addClient(ClientRecord client) async => added = client;
+  Future<ClientRecord> addClient(ClientRecord client) async {
+    added = client;
+    return client.copyWith(id: 'new-id');
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

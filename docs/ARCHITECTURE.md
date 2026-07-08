@@ -231,6 +231,21 @@ client doc was deleted or hasn't loaded yet). The `clientCleared` state flag
 an explicit removal so `AppointmentFormValidator` fires `clientRequired`
 exactly like the add flow.
 
+**Inline add-client.** When the client search finds no match, `ClientSearchField`
+offers an **Add "&lt;name&gt;" as a new client** action (its `onAddNew` callback).
+`AppointmentFormFields.onRequestAddClient` opens the standard `AddClientSheet`
+via `showAddClientSheet` (`clients/widgets/sheets/`) — prefilled with the typed
+name and passed `settleFocus: true` for the sheet-from-search settle — and
+auto-selects the returned client on save. This relies on
+`ClientsRepository.addClient` returning the created `ClientRecord` with its
+generated Firestore doc id (it was `void`), so the appointment links to a real
+id. `showAddClientSheet` is the single add-client opener (both Clients-tab FABs
+and this flow route through it); it gates its result on `context.mounted` so a
+form torn down mid-sheet never selects into disposed controllers. The affordance
+is admin-only by construction — the appointment add FAB and edit actions are
+already gated on `isAdmin` — and both hosts guard the open with an in-flight
+flag so a double-tap during the settle can't stack two sheets.
+
 ### Error Handling
 
 Domain-layer `Failure` subtypes (sealed, one per feature) carry localised messages. Each family lives at `lib/features/<f>/domain/<f>_failure.dart` and implements `toLocalizedMessage(BuildContext)`. The base `Failure` (`lib/core/errors/failure.dart`) `implements Exception`, so repositories and services can `throw` failures without tripping the `only_throw_errors` lint:
@@ -580,7 +595,7 @@ authoritative; line numbers drift.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (716 test cases as of 2026-07-05). `flutter analyze` is
+Run: `flutter test` (722 test cases as of 2026-07-07). `flutter analyze` is
 clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.

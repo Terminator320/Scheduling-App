@@ -208,6 +208,26 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     );
   }
 
+  /// The selected employee, reconciled against the live users stream by id.
+  ///
+  /// The detail pane stays mounted after an in-pane enable/disable/edit (only
+  /// a delete clears the selection), so the tapped snapshot must track the
+  /// stream — otherwise re-enabling a disabled employee keeps rendering the
+  /// stale "disabled" status here while the master list already shows them
+  /// active. Falls back to the snapshot until the stream reflects the change
+  /// (or briefly after a delete removes the doc).
+  EmployeeRecord? _liveSelectedEmployee() {
+    final snapshot = _selectedEmployee;
+    if (snapshot == null) return null;
+    final liveUsers = ref.watch(allUsersStreamProvider).asData?.value;
+    if (liveUsers != null) {
+      for (final employee in liveUsers) {
+        if (employee.id == snapshot.id) return employee;
+      }
+    }
+    return snapshot;
+  }
+
   Widget _buildDetailPlaceholder() => DetailPlaceholder(
     icon: Icons.badge_outlined,
     message: context.l10n.employees_selectAnEmployeeToViewDetails,
@@ -238,7 +258,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
           .read(loggerProvider)
           .warn('employeesStreamProvider error', next.error, next.stackTrace);
     });
-    final selected = _selectedEmployee;
+    final selected = _liveSelectedEmployee();
     return Scaffold(
       appBar: _buildAppBar(),
       endDrawer: SettingsDrawer.endDrawerFor(

@@ -101,13 +101,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
   }
 
   Future<void> _onAddClient() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      sheetAnimationStyle: AppMotion.sheetStyle,
-      builder: (_) => const AddClientSheet(),
-    );
+    await showAddClientSheet(context);
   }
 
   Future<void> _openClient(ClientRecord client) async {

@@ -17,6 +17,7 @@ class ClientSearchField extends StatelessWidget {
     required this.onClear,
     super.key,
     this.errorText,
+    this.onAddNew,
   });
   final TextEditingController controller;
   final ClientRecord? selectedClient;
@@ -27,6 +28,11 @@ class ClientSearchField extends StatelessWidget {
   final VoidCallback onClear;
   final String? errorText;
 
+  /// When non-null, an "Add `query` as a new client" affordance is shown once
+  /// the query finds nothing (or as a footer under partial matches). Null hides
+  /// it entirely, leaving the plain no-results text.
+  final VoidCallback? onAddNew;
+
   /// Max dropdown height — about five dense tiles. The list scrolls past this
   /// so every scored result (the repo returns up to 25) stays reachable while
   /// the inline list stays compact.
@@ -34,6 +40,12 @@ class ClientSearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final showAddNew =
+        onAddNew != null &&
+        !isSearching &&
+        selectedClient == null &&
+        controller.text.trim().isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -75,17 +87,18 @@ class ClientSearchField extends StatelessWidget {
             margin: const EdgeInsets.only(top: AppSpacing.sp4),
             constraints: const BoxConstraints(maxHeight: _maxDropdownHeight),
             decoration: BoxDecoration(
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outlineVariant,
-              ),
+              border: Border.all(color: scheme.outlineVariant),
               borderRadius: BorderRadius.circular(AppRadius.r12),
             ),
             clipBehavior: Clip.antiAlias,
             child: ListView.builder(
               shrinkWrap: true,
               padding: EdgeInsets.zero,
-              itemCount: results.length,
+              itemCount: results.length + (showAddNew ? 1 : 0),
               itemBuilder: (context, index) {
+                if (index == results.length) {
+                  return _addNewClientTile(context);
+                }
                 final client = results[index];
                 final String subtitleText;
                 if (client.phone.trim().isNotEmpty) {
@@ -121,16 +134,54 @@ class ClientSearchField extends StatelessWidget {
             controller.text.trim().isNotEmpty &&
             selectedClient == null)
           Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              context.l10n.clients_noClientsFound,
-              style: TextStyle(
-                fontSize: 13,
-                color: Theme.of(context).colorScheme.error,
-              ),
+            padding: const EdgeInsets.only(top: AppSpacing.sp8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.l10n.clients_noClientsFound,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: showAddNew ? scheme.onSurfaceVariant : scheme.error,
+                  ),
+                ),
+                if (showAddNew) ...[
+                  const SizedBox(height: AppSpacing.sp4),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: scheme.outlineVariant),
+                      borderRadius: BorderRadius.circular(AppRadius.r12),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: _addNewClientTile(context),
+                  ),
+                ],
+              ],
             ),
           ),
       ],
+    );
+  }
+
+  Widget _addNewClientTile(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return ListTile(
+      dense: true,
+      leading: Icon(Icons.person_add_alt_1, size: 20, color: scheme.primary),
+      title: Text(
+        context.l10n.clients_addNamedClient(controller.text.trim()),
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: scheme.primary,
+          fontWeight: FontWeight.w600,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      onTap: () {
+        FocusScope.of(context).unfocus();
+        onAddNew!();
+      },
     );
   }
 }

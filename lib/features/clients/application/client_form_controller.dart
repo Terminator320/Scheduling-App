@@ -84,9 +84,9 @@ class ClientFormController extends Notifier<ClientFormActivity> {
     final logger = ref.read(loggerProvider);
     state = state.copyWith(isSaving: true);
     try {
-      await repo.addClient(client);
+      final saved = await repo.addClient(client);
       refresh.bump();
-      return ClientSaved(client);
+      return ClientSaved(saved);
     } catch (e, st) {
       logger.warn('CLI-ADD addClient failed', e, st);
       return ClientSaveFailed(e);

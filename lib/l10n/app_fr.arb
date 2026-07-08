@@ -232,6 +232,7 @@
   "common_search": "Rechercher...",
   "clients_searchByNameBusinessPhoneEmailAddress": "Rechercher par nom, téléphone, courriel ou adresse...",
   "clients_noClientsFound": "Aucun client trouvé",
+  "clients_addNamedClient": "Ajouter « {name} » comme nouveau client",
   "common_employeeRoleValue": "Employé",
   "auth_welcomeBack": "Bienvenue",
   "auth_signInToYourAccount": "Connectez-vous à votre compte",

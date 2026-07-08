@@ -92,6 +92,7 @@ class AppointmentFormFields extends StatelessWidget {
     super.key,
     this.editingStatus,
     this.onStatusChanged,
+    this.onRequestAddClient,
   });
 
   final AppointmentFormControllers controllers;
@@ -122,6 +123,11 @@ class AppointmentFormFields extends StatelessWidget {
   final String? editingStatus;
   final ValueChanged<String>? onStatusChanged;
 
+  /// Opens the add-client sheet (prefilled with the typed name) and resolves to
+  /// the created client, which is then auto-selected. Null hides the inline
+  /// "add new client" affordance in the client picker.
+  final Future<ClientRecord?> Function(String initialName)? onRequestAddClient;
+
   String? _err(BuildContext context, String field) {
     final key = errors[field];
     return key == null ? null : appointmentFormErrorText(context, key);
@@ -137,6 +143,14 @@ class AppointmentFormFields extends StatelessWidget {
     controllers.clientSearch.clear();
     controllers.address.clear();
     onClearClient();
+  }
+
+  Future<void> _addNewClient() async {
+    final created = await onRequestAddClient!(
+      controllers.clientSearch.text.trim(),
+    );
+    if (created == null) return;
+    _selectClient(created);
   }
 
   void _switchToCustomAddress() {
@@ -209,6 +223,7 @@ class AppointmentFormFields extends StatelessWidget {
             onSelect: _selectClient,
             onClear: _clearClient,
             errorText: _err(context, 'client'),
+            onAddNew: onRequestAddClient == null ? null : _addNewClient,
           ),
         ),
         const SizedBox(height: AppSpacing.sp16),

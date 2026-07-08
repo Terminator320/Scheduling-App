@@ -10,6 +10,15 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.24.0+42] - 2026-07-07
+### Added
+- **Add a new client without leaving the appointment.** When you search for a
+  client while booking (or editing) an appointment and no one matches, you can
+  now tap **Add "<name>" as a new client** right from the results. The new-client
+  form opens with the name already filled in, and once you save it, the client is
+  selected on the appointment automatically — no more backing out to the Clients
+  tab and starting over.
+
 ## [1.23.1+41] - 2026-07-05
 ### Changed
 - **Moving between sections feels smoother.** Switching tabs and typing with the

@@ -99,6 +99,14 @@ void main() {
       expect(captured.containsKey('createdAt'), isTrue);
       expect(captured.containsKey('updatedAt'), isTrue);
     });
+
+    test('returns the client with the generated doc id', () async {
+      // The input has an empty id (new client); the returned record carries the
+      // Firestore-generated id so callers can link to it immediately.
+      final saved = await repo().addClient(client(id: ''));
+
+      expect(saved.id, 'new-id');
+    });
   });
 
   group('updateClient', () {

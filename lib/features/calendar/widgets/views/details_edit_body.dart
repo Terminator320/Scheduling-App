@@ -16,6 +16,8 @@ import 'package:scheduling/features/calendar/widgets/dialogs/series_scope_dialog
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
+import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -41,10 +43,27 @@ class DetailsEditBody extends ConsumerStatefulWidget {
 class _DetailsEditBodyState extends ConsumerState<DetailsEditBody> {
   final _clientSearchDebounce = Debouncer(const Duration(milliseconds: 300));
 
+  // Guards the inline add-client sheet against a double-tap (see add sheet).
+  bool _addingClient = false;
+
   @override
   void dispose() {
     _clientSearchDebounce.dispose();
     super.dispose();
+  }
+
+  Future<ClientRecord?> _onRequestAddClient(String name) async {
+    if (_addingClient) return null;
+    _addingClient = true;
+    try {
+      return await showAddClientSheet(
+        context,
+        initialName: name,
+        settleFocus: true,
+      );
+    } finally {
+      if (mounted) _addingClient = false;
+    }
   }
 
   // Mirrors the add sheet: debounce so the comprehensive client search doesn't
@@ -106,6 +125,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody> {
           onSearchClients: _onClientSearchChanged,
           onSelectClient: notifier.selectClient,
           onClearClient: notifier.clearClient,
+          onRequestAddClient: _onRequestAddClient,
           onToggleEmployee: notifier.toggleEmployee,
           onPickDate: () => _pickDate(context, state, notifier),
           onPickStartTime: () => _pickStartTime(context, state, notifier),
