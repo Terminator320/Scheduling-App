@@ -574,19 +574,16 @@ waveSyncQueue/{jobId}  Outbox for Wave sync jobs — enqueued by the waveUpsertC
 
 ## Pre-Ship Cleanup (`TODO(pre-ship)`)
 
-Temporary scaffolding marked `TODO(pre-ship)` must be reverted before store
-release. The Flutter-side test scaffolding has all been removed (the employee
-delete/disable flow is now a real shipped feature with the `EMP-DEL` error tag).
-The only markers left are in **Cloud Functions**, where App Check enforcement is
-relaxed for pre-ship testing:
+All `TODO(pre-ship)` scaffolding has been removed. The Flutter-side test
+scaffolding is gone (the employee delete/disable flow is a real shipped feature
+with the `EMP-DEL` error tag), and the Cloud Functions App Check carve-out was
+retired in 1.25.1 — every callable now sets `enforceAppCheck: true` (verify:
+`grep -rn "enforceAppCheck: false" functions` returns nothing).
 
-| File | What to revert |
-|---|---|
-| `functions/account.js` + `invites.js` | `enforceAppCheck: false` on `deleteAccount`, `createEmployeeInvite`, `redeemSignupCode` — set back to `true` once the app ships |
-| `functions/wave/callables.js` | `enforceAppCheck: false` on the Wave callables — set back to `true` once the app ships |
-
-Locate them with `grep -rn "TODO(pre-ship)" functions lib` — markers are
-authoritative; line numbers drift.
+Enforcement activates on the next `firebase deploy --only functions`; deploy
+only after test clients move off Firebase App Distribution sideloads (which
+can't mint verified App Check tokens) to store-signed builds, or they'll be
+rejected.
 
 ---
 
@@ -597,7 +594,7 @@ authoritative; line numbers drift.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (733 test cases as of 2026-07-07). `flutter analyze` is
+Run: `flutter test` (739 test cases as of 2026-07-08). `flutter analyze` is
 clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.

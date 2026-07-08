@@ -10,6 +10,13 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.25.1+44] - 2026-07-08
+### Security
+- **Hardened the app's connection to its backend.** Sensitive actions —
+  deleting your account, sending employee invites, and the Wave accounting sync
+  — now require requests to come from a verified copy of the app, blocking
+  tampered or automated clients.
+
 ## [1.25.0+43] - 2026-07-07
 ### Changed
 - **The app now shows as "ES Pro" on your home screen.** The app icon's label
