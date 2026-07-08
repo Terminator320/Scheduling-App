@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
+import 'package:scheduling/core/constants/app_urls.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
+import 'package:scheduling/core/launchers/web_url_launcher.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
@@ -150,6 +152,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ],
         const SizedBox(height: AppSpacing.sp24),
+        SettingsSectionHeader(
+          label: context.l10n.settings_legal.toUpperCase(),
+        ),
+        _legalCard(scheme),
+        const SizedBox(height: AppSpacing.sp24),
         _buildVersionFooter(scheme),
         const SizedBox(height: AppSpacing.sp32),
       ],
@@ -264,6 +271,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           activeTrackColor: scheme.primary,
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
+      ),
+    );
+  }
+
+  Widget _legalCard(ColorScheme scheme) {
+    return SettingsSectionCard(
+      child: SettingsTile(
+        iconBg: scheme.secondaryContainer,
+        icon: Icons.privacy_tip_rounded,
+        iconColor: scheme.secondary,
+        label: context.l10n.settings_privacyPolicy,
+        isLast: true,
+        trailing: Icon(
+          Icons.open_in_new_rounded,
+          size: 18,
+          color: scheme.onSurfaceVariant,
+        ),
+        onTap: () => launchWebUrl(context, ref, AppUrls.privacyPolicy),
       ),
     );
   }
