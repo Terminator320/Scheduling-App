@@ -28,6 +28,24 @@ Baseline: working tree (clean) on `moblie` @ `efac0d6`.
 3. **🟡 D1/D2 — two dead `AppColors` constants** (`design_tokens.dart:22,42`),
    zero references. Cut them or wire them up — your call on the palette.
 
+## ✅ Resolution (2026-07-08) — all findings actioned
+All report-only findings were implemented (commits on `moblie`), and the App
+Check pre-ship gate was flipped at the user's direction:
+- **Tests added** (I1–I4): `client_propagation.test.js`, `maintenance.test.js`,
+  `account.test.js` (functions), `auth_cache_test.dart` (Flutter). Pure helpers
+  `image_magic.js` / `isReauthStale` extracted to make them testable.
+- **Dead tokens removed** (D1–D4); sheet/drawer corner radii tokenized via new
+  `AppRadius.r20`/`r24` (C1).
+- **App Check ENFORCED** on all 6 callables (`enforceAppCheck: true`,
+  `TODO(pre-ship)` notes removed). ⚠️ **Needs `firebase deploy --only functions`
+  to take effect**, and on deploy it blocks clients that can't mint a verified
+  App Check token — cut testers over to Play internal testing / TestFlight first.
+- Verified green: flutter analyze clean · flutter test 751 · functions eslint
+  clean · jest 237.
+
+Deferred by design (see notes): C2 spacing-token churn, I5 `build()` extraction,
+L1/L2 reserved l10n keys.
+
 ---
 
 ## Auto-applied cleanups (review the diff)
@@ -38,19 +56,15 @@ only dead code found is design-system API surface that is report-only by policy.
 ---
 
 ## ⚠️ Pre-ship checklist (act before release)
-- [ ] **App Check enforcement is OFF on 6 callables.** Each carries a
-  `TODO(pre-ship)` explaining it's temporary so Firebase App Distribution sideload
-  testers (whose builds can't mint Play-Integrity-verified App Check tokens) can
-  exercise them:
-  - `functions/invites.js:43` — `createEmployeeInvite`, `redeemSignupCode`
-  - `functions/account.js:41` — `deleteAccount`
-  - `functions/wave/callables.js` — `waveBootstrap`, `waveGetConnection`,
-    `waveImportCustomers`
-
-  Residual risk is bounded (each route still enforces auth + admin/reauth +
-  durable rate limits, and client-side App Check stays active), and the
-  billing-sensitive Places callables correctly keep `enforceAppCheck: true`. Flip
-  these 6 back to `enforceAppCheck: true` before store launch.
+- [x] **App Check enforcement — DONE (2026-07-08).** All 6 callables flipped to
+  `enforceAppCheck: true` and the `TODO(pre-ship)` notes removed
+  (`account.js` — `deleteAccount`; `invites.js` — `createEmployeeInvite` +
+  `redeemSignupCode`; `wave/callables.js` — `waveBootstrap`, `waveGetConnection`,
+  `waveImportCustomers`). The 2 Places callables already enforced.
+  **Still requires `firebase deploy --only functions` to take effect** — until
+  deployed, production runs the old unenforced build. On deploy it blocks any
+  client that can't mint a verified App Check token (App Distribution sideloads),
+  so move testers to Play internal testing / TestFlight first.
 
 ---
 

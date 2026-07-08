@@ -48,10 +48,6 @@ const WAVE_BUSINESS_NAME = defineSecret("WAVE_BUSINESS_NAME");
 // heavy lifting (GraphQL transport, mapping, queue mechanics) lives in the
 // `wave/*` modules — these functions are thin orchestrators that add auth,
 // admin, and rate-limit guards and translate Wave errors into HttpsErrors.
-//
-// App Check posture mirrors deleteAccount: admin callables run
-// enforceAppCheck:false with a TODO(pre-ship) until Play Integrity can mint
-// verified tokens for store builds.
 
 /**
  * Reads the connected Wave `businessId` from the `wave/connection` doc, or
@@ -119,11 +115,9 @@ function selectBusiness(businesses, wantName) {
 
 // 1) waveBootstrap — admin-only, idempotent get-or-create of wave/connection.
 const waveBootstrap = onCall(
-    // TODO(pre-ship): set back to `enforceAppCheck: true` once the app ships
-    // through Play Store and Play Integrity can mint verified App Check tokens.
     {
       secrets: [WAVE_FULL_ACCESS_TOKEN, WAVE_BUSINESS_NAME],
-      enforceAppCheck: false,
+      enforceAppCheck: true,
     },
     async (req) => {
       if (!req.auth || !req.auth.uid) {
@@ -202,9 +196,7 @@ const waveBootstrap = onCall(
 );
 
 const waveGetConnection = onCall(
-    // TODO(pre-ship): set back to `enforceAppCheck: true` once the app ships
-    // through Play Store and Play Integrity can mint verified App Check tokens.
-    {enforceAppCheck: false},
+    {enforceAppCheck: true},
     async (req) => {
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
@@ -225,11 +217,9 @@ const waveGetConnection = onCall(
 
 // 2) waveImportCustomers — admin-only one-shot Wave → App seed.
 const waveImportCustomers = onCall(
-    // TODO(pre-ship): set back to `enforceAppCheck: true` once the app ships
-    // through Play Store and Play Integrity can mint verified App Check tokens.
     {
       secrets: [WAVE_FULL_ACCESS_TOKEN],
-      enforceAppCheck: false,
+      enforceAppCheck: true,
       timeoutSeconds: 300,
     },
     async (req) => {

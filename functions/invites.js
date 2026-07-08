@@ -38,9 +38,7 @@ function optionalString(data, key, maxLen) {
   return v;
 }
 
-// TODO(pre-ship): set enforceAppCheck:true once the app ships through the
-// stores and Play Integrity can mint verified App Check tokens.
-const APP_CHECK = {enforceAppCheck: false};
+const APP_CHECK = {enforceAppCheck: true};
 
 /**
  * Transactional core of createEmployeeInvite, extracted for unit testing.
