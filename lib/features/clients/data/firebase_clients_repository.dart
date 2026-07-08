@@ -109,9 +109,7 @@ class FirebaseClientsRepository implements ClientsRepository {
       final last = docs.last;
       _pageBoundaryNames[last.id] = (last.data()['name'] ?? '').toString();
     }
-    return docs
-        .map((doc) => ClientRecord.fromMap(doc.id, doc.data()))
-        .toList();
+    return docs.map((doc) => ClientRecord.fromMap(doc.id, doc.data())).toList();
   }
 
   @override
@@ -122,7 +120,7 @@ class FirebaseClientsRepository implements ClientsRepository {
   }
 
   @override
-  Future<void> addClient(ClientRecord client) async {
+  Future<ClientRecord> addClient(ClientRecord client) async {
     final map = _normalizedMap(client);
     final docRef = await _clients.add({
       ...map,
@@ -130,6 +128,7 @@ class FirebaseClientsRepository implements ClientsRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     });
     _applyLocalWrite(docRef.id, map);
+    return client.copyWith(id: docRef.id);
   }
 
   @override

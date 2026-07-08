@@ -3,7 +3,10 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 abstract class ClientsRepository {
   Future<ClientRecord?> getClientById(String id);
 
-  Future<void> addClient(ClientRecord client);
+  /// Persists a new client and returns it with the generated Firestore doc id
+  /// populated, so callers (e.g. inline add during appointment booking) can
+  /// link to it immediately.
+  Future<ClientRecord> addClient(ClientRecord client);
 
   Future<void> updateClient(ClientRecord client);
 

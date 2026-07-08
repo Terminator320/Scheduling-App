@@ -963,6 +963,16 @@
   "@clients_noClientsFound": {
     "description": "No clients found"
   },
+  "clients_addNamedClient": "Add \"{name}\" as a new client",
+  "@clients_addNamedClient": {
+    "description": "Action in the appointment client picker that creates a new client from the typed search text (which prefills the new client's name).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "John Smith"
+      }
+    }
+  },
   "common_employeeRoleValue": "Employee",
   "@common_employeeRoleValue": {
     "description": "Employee"

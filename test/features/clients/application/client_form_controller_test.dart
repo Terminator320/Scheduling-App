@@ -54,13 +54,17 @@ void main() {
   int refreshCount() => container.read(clientsRefreshProvider);
 
   group('addClient', () {
-    test('persists, bumps the list refresh and reports saved', () async {
-      when(() => repo.addClient(any())).thenAnswer((_) async {});
+    test('persists, bumps the list refresh and reports saved with the '
+        'generated id', () async {
+      final persisted = _client.copyWith(id: 'c1-persisted');
+      when(() => repo.addClient(any())).thenAnswer((_) async => persisted);
 
       final outcome = await notifier().addClient(_client);
 
       expect(outcome, isA<ClientSaved>());
-      expect((outcome as ClientSaved).client, _client);
+      // The controller surfaces the repository's id-populated record, not the
+      // input (whose id may be empty), so the caller can link to it.
+      expect((outcome as ClientSaved).client, persisted);
       verify(() => repo.addClient(_client)).called(1);
       expect(refreshCount(), 1);
       // Resets on success: in the split layout the detail pane keeps this

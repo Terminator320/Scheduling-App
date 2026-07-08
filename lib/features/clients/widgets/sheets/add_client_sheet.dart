@@ -4,6 +4,7 @@ import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/sheet_focus.dart';
 import 'package:scheduling/features/clients/application/client_form_controller.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_form_validator.dart';
@@ -15,8 +16,40 @@ import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
+/// Opens the add-client sheet and resolves to the newly created client (with
+/// its Firestore id populated) once saved, or null if dismissed. [initialName]
+/// prefills the name field. Pass [settleFocus] when opening from a search field
+/// (the appointment client picker) to settle the keyboard before the sheet
+/// slides in and double-unfocus after it closes — the sheet-from-search idiom,
+/// mirroring `_openClient` in clients_list_view; FAB openers leave it false.
+Future<ClientRecord?> showAddClientSheet(
+  BuildContext context, {
+  String? initialName,
+  bool settleFocus = false,
+}) async {
+  if (settleFocus) {
+    await SheetFocus.settleBeforeSheet();
+    if (!context.mounted) return null;
+  }
+  final created = await showModalBottomSheet<ClientRecord>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    sheetAnimationStyle: AppMotion.sheetStyle,
+    builder: (_) => AddClientSheet(initialName: initialName),
+  );
+  if (settleFocus && context.mounted) await SheetFocus.unfocusAfterSheet();
+  // Final guard: if the caller unmounted while the sheet (or unfocus delay) was
+  // open, don't hand a client back to a now-disposed form to select.
+  return context.mounted ? created : null;
+}
+
 class AddClientSheet extends ConsumerStatefulWidget {
-  const AddClientSheet({super.key});
+  const AddClientSheet({super.key, this.initialName});
+
+  /// Prefills the name field (e.g. the text typed into the appointment client
+  /// search before choosing to add a new client).
+  final String? initialName;
 
   @override
   ConsumerState<AddClientSheet> createState() => _AddClientSheetState();
@@ -36,6 +69,12 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
   final _countryController = TextEditingController();
   final _postalCodeController = TextEditingController();
   final _aptController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController.text = widget.initialName ?? '';
+  }
 
   @override
   void dispose() {
@@ -122,11 +161,11 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
         .addClient(newClient);
     if (!mounted) return;
     switch (outcome) {
-      case ClientSaved():
+      case ClientSaved(:final client):
         ref
             .read(noticeServiceProvider)
             .success(context.l10n.common_clientAdded);
-        Navigator.pop(context);
+        Navigator.pop(context, client);
       case ClientSaveFailed(:final error):
         ref
             .read(noticeServiceProvider)
