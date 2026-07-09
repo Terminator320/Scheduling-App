@@ -106,7 +106,7 @@ Future<T?> _showCupertinoWheelSheet<T>(
                     CupertinoButton(
                       padding: EdgeInsets.zero,
                       child: Text(
-                        ctx.l10n.status_done,
+                        ctx.l10n.common_done,
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
                           color: Theme.of(ctx).colorScheme.primary,

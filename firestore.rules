@@ -145,9 +145,10 @@ service cloud.firestore {
 
     // ── appointments ──────────────────────────────────────────────────────────
     // Allowed status values (admin writes are validated; employee writes are
-    // additionally restricted to 'done' only, see below).
+    // additionally restricted to 'done' only, see below). Lifecycle is
+    // pending -> in_progress -> done, plus 'cancelled'.
     function isValidAppointmentStatus(s) {
-      return s in ['pending', 'confirmed', 'in_progress', 'done', 'cancelled'];
+      return s in ['pending', 'in_progress', 'done', 'cancelled'];
     }
 
     match /appointments/{appointmentId} {

@@ -13,7 +13,7 @@ import 'package:scheduling/features/employees/widgets/dialogs/signup_code_dialog
 import 'package:scheduling/features/employees/widgets/fields/employee_color_picker_row.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
+import 'package:scheduling/shared/widgets/feedback/user_status_chip.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
@@ -45,6 +45,9 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
   final Map<String, String?> _errors = {};
 
   bool get _isEdit => widget.employee != null;
+
+  UserStatus get _status =>
+      _isDisabled ? UserStatus.disabled : UserStatus.active;
 
   @override
   void initState() {
@@ -182,11 +185,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
         EntityFormHeader(
           name: e.name,
           avatarColor: e.color,
-          status: StatusChip(
-            status: _isDisabled
-                ? AppointmentStatus.disabled
-                : AppointmentStatus.active,
-          ),
+          status: UserStatusChip(status: _status),
         ),
         const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
@@ -285,11 +284,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
                 ),
               ),
               const SizedBox(height: AppSpacing.sp8),
-              StatusChip(
-                status: _isDisabled
-                    ? AppointmentStatus.disabled
-                    : AppointmentStatus.active,
-              ),
+              UserStatusChip(status: _status),
             ],
           )
         else
@@ -317,11 +312,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
                 ),
               ),
               const SizedBox(width: AppSpacing.sp8),
-              StatusChip(
-                status: _isDisabled
-                    ? AppointmentStatus.disabled
-                    : AppointmentStatus.active,
-              ),
+              UserStatusChip(status: _status),
             ],
           ),
         const SizedBox(height: AppSpacing.sp12),

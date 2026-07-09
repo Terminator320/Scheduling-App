@@ -8,7 +8,7 @@ import 'package:scheduling/features/employees/application/employee_form_controll
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
+import 'package:scheduling/shared/widgets/feedback/user_status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
@@ -115,10 +115,8 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
       context.l10n.employees_employeeDetails,
       style: theme.textTheme.headlineLarge,
     );
-    final statusChip = StatusChip(
-      status: isDisabled
-          ? AppointmentStatus.disabled
-          : AppointmentStatus.active,
+    final statusChip = UserStatusChip(
+      status: UserStatus.fromRaw(widget.employee.status),
     );
 
     return DetailSheetListView(

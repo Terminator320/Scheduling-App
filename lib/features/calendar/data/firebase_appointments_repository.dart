@@ -219,9 +219,11 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     _invalidateSearchCache();
   }
 
+  // The valid appointment statuses: the pending → in_progress → done
+  // lifecycle plus 'cancelled' (set by the separate Cancel action). Mirrors
+  // isValidAppointmentStatus in firestore.rules.
   static const _allowedStatuses = {
     'pending',
-    'confirmed',
     'in_progress',
     'done',
     'cancelled',

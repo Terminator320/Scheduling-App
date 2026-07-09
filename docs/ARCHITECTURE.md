@@ -32,7 +32,7 @@ lib/
 ├── shared/widgets/                  Reusable UI components used across ≥2 features, grouped by type
 │   ├── app_bars/                    app_top_bar (AppTopBar — the standard primary app bar every screen uses; slims in landscape)
 │   ├── primitives/                  app_avatar (contrast-aware initials circle), app_back_button (shared leading back arrow), busy_button_icon (spinner-or-icon slot for *.icon buttons), entity_form_header (avatar + name + optional status, for edit forms), fade_in_item, quick_action_button (QuickActionsRow + QuickActionButton — tinted Call/Email/Directions tiles), section_label (uppercase mini-header)
-│   ├── feedback/                    app_empty_state, error_snack_bar (errorSnackBar — shared error SnackBar for the sites that bypass NoticeService), skeleton_loader (shimmer), status_chip (+ AppointmentStatus.fromRaw, the canonical status mapper)
+│   ├── feedback/                    app_empty_state, error_snack_bar (errorSnackBar — shared error SnackBar for the sites that bypass NoticeService), skeleton_loader (shimmer), status_pill (shared rounded label + text-scale cap), status_chip (appointment lifecycle + AppointmentStatus.fromRaw, the canonical status mapper), user_status_chip (account UserStatus: active/invited/disabled + UserStatus.fromRaw)
 │   ├── fields/                      address_autocomplete_field, labeled_text_field (built-in shake + animated error row), app_search_bar, clear_text_button (ClearTextButton — the one clear-"x" suffix), form_helpers
 │   ├── cards/                       list_item_tile (shared row layout behind client/employee tiles), info_card (InfoCard + InfoCardRow — bordered card of tappable rows with tinted icon chips)
 │   ├── dialogs/                     confirm_dialog (showConfirmDialog — shared Cancel/confirm, destructive variant)
@@ -272,7 +272,7 @@ Free-text input length caps live in `lib/core/validators/text_limits.dart`. The 
 2. Form validators (`AppointmentFormValidator`) — defensive backup.
 3. Firestore rules (where applicable) — defense in depth.
 
-Status enums (`AppointmentStatus` written by `updateAppointmentStatus`) are allowlisted at both the repository (`{pending, confirmed, in_progress, done, cancelled}`) and `firestore.rules`. Employees can only write `status='done'`.
+Status enums (`AppointmentStatus` written by `updateAppointmentStatus`) are allowlisted at both the repository (`{pending, in_progress, done, cancelled}`) and `firestore.rules`. Employees can only write `status='done'`. Edits that re-serialize a whole record normalize the stored status through `AppointmentStatus.fromRaw(status).raw` first (seed + series `propagate`) so a legacy `confirmed`/unknown value can't be re-written verbatim and rejected.
 
 ### Theming
 
@@ -594,7 +594,7 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (739 test cases as of 2026-07-08). `flutter analyze` is
+Run: `flutter test` (742 test cases as of 2026-07-09). `flutter analyze` is
 clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.

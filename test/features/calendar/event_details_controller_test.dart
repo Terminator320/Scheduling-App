@@ -144,7 +144,10 @@ void main() {
       expect(state.selectedDate, _appointment.startTime);
       expect(state.selectedStartTime, const TimeOfDay(hour: 9, minute: 0));
       expect(state.selectedEndTime, const TimeOfDay(hour: 10, minute: 0));
-      expect(state.editingStatus, 'booked');
+      // The fixture's unknown 'booked' status normalizes to 'pending' on seed
+      // (via AppointmentStatus.fromRaw) so an unchanged status is always
+      // re-written as an allowlisted value.
+      expect(state.editingStatus, 'pending');
       expect(state.isEditing, isFalse);
     });
 
@@ -651,8 +654,10 @@ void main() {
         expect(batch.every((a) => a.title == 'New title'), isTrue);
         expect(batch.every((a) => a.address == 'New address'), isTrue);
         expect(batch.every((a) => a.seriesId == 'series-1'), isTrue);
-        // Status stays per-visit — never propagated across the series.
-        expect(batch[1].status, 'confirmed');
+        // Status stays per-visit — never propagated across the series — but is
+        // canonicalized: the retired 'confirmed' sibling normalizes to
+        // 'pending', while a valid 'in_progress' sibling round-trips unchanged.
+        expect(batch[1].status, 'pending');
         expect(batch[2].status, 'in_progress');
         // Each sibling keeps its own date but takes the new time of day.
         expect(batch[1].startTime, DateTime(2026, 11, 10, 8));

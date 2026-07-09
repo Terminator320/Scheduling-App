@@ -58,15 +58,18 @@ void main() {
 
   test('accepts each allowlisted status', () async {
     final repo = FirebaseAppointmentsRepository(firestore);
-    for (final s in const [
-      'pending',
-      'confirmed',
-      'in_progress',
-      'done',
-      'cancelled',
-    ]) {
+    for (final s in const ['pending', 'in_progress', 'done', 'cancelled']) {
       await repo.updateAppointmentStatus(id: 'a1', status: s);
     }
-    verify(() => doc.update(any())).called(5);
+    verify(() => doc.update(any())).called(4);
+  });
+
+  test('rejects retired confirmed status', () async {
+    final repo = FirebaseAppointmentsRepository(firestore);
+    expect(
+      () => repo.updateAppointmentStatus(id: 'a1', status: 'confirmed'),
+      throwsArgumentError,
+    );
+    verifyNever(() => doc.update(any()));
   });
 }
