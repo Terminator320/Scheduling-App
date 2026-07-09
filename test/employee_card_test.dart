@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/widgets/cards/employee_card.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
+import 'package:scheduling/shared/widgets/feedback/user_status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 EmployeeRecord _fakeEmployee({
@@ -54,11 +54,11 @@ void main() {
     expect(find.byType(AppAvatar), findsOneWidget);
   });
 
-  testWidgets('shows StatusChip', (tester) async {
+  testWidgets('shows UserStatusChip', (tester) async {
     await tester.pumpWidget(
       _wrap(EmployeeCard(employee: _fakeEmployee(), onTap: () {})),
     );
-    expect(find.byType(StatusChip), findsOneWidget);
+    expect(find.byType(UserStatusChip), findsOneWidget);
   });
 
   testWidgets('calls onTap when tapped', (tester) async {

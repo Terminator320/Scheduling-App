@@ -10,6 +10,24 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.27.0+46] - 2026-07-09
+### Changed
+- **Appointment statuses are simpler: Pending → In progress → Complete.** The
+  status picker now offers just these three stages, and "Done" is called
+  **"Complete"** everywhere (the button now reads **"Mark as complete"**).
+  Cancelling a visit is still its own separate action.
+- **A completed visit no longer offers a Cancel button.** Once a job is marked
+  complete, the Cancel action is hidden — completing it is the end of its
+  lifecycle.
+
+### Fixed
+- **Editing an older appointment saves reliably again.** Changing the time,
+  notes, or assignees on a visit created before the status change no longer
+  fails to save.
+- **An invited employee now reads "Invited" everywhere.** The employee details
+  view previously showed a not-yet-activated employee as "Active"; it now
+  matches the "Invited" badge shown in the list.
+
 ## [1.26.0+45] - 2026-07-08
 ### Added
 - **Read the privacy policy from inside the app.** Settings now has a **Legal**

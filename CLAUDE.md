@@ -94,11 +94,23 @@ the iOS `FirebaseOptions`). Android also needs `google-services.json`.
   compression pass. Background dispatch via `AppointmentImageUploadService`
   after appointment save; the picker's temp files are deleted in a `finally`.
 - **App Check:** `FirebaseAppCheck.instance.activate()` in `main()`. Do not remove.
-- **Appointment status allowlist:** Valid values are `pending`, `confirmed`,
-  `in_progress`, `done`, `cancelled` — enforced by `isValidAppointmentStatus`
+- **Appointment status allowlist:** The lifecycle is `pending` →
+  `in_progress` → `done`, plus `cancelled` (set by the separate Cancel action).
+  These four are the ONLY valid values — enforced by `isValidAppointmentStatus`
   in `firestore.rules` and `_allowedStatuses` in
   `firebase_appointments_repository.dart`. New appointments must be created
-  with `status: 'pending'`.
+  with `status: 'pending'`. (`confirmed` was retired 2026-07-09 when the picker
+  collapsed to three states; `done` is labeled "Complete" in the UI. Account
+  statuses `active`/`invited`/`disabled` live in the separate `UserStatus` enum
+  — `shared/widgets/feedback/user_status_chip.dart` — not `AppointmentStatus`.)
+  **Any edit that re-serializes a stored record must normalize its status
+  through `AppointmentStatus.fromRaw(status).raw` before writing** — legacy
+  `confirmed`/unknown docs exist, an unchanged status is re-written verbatim,
+  and the rules reject anything off the allowlist (a raw write would fail the
+  whole save/series-update with `permission-denied`). Done at the seed in
+  `event_details_controller` and per-sibling in `appointment_series_editor`'s
+  `propagate`. `UserStatus.fromRaw` is the matching mapper for account statuses
+  (unknown/empty → `invited`).
 - **Role cache:** Never read `isAdmin`/role from SharedPreferences — always Firestore.
 - **Routing:** `AppRoutes.onGenerateRoute` is the single source of truth.
   Pass typed arg classes via `Navigator.pushNamed(..., arguments: ...)`.

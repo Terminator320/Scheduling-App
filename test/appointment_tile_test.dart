@@ -9,7 +9,7 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 AppointmentRecord _fakeAppt({
-  String status = 'confirmed',
+  String status = 'pending',
   List<String> employeeNames = const ['Sarah Johnson'],
   List<String> employeeIds = const ['e1'],
 }) => AppointmentRecord(
@@ -80,10 +80,26 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('does NOT show StatusChip for confirmed status', (tester) async {
+  testWidgets('does NOT show StatusChip for pending (default) status', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       _wrap(
         AppointmentTile(appointment: _fakeAppt(), employeeColorMap: _colorMap),
+      ),
+    );
+    expect(find.byType(StatusChip), findsNothing);
+  });
+
+  testWidgets('legacy confirmed status is treated as pending (no chip)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentTile(
+          appointment: _fakeAppt(status: 'confirmed'),
+          employeeColorMap: _colorMap,
+        ),
       ),
     );
     expect(find.byType(StatusChip), findsNothing);
@@ -101,11 +117,11 @@ void main() {
     expect(find.byType(StatusChip), findsOneWidget);
   });
 
-  testWidgets('shows StatusChip for pending status', (tester) async {
+  testWidgets('shows StatusChip for in_progress status', (tester) async {
     await tester.pumpWidget(
       _wrap(
         AppointmentTile(
-          appointment: _fakeAppt(status: 'pending'),
+          appointment: _fakeAppt(status: 'in_progress'),
           employeeColorMap: _colorMap,
         ),
       ),

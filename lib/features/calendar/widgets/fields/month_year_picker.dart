@@ -86,7 +86,7 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                   CupertinoButton(
                     padding: EdgeInsets.zero,
                     child: Text(
-                      context.l10n.status_done,
+                      context.l10n.common_done,
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: scheme.primary,

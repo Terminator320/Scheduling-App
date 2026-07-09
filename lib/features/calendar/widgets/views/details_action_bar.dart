@@ -73,8 +73,8 @@ class DetailsActionBar extends StatelessWidget {
             ),
           ),
         ],
-        if (showCancel && !isCancelled) ...[
-          if (isToday && !isDone) const SizedBox(height: AppSpacing.sp8),
+        if (showCancel && !isCancelled && !isDone) ...[
+          if (isToday) const SizedBox(height: AppSpacing.sp8),
           OutlinedButton(
             style: destructiveOutlinedButtonStyle(
               context,

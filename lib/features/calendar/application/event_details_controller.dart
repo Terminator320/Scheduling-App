@@ -21,6 +21,7 @@ import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 part 'event_details_controller.freezed.dart';
 
@@ -105,7 +106,12 @@ class EventDetailsController extends Notifier<EventDetailsState>
       selectedDate: appointment.startTime,
       selectedStartTime: TimeOfDay.fromDateTime(appointment.startTime),
       selectedEndTime: TimeOfDay.fromDateTime(appointment.endTime),
-      editingStatus: appointment.status,
+      // Normalize the stored raw status so a legacy value (e.g. the retired
+      // 'confirmed') is edited back as a valid one — an unchanged status is
+      // re-written verbatim on save and the rules reject anything off the
+      // allowlist. fromRaw maps unknown/legacy → pending; valid values
+      // round-trip.
+      editingStatus: AppointmentStatus.fromRaw(appointment.status).raw,
       repeat: appointment.repeat,
       savedRepeat: appointment.repeat,
       // Seeded synchronously from the record so a picker toggle can never race

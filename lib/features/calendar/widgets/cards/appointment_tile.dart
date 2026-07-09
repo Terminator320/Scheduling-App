@@ -23,8 +23,8 @@ class AppointmentTile extends StatelessWidget {
   final Map<String, Color> employeeColorMap;
   final Future<void> Function()? onOpen;
 
-  /// Show the status chip even for confirmed appointments (the history list
-  /// wants every row chipped; the calendar hides the chip when confirmed).
+  /// Show the status chip even for the default (pending) state (the history
+  /// list wants every row chipped; the calendar hides the chip when pending).
   final bool alwaysShowChip;
 
   /// Strike through the title and dim the card when the appointment is
@@ -39,7 +39,7 @@ class AppointmentTile extends StatelessWidget {
     final accent =
         colorFromMap(appointment, employeeColorMap) ?? scheme.primary;
     final status = AppointmentStatus.fromRaw(appointment.displayStatus);
-    final showChip = alwaysShowChip || status != AppointmentStatus.confirmed;
+    final showChip = alwaysShowChip || status != AppointmentStatus.pending;
     final isCancelled = dimWhenCancelled && status.isCancelled;
 
     // Show every assigned employee, dropping blanks so no stray ", " shows.

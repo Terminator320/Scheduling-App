@@ -2,6 +2,7 @@ import 'package:scheduling/features/calendar/application/event_series_helpers.da
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
+import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 /// Outcome of a series rewrite: the series-stamped record plus how many future
 /// occurrences were booked and how many old ones were removed.
@@ -100,6 +101,10 @@ class AppointmentSeriesEditor {
           originalEnd: end,
           copyStart: copyStart,
         ),
+        // Canonicalize each sibling's own status (never propagate the edited
+        // visit's) so a legacy value like the retired 'confirmed' isn't
+        // re-written verbatim and rejected by the status allowlist rule.
+        status: AppointmentStatus.fromRaw(v.status).raw,
       );
     }).toList();
     await _repo.updateAppointments([updated, ...propagated]);

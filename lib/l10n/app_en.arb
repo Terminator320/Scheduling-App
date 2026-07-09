@@ -40,10 +40,6 @@
   "@status_invited": {
     "description": "Invited"
   },
-  "status_confirmed": "Confirmed",
-  "@status_confirmed": {
-    "description": "Confirmed"
-  },
   "status_pending": "Pending",
   "@status_pending": {
     "description": "Pending"
@@ -92,6 +88,10 @@
   "@common_cancel": {
     "description": "Cancel"
   },
+  "common_done": "Done",
+  "@common_done": {
+    "description": "Done (generic picker/dialog confirm button)"
+  },
   "common_close": "Close",
   "@common_close": {
     "description": "Accessibility label / tooltip for a close button."
@@ -120,9 +120,9 @@
   "@common_edit": {
     "description": "Edit"
   },
-  "status_done": "Done",
+  "status_done": "Complete",
   "@status_done": {
-    "description": "Done"
+    "description": "Complete (appointment lifecycle end state)"
   },
   "common_calendar": "Calendar",
   "@common_calendar": {
@@ -555,13 +555,13 @@
   "@calendar_noAddress": {
     "description": "No address"
   },
-  "calendar_markAsDone": "Mark as done",
+  "calendar_markAsDone": "Mark as complete",
   "@calendar_markAsDone": {
-    "description": "Mark as done"
+    "description": "Mark as complete"
   },
-  "calendar_completed": "Completed",
+  "calendar_completed": "Complete",
   "@calendar_completed": {
-    "description": "Completed"
+    "description": "Complete (appointment already marked complete)"
   },
   "calendar_areYouSureYouWantToDeleteThisJob": "Are you sure you want to delete this job?",
   "@calendar_areYouSureYouWantToDeleteThisJob": {
@@ -883,7 +883,7 @@
   "@common_appointmentDeleted": {
     "description": "Appointment deleted"
   },
-  "common_appointmentMarkedAsDone": "Marked as done",
+  "common_appointmentMarkedAsDone": "Marked as complete",
   "@common_appointmentMarkedAsDone": {
     "description": "Marked as done"
   },
