@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/cards/list_item_tile.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
+import 'package:scheduling/shared/widgets/feedback/user_status_chip.dart';
 
 class EmployeeCard extends StatelessWidget {
   const EmployeeCard({
@@ -16,11 +16,7 @@ class EmployeeCard extends StatelessWidget {
   final VoidCallback onTap;
   final bool selected;
 
-  AppointmentStatus get _status => employee.isActive
-      ? AppointmentStatus.active
-      : employee.isDisabled
-      ? AppointmentStatus.disabled
-      : AppointmentStatus.invited;
+  UserStatus get _status => UserStatus.fromRaw(employee.status);
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +31,7 @@ class EmployeeCard extends StatelessWidget {
       subtitle: employee.email,
       selected: selected,
       dimmed: employee.isDisabled,
-      trailing: StatusChip(status: _status),
+      trailing: UserStatusChip(status: _status),
       onTap: onTap,
     );
   }

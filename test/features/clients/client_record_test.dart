@@ -6,15 +6,15 @@ void main() {
     test('value equality works (freezed)', () {
       const a = ClientRecord(
         id: 'c1',
-        businessName: 'Acme',
-        name: 'Jane',
+        name: 'Acme',
+        firstName: 'Jane',
         phone: '514-555-0101',
         email: 'jane@acme.com',
       );
       const b = ClientRecord(
         id: 'c1',
-        businessName: 'Acme',
-        name: 'Jane',
+        name: 'Acme',
+        firstName: 'Jane',
         phone: '514-555-0101',
         email: 'jane@acme.com',
       );
@@ -31,26 +31,20 @@ void main() {
       expect(original.name, 'Jane'); // immutable
     });
 
-    test('displayName prefers businessName, falls back to name', () {
+    test('displayName returns name', () {
       expect(
-        const ClientRecord(
-          id: 'c1',
-          businessName: 'Acme',
-          name: 'Jane',
-        ).displayName,
-        'Acme',
+        const ClientRecord(id: 'c1', name: 'Acme Co').displayName,
+        'Acme Co',
       );
-      expect(
-        const ClientRecord(id: 'c1', name: 'Jane').displayName,
-        'Jane',
-      );
+      expect(const ClientRecord(id: 'c1', name: 'Jane').displayName, 'Jane');
     });
 
-    test('toMap → fromMap roundtrip preserves data', () {
+    test('toMap → fromMap roundtrip preserves user-owned data', () {
       const original = ClientRecord(
         id: 'c1',
-        businessName: 'Acme',
-        name: 'Jane',
+        name: 'Acme',
+        firstName: 'Jane',
+        lastName: 'Doe',
         address: '123 Main St',
         apt: '4B',
         city: 'Montreal',
@@ -58,6 +52,7 @@ void main() {
         country: 'Canada',
         postalCode: 'H3B 0A8',
         phone: '514-555-0101',
+        mobile: '514-555-0199',
         email: 'jane@acme.com',
         contacts: [
           ClientContact(name: 'Bob', phone: '514-555-0102', email: 'b@a.com'),
@@ -69,28 +64,89 @@ void main() {
       expect(restored, equals(original));
     });
 
-    test('fromMap defaults missing fields to empty', () {
+    test('fromMap defaults missing fields to empty/null', () {
       final r = ClientRecord.fromMap('c1', const {});
       expect(r.id, 'c1');
-      expect(r.businessName, '');
       expect(r.name, '');
+      expect(r.firstName, '');
+      expect(r.lastName, '');
+      expect(r.mobile, '');
       expect(r.contacts, isEmpty);
+      expect(r.waveCustomerId, isNull);
+      expect(r.waveSyncState, '');
+      expect(r.waveSyncError, isNull);
+    });
+
+    test('fromMap reads the function-owned Wave projection fields', () {
+      final r = ClientRecord.fromMap('c1', const {
+        'name': 'Jane',
+        'waveCustomerId': 'wave-123',
+        'wave': {'syncState': 'synced', 'syncError': null},
+      });
+      expect(r.waveCustomerId, 'wave-123');
+      expect(r.waveSyncState, 'synced');
+      expect(r.waveSyncError, isNull);
+
+      final errored = ClientRecord.fromMap('c2', const {
+        'name': 'Bob',
+        'wave': {'syncState': 'error', 'syncError': 'boom'},
+      });
+      expect(errored.waveSyncState, 'error');
+      expect(errored.waveSyncError, 'boom');
+    });
+
+    test('fromMap falls back to legacy businessName when name is empty', () {
+      // A pre-Wave-reshape business-only doc: businessName set, name empty.
+      final r = ClientRecord.fromMap('c1', const {
+        'name': '',
+        'businessName': 'Acme Industries',
+        'phone': '514-555-0101',
+      });
+      expect(r.name, 'Acme Industries');
+      expect(r.displayName, 'Acme Industries');
+    });
+
+    test('fromMap prefers name over legacy businessName when both set', () {
+      final r = ClientRecord.fromMap('c1', const {
+        'name': 'Jane Doe',
+        'businessName': 'Acme Industries',
+      });
+      expect(r.name, 'Jane Doe');
+    });
+
+    test('toMap never emits the function-owned Wave fields', () {
+      const c = ClientRecord(
+        id: 'c1',
+        name: 'Jane',
+        waveCustomerId: 'wave-123',
+        waveSyncState: 'synced',
+        waveSyncError: 'boom',
+      );
+      final map = c.toMap();
+      expect(map.containsKey('waveCustomerId'), isFalse);
+      expect(map.containsKey('wave'), isFalse);
+      expect(map.containsKey('waveSyncState'), isFalse);
+      expect(map.containsKey('waveSyncError'), isFalse);
     });
 
     test('toMap trims whitespace on all fields', () {
       const c = ClientRecord(
         id: 'c1',
-        businessName: '  Acme  ',
-        name: '  Jane  ',
+        name: '  Acme  ',
+        firstName: '  Jane  ',
+        lastName: '  Doe  ',
         address: '  123 Main  ',
         phone: '  514  ',
+        mobile: '  438  ',
         email: '  jane@acme.com  ',
       );
       final map = c.toMap();
-      expect(map['businessName'], 'Acme');
-      expect(map['name'], 'Jane');
+      expect(map['name'], 'Acme');
+      expect(map['firstName'], 'Jane');
+      expect(map['lastName'], 'Doe');
       expect(map['address'], '123 Main');
       expect(map['phone'], '514');
+      expect(map['mobile'], '438');
       expect(map['email'], 'jane@acme.com');
     });
 

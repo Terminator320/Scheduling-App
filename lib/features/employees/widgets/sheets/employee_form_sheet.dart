@@ -2,16 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
-import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
-import 'package:scheduling/features/employees/application/employees_providers.dart';
-import 'package:scheduling/features/employees/domain/employees_failure.dart';
+import 'package:scheduling/features/employees/application/employee_form_controller.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/policies/employee_form_validator.dart';
+import 'package:scheduling/features/employees/widgets/dialogs/signup_code_dialog.dart';
 import 'package:scheduling/features/employees/widgets/fields/employee_color_picker_row.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
+import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
+import 'package:scheduling/shared/widgets/feedback/user_status_chip.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
@@ -40,11 +42,12 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
   late bool _isAdmin;
   late int _selectedColor;
   late bool _isDisabled;
-  bool _isSaving = false;
-  bool _isTogglingStatus = false;
   final Map<String, String?> _errors = {};
 
   bool get _isEdit => widget.employee != null;
+
+  UserStatus get _status =>
+      _isDisabled ? UserStatus.disabled : UserStatus.active;
 
   @override
   void initState() {
@@ -68,13 +71,11 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
   }
 
   bool _validate() {
-    final errors = <String, String?>{};
-    if (_nameController.text.trim().isEmpty) {
-      errors['name'] = context.l10n.error_nameAndEmailAreRequired;
-    }
-    if (_emailController.text.trim().isEmpty) {
-      errors['email'] = context.l10n.error_nameAndEmailAreRequired;
-    }
+    final errors = EmployeeFormValidator.validate(
+      l10n: context.l10n,
+      name: _nameController.text.trim(),
+      email: _emailController.text.trim(),
+    );
     setState(() {
       _errors
         ..clear()
@@ -86,84 +87,93 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
   Future<void> _save() async {
     if (!_validate()) return;
 
-    setState(() => _isSaving = true);
+    final controller = ref.read(employeeFormControllerProvider.notifier);
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim().toLowerCase();
+    final phone = _phoneController.text.trim();
+    final colorValue = _selectedColor.toString();
 
-    final repo = ref.read(employeesRepositoryProvider);
-    final notices = ref.read(noticeServiceProvider);
-    try {
-      final name = _nameController.text.trim();
-      final email = _emailController.text.trim().toLowerCase();
-      final phone = _phoneController.text.trim();
-      final colorValue = _selectedColor.toString();
+    final outcome = _isEdit
+        ? await controller.updateEmployee(
+            docId: widget.employee!.id,
+            name: name,
+            email: email,
+            phone: phone,
+            colorValue: colorValue,
+            isAdmin: _isAdmin,
+          )
+        : await controller.inviteEmployee(
+            name: name,
+            email: email,
+            phone: phone,
+            colorValue: colorValue,
+          );
+    if (!mounted) return;
 
-      if (_isEdit) {
-        await repo.updateEmployee(
-          docId: widget.employee!.id,
-          name: name,
-          email: email,
-          phone: phone,
-          colorValue: colorValue,
-          isAdmin: _isAdmin,
-        );
-      } else {
-        await repo.addEmployee(
-          name: name,
-          email: email,
-          phone: phone,
-          colorValue: colorValue,
-        );
-      }
-
-      if (!mounted) return;
-      Navigator.pop(context, true);
-    } catch (e, st) {
-      if (e is EmployeesFailureEmailAlreadyExists) {
+    switch (outcome) {
+      case EmployeeUpdated():
+        Navigator.pop(context, true);
+      case EmployeeInvited(:final code):
+        await showSignupCodeDialog(context, name: name, code: code);
         if (!mounted) return;
-        setState(() => _errors['email'] = e.toLocalizedMessage(context));
-      } else {
-        ref.read(loggerProvider).warn('EMP-CREATE saveEmployee failed', e, st);
-        if (!mounted) return;
-        notices.error(
-          composeErrorNotice(
-            context,
-            intro: context.l10n.error_introSaveEmployee,
-            tag: 'EMP-CREATE',
-            error: e,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
+        Navigator.pop(context, true);
+      case EmployeeEmailInUse(:final failure):
+        setState(() => _errors['email'] = failure.toLocalizedMessage(context));
+      case EmployeeSaveFailed(:final error):
+        ref
+            .read(noticeServiceProvider)
+            .error(
+              composeErrorNotice(
+                context,
+                intro: context.l10n.error_introSaveEmployee,
+                tag: 'EMP-CREATE',
+                error: error,
+              ),
+            );
     }
   }
 
   Future<void> _toggleStatus() async {
-    setState(() => _isTogglingStatus = true);
-    final repo = ref.read(employeesRepositoryProvider);
-    try {
-      if (_isDisabled) {
-        await repo.reactivateEmployee(widget.employee!.id);
-      } else {
-        await repo.deactivateEmployee(widget.employee!.id);
-      }
-      if (mounted) setState(() => _isDisabled = !_isDisabled);
-    } catch (e, st) {
-      ref
-          .read(loggerProvider)
-          .warn('EMP-STATUS toggleEmployeeStatus failed', e, st);
-      if (!mounted) return;
-      ref
-          .read(noticeServiceProvider)
-          .error(
-            composeErrorNotice(
-              context,
-              intro: context.l10n.error_introChangeEmployeeStatus,
-              tag: 'EMP-STATUS',
-              error: e,
-            ),
-          );
-    } finally {
-      if (mounted) setState(() => _isTogglingStatus = false);
+    final willDisable = !_isDisabled;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: willDisable
+          ? context.l10n.employees_disableEmployee
+          : context.l10n.employees_enableEmployee,
+      message: willDisable
+          ? context.l10n.employees_disableEmployeeConfirmBody
+          : context.l10n.employees_enableEmployeeConfirmBody,
+      confirmLabel: willDisable
+          ? context.l10n.employees_disableEmployee
+          : context.l10n.employees_enableEmployee,
+      destructive: willDisable,
+    );
+    if (!mounted || !confirmed) return;
+    final outcome = await ref
+        .read(employeeFormControllerProvider.notifier)
+        .setEmployeeStatus(docId: widget.employee!.id, disable: willDisable);
+    if (!mounted) return;
+    switch (outcome) {
+      case EmployeeStatusChanged():
+        setState(() => _isDisabled = !_isDisabled);
+        ref
+            .read(noticeServiceProvider)
+            .success(
+              _isDisabled
+                  ? context.l10n.employees_employeeDisabledSuccessfully
+                  : context.l10n.employees_employeeEnabledSuccessfully,
+            );
+      case EmployeeStatusChangeFailed(:final error):
+        ref
+            .read(noticeServiceProvider)
+            .error(
+              composeErrorNotice(
+                context,
+                intro: context.l10n.error_introChangeEmployeeStatus,
+                tag: 'EMP-STATUS',
+                error: error,
+              ),
+            );
     }
   }
 
@@ -175,11 +185,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
         EntityFormHeader(
           name: e.name,
           avatarColor: e.color,
-          status: StatusChip(
-            status: _isDisabled
-                ? AppointmentStatus.disabled
-                : AppointmentStatus.active,
-          ),
+          status: UserStatusChip(status: _status),
         ),
         const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
@@ -202,6 +208,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
             vertical: 10,
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Column(
@@ -223,8 +230,10 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
                   ],
                 ),
               ),
-              Switch(
+              const SizedBox(width: AppSpacing.sp8),
+              Switch.adaptive(
                 value: _isAdmin,
+                activeTrackColor: theme.colorScheme.primary,
                 onChanged: (v) => setState(() => _isAdmin = v),
               ),
             ],
@@ -237,6 +246,9 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
   Widget _buildAccountStatusSection(ThemeData theme) {
     final scheme = theme.colorScheme;
     final statusColors = theme.statusColors;
+    final isTogglingStatus = ref
+        .watch(employeeFormControllerProvider)
+        .isTogglingStatus;
     final toggleForeground = _isDisabled
         ? statusColors.onSuccessContainer
         : statusColors.onWarningContainer;
@@ -254,43 +266,60 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
       children: [
         const Divider(height: 1),
         const SizedBox(height: AppSpacing.sp16),
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.l10n.employees_accountStatus,
-                    // NOTE: source size 13 is between bodySmall (12) and
-                    // bodyMedium (14); bodySmall is the nearer role.
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    context.l10n.employees_accountStatusDescription,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
+        if (context.isCompact)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.l10n.employees_accountStatus,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-            const SizedBox(width: AppSpacing.sp8),
-            StatusChip(
-              status: _isDisabled
-                  ? AppointmentStatus.disabled
-                  : AppointmentStatus.active,
-            ),
-          ],
-        ),
+              const SizedBox(height: 2),
+              Text(
+                context.l10n.employees_accountStatusDescription,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sp8),
+              UserStatusChip(status: _status),
+            ],
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.l10n.employees_accountStatus,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      context.l10n.employees_accountStatusDescription,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sp8),
+              UserStatusChip(status: _status),
+            ],
+          ),
         const SizedBox(height: AppSpacing.sp12),
         OutlinedButton.icon(
-          onPressed: _isTogglingStatus ? null : _toggleStatus,
+          onPressed: isTogglingStatus ? null : _toggleStatus,
           icon: BusyButtonIcon(
-            isBusy: _isTogglingStatus,
+            isBusy: isTogglingStatus,
             icon: toggleIcon,
             iconSize: 14,
             color: toggleForeground,
@@ -336,13 +365,10 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
         if (_isEdit) ...[
           const SizedBox(height: AppSpacing.sp4),
           _buildEditHeader(),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpacing.sp16),
         ] else
-          const SizedBox(height: 20),
+          const SizedBox(height: AppSpacing.sp24),
         ..._buildIdentityFields(),
-        // Admin access is grantable only after activation — an invited
-        // admin can't self-activate (firestore.rules), so the toggle is
-        // edit-only.
         if (_isEdit) ...[
           const SizedBox(height: AppSpacing.sp16),
           _buildPermissionsCard(theme),
@@ -357,7 +383,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
         const SizedBox(height: AppSpacing.sp16),
         AnimatedLoadingButton(
           label: submitLabel,
-          isLoading: _isSaving,
+          isLoading: ref.watch(employeeFormControllerProvider).isSaving,
           onPressed: _save,
           height: 48,
         ),
@@ -376,6 +402,8 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
           label: context.l10n.employees_name,
           controller: _nameController,
           required: !_isEdit,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.next,
           maxLength: TextLimits.personName,
           errorText: _errors['name'],
           onChanged: (_) {
@@ -392,6 +420,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
           controller: _emailController,
           keyboard: TextInputType.emailAddress,
           required: !_isEdit,
+          textInputAction: TextInputAction.next,
           maxLength: TextLimits.email,
           errorText: _errors['email'],
           onChanged: (_) {

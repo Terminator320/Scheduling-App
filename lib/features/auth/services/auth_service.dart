@@ -1,11 +1,27 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
+import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+
+/// App-wide [AuthService], wired through the shared providers so tests can
+/// override any collaborator (or this provider itself) instead of the
+/// widgets newing up their own instances.
+final authServiceProvider = Provider<AuthService>(
+  (ref) => AuthService(
+    firebaseAuth: ref.watch(firebaseAuthProvider),
+    employeesRepository: ref.watch(employeesRepositoryProvider),
+    authCache: ref.watch(authCacheProvider),
+    logger: ref.watch(loggerProvider),
+  ),
+);
 
 class AuthService {
   AuthService({
@@ -26,8 +42,6 @@ class AuthService {
   final AppLogger _logger;
 
   User? get currentUser => _auth.currentUser;
-
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   Future<UserCredential> signIn({
     required String email,
@@ -53,90 +67,111 @@ class AuthService {
     return _auth.sendPasswordResetEmail(email: email.trim().toLowerCase());
   }
 
-  Future<UserCredential> createEmployeeAccount({
+  /// Invited-employee signup. Registers (or adopts an existing account), then
+  /// redeems the admin-issued one-time code, which activates the account
+  /// server-side. On redemption failure the freshly-created Auth user is rolled
+  /// back so no orphan is left.
+  Future<void> signUpWithCode({
     required String email,
     required String password,
+    required String code,
   }) async {
-    // A previous attempt can orphan an Auth user (the invite lookup or the
-    // rollback delete failed), and that orphan then blocks re-registration
-    // with `email-already-in-use`. Adopt it by signing in so we can re-check
-    // the invite and resend verification instead of dead-ending the user.
-    // signIn rethrows wrong-password / invalid-credential when the email is
-    // someone else's, which surfaces as the usual auth failure.
+    final normalizedEmail = email.trim().toLowerCase();
     UserCredential credential;
     var freshlyCreated = true;
     try {
-      credential = await register(email: email, password: password);
+      credential = await register(email: normalizedEmail, password: password);
     } on FirebaseAuthException catch (e) {
       if (e.code != 'email-already-in-use') rethrow;
-      credential = await signIn(email: email, password: password);
+      credential = await signIn(email: normalizedEmail, password: password);
       freshlyCreated = false;
     }
 
-    final user = credential.user!;
-
-    InvitedEmployeeMatch? invitedEmployee;
     try {
-      invitedEmployee = await _employees.findInvitedEmployeeForCurrentUser();
+      await _employees.redeemSignupCode(code.trim());
     } catch (e, st) {
-      _logger.warn(
-        'createEmployeeAccount: findInvitedEmployeeForCurrentUser failed',
-        e,
-        st,
-      );
-      // Only roll back an account we freshly created this call — never delete
-      // an adopted pre-existing account on a transient lookup failure.
+      _logger.warn('signUpWithCode: redeemSignupCode failed', e, st);
+      final failure = _mapRedemptionError(e);
       if (freshlyCreated) {
-        await _rollbackOrFailLoud(credential, reason: 'invite-lookup-failed');
+        await _rollbackOrFailLoud(
+          credential,
+          email: normalizedEmail,
+          password: password,
+          reason: 'code-redemption-failed',
+        );
       } else {
         await _signOutQuietly();
       }
-      rethrow;
+      throw failure;
     }
-
-    if (invitedEmployee != null) {
-      await user.sendEmailVerification();
-      return credential;
-    }
-
-    // No invite matches this email. An adopted account that's already
-    // provisioned (has a `users` doc keyed by uid) is a real account — tell
-    // them to sign in, never delete it. Only a true orphan gets cleaned up.
-    if (!freshlyCreated) {
-      final provisioned = await _employees.findUserByUid(user.uid);
-      if (provisioned != null) {
-        await _signOutQuietly();
-        throw const AuthFailureEmailAlreadyInUse();
-      }
-    }
-    await _rollbackOrFailLoud(credential, reason: 'no-invite-found');
-    throw const AuthFailureNotAuthorized();
   }
 
-  // Best-effort cleanup of the Auth user we just created. When this delete
-  // fails (App Check hiccup, network blip, requires-recent-login edge case)
-  // the user is left orphaned: an Auth identity with no Firestore users doc
-  // backing it, which blocks future Create-Account attempts with the same
-  // email. Sign the session out so we never leave a half-signed-in orphan,
-  // log the failure for Crashlytics, and throw a distinct failure so the UI
-  // tells the admin how to recover.
+  AuthFailure _mapRedemptionError(Object e) {
+    if (e is FirebaseFunctionsException) {
+      switch (e.message) {
+        case 'code-expired':
+          return const AuthFailureSignupCodeExpired();
+        case 'code-email-mismatch':
+          return const AuthFailureSignupEmailMismatch();
+        case 'invalid-code':
+          return const AuthFailureInvalidSignupCode();
+      }
+      if (e.code == 'resource-exhausted') {
+        return const AuthFailureTooManyRequests();
+      }
+      if (e.code == 'unavailable' || e.code == 'deadline-exceeded') {
+        return const AuthFailureNetwork();
+      }
+    }
+    return const AuthFailureUnknown();
+  }
+
+  // Cleanup of the Auth user we just created. The global account guard signs
+  // out any signed-in user with no Firestore users doc (which is exactly this
+  // half-created user before redemption), so by the time we get here
+  // `currentUser` is often already null and a plain `user.delete()` throws
+  // `no-current-user`, leaving an orphan. We re-authenticate with the same
+  // credentials before deleting so the cleanup actually lands. If it still
+  // fails, sign out, log the orphan for Crashlytics, and throw a distinct
+  // failure so the UI tells the admin how to recover.
   Future<void> _rollbackOrFailLoud(
     UserCredential credential, {
+    required String email,
+    required String password,
     required String reason,
   }) async {
-    final user = credential.user;
-    if (user == null) return;
     try {
-      await user.delete();
+      await _deleteFreshlyCreatedUser(email: email, password: password);
     } catch (e, st) {
+      final uid = _auth.currentUser?.uid ?? credential.user?.uid;
       _logger.warn(
-        'createEmployeeAccount: rollback delete failed ($reason); '
-        'orphan Auth user left for uid=${user.uid}',
+        'signUpWithCode: rollback delete failed ($reason); '
+        'orphan Auth user left for uid=$uid',
         e,
         st,
       );
       await _signOutQuietly();
       throw const AuthFailureAccountCreationIncomplete();
+    }
+  }
+
+  // Deletes the just-created user, re-authenticating first when the session was
+  // already torn down (current user null) or the delete needs a recent login.
+  Future<void> _deleteFreshlyCreatedUser({
+    required String email,
+    required String password,
+  }) async {
+    var user = _auth.currentUser;
+    user ??= (await signIn(email: email, password: password)).user;
+    if (user == null) return;
+    try {
+      await user.delete();
+    } on FirebaseAuthException catch (e) {
+      if (e.code != 'requires-recent-login' && e.code != 'no-current-user') {
+        rethrow;
+      }
+      final reauthed = (await signIn(email: email, password: password)).user;
+      await reauthed?.delete();
     }
   }
 
@@ -146,35 +181,19 @@ class AuthService {
     } catch (_) {}
   }
 
-  // Best-effort resend of the email-verification link. Returns false (instead
-  // of throwing) when the send fails — e.g. Firebase rate-limits repeated
-  // requests — so the caller can fall back to a plain "please verify" message.
-  Future<bool> resendVerificationEmail(User user) async {
-    try {
-      await user.sendEmailVerification();
-      return true;
-    } catch (e, st) {
-      _logger.warn('resendVerificationEmail failed', e, st);
-      return false;
-    }
-  }
-
-  Future<void> tryActivateInvitedEmployee(User user) async {
-    await user.reload();
-    // reload() refreshes the auth instance's user; the passed-in snapshot can
-    // be stale, so re-read the verified flag from the instance.
-    final refreshed = _auth.currentUser ?? user;
-    if (!refreshed.emailVerified) return;
-    final invite = await _employees.findInvitedEmployeeForCurrentUser();
-    if (invite == null) return;
-    await _employees.activateEmployee(docId: invite.docId, uid: user.uid);
-  }
-
   Future<void> signOut() async {
     try {
       await _auth.signOut();
     } finally {
-      await _authCache.clear();
+      // Best-effort: a keystore/cipher failure clearing the cache must not
+      // make signOut() itself throw once the Firebase session is gone (C12
+      // relies on signOut completing). A stale entry is uid-checked on the
+      // next launch, so it cannot leak across accounts.
+      try {
+        await _authCache.clear();
+      } catch (e, st) {
+        _logger.warn('signOut: auth cache clear failed', e, st);
+      }
     }
   }
 }

@@ -21,7 +21,6 @@ void main() {
               children: [
                 Text(context.l10n.common_calendar),
                 Text(context.l10n.common_language),
-                Text(context.l10n.common_resetPassword),
               ],
             ),
           ),
@@ -31,7 +30,6 @@ void main() {
 
     expect(find.text('Calendrier'), findsOneWidget);
     expect(find.text('Langue'), findsOneWidget);
-    expect(find.text('Réinitialiser le mot de passe'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

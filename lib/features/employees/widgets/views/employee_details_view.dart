@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
-import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/employees/application/employee_form_controller.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
+import 'package:scheduling/shared/widgets/feedback/user_status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
-
-typedef EmployeeDetailsAction = void Function(String action);
 
 class EmployeeDetailsView extends ConsumerStatefulWidget {
   const EmployeeDetailsView({
@@ -27,7 +25,10 @@ class EmployeeDetailsView extends ConsumerStatefulWidget {
 
   final EmployeeRecord employee;
   final bool isCurrentUserAdmin;
-  final EmployeeDetailsAction onAction;
+
+  /// Receives the action name (`'edit'`, `'deleted'`, `'enabled'`,
+  /// `'disabled'`) so the host sheet/pane can react.
+  final ValueChanged<String> onAction;
   final ScrollController? scrollController;
   final bool showHandle;
   final double bottomPadding;
@@ -38,9 +39,6 @@ class EmployeeDetailsView extends ConsumerStatefulWidget {
 }
 
 class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
-  bool _isDeleting = false;
-  bool _isDisabling = false;
-
   Future<void> _confirmDelete() async {
     final confirmed = await showConfirmDialog(
       context,
@@ -49,27 +47,24 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
       confirmLabel: context.l10n.common_delete,
     );
     if (!mounted || !confirmed) return;
-    setState(() => _isDeleting = true);
-    try {
-      await ref
-          .read(employeesRepositoryProvider)
-          .deleteEmployee(widget.employee.id);
-      if (!mounted) return;
-      widget.onAction('deleted');
-    } catch (e, st) {
-      ref.read(loggerProvider).warn('EMP-DEL deleteEmployee failed', e, st);
-      if (!mounted) return;
-      setState(() => _isDeleting = false);
-      ref
-          .read(noticeServiceProvider)
-          .error(
-            composeErrorNotice(
-              context,
-              intro: context.l10n.error_introDeleteEmployee,
-              tag: 'EMP-DEL',
-              error: e,
-            ),
-          );
+    final outcome = await ref
+        .read(employeeFormControllerProvider.notifier)
+        .deleteEmployee(widget.employee.id);
+    if (!mounted) return;
+    switch (outcome) {
+      case EmployeeDeleted():
+        widget.onAction('deleted');
+      case EmployeeDeleteFailed(:final error):
+        ref
+            .read(noticeServiceProvider)
+            .error(
+              composeErrorNotice(
+                context,
+                intro: context.l10n.error_introDeleteEmployee,
+                tag: 'EMP-DEL',
+                error: error,
+              ),
+            );
     }
   }
 
@@ -88,32 +83,24 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
       destructive: !isDisabled,
     );
     if (!mounted || !confirmed) return;
-    setState(() => _isDisabling = true);
-    try {
-      final repo = ref.read(employeesRepositoryProvider);
-      if (isDisabled) {
-        await repo.reactivateEmployee(widget.employee.id);
-      } else {
-        await repo.deactivateEmployee(widget.employee.id);
-      }
-      if (!mounted) return;
-      widget.onAction(isDisabled ? 'enabled' : 'disabled');
-    } catch (e, st) {
-      ref
-          .read(loggerProvider)
-          .warn('EMP-STATUS toggleEmployeeStatus failed', e, st);
-      if (!mounted) return;
-      setState(() => _isDisabling = false);
-      ref
-          .read(noticeServiceProvider)
-          .error(
-            composeErrorNotice(
-              context,
-              intro: context.l10n.error_introChangeEmployeeStatus,
-              tag: 'EMP-STATUS',
-              error: e,
-            ),
-          );
+    final outcome = await ref
+        .read(employeeFormControllerProvider.notifier)
+        .setEmployeeStatus(docId: widget.employee.id, disable: !isDisabled);
+    if (!mounted) return;
+    switch (outcome) {
+      case EmployeeStatusChanged():
+        widget.onAction(isDisabled ? 'enabled' : 'disabled');
+      case EmployeeStatusChangeFailed(:final error):
+        ref
+            .read(noticeServiceProvider)
+            .error(
+              composeErrorNotice(
+                context,
+                intro: context.l10n.error_introChangeEmployeeStatus,
+                tag: 'EMP-STATUS',
+                error: error,
+              ),
+            );
     }
   }
 
@@ -121,31 +108,42 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDisabled = widget.employee.isDisabled;
+    final activity = ref.watch(employeeFormControllerProvider);
+    final stackedHeader = context.isCompact;
+
+    final headerTitle = Text(
+      context.l10n.employees_employeeDetails,
+      style: theme.textTheme.headlineLarge,
+    );
+    final statusChip = UserStatusChip(
+      status: UserStatus.fromRaw(widget.employee.status),
+    );
 
     return DetailSheetListView(
       scrollController: widget.scrollController,
       showHandle: widget.showHandle,
       bottomPadding: widget.bottomPadding,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                context.l10n.employees_employeeDetails,
-                style: theme.textTheme.headlineLarge,
-              ),
-            ),
-            const SizedBox(width: 8),
-            StatusChip(
-              status: isDisabled
-                  ? AppointmentStatus.disabled
-                  : AppointmentStatus.active,
-            ),
-          ],
-        ),
+        if (stackedHeader)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              headerTitle,
+              const SizedBox(height: AppSpacing.sp8),
+              statusChip,
+            ],
+          )
+        else
+          Row(
+            children: [
+              Expanded(child: headerTitle),
+              const SizedBox(width: 8),
+              statusChip,
+            ],
+          ),
         const SizedBox(height: 16),
         const Divider(height: 1),
-        const SizedBox(height: 20),
+        const SizedBox(height: AppSpacing.sp24),
         _DetailField(
           icon: Icons.person_outline,
           label: context.l10n.employees_name,
@@ -172,57 +170,109 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
               : context.l10n.common_employeeRoleValue,
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Icon(
-                Icons.palette_outlined,
-                size: 16,
-                color: theme.colorScheme.primary,
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.l10n.employees_employeeColor,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: widget.employee.color,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: theme.colorScheme.outlineVariant),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+        _ColorRow(color: widget.employee.color),
         const SizedBox(height: 24),
         const Divider(height: 1),
         const SizedBox(height: 16),
+        _ActionButtons(
+          isCurrentUserAdmin: widget.isCurrentUserAdmin,
+          isDisabled: isDisabled,
+          isDeleting: activity.isDeleting,
+          isDisabling: activity.isTogglingStatus,
+          onEdit: () => widget.onAction('edit'),
+          onToggleStatus: _confirmDisable,
+          onDelete: _confirmDelete,
+        ),
+      ],
+    );
+  }
+}
 
-        FilledButton.icon(
-          onPressed: () => widget.onAction('edit'),
-          icon: const Icon(Icons.edit_outlined, size: 18),
-          label: Text(context.l10n.common_edit),
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(double.infinity, 48),
+/// The employee colour swatch row (icon + label + colour dot).
+class _ColorRow extends StatelessWidget {
+  const _ColorRow({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: Icon(
+            Icons.palette_outlined,
+            size: 16,
+            color: theme.colorScheme.primary,
           ),
         ),
-        if (widget.isCurrentUserAdmin) ...[
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.l10n.employees_employeeColor,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                border: Border.all(color: theme.colorScheme.outlineVariant),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Edit / (admin) Disable-or-Enable / Delete action stack for the detail view.
+class _ActionButtons extends StatelessWidget {
+  const _ActionButtons({
+    required this.isCurrentUserAdmin,
+    required this.isDisabled,
+    required this.isDeleting,
+    required this.isDisabling,
+    required this.onEdit,
+    required this.onToggleStatus,
+    required this.onDelete,
+  });
+
+  final bool isCurrentUserAdmin;
+  final bool isDisabled;
+  final bool isDeleting;
+  final bool isDisabling;
+  final VoidCallback onEdit;
+  final VoidCallback onToggleStatus;
+  final VoidCallback onDelete;
+
+  static const _fullWidthButton = Size(double.infinity, 48);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FilledButton.icon(
+          onPressed: onEdit,
+          icon: const Icon(Icons.edit_outlined, size: 18),
+          label: Text(context.l10n.common_edit),
+          style: FilledButton.styleFrom(minimumSize: _fullWidthButton),
+        ),
+        if (isCurrentUserAdmin) ...[
           const SizedBox(height: AppSpacing.sp8),
           FilledButton.icon(
-            onPressed: _isDisabling ? null : _confirmDisable,
+            onPressed: isDisabling ? null : onToggleStatus,
             icon: BusyButtonIcon(
-              isBusy: _isDisabling,
+              isBusy: isDisabling,
               icon: isDisabled
                   ? Icons.lock_open_outlined
                   : Icons.block_outlined,
@@ -237,25 +287,24 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
                   : context.l10n.employees_disableEmployee,
             ),
             style: FilledButton.styleFrom(
-              minimumSize: const Size(double.infinity, 48),
+              minimumSize: _fullWidthButton,
               backgroundColor: isDisabled ? null : theme.colorScheme.error,
               foregroundColor: isDisabled ? null : theme.colorScheme.onError,
             ),
           ),
         ],
-        // TODO(pre-ship): Remove the SizedBox and OutlinedButton below — testing only.
         const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: _isDeleting ? null : _confirmDelete,
+          onPressed: isDeleting ? null : onDelete,
           icon: BusyButtonIcon(
-            isBusy: _isDeleting,
+            isBusy: isDeleting,
             icon: Icons.delete_outline,
             spinnerSize: 16,
             color: theme.colorScheme.error,
           ),
           label: Text(context.l10n.employees_deleteEmployee),
           style: OutlinedButton.styleFrom(
-            minimumSize: const Size(double.infinity, 48),
+            minimumSize: _fullWidthButton,
             foregroundColor: theme.colorScheme.error,
             side: BorderSide(color: theme.colorScheme.error),
           ),

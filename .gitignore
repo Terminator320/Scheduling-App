@@ -1,6 +1,8 @@
 # Miscellaneous
 *.class
 *.lock
+# ...but the pub lockfile is committed so app builds are reproducible.
+!pubspec.lock
 *.log
 *.pyc
 *.swp
@@ -142,6 +144,7 @@ agentdb.rvf
 *.rvf
 ruvector.db
 *.stackdump
+*.skill
 .playwright-mcp/
 UsersGeorgeVogasAppDataLocalTempvibe-security-skill/
 .agents/
@@ -150,6 +153,5 @@ UsersGeorgeVogasAppDataLocalTempvibe-security-skill/
 superpowers/
 docs/superpowers/
 
-# Internal notes — never commit
-CLAUDE.md
+
 

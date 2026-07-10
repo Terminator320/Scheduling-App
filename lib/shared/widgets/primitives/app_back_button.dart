@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 
 /// The app's standard back arrow: an [IconButton] whose icon nudges left and
@@ -63,7 +64,11 @@ class _AppBackButtonState extends State<AppBackButton> {
           scale: active ? 0.72 : 1,
           duration: duration,
           curve: curve,
-          child: const Icon(Icons.arrow_back_rounded),
+          child: Icon(
+            context.isCupertino
+                ? Icons.arrow_back_ios_new
+                : Icons.arrow_back_rounded,
+          ),
         ),
       ),
     );

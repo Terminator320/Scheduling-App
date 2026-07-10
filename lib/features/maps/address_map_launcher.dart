@@ -1,6 +1,8 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/adaptive/adaptive.dart';
+import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -45,63 +47,84 @@ class AddressMapLauncher {
 
     if (!context.mounted) return;
 
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      sheetAnimationStyle: AppMotion.sheetStyle,
-      builder: (sheetContext) {
-        final theme = Theme.of(sheetContext);
-
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.l10n.maps_openAddressWith,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  displayAddress,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ...options.map(
-                  (option) => ListTile(
-                    leading: Icon(option.icon),
-                    title: Text(option.label),
-                    contentPadding: EdgeInsets.zero,
-                    onTap: () async {
-                      Navigator.pop(sheetContext);
-                      final opened = await launchUrl(
-                        option.uri,
-                        mode: LaunchMode.externalApplication,
-                      );
-
-                      if (!opened && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          errorSnackBar(
-                            context,
-                            context.l10n.error_couldNotOpenMapApp,
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                ),
-              ],
+    // iOS: native CupertinoActionSheet. Android: the existing Material sheet
+    // (drag handle + address header). Both resolve to the chosen URI, launched
+    // once below.
+    final Uri? chosen;
+    if (context.isCupertino) {
+      chosen = await showAdaptiveActionSheet<Uri>(
+        context,
+        title: context.l10n.maps_openAddressWith,
+        message: displayAddress,
+        actions: [
+          for (final option in options)
+            AdaptiveSheetAction(
+              value: option.uri,
+              label: option.label,
+              icon: option.icon,
             ),
-          ),
-        );
-      },
+        ],
+      );
+    } else {
+      chosen = await showModalBottomSheet<Uri>(
+        context: context,
+        showDragHandle: true,
+        sheetAnimationStyle: AppMotion.sheetStyle,
+        builder: (sheetContext) {
+          final theme = Theme.of(sheetContext);
+
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.sp16,
+                AppSpacing.sp4,
+                AppSpacing.sp16,
+                AppSpacing.sp16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.l10n.maps_openAddressWith,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sp4),
+                  Text(
+                    displayAddress,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sp12),
+                  ...options.map(
+                    (option) => ListTile(
+                      leading: Icon(option.icon),
+                      title: Text(option.label),
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () => Navigator.pop(sheetContext, option.uri),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    if (chosen == null || !context.mounted) return;
+    final opened = await launchUrl(
+      chosen,
+      mode: LaunchMode.externalApplication,
     );
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        errorSnackBar(context, context.l10n.error_couldNotOpenMapApp),
+      );
+    }
   }
 }
 

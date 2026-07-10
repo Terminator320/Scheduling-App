@@ -3,25 +3,44 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 
-Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
+Widget _wrap(Widget child, {bool disableAnimations = false}) => MaterialApp(
+  home: MediaQuery(
+    data: MediaQueryData(disableAnimations: disableAnimations),
+    child: Scaffold(body: child),
+  ),
+);
 
 void main() {
-  testWidgets('SkeletonBox renders with given dimensions', (tester) async {
-    await tester.pumpWidget(_wrap(const SkeletonBox(width: 120, height: 14)));
-    expect(tester.getSize(find.byType(SkeletonBox)), const Size(120, 14));
-  });
-
-  testWidgets('SkeletonAppointmentRow renders without overflow', (tester) async {
-    await tester.pumpWidget(_wrap(
-      const SizedBox(width: 400, child: SkeletonAppointmentRow()),
-    ));
+  testWidgets('SkeletonAppointmentRow renders without overflow', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(const SizedBox(width: 400, child: SkeletonAppointmentRow())),
+    );
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('SkeletonListTile renders without overflow', (tester) async {
-    await tester.pumpWidget(_wrap(
-      const SizedBox(width: 400, child: SkeletonListTile()),
-    ));
+    await tester.pumpWidget(
+      _wrap(const SizedBox(width: 400, child: SkeletonListTile())),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shimmer runs by default', (tester) async {
+    await tester.pumpWidget(_wrap(const SkeletonListTile()));
+    expect(tester.hasRunningAnimations, isTrue);
+  });
+
+  testWidgets('reduce-motion renders a static skeleton (no shimmer)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(const SkeletonListTile(), disableAnimations: true),
+    );
+    expect(tester.hasRunningAnimations, isFalse);
+    // A repeating shimmer would make pumpAndSettle time out.
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 }

@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
-/// Horizontal header for an entity edit form: a large [AppAvatar] beside the
-/// entity [name], with an optional [status] chip below the name. Shared by the
-/// client- and employee-edit forms. [avatarColor] tints the avatar (employees);
-/// when null the avatar derives its color from [name].
 class EntityFormHeader extends StatelessWidget {
   const EntityFormHeader({
     required this.name,
@@ -21,7 +18,32 @@ class EntityFormHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final compact = context.isCompact;
+
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppAvatar(name: name, color: avatarColor, size: AvatarSize.lg),
+          const SizedBox(height: AppSpacing.sp12),
+          Text(
+            name,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (status != null) ...[
+            const SizedBox(height: AppSpacing.sp8),
+            status!,
+          ],
+        ],
+      );
+    }
+
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         AppAvatar(name: name, color: avatarColor, size: AvatarSize.lg),
         const SizedBox(width: AppSpacing.sp12),
@@ -32,6 +54,8 @@ class EntityFormHeader extends StatelessWidget {
             children: [
               Text(
                 name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),

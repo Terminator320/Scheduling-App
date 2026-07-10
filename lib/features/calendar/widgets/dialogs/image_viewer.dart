@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 class ImageViewer extends StatefulWidget {
   const ImageViewer({required this.images, super.key, this.initialIndex = 0});
@@ -47,23 +49,106 @@ class _ImageViewerState extends State<ImageViewer> {
   late final PageController _pageController;
   late int _currentIndex;
 
+  /// Shared by every page's [InteractiveViewer]; reset on page change. Drives
+  /// [_zoomed], which hands single-finger drags either to the zoom pan (when
+  /// zoomed in) or to the drag-down-to-dismiss gesture (at rest).
+  final _transformController = TransformationController();
+  bool _zoomed = false;
+
+  /// Current vertical drag displacement of the image, in logical pixels.
+  double _dragOffset = 0;
+
+  /// Downward displacement past which releasing the drag dismisses the viewer.
+  static const double _dismissDistance = 120;
+
+  /// Downward fling velocity (px/s) that dismisses regardless of distance.
+  static const double _dismissVelocity = 700;
+
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: widget.initialIndex);
+    _transformController.addListener(_onTransformChanged);
   }
 
   @override
   void dispose() {
+    _transformController.dispose();
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _onTransformChanged() {
+    final zoomed = _transformController.value.getMaxScaleOnAxis() > 1.01;
+    if (zoomed != _zoomed) setState(() => _zoomed = zoomed);
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    setState(() => _dragOffset += details.delta.dy);
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    final flungDown = details.velocity.pixelsPerSecond.dy > _dismissVelocity;
+    if (_dragOffset > _dismissDistance || flungDown) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() => _dragOffset = 0);
+  }
+
+  void _onDragCancel() {
+    setState(() => _dragOffset = 0);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     const foreground = Colors.white;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final dragFraction = (_dragOffset.abs() / (_dismissDistance * 2)).clamp(
+      0.0,
+      1.0,
+    );
+
+    Widget pager = PageView.builder(
+      controller: _pageController,
+      itemCount: widget.images.length,
+      onPageChanged: (i) {
+        _transformController.value = Matrix4.identity();
+        setState(() => _currentIndex = i);
+      },
+      itemBuilder: (context, index) {
+        return InteractiveViewer(
+          transformationController: _transformController,
+          // Single-finger pans belong to drag-down-to-dismiss until the user
+          // has pinch-zoomed in; then they pan the zoomed image instead.
+          panEnabled: _zoomed,
+          minScale: 1,
+          maxScale: 4,
+          child: Center(
+            child: Image(
+              image: widget.images[index],
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => Icon(
+                Icons.broken_image_outlined,
+                color: foreground.withValues(alpha: 0.54),
+                size: 64,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    // Drag-follow translate + fade; with reduce-motion on, the image stays
+    // put and the gesture only pops past the threshold.
+    if (!reduceMotion && _dragOffset != 0) {
+      pager = Transform.translate(
+        offset: Offset(0, _dragOffset),
+        child: Opacity(opacity: 1 - (0.6 * dragFraction), child: pager),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -71,35 +156,18 @@ class _ImageViewerState extends State<ImageViewer> {
         children: [
           GestureDetector(
             onTap: () => Navigator.of(context).pop(),
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: widget.images.length,
-              onPageChanged: (i) => setState(() => _currentIndex = i),
-              itemBuilder: (context, index) {
-                return InteractiveViewer(
-                  minScale: 1,
-                  maxScale: 4,
-                  child: Center(
-                    child: Image(
-                      image: widget.images[index],
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) => Icon(
-                        Icons.broken_image_outlined,
-                        color: foreground.withValues(alpha: 0.54),
-                        size: 64,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
+            onVerticalDragUpdate: _zoomed ? null : _onDragUpdate,
+            onVerticalDragEnd: _zoomed ? null : _onDragEnd,
+            onVerticalDragCancel: _zoomed ? null : _onDragCancel,
+            child: pager,
           ),
           SafeArea(
             child: Align(
               alignment: Alignment.topRight,
               child: Padding(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(AppSpacing.sp8),
                 child: IconButton(
+                  tooltip: context.l10n.common_close,
                   icon: const Icon(Icons.close, color: foreground),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
@@ -111,7 +179,7 @@ class _ImageViewerState extends State<ImageViewer> {
               child: Align(
                 alignment: Alignment.topCenter,
                 child: Padding(
-                  padding: const EdgeInsets.only(top: 12),
+                  padding: const EdgeInsets.only(top: AppSpacing.sp12),
                   child: Text(
                     '${_currentIndex + 1} / ${widget.images.length}',
                     style: theme.textTheme.bodyMedium?.copyWith(

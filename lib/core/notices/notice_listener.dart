@@ -8,6 +8,7 @@ import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/notices/app_notice.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 class NoticeListener extends ConsumerStatefulWidget {
   const NoticeListener({required this.child, this.navigatorKey, super.key});
@@ -179,33 +180,46 @@ class _TopNoticeState extends State<_TopNotice>
           opacity: _fade,
           child: Semantics(
             liveRegion: true,
-            child: Material(
-              color: widget.bg,
-              borderRadius: BorderRadius.circular(AppRadius.r12),
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sp12,
-                  vertical: 10,
-                ),
-                child: Row(
-                  children: [
-                    Icon(widget.icon, color: widget.fg, size: 20),
-                    const SizedBox(width: AppSpacing.sp12),
-                    Expanded(
-                      child: Text(
-                        widget.message,
-                        style: TextStyle(color: widget.fg, fontSize: 14),
+            // U5: swipe the banner up to dismiss. Dismissible animates the
+            // slide itself, so skip the reverse animation and remove the
+            // overlay entry directly; the auto-dismiss timer stays as-is
+            // (it no-ops once unmounted).
+            child: Dismissible(
+              key: const ValueKey('app-notice-banner'),
+              direction: DismissDirection.up,
+              onDismissed: (_) => widget.onDismiss(),
+              child: Material(
+                color: widget.bg,
+                borderRadius: BorderRadius.circular(AppRadius.r12),
+                elevation: 4,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.sp12,
+                    AppSpacing.sp4,
+                    AppSpacing.sp4,
+                    AppSpacing.sp4,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(widget.icon, color: widget.fg, size: 20),
+                      const SizedBox(width: AppSpacing.sp12),
+                      Expanded(
+                        child: Text(
+                          widget.message,
+                          style: TextStyle(color: widget.fg, fontSize: 14),
+                        ),
                       ),
-                    ),
-                    GestureDetector(
-                      onTap: _dismiss,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: AppSpacing.sp8),
-                        child: Icon(Icons.close, color: widget.fg, size: 18),
+                      const SizedBox(width: AppSpacing.sp4),
+                      // U5: a real IconButton — 48px minimum tap target plus
+                      // tooltip/semantics — instead of the old bare 18px
+                      // GestureDetector icon.
+                      IconButton(
+                        onPressed: _dismiss,
+                        tooltip: context.l10n.common_close,
+                        icon: Icon(Icons.close, color: widget.fg, size: 20),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

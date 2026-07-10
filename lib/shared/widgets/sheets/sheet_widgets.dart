@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+
+bool _isShortSheetViewport(BuildContext context) =>
+    MediaQuery.sizeOf(context).height < Breakpoints.shortViewportHeight;
 
 class DraggableSheetFrame extends StatelessWidget {
   const DraggableSheetFrame({
@@ -19,11 +23,12 @@ class DraggableSheetFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isShort = _isShortSheetViewport(context);
 
     return DraggableScrollableSheet(
-      initialChildSize: initialChildSize,
-      minChildSize: minChildSize,
-      maxChildSize: maxChildSize,
+      initialChildSize: isShort ? 0.82 : initialChildSize,
+      minChildSize: isShort ? 0.58 : minChildSize,
+      maxChildSize: isShort ? 0.98 : maxChildSize,
       expand: false,
       builder: (sheetContext, scrollController) {
         return GestureDetector(
@@ -37,7 +42,15 @@ class DraggableSheetFrame extends StatelessWidget {
               ),
               boxShadow: AppShadow.sheet,
             ),
-            child: builder(sheetContext, scrollController),
+            // A transparent Material sits between the decorated Container and
+            // the sheet content so descendant ListTiles paint their background
+            // and ink ripples here (above the Container's surface color) rather
+            // than on the modal Material below, where the Container would hide
+            // them.
+            child: Material(
+              type: MaterialType.transparency,
+              child: builder(sheetContext, scrollController),
+            ),
           ),
         );
       },
@@ -80,8 +93,8 @@ class _SheetFocusScrollState extends State<SheetFocusScroll> {
   }
 }
 
-class SheetHandle extends StatelessWidget {
-  const SheetHandle({super.key});
+class _SheetHandle extends StatelessWidget {
+  const _SheetHandle();
 
   @override
   Widget build(BuildContext context) {
@@ -133,7 +146,7 @@ class DetailSheetListView extends StatelessWidget {
       ),
       children: [
         if (showHandle) ...[
-          const SheetHandle(),
+          const _SheetHandle(),
           SizedBox(height: handleGap),
         ],
         ...children,
@@ -144,7 +157,7 @@ class DetailSheetListView extends StatelessWidget {
 
 /// Standard chrome for an add/edit **form** shown in a bottom sheet: the
 /// [DraggableSheetFrame] container plus a scrollable body with the shared sheet
-/// padding, a drag [SheetHandle], and a [headlineLarge] [title]. Put the
+/// padding, a drag [_SheetHandle], and a [headlineLarge] [title]. Put the
 /// divider and form fields in [children]. Mirrors [DetailSheetListView], which
 /// serves read-only detail views.
 class FormSheetScaffold extends StatelessWidget {
@@ -165,6 +178,7 @@ class FormSheetScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isShort = _isShortSheetViewport(context);
     return DraggableSheetFrame(
       initialChildSize: initialChildSize,
       minChildSize: minChildSize,
@@ -180,9 +194,14 @@ class FormSheetScaffold extends StatelessWidget {
                 MediaQuery.of(sheetContext).viewInsets.bottom + AppSpacing.sp24,
           ),
           children: [
-            const SheetHandle(),
-            const SizedBox(height: AppSpacing.sp16),
-            Text(title, style: Theme.of(sheetContext).textTheme.headlineLarge),
+            const _SheetHandle(),
+            SizedBox(height: isShort ? AppSpacing.sp12 : AppSpacing.sp16),
+            Text(
+              title,
+              style: isShort
+                  ? Theme.of(sheetContext).textTheme.headlineSmall
+                  : Theme.of(sheetContext).textTheme.headlineLarge,
+            ),
             ...children,
           ],
         );

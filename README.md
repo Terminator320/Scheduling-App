@@ -8,9 +8,26 @@ This repository is proprietary. The source code, architecture, and configuration
 
 ## Overview
 
-The Scheduling App is a native Android application built with Flutter. It provides a centralized platform for business owners and their field teams to coordinate service appointments in real time — replacing manual scheduling, paper records, and fragmented communication.
+The Scheduling App is a cross-platform mobile application built with Flutter, targeting Android and iOS from a single codebase. It provides a centralized platform for business owners and their field teams to coordinate service appointments in real time — replacing manual scheduling, paper records, and fragmented communication.
 
 The application is backed by Google Firebase, giving it a secure, cloud-based foundation with offline-capable data sync, enterprise-grade authentication, and scalable storage for appointment photos and client files.
+
+---
+
+## Setup
+
+1. **Environment file** — copy `dev/.env.example` to `dev/.env` and fill in the Firebase client values (Firebase console → *Project settings* → *General* → *Your apps*, or the output of `flutterfire configure`). `dev/.env` is gitignored and bundled as an asset at build time; the app fails fast on startup naming any missing key.
+2. **Dependencies** — run `flutter pub get`. Localizations are generated automatically (`generate: true` in `pubspec.yaml`); run `flutter gen-l10n` manually if needed.
+3. **Run** — `flutter run`.
+4. **Local Firebase emulators (optional)** — start them with `firebase emulators:start`, then run the app with:
+
+   ```bash
+   flutter run --dart-define=USE_FIREBASE_EMULATOR=true
+   # Override the emulator host if not on the Android emulator (default 10.0.2.2):
+   flutter run --dart-define=USE_FIREBASE_EMULATOR=true --dart-define=EMULATOR_HOST=127.0.0.1
+   ```
+
+Building for iOS requires a Mac — see [docs/IOS_MAC_BUILD.md](docs/IOS_MAC_BUILD.md).
 
 ---
 
@@ -20,7 +37,10 @@ The application is backed by Google Firebase, giving it a secure, cloud-based fo
 A full-featured monthly calendar lets administrators plan, assign, and manage service appointments. Each appointment captures everything needed in the field: client details, service address, assigned employees, time window, materials required, internal notes, and status. Administrators have a complete view of all scheduled work; employees see only the appointments assigned to them.
 
 ### Client Records
-A searchable, paginated directory of clients — including business name, service address, billing contacts, and phone numbers. Records update in real time across all devices. The search engine handles accent characters and partial matches to keep lookups fast even with large client bases.
+A searchable directory of clients, listed alphabetically by name — including customer name, optional first/last name, service address, billing contacts, phone, and mobile numbers. Records update in real time across all devices. The search engine matches customer name, first name, last name, phone, and mobile, handling accent characters and partial matches to keep lookups fast even with large client bases.
+
+### Wave Accounting Sync
+Administrators can connect the business's [Wave](https://www.waveapps.com) account and import its existing customers into the app. From then on, every client added or edited is synced to Wave automatically in the background, and each client carries a small status badge — *synced*, *sync pending*, or *sync error*. The sync runs entirely server-side, so it never slows the app down, and a Wave outage simply leaves a client "pending" rather than failing the save. If a Wave account has more than one business, connecting shows a short list to choose the right one.
 
 ### Employee Management
 Administrators onboard employees through a controlled invite flow: an employee account is created by the admin first, and only pre-invited email addresses are permitted to self-register. Each employee is assigned a distinct display color that appears on the calendar, making workload distribution and scheduling conflicts immediately visible.
@@ -40,12 +60,13 @@ Users can switch between light and dark display modes, adjust text scaling for r
 
 | Concern | Solution |
 |---|---|
-| Mobile framework | Flutter — Android |
+| Mobile framework | Flutter — Android & iOS |
 | Authentication | Firebase Authentication |
 | Data store | Cloud Firestore (real-time sync) |
 | File storage | Firebase Storage |
 | Application security | Firebase App Check |
 | Address lookup | Google Places API |
+| Accounting sync | Wave Accounting (server-side) |
 | Offline support | Firestore local cache |
 
 ---
@@ -84,12 +105,13 @@ Three primary collections form the application's data backbone:
 ## Roadmap
 
 ### Wave Billing Integration
-The next major milestone is a full integration with [Wave](https://www.waveapps.com), a cloud-based accounting and invoicing platform. The goal is to bridge the gap between scheduling and billing — once a service appointment is completed in the app, the relevant data will flow directly into Wave to generate invoices, track payments, and maintain accurate financial records without any manual re-entry.
+The first stage of the [Wave](https://www.waveapps.com) integration — **client record sync** — is live: clients created or updated in the Scheduling App are reflected in Wave's customer directory, keeping both systems consistent (see *Wave Accounting Sync* above).
+
+The next milestone extends this to full billing, bridging the gap between scheduling and invoicing so that once a service appointment is completed in the app, the relevant data flows directly into Wave without any manual re-entry.
 
 Planned scope includes:
 
 - **Automatic invoice generation** — completed appointments trigger draft invoices in Wave, pre-populated with client details, service description, and time-based or flat-rate billing.
-- **Client record sync** — clients created or updated in the Scheduling App will be reflected in Wave's customer directory, keeping both systems consistent.
 - **Payment status visibility** — invoice and payment status from Wave surfaced within the app so administrators can see outstanding balances alongside their scheduling view.
 - **Appointment-to-invoice traceability** — each appointment will carry a reference to its corresponding Wave invoice, creating a clear audit trail from booking to payment.
 

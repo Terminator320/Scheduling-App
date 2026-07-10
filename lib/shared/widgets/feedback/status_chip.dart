@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/feedback/status_pill.dart';
 
+/// The appointment lifecycle: pending → in progress → done, plus a cancelled
+/// terminal state reached by the separate Cancel action. User/account states
+/// (active/invited/disabled) live in `UserStatus` — see `user_status_chip.dart`.
 enum AppointmentStatus {
-  confirmed,
-  done,
   pending,
-  cancelled,
-  invited,
-  active,
-  disabled,
-  inProgress;
+  inProgress,
+  done,
+  cancelled;
 
-  /// Canonical mapping from a stored appointment status string.
+  /// Canonical mapping from a stored appointment status string; any
+  /// unrecognized value falls through to [pending].
   static AppointmentStatus fromRaw(String raw) => switch (raw.toLowerCase()) {
-    'confirmed' => confirmed,
     'done' || 'completed' => done,
     'cancelled' => cancelled,
     'in_progress' || 'inprogress' => inProgress,
@@ -22,13 +22,7 @@ enum AppointmentStatus {
   };
 
   /// The pickable appointment statuses, in picker display order.
-  static const appointmentValues = [
-    confirmed,
-    inProgress,
-    pending,
-    done,
-    cancelled,
-  ];
+  static const appointmentValues = [pending, inProgress, done];
 
   /// The stored raw string for this status.
   String get raw => this == inProgress ? 'in_progress' : name;
@@ -40,93 +34,48 @@ enum AppointmentStatus {
   bool get isTerminal => isDone || isCancelled;
 }
 
-/// Localized label for a status — shared by [StatusChip] and the
+/// Localized label for an appointment status — shared by [StatusChip] and the
 /// appointment status picker.
 String statusLabel(AppLocalizations l10n, AppointmentStatus status) =>
     switch (status) {
-      AppointmentStatus.confirmed => l10n.status_confirmed,
-      AppointmentStatus.done => l10n.status_done,
       AppointmentStatus.pending => l10n.status_pending,
-      AppointmentStatus.cancelled => l10n.status_cancelled,
-      AppointmentStatus.active => l10n.status_active,
-      AppointmentStatus.invited => l10n.status_invited,
-      AppointmentStatus.disabled => l10n.status_disabled,
       AppointmentStatus.inProgress => l10n.status_inProgress,
+      AppointmentStatus.done => l10n.status_done,
+      AppointmentStatus.cancelled => l10n.status_cancelled,
     };
 
 class StatusChip extends StatelessWidget {
   const StatusChip({required this.status, super.key});
   final AppointmentStatus status;
 
-  static const double _maxLabelScale = 1.3;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final statusColors = theme.statusColors;
-    final label = statusLabel(context.l10n, status);
-    final (bg, fg) = _colorsFor(scheme, statusColors);
-    final userScale = MediaQuery.textScalerOf(context).scale(1);
-    final cappedScaler = TextScaler.linear(
-      userScale < _maxLabelScale ? userScale : _maxLabelScale,
-    );
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sp8 + 2,
-        vertical: 3,
-      ),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(AppRadius.rFull),
-      ),
-      child: Text(
-        label,
-        textScaler: cappedScaler,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        softWrap: false,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: fg,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
+    final (bg, fg) = _colorsFor(theme.colorScheme, theme.statusColors);
+    return StatusPill(
+      label: statusLabel(context.l10n, status),
+      background: bg,
+      foreground: fg,
     );
   }
 
   (Color, Color) _colorsFor(ColorScheme scheme, AppStatusColors statusColors) =>
       switch (status) {
-        AppointmentStatus.confirmed => (
-          scheme.primaryContainer,
-          scheme.onPrimaryContainer,
+        AppointmentStatus.pending => (
+          statusColors.warningContainer,
+          statusColors.onWarningContainer,
+        ),
+        AppointmentStatus.inProgress => (
+          statusColors.inProgressContainer,
+          statusColors.onInProgressContainer,
         ),
         AppointmentStatus.done => (
           statusColors.successContainer,
           statusColors.onSuccessContainer,
         ),
-        AppointmentStatus.pending => (
-          statusColors.warningContainer,
-          statusColors.onWarningContainer,
-        ),
         AppointmentStatus.cancelled => (
           scheme.errorContainer,
           scheme.onErrorContainer,
-        ),
-        AppointmentStatus.active => (
-          statusColors.successContainer,
-          statusColors.onSuccessContainer,
-        ),
-        AppointmentStatus.invited => (
-          statusColors.invitedContainer,
-          statusColors.onInvitedContainer,
-        ),
-        AppointmentStatus.disabled => (
-          scheme.surfaceContainerHighest,
-          scheme.onSurfaceVariant,
-        ),
-        AppointmentStatus.inProgress => (
-          statusColors.inProgressContainer,
-          statusColors.onInProgressContainer,
         ),
       };
 }

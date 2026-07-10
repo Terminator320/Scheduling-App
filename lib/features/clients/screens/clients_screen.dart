@@ -40,13 +40,7 @@ class _ListInformationState extends State<ListInformation> {
   }
 
   Future<void> _onAddClient() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      sheetAnimationStyle: AppMotion.sheetStyle,
-      builder: (_) => const AddClientSheet(),
-    );
+    await showAddClientSheet(context);
   }
 
   Future<void> _onClientTap(ClientRecord client) async {
@@ -90,6 +84,7 @@ class _ListInformationState extends State<ListInformation> {
         compact: context.isLandscape,
         onBack: _backToCalendar,
         bottom: AppSearchBar(
+          textScaler: MediaQuery.textScalerOf(context),
           controller: _searchController,
           hintText: context.l10n.clients_searchByNameOrPhone,
         ),
@@ -101,35 +96,42 @@ class _ListInformationState extends State<ListInformation> {
       ),
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton(
+              // Unique across the hub: the IndexedStack keeps every tab's
+              // Scaffold (and FAB) mounted at once, so a default/shared hero
+              // tag collides with another tab's FAB ("multiple heroes share
+              // the same tag").
+              heroTag: 'clientsAddFab',
               onPressed: _onAddClient,
+              tooltip: context.l10n.clients_addClient,
               child: const Icon(Icons.add),
             )
           : null,
-      body: ListenableBuilder(
-        listenable: _searchController,
-        builder: (context, _) {
-          final body = MasterDetailScaffold(
-            master: ClientsListView(
+      // The nav shell is built once. Only the master list listens to the search
+      // controller, so typing rebuilds just the list — not the chrome, and not
+      // the (search-independent) detail pane in the split layout.
+      body: AdaptiveShell(
+        currentDestination: AdaptiveDestination.clients,
+        isAdmin: widget.isAdmin,
+        employeeId: widget.employeeId,
+        child: MasterDetailScaffold(
+          master: ListenableBuilder(
+            listenable: _searchController,
+            builder: (context, _) => ClientsListView(
               searchQuery: _searchController.text,
               isAdmin: widget.isAdmin,
               selectedClientId: _selectedClient?.id,
               onClientTap: _onClientTap,
             ),
-            detail: _selectedClient != null
-                ? ClientDetailView(
-                    key: ValueKey(_selectedClient!.id),
-                    client: _selectedClient!,
-                  )
-                : null,
-            placeholder: _buildDetailPlaceholder(),
-          );
-          return AdaptiveShell(
-            currentDestination: AdaptiveDestination.clients,
-            isAdmin: widget.isAdmin,
-            employeeId: widget.employeeId,
-            child: body,
-          );
-        },
+          ),
+          detail: _selectedClient != null
+              ? ClientDetailView(
+                  key: ValueKey(_selectedClient!.id),
+                  client: _selectedClient!,
+                  onDeleted: () => setState(() => _selectedClient = null),
+                )
+              : null,
+          placeholder: _buildDetailPlaceholder(),
+        ),
       ),
     );
   }

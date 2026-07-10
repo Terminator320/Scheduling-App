@@ -14,3 +14,11 @@ class EmployeesFailureEmailAlreadyExists extends EmployeesFailure {
   String toLocalizedMessage(BuildContext context) =>
       context.l10n.error_anEmployeeWithThisEmailAlreadyExists;
 }
+
+class EmployeesFailureUnknown extends EmployeesFailure {
+  const EmployeesFailureUnknown();
+
+  @override
+  String toLocalizedMessage(BuildContext context) =>
+      context.l10n.error_somethingWentWrongPleaseTryAgain;
+}

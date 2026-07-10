@@ -14,6 +14,8 @@ class LabeledTextField extends StatelessWidget {
     this.required = false,
     this.optional = false,
     this.keyboard = TextInputType.text,
+    this.textCapitalization = TextCapitalization.none,
+    this.textInputAction,
     this.autofillHints,
     this.maxLines = 1,
     this.maxLength,
@@ -21,6 +23,7 @@ class LabeledTextField extends StatelessWidget {
     this.readOnly = false,
     this.onTap,
     this.onChanged,
+    this.onSubmitted,
     this.suffixIcon,
     this.prefixIcon,
     this.hint,
@@ -33,6 +36,8 @@ class LabeledTextField extends StatelessWidget {
   final bool required;
   final bool optional;
   final TextInputType keyboard;
+  final TextCapitalization textCapitalization;
+  final TextInputAction? textInputAction;
   final Iterable<String>? autofillHints;
   final int maxLines;
 
@@ -41,6 +46,7 @@ class LabeledTextField extends StatelessWidget {
   final bool readOnly;
   final VoidCallback? onTap;
   final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onSubmitted;
   final Widget? suffixIcon;
   final Widget? prefixIcon;
   final String? hint;
@@ -59,8 +65,11 @@ class LabeledTextField extends StatelessWidget {
             controller: controller,
             focusNode: focusNode,
             keyboardType: keyboard,
+            textCapitalization: textCapitalization,
+            textInputAction: textInputAction,
             autofillHints: autofillHints,
             maxLines: maxLines,
+            onSubmitted: onSubmitted,
             // With showCounter, TextField.maxLength enforces the cap and
             // renders the live "x/y" counter; otherwise enforce silently.
             maxLength: showCounter ? maxLength : null,

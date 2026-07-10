@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/settings/domain/role_label.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -16,7 +17,7 @@ class SettingsSectionCard extends StatelessWidget {
     final theme = Theme.of(context);
     return Container(
       decoration: appCardDecoration(theme, color: theme.colorScheme.surface),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp16),
       child: child,
     );
   }
@@ -65,7 +66,10 @@ class SettingsTrailingPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sp8,
+        vertical: AppSpacing.sp4,
+      ),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(AppRadius.rFull),
@@ -106,15 +110,12 @@ class SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final narrowOrLarge = context.isCompact;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.r8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
-          children: [
-            if (icon != null && iconBg != null && iconColor != null) ...[
+    final Widget? leading = icon != null && iconBg != null && iconColor != null
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               Container(
                 width: 36,
                 height: 36,
@@ -124,24 +125,58 @@ class SettingsTile extends StatelessWidget {
                 ),
                 child: Icon(icon, size: 18, color: iconColor),
               ),
-              const SizedBox(width: 13),
+              const SizedBox(width: AppSpacing.sp12),
             ],
-            Expanded(
-              // NOTE: bodyLarge (16) is the nearest role; original 15 sits
-              // between bodyMedium (14) and bodyLarge — let the role drive size.
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w500,
-                  color: labelColor,
-                ),
+          )
+        : null;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.r8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: narrowOrLarge
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ?leading,
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w500,
+                            color: labelColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (trailing != null) ...[
+                    const SizedBox(height: AppSpacing.sp8),
+                    Align(alignment: Alignment.centerLeft, child: trailing),
+                  ],
+                ],
+              )
+            : Row(
+                children: [
+                  ?leading,
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: labelColor,
+                      ),
+                    ),
+                  ),
+                  ?trailing,
+                ],
               ),
-            ),
-            ?trailing,
-          ],
-        ),
       ),
     );
   }
@@ -165,15 +200,15 @@ class LanguageToggle extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.r8),
       ),
       padding: const EdgeInsets.all(3),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Wrap(
+        spacing: 2,
+        runSpacing: 2,
         children: [
           _LangBtn(
             label: 'EN',
             isActive: currentCode == 'en',
             onTap: () => onChanged('en'),
           ),
-          const SizedBox(width: 2),
           _LangBtn(
             label: 'FR',
             isActive: currentCode == 'fr',
@@ -196,32 +231,41 @@ class _LangBtn extends StatelessWidget {
   final bool isActive;
   final VoidCallback onTap;
 
+  /// Minimum tap-target side (Apple HIG / Material a11y): the old
+  /// text-sized GestureDetector was ~24x17px and easy to miss.
+  static const double _minTapTarget = 44;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: AppDuration.fast,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: isActive ? scheme.surface : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          boxShadow: isActive
-              ? const [
-                  BoxShadow(
-                    color: Color(0x1A000000),
-                    blurRadius: 3,
-                    offset: Offset(0, 1),
-                  ),
-                ]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: isActive ? scheme.primary : scheme.onSurfaceVariant,
+    return Semantics(
+      button: true,
+      selected: isActive,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.r8),
+          child: AnimatedContainer(
+            duration: AppDuration.fast,
+            constraints: const BoxConstraints(
+              minWidth: _minTapTarget,
+              minHeight: _minTapTarget,
+            ),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp8),
+            decoration: BoxDecoration(
+              color: isActive ? scheme.surface : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppRadius.r8),
+              boxShadow: isActive ? AppShadow.pill : null,
+            ),
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: isActive ? scheme.primary : scheme.onSurfaceVariant,
+              ),
+            ),
           ),
         ),
       ),
@@ -245,6 +289,56 @@ class SettingsProfileCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final narrowOrLarge = context.isCompact;
+
+    final avatar = AppAvatar(
+      name: name,
+      color: scheme.primary,
+      size: AvatarSize.lg,
+    );
+
+    final identity = Column(
+      crossAxisAlignment: narrowOrLarge
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          name.isNotEmpty ? name : '—',
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: narrowOrLarge ? TextAlign.center : TextAlign.start,
+        ),
+        const SizedBox(height: AppSpacing.sp4),
+        Wrap(
+          alignment: narrowOrLarge ? WrapAlignment.center : WrapAlignment.start,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: AppSpacing.sp8,
+          runSpacing: AppSpacing.sp4,
+          children: [
+            if (role != null) _RoleBadge(role: role!),
+            if (email.isNotEmpty)
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: narrowOrLarge ? 260 : 220,
+                ),
+                child: Text(
+                  email,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: narrowOrLarge ? TextAlign.center : TextAlign.start,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
 
     return Container(
       decoration: appCardDecoration(theme, radius: AppRadius.r16),
@@ -270,7 +364,10 @@ class SettingsProfileCard extends StatelessWidget {
                 child: Align(
                   alignment: Alignment.bottomRight,
                   child: Padding(
-                    padding: const EdgeInsets.only(right: 20, bottom: 10),
+                    padding: const EdgeInsets.only(
+                      right: AppSpacing.sp24,
+                      bottom: AppSpacing.sp12,
+                    ),
                     child: FaIcon(
                       FontAwesomeIcons.droplet,
                       size: 40,
@@ -280,53 +377,23 @@ class SettingsProfileCard extends StatelessWidget {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-                child: Row(
-                  children: [
-                    AppAvatar(
-                      name: name,
-                      color: scheme.primary,
-                      size: AvatarSize.lg,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
+                padding: const EdgeInsets.all(AppSpacing.sp16),
+                child: narrowOrLarge
+                    ? Column(
                         children: [
-                          Text(
-                            name.isNotEmpty ? name : '—',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 5),
-                          Row(
-                            children: [
-                              if (role != null) ...[
-                                _RoleBadge(role: role!),
-                                if (email.isNotEmpty) const SizedBox(width: 6),
-                              ],
-                              if (email.isNotEmpty)
-                                Flexible(
-                                  child: Text(
-                                    email,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: scheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
+                          avatar,
+                          const SizedBox(height: AppSpacing.sp12),
+                          identity,
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          avatar,
+                          const SizedBox(width: AppSpacing.sp16),
+                          Expanded(child: identity),
                         ],
                       ),
-                    ),
-                  ],
-                ),
               ),
             ],
           ),
@@ -346,7 +413,10 @@ class _RoleBadge extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final label = roleLabel(context.l10n, isAdmin: role == 'admin');
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sp8,
+        vertical: AppSpacing.sp4,
+      ),
       decoration: BoxDecoration(
         color: scheme.primaryContainer,
         borderRadius: BorderRadius.circular(AppRadius.rFull),

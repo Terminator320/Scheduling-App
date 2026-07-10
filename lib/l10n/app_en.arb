@@ -40,10 +40,6 @@
   "@status_invited": {
     "description": "Invited"
   },
-  "status_confirmed": "Confirmed",
-  "@status_confirmed": {
-    "description": "Confirmed"
-  },
   "status_pending": "Pending",
   "@status_pending": {
     "description": "Pending"
@@ -92,6 +88,18 @@
   "@common_cancel": {
     "description": "Cancel"
   },
+  "common_done": "Done",
+  "@common_done": {
+    "description": "Done (generic picker/dialog confirm button)"
+  },
+  "common_close": "Close",
+  "@common_close": {
+    "description": "Accessibility label / tooltip for a close button."
+  },
+  "common_remove": "Remove",
+  "@common_remove": {
+    "description": "Accessibility label / tooltip for a remove button."
+  },
   "common_clearText": "Clear text",
   "@common_clearText": {
     "description": "Tooltip on the x button that empties a text field"
@@ -112,9 +120,9 @@
   "@common_edit": {
     "description": "Edit"
   },
-  "status_done": "Done",
+  "status_done": "Complete",
   "@status_done": {
-    "description": "Done"
+    "description": "Complete (appointment lifecycle end state)"
   },
   "common_calendar": "Calendar",
   "@common_calendar": {
@@ -128,9 +136,22 @@
   "@common_clients": {
     "description": "Clients"
   },
-  "calendar_appointments": "Appointments",
-  "@calendar_appointments": {
-    "description": "Appointments"
+  "calendar_appointmentCount": "{count, plural, =1{1 appointment} other{{count} appointments}}",
+  "@calendar_appointmentCount": {
+    "description": "Appointment count for a day, shown in the calendar app bar and used in day-cell accessibility labels.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_openMenuTooltip": "Open menu",
+  "@calendar_openMenuTooltip": {
+    "description": "Tooltip for the calendar app-bar button that opens the settings drawer."
+  },
+  "calendar_noAppointmentsForDay": "No appointments for this day.",
+  "@calendar_noAppointmentsForDay": {
+    "description": "Empty-state body shown to employees (who cannot create appointments) when the selected day has none."
   },
   "common_language": "Language",
   "@common_language": {
@@ -197,9 +218,21 @@
   "@common_address": {
     "description": "Address"
   },
-  "clients_businessName": "Business name",
-  "@clients_businessName": {
-    "description": "Business name"
+  "clients_customerName": "Customer name",
+  "@clients_customerName": {
+    "description": "The customer/display name field on the client form (required)"
+  },
+  "clients_firstName": "First name",
+  "@clients_firstName": {
+    "description": "First name field on the client form"
+  },
+  "clients_lastName": "Last name",
+  "@clients_lastName": {
+    "description": "Last name field on the client form"
+  },
+  "clients_mobile": "Mobile",
+  "@clients_mobile": {
+    "description": "Mobile phone field on the client form"
   },
   "clients_contactName": "Contact name",
   "@clients_contactName": {
@@ -282,10 +315,6 @@
   "@clients_clientDeletedSuccessfully": {
     "description": "Client deleted successfully."
   },
-  "error_couldNotDeleteClientTryAgain": "Could not delete client. Try again.",
-  "@error_couldNotDeleteClientTryAgain": {
-    "description": "Could not delete client. Try again."
-  },
   "error_couldNotSaveChangesTryAgain": "Could not save changes. Try again.",
   "@error_couldNotSaveChangesTryAgain": {
     "description": "Could not save changes. Try again."
@@ -298,13 +327,13 @@
   "@clients_thisClient": {
     "description": "this client"
   },
-  "clients_additionalBusinessContacts": "Additional business contacts",
+  "clients_additionalBusinessContacts": "Additional contacts",
   "@clients_additionalBusinessContacts": {
-    "description": "Additional business contacts"
+    "description": "Section header for extra contacts on the client form"
   },
-  "clients_theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded": "The first contact is the main contact above. Add more contacts here if needed.",
+  "clients_theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded": "Add extra contacts for this customer if needed.",
   "@clients_theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded": {
-    "description": "The first contact is the main contact above. Add more contacts here if needed."
+    "description": "Helper text under the additional-contacts section header"
   },
   "clients_add": "Add",
   "@clients_add": {
@@ -326,9 +355,9 @@
   "@validation_contactNameIsRequired": {
     "description": "Contact name is required"
   },
-  "validation_businessNameOrContactNameIsRequired": "Business name or contact name is required",
-  "@validation_businessNameOrContactNameIsRequired": {
-    "description": "Business name or contact name is required"
+  "validation_nameIsRequired": "Name is required",
+  "@validation_nameIsRequired": {
+    "description": "Shown when the required customer name field is empty"
   },
   "validation_phoneOrEmailIsRequired": "Phone or email is required",
   "@validation_phoneOrEmailIsRequired": {
@@ -498,14 +527,6 @@
   "@validation_maximumCharacterLimitReached": {
     "description": "Warning under a text field when its character limit is hit"
   },
-  "error_somethingWentWrongCreatingTheAppointment": "Something went wrong creating the appointment",
-  "@error_somethingWentWrongCreatingTheAppointment": {
-    "description": "Something went wrong creating the appointment"
-  },
-  "error_somethingWentWrongSavingChanges": "Something went wrong saving changes",
-  "@error_somethingWentWrongSavingChanges": {
-    "description": "Something went wrong saving changes"
-  },
   "calendar_noEmployeesAssigned": "No employees assigned",
   "@calendar_noEmployeesAssigned": {
     "description": "No employees assigned"
@@ -530,29 +551,17 @@
   "@calendar_noPhotos": {
     "description": "No photos"
   },
-  "calendar_noNumber": "No number",
-  "@calendar_noNumber": {
-    "description": "No number"
-  },
   "calendar_noAddress": "No address",
   "@calendar_noAddress": {
     "description": "No address"
   },
-  "calendar_noNotes": "No notes",
-  "@calendar_noNotes": {
-    "description": "No notes"
-  },
-  "calendar_noMaterials": "No materials",
-  "@calendar_noMaterials": {
-    "description": "No materials"
-  },
-  "calendar_markAsDone": "Mark as done",
+  "calendar_markAsDone": "Mark as complete",
   "@calendar_markAsDone": {
-    "description": "Mark as done"
+    "description": "Mark as complete"
   },
-  "calendar_completed": "Completed",
+  "calendar_completed": "Complete",
   "@calendar_completed": {
-    "description": "Completed"
+    "description": "Complete (appointment already marked complete)"
   },
   "calendar_areYouSureYouWantToDeleteThisJob": "Are you sure you want to delete this job?",
   "@calendar_areYouSureYouWantToDeleteThisJob": {
@@ -638,10 +647,6 @@
   "@employees_selectAnEmployeeToViewDetails": {
     "description": "Select an employee to view details"
   },
-  "calendar_selectAnAppointmentToViewDetails": "Select an appointment to view details",
-  "@calendar_selectAnAppointmentToViewDetails": {
-    "description": "Select an appointment to view details"
-  },
   "clients_noClientsYet": "No clients yet",
   "@clients_noClientsYet": {
     "description": "No clients yet"
@@ -714,10 +719,6 @@
   "@error_anEmployeeWithThisEmailAlreadyExists": {
     "description": "An employee with this email already exists"
   },
-  "error_couldNotCreateEmployee": "Could not create employee",
-  "@error_couldNotCreateEmployee": {
-    "description": "Could not create employee"
-  },
   "employees_deleteEmployee": "Delete employee",
   "@employees_deleteEmployee": {
     "description": "Delete employee"
@@ -725,10 +726,6 @@
   "employees_areYouSureYouWantToDeleteThisEmployee": "Are you sure you want to delete this employee?",
   "@employees_areYouSureYouWantToDeleteThisEmployee": {
     "description": "Are you sure you want to delete this employee?"
-  },
-  "common_resetPassword": "Reset Password",
-  "@common_resetPassword": {
-    "description": "Reset Password"
   },
   "auth_forgotYourPassword": "Forgot your password?",
   "@auth_forgotYourPassword": {
@@ -761,6 +758,10 @@
   "error_networkErrorCheckYourConnectionAndTryAgain": "Network error. Check your connection and try again.",
   "@error_networkErrorCheckYourConnectionAndTryAgain": {
     "description": "Network error. Check your connection and try again."
+  },
+  "common_offlineBanner": "Offline — changes will sync when you're back online",
+  "@common_offlineBanner": {
+    "description": "Persistent app-wide banner shown while the device has no network connection."
   },
   "auth_checkYourInbox": "Check your inbox",
   "@auth_checkYourInbox": {
@@ -862,13 +863,13 @@
   "@validation_passwordReqSymbol": {
     "description": "Password requirement checklist row: at least one symbol/special character."
   },
-  "error_couldNotLoadAppointments": "Could not load appointments. Check your connection and try again.",
-  "@error_couldNotLoadAppointments": {
-    "description": "Could not load appointments. Check your connection and try again."
-  },
   "common_clientAdded": "Client added",
   "@common_clientAdded": {
     "description": "Client added"
+  },
+  "common_changesSaved": "Changes saved",
+  "@common_changesSaved": {
+    "description": "Success notice shown after saving edits to a record."
   },
   "common_appointmentCreated": "Appointment created",
   "@common_appointmentCreated": {
@@ -882,7 +883,7 @@
   "@common_appointmentDeleted": {
     "description": "Appointment deleted"
   },
-  "common_appointmentMarkedAsDone": "Marked as done",
+  "common_appointmentMarkedAsDone": "Marked as complete",
   "@common_appointmentMarkedAsDone": {
     "description": "Marked as done"
   },
@@ -902,14 +903,6 @@
   "@auth_accountCreatedYouCanNowSignIn": {
     "description": "Account created. You can now sign in."
   },
-  "auth_accountCreated": "Account created",
-  "@auth_accountCreated": {
-    "description": "Account created"
-  },
-  "auth_youCanNowSignInWithThisEmailAndPassword": "Check your inbox and spam folder to verify your email, then sign in.",
-  "@auth_youCanNowSignInWithThisEmailAndPassword": {
-    "description": "Create-account success subtitle telling the user to verify their email before signing in."
-  },
   "auth_useTheEmailYourAdminAddedToTheEmployeeList": "Use the email your admin added to the employee list.",
   "@auth_useTheEmailYourAdminAddedToTheEmployeeList": {
     "description": "Use the email your admin added to the employee list."
@@ -917,22 +910,6 @@
   "error_noUserProfileFoundForThisAccount": "No user profile found for this account",
   "@error_noUserProfileFoundForThisAccount": {
     "description": "No user profile found for this account"
-  },
-  "auth_pleaseVerifyYourEmailBeforeSigningIn": "Please verify your email before signing in.",
-  "@auth_pleaseVerifyYourEmailBeforeSigningIn": {
-    "description": "Please verify your email before signing in."
-  },
-  "auth_verificationEmailResentCheckInboxAndSpam": "Your email isn't verified yet. We sent a new verification link — check your inbox and spam folder, then sign in.",
-  "@auth_verificationEmailResentCheckInboxAndSpam": {
-    "description": "Shown on sign-in when an unverified invited user's account triggered an automatic resend of the email-verification link."
-  },
-  "auth_resendVerificationEmail": "Resend verification email",
-  "@auth_resendVerificationEmail": {
-    "description": "Button on the account-created screen to send the email-verification link again."
-  },
-  "auth_verificationEmailSentCheckInboxAndSpam": "Verification email sent — check your inbox and spam folder.",
-  "@auth_verificationEmailSentCheckInboxAndSpam": {
-    "description": "Confirmation shown after the user taps Resend verification email."
   },
   "auth_pleaseLogInAgainAndRetry": "Please log in again and retry",
   "@auth_pleaseLogInAgainAndRetry": {
@@ -974,25 +951,27 @@
   "@error_couldNotLoadAddressDetails": {
     "description": "Could not load address details"
   },
-  "common_searchAddress": "Search address",
-  "@common_searchAddress": {
-    "description": "Search address"
+  "common_search": "Search...",
+  "@common_search": {
+    "description": "Generic search field placeholder (default AppSearchBar hint)"
   },
-  "common_typeToSearchAnAddress": "Type to search an address",
-  "@common_typeToSearchAnAddress": {
-    "description": "Type to search an address"
-  },
-  "common_street": "Street",
-  "@common_street": {
-    "description": "Street"
-  },
-  "clients_searchByNameBusinessPhoneEmailAddress": "Search by name, business, phone, email, address...",
+  "clients_searchByNameBusinessPhoneEmailAddress": "Search by name, phone, email, address...",
   "@clients_searchByNameBusinessPhoneEmailAddress": {
-    "description": "Search by name, business, phone, email, address..."
+    "description": "Hint text for the client list search field"
   },
   "clients_noClientsFound": "No clients found",
   "@clients_noClientsFound": {
     "description": "No clients found"
+  },
+  "clients_addNamedClient": "Add \"{name}\" as a new client",
+  "@clients_addNamedClient": {
+    "description": "Action in the appointment client picker that creates a new client from the typed search text (which prefills the new client's name).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "John Smith"
+      }
+    }
   },
   "common_employeeRoleValue": "Employee",
   "@common_employeeRoleValue": {
@@ -1005,6 +984,10 @@
   "auth_signInToYourAccount": "Sign in to your account",
   "@auth_signInToYourAccount": {
     "description": "Sign in to your account"
+  },
+  "auth_dontHaveAnAccount": "Don't have an account?",
+  "@auth_dontHaveAnAccount": {
+    "description": "Prompt before the Create account link on the sign-in screen"
   },
   "common_tapToScheduleAnAppointment": "Tap + to schedule an appointment.",
   "@common_tapToScheduleAnAppointment": {
@@ -1101,6 +1084,10 @@
   "onboarding_getStarted": "Get Started",
   "@onboarding_getStarted": {
     "description": "Final-slide button that finishes onboarding"
+  },
+  "onboarding_back": "Back",
+  "@onboarding_back": {
+    "description": "Back button shown after the first onboarding slide"
   },
   "settings_version": "Version {version} ({buildNumber})",
   "@settings_version": {
@@ -1316,9 +1303,9 @@
   "@settings_accountDeleted": {
     "description": "Your account has been deleted."
   },
-  "error_couldNotDeleteAccount": "Could not delete your account. Please try again.",
-  "@error_couldNotDeleteAccount": {
-    "description": "Could not delete your account. Please try again."
+  "settings_deletingAccount": "Deleting your account…",
+  "@settings_deletingAccount": {
+    "description": "Progress label shown while the account is being deleted."
   },
   "error_noticeWithCause": "{intro} — {cause}. ({tag})",
   "@error_noticeWithCause": {
@@ -1347,6 +1334,8 @@
   "@error_introCreateAppointment": {"description": "Error intro for APPT-CREATE"},
   "error_introSaveAppointment": "Couldn't save the appointment changes",
   "@error_introSaveAppointment": {"description": "Error intro for APPT-SAVE"},
+  "error_introUpdateAppointmentStatus": "Couldn't update the appointment status",
+  "@error_introUpdateAppointmentStatus": {"description": "Error intro for APPT-STATUS (mark done / cancel)"},
   "error_introDeleteAppointment": "Couldn't delete the appointment",
   "@error_introDeleteAppointment": {"description": "Error intro for APPT-DEL"},
   "error_introLoadAppointments": "Couldn't load appointments",
@@ -1362,5 +1351,120 @@
   "error_introLoadHistory": "Couldn't load the appointment history",
   "@error_introLoadHistory": {"description": "Error intro for HIST-LOAD"},
   "error_introLoadClients": "Couldn't load clients",
-  "@error_introLoadClients": {"description": "Error intro for CLI-LIST"}
+  "@error_introLoadClients": {"description": "Error intro for CLI-LIST"},
+  "error_thatCodeIsntValidAskYourAdmin": "That code isn't valid. Ask your admin for a new one.",
+  "@error_thatCodeIsntValidAskYourAdmin": { "description": "Shown when a signup code is wrong or already used." },
+  "error_thatCodeHasExpiredAskYourAdmin": "That code has expired. Ask your admin for a new one.",
+  "@error_thatCodeHasExpiredAskYourAdmin": { "description": "Shown when a signup code is past its expiry." },
+  "error_thatCodeWasIssuedForADifferentEmail": "That code was issued for a different email. Sign up using the exact email your admin invited.",
+  "@error_thatCodeWasIssuedForADifferentEmail": { "description": "Shown when a valid signup code is redeemed with an email that doesn't match the invite." },
+  "wave_errorAuthInvalid": "Wave connection token is missing or has been revoked. Please reconnect.",
+  "@wave_errorAuthInvalid": {
+    "description": "WaveAuthInvalid failure: the Wave access token is missing or revoked"
+  },
+  "wave_errorValidation": "Something went wrong with the Wave request. Please try again.",
+  "@wave_errorValidation": {
+    "description": "WaveValidation failure: covers Wave validation errors and not-found precondition failures"
+  },
+  "wave_errorNotConnected": "Connect to Wave first, then try the import again.",
+  "@wave_errorNotConnected": {
+    "description": "WaveValidation failure with reason notConnected: the Wave integration has not been bootstrapped yet"
+  },
+  "wave_errorBusinessAmbiguous": "Couldn't determine which Wave business to connect. Please try again.",
+  "@wave_errorBusinessAmbiguous": {
+    "description": "WaveValidation failure with reason businessAmbiguous: a safety-net fallback for the rare case the server still reports ambiguity after the business picker"
+  },
+  "settings_integrations": "Integrations",
+  "@settings_integrations": {
+    "description": "Settings section header for third-party integrations (Wave, etc.)"
+  },
+  "settings_legal": "Legal",
+  "@settings_legal": {
+    "description": "Settings section header for legal links (privacy policy, etc.)"
+  },
+  "settings_privacyPolicy": "Privacy Policy",
+  "@settings_privacyPolicy": {
+    "description": "Settings tile label that opens the hosted privacy policy in the browser"
+  },
+  "error_couldNotOpenLink": "Couldn't open the link.",
+  "@error_couldNotOpenLink": {
+    "description": "Error notice shown when an external web link fails to open"
+  },
+  "wave_connectToWave": "Connect to Wave",
+  "@wave_connectToWave": {
+    "description": "Button label: initiates the Wave connection bootstrap"
+  },
+  "wave_importCustomers": "Import customers from Wave",
+  "@wave_importCustomers": {
+    "description": "Button label: triggers Wave customer import"
+  },
+  "wave_connectedSuccess": "Connected to {businessName}",
+  "@wave_connectedSuccess": {
+    "description": "Success notice shown after a successful Wave bootstrap",
+    "placeholders": {
+      "businessName": {
+        "type": "String",
+        "description": "The Wave business name returned by bootstrap"
+      }
+    }
+  },
+  "wave_importSuccess": "Wave import complete — {imported} added, {updated} updated, {skipped} skipped.",
+  "@wave_importSuccess": {
+    "description": "Success notice summarising a Wave customer import run",
+    "placeholders": {
+      "imported": {
+        "type": "int",
+        "description": "Number of newly created client records"
+      },
+      "updated": {
+        "type": "int",
+        "description": "Number of existing client records updated"
+      },
+      "skipped": {
+        "type": "int",
+        "description": "Number of archived Wave customers skipped"
+      }
+    }
+  },
+  "wave_syncedWithWave": "Synced with Wave",
+  "@wave_syncedWithWave": {
+    "description": "Badge label shown on a client that is synced with Wave"
+  },
+  "wave_syncPending": "Sync pending",
+  "@wave_syncPending": {
+    "description": "Badge label shown on a client whose Wave sync is pending"
+  },
+  "wave_syncError": "Sync error",
+  "@wave_syncError": {
+    "description": "Badge label shown on a client whose Wave sync has failed"
+  },
+  "auth_signupCode": "Signup code",
+  "@auth_signupCode": {
+    "description": "Label for the signup code field on the create-account screen."
+  },
+  "validation_pleaseEnterYourSignupCode": "Please enter your signup code.",
+  "@validation_pleaseEnterYourSignupCode": {
+    "description": "Validation error shown when the signup code field is empty."
+  },
+  "employees_signupCodeTitle": "Signup code",
+  "@employees_signupCodeTitle": {
+    "description": "Title of the dialog showing the admin the employee's signup code"
+  },
+  "employees_shareThisCodeWith": "Share this code with {name}. They'll need it and their email to sign in.",
+  "@employees_shareThisCodeWith": {
+    "description": "Body of the signup-code dialog telling the admin to share the code with the new employee",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "employees_copyCode": "Copy code",
+  "@employees_copyCode": {
+    "description": "Button in the signup-code dialog that copies the code to the clipboard"
+  },
+  "common_copied": "Copied",
+  "@common_copied": {
+    "description": "Inline confirmation shown after copying text to the clipboard"
+  }
 }

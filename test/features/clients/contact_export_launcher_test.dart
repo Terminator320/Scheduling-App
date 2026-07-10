@@ -4,11 +4,14 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 
 void main() {
   group('clientToContact', () {
-    test('maps a person client to name, phone, email and address', () {
+    test('maps first/last name, both phones, email and address', () {
       const client = ClientRecord(
         id: '1',
-        name: 'Jane Doe',
+        name: 'Acme Co',
+        firstName: 'Jane',
+        lastName: 'Doe',
         phone: '555-1234',
+        mobile: '555-9999',
         email: 'jane@example.com',
         address: '123 Main St',
         city: 'Springfield',
@@ -19,10 +22,14 @@ void main() {
 
       final contact = clientToContact(client);
 
-      expect(contact.name?.first, 'Jane Doe');
-      expect(contact.phones.single.number, '555-1234');
+      // Structured person name from firstName/lastName.
+      expect(contact.name?.first, 'Jane');
+      expect(contact.name?.last, 'Doe');
+      // The customer/display name lands on the organization.
+      expect(contact.organizations.single.name, 'Acme Co');
+      // Phone and mobile are two separate entries.
+      expect(contact.phones.map((p) => p.number), ['555-1234', '555-9999']);
       expect(contact.emails.single.address, 'jane@example.com');
-      expect(contact.organizations, isEmpty);
 
       final address = contact.addresses.single;
       expect(address.street, '123 Main St');
@@ -33,16 +40,13 @@ void main() {
       expect(address.formatted, '123 Main St, Springfield, IL, 62704, USA');
     });
 
-    test('business client lands on the organization, not the person name', () {
-      const client = ClientRecord(
-        id: '2',
-        businessName: 'Acme Co',
-        phone: '555-0000',
-      );
+    test('falls back to the display name when there is no first/last name', () {
+      const client = ClientRecord(id: '2', name: 'Acme Co', phone: '555-0000');
 
       final contact = clientToContact(client);
 
-      expect(contact.name, isNull);
+      // Name-only client: display name seeds the contact name AND the org.
+      expect(contact.name?.first, 'Acme Co');
       expect(contact.organizations.single.name, 'Acme Co');
       expect(contact.phones.single.number, '555-0000');
     });
@@ -70,7 +74,7 @@ void main() {
       expect(contact.phones, isEmpty);
       expect(contact.emails, isEmpty);
       expect(contact.addresses, isEmpty);
-      expect(contact.organizations, isEmpty);
+      expect(contact.organizations.single.name, 'Solo');
     });
   });
 }

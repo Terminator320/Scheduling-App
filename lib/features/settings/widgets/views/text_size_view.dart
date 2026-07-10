@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -33,6 +34,7 @@ class _TextSizeViewState extends State<TextSizeView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final compact = context.isCompact;
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.sp16),
@@ -65,12 +67,12 @@ class _TextSizeViewState extends State<TextSizeView> {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Tuesday, May 12 · 9:00 – 9:45 AM',
+                      'Tuesday, May 12 - 9:00 - 9:45 AM',
                       style: theme.textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Sarah Johnson · 514-555-0101',
+                      'Sarah Johnson - 514-555-0101',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
@@ -82,7 +84,6 @@ class _TextSizeViewState extends State<TextSizeView> {
           ),
         ),
         const SizedBox(height: AppSpacing.sp12),
-
         Builder(
           builder: (context) {
             final options = _buildOptions(context.l10n);
@@ -95,6 +96,7 @@ class _TextSizeViewState extends State<TextSizeView> {
                       label: options[i].$1,
                       scale: options[i].$2,
                       isSelected: (_selected - options[i].$2).abs() < 0.01,
+                      compact: compact,
                       onTap: () => setState(() => _selected = options[i].$2),
                     ),
                     if (i < options.length - 1)
@@ -105,7 +107,7 @@ class _TextSizeViewState extends State<TextSizeView> {
             );
           },
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: AppSpacing.sp8),
         Text(
           context.l10n.settings_textSizeAppliesAppWide,
           textAlign: TextAlign.center,
@@ -114,7 +116,6 @@ class _TextSizeViewState extends State<TextSizeView> {
           ),
         ),
         const SizedBox(height: AppSpacing.sp24),
-
         FilledButton(
           style: FilledButton.styleFrom(
             backgroundColor: scheme.primary,
@@ -149,7 +150,7 @@ class _Card extends StatelessWidget {
     final theme = Theme.of(context);
     return Container(
       decoration: appCardDecoration(theme, color: theme.colorScheme.surface),
-      padding: padding ?? const EdgeInsets.all(14),
+      padding: padding ?? const EdgeInsets.all(AppSpacing.sp16),
       child: child,
     );
   }
@@ -160,12 +161,14 @@ class _SizeRow extends StatelessWidget {
     required this.label,
     required this.scale,
     required this.isSelected,
+    required this.compact,
     required this.onTap,
   });
 
   final String label;
   final double scale;
   final bool isSelected;
+  final bool compact;
   final VoidCallback onTap;
 
   @override
@@ -180,44 +183,113 @@ class _SizeRow extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.r8),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 6),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 40,
-                child: Center(
-                  child: Text(
-                    'A',
-                    style: TextStyle(
-                      fontSize: 11 + (scale - 0.8) * 16,
-                      fontWeight: FontWeight.w800,
+          padding: const EdgeInsets.symmetric(
+            vertical: AppSpacing.sp12,
+            horizontal: AppSpacing.sp8,
+          ),
+          child: compact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _ScaleGlyph(
+                          scale: scale,
+                          isSelected: isSelected,
+                          primary: scheme.primary,
+                          muted: scheme.onSurfaceVariant,
+                        ),
+                        const Spacer(),
+                        Icon(
+                          isSelected
+                              ? Icons.radio_button_checked_rounded
+                              : Icons.radio_button_unchecked_rounded,
+                          size: 20,
+                          color: isSelected
+                              ? scheme.primary
+                              : scheme.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sp8),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 48),
+                      child: Text(
+                        label,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                          color: isSelected ? scheme.primary : null,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    _ScaleGlyph(
+                      scale: scale,
+                      isSelected: isSelected,
+                      primary: scheme.primary,
+                      muted: scheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                          color: isSelected ? scheme.primary : null,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      isSelected
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      size: 20,
                       color: isSelected
                           ? scheme.primary
                           : scheme.onSurfaceVariant,
-                      height: 1,
                     ),
-                  ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  label,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    color: isSelected ? scheme.primary : null,
-                    fontSize: 15,
-                  ),
-                ),
-              ),
-              Icon(
-                isSelected
-                    ? Icons.radio_button_checked_rounded
-                    : Icons.radio_button_unchecked_rounded,
-                size: 20,
-                color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
-              ),
-            ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScaleGlyph extends StatelessWidget {
+  const _ScaleGlyph({
+    required this.scale,
+    required this.isSelected,
+    required this.primary,
+    required this.muted,
+  });
+
+  final double scale;
+  final bool isSelected;
+  final Color primary;
+  final Color muted;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 40,
+      child: Center(
+        child: Text(
+          'A',
+          style: TextStyle(
+            fontSize: 11 + (scale - 0.8) * 16,
+            fontWeight: FontWeight.w800,
+            color: isSelected ? primary : muted,
+            height: 1,
           ),
         ),
       ),

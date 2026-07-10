@@ -9,6 +9,7 @@ import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 class _MockFirebaseAuth extends Mock implements FirebaseAuth {}
 
@@ -145,12 +146,14 @@ void main() {
 
   group('isAccountDeletionSignal', () {
     const emptyData = AsyncData<Map<String, dynamic>>({});
+    const populated = AsyncData<Map<String, dynamic>>({'status': 'active'});
 
     test('false when not signed in', () {
       expect(
         isAccountDeletionSignal(
           isSignedIn: false,
           resolvedUid: 'uid1',
+          previous: populated,
           docState: emptyData,
         ),
         isFalse,
@@ -164,57 +167,248 @@ void main() {
         isAccountDeletionSignal(
           isSignedIn: true,
           resolvedUid: null,
+          previous: populated,
           docState: emptyData,
         ),
         isFalse,
       );
     });
 
-    test(
-      'false for the reload transition that retains the empty placeholder',
-      () {
-        // uid just resolved: provider rebuilds into AsyncLoading retaining the
-        // previous empty doc via copyWithPrevious — not an authoritative delete.
-        final reloading = const AsyncLoading<Map<String, dynamic>>()
-            // copyWithPrevious is @internal in Riverpod 3, but this test must
-            // reproduce the exact reload transition the framework emits.
-            // ignore: invalid_use_of_internal_member
-            .copyWithPrevious(emptyData);
-        expect(
-          isAccountDeletionSignal(
-            isSignedIn: true,
-            resolvedUid: 'uid1',
-            docState: reloading,
-          ),
-          isFalse,
-        );
-      },
-    );
+    test('false while the doc is reloading (isLoading)', () {
+      final reloading = const AsyncLoading<Map<String, dynamic>>()
+          // copyWithPrevious is @internal in Riverpod 3, but this test must
+          // reproduce the exact reload transition the framework emits.
+          // ignore: invalid_use_of_internal_member
+          .copyWithPrevious(populated);
+      expect(
+        isAccountDeletionSignal(
+          isSignedIn: true,
+          resolvedUid: 'uid1',
+          previous: populated,
+          docState: reloading,
+        ),
+        isFalse,
+      );
+    });
 
     test('false when the settled doc is non-empty', () {
       expect(
         isAccountDeletionSignal(
           isSignedIn: true,
           resolvedUid: 'uid1',
-          docState: const AsyncData({'status': 'active'}),
+          previous: emptyData,
+          docState: populated,
+        ),
+        isFalse,
+      );
+    });
+
+    test('true for a populated -> empty transition (real deletion)', () {
+      expect(
+        isAccountDeletionSignal(
+          isSignedIn: true,
+          resolvedUid: 'uid1',
+          previous: populated,
+          docState: emptyData,
+        ),
+        isTrue,
+      );
+    });
+
+    test('true across a loading blip: retained-populated -> empty', () {
+      final reloadingPopulated = const AsyncLoading<Map<String, dynamic>>()
+          // No public API builds a loading state that retains prior data;
+          // copyWithPrevious mirrors a live reload blip over a populated doc.
+          // ignore: invalid_use_of_internal_member
+          .copyWithPrevious(populated);
+      expect(
+        isAccountDeletionSignal(
+          isSignedIn: true,
+          resolvedUid: 'uid1',
+          previous: reloadingPopulated,
+          docState: emptyData,
+        ),
+        isTrue,
+      );
+    });
+
+    test(
+      'false for a settled empty doc that was never populated (fresh sign-in '
+      'lag / invited-signup bootstrap window)',
+      () {
+        // No prior data (first emission), or a prior empty placeholder: the
+        // empty doc is a bootstrap window, not a populated->empty deletion.
+        expect(
+          isAccountDeletionSignal(
+            isSignedIn: true,
+            resolvedUid: 'uid1',
+            previous: null,
+            docState: emptyData,
+          ),
+          isFalse,
+        );
+        expect(
+          isAccountDeletionSignal(
+            isSignedIn: true,
+            resolvedUid: 'uid1',
+            previous: emptyData,
+            docState: emptyData,
+          ),
+          isFalse,
+        );
+      },
+    );
+  });
+
+  group('confirmColdStartDeletion (C3: deleted while the app was closed)', () {
+    const emptyData = AsyncData<Map<String, dynamic>>({});
+    const populated = AsyncData<Map<String, dynamic>>({'status': 'active'});
+    const cachedIdentity = EmployeeRecord(
+      id: 'doc1',
+      uid: 'uid1',
+      name: 'George',
+      status: 'active',
+    );
+
+    test(
+      'flags a warm-cache cold start whose users doc is confirmed absent',
+      () async {
+        // Cold start after server-side deletion: splash's cache-hit path
+        // routed straight to the calendar, so the doc's first settled
+        // emission is a clean empty with no populated previous.
+        expect(
+          await confirmColdStartDeletion(
+            isSignedIn: true,
+            resolvedUid: 'uid1',
+            previous: null,
+            docState: emptyData,
+            loadWarmCache: (uid) async => uid == 'uid1' ? cachedIdentity : null,
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'does not flag the fresh-signup window (signed in, no doc yet, '
+      'cold cache)',
+      () async {
+        var cacheReads = 0;
+        expect(
+          await confirmColdStartDeletion(
+            isSignedIn: true,
+            resolvedUid: 'uid1',
+            previous: null,
+            docState: emptyData,
+            loadWarmCache: (uid) async {
+              cacheReads++;
+              return null; // The cache only exists after a completed sign-in.
+            },
+          ),
+          isFalse,
+        );
+        expect(cacheReads, 1);
+      },
+    );
+
+    test('does not flag a transient permission-denied (stream error)', () async {
+      var cacheReads = 0;
+      final denied = AsyncError<Map<String, dynamic>>(
+        Exception('permission-denied'),
+        StackTrace.current,
+      );
+      expect(
+        await confirmColdStartDeletion(
+          isSignedIn: true,
+          resolvedUid: 'uid1',
+          previous: null,
+          docState: denied,
+          loadWarmCache: (uid) async {
+            cacheReads++;
+            return cachedIdentity;
+          },
+        ),
+        isFalse,
+      );
+      // An error emission must never even consult the cache.
+      expect(cacheReads, 0);
+    });
+
+    test('does not flag while the doc is still loading or populated', () async {
+      expect(
+        await confirmColdStartDeletion(
+          isSignedIn: true,
+          resolvedUid: 'uid1',
+          previous: null,
+          docState: const AsyncLoading(),
+          loadWarmCache: (uid) async => cachedIdentity,
+        ),
+        isFalse,
+      );
+      expect(
+        await confirmColdStartDeletion(
+          isSignedIn: true,
+          resolvedUid: 'uid1',
+          previous: null,
+          docState: populated,
+          loadWarmCache: (uid) async => cachedIdentity,
         ),
         isFalse,
       );
     });
 
     test(
-      'true for a settled empty doc with a resolved uid (real deletion)',
-      () {
+      'leaves the populated→empty transition to isAccountDeletionSignal',
+      () async {
+        // The live-deletion listener already handles this shape; the
+        // cold-start confirmation only owns the never-populated case.
         expect(
-          isAccountDeletionSignal(
+          isColdStartDeletionCandidate(
             isSignedIn: true,
             resolvedUid: 'uid1',
+            previous: populated,
             docState: emptyData,
           ),
-          isTrue,
+          isFalse,
         );
       },
     );
+
+    test('does not flag when signed out or the uid is unresolved', () async {
+      expect(
+        await confirmColdStartDeletion(
+          isSignedIn: false,
+          resolvedUid: 'uid1',
+          previous: null,
+          docState: emptyData,
+          loadWarmCache: (uid) async => cachedIdentity,
+        ),
+        isFalse,
+      );
+      expect(
+        await confirmColdStartDeletion(
+          isSignedIn: true,
+          resolvedUid: null,
+          previous: null,
+          docState: emptyData,
+          loadWarmCache: (uid) async => cachedIdentity,
+        ),
+        isFalse,
+      );
+    });
+
+    test('fails safe when the cache read itself throws', () async {
+      expect(
+        await confirmColdStartDeletion(
+          isSignedIn: true,
+          resolvedUid: 'uid1',
+          previous: null,
+          docState: emptyData,
+          loadWarmCache: (uid) async => throw Exception('keystore'),
+        ),
+        isFalse,
+      );
+    });
   });
 
   group('userRoleProvider', () {

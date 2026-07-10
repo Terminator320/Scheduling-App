@@ -1,23 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
-import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/core/validators/text_limits.dart';
-import 'package:scheduling/features/clients/application/clients_providers.dart';
-import 'package:scheduling/features/clients/contact_export_launcher.dart';
+import 'package:scheduling/features/clients/application/client_form_controller.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_form_validator.dart';
 import 'package:scheduling/features/clients/widgets/client_form_state.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_address_section.dart';
 import 'package:scheduling/features/clients/widgets/sections/additional_contacts_section.dart';
+import 'package:scheduling/features/clients/widgets/sections/client_personal_fields_section.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/primitives/entity_form_header.dart';
-import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
 /// Editable form for a [ClientRecord]. Owns every text controller and the
 /// validate/persist flow; it is built only while the detail view is in edit
@@ -44,9 +40,11 @@ class ClientEditForm extends ConsumerStatefulWidget {
 
 class _ClientEditFormState extends ConsumerState<ClientEditForm>
     with ClientFormState<ClientEditForm> {
-  late final TextEditingController _businessNameController;
   late final TextEditingController _nameController;
+  late final TextEditingController _firstNameController;
+  late final TextEditingController _lastNameController;
   late final TextEditingController _phoneController;
+  late final TextEditingController _mobileController;
   late final TextEditingController _emailController;
   late final TextEditingController _addressController;
   late final TextEditingController _aptController;
@@ -54,9 +52,6 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
   late final TextEditingController _provinceController;
   late final TextEditingController _countryController;
   late final TextEditingController _postalCodeController;
-
-  // A business name marks the client as a business and unlocks extra contacts.
-  bool get _isBusiness => _businessNameController.text.trim().isNotEmpty;
 
   // Prefers the explicit apt field over an apt embedded in the street text.
   String _buildFullAddress() {
@@ -76,9 +71,11 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
 
   void _initControllers() {
     final c = widget.client;
-    _businessNameController = TextEditingController(text: c.businessName);
     _nameController = TextEditingController(text: c.name);
+    _firstNameController = TextEditingController(text: c.firstName);
+    _lastNameController = TextEditingController(text: c.lastName);
     _phoneController = TextEditingController(text: c.phone);
+    _mobileController = TextEditingController(text: c.mobile);
     _emailController = TextEditingController(text: c.email);
     final parsed = AddressParser.splitApt(c.address);
     _addressController = TextEditingController(
@@ -91,9 +88,8 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
     _provinceController = TextEditingController(text: c.province);
     _countryController = TextEditingController(text: c.country);
     _postalCodeController = TextEditingController(text: c.postalCode);
-    // contacts[0] mirrors the main name/phone/email fields; the rest are
-    // the additional business contacts.
-    for (final contact in c.contacts.skip(1)) {
+    // `contacts` is now purely the extra contacts (no primary mirror).
+    for (final contact in c.contacts) {
       additionalContacts.add(
         ContactFields()
           ..nameController.text = contact.name
@@ -106,9 +102,11 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
 
   @override
   void dispose() {
-    _businessNameController.dispose();
     _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _phoneController.dispose();
+    _mobileController.dispose();
     _emailController.dispose();
     _addressController.dispose();
     _aptController.dispose();
@@ -120,34 +118,30 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
     super.dispose();
   }
 
-  List<ClientContact> _buildContacts() {
-    // A non-business client has no contacts list — its sole contact lives in
-    // the top-level name/phone/email fields (mirrors the add-client form).
-    if (!_isBusiness) return const [];
-
-    return [
-      ClientContact(
-        name: _nameController.text.trim(),
-        phone: _phoneController.text.trim(),
-        email: _emailController.text.trim(),
-      ),
-      for (final contact in additionalContacts)
-        if (!contact.isEmpty) contact.toContact(),
-    ];
-  }
+  List<ClientContact> _buildContacts() => [
+    for (final contact in additionalContacts)
+      if (!contact.isEmpty) contact.toContact(),
+  ];
 
   Future<void> _save() async {
-    final businessName = _businessNameController.text.trim();
+    // Guards against a double-tap firing two concurrent writes (mirrors
+    // AddClientSheet) — the Save button disables while the save is in flight.
+    if (ref.read(clientFormControllerProvider).isSaving) return;
     final name = _nameController.text.trim();
+    final firstName = _firstNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
     final phone = _phoneController.text.trim();
+    final mobile = _mobileController.text.trim();
     final email = _emailController.text.trim();
     final address = _addressController.text.trim();
 
     final nextErrors = ClientFormValidator.validate(
       l10n: context.l10n,
-      businessName: businessName,
       name: name,
+      firstName: firstName,
+      lastName: lastName,
       phone: phone,
+      mobile: mobile,
       email: email,
       address: address,
       additionalContacts: [
@@ -165,11 +159,15 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
     if (errors.values.any((e) => e != null)) return;
 
     // --- Build & persist ---
-    final updated = ClientRecord(
-      id: widget.client.id,
-      businessName: businessName,
+    // Preserves the Wave projection fields (waveCustomerId / waveSyncState /
+    // waveSyncError) by copying the loaded record — they're never edited here
+    // and toMap drops them anyway.
+    final updated = widget.client.copyWith(
       name: name,
+      firstName: firstName,
+      lastName: lastName,
       phone: phone,
+      mobile: mobile,
       email: email,
       address: noFixedAddress ? '' : _buildFullAddress(),
       apt: noFixedAddress ? '' : _aptController.text.trim(),
@@ -181,27 +179,27 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
       noFixedAddress: noFixedAddress,
     );
 
-    try {
-      await ref.read(clientsRepositoryProvider).updateClient(updated);
-      ref.read(clientsRefreshProvider.notifier).bump();
-      // Mirror the edit onto the phone contact this client was saved as (no-op
-      // unless it was saved on this device). Best-effort — never blocks save.
-      await updateLinkedPhoneContact(ref, updated);
-      if (!mounted) return;
-      widget.onSaved(updated);
-    } catch (e, st) {
-      ref.read(loggerProvider).warn('CLI-SAVE updateClient failed', e, st);
-      if (!mounted) return;
-      ref
-          .read(noticeServiceProvider)
-          .error(
-            composeErrorNotice(
-              context,
-              intro: context.l10n.error_introSaveClient,
-              tag: 'CLI-SAVE',
-              error: e,
-            ),
-          );
+    final outcome = await ref
+        .read(clientFormControllerProvider.notifier)
+        .updateClient(updated);
+    if (!mounted) return;
+    switch (outcome) {
+      case ClientSaved():
+        ref
+            .read(noticeServiceProvider)
+            .success(context.l10n.common_changesSaved);
+        widget.onSaved(updated);
+      case ClientSaveFailed(:final error):
+        ref
+            .read(noticeServiceProvider)
+            .error(
+              composeErrorNotice(
+                context,
+                intro: context.l10n.error_introSaveClient,
+                tag: 'CLI-SAVE',
+                error: error,
+              ),
+            );
     }
   }
 
@@ -214,84 +212,40 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
         EntityFormHeader(name: widget.client.displayName),
         const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpacing.sp16),
 
-        // --- Business & contact name ---
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: context.l10n.clients_businessName,
-            controller: _businessNameController,
-            optional: true,
-            autofillHints: const [AutofillHints.organizationName],
-            maxLength: TextLimits.personName,
-            onChanged: (_) {
-              clearError('name');
-              setState(() {});
-            },
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: context.l10n.clients_contactName,
-            controller: _nameController,
-            required: _businessNameController.text.trim().isEmpty,
-            optional: _businessNameController.text.trim().isNotEmpty,
-            autofillHints: const [AutofillHints.name],
-            maxLength: TextLimits.personName,
-            errorText: errors['name'],
-            onChanged: (_) {
-              clearError('name');
-              setState(() {});
-            },
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Phone & email ---
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: context.l10n.clients_phone,
-            controller: _phoneController,
-            keyboard: TextInputType.phone,
-            optional: true,
-            autofillHints: const [AutofillHints.telephoneNumber],
-            maxLength: TextLimits.phone,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: context.l10n.common_email,
-            controller: _emailController,
-            keyboard: TextInputType.emailAddress,
-            optional: true,
-            autofillHints: const [AutofillHints.email],
-            maxLength: TextLimits.email,
-            errorText: errors['email'],
-            onChanged: (_) => clearError('email'),
-          ),
+        // --- Names, phone, mobile & email ---
+        ClientPersonalFieldsSection(
+          nameController: _nameController,
+          firstNameController: _firstNameController,
+          lastNameController: _lastNameController,
+          phoneController: _phoneController,
+          mobileController: _mobileController,
+          emailController: _emailController,
+          nameError: errors['name'],
+          emailError: errors['email'],
+          onClearError: clearError,
         ),
 
-        // --- Additional business contacts ---
-        if (_isBusiness) ...[
-          const SizedBox(height: AppSpacing.sp8),
-          AdditionalContactsSection(
-            contacts: additionalContacts,
-            errors: errors,
-            onAddContact: addAdditionalContact,
-            onRemoveContact: removeAdditionalContact,
-            onClearError: clearError,
-          ),
-        ],
+        // --- Additional contacts ---
+        const SizedBox(height: AppSpacing.sp8),
+        AdditionalContactsSection(
+          contacts: additionalContacts,
+          errors: errors,
+          onAddContact: addAdditionalContact,
+          onRemoveContact: removeAdditionalContact,
+          onClearError: clearError,
+        ),
         const SizedBox(height: AppSpacing.sp8),
         // --- Address ---
         Material(
           type: MaterialType.transparency,
-          child: SwitchListTile(
+          child: SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
             title: Text(context.l10n.clients_noFixedAddress),
             subtitle: Text(context.l10n.clients_noFixedAddressHint),
             value: noFixedAddress,
+            activeTrackColor: Theme.of(context).colorScheme.primary,
             onChanged: (value) => setNoFixedAddress(value: value),
           ),
         ),
@@ -310,17 +264,26 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
           ),
         ],
         const SizedBox(height: AppSpacing.sp24),
-        _EditActions(onSave: _save, onDelete: widget.onDelete),
+        _EditActions(
+          onSave: _save,
+          onDelete: widget.onDelete,
+          isSaving: ref.watch(clientFormControllerProvider).isSaving,
+        ),
       ],
     );
   }
 }
 
 class _EditActions extends StatelessWidget {
-  const _EditActions({required this.onSave, required this.onDelete});
+  const _EditActions({
+    required this.onSave,
+    required this.onDelete,
+    required this.isSaving,
+  });
 
   final VoidCallback onSave;
   final VoidCallback? onDelete;
+  final bool isSaving;
 
   @override
   Widget build(BuildContext context) {
@@ -331,7 +294,7 @@ class _EditActions extends StatelessWidget {
           style: FilledButton.styleFrom(
             minimumSize: const Size(double.infinity, 46),
           ),
-          onPressed: onSave,
+          onPressed: isSaving ? null : onSave,
           child: Text(context.l10n.common_saveChanges),
         ),
         const SizedBox(height: AppSpacing.sp8),

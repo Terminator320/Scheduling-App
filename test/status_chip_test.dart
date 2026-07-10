@@ -16,18 +16,11 @@ Widget _wrap(Widget child) => MaterialApp(
 );
 
 void main() {
-  testWidgets('StatusChip renders Confirmed label', (tester) async {
-    await tester.pumpWidget(
-      _wrap(const StatusChip(status: AppointmentStatus.confirmed)),
-    );
-    expect(find.text('Confirmed'), findsOneWidget);
-  });
-
-  testWidgets('StatusChip renders Done label', (tester) async {
+  testWidgets('StatusChip renders Complete label', (tester) async {
     await tester.pumpWidget(
       _wrap(const StatusChip(status: AppointmentStatus.done)),
     );
-    expect(find.text('Done'), findsOneWidget);
+    expect(find.text('Complete'), findsOneWidget);
   });
 
   testWidgets('StatusChip renders Pending label', (tester) async {
@@ -42,27 +35,6 @@ void main() {
       _wrap(const StatusChip(status: AppointmentStatus.cancelled)),
     );
     expect(find.text('Cancelled'), findsOneWidget);
-  });
-
-  testWidgets('StatusChip renders Active label', (tester) async {
-    await tester.pumpWidget(
-      _wrap(const StatusChip(status: AppointmentStatus.active)),
-    );
-    expect(find.text('Active'), findsOneWidget);
-  });
-
-  testWidgets('StatusChip renders Invited label', (tester) async {
-    await tester.pumpWidget(
-      _wrap(const StatusChip(status: AppointmentStatus.invited)),
-    );
-    expect(find.text('Invited'), findsOneWidget);
-  });
-
-  testWidgets('StatusChip renders Disabled label', (tester) async {
-    await tester.pumpWidget(
-      _wrap(const StatusChip(status: AppointmentStatus.disabled)),
-    );
-    expect(find.text('Disabled'), findsOneWidget);
   });
 
   testWidgets('StatusChip renders In Progress label', (tester) async {

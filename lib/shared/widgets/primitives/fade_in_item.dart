@@ -17,15 +17,23 @@ class _FadeInItemState extends State<FadeInItem>
   static const _perItemDelay = Duration(milliseconds: 30);
 
   AnimationController? _ctrl;
-  Animation<double>? _opacity;
+  CurvedAnimation? _opacity;
+  bool _didSetup = false;
 
   @override
-  void initState() {
-    super.initState();
-    // Only the first few rows stagger-fade. Rows past the window appear
-    // instantly — skip the controller so scrolling a long list doesn't
-    // allocate (and tear down) one AnimationController per recycled row.
-    if (widget.index >= _maxStagger) return;
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Runs after MediaQuery is available (initState can't read it safely),
+    // so we can honour the OS "reduce motion" setting. Set up once.
+    if (_didSetup) return;
+    _didSetup = true;
+    // Only the first few rows stagger-fade. Rows past the window — and every
+    // row under reduce-motion — appear instantly, skipping the controller so
+    // a long list doesn't allocate (and tear down) one per recycled row.
+    if (widget.index >= _maxStagger ||
+        MediaQuery.disableAnimationsOf(context)) {
+      return;
+    }
     final ctrl = AnimationController(vsync: this, duration: AppDuration.fast);
     _ctrl = ctrl;
     _opacity = CurvedAnimation(parent: ctrl, curve: Curves.easeOut);
@@ -41,6 +49,7 @@ class _FadeInItemState extends State<FadeInItem>
 
   @override
   void dispose() {
+    _opacity?.dispose();
     _ctrl?.dispose();
     super.dispose();
   }

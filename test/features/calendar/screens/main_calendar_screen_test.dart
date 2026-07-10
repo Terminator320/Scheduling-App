@@ -38,6 +38,7 @@ Widget _wrap({
   required Stream<List<EmployeeRecord>> allUsers,
   required EmployeesRepository repo,
   bool isAdmin = true,
+  double textScale = 1,
 }) {
   return ProviderScope(
     overrides: [
@@ -50,13 +51,19 @@ Widget _wrap({
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
       toggleTheme: () {},
-      textScale: 1,
+      textScale: textScale,
       setTextScale: (_) {},
       setLanguage: (_) {},
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         theme: lightTheme(),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
         home: MainCalendar(isAdmin: isAdmin, employeeId: 'admin'),
       ),
     ),
@@ -93,6 +100,68 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Calendar'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('icon-only controls expose localized tooltips', (tester) async {
+    await withPhoneViewport(tester);
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value(const []),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Open menu'), findsOneWidget);
+    expect(find.byTooltip('New Appointment'), findsOneWidget);
+    expect(find.byTooltip('Today'), findsOneWidget);
+  });
+
+  testWidgets('month bar pluralizes the selected day appointment count', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    // The initially selected day is today.
+    final today = DateTime.now();
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([_appointment(1, today)]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 appointment'), findsOneWidget);
+    expect(find.textContaining('1 appointments'), findsNothing);
+  });
+
+  testWidgets('month bar reserves room for its labels at 2x text scale', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value(const []),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+        textScale: 2,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final countLabel = find.text('0 appointments');
+    expect(countLabel, findsOneWidget);
+
+    // The space the AppBar reserves below its toolbar must fit the scaled
+    // month-bar text plus its 8px bottom padding, otherwise the labels get
+    // painted clipped. (Portrait toolbar height is kToolbarHeight.)
+    final appBarRect = tester.getRect(find.byType(AppBar));
+    final reservedBottomSpace = appBarRect.height - kToolbarHeight;
+    final textHeight = tester.getSize(countLabel).height;
+    expect(reservedBottomSpace, greaterThanOrEqualTo(textHeight + 8));
     expect(tester.takeException(), isNull);
   });
 

@@ -21,10 +21,6 @@ class MediaPermissionService {
     }
     return MediaPermissionResult.denied;
   }
-
-  /// Opens the OS app-settings page so the user can grant a permission they
-  /// previously denied permanently.
-  Future<bool> openSettings() => openAppSettings();
 }
 
 final mediaPermissionServiceProvider = Provider<MediaPermissionService>(

@@ -29,6 +29,14 @@ service cloud.firestore {
         && userByUid().data.status == 'active';
     }
 
+    // True when the CALLER is an active user (any role) per the bridge doc.
+    // Conditions here are on the caller, not the resource, so list queries
+    // remain provable by the rules engine.
+    function isActiveUser() {
+      return userByUidExists()
+        && userByUid().data.status == 'active';
+    }
+
     // Returns the Firestore doc ID for the current user (via the bridge doc).
     // Used to check whether a UID is in appointment.employeeIds.
     function myDocId() {
@@ -63,23 +71,35 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // signupCodes hold the sha256 hash of one-time invite codes. Only Cloud
+    // Functions (Admin SDK) touch them — a client able to read a hash could
+    // brute-force the code offline; one able to write could mint codes.
+    match /signupCodes/{codeHash} {
+      allow read, write: if false;
+    }
+
     // ── users ─────────────────────────────────────────────────────────────────
     // Read: admins see all; active employees see active peers (picker/display);
     // a registering user can find their own invited doc by email match.
-    // Write: admin from the admin UI, plus a narrow self-activation path used
-    // by the sign-up flow — an invited user claims their pre-seeded doc by
-    // writing their auth uid into it. Activation only flips ['uid','status']
-    // and requires the caller's email to be verified by Firebase Auth.
+    // Write: admin only. Invite activation is server-side (the redeemSignupCode
+    // callable via the Admin SDK), so there is no client self-activation path.
     match /users/{userId} {
       // The invited-doc lookup is intentionally NOT exposed as a client-side
       // list query — Firestore's rules engine cannot prove
       // `resource.data.email == request.auth.token.email` from a query's
       // `where('email', '==', X)` constraint, so any client query would be
-      // rejected with permission-denied. The signup/activation flow goes
-      // through the `resolveMyInvite` Cloud Function (Admin SDK), which is
-      // why this clause can stay tight without breaking the app.
+      // rejected with permission-denied. Invite resolution and activation run
+      // server-side via the signup-code callables (Admin SDK), so this clause
+      // can stay tight without breaking the app.
+      // The active-peers clause requires the CALLER to be an active user via
+      // the usersByUid bridge — a merely-signed-in stranger (self-registered
+      // account with no bridge doc) can no longer dump the staff directory.
+      // The caller-side condition keeps the client's
+      // `.where('status', isEqualTo: 'active')` list queries provable (the
+      // resource-side condition matches the query filter; the caller-side
+      // conditions don't depend on resource data at all).
       allow read: if isAdmin()
-        || (isSignedIn() && resource.data.status == 'active')
+        || (isActiveUser() && resource.data.status == 'active')
         || (isSignedIn() && resource.data.uid == request.auth.uid)
         || (isSignedIn()
             && resource.data.status == 'invited'
@@ -104,41 +124,31 @@ service cloud.firestore {
         return s in ['active', 'disabled', 'invited'];
       }
 
-      // Self-activation path is intentionally restricted to role=='employee'.
-      // Invited admins cannot self-activate here — that would let anyone who
-      // knows an invited admin's email claim full admin privileges by signing
-      // up with that email. Admin activation must be done out-of-band.
-      // email_verified == true is required: Firebase Auth allows registering
-      // with any email without proof of ownership, so without this check an
-      // attacker who creates an account with a victim's email could steal their
-      // invite. Verification forces the real email owner to complete the flow.
-      allow update: if (isAdmin()
+      // Only an admin can update a user doc. Invite activation (writing the
+      // auth uid + flipping status to 'active') is done server-side by the
+      // redeemSignupCode callable via the Admin SDK — there is no client
+      // self-activation path, so an unverified registrant can't claim a doc.
+      // `uid` links the doc to a Firebase Auth account; rewriting it from the
+      // client could hijack the bridge doc of another account. Only the
+      // server-side callables (Admin SDK) may ever set/rotate it.
+      allow update: if isAdmin()
+            && !request.resource.data.diff(resource.data)
+                 .affectedKeys()
+                 .hasAny(['uid'])
             && (!('colorValue' in request.resource.data.keys())
                 || isValidColorValue(request.resource.data.colorValue))
             && (!('role' in request.resource.data.keys())
                 || isValidRole(request.resource.data.role))
             && (!('status' in request.resource.data.keys())
-                || isValidUserStatus(request.resource.data.status)))
-        || (isSignedIn()
-            && request.auth.token.email_verified == true
-            && resource.data.status == 'invited'
-            && resource.data.uid == ''
-            && resource.data.role == 'employee'
-            && resource.data.email == request.auth.token.email
-            && request.resource.data.uid == request.auth.uid
-            && request.resource.data.status == 'active'
-            && request.resource.data.role == resource.data.role
-            && request.resource.data.email == resource.data.email
-            && request.resource.data.diff(resource.data)
-               .affectedKeys()
-               .hasOnly(['uid', 'status', 'updatedAt']));
+                || isValidUserStatus(request.resource.data.status));
     }
 
     // ── appointments ──────────────────────────────────────────────────────────
     // Allowed status values (admin writes are validated; employee writes are
-    // additionally restricted to 'done' only, see below).
+    // additionally restricted to 'done' only, see below). Lifecycle is
+    // pending -> in_progress -> done, plus 'cancelled'.
     function isValidAppointmentStatus(s) {
-      return s in ['pending', 'confirmed', 'in_progress', 'done', 'cancelled'];
+      return s in ['pending', 'in_progress', 'done', 'cancelled'];
     }
 
     match /appointments/{appointmentId} {
@@ -171,15 +181,51 @@ service cloud.firestore {
     function isValidClientData(data) {
       return (!('name' in data) || (data.name is string && data.name.size() <= 200))
         && (!('businessName' in data) || (data.businessName is string && data.businessName.size() <= 200))
+        && (!('firstName' in data) || (data.firstName is string && data.firstName.size() <= 200))
+        && (!('lastName' in data) || (data.lastName is string && data.lastName.size() <= 200))
         && (!('phone' in data) || (data.phone is string && data.phone.size() <= 32))
+        && (!('mobile' in data) || (data.mobile is string && data.mobile.size() <= 32))
         && (!('email' in data) || (data.email is string && data.email.size() <= 320))
         && (!('noFixedAddress' in data) || data.noFixedAddress is bool);
     }
 
     match /clients/{clientId} {
       allow read: if isAdmin();
-      allow create, update: if isAdmin() && isValidClientData(request.resource.data);
+      // `waveCustomerId` and `wave` are written exclusively by Cloud Functions
+      // via Admin SDK (which bypasses these rules). The client app must never
+      // set or modify these fields; reject any create that includes them.
+      allow create: if isAdmin()
+        && isValidClientData(request.resource.data)
+        && !('waveCustomerId' in request.resource.data.keys())
+        && !('wave' in request.resource.data.keys());
+      // For updates, reject only if the client is changing/adding the Wave
+      // fields — an update that leaves them untouched has no affected keys.
+      allow update: if isAdmin()
+        && isValidClientData(request.resource.data)
+        && !request.resource.data.diff(resource.data)
+             .affectedKeys()
+             .hasAny(['waveCustomerId', 'wave']);
       allow delete: if isAdmin();
+    }
+
+    // ── wave (Wave Accounting connection metadata) ────────────────────────────
+    // Written exclusively by Cloud Functions via Admin SDK (connection status,
+    // businessId, last-sync timestamps; the access token lives only in Secret
+    // Manager, never here). No client may read connection state — treat this
+    // collection like rateLimits. The default
+    // deny-everything would already block access; the explicit rule documents
+    // intent for a security-sensitive collection.
+    match /wave/{docId} {
+      allow read, write: if false;
+    }
+
+    // ── waveSyncQueue (outbox for Wave API sync jobs) ─────────────────────────
+    // Jobs are enqueued and processed exclusively by Cloud Functions via Admin
+    // SDK. No client may read pending jobs, inspect retry state, or reset the
+    // queue — doing so could expose Wave API credentials embedded in job
+    // payloads or allow a client to cancel/replay sync operations.
+    match /waveSyncQueue/{jobId} {
+      allow read, write: if false;
     }
   }
 }

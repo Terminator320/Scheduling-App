@@ -32,9 +32,6 @@
 # image_picker — Android Activity result types
 -keep class io.flutter.plugins.imagepicker.** { *; }
 
-# flutter_image_compress — native bridge in the plugin
--keep class com.fluttercandies.image_compress.** { *; }
-
 # ---- Kotlin reflection (used by Firebase + some Flutter plugins) ----
 -keep class kotlin.Metadata { *; }
 -keep class kotlin.reflect.** { *; }

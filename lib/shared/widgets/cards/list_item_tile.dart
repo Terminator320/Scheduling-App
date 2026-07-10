@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
@@ -33,6 +34,7 @@ class ListItemTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final compact = context.isCompact;
 
     Widget row = Material(
       color: selected ? scheme.secondaryContainer : Colors.transparent,
@@ -44,6 +46,7 @@ class ListItemTile extends StatelessWidget {
             vertical: AppSpacing.sp12,
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               AppAvatar(name: avatarName, color: avatarColor),
               const SizedBox(width: AppSpacing.sp12),
@@ -54,7 +57,7 @@ class ListItemTile extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      maxLines: 1,
+                      maxLines: compact ? 2 : 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyLarge?.copyWith(
                         fontWeight: FontWeight.w600,
@@ -64,21 +67,25 @@ class ListItemTile extends StatelessWidget {
                       const SizedBox(height: AppSpacing.sp4),
                       Text(
                         subtitle!,
-                        maxLines: 1,
+                        maxLines: compact ? 2 : 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
                       ),
                     ],
+                    if (compact && trailing != null) ...[
+                      const SizedBox(height: AppSpacing.sp8),
+                      Align(alignment: Alignment.centerLeft, child: trailing),
+                    ],
                   ],
                 ),
               ),
-              if (trailing != null) ...[
+              if (!compact && trailing != null) ...[
                 const SizedBox(width: AppSpacing.sp8),
                 trailing!,
-                const SizedBox(width: AppSpacing.sp8),
               ],
+              const SizedBox(width: AppSpacing.sp8),
               Icon(
                 Icons.chevron_right,
                 size: 18,

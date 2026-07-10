@@ -72,12 +72,11 @@ Future<void> saveClientToPhoneContacts(
 /// Overwrites only the synced fields (name, organization, phones, emails,
 /// addresses); unfetched properties (photo, groups, account) are preserved
 /// because `update` only writes the properties that were fetched.
-Future<void> updateLinkedPhoneContact(
-  WidgetRef ref,
-  ClientRecord client,
-) async {
-  final linkStore = ref.read(contactLinkStoreProvider);
-  final logger = ref.read(loggerProvider);
+Future<void> updateLinkedPhoneContact({
+  required ContactLinkStore linkStore,
+  required AppLogger logger,
+  required ClientRecord client,
+}) async {
   // The whole sync is guarded: a missing link, declined permission, or any
   // failure (incl. storage/plugin) must leave the client save untouched.
   try {
@@ -116,15 +115,30 @@ Future<void> updateLinkedPhoneContact(
 /// Maps a [ClientRecord] to a flutter_contacts [Contact] for the native insert
 /// screen. Pure (no I/O) so it can be unit-tested directly.
 ///
-/// A business name lands on the organization (the OS then displays the contact
-/// by company), the person name on the contact name; either may be absent.
-/// Empty optional fields are left off so the native form shows blank rows
-/// rather than empty entries.
+/// The structured person name comes from `firstName`/`lastName`; `name` (the
+/// customer/display name) lands on the organization so the OS shows the contact
+/// by that name, and — when there is no first/last name — also seeds the
+/// contact's name (so a name-only client isn't a blank contact). `phone` and
+/// `mobile` map to two separate phone entries. Empty optional fields are left
+/// off so the native form shows blank rows rather than empty entries.
 Contact clientToContact(ClientRecord client) {
-  final personName = client.name.trim();
-  final business = client.businessName.trim();
+  final displayName = client.name.trim();
+  final first = client.firstName.trim();
+  final last = client.lastName.trim();
   final phone = client.phone.trim();
+  final mobile = client.mobile.trim();
   final email = client.email.trim();
+
+  // Prefer the structured first/last name; fall back to the display name so a
+  // name-only client still gets a contact name.
+  final Name? name;
+  if (first.isNotEmpty || last.isNotEmpty) {
+    name = Name(first: first, last: last);
+  } else if (displayName.isNotEmpty) {
+    name = Name(first: displayName);
+  } else {
+    name = null;
+  }
 
   Address? address;
   if (!client.noFixedAddress && client.address.trim().isNotEmpty) {
@@ -148,9 +162,16 @@ Contact clientToContact(ClientRecord client) {
   }
 
   return Contact(
-    name: personName.isNotEmpty ? Name(first: personName) : null,
-    organizations: [if (business.isNotEmpty) Organization(name: business)],
-    phones: [if (phone.isNotEmpty) Phone(number: phone)],
+    name: name,
+    organizations: [
+      if (displayName.isNotEmpty) Organization(name: displayName),
+    ],
+    phones: [
+      if (phone.isNotEmpty)
+        Phone(number: phone, label: const Label(PhoneLabel.work)),
+      if (mobile.isNotEmpty)
+        Phone(number: mobile, label: const Label(PhoneLabel.mobile)),
+    ],
     emails: [if (email.isNotEmpty) Email(address: email)],
     addresses: [?address],
   );

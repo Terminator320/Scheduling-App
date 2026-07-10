@@ -48,4 +48,10 @@ void main() {
       AppLocalizations.of(context).error_anEmployeeWithThisEmailAlreadyExists,
     );
   });
+
+  testWidgets('unknown resolves to a non-empty EN string', (tester) async {
+    final context = await harness(tester, const Locale('en'));
+    const failure = EmployeesFailureUnknown();
+    expect(failure.toLocalizedMessage(context), isNotEmpty);
+  });
 }
