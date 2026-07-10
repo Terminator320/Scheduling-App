@@ -60,6 +60,7 @@ dependencies:
   flutter_animate: ^4.5.0
   flex_color_picker: ^3.8.0
   font_awesome_flutter: ^11.0.0
+  fl_chart: ^1.2.0
 
 
   # App / device info
