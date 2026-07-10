@@ -163,6 +163,28 @@ void main() {
       expect(restored.noFixedAddress, isTrue);
       expect(restored, equals(original));
     });
+
+    group('createdAt', () {
+      test('fromMap parses a DateTime createdAt', () {
+        final record = ClientRecord.fromMap('c1', {
+          'name': 'Alice',
+          'createdAt': DateTime(2026, 7, 1, 10, 30),
+        });
+        expect(record.createdAt, DateTime(2026, 7, 1, 10, 30));
+      });
+
+      test('fromMap defaults createdAt to null when absent', () {
+        expect(ClientRecord.fromMap('c2', {'name': 'Bob'}).createdAt, isNull);
+      });
+
+      test('toMap never emits createdAt (function-owned server timestamp)', () {
+        final record = ClientRecord.fromMap('c3', {
+          'name': 'Carol',
+          'createdAt': DateTime(2026, 7, 1),
+        });
+        expect(record.toMap().containsKey('createdAt'), isFalse);
+      });
+    });
   });
 
   group('ClientContact', () {

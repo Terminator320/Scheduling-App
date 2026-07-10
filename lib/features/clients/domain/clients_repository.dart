@@ -22,4 +22,9 @@ abstract class ClientsRepository {
     required int limit,
     ClientRecord? after,
   });
+
+  /// One-shot fetch of clients created at or after [since] (dashboard
+  /// new-clients trend). Legacy docs without `createdAt` are excluded by the
+  /// orderBy — an accepted undercount (they're old imports anyway).
+  Future<List<ClientRecord>> fetchClientsCreatedSince(DateTime since);
 }

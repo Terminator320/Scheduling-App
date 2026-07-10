@@ -44,6 +44,9 @@ abstract class ClientRecord with _$ClientRecord {
     @Default('') String email,
     @Default(<ClientContact>[]) List<ClientContact> contacts,
     @Default(false) bool noFixedAddress,
+    // Server timestamp written by the repository / Wave import; read-only in
+    // the app (dashboard new-clients trend). NEVER emitted by toMap.
+    DateTime? createdAt,
     // Wave projection (read-only): written exclusively by Cloud Functions via
     // the Admin SDK. The app reads them for a sync indicator and MUST NOT emit
     // them in toMap — firestore.rules rejects any client write that touches
@@ -83,6 +86,7 @@ abstract class ClientRecord with _$ClientRecord {
           .map((c) => ClientContact.fromMap(Map<String, dynamic>.from(c)))
           .toList(),
       noFixedAddress: (data['noFixedAddress'] as bool?) ?? false,
+      createdAt: _parseDateTime(data['createdAt']),
       waveCustomerId: data['waveCustomerId']?.toString(),
       waveSyncState: (wave?['syncState'] ?? '').toString(),
       waveSyncError: wave?['syncError']?.toString(),
@@ -110,4 +114,15 @@ abstract class ClientRecord with _$ClientRecord {
   };
 
   String get displayName => name;
+
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    final typeName = value.runtimeType.toString();
+    if (typeName == 'Timestamp') {
+      return (value as dynamic).toDate() as DateTime;
+    }
+    return null;
+  }
 }
