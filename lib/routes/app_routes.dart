@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/features/auth/screens/forgot_password_screen.dart';
+import 'package:scheduling/features/dashboard/screens/dashboard_screen.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
 import 'package:scheduling/routes/hub_shell.dart';
 
@@ -15,6 +16,7 @@ class AppRoutes {
   static const String clients = '/clients';
   static const String history = '/history';
   static const String settings = '/settings';
+  static const String dashboard = '/dashboard';
 
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -30,6 +32,12 @@ class AppRoutes {
           settings: settings,
           builder: (_) =>
               ForgotPasswordScreen(initialEmail: args?.initialEmail),
+        );
+
+      case dashboard:
+        return AppPageRoute(
+          settings: settings,
+          builder: (_) => const DashboardScreen(),
         );
 
       case mainCalendar:

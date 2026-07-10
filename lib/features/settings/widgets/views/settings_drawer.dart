@@ -7,6 +7,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/settings/domain/role_label.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 class SettingsDrawer extends ConsumerStatefulWidget {
@@ -238,6 +239,18 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             iconColor: statusColors.warning,
             label: context.l10n.common_history,
             onTap: () => go(AdaptiveDestination.history),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp12),
+          child: _NavItem(
+            icon: Icons.insights_rounded,
+            iconColor: scheme.secondary,
+            label: context.l10n.dashboard_title,
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, AppRoutes.dashboard);
+            },
           ),
         ),
       ],
