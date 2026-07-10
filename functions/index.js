@@ -18,6 +18,7 @@ const invites = require("./invites");
 const maintenance = require("./maintenance");
 const waveCallables = require("./wave/callables");
 const clientPropagation = require("./client_propagation");
+const notifications = require("./notifications");
 
 exports.syncUsersByUid = bridge.syncUsersByUid;
 exports.propagateClientEdits = clientPropagation.propagateClientEdits;
@@ -33,3 +34,6 @@ exports.waveGetConnection = waveCallables.waveGetConnection;
 exports.waveImportCustomers = waveCallables.waveImportCustomers;
 exports.waveUpsertCustomer = waveCallables.waveUpsertCustomer;
 exports.waveSyncWorker = waveCallables.waveSyncWorker;
+exports.notifyAppointmentChanges = notifications.notifyAppointmentChanges;
+exports.sendUpcomingJobReminders = notifications.sendUpcomingJobReminders;
+exports.sendDailyJobDigest = notifications.sendDailyJobDigest;
