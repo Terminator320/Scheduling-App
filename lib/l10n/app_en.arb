@@ -56,6 +56,10 @@
   "@status_inProgress": {
     "description": "In Progress"
   },
+  "status_overdue": "Overdue",
+  "@status_overdue": {
+    "description": "Appointment whose end time has passed without being marked done"
+  },
   "settings_textScaleSmall": "Small",
   "@settings_textScaleSmall": {
     "description": "Small"

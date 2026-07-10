@@ -14,6 +14,7 @@
   "status_cancelled": "Annulé",
   "status_disabled": "Désactivé",
   "status_inProgress": "En cours",
+  "status_overdue": "En retard",
   "settings_textScaleSmall": "Petit",
   "settings_textScaleMedium": "Moyen",
   "settings_textScaleLarge": "Grand",

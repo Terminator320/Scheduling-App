@@ -51,14 +51,24 @@ void main() {
       }
     });
 
-    test('displayStatus auto-promotes to in_progress past startTime', () {
-      final past = DateTime.now().subtract(const Duration(hours: 1));
+    test('displayStatus shows in_progress while within the time window', () {
+      final now = DateTime.now();
+      final a = AppointmentRecord(
+        id: 'a1',
+        startTime: now.subtract(const Duration(minutes: 30)),
+        endTime: now.add(const Duration(minutes: 30)),
+      );
+      expect(a.displayStatus, 'in_progress');
+    });
+
+    test('displayStatus shows overdue once the end time has passed', () {
+      final past = DateTime.now().subtract(const Duration(hours: 2));
       final a = AppointmentRecord(
         id: 'a1',
         startTime: past,
         endTime: past.add(const Duration(hours: 1)),
       );
-      expect(a.displayStatus, 'in_progress');
+      expect(a.displayStatus, 'overdue');
     });
 
     test('displayStatus stays as configured before startTime', () {
