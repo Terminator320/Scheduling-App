@@ -164,3 +164,64 @@ The rest of the audit's findings and the parked Play items live in
 (debug-signing fallback: dormant while Android is dev-only; `functions/`
 transitive npm advisories: `npm audit fix` whenever convenient). Nothing in
 that report blocks the steps above.
+
+## 9. Push Notifications + iOS Widget (Mac steps)
+
+Everything Windows-buildable already landed (branch `notification`): FCM Cloud
+Functions (`functions/notifications.js` + `notification_utils.js`), Firestore
+rules for `fcmTokens` / `appointmentReminders`, the Flutter client
+(`push_notification_service.dart`, `fcm_token_repository.dart`,
+`push_registration_controller.dart`, main.dart wiring), the widget data-sync
+(`home_widget/application/widget_sync_service.dart`), and the pre-authored
+Swift widget (`ios/ScheduleWidget/ScheduleWidget.swift`). These Mac-only steps
+remain.
+
+### Push notifications
+- [ ] **APNs Auth Key** — Apple Developer portal → Keys → create an APNs Auth
+  Key (`.p8`); note the **Key ID** and your **Team ID**.
+- [ ] **Firebase** — Console → Project settings → Cloud Messaging → the iOS app
+  `net.vogas.scheduling` → upload the `.p8` (Key ID + Team ID).
+- [ ] **Xcode capability** — Runner target → Signing & Capabilities → add
+  **Push Notifications**. Commit the generated `Runner.entitlements`.
+- [ ] No `UIBackgroundModes` needed (display messages only). **Never** run
+  `flutterfire configure`. SwiftPM pulls `FirebaseMessaging` automatically on
+  first open.
+- [ ] Deploy the functions + rules from any machine with the Firebase CLI:
+  `firebase deploy --only firestore:rules` then
+  `--only functions:notifyAppointmentChanges,functions:sendUpcomingJobReminders,functions:sendDailyJobDigest,functions:deleteAccount`
+  (the last re-deploys the `recursiveDelete` change that also clears
+  `fcmTokens`).
+
+### iOS home-screen widget
+- [ ] **Widget Extension target** — File → New → Target → Widget Extension named
+  `ScheduleWidget` (no intent configuration). Delete the template Swift files
+  and add the pre-authored `ios/ScheduleWidget/ScheduleWidget.swift`.
+- [ ] **App Groups** — add the **App Groups** capability
+  (`group.net.vogas.scheduling`) to **BOTH** the Runner target and the
+  ScheduleWidget extension. (The Flutter side already writes to this group via
+  `home_widget`.)
+- [ ] Set the extension's deployment target to **iOS 15.0** (matches Runner).
+
+### Device verification (physical iPhone — App Attest fails on Simulator)
+- [ ] Employee sign-in → a `users/{docId}/fcmTokens/{token}` doc appears in the
+  console; sign-out deletes it. (Admins get no prompt and no token doc.)
+- [ ] Admin creates / reschedules / cancels / unassigns an appointment → the
+  correct localized push arrives with the app **killed**.
+- [ ] Appointment starting ~28 min out → a reminder within ~5 min; an
+  `appointmentReminders/{id}_{startMs}` ledger doc is written; move the time →
+  a fresh reminder under the new key (no duplicate for the old one).
+- [ ] Digest: seed a job for tomorrow, then trigger `sendDailyJobDigest` from
+  the console (or wait for 18:00 America/Toronto) → one summary push.
+- [ ] FR-language device receives French text (the token's `locale` field).
+- [ ] Tapping a notification from killed/background surfaces the calendar hub.
+- [ ] Add the widget in all three sizes → today's jobs render; a job rolls off
+  the small widget once it starts; sign-out clears the widget.
+
+### Known deferrals (documented, not bugs)
+- **Deep-link on notification tap**: the tap surfaces the calendar hub at the
+  stack root; jumping to the specific `data.appointmentId` is a future link.
+- **Android foreground banner**: FCM shows no banner while the app is
+  foregrounded on Android (background/killed delivery works). Android is the
+  dev harness only, so this is accepted.
+- **Series bulk edits** write N appointment docs → N pushes; accepted for v1
+  (each is a real change).
