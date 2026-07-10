@@ -8,6 +8,7 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
@@ -28,6 +29,7 @@ import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/onboarding/screens/onboarding_gate.dart';
 import 'package:scheduling/features/settings/application/settings_providers.dart';
 import 'package:scheduling/features/settings/data/shared_prefs_settings_repository.dart';
@@ -146,6 +148,22 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _textScale = widget.settings.textScale;
     _languageController = AppLanguageController.instance;
     _languageController.setLanguage(widget.settings.language);
+    _setupPushTapHandling();
+  }
+
+  /// Notification taps (terminated launch + background) surface the calendar
+  /// hub at the navigation-stack root. Deep-linking to the tapped appointment
+  /// is deferred; `data.appointmentId` is carried for that future link.
+  void _setupPushTapHandling() {
+    final service = ref.read(pushNotificationServiceProvider);
+    unawaited(service.initialMessage().then(_handlePushTap));
+    service.onMessageOpenedApp.listen(_handlePushTap);
+  }
+
+  void _handlePushTap(RemoteMessage? message) {
+    if (message == null) return;
+    if (FirebaseAuth.instance.currentUser == null) return;
+    _navigatorKey.currentState?.popUntil((route) => route.isFirst);
   }
 
   @override
@@ -178,6 +196,8 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   void setLanguage(String code) {
     _languageController.setLanguage(code);
     _settingsRepository.save(language: code);
+    // Re-upsert the token so its `locale` field follows the app language.
+    unawaited(ref.read(pushRegistrationControllerProvider).sync());
   }
 
   Future<void> _handleAccountDisabled(
@@ -193,6 +213,9 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     var exitScheduled = false;
     try {
       final message = selectMessage(AppLocalizations.of(navContext));
+      // Best-effort device de-registration first — sign-out must not be blocked
+      // by it (the controller swallows its own failures).
+      await ref.read(pushRegistrationControllerProvider).unregisterCurrentDevice();
       await ref.read(authServiceProvider).signOut();
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -222,6 +245,17 @@ class _PaulAppState extends ConsumerState<PaulApp> {
       if (!wasDisabled && isDisabled) {
         _handleAccountDisabled((l10n) => l10n.error_thisAccountHasBeenDisabled);
       }
+    });
+  }
+
+  void _listenForPushRegistration() {
+    // Employees only: registers this device's FCM token when an active
+    // employee's account doc resolves; a no-op for admins / signed-out.
+    ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
+      prev,
+      next,
+    ) {
+      unawaited(ref.read(pushRegistrationControllerProvider).sync());
     });
   }
 
@@ -275,6 +309,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _listenForAccountDisabled();
     _listenForRoleRevocation();
     _listenForDeletedAccount();
+    _listenForPushRegistration();
     return AppLanguageScope(
       controller: _languageController,
       child: ThemeNotifier(

@@ -26,6 +26,7 @@ import 'package:scheduling/features/settings/widgets/cards/settings_tiles.dart';
 import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dialog.dart';
 import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
 import 'package:scheduling/features/wave/widgets/wave_settings_section.dart';
+import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
@@ -388,6 +389,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (_isSigningOut) return;
     setState(() => _isSigningOut = true);
     try {
+      // Best-effort: drop this device's push token before the session ends.
+      await ref
+          .read(pushRegistrationControllerProvider)
+          .unregisterCurrentDevice();
       await ref.read(authServiceProvider).signOut();
     } catch (e, st) {
       // signOut clears local state and effectively never throws; if it does,
