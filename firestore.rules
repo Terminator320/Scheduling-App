@@ -78,6 +78,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // appointmentReminders is the Admin-SDK-only idempotency ledger for the
+    // 30-minute reminder sweep (one doc per appointment occurrence). No client
+    // may read or write it — a client that could delete a ledger doc could
+    // force duplicate reminders, and it exposes nothing useful.
+    match /appointmentReminders/{id} {
+      allow read, write: if false;
+    }
+
     // ── users ─────────────────────────────────────────────────────────────────
     // Read: admins see all; active employees see active peers (picker/display);
     // a registering user can find their own invited doc by email match.
@@ -141,6 +149,23 @@ service cloud.firestore {
                 || isValidRole(request.resource.data.role))
             && (!('status' in request.resource.data.keys())
                 || isValidUserStatus(request.resource.data.status));
+
+      // FCM device tokens (push notifications). A user owns only the tokens
+      // under their OWN users doc — the send path (Cloud Functions, Admin SDK)
+      // reads them but clients can never see another user's tokens. Writes are
+      // shape-constrained: only the known fields, a valid locale/platform, and
+      // a uid that matches the caller (so a token can't be planted under a
+      // spoofed identity).
+      match /fcmTokens/{token} {
+        allow read, delete: if isActiveUser() && myDocId() == userId;
+        allow create, update: if isActiveUser()
+          && myDocId() == userId
+          && request.resource.data.keys().hasOnly(
+              ['platform', 'locale', 'uid', 'createdAt', 'updatedAt'])
+          && request.resource.data.locale in ['en', 'fr']
+          && request.resource.data.platform in ['ios', 'android']
+          && request.resource.data.uid == request.auth.uid;
+      }
     }
 
     // ── appointments ──────────────────────────────────────────────────────────
