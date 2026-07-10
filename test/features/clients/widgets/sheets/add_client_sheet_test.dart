@@ -15,7 +15,10 @@ class _FakeClientsRepository implements ClientsRepository {
   ClientRecord? added;
 
   @override
-  Future<void> addClient(ClientRecord client) async => added = client;
+  Future<ClientRecord> addClient(ClientRecord client) async {
+    added = client;
+    return client.copyWith(id: 'new-id');
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -76,7 +79,7 @@ void main() {
   ) async {
     final repo = await pumpSheet(tester);
 
-    // Business name (first field) satisfies the name requirement; the phone
+    // Customer name (first field) satisfies the name requirement; the phone
     // field satisfies the contact-method requirement. With no-fixed-address on,
     // no address is required.
     await tester.enterText(find.byType(TextField).first, 'City of Montreal');

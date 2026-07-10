@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
+import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -159,6 +160,53 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     }
   }
 
+  // Error logging/surfacing for the appointments stream — fires only on the
+  // data→error transition. A `.when` error branch would re-log every rebuild.
+  void _onAppointmentsAsyncChange(
+    AsyncValue<List<AppointmentRecord>>? previous,
+    AsyncValue<List<AppointmentRecord>> next,
+  ) {
+    if (next is! AsyncError || previous is AsyncError) return;
+    ref
+        .read(loggerProvider)
+        .warn(
+          'APPT-LOAD appointments stream error',
+          next.error,
+          next.stackTrace,
+        );
+    ref
+        .read(noticeServiceProvider)
+        .error(
+          composeErrorNotice(
+            context,
+            intro: context.l10n.error_introLoadAppointments,
+            tag: 'APPT-LOAD',
+            error: next.error ?? Exception('unknown'),
+          ),
+        );
+  }
+
+  // A non-admin whose role becomes 'admin' is routed to the admin calendar
+  // after the current frame (guarded so it fires once).
+  void _upgradeIfAdmin(String? role) {
+    if (role != 'admin' || !mounted || _upgradingToAdmin) return;
+    _upgradingToAdmin = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      navigateToDestination(
+        context,
+        AdaptiveDestination.calendar,
+        isAdmin: true,
+        employeeId: widget.employeeId,
+      );
+    });
+  }
+
+  Future<void> _pickMonth() async {
+    final picked = await MonthYearPicker.show(context, _focusedDay);
+    if (picked != null) _setFocusedDay(picked);
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -171,57 +219,24 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         : ref.watch(myAppointmentsProvider(myAppointmentsKey));
     final userName = ref.watch(currentUserNameProvider);
 
-    void onAsyncChange(
-      AsyncValue<List<AppointmentRecord>>? previous,
-      AsyncValue<List<AppointmentRecord>> next,
-    ) {
-      if (next is AsyncError && previous is! AsyncError) {
-        ref
-            .read(loggerProvider)
-            .warn(
-              'APPT-LOAD appointments stream error',
-              next.error,
-              next.stackTrace,
-            );
-        ref
-            .read(noticeServiceProvider)
-            .error(
-              composeErrorNotice(
-                context,
-                intro: context.l10n.error_introLoadAppointments,
-                tag: 'APPT-LOAD',
-                error: next.error ?? Exception('unknown'),
-              ),
-            );
-      }
-    }
-
     if (widget.isAdmin) {
-      ref.listen(appointmentsInRangeProvider(_appointmentRange), onAsyncChange);
+      ref.listen(
+        appointmentsInRangeProvider(_appointmentRange),
+        _onAppointmentsAsyncChange,
+      );
     } else {
-      ref.listen(myAppointmentsProvider(myAppointmentsKey), onAsyncChange);
+      ref.listen(
+        myAppointmentsProvider(myAppointmentsKey),
+        _onAppointmentsAsyncChange,
+      );
     }
 
     if (!widget.isAdmin) {
-      void upgradeIfAdmin(String? role) {
-        if (role != 'admin' || !mounted || _upgradingToAdmin) return;
-        _upgradingToAdmin = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          navigateToDestination(
-            context,
-            AdaptiveDestination.calendar,
-            isAdmin: true,
-            employeeId: widget.employeeId,
-          );
-        });
-      }
-
       ref.listen<AsyncValue<String>>(
         userRoleProvider,
-        (_, next) => upgradeIfAdmin(next.value),
+        (_, next) => _upgradeIfAdmin(next.value),
       );
-      upgradeIfAdmin(ref.read(userRoleProvider).value);
+      _upgradeIfAdmin(ref.read(userRoleProvider).value);
     }
 
     final colorMap = ref.watch(employeeColorMapProvider);
@@ -248,8 +263,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       _lastLocale = locale;
     }
     final monthLabel = _monthLabelFormat.format(_focusedDay);
-    final jobLabel =
-        '${selectedEvents.length} ${context.l10n.calendar_appointments}';
+    final jobLabel = context.l10n.calendar_appointmentCount(
+      selectedEvents.length,
+    );
 
     return Scaffold(
       key: _scaffoldKey,
@@ -261,56 +277,29 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           if (!context.isSplitLayout)
             IconButton(
               icon: Icon(Icons.menu, color: scheme.onPrimary),
+              tooltip: context.l10n.calendar_openMenuTooltip,
               onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
             ),
         ],
         bottom: PreferredSize(
-          preferredSize: Size.fromHeight(context.isLandscape ? 22 : 28),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              0,
-              16,
-              context.isLandscape ? 4 : 8,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Semantics(
-                  button: true,
-                  label: context.l10n.calendar_selectDate,
-                  child: GestureDetector(
-                    onTap: () async {
-                      final picked = await MonthYearPicker.show(
-                        context,
-                        _focusedDay,
-                      );
-                      if (picked != null) _setFocusedDay(picked);
-                    },
-                    child: Text(
-                      monthLabel,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                        color: scheme.onPrimary.withValues(alpha: 0.82),
-                      ),
-                    ),
-                  ),
-                ),
-                Text(
-                  jobLabel,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                    color: scheme.onPrimary.withValues(alpha: 0.82),
-                  ),
-                ),
-              ],
-            ),
+          // Scale with the user's text size so the month bar's single line of
+          // label text doesn't clip at large accessibility scales (1.4x+).
+          preferredSize: Size.fromHeight(
+            MediaQuery.textScalerOf(
+              context,
+            ).scale(context.isLandscape ? 22 : 28),
+          ),
+          child: _CalendarMonthBar(
+            monthLabel: monthLabel,
+            jobLabel: jobLabel,
+            onPickMonth: _pickMonth,
           ),
         ),
       ),
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton(
               heroTag: 'addFab',
+              tooltip: context.l10n.calendar_newAppointment,
               onPressed: () async {
                 await showAddEventPopup(
                   context,
@@ -342,22 +331,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
               Positioned(
                 bottom: 16,
                 left: 16,
-                child: AnimatedScale(
-                  scale: _showTodayButton ? 1.0 : 0.75,
-                  duration: AppDuration.normal,
-                  curve: Curves.easeInOut,
-                  child: AnimatedOpacity(
-                    opacity: _showTodayButton ? 1.0 : 0.0,
-                    duration: AppDuration.normal,
-                    child: IgnorePointer(
-                      ignoring: !_showTodayButton,
-                      child: FloatingActionButton(
-                        heroTag: 'todayFab',
-                        onPressed: _goToToday,
-                        child: const Icon(Icons.today),
-                      ),
-                    ),
-                  ),
+                child: _TodayFab(
+                  visible: _showTodayButton,
+                  onPressed: _goToToday,
                 ),
               ),
             ],
@@ -393,39 +369,135 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     );
 
     if (_splitCalendar) {
+      // Both panes scroll and are alive at once, so scope each under its own
+      // PrimaryScrollController — otherwise the calendar's SingleChildScrollView
+      // and the event list both attach to the tab's shared controller and the
+      // Scrollbar throws (it needs one ScrollPosition per controller).
       return Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
             flex: 11,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                // Size the month rows to the pane: compact in the short
-                // landscape viewport, comfortable on a tall tablet.
-                final rowHeight = ((constraints.maxHeight - 40) / 6).clamp(
-                  40.0,
-                  88.0,
-                );
-                return SingleChildScrollView(
-                  child: _buildCalendar(colorMap, rowHeight),
-                );
-              },
+            child: PrimaryScrollScope(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Size the month rows to the pane: compact in the short
+                  // landscape viewport, comfortable on a tall tablet.
+                  final rowHeight = ((constraints.maxHeight - 40) / 6).clamp(
+                    40.0,
+                    88.0,
+                  );
+                  return SingleChildScrollView(
+                    child: _buildCalendar(colorMap, rowHeight),
+                  );
+                },
+              ),
             ),
           ),
           const VerticalDivider(width: 1),
           // EventList already returns an Expanded, so wrap it in a Flex.
-          Expanded(flex: 9, child: Column(children: [eventList])),
+          Expanded(
+            flex: 9,
+            child: PrimaryScrollScope(child: Column(children: [eventList])),
+          ),
         ],
       );
     }
 
-    return Column(
-      children: [
-        _buildCalendar(colorMap, MediaQuery.sizeOf(context).height * 0.065),
-        const SizedBox(height: AppSpacing.sp12),
-        const Divider(),
-        eventList,
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Size the six week-rows off the *available* height, not the full
+        // screen. Sizing off MediaQuery.size overshoots whenever the body is
+        // shorter than the screen (keyboard open, split-screen, foldable,
+        // large text scale forcing a six-week grid): the fixed-height month
+        // grid would push past the body and overflow this column, starving
+        // the Expanded event list. Reserve the day-of-week header (36) out of
+        // the calendar's ~55% share, then clamp rows to a tappable band so the
+        // event list always keeps room. Mirrors the split-calendar path above.
+        final rowHeight = ((constraints.maxHeight * 0.55 - 36) / 6).clamp(
+          36.0,
+          56.0,
+        );
+        return Column(
+          children: [
+            _buildCalendar(colorMap, rowHeight),
+            const SizedBox(height: AppSpacing.sp12),
+            const Divider(),
+            eventList,
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// The app-bar bottom row: tappable month label (opens the month picker) and
+/// the selected day's appointment count.
+class _CalendarMonthBar extends StatelessWidget {
+  const _CalendarMonthBar({
+    required this.monthLabel,
+    required this.jobLabel,
+    required this.onPickMonth,
+  });
+
+  final String monthLabel;
+  final String jobLabel;
+  final VoidCallback onPickMonth;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final labelStyle = theme.textTheme.labelMedium?.copyWith(
+      fontWeight: FontWeight.w500,
+      color: theme.colorScheme.onPrimary.withValues(alpha: 0.82),
+    );
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, context.isLandscape ? 4 : 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Semantics(
+            button: true,
+            label: context.l10n.calendar_selectDate,
+            child: GestureDetector(
+              onTap: onPickMonth,
+              child: Text(monthLabel, style: labelStyle),
+            ),
+          ),
+          Text(jobLabel, style: labelStyle),
+        ],
+      ),
+    );
+  }
+}
+
+/// The "jump to today" FAB — scales/fades out (and stops absorbing taps) when
+/// today is already in view. Wrap in a [Positioned] inside the body stack.
+class _TodayFab extends StatelessWidget {
+  const _TodayFab({required this.visible, required this.onPressed});
+
+  final bool visible;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedScale(
+      scale: visible ? 1.0 : 0.75,
+      duration: AppDuration.normal,
+      curve: Curves.easeInOut,
+      child: AnimatedOpacity(
+        opacity: visible ? 1.0 : 0.0,
+        duration: AppDuration.normal,
+        child: IgnorePointer(
+          ignoring: !visible,
+          child: FloatingActionButton(
+            heroTag: 'todayFab',
+            tooltip: context.l10n.calendar_today,
+            onPressed: onPressed,
+            child: const Icon(Icons.today),
+          ),
+        ),
+      ),
     );
   }
 }

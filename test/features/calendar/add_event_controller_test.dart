@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -135,6 +137,31 @@ void main() {
       final c = readNotifier();
       await c.searchClients('jan');
       expect(readState().clientResults, [_aClient]);
+      expect(readState().isSearchingClient, isFalse);
+    });
+
+    test('a slow older search never overwrites a newer one', () async {
+      const bClient = ClientRecord(
+        id: 'c2',
+        name: 'Marc Roy',
+        phone: '555-0002',
+        address: '9 Oak St',
+      );
+      final slow = Completer<List<ClientRecord>>();
+      when(() => clients.searchClients('ma')).thenAnswer((_) => slow.future);
+      when(
+        () => clients.searchClients('mar'),
+      ).thenAnswer((_) async => const [bClient]);
+
+      final c = readNotifier();
+      final first = c.searchClients('ma');
+      await c.searchClients('mar');
+      expect(readState().clientResults, [bClient]);
+
+      // The older read resolving late must be discarded, not published.
+      slow.complete(const [_aClient]);
+      await first;
+      expect(readState().clientResults, [bClient]);
       expect(readState().isSearchingClient, isFalse);
     });
   });

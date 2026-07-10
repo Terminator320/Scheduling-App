@@ -20,7 +20,9 @@ class MonthYearPicker {
       backgroundColor: Theme.of(context).colorScheme.surface,
       sheetAnimationStyle: AppMotion.sheetStyle,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.r20),
+        ),
       ),
       builder: (context) => _MonthYearPickerContent(focusedDay: focusedDay),
     );
@@ -60,93 +62,99 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
     final bodyLarge = theme.textTheme.bodyLarge;
     final monthFormat = DateFormat.MMMM(locale);
 
+    // Sized past the bottom view padding + SafeArea so the wheels don't sit
+    // under the home indicator.
     return SizedBox(
-      height: 300,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  child: Text(
-                    context.l10n.common_cancel,
-                    style: TextStyle(color: scheme.primary),
+      height: 300 + MediaQuery.viewPaddingOf(context).bottom,
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    child: Text(
+                      context.l10n.common_cancel,
+                      style: TextStyle(color: scheme.primary),
+                    ),
+                    onPressed: () => Navigator.pop(context),
                   ),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  child: Text(
-                    context.l10n.status_done,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: scheme.primary,
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    child: Text(
+                      context.l10n.common_done,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: scheme.primary,
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(
+                      context,
+                      DateTime(selectedYear, selectedMonth),
                     ),
                   ),
-                  onPressed: () => Navigator.pop(
-                    context,
-                    DateTime(selectedYear, selectedMonth),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: CupertinoPicker(
-                    scrollController: FixedExtentScrollController(
-                      initialItem: selectedMonth - 1,
-                    ),
-                    itemExtent: 40,
-                    useMagnifier: true,
-                    magnification: 1.2,
-                    squeeze: 1.2,
-                    onSelectedItemChanged: (i) => selectedMonth = i + 1,
-                    children: List.generate(
-                      12,
-                      (i) => Center(
-                        child: Text(
-                          monthFormat.format(DateTime(0, i + 1)),
-                          style: bodyLarge,
+            const Divider(height: 1),
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: CupertinoPicker(
+                      scrollController: FixedExtentScrollController(
+                        initialItem: selectedMonth - 1,
+                      ),
+                      itemExtent: 40,
+                      useMagnifier: true,
+                      magnification: 1.2,
+                      squeeze: 1.2,
+                      onSelectedItemChanged: (i) => selectedMonth = i + 1,
+                      children: List.generate(
+                        12,
+                        (i) => Center(
+                          child: Text(
+                            monthFormat.format(DateTime(0, i + 1)),
+                            style: bodyLarge,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: CupertinoPicker(
-                    scrollController: FixedExtentScrollController(
-                      initialItem: (selectedYear - _startYear).clamp(
-                        0,
-                        _yearCount - 1,
+                  Expanded(
+                    child: CupertinoPicker(
+                      scrollController: FixedExtentScrollController(
+                        initialItem: (selectedYear - _startYear).clamp(
+                          0,
+                          _yearCount - 1,
+                        ),
                       ),
-                    ),
-                    itemExtent: 40,
-                    useMagnifier: true,
-                    magnification: 1.2,
-                    squeeze: 1.2,
-                    onSelectedItemChanged: (i) => selectedYear = _startYear + i,
-                    children: List.generate(
-                      _yearCount,
-                      (i) => Center(
-                        child: Text(
-                          '${_startYear + i}',
-                          style: bodyLarge,
+                      itemExtent: 40,
+                      useMagnifier: true,
+                      magnification: 1.2,
+                      squeeze: 1.2,
+                      onSelectedItemChanged: (i) =>
+                          selectedYear = _startYear + i,
+                      children: List.generate(
+                        _yearCount,
+                        (i) => Center(
+                          child: Text(
+                            '${_startYear + i}',
+                            style: bodyLarge,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -5,6 +5,7 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/images/image_storage_service.dart';
 import 'package:scheduling/core/images/images_providers.dart';
+import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
@@ -116,15 +117,20 @@ void main() {
           )
           // Keep the provider alive across reads so autoDispose doesn't tear
           // down the seeded state between assertions.
-          ..listen(eventDetailsControllerProvider(_appointment), (_, _) {});
+          ..listen(
+            eventDetailsControllerProvider(EventDetailsKey(_appointment)),
+            (_, _) {},
+          );
     addTearDown(container.dispose);
   });
 
-  EventDetailsController readNotifier() =>
-      container.read(eventDetailsControllerProvider(_appointment).notifier);
+  EventDetailsController readNotifier() => container.read(
+    eventDetailsControllerProvider(EventDetailsKey(_appointment)).notifier,
+  );
 
-  EventDetailsState readState() =>
-      container.read(eventDetailsControllerProvider(_appointment));
+  EventDetailsState readState() => container.read(
+    eventDetailsControllerProvider(EventDetailsKey(_appointment)),
+  );
 
   Future<void> waitForSeed() async {
     // Allow microtasks for client + employee seeding to complete.
@@ -138,7 +144,10 @@ void main() {
       expect(state.selectedDate, _appointment.startTime);
       expect(state.selectedStartTime, const TimeOfDay(hour: 9, minute: 0));
       expect(state.selectedEndTime, const TimeOfDay(hour: 10, minute: 0));
-      expect(state.editingStatus, 'booked');
+      // The fixture's unknown 'booked' status normalizes to 'pending' on seed
+      // (via AppointmentStatus.fromRaw) so an unchanged status is always
+      // re-written as an allowlisted value.
+      expect(state.editingStatus, 'pending');
       expect(state.isEditing, isFalse);
     });
 
@@ -147,6 +156,46 @@ void main() {
       await waitForSeed();
       expect(readState().client, _existingClient);
       expect(readState().selectedEmployees, [_employeeA]);
+    });
+
+    test('skips the client load for a known non-admin session (the clients '
+        'read rule is admin-only)', () async {
+      // Own mock: the setUp container already builds an (admin-path)
+      // controller against the shared one, which would pollute verifyNever.
+      final scopedClients = _MockClientsRepo();
+      when(
+        () => scopedClients.getClientById(any()),
+      ).thenAnswer((_) async => _existingClient);
+      final scoped = ProviderContainer(
+        overrides: [
+          appointmentsRepositoryProvider.overrideWithValue(appointments),
+          clientsRepositoryProvider.overrideWithValue(scopedClients),
+          employeesRepositoryProvider.overrideWithValue(employees),
+          appointmentImageUploadProvider.overrideWithValue(uploader),
+          imageStorageProvider.overrideWithValue(storage),
+          currentUserDocProvider.overrideWith(
+            (ref) => Stream.value(const {'role': 'employee', 'uid': 'u1'}),
+          ),
+        ],
+      );
+      addTearDown(scoped.dispose);
+      // Keep the user-doc stream alive and settled before the controller
+      // builds — mirrors main.dart's app-lifetime listen.
+      scoped.listen(currentUserDocProvider, (_, _) {});
+      await scoped.read(currentUserDocProvider.future);
+
+      scoped
+        ..listen(
+          eventDetailsControllerProvider(EventDetailsKey(_appointment)),
+          (_, _) {},
+        )
+        ..read(
+          eventDetailsControllerProvider(EventDetailsKey(_appointment)),
+        );
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      verifyNever(() => scopedClients.getClientById(any()));
     });
   });
 
@@ -186,9 +235,9 @@ void main() {
   });
 
   group('markAsDone / cancelAppointment', () {
-    test('markAsDone writes status="done" and returns true', () async {
-      final ok = await readNotifier().markAsDone(_appointment);
-      expect(ok, isTrue);
+    test('markAsDone writes status="done" and returns null', () async {
+      final error = await readNotifier().markAsDone(_appointment);
+      expect(error, isNull);
       verify(
         () => appointments.updateAppointmentStatus(
           id: _appointment.id!,
@@ -198,10 +247,10 @@ void main() {
     });
 
     test(
-      'cancelAppointment writes status="cancelled" and returns true',
+      'cancelAppointment writes status="cancelled" and returns null',
       () async {
-        final ok = await readNotifier().cancelAppointment(_appointment);
-        expect(ok, isTrue);
+        final error = await readNotifier().cancelAppointment(_appointment);
+        expect(error, isNull);
         verify(
           () => appointments.updateAppointmentStatus(
             id: _appointment.id!,
@@ -212,16 +261,17 @@ void main() {
     );
 
     test(
-      'markAsDone returns false and resets isSaving when repo throws',
+      'markAsDone returns the error and resets isSaving when repo throws',
       () async {
+        final failure = Exception('boom');
         when(
           () => appointments.updateAppointmentStatus(
             id: any(named: 'id'),
             status: any(named: 'status'),
           ),
-        ).thenThrow(Exception('boom'));
-        final ok = await readNotifier().markAsDone(_appointment);
-        expect(ok, isFalse);
+        ).thenThrow(failure);
+        final error = await readNotifier().markAsDone(_appointment);
+        expect(error, same(failure));
         expect(readState().isSaving, isFalse);
       },
     );
@@ -270,6 +320,73 @@ void main() {
 
       verify(() => appointments.updateAppointment(any())).called(1);
     });
+
+    test('preserves a disabled assignee not in the active list (B1)', () async {
+      final withDisabled = _appointment.copyWith(
+        employeeIds: const ['e1', 'e9'],
+        employeeNames: const ['Alex', 'Zoe'],
+      );
+      container.listen(
+        eventDetailsControllerProvider(EventDetailsKey(withDisabled)),
+        (_, _) {},
+      );
+      final c = container.read(
+        eventDetailsControllerProvider(EventDetailsKey(withDisabled)).notifier,
+      );
+      await waitForSeed();
+      // Only the active assignee is resolvable into the picker.
+      expect(
+        container
+            .read(eventDetailsControllerProvider(EventDetailsKey(withDisabled)))
+            .selectedEmployees
+            .map((e) => e.id),
+        ['e1'],
+      );
+
+      final outcome = await c.save(
+        withDisabled,
+        title: 'x',
+        address: 'y',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      // e9 (disabled, never shown in the picker) is retained, not dropped.
+      final saved = (outcome as EventDetailsSaved).appointment;
+      expect(saved.employeeIds, ['e1', 'e9']);
+      expect(saved.employeeNames, ['Alex', 'Zoe']);
+    });
+
+    test(
+      'awaits the employee seed before validating (B1 race): a save fired '
+      'before seeding settles keeps active assignees, not "employees required"',
+      () async {
+        final fresh = _appointment.copyWith(id: 'appt-race');
+        container.listen(
+          eventDetailsControllerProvider(EventDetailsKey(fresh)),
+          (_, _) {},
+        );
+        final c = container.read(
+          eventDetailsControllerProvider(EventDetailsKey(fresh)).notifier,
+        );
+
+        // Intentionally NO waitForSeed: save() must settle the seed itself.
+        // Without the guard, validation sees an empty selection and returns
+        // EventDetailsInvalid (employeesRequired) before any save happens.
+        final outcome = await c.save(
+          fresh,
+          title: 'x',
+          address: 'y',
+          notes: '',
+          materialsNeeded: '',
+        );
+
+        expect(outcome, isA<EventDetailsSaved>());
+        final saved = (outcome as EventDetailsSaved).appointment;
+        expect(saved.employeeIds, ['e1']);
+        expect(saved.employeeNames, ['Alex']);
+      },
+    );
 
     test('uses freshly-picked client over the loaded one', () async {
       readNotifier();
@@ -334,7 +451,6 @@ void main() {
         () => uploader.uploadInBackground(
           appointmentId: any(named: 'appointmentId'),
           newImages: any(named: 'newImages'),
-          existingImages: any(named: 'existingImages'),
         ),
       );
     });
@@ -428,9 +544,12 @@ void main() {
         ],
       );
 
-      container.listen(eventDetailsControllerProvider(repeating), (_, _) {});
+      container.listen(
+        eventDetailsControllerProvider(EventDetailsKey(repeating)),
+        (_, _) {},
+      );
       final c = container.read(
-        eventDetailsControllerProvider(repeating).notifier,
+        eventDetailsControllerProvider(EventDetailsKey(repeating)).notifier,
       );
       await waitForSeed();
       c.selectRepeat(RepeatInterval.oneYear);
@@ -501,9 +620,12 @@ void main() {
           ],
         );
 
-        container.listen(eventDetailsControllerProvider(repeating), (_, _) {});
+        container.listen(
+          eventDetailsControllerProvider(EventDetailsKey(repeating)),
+          (_, _) {},
+        );
         final c = container.read(
-          eventDetailsControllerProvider(repeating).notifier,
+          eventDetailsControllerProvider(EventDetailsKey(repeating)).notifier,
         );
         await waitForSeed();
         // Move the time of day; the repeat rule is unchanged.
@@ -532,8 +654,10 @@ void main() {
         expect(batch.every((a) => a.title == 'New title'), isTrue);
         expect(batch.every((a) => a.address == 'New address'), isTrue);
         expect(batch.every((a) => a.seriesId == 'series-1'), isTrue);
-        // Status stays per-visit — never propagated across the series.
-        expect(batch[1].status, 'confirmed');
+        // Status stays per-visit — never propagated across the series — but is
+        // canonicalized: the retired 'confirmed' sibling normalizes to
+        // 'pending', while a valid 'in_progress' sibling round-trips unchanged.
+        expect(batch[1].status, 'pending');
         expect(batch[2].status, 'in_progress');
         // Each sibling keeps its own date but takes the new time of day.
         expect(batch[1].startTime, DateTime(2026, 11, 10, 8));
@@ -557,9 +681,12 @@ void main() {
         seriesId: 'series-1',
         repeat: RepeatInterval.sixMonths,
       );
-      container.listen(eventDetailsControllerProvider(repeating), (_, _) {});
+      container.listen(
+        eventDetailsControllerProvider(EventDetailsKey(repeating)),
+        (_, _) {},
+      );
       final c = container.read(
-        eventDetailsControllerProvider(repeating).notifier,
+        eventDetailsControllerProvider(EventDetailsKey(repeating)).notifier,
       );
       await waitForSeed();
 
@@ -578,16 +705,25 @@ void main() {
     });
 
     test('seeds the stored repeat and does not re-book it unchanged', () async {
+      // Distinct id: the controller family is keyed by appointment id, so
+      // reusing _appointment's id would return the instance the setUp
+      // pre-listened (seeded with repeat: none).
       final repeating = _appointment.copyWith(
+        id: 'repeat-seed-1',
         repeat: RepeatInterval.sixMonths,
       );
-      container.listen(eventDetailsControllerProvider(repeating), (_, _) {});
+      container.listen(
+        eventDetailsControllerProvider(EventDetailsKey(repeating)),
+        (_, _) {},
+      );
       final c = container.read(
-        eventDetailsControllerProvider(repeating).notifier,
+        eventDetailsControllerProvider(EventDetailsKey(repeating)).notifier,
       );
       await waitForSeed();
       expect(
-        container.read(eventDetailsControllerProvider(repeating)).repeat,
+        container
+            .read(eventDetailsControllerProvider(EventDetailsKey(repeating)))
+            .repeat,
         RepeatInterval.sixMonths,
       );
 
@@ -690,9 +826,12 @@ void main() {
           ),
         ],
       );
-      container.listen(eventDetailsControllerProvider(repeating), (_, _) {});
+      container.listen(
+        eventDetailsControllerProvider(EventDetailsKey(repeating)),
+        (_, _) {},
+      );
       final c = container.read(
-        eventDetailsControllerProvider(repeating).notifier,
+        eventDetailsControllerProvider(EventDetailsKey(repeating)).notifier,
       );
 
       final error = await c.deleteAppointment(repeating, includeFuture: true);

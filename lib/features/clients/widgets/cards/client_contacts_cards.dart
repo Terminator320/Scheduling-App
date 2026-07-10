@@ -8,7 +8,7 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/info_card.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
-/// Section of additional business [contacts], each an [InfoCard] with tappable
+/// Section of additional [contacts], each an [InfoCard] with tappable
 /// phone (call) and email (compose) rows. Shared by the client and appointment
 /// detail views; renders nothing when [contacts] is empty.
 ///
@@ -117,7 +117,7 @@ class _CollapsibleContactsState extends State<_CollapsibleContacts> {
   }
 }
 
-/// A single business contact rendered as a tappable [InfoCard].
+/// A single additional contact rendered as a tappable [InfoCard].
 class _ContactCard extends ConsumerWidget {
   const _ContactCard({required this.contact});
 

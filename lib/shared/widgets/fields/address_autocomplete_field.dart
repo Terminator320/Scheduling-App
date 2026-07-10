@@ -1,8 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/errors/failure.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/maps/application/maps_providers.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
@@ -41,7 +42,7 @@ class _AddressAutocompleteFieldState
     extends ConsumerState<AddressAutocompleteField> {
   late final PlacesRepository _service = ref.read(placesRepositoryProvider);
   static const _uuid = Uuid();
-  Timer? _debounce;
+  final Debouncer _debounce = Debouncer(_debounceDelay);
   List<AddressSuggestion> _suggestions = [];
   bool _isLoading = false;
   String? _serviceError;
@@ -50,13 +51,18 @@ class _AddressAutocompleteFieldState
   String _lastTypedApt = '';
   String _lastFetched = '';
 
+  /// Monotonically increasing id of the newest autocomplete request. A slow
+  /// response whose id no longer matches is stale — the user has typed a newer
+  /// query (or picked a suggestion) since — and is discarded instead of
+  /// overwriting the newer suggestions.
+  int _requestId = 0;
 
   static const _minQueryLength = 3;
   static const _debounceDelay = Duration(milliseconds: 700);
 
   @override
   void dispose() {
-    _debounce?.cancel();
+    _debounce.dispose();
     super.dispose();
   }
 
@@ -69,7 +75,7 @@ class _AddressAutocompleteFieldState
       return;
     }
 
-    _debounce?.cancel();
+    _debounce.cancel();
     final trimmed = value.trim();
     if (trimmed.length < _minQueryLength) {
       _lastFetched = '';
@@ -81,7 +87,7 @@ class _AddressAutocompleteFieldState
       return;
     }
 
-    _debounce = Timer(_debounceDelay, () => _fetch(value));
+    _debounce.run(() => _fetch(value));
   }
 
   String _localizedErrorFor(
@@ -94,10 +100,12 @@ class _AddressAutocompleteFieldState
   }
 
   Future<void> _fetch(String query) async {
-    // Skip a re-fetch of the exact query we last sent (e.g. trailing edits
-    // that trim back to the same text) — it would bill an identical call.
+    // Skip a re-fetch of the exact query we last *successfully* fetched (e.g.
+    // trailing edits that trim back to the same text) — it would bill an
+    // identical call. Set on success only, so a failed query is retried when
+    // the user re-triggers the same text.
     if (query == _lastFetched) return;
-    _lastFetched = query;
+    final requestId = ++_requestId;
     setState(() {
       _isLoading = true;
       _serviceError = null;
@@ -108,13 +116,14 @@ class _AddressAutocompleteFieldState
         query,
         sessionToken: _ensureSessionToken(),
       );
-      if (!mounted) return;
+      if (!mounted || requestId != _requestId) return;
+      _lastFetched = query;
       setState(() {
         _suggestions = results;
         _isLoading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || requestId != _requestId) return;
       setState(() {
         _suggestions = [];
         _isLoading = false;
@@ -128,6 +137,10 @@ class _AddressAutocompleteFieldState
   }
 
   Future<void> _selectSuggestion(AddressSuggestion s) async {
+    // Invalidate any pending debounce/in-flight autocomplete so a late
+    // response can't resurface the suggestion list after this pick.
+    _debounce.cancel();
+    _requestId++;
     _suppressFetch = true;
     widget.controller.text = s.description;
     setState(() {
@@ -187,12 +200,8 @@ class _AddressAutocompleteFieldState
           onChanged: _onTextChanged,
           suffixIcon: _isLoading
               ? const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+                  padding: EdgeInsets.all(AppSpacing.sp12),
+                  child: AdaptiveProgressIndicator(size: 16),
                 )
               : Icon(
                   Icons.location_on_outlined,
@@ -202,10 +211,10 @@ class _AddressAutocompleteFieldState
         ),
         if (_suggestions.isNotEmpty)
           Container(
-            margin: const EdgeInsets.only(top: 4),
+            margin: const EdgeInsets.only(top: AppSpacing.sp4),
             decoration: BoxDecoration(
               border: Border.all(color: scheme.outlineVariant),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.r12),
             ),
             child: Column(
               children: _suggestions
@@ -229,7 +238,10 @@ class _AddressAutocompleteFieldState
           ),
         if (_serviceError != null)
           Padding(
-            padding: const EdgeInsets.only(top: 6, left: 4),
+            padding: const EdgeInsets.only(
+              top: AppSpacing.sp8,
+              left: AppSpacing.sp4,
+            ),
             child: Text(
               _serviceError!,
               style: Theme.of(

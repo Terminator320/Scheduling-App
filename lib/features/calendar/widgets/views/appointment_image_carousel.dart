@@ -27,7 +27,11 @@ class _AppointmentImageCarouselState extends State<AppointmentImageCarousel> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final cacheHeight = (200 * MediaQuery.devicePixelRatioOf(context)).round();
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final cacheHeight = (200 * dpr).round();
+    // Also bound the decoded width to the on-screen strip width; with height
+    // alone a wide source decodes a much larger bitmap than the strip shows.
+    final cacheWidth = (MediaQuery.sizeOf(context).width * dpr).round();
     return Column(
       children: [
         ClipRRect(
@@ -46,6 +50,7 @@ class _AppointmentImageCarouselState extends State<AppointmentImageCarousel> {
                 child: Image(
                   image: ResizeImage(
                     widget.images[index],
+                    width: cacheWidth,
                     height: cacheHeight,
                     policy: ResizeImagePolicy.fit,
                   ),

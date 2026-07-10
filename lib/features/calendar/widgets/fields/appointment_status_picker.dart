@@ -16,33 +16,52 @@ class AppointmentStatusPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final l = context.l10n;
     final selected = AppointmentStatus.fromRaw(currentStatus);
 
     return Wrap(
-      spacing: 6,
-      runSpacing: 6,
+      spacing: AppSpacing.sp8,
+      runSpacing: AppSpacing.sp8,
       children: AppointmentStatus.appointmentValues.map((s) {
         final isSelected = selected == s;
-        return GestureDetector(
-          onTap: () => onChanged(s.raw),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-            decoration: BoxDecoration(
-              color: isSelected ? scheme.primaryContainer : Colors.transparent,
-              border: Border.all(
-                color: isSelected ? scheme.primary : scheme.outlineVariant,
-                width: 1.5,
-              ),
-              borderRadius: BorderRadius.circular(AppRadius.rFull),
-            ),
-            child: Text(
-              statusLabel(l, s),
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
+        final label = statusLabel(l, s);
+        return Semantics(
+          button: true,
+          selected: isSelected,
+          label: label,
+          excludeSemantics: true,
+          child: GestureDetector(
+            onTap: () => onChanged(s.raw),
+            child: ConstrainedBox(
+              // Material 48px-ish minimum tap target.
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Container(
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sp16,
+                  vertical: AppSpacing.sp8,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? scheme.primaryContainer
+                      : Colors.transparent,
+                  border: Border.all(
+                    color: isSelected ? scheme.primary : scheme.outlineVariant,
+                    width: 1.5,
+                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.rFull),
+                ),
+                child: Text(
+                  label,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: isSelected
+                        ? scheme.primary
+                        : scheme.onSurfaceVariant,
+                  ),
+                ),
               ),
             ),
           ),

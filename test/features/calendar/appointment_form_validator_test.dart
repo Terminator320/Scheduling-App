@@ -94,19 +94,20 @@ void main() {
       expect(errors, isEmpty);
     });
 
-    test('end equal to start triggers endTimeMustBeAfterStart only if neither '
-        'overnight bump nor missing field', () {
-      // When start and end are equal AND not on a missing date, the bump
-      // makes end+1day, which is after start, so the validator does not
-      // fire endTimeMustBeAfterStart. This pins existing behaviour: end ==
-      // start is treated as a 24h overnight appointment.
+    test('end equal to start triggers endTimeMustBeAfterStart', () {
+      // Equal times must NOT get the overnight next-day bump (that would
+      // silently book a ~24h appointment) — they surface the validation
+      // error instead.
       final errors = AppointmentFormValidator.validate(
         _input(
           startTime: const TimeOfDay(hour: 9, minute: 0),
           endTime: const TimeOfDay(hour: 9, minute: 0),
         ),
       );
-      expect(errors, isEmpty);
+      expect(
+        errors['endTime'],
+        AppointmentFormError.endTimeMustBeAfterStart,
+      );
     });
 
     test('reports multiple errors at once', () {
@@ -151,13 +152,22 @@ void main() {
       expect(r, DateTime(2026, 5, 10, 11));
     });
 
-    test('bumps to next day when end <= start', () {
+    test('bumps to next day only when end is strictly before start', () {
       final r = combineEndDateAndTime(
         DateTime(2026, 5, 10),
         const TimeOfDay(hour: 1, minute: 0),
         const TimeOfDay(hour: 23, minute: 0),
       );
       expect(r, DateTime(2026, 5, 11, 1));
+    });
+
+    test('keeps a same-day end when end equals start (no 24h bump)', () {
+      final r = combineEndDateAndTime(
+        DateTime(2026, 5, 10),
+        const TimeOfDay(hour: 9, minute: 0),
+        const TimeOfDay(hour: 9, minute: 0),
+      );
+      expect(r, DateTime(2026, 5, 10, 9));
     });
 
     test('returns same-day end when no startTime supplied', () {

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/branding/brand_logo.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
 /// First-launch intro carousel. Swipeable slides with a page-dot indicator;
@@ -48,12 +50,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       widget.onFinish();
       return;
     }
-    _controller.nextPage(duration: AppDuration.fast, curve: Curves.easeOut);
+    _controller.nextPage(duration: AppDuration.normal, curve: Curves.easeOut);
+  }
+
+  void _back() {
+    _controller.previousPage(
+      duration: AppDuration.normal,
+      curve: Curves.easeOut,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final slides = <_OnboardingSlide>[
       _OnboardingSlide(
         icon: FontAwesomeIcons.calendarCheck,
@@ -78,12 +88,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: widget.onFinish,
-                child: Text(context.l10n.onboarding_skip),
-              ),
+            _OnboardingTopBar(
+              showSkip: !isLast,
+              onSkip: widget.onFinish,
             ),
             Expanded(
               child: PageView.builder(
@@ -106,20 +113,71 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
             Padding(
               padding: const EdgeInsets.all(AppSpacing.sp24),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => _advance(slides.length),
-                  child: Text(
-                    isLast
-                        ? context.l10n.onboarding_getStarted
-                        : context.l10n.onboarding_next,
+              child: Row(
+                children: [
+                  if (_index > 0) ...[
+                    TextButton(
+                      onPressed: _back,
+                      child: Text(context.l10n.onboarding_back),
+                    ),
+                    const SizedBox(width: AppSpacing.sp8),
+                  ],
+                  Expanded(
+                    child: AnimatedLoadingButton(
+                      label: isLast
+                          ? context.l10n.onboarding_getStarted
+                          : context.l10n.onboarding_next,
+                      onPressed: () => _advance(slides.length),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Onboarding chrome: the brand mark + wordmark on the left, a "Skip" action on
+/// the right (hidden on the final slide, where "Get Started" supersedes it).
+class _OnboardingTopBar extends StatelessWidget {
+  const _OnboardingTopBar({required this.showSkip, required this.onSkip});
+
+  final bool showSkip;
+  final VoidCallback onSkip;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.sp16,
+        AppSpacing.sp8,
+        AppSpacing.sp8,
+        0,
+      ),
+      child: Row(
+        children: [
+          const BrandMark(size: 32, decorative: true),
+          const SizedBox(width: AppSpacing.sp8),
+          Expanded(
+            child: Text(
+              brandName,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ),
+          if (showSkip)
+            TextButton(
+              onPressed: onSkip,
+              child: Text(context.l10n.onboarding_skip),
+            ),
+        ],
       ),
     );
   }
@@ -149,34 +207,40 @@ class _SlideView extends StatelessWidget {
     final scheme = theme.colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 96,
-            height: 96,
-            decoration: BoxDecoration(
-              color: scheme.primaryContainer,
-              borderRadius: BorderRadius.circular(AppRadius.r16),
-            ),
-            alignment: Alignment.center,
-            child: FaIcon(slide.icon, size: 40, color: scheme.primary),
+      // Center when the content fits; scroll instead of overflowing on short
+      // (landscape-phone) viewports or at large accessibility text scales.
+      child: Center(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  color: scheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(AppRadius.r16),
+                ),
+                alignment: Alignment.center,
+                child: FaIcon(slide.icon, size: 40, color: scheme.primary),
+              ),
+              const SizedBox(height: AppSpacing.sp24),
+              Text(
+                slide.title,
+                style: theme.textTheme.headlineSmall,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppSpacing.sp12),
+              Text(
+                slide.body,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.sp24),
-          Text(
-            slide.title,
-            style: theme.textTheme.headlineSmall,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppSpacing.sp12),
-          Text(
-            slide.body,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+        ),
       ),
     );
   }

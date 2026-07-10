@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/animations/app_animation_constants.dart';
 import 'package:scheduling/core/animations/tap_scale.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 
 enum AnimatedLoadingButtonVariant { filled, outlined }
 
@@ -27,7 +29,7 @@ class AnimatedLoadingButton extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final effectiveOnPressed = isLoading ? null : onPressed;
     final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.r12),
     );
     final child = AnimatedSwitcher(
       duration: AppAnimationDurations.switcher,
@@ -41,16 +43,13 @@ class AnimatedLoadingButton extends StatelessWidget {
         ),
       ),
       child: isLoading
-          ? SizedBox(
+          ? AdaptiveProgressIndicator(
               key: const ValueKey('spinner'),
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.2,
-                color: variant == AnimatedLoadingButtonVariant.filled
-                    ? colour.onPrimary
-                    : colour.primary,
-              ),
+              size: 22,
+              strokeWidth: 2.2,
+              color: variant == AnimatedLoadingButtonVariant.filled
+                  ? colour.onPrimary
+                  : colour.primary,
             )
           : Text(
               key: const ValueKey('label'),

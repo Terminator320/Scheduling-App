@@ -8,6 +8,7 @@ import 'package:scheduling/features/clients/email_compose_launcher.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_contacts_cards.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
+import 'package:scheduling/features/wave/widgets/wave_sync_badge.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/info_card.dart';
 import 'package:scheduling/shared/widgets/primitives/quick_action_button.dart';
@@ -15,7 +16,7 @@ import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
 /// Read-only display of a [ClientRecord]: a Call / Email / Directions
 /// quick-action row, a contact-info card (tappable phone / email / address)
-/// and, for business clients, the saved business contacts.
+/// and an additional-contacts section when the client has extra contacts.
 class ClientDetailViewBody extends ConsumerWidget {
   const ClientDetailViewBody({required this.client, super.key});
 
@@ -24,14 +25,20 @@ class ClientDetailViewBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final hasPhone = client.phone.isNotEmpty;
+    final hasMobile = client.mobile.isNotEmpty;
     final hasEmail = client.email.isNotEmpty;
     final hasAddress = client.address.isNotEmpty;
-    final hasContactInfo = hasPhone || hasEmail || hasAddress;
+    // The person name (first/last) is shown once, as the header subtitle in
+    // ClientDetailView; it is deliberately not repeated as a contact row here.
+    final hasContactInfo = hasPhone || hasMobile || hasEmail || hasAddress;
 
     // Handlers are built here (where `ref` lives) and passed down, so the row
     // and button widgets stay presentational.
     final onCall = hasPhone
         ? () => launchPhoneCall(context, ref, client.phone)
+        : null;
+    final onMobile = hasMobile
+        ? () => launchPhoneCall(context, ref, client.mobile)
         : null;
     final onEmail = hasEmail
         ? () => EmailComposeLauncher.showEmailChoices(
@@ -49,9 +56,11 @@ class ClientDetailViewBody extends ConsumerWidget {
     // Always offered — even a name-only client is worth saving to the phone.
     void onSaveToContacts() => saveClientToPhoneContacts(context, ref, client);
 
-    // contacts[0] mirrors the primary name/phone/email already shown in the
-    // header and contact-info card — only the rest are worth listing again.
-    final extraContacts = client.contacts.skip(1).toList();
+    // `contacts` holds only the extra contacts (the customer's own details
+    // live in the header and contact-info card).
+    final extraContacts = client.contacts;
+
+    final hasSyncBadge = client.waveSyncState.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -96,6 +105,13 @@ class ClientDetailViewBody extends ConsumerWidget {
                   onTap: onCall,
                   trailingIcon: Icons.chevron_right,
                 ),
+              if (hasMobile)
+                InfoCardRow(
+                  icon: Icons.smartphone_outlined,
+                  text: client.mobile,
+                  onTap: onMobile,
+                  trailingIcon: Icons.chevron_right,
+                ),
               if (hasEmail)
                 InfoCardRow(
                   icon: Icons.email_outlined,
@@ -117,6 +133,16 @@ class ClientDetailViewBody extends ConsumerWidget {
           ),
         ],
         ClientContactsCards(contacts: extraContacts),
+        if (hasSyncBadge) ...[
+          const SizedBox(height: AppSpacing.sp16),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: WaveSyncBadge(
+              syncState: client.waveSyncState,
+              syncError: client.waveSyncError,
+            ),
+          ),
+        ],
       ],
     );
   }

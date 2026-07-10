@@ -7,7 +7,6 @@ enum AuthErrorContext {
   login,
   register,
   forgotPassword,
-  passwordReset,
   reauthentication,
   general,
 }
@@ -114,6 +113,30 @@ class AuthFailureNotAuthorized extends AuthFailure {
       c.l10n.error_thisEmailIsNotAuthorizedToSignUp;
 }
 
+class AuthFailureInvalidSignupCode extends AuthFailure {
+  const AuthFailureInvalidSignupCode();
+  @override
+  String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
+      c.l10n.error_thatCodeIsntValidAskYourAdmin;
+}
+
+class AuthFailureSignupCodeExpired extends AuthFailure {
+  const AuthFailureSignupCodeExpired();
+  @override
+  String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
+      c.l10n.error_thatCodeHasExpiredAskYourAdmin;
+}
+
+// The code is valid but was issued for a different email than the one the user
+// signed up with — a common admin/employee typo. Distinct from "invalid code"
+// so the message points at the email, not the code.
+class AuthFailureSignupEmailMismatch extends AuthFailure {
+  const AuthFailureSignupEmailMismatch();
+  @override
+  String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
+      c.l10n.error_thatCodeWasIssuedForADifferentEmail;
+}
+
 class AuthFailurePermissionDenied extends AuthFailure {
   const AuthFailurePermissionDenied();
   @override
@@ -128,12 +151,10 @@ class AuthFailureUnknown extends AuthFailure {
       c.l10n.error_somethingWentWrongPleaseTryAgain;
 }
 
-// Thrown when createEmployeeAccount succeeded in creating the Firebase Auth
-// user but the follow-up rollback delete failed after the invite lookup
-// returned null (or errored). The Auth account is now orphaned: it has no
-// matching Firestore users doc and can't sign in successfully, but it does
-// block re-registration with the same email. Surface a message that tells
-// the admin what to do (delete the Auth user in console + re-invite).
+// Thrown when signUpWithCode created the Firebase Auth user but the rollback
+// delete failed after code redemption errored. The Auth account is now
+// orphaned: no matching Firestore users doc, blocks re-registration with the
+// same email. Tell the admin to delete the Auth user in console and re-invite.
 class AuthFailureAccountCreationIncomplete extends AuthFailure {
   const AuthFailureAccountCreationIncomplete();
   @override

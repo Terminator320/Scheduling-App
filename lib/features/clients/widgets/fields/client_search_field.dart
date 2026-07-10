@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/clear_text_button.dart';
@@ -15,6 +17,7 @@ class ClientSearchField extends StatelessWidget {
     required this.onClear,
     super.key,
     this.errorText,
+    this.onAddNew,
   });
   final TextEditingController controller;
   final ClientRecord? selectedClient;
@@ -25,8 +28,24 @@ class ClientSearchField extends StatelessWidget {
   final VoidCallback onClear;
   final String? errorText;
 
+  /// When non-null, an "Add `query` as a new client" affordance is shown once
+  /// the query finds nothing (or as a footer under partial matches). Null hides
+  /// it entirely, leaving the plain no-results text.
+  final VoidCallback? onAddNew;
+
+  /// Max dropdown height — about five dense tiles. The list scrolls past this
+  /// so every scored result (the repo returns up to 25) stays reachable while
+  /// the inline list stays compact.
+  static const double _maxDropdownHeight = 280;
+
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final showAddNew =
+        onAddNew != null &&
+        !isSearching &&
+        selectedClient == null &&
+        controller.text.trim().isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -43,16 +62,13 @@ class ClientSearchField extends StatelessWidget {
                 suffixIcon: selectedClient != null
                     ? IconButton(
                         icon: const Icon(Icons.close, size: 18),
+                        tooltip: context.l10n.common_clearText,
                         onPressed: onClear,
                       )
                     : isSearching
                     ? const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
+                        padding: EdgeInsets.all(AppSpacing.sp12),
+                        child: AdaptiveProgressIndicator(size: 16),
                       )
                     // Typed-but-unselected: an "x" wipes the query in one tap
                     // (clearing results too); empty shows the search affordance.
@@ -68,15 +84,22 @@ class ClientSearchField extends StatelessWidget {
         ),
         if (results.isNotEmpty)
           Container(
-            margin: const EdgeInsets.only(top: 4),
+            margin: const EdgeInsets.only(top: AppSpacing.sp4),
+            constraints: const BoxConstraints(maxHeight: _maxDropdownHeight),
             decoration: BoxDecoration(
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outlineVariant,
-              ),
-              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: scheme.outlineVariant),
+              borderRadius: BorderRadius.circular(AppRadius.r12),
             ),
-            child: Column(
-              children: results.map((client) {
+            clipBehavior: Clip.antiAlias,
+            child: ListView.builder(
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              itemCount: results.length + (showAddNew ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == results.length) {
+                  return _addNewClientTile(context);
+                }
+                final client = results[index];
                 final String subtitleText;
                 if (client.phone.trim().isNotEmpty) {
                   subtitleText = client.phone;
@@ -102,7 +125,7 @@ class ClientSearchField extends StatelessWidget {
                     onSelect(client);
                   },
                 );
-              }).toList(),
+              },
             ),
           ),
 
@@ -111,16 +134,54 @@ class ClientSearchField extends StatelessWidget {
             controller.text.trim().isNotEmpty &&
             selectedClient == null)
           Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              context.l10n.clients_noClientsFound,
-              style: TextStyle(
-                fontSize: 13,
-                color: Theme.of(context).colorScheme.error,
-              ),
+            padding: const EdgeInsets.only(top: AppSpacing.sp8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.l10n.clients_noClientsFound,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: showAddNew ? scheme.onSurfaceVariant : scheme.error,
+                  ),
+                ),
+                if (showAddNew) ...[
+                  const SizedBox(height: AppSpacing.sp4),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: scheme.outlineVariant),
+                      borderRadius: BorderRadius.circular(AppRadius.r12),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: _addNewClientTile(context),
+                  ),
+                ],
+              ],
             ),
           ),
       ],
+    );
+  }
+
+  Widget _addNewClientTile(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return ListTile(
+      dense: true,
+      leading: Icon(Icons.person_add_alt_1, size: 20, color: scheme.primary),
+      title: Text(
+        context.l10n.clients_addNamedClient(controller.text.trim()),
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: scheme.primary,
+          fontWeight: FontWeight.w600,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      onTap: () {
+        FocusScope.of(context).unfocus();
+        onAddNew!();
+      },
     );
   }
 }

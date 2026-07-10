@@ -109,13 +109,14 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
 
     if (!mounted) return;
     await SheetFocus.unfocusAfterSheet();
+    if (!mounted) return;
     if (result is String) _handleEmployeeAction(result, employee);
   }
 
   void _clearSearch() {
     FocusManager.instance.primaryFocus?.unfocus();
     if (_searchController.text.isEmpty) return;
-    setState(_searchController.clear);
+    _searchController.clear();
   }
 
   PreferredSizeWidget _buildAppBar() {
@@ -129,8 +130,8 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         employeeId: widget.employeeId,
       ),
       bottom: AppSearchBar(
+        textScaler: MediaQuery.textScalerOf(context),
         controller: _searchController,
-        onChanged: (_) => setState(() {}),
         hintText: context.l10n.employees_searchEmployees,
       ),
     );
@@ -143,16 +144,13 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         padding: const EdgeInsets.all(AppSpacing.sp16),
         children: const [
           SkeletonListTile(),
-          SizedBox(height: 12),
+          SizedBox(height: AppSpacing.sp12),
           SkeletonListTile(),
-          SizedBox(height: 12),
+          SizedBox(height: AppSpacing.sp12),
           SkeletonListTile(),
         ],
       ),
-      error: (err, stack) {
-        ref
-            .read(loggerProvider)
-            .warn('employeesStreamProvider error', err, stack);
+      error: (_, _) {
         return Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -210,6 +208,29 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     );
   }
 
+  /// The selected employee, reconciled against the live users stream by id.
+  ///
+  /// The detail pane stays mounted after an in-pane enable/disable/edit, so the
+  /// tapped snapshot must track the stream — otherwise re-enabling a disabled
+  /// employee keeps rendering the stale "disabled" status here while the master
+  /// list already shows them active.
+  ///
+  /// - Loading/error (no settled list): keep the last-known snapshot.
+  /// - Found in the settled list: use that live record.
+  /// - Absent from the settled list (deleted, possibly by another admin):
+  ///   return null so the pane clears instead of leaving a ghost whose
+  ///   Edit/Disable buttons would write to a doc that no longer exists.
+  EmployeeRecord? _liveSelectedEmployee() {
+    final snapshot = _selectedEmployee;
+    if (snapshot == null) return null;
+    final liveUsers = ref.watch(allUsersStreamProvider).asData?.value;
+    if (liveUsers == null) return snapshot;
+    for (final employee in liveUsers) {
+      if (employee.id == snapshot.id) return employee;
+    }
+    return null;
+  }
+
   Widget _buildDetailPlaceholder() => DetailPlaceholder(
     icon: Icons.badge_outlined,
     message: context.l10n.employees_selectAnEmployeeToViewDetails,
@@ -232,20 +253,15 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
 
   @override
   Widget build(BuildContext context) {
-    final selected = _selectedEmployee;
-    final body = MasterDetailScaffold(
-      master: _buildMasterList(),
-      detail: selected == null
-          ? null
-          : EmployeeDetailsView(
-              key: ValueKey(selected.id),
-              employee: selected,
-              isCurrentUserAdmin: widget.isAdmin,
-              onAction: (action) => _handleEmployeeAction(action, selected),
-            ),
-      placeholder: _buildDetailPlaceholder(),
-    );
-
+    // Log only on the data→error transition — a `.when` error branch would
+    // re-log on every rebuild while the stream stays errored.
+    ref.listen(employeesStreamProvider, (previous, next) {
+      if (next is! AsyncError || previous is AsyncError) return;
+      ref
+          .read(loggerProvider)
+          .warn('employeesStreamProvider error', next.error, next.stackTrace);
+    });
+    final selected = _liveSelectedEmployee();
     return Scaffold(
       appBar: _buildAppBar(),
       endDrawer: SettingsDrawer.endDrawerFor(
@@ -255,15 +271,37 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
       ),
       floatingActionButton: widget.isAdmin
           ? FloatingActionButton(
+              // Unique across the hub: the IndexedStack keeps every tab's
+              // Scaffold (and FAB) mounted at once, so a default/shared hero
+              // tag collides with another tab's FAB ("multiple heroes share
+              // the same tag").
+              heroTag: 'employeesAddFab',
               onPressed: _openEmployeeSheet,
+              tooltip: context.l10n.employees_inviteEmployee,
               child: const Icon(Icons.add),
             )
           : null,
+      // Only the master list listens to the search controller, so typing
+      // rebuilds just the list — not the (search-independent) detail pane.
       body: AdaptiveShell(
         currentDestination: AdaptiveDestination.employees,
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
-        child: body,
+        child: MasterDetailScaffold(
+          master: ListenableBuilder(
+            listenable: _searchController,
+            builder: (context, _) => _buildMasterList(),
+          ),
+          detail: selected == null
+              ? null
+              : EmployeeDetailsView(
+                  key: ValueKey(selected.id),
+                  employee: selected,
+                  isCurrentUserAdmin: widget.isAdmin,
+                  onAction: (action) => _handleEmployeeAction(action, selected),
+                ),
+          placeholder: _buildDetailPlaceholder(),
+        ),
       ),
     );
   }

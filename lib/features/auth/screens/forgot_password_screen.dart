@@ -114,9 +114,7 @@ class _ForgotPasswordState extends State<ForgotPasswordScreen> {
       key: key,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const AuthLogo(),
-        const SizedBox(height: AppSpacing.sp24),
-        AuthHeaderText(
+        AuthBrandHeader(
           title: context.l10n.auth_forgotYourPassword,
           subtitle: context
               .l10n
@@ -158,7 +156,7 @@ class _ForgotPasswordState extends State<ForgotPasswordScreen> {
             ),
           ),
         ),
-      ].authStaggerIn(),
+      ],
     );
   }
 
@@ -171,10 +169,12 @@ class _ForgotPasswordState extends State<ForgotPasswordScreen> {
       key: key,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        AuthIconBadge(
-          icon: Icons.mark_email_read_rounded,
-          background: theme.statusColors.successContainer,
-          foreground: theme.statusColors.success,
+        Center(
+          child: AuthIconBadge(
+            icon: Icons.mark_email_read_rounded,
+            background: theme.statusColors.successContainer,
+            foreground: theme.statusColors.success,
+          ),
         ),
         const SizedBox(height: AppSpacing.sp24),
         AuthHeaderText(
@@ -229,7 +229,7 @@ class _ForgotPasswordState extends State<ForgotPasswordScreen> {
             ),
           ),
         ),
-      ].authStaggerIn(),
+      ],
     );
   }
 }

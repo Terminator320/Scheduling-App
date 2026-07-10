@@ -50,14 +50,15 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
     return const SplashGoToLogin();
   }
 
+  final authCache = ref.read(authCacheProvider);
   final employee = EmployeeRecord.fromMap(match.id, match.data);
   if (!employee.isActive) {
     await auth.signOut();
-    await AuthCache().clear();
+    await authCache.clear();
     return const SplashGoToLogin();
   }
   unawaited(
-    AuthCache().save(employee).catchError((Object e, StackTrace st) {
+    authCache.save(employee).catchError((Object e, StackTrace st) {
       logger.warn('splash.auth_cache_save', e, st);
     }),
   );

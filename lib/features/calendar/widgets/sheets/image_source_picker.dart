@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
 import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/permissions/media_permission_service.dart';
@@ -45,24 +46,20 @@ Future<List<File>> pickAppointmentImages(
 }
 
 Future<ImageSource?> _showSourceSheet(BuildContext context) {
-  return showModalBottomSheet<ImageSource>(
-    context: context,
-    builder: (sheetContext) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.photo_camera_outlined),
-            title: Text(sheetContext.l10n.calendar_takePhoto),
-            onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
-          ),
-          ListTile(
-            leading: const Icon(Icons.photo_library_outlined),
-            title: Text(sheetContext.l10n.calendar_chooseFromGallery),
-            onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
-          ),
-        ],
+  final l = context.l10n;
+  return showAdaptiveActionSheet<ImageSource>(
+    context,
+    actions: [
+      AdaptiveSheetAction(
+        value: ImageSource.camera,
+        label: l.calendar_takePhoto,
+        icon: Icons.photo_camera_outlined,
       ),
-    ),
+      AdaptiveSheetAction(
+        value: ImageSource.gallery,
+        label: l.calendar_chooseFromGallery,
+        icon: Icons.photo_library_outlined,
+      ),
+    ],
   );
 }

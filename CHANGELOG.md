@@ -10,6 +10,381 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.27.0+46] - 2026-07-09
+### Changed
+- **Appointment statuses are simpler: Pending → In progress → Complete.** The
+  status picker now offers just these three stages, and "Done" is called
+  **"Complete"** everywhere (the button now reads **"Mark as complete"**).
+  Cancelling a visit is still its own separate action.
+- **A completed visit no longer offers a Cancel button.** Once a job is marked
+  complete, the Cancel action is hidden — completing it is the end of its
+  lifecycle.
+
+### Fixed
+- **Editing an older appointment saves reliably again.** Changing the time,
+  notes, or assignees on a visit created before the status change no longer
+  fails to save.
+- **An invited employee now reads "Invited" everywhere.** The employee details
+  view previously showed a not-yet-activated employee as "Active"; it now
+  matches the "Invited" badge shown in the list.
+
+## [1.26.0+45] - 2026-07-08
+### Added
+- **Read the privacy policy from inside the app.** Settings now has a **Legal**
+  section with a **Privacy Policy** link that opens the policy in your browser.
+
+## [1.25.1+44] - 2026-07-08
+### Security
+- **Hardened the app's connection to its backend.** Sensitive actions —
+  deleting your account, sending employee invites, and the Wave accounting sync
+  — now require requests to come from a verified copy of the app, blocking
+  tampered or automated clients.
+
+## [1.25.0+43] - 2026-07-07
+### Changed
+- **The app now shows as "ES Pro" on your home screen.** The app icon's label
+  was renamed; the branding inside the app is unchanged.
+- **Appointment cards list everyone assigned to a job.** When a visit has more
+  than one person on it, the calendar and history cards now show all of their
+  names instead of only the first.
+
+### Fixed
+- **Re-enabling a disabled employee now updates immediately.** On tablets and in
+  landscape, an employee you just re-enabled no longer keeps showing as
+  "Disabled" in the details pane — it flips to active right away.
+- **The light/dark switch works on the first tap.** If your phone was set to
+  dark mode, the toggle used to start in the wrong position and needed two taps
+  to switch back to light; one tap now does it.
+
+## [1.24.0+42] - 2026-07-07
+### Added
+- **Add a new client without leaving the appointment.** When you search for a
+  client while booking (or editing) an appointment and no one matches, you can
+  now tap **Add "<name>" as a new client** right from the results. The new-client
+  form opens with the name already filled in, and once you save it, the client is
+  selected on the appointment automatically — no more backing out to the Clients
+  tab and starting over.
+
+## [1.23.1+41] - 2026-07-05
+### Changed
+- **Moving between sections feels smoother.** Switching tabs and typing with the
+  keyboard open no longer cause background screens to redraw, so the app stays
+  responsive.
+
+### Fixed
+- **The month calendar no longer crowds out the day's appointments.** On smaller
+  phones — or with the keyboard open, large text turned on, or in split-screen —
+  the month grid now sizes itself to the space available instead of pushing the
+  appointment list off the bottom.
+- **No more crashes on tablets, in landscape, or when moving between sections.**
+  A scrolling error that could blank the screen when two lists were visible at
+  once (calendar split view, client/appointment side-by-side panes, or a kept-
+  alive tab) is resolved, and the add buttons on the Clients and Employees tabs
+  no longer conflict with each other.
+- **Marking a job done or cancelling it now tells you if it fails.** Previously a
+  failed status change was silent; you now get a clear message with the reason.
+- **Adding a client on a tablet no longer jams the next add or edit.** The add
+  form's Save button could stay stuck after a client was added in the two-pane
+  layout; it now resets correctly.
+- **Creating an account is more reliable.** A hiccup reading your profile right
+  after sign-up no longer leaves you stuck with no message — you're guided to
+  sign in normally, which completes the setup.
+- **Client search in the appointment form no longer flashes stale results.** A
+  slow earlier search can no longer overwrite the results of what you just typed.
+- **Search fields no longer get cut off at large text sizes,** and the clear
+  button on the appointment client picker now has a spoken label for screen
+  readers.
+
+### Security
+- **Employee invitations are rate-limited.** Invite creation is now capped per
+  admin, a safeguard against a compromised admin session mass-creating invites.
+
+## [1.23.0+40] - 2026-07-02
+### Added
+- **The app works sensibly offline.** A slim banner appears whenever the
+  connection drops, so nobody wonders why a change hasn't shown up yet.
+- **Failed lists can be retried in place.** When clients, history, or a search
+  can't load, the screen now shows a clear message with a Retry button instead
+  of bare error text.
+- **Screen-reader and large-text support took a big step.** Calendar days
+  announce their date and appointment count, every icon-only button has a
+  spoken name, the in-app text size now stacks on top of the phone's
+  accessibility font size, and small tap targets (banner dismiss, EN/FR
+  switch) were enlarged to comfortable sizes.
+
+### Changed
+- **Switching sections no longer restarts them.** Calendar, Clients,
+  Employees, History, and Settings stay alive in the background: no more
+  loading flashes, and the Android back button now returns to the calendar
+  instead of exiting the app. On iPhone, swiping back works on pushed screens.
+- **Date and time pickers match the platform.** Android gets Material pickers,
+  iPhone gets the native-style wheels, and the time wheel follows the device's
+  12/24-hour preference.
+- **Searching clients and history is far cheaper and faster.** Searches share
+  one cached read window, match off the main thread, and results update
+  immediately after adding, editing, or deleting a record.
+- **App start is quicker.** The first frame no longer waits on analytics
+  setup, and the app's fonts ship inside the binary instead of being fetched
+  from the internet on first launch.
+
+### Fixed
+- **Appointment photos can no longer vanish.** Saving an edit while photos
+  were still uploading in the background could silently erase them; photo
+  changes are now applied additively so concurrent activity can't clobber them.
+- **Editing a repeating visit right after opening it no longer drops the
+  original assignees**, and picking the same start and end time now shows a
+  validation message instead of silently booking a 24-hour appointment.
+- **Cancelled visits no longer block staff as "busy"** when booking new work.
+- **Client edits reach existing appointments.** Changing a client's name,
+  phone, or address now updates their future appointments automatically.
+- **Deleted or just-edited records no longer linger in search results.**
+- **Account safety nets.** An account deleted while the app was closed now
+  signs out with a clear message instead of a broken calendar; a rare start-up
+  hiccup can no longer disable the admin role or account-status detection for
+  the whole session.
+- **Wave sync is more robust.** Stuck jobs now surface an error badge instead
+  of staying "pending" forever, temporary Wave outages retry instead of giving
+  up, a crash mid-sync can no longer create duplicate Wave customers, and
+  second address lines (e.g. "Suite 5") survive the round trip.
+- **Security hardening.** Staff-directory reads now require an active account
+  — a merely signed-up account can no longer list employee contact details —
+  and client-side updates can never rewrite a user's account link.
+
+## [1.22.0+39] - 2026-07-01
+### Added
+- **On iPhone, the app now feels native.** Confirmation dialogs, the
+  camera/gallery and map/email choosers, the "just this appointment or the whole
+  series" prompt, on/off switches, loading spinners, and pull-to-refresh all
+  follow iOS conventions, with an iOS-style scrollbar on long lists and an iOS
+  back arrow. On Android, everything looks and works exactly as before.
+
+### Changed
+- **The Text Size screen now matches the rest of the app.** Its header uses the
+  same standard top bar as every other screen, so the title, back button, and
+  landscape behaviour stay consistent.
+
+### Fixed
+- **No more false "account disabled" message just after signing up.** A rare
+  timing issue that could briefly flash the account-disabled screen while a
+  newly invited account was still finishing activation is resolved.
+
+## [1.21.0+38] - 2026-06-28
+### Added
+- **The first-launch walkthrough now has a Back button.** You can step back to a
+  slide you moved past instead of only going forward or skipping.
+
+### Changed
+- **A refreshed, on-brand welcome.** The sign-in, create-account, password-reset,
+  and intro screens now lead with the Plombier Eau Secours logo and a cleaner,
+  centered layout that also looks right on tablets and in landscape.
+- **Sign-in is easier to scan.** "Forgot password?" now sits directly under the
+  password field, and creating an account is a clear prompt at the bottom of the
+  screen.
+- **Calmer screen transitions.** The sign-in and account screens now ease in
+  smoothly as a whole rather than animating each field one at a time, and the
+  loading splash shows the company name beneath the logo.
+
+## [1.20.0+37] - 2026-06-28
+### Added
+- **Inviting a staff member now gives you a one-time code to share with them.**
+  When you invite someone, the app shows a code you can copy and pass on however
+  you like — they use it to set up their own login. Re-inviting a person who
+  hasn't signed up yet hands you a fresh code, so a lost or expired one is easy
+  to replace.
+
+### Changed
+- **Joining as an invited staff member is simpler and works right away.** New
+  staff create their account with their email, a password, and the code from
+  their admin — there's no separate email-verification step, and the account is
+  ready to use the moment they finish.
+
+### Fixed
+- **Signing up with the wrong email now gives a clear message.** If the email
+  you enter doesn't match the one your admin invited, the app tells you to use
+  the exact invited email instead of a confusing "invalid code".
+- **A failed sign-up no longer leaves a broken half-made account behind.** If
+  setting up the account doesn't go through, the partially-created login is
+  cleaned up so you can simply try again.
+- **Too many wrong-code attempts are now blocked for a short while**, so an
+  invite can't be guessed at.
+- **Your appointments load reliably right after you sign in.** A timing hiccup
+  that could briefly stop the calendar from loading on the very first try after
+  signing in now sorts itself out automatically.
+
+## [1.19.4+36] - 2026-06-27
+### Changed
+- **Risky actions now confirm before they happen.** Cancelling an appointment
+  and disabling or re-enabling a staff member ask for confirmation first, and
+  deleting your account shows a full-screen progress overlay so it can't be
+  triggered twice.
+- **Forms are quicker to fill in.** Name fields capitalise automatically, the
+  keyboard's "next" key moves you through a form field by field, and the status
+  and staff-member chips are bigger, with clearer labels for screen readers.
+
+### Fixed
+- **Saving an appointment can't accidentally book it twice.** Quickly
+  double-tapping Save when adding or editing an appointment no longer creates a
+  duplicate visit (or duplicate repeats), even on a slow connection.
+- **Buttons no longer get stuck after a failure.** If checking for scheduling
+  conflicts or changing a staff member's status failed, the button could stay
+  greyed-out and spinning; it now resets so you can try again.
+- **Search no longer shows clients or appointments that were just changed or
+  deleted.** Client and appointment-history search results stay in sync after an
+  edit or deletion.
+- **Removing a client on a tablet clears the side panel.** Deleting a client in
+  the two-pane layout no longer leaves their details on screen with a frozen
+  button.
+
+## [1.19.3+35] - 2026-06-26
+### Changed
+- **The app now adapts to small phones and large text sizes.** Appointment
+  cards, the appointment and client detail views, the add/edit forms, the
+  employee screens, and Settings now rearrange their contents — stacking
+  titles, buttons, and fields vertically — when the screen is narrow or you've
+  turned up the system text size, so everything stays readable and tappable.
+- **The slide-out menu now scrolls and never cuts off.** On shorter screens
+  (including phones held sideways) the navigation menu scrolls instead of
+  pushing items off-screen, and add/edit panels open taller so more of the form
+  is visible at once.
+
+### Fixed
+- **Long names, times, and labels no longer run off the edge.** Text that could
+  overflow or get clipped on appointment cards, list rows, and the top bar now
+  wraps or trims cleanly.
+
+## [1.19.2+34] - 2026-06-25
+### Changed
+- **Searching and scrolling the clients and appointment-history lists is now
+  faster and smoother.** Repeating a recent search reuses its results, and
+  typing in the search box no longer rebuilds the surrounding screen, so large
+  lists stay responsive.
+
+### Fixed
+- **Editing an appointment now keeps everyone assigned to it.** Staff who were
+  disabled or removed after being assigned to a visit were silently dropped when
+  you saved an edit; they now keep their assignment — and their access to that
+  appointment.
+- **Client search finds clients that were previously missing.** Older client
+  records that never showed up in search results are now included.
+- **The Save button can't submit a client edit twice.** It now disables while a
+  save is in progress, so a quick double-tap can't create duplicate updates.
+- **The app no longer gets stuck on the coloured launch screen.** If a saved
+  setting can't be read at startup, the app now continues to the normal screen
+  instead of hanging.
+
+## [1.19.1+33] - 2026-06-24
+### Fixed
+- **Wave customer sync no longer risks dropping an edit.** If a client was
+  changed while an earlier sync to Wave was still being retried after an
+  interruption, that newer edit could be overwritten; syncs are now reconciled
+  so your most recent change always reaches Wave.
+
+## [1.19.0+32] - 2026-06-23
+### Added
+- **Appointment history search now covers your entire history.** Searching past
+  appointments by client name, phone, or staff member finds matches across all
+  of your history — not just the appointments already scrolled into view — while
+  still showing instant results as you type.
+
+### Changed
+- **Client search matches more of a client's details.** Typing in the clients
+  list now finds people by business name, email, address, extra contacts, and
+  mobile or contact phone numbers, on top of their name and main phone.
+- **Every client suggestion on the appointment form is now reachable.** The
+  client picker used to show only the first five matches; the list now scrolls
+  so you can reach every one.
+- **Employee search now matches accented names and formatted phone numbers.**
+  Searching "Jose" finds "José", and a run of digits like "5145550199" finds a
+  staff member whose number is saved as "(514) 555-0199".
+
+## [1.18.1+31] - 2026-06-23
+### Fixed
+- **Appointment details show the right client contacts.** The appointment view
+  was dropping a client's first extra contact (and showed none when the client
+  had only one); every extra contact now appears.
+- **Clients identified only by a business name sort correctly in the A–Z list.**
+  After the switch to alphabetical ordering, clients whose name came from the
+  old "Business name" field clustered at the very top of the list; a one-time
+  repair files them under their actual name so they appear in the right place.
+- **Connecting to Wave fails cleanly when no business is configured.** Instead
+  of showing a blank "Connected to" status, Connect now reports the problem and
+  stays on the Connect button.
+- **Wave customers imported without a name get a usable label.** Such customers
+  now fall back to their first/last name or email instead of importing as a
+  blank, unsortable row.
+
+## [1.18.0+30] - 2026-06-23
+### Added
+- **The Wave section now shows you're connected.** Once an admin connects the
+  business's Wave account, Settings shows a "Connected to <business>" status
+  every time you open it — on any device, not just right after connecting.
+
+### Changed
+- **Connecting to Wave is now a single tap.** Connect links the business's Wave
+  account directly, with no business to choose. Once connected, the Connect
+  button is replaced by the connected status, leaving just "Import customers
+  from Wave."
+
+## [1.17.0+29] - 2026-06-23
+### Changed
+- **Clients are now listed alphabetically by name.** The client list is sorted
+  A–Z instead of newest-first, making it easier to scan and find someone.
+
+### Fixed
+- **Imported Wave customers now appear in your client list.** Customers brought
+  in from Wave were saved but didn't show up when browsing or searching clients.
+  They now appear immediately. Re-running the import once repairs any customers
+  imported earlier so they show up too.
+
+## [1.16.1+28] - 2026-06-21
+### Fixed
+- **Clients identified only by a business name stay visible.** A client created
+  before the recent details reshape — one whose only name was the old "Business
+  name" — keeps that name on its card and detail screen, stays findable in
+  search, and can still be opened and saved. Previously such clients could show
+  up blank and refuse to save.
+- **A quick second edit to a client is no longer lost during Wave sync.** If you
+  edited a client again while its previous change was still syncing to Wave, the
+  newer edit could be silently dropped; both edits now reach Wave.
+- **Clearer message when your Wave account has more than one business.** Instead
+  of a generic "something went wrong, try again," connecting now explains that
+  choosing a specific business isn't supported yet.
+- **The client detail screen no longer shows the contact's name twice.**
+
+## [1.16.0+27] - 2026-06-21
+### Added
+- **Wave Accounting customer sync (admins).** Settings has a new Wave section
+  (admins only) to connect the business's Wave account and import its existing
+  customers into the app. From then on, every client you add or edit is synced
+  to Wave automatically in the background, and each client shows a small Wave
+  badge — *synced*, *sync pending*, or *sync error* — so you can see its status
+  at a glance. The sync runs entirely server-side: it never slows the app down
+  and a Wave outage just leaves a client "pending," never a failed save. The app
+  always reads clients from its own database, so browsing and searching are as
+  fast as before.
+
+### Changed
+- **Client details reshaped to match Wave.** A client now has a **Customer
+  name** plus optional **First name** / **Last name**, and a separate **Mobile**
+  field alongside Phone. The old single "Business name" field is gone — the
+  customer name covers both people and businesses. Client search now also
+  matches first name, last name, and mobile number.
+
+## [1.15.1+26] - 2026-06-21
+### Changed
+- **iOS build now uses Swift Package Manager; CocoaPods removed.** All native
+  iOS plugins are resolved through Swift Package Manager and the CocoaPods
+  integration (Podfile, Pods project, and xcconfig includes) has been removed,
+  which speeds up iOS builds. No change to app behavior. The custom
+  permission-handler setup is no longer needed — only the permissions the app
+  actually declares in Info.plist (camera, photos, contacts) are compiled in.
+- **Image uploads no longer double-compress.** Picked images were being resized
+  and JPEG-compressed once by the image picker and then a second time by a
+  separate compression step. The redundant pass and its plugin
+  (`flutter_image_compress`) were removed; the picker now produces the upload
+  image directly at the same target size and quality. Uploads look the same and
+  stay well under the size limit.
+
 ## [1.15.0+25] - 2026-06-11
 ### Added
 - **Password strength checklist when creating an account.** The create-account

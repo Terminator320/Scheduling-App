@@ -7,18 +7,17 @@ abstract class EmployeesRepository {
 
   Stream<List<EmployeeRecord>> watchAssignableUsers();
 
-  Future<EmployeeRecord?> getEmployeeById(String docId);
-
-  /// Creates an invited employee. Invites are always `role: 'employee'` —
-  /// admin is granted only after activation via [updateEmployee], because
-  /// `firestore.rules` restricts invite self-activation to employees (an
-  /// invited admin could never activate; see the rule comment).
-  Future<void> addEmployee({
+  /// Creates an invite via the createEmployeeInvite callable; returns the
+  /// one-time signup code to show the admin once.
+  Future<String> createEmployeeInvite({
     required String name,
     required String email,
     required String phone,
     required String colorValue,
   });
+
+  /// Redeems a signup code for the current user (activates the invite).
+  Future<void> redeemSignupCode(String code);
 
   Future<void> updateEmployee({
     required String docId,
@@ -31,11 +30,7 @@ abstract class EmployeesRepository {
 
   Future<void> deleteEmployee(String docId);
 
-  Future<InvitedEmployeeMatch?> findInvitedEmployeeForCurrentUser();
-
   Future<UserUidMatch?> findUserByUid(String uid);
-
-  Future<void> activateEmployee({required String docId, required String uid});
 
   Future<void> deactivateEmployee(String docId);
 
@@ -45,12 +40,6 @@ abstract class EmployeesRepository {
   /// none). One listener feeds name + status + role so the app doesn't open
   /// three separate snapshot listeners on the same document.
   Stream<Map<String, dynamic>> watchUserDoc(String uid);
-}
-
-class InvitedEmployeeMatch {
-  const InvitedEmployeeMatch({required this.docId, required this.data});
-  final String docId;
-  final Map<String, dynamic> data;
 }
 
 class UserUidMatch {

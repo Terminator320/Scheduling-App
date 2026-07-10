@@ -24,7 +24,10 @@ class _MockUser extends Mock implements User {}
 
 Widget _wrap(AuthService auth, EmployeesRepository repo) {
   return ProviderScope(
-    overrides: [employeesRepositoryProvider.overrideWithValue(repo)],
+    overrides: [
+      authServiceProvider.overrideWithValue(auth),
+      employeesRepositoryProvider.overrideWithValue(repo),
+    ],
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
       toggleTheme: () {},
@@ -35,7 +38,7 @@ Widget _wrap(AuthService auth, EmployeesRepository repo) {
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         theme: lightTheme(),
-        home: Login(authService: auth),
+        home: const Login(),
         onGenerateRoute: (settings) => MaterialPageRoute<void>(
           builder: (_) => Scaffold(
             body: Text(
@@ -106,10 +109,6 @@ void main() {
           password: any(named: 'password'),
         ),
       ).thenAnswer((_) async => credential);
-      when(
-        () => auth.tryActivateInvitedEmployee(user),
-      ).thenAnswer((_) async {});
-
       var reads = 0;
       when(() => repo.findUserByUid('u1')).thenAnswer((_) async {
         reads++;
@@ -149,13 +148,11 @@ void main() {
   );
 
   testWidgets(
-    'does not attempt invite activation when the user already has a uid-keyed '
-    'profile (keeps routine logins off the resolveMyInvite rate limit)',
+    'routes to calendar when the profile is found on first read',
     (tester) async {
       final credential = _MockUserCredential();
       final user = _MockUser();
       when(() => user.uid).thenReturn('u1');
-      when(() => user.emailVerified).thenReturn(true);
       when(() => credential.user).thenReturn(user);
       when(
         () => auth.signIn(
@@ -163,9 +160,6 @@ void main() {
           password: any(named: 'password'),
         ),
       ).thenAnswer((_) async => credential);
-      when(
-        () => auth.tryActivateInvitedEmployee(user),
-      ).thenAnswer((_) async {});
       when(() => repo.findUserByUid('u1')).thenAnswer(
         (_) async => const UserUidMatch(
           id: 'doc1',
@@ -189,8 +183,37 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('CALENDAR_REACHED'), findsOneWidget);
-      // The provisioned doc is found first, so the invite callable never runs.
-      verifyNever(() => auth.tryActivateInvitedEmployee(user));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'signs out and shows no-profile error when findUserByUid returns null',
+    (tester) async {
+      final credential = _MockUserCredential();
+      final user = _MockUser();
+      when(() => user.uid).thenReturn('u1');
+      when(() => credential.user).thenReturn(user);
+      when(
+        () => auth.signIn(
+          email: any(named: 'email'),
+          password: any(named: 'password'),
+        ),
+      ).thenAnswer((_) async => credential);
+      when(() => repo.findUserByUid('u1')).thenAnswer((_) async => null);
+      when(() => auth.signOut()).thenAnswer((_) async {});
+
+      await tester.pumpWidget(_wrap(auth, repo));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).at(0), 'user@test.com');
+      await tester.enterText(find.byType(TextField).at(1), 'password123');
+
+      await tester.tap(find.byType(FilledButton).first);
+      await tester.pumpAndSettle();
+
+      verify(() => auth.signOut()).called(1);
+      expect(find.text('CALENDAR_REACHED'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

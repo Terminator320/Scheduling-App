@@ -41,9 +41,61 @@ enum AdaptiveDestination { calendar, clients, employees, history, settings }
   ),
 };
 
-/// Replaces the current route with [destination] and its typed args — the
-/// single nav action shared by the rail and every screen's back button, so
-/// they can't drift from [destinationRoute].
+/// Tab-switch contract implemented by the persistent hub shell
+/// (`HubShellState` in `lib/routes/hub_shell.dart`). Declared here so
+/// [navigateToDestination] (core) can drive the shell (routes) without a
+/// core → routes dependency.
+///
+/// `userName`/`userEmail` are sticky on the shell side: passing an empty
+/// value keeps the last known one, since most call sites don't know them.
+// One-method contract by design: an abstract class (vs a callback type)
+// keeps the InheritedWidget field debuggable and the signature named.
+// ignore: one_member_abstracts
+abstract interface class HubTabSelector {
+  /// Switches the visible hub tab, refreshing the identity args the hub
+  /// screens are constructed with.
+  void select(
+    AdaptiveDestination destination, {
+    required bool isAdmin,
+    required String employeeId,
+    String userName,
+    String userEmail,
+  });
+}
+
+/// Lets shell descendants (the nav rail, hub back buttons) reach the
+/// enclosing hub shell to switch tabs. [current] is carried so dependents
+/// rebuild when the selection changes.
+class HubShellScope extends InheritedWidget {
+  const HubShellScope({
+    required this.shell,
+    required this.current,
+    required super.child,
+    super.key,
+  });
+
+  final HubTabSelector shell;
+  final AdaptiveDestination current;
+
+  /// The enclosing shell, or null when the widget is hosted outside one
+  /// (standalone route, tests). Does not create a rebuild dependency —
+  /// callers only use it for one-shot navigation.
+  static HubTabSelector? maybeOf(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<HubShellScope>()?.shell;
+
+  @override
+  bool updateShouldNotify(HubShellScope oldWidget) =>
+      current != oldWidget.current || shell != oldWidget.shell;
+}
+
+/// Navigates to [destination] — the single nav action shared by the rail and
+/// every screen's back button, so they can't drift from [destinationRoute].
+///
+/// Inside the persistent hub shell (U1/P4) this is just a tab switch: the
+/// shell's IndexedStack swaps its index, the screens stay alive, and the
+/// navigator stack is untouched. Outside a shell (a hub screen hosted
+/// standalone, e.g. in widget tests) it falls back to the historical
+/// route-replacement behavior.
 void navigateToDestination(
   BuildContext context,
   AdaptiveDestination destination, {
@@ -52,6 +104,17 @@ void navigateToDestination(
   String userName = '',
   String userEmail = '',
 }) {
+  final shell = HubShellScope.maybeOf(context);
+  if (shell != null) {
+    shell.select(
+      destination,
+      isAdmin: isAdmin,
+      employeeId: employeeId,
+      userName: userName,
+      userEmail: userEmail,
+    );
+    return;
+  }
   final target = destinationRoute(
     destination,
     isAdmin: isAdmin,

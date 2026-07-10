@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
@@ -7,13 +5,15 @@ import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
+import 'package:scheduling/features/calendar/utils/adaptive_pickers.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
-import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
+import 'package:scheduling/features/calendar/widgets/sheets/inline_add_client_host.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -28,7 +28,8 @@ class AddEventSheet extends ConsumerStatefulWidget {
   ConsumerState<AddEventSheet> createState() => _AddEventSheetState();
 }
 
-class _AddEventSheetState extends ConsumerState<AddEventSheet> {
+class _AddEventSheetState extends ConsumerState<AddEventSheet>
+    with InlineAddClientHost {
   final _controllers = AppointmentFormControllers(
     title: TextEditingController(),
     date: TextEditingController(),
@@ -39,7 +40,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     notes: TextEditingController(),
     materials: TextEditingController(),
   );
-  Timer? _clientSearchDebounce;
+  final _clientSearchDebounce = Debouncer(const Duration(milliseconds: 300));
   late final _provider = addEventControllerProvider(widget.initialDate);
 
   AddEventController get _notifier => ref.read(_provider.notifier);
@@ -55,30 +56,27 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
 
   @override
   void dispose() {
-    _clientSearchDebounce?.cancel();
+    _clientSearchDebounce.dispose();
     _controllers.dispose();
     super.dispose();
   }
 
   void _onClientSearchChanged(String query) {
-    _clientSearchDebounce?.cancel();
     if (query.trim().isEmpty) {
+      _clientSearchDebounce.cancel();
       _notifier.searchClients('');
       return;
     }
-    _clientSearchDebounce = Timer(
-      const Duration(milliseconds: 300),
-      () => _notifier.searchClients(query),
-    );
+    _clientSearchDebounce.run(() => _notifier.searchClients(query));
   }
 
   Future<void> _pickDate() async {
     final state = ref.read(_provider);
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await showAdaptiveDatePicker(
+      context,
       initialDate: state.selectedDate ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
+      firstDate: AppointmentDraftDefaults.datePickerFirstDate,
+      lastDate: AppointmentDraftDefaults.datePickerLastDate,
     );
     if (picked == null) return;
     _controllers.date.text = DateUtilsHelper.formatDate(picked);
@@ -87,7 +85,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
 
   Future<void> _pickStartTime() async {
     final stateBefore = ref.read(_provider);
-    final picked = await showCupertinoTimePicker(
+    final picked = await showAdaptiveTimePicker(
       context,
       initialTime: stateBefore.selectedStartTime,
     );
@@ -102,7 +100,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
 
   Future<void> _pickEndTime() async {
     final state = ref.read(_provider);
-    final picked = await showCupertinoTimePicker(
+    final picked = await showAdaptiveTimePicker(
       context,
       initialTime: state.selectedEndTime,
     );
@@ -195,6 +193,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
           onSearchClients: _onClientSearchChanged,
           onSelectClient: _notifier.selectClient,
           onClearClient: _notifier.clearClient,
+          onRequestAddClient: requestAddClient,
           onToggleEmployee: _notifier.toggleEmployee,
           onPickDate: _pickDate,
           onPickStartTime: _pickStartTime,

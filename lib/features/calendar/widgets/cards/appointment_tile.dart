@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -22,8 +23,8 @@ class AppointmentTile extends StatelessWidget {
   final Map<String, Color> employeeColorMap;
   final Future<void> Function()? onOpen;
 
-  /// Show the status chip even for confirmed appointments (the history list
-  /// wants every row chipped; the calendar hides the chip when confirmed).
+  /// Show the status chip even for the default (pending) state (the history
+  /// list wants every row chipped; the calendar hides the chip when pending).
   final bool alwaysShowChip;
 
   /// Strike through the title and dim the card when the appointment is
@@ -34,20 +35,23 @@ class AppointmentTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final compact = context.isCompact;
     final accent =
         colorFromMap(appointment, employeeColorMap) ?? scheme.primary;
     final status = AppointmentStatus.fromRaw(appointment.displayStatus);
-    final showChip = alwaysShowChip || status != AppointmentStatus.confirmed;
+    final showChip = alwaysShowChip || status != AppointmentStatus.pending;
     final isCancelled = dimWhenCancelled && status.isCancelled;
 
-    final employeeName = appointment.employeeNames.isNotEmpty
-        ? appointment.employeeNames.first
-        : null;
+    // Show every assigned employee, dropping blanks so no stray ", " shows.
+    final joinedNames = appointment.employeeNames
+        .where((name) => name.isNotEmpty)
+        .join(', ');
+    final employeeName = joinedNames.isEmpty ? null : joinedNames;
 
     final timeLabel =
-        '${DateUtilsHelper.formatTime(appointment.startTime)} – '
+        '${DateUtilsHelper.formatTime(appointment.startTime)} - '
         '${DateUtilsHelper.formatTime(appointment.endTime)}'
-        '${employeeName != null ? ' · $employeeName' : ''}';
+        '${employeeName != null ? ' - $employeeName' : ''}';
 
     final card = Card(
       margin: EdgeInsets.zero,
@@ -81,44 +85,23 @@ class AppointmentTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        appointment.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          decoration: isCancelled
-                              ? TextDecoration.lineThrough
-                              : null,
-                          color: isCancelled ? scheme.onSurfaceVariant : null,
-                        ),
+                      _TitleRow(
+                        title: appointment.title,
+                        compact: compact,
+                        showChip: showChip,
+                        isCancelled: isCancelled,
+                        status: status,
                       ),
                       const SizedBox(height: AppSpacing.sp4),
-                      Row(
-                        children: [
-                          Container(
-                            width: 7,
-                            height: 7,
-                            decoration: BoxDecoration(
-                              color: accent,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.sp4),
-                          Expanded(
-                            child: Text(
-                              timeLabel,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ],
+                      _TimeRow(
+                        timeLabel: timeLabel,
+                        accent: accent,
+                        compact: compact,
                       ),
+                      if (compact && showChip) ...[
+                        const SizedBox(height: AppSpacing.sp8),
+                        StatusChip(status: status),
+                      ],
                     ],
                   ),
                 ),
@@ -128,19 +111,13 @@ class AppointmentTile extends StatelessWidget {
                   right: AppSpacing.sp8,
                   left: AppSpacing.sp4,
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (showChip) ...[
-                      StatusChip(status: status),
-                      const SizedBox(width: AppSpacing.sp8),
-                    ],
-                    Icon(
-                      Icons.chevron_right,
-                      size: 16,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ],
+                child: Align(
+                  alignment: compact ? Alignment.topCenter : Alignment.center,
+                  child: Icon(
+                    Icons.chevron_right,
+                    size: 16,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ],
@@ -150,5 +127,90 @@ class AppointmentTile extends StatelessWidget {
     );
 
     return isCancelled ? Opacity(opacity: 0.75, child: card) : card;
+  }
+}
+
+class _TitleRow extends StatelessWidget {
+  const _TitleRow({
+    required this.title,
+    required this.compact,
+    required this.showChip,
+    required this.isCancelled,
+    required this.status,
+  });
+
+  final String title;
+  final bool compact;
+  final bool showChip;
+  final bool isCancelled;
+  final AppointmentStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            maxLines: compact ? 3 : 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              decoration: isCancelled ? TextDecoration.lineThrough : null,
+              color: isCancelled ? scheme.onSurfaceVariant : null,
+            ),
+          ),
+        ),
+        if (!compact && showChip) ...[
+          const SizedBox(width: AppSpacing.sp8),
+          StatusChip(status: status),
+        ],
+      ],
+    );
+  }
+}
+
+class _TimeRow extends StatelessWidget {
+  const _TimeRow({
+    required this.timeLabel,
+    required this.accent,
+    required this.compact,
+  });
+
+  final String timeLabel;
+  final Color accent;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          margin: const EdgeInsets.only(top: AppSpacing.sp4),
+          decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: AppSpacing.sp4),
+        Expanded(
+          child: Text(
+            timeLabel,
+            maxLines: compact ? 2 : 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

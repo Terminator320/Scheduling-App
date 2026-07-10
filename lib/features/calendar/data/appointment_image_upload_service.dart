@@ -1,57 +1,45 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:scheduling/core/images/image_compress_service.dart';
 import 'package:scheduling/core/images/image_storage_service.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
-import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 
 class AppointmentImageUploadService {
   AppointmentImageUploadService({
     required AppointmentsRepository appointments,
     required PhotoUploadNotifier notifier,
-    ImageCompressService? compress,
     ImageStorageService? storage,
+    AppLogger? logger,
   }) : _appointments = appointments,
        _notifier = notifier,
-       _compress = compress ?? ImageCompressService(),
-       _storage = storage ?? ImageStorageService();
+       _storage = storage ?? ImageStorageService(),
+       _logger = logger ?? AppLogger();
 
   final AppointmentsRepository _appointments;
   final PhotoUploadNotifier _notifier;
-  final ImageCompressService _compress;
   final ImageStorageService _storage;
+  final AppLogger _logger;
 
   void uploadInBackground({
     required String appointmentId,
     required List<File> newImages,
-    List<AppointmentImage> existingImages = const [],
   }) {
-    _run(
-      appointmentId: appointmentId,
-      newImages: List.of(newImages),
-      existingImages: List.of(existingImages),
-    );
+    _run(appointmentId: appointmentId, newImages: List.of(newImages));
   }
 
   Future<void> _run({
     required String appointmentId,
     required List<File> newImages,
-    required List<AppointmentImage> existingImages,
   }) async {
     try {
       var failedCount = 0;
       final tooLargeNames = <String>[];
       if (newImages.isNotEmpty) {
-        final result = await _compressUploadAndPatch(
-          appointmentId,
-          newImages,
-          existingImages,
-        );
+        final result = await _uploadAndPatch(appointmentId, newImages);
         tooLargeNames.addAll(result.tooLargeNames);
         failedCount += result.failedCount;
       }
@@ -63,57 +51,57 @@ class AppointmentImageUploadService {
           tooLargeFileNames: tooLargeNames,
         );
       }
-      debugPrint('[AppointmentImageUpload] done for $appointmentId');
     } catch (e, st) {
       _notifier.reportFailure(appointmentId, failedCount: newImages.length);
-      debugPrint('[AppointmentImageUpload] FAILED for $appointmentId: $e');
-      debugPrintStack(stackTrace: st);
+      _logger.warn(
+        'IMG-UPLOAD background run failed for $appointmentId',
+        e,
+        st,
+      );
     }
   }
 
-  Future<_CompressUploadOutcome> _compressUploadAndPatch(
+  Future<_UploadOutcome> _uploadAndPatch(
     String appointmentId,
     List<File> newImages,
-    List<AppointmentImage> existingImages,
   ) async {
-    final compressed = await _compress.compressImages(newImages);
-
     try {
-      final sizes = await Future.wait(compressed.map((f) => f.length()));
+      final sizes = await Future.wait(newImages.map((f) => f.length()));
 
       final uploadable = <File>[];
       final tooLargeNames = <String>[];
 
-      for (var i = 0; i < compressed.length; i++) {
+      for (var i = 0; i < newImages.length; i++) {
         if (sizes[i] > ImageStorageService.maxUploadBytes) {
           tooLargeNames.add(_fileName(newImages[i]));
         } else {
-          uploadable.add(compressed[i]);
+          uploadable.add(newImages[i]);
         }
       }
 
       var failedCount = 0;
       if (uploadable.isNotEmpty) {
         final result = await _storage.uploadImages(appointmentId, uploadable);
-        await _appointments.updateAppointmentPictures(appointmentId, [
-          ...existingImages,
-          ...result.uploaded,
-        ]);
+        // Append (arrayUnion) rather than rewriting the whole array from a
+        // submit-time snapshot: an edit saved while this upload was in flight
+        // would otherwise be overwritten with the stale base (C1).
+        await _appointments.appendAppointmentPictures(
+          appointmentId,
+          result.uploaded,
+        );
         failedCount = result.failedCount;
       }
 
-      return _CompressUploadOutcome(
+      return _UploadOutcome(
         tooLargeNames: tooLargeNames,
         failedCount: failedCount,
       );
     } finally {
-      for (final f in compressed) {
+      for (final f in newImages) {
         try {
           await f.delete();
-        } catch (e) {
-          debugPrint(
-            '[AppointmentImageUpload] temp-cleanup failed for ${f.path}: $e',
-          );
+        } catch (e, st) {
+          _logger.warn('IMG-UPLOAD temp cleanup failed for ${f.path}', e, st);
         }
       }
     }
@@ -125,8 +113,8 @@ class AppointmentImageUploadService {
   }
 }
 
-class _CompressUploadOutcome {
-  const _CompressUploadOutcome({
+class _UploadOutcome {
+  const _UploadOutcome({
     required this.tooLargeNames,
     required this.failedCount,
   });

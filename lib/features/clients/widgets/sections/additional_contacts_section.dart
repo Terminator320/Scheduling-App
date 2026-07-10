@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/layout/breakpoints.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-// Controller bundle for one additional-contact card; the owner must dispose it.
 class ContactFields {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
@@ -49,36 +50,58 @@ class AdditionalContactsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final compact = context.isCompact;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(AppSpacing.sp16),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.r16),
         border: Border.all(color: scheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- Header & helper text ---
-          Row(
-            children: [
-              Expanded(
-                child: Text(
+          if (compact)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
                   context.l10n.clients_additionalBusinessContacts,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
-              TextButton.icon(
-                onPressed: onAddContact,
-                icon: const Icon(Icons.add),
-                label: Text(context.l10n.clients_add),
-              ),
-            ],
-          ),
+                const SizedBox(height: AppSpacing.sp8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: onAddContact,
+                    icon: const Icon(Icons.add),
+                    label: Text(context.l10n.clients_add),
+                  ),
+                ),
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    context.l10n.clients_additionalBusinessContacts,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: onAddContact,
+                  icon: const Icon(Icons.add),
+                  label: Text(context.l10n.clients_add),
+                ),
+              ],
+            ),
           const SizedBox(height: 4),
           Text(
             context
@@ -88,7 +111,6 @@ class AdditionalContactsSection extends StatelessWidget {
               color: scheme.onSurfaceVariant,
             ),
           ),
-          // --- Empty state ---
           if (contacts.isEmpty) ...[
             const SizedBox(height: 12),
             OutlinedButton.icon(
@@ -97,7 +119,6 @@ class AdditionalContactsSection extends StatelessWidget {
               label: Text(context.l10n.clients_addAnotherContact),
             ),
           ],
-          // --- Contact cards ---
           for (var i = 0; i < contacts.length; i++) ...[
             const SizedBox(height: 16),
             _AdditionalContactCard(
@@ -133,43 +154,64 @@ class _AdditionalContactCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final compact = context.isCompact;
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(AppSpacing.sp12),
       decoration: BoxDecoration(
         color: scheme.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.r12),
         border: Border.all(color: scheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- Card header ---
-          Row(
-            children: [
-              Expanded(
-                // +2: the main contact above the section is "Contact 1".
-                child: Text(
-                  '${context.l10n.clients_contact} ${index + 2}',
+          if (compact)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${context.l10n.clients_contact} ${index + 1}',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
-              IconButton(
-                tooltip: context.l10n.clients_removeContact,
-                onPressed: onRemove,
-                icon: const Icon(Icons.close),
-              ),
-            ],
-          ),
+                const SizedBox(height: AppSpacing.sp4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    tooltip: context.l10n.clients_removeContact,
+                    onPressed: onRemove,
+                    icon: const Icon(Icons.close),
+                  ),
+                ),
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${context.l10n.clients_contact} ${index + 1}',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: context.l10n.clients_removeContact,
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
           const SizedBox(height: 8),
-          // --- Name, phone & email fields ---
           SheetFocusScroll(
             child: LabeledTextField(
               label: context.l10n.clients_contactName,
               controller: contact.nameController,
               required: true,
+              textCapitalization: TextCapitalization.words,
               autofillHints: const [AutofillHints.name],
               maxLength: TextLimits.personName,
               errorText: errors['contact_${index}_name'],

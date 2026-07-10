@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
@@ -91,6 +92,7 @@ class AppointmentFormFields extends StatelessWidget {
     super.key,
     this.editingStatus,
     this.onStatusChanged,
+    this.onRequestAddClient,
   });
 
   final AppointmentFormControllers controllers;
@@ -121,6 +123,11 @@ class AppointmentFormFields extends StatelessWidget {
   final String? editingStatus;
   final ValueChanged<String>? onStatusChanged;
 
+  /// Opens the add-client sheet (prefilled with the typed name) and resolves to
+  /// the created client, which is then auto-selected. Null hides the inline
+  /// "add new client" affordance in the client picker.
+  final Future<ClientRecord?> Function(String initialName)? onRequestAddClient;
+
   String? _err(BuildContext context, String field) {
     final key = errors[field];
     return key == null ? null : appointmentFormErrorText(context, key);
@@ -136,6 +143,14 @@ class AppointmentFormFields extends StatelessWidget {
     controllers.clientSearch.clear();
     controllers.address.clear();
     onClearClient();
+  }
+
+  Future<void> _addNewClient() async {
+    final created = await onRequestAddClient!(
+      controllers.clientSearch.text.trim(),
+    );
+    if (created == null) return;
+    _selectClient(created);
   }
 
   void _switchToCustomAddress() {
@@ -154,6 +169,30 @@ class AppointmentFormFields extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final showStatus = editingStatus != null && onStatusChanged != null;
+    final isNarrowPhone = context.isNarrowWidth;
+
+    final startTimeField = SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.calendar_startTime,
+        hint: l10n.calendar_start,
+        controller: controllers.startTime,
+        required: true,
+        readOnly: true,
+        errorText: _err(context, 'startTime'),
+        onTap: onPickStartTime,
+      ),
+    );
+    final endTimeField = SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.calendar_endTime,
+        hint: l10n.calendar_end,
+        controller: controllers.endTime,
+        required: true,
+        readOnly: true,
+        errorText: _err(context, 'endTime'),
+        onTap: onPickEndTime,
+      ),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -165,6 +204,8 @@ class AppointmentFormFields extends StatelessWidget {
             hint: l10n.calendar_eGPlumbingRepair,
             controller: controllers.title,
             required: true,
+            textCapitalization: TextCapitalization.sentences,
+            textInputAction: TextInputAction.next,
             maxLength: TextLimits.appointmentTitle,
             errorText: _err(context, 'title'),
           ),
@@ -182,6 +223,7 @@ class AppointmentFormFields extends StatelessWidget {
             onSelect: _selectClient,
             onClear: _clearClient,
             errorText: _err(context, 'client'),
+            onAddNew: onRequestAddClient == null ? null : _addNewClient,
           ),
         ),
         const SizedBox(height: AppSpacing.sp16),
@@ -210,38 +252,24 @@ class AppointmentFormFields extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.sp16),
         // --- Start / end time ---
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: SheetFocusScroll(
-                child: LabeledTextField(
-                  label: l10n.calendar_startTime,
-                  hint: l10n.calendar_start,
-                  controller: controllers.startTime,
-                  required: true,
-                  readOnly: true,
-                  errorText: _err(context, 'startTime'),
-                  onTap: onPickStartTime,
-                ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sp12),
-            Expanded(
-              child: SheetFocusScroll(
-                child: LabeledTextField(
-                  label: l10n.calendar_endTime,
-                  hint: l10n.calendar_end,
-                  controller: controllers.endTime,
-                  required: true,
-                  readOnly: true,
-                  errorText: _err(context, 'endTime'),
-                  onTap: onPickEndTime,
-                ),
-              ),
-            ),
-          ],
-        ),
+        if (isNarrowPhone)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              startTimeField,
+              const SizedBox(height: AppSpacing.sp16),
+              endTimeField,
+            ],
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: startTimeField),
+              const SizedBox(width: AppSpacing.sp12),
+              Expanded(child: endTimeField),
+            ],
+          ),
         const SizedBox(height: AppSpacing.sp16),
         // --- Status (edit flow only) ---
         if (showStatus) ...[
@@ -273,6 +301,7 @@ class AppointmentFormFields extends StatelessWidget {
             hint: l10n.calendar_typeTheNoteHere,
             controller: controllers.notes,
             optional: true,
+            textCapitalization: TextCapitalization.sentences,
             maxLines: 2,
             maxLength: TextLimits.appointmentNotes,
             showCounter: true,
@@ -286,6 +315,7 @@ class AppointmentFormFields extends StatelessWidget {
             hint: materialsHint,
             controller: controllers.materials,
             optional: true,
+            textCapitalization: TextCapitalization.sentences,
             maxLines: 2,
             maxLength: TextLimits.appointmentMaterials,
           ),

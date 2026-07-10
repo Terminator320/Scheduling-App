@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 
 /// Bordered card that stacks [rows] with a hairline divider between each pair.
@@ -62,10 +63,17 @@ class InfoCardRow extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final chipColor = iconColor ?? scheme.primary;
+    final compact = context.isCompact;
 
     final content = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sp16,
+        vertical: AppSpacing.sp12,
+      ),
       child: Row(
+        crossAxisAlignment: compact
+            ? CrossAxisAlignment.start
+            : CrossAxisAlignment.center,
         children: [
           Container(
             width: 34,
@@ -76,7 +84,7 @@ class InfoCardRow extends StatelessWidget {
             ),
             child: Icon(icon, size: 18, color: chipColor),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.sp12),
           Expanded(
             child: Text(
               text,
@@ -92,8 +100,15 @@ class InfoCardRow extends StatelessWidget {
             ),
           ),
           if (trailingIcon != null) ...[
-            const SizedBox(width: 8),
-            Icon(trailingIcon, size: 18, color: scheme.onSurfaceVariant),
+            const SizedBox(width: AppSpacing.sp8),
+            Padding(
+              padding: EdgeInsets.only(top: compact ? 2 : 0),
+              child: Icon(
+                trailingIcon,
+                size: 18,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
           ],
         ],
       ),

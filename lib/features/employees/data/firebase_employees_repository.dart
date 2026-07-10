@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
+import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -17,78 +18,88 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
 
   @override
   Stream<List<EmployeeRecord>> watchAllUsers() {
-    return _users
-        .orderBy('name')
-        .limit(500)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
-              .toList(),
-        );
+    return retryStream(
+      () => _users
+          .orderBy('name')
+          .limit(500)
+          .snapshots()
+          .map(
+            (snapshot) => snapshot.docs
+                .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
+                .toList(),
+          ),
+      retryWhen: _isAuthPropagationDenied,
+    );
   }
 
   @override
   Stream<List<EmployeeRecord>> watchEmployees() {
-    return _users
-        .where('role', whereIn: ['employee', 'admin'])
-        .where('status', isEqualTo: 'active')
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
-              .toList(),
-        );
+    return retryStream(
+      () => _users
+          .where('role', whereIn: ['employee', 'admin'])
+          .where('status', isEqualTo: 'active')
+          .snapshots()
+          .map(
+            (snapshot) => snapshot.docs
+                .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
+                .toList(),
+          ),
+      retryWhen: _isAuthPropagationDenied,
+    );
   }
 
   @override
   Stream<List<EmployeeRecord>> watchAssignableUsers() {
-    return _users
-        .where('status', isEqualTo: 'active')
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
-              .toList(),
-        );
+    return retryStream(
+      () => _users
+          .where('status', isEqualTo: 'active')
+          // Bounded like watchAllUsers so a runaway users collection can't
+          // stream an unbounded snapshot to every client.
+          .limit(500)
+          .snapshots()
+          .map(
+            (snapshot) => snapshot.docs
+                .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
+                .toList(),
+          ),
+      retryWhen: _isAuthPropagationDenied,
+    );
   }
 
   @override
-  Future<EmployeeRecord?> getEmployeeById(String docId) async {
-    final doc = await _users.doc(docId).get();
-    if (!doc.exists) return null;
-    return EmployeeRecord.fromMap(doc.id, doc.data() ?? {});
-  }
-
-  @override
-  Future<void> addEmployee({
+  Future<String> createEmployeeInvite({
     required String name,
     required String email,
     required String phone,
     required String colorValue,
   }) async {
-    final normalizedEmail = email.trim().toLowerCase();
-
-    final existing = await _users
-        .where('email', isEqualTo: normalizedEmail)
-        .limit(1)
-        .get();
-
-    if (existing.docs.isNotEmpty) {
-      throw const EmployeesFailureEmailAlreadyExists();
+    try {
+      final res = await _functions
+          .httpsCallable('createEmployeeInvite')
+          .call<dynamic>({
+            'name': name.trim(),
+            'email': email.trim().toLowerCase(),
+            'phone': phone.trim(),
+            'colorValue': colorValue,
+          });
+      final data = (res.data as Map?)?.cast<String, dynamic>();
+      final code = data?['code'] as String?;
+      if (code == null || code.isEmpty) {
+        throw const EmployeesFailureUnknown();
+      }
+      return code;
+    } on FirebaseFunctionsException catch (e) {
+      if (e.message == 'email-exists') {
+        throw const EmployeesFailureEmailAlreadyExists();
+      }
+      rethrow;
     }
+  }
 
-    await _users.add({
-      'name': name.trim(),
-      'email': normalizedEmail,
-      'phone': phone.trim(),
-      // Always employee — admin is granted post-activation via updateEmployee
-      // (invite self-activation is employee-only in firestore.rules).
-      'role': 'employee',
-      'status': 'invited',
-      'uid': '',
-      'colorValue': colorValue,
-      'createdAt': FieldValue.serverTimestamp(),
+  @override
+  Future<void> redeemSignupCode(String code) async {
+    await _functions.httpsCallable('redeemSignupCode').call<dynamic>({
+      'code': code,
     });
   }
 
@@ -103,6 +114,11 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }) async {
     final normalizedEmail = email.trim().toLowerCase();
 
+    // Uniqueness pre-check. The Firestore client SDK cannot run queries inside
+    // a transaction, so this read-then-write is not atomic: another doc could
+    // claim [normalizedEmail] between this query and the commit below. That
+    // residual race is accepted client-side — the server-side invite flow
+    // (functions/createEmployeeInvite) is the authoritative uniqueness guard.
     final existing = await _users
         .where('email', isEqualTo: normalizedEmail)
         .get();
@@ -114,6 +130,11 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     if (emailUsedByAnotherEmployee) {
       throw const EmployeesFailureEmailAlreadyExists();
     }
+
+    final targetInQuery = existing.docs.where((doc) => doc.id == docId);
+    final emailAtCheck = targetInQuery.isNotEmpty
+        ? normalizedEmail
+        : (await _users.doc(docId).get()).data()?['email'] as String?;
 
     final updateData = <String, dynamic>{
       'name': name.trim(),
@@ -127,7 +148,22 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       updateData['role'] = isAdmin ? 'admin' : 'employee';
     }
 
-    await _users.doc(docId).update(updateData);
+    // Best-available client-side hardening: commit inside a transaction that
+    // re-reads the target doc and aborts when its email moved underneath the
+    // uniqueness check (e.g. another admin edited the same employee
+    // concurrently), so this write can't silently overwrite it with a value
+    // that was never re-validated.
+    final ref = _users.doc(docId);
+    await ref.firestore.runTransaction<void>((txn) async {
+      final snapshot = await txn.get(ref);
+      final currentEmail = snapshot.data()?['email'] as String?;
+      if (currentEmail != emailAtCheck) {
+        // Concurrent edit — surface a retryable "try again" instead of
+        // committing on top of state the uniqueness check never saw.
+        throw const EmployeesFailureUnknown();
+      }
+      txn.update(ref, updateData);
+    });
   }
 
   @override
@@ -136,36 +172,11 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }
 
   @override
-  Future<InvitedEmployeeMatch?> findInvitedEmployeeForCurrentUser() async {
-    final response = await _functions
-        .httpsCallable('resolveMyInvite')
-        .call<dynamic>();
-    final payload = (response.data as Map?)?.cast<String, dynamic>();
-    if (payload == null || payload['found'] != true) return null;
-    final docId = payload['docId'] as String?;
-    final data = (payload['data'] as Map?)?.cast<String, dynamic>();
-    if (docId == null || data == null) return null;
-    return InvitedEmployeeMatch(docId: docId, data: data);
-  }
-
-  @override
   Future<UserUidMatch?> findUserByUid(String uid) async {
     final result = await _users.where('uid', isEqualTo: uid).limit(1).get();
     if (result.docs.isEmpty) return null;
     final doc = result.docs.first;
     return UserUidMatch(id: doc.id, data: doc.data());
-  }
-
-  @override
-  Future<void> activateEmployee({
-    required String docId,
-    required String uid,
-  }) async {
-    await _users.doc(docId).update({
-      'uid': uid,
-      'status': 'active',
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
   }
 
   @override
@@ -187,21 +198,35 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   @override
   Stream<Map<String, dynamic>> watchUserDoc(String uid) {
     if (uid.isEmpty) return Stream.value(const {});
-    return _users
-        .where('uid', isEqualTo: uid)
-        .limit(1)
-        .snapshots()
-        .where((snapshot) {
-          // Skip the transient empty from-cache snapshot that precedes the
-          // server result on a cold cache. Reporting it as an empty (deleted)
-          // doc would falsely sign the user out and stop the role from
-          // upgrading past the cached employee guess. An authoritative empty
-          // (from the server) still passes through to flag a real deletion.
-          return snapshot.docs.isNotEmpty || !snapshot.metadata.isFromCache;
-        })
-        .map((snapshot) {
-          if (snapshot.docs.isEmpty) return const <String, dynamic>{};
-          return snapshot.docs.first.data();
-        });
+    return retryStream(
+      () => _users
+          .where('uid', isEqualTo: uid)
+          .limit(1)
+          .snapshots()
+          .where((snapshot) {
+            // Skip the transient empty from-cache snapshot that precedes the
+            // server result on a cold cache. Reporting it as an empty (deleted)
+            // doc would falsely sign the user out and stop the role from
+            // upgrading past the cached employee guess. An authoritative empty
+            // (from the server) still passes through to flag a real deletion.
+            return snapshot.docs.isNotEmpty || !snapshot.metadata.isFromCache;
+          })
+          .map((snapshot) {
+            if (snapshot.docs.isEmpty) return const <String, dynamic>{};
+            return snapshot.docs.first.data();
+          }),
+      retryWhen: _isAuthPropagationDenied,
+    );
   }
 }
+
+// Twin of `_isAuthPropagationDenied` in
+// `lib/features/calendar/data/firebase_appointments_repository.dart` — keep in
+// sync. A freshly signed-in user's ID token and `usersByUid` role bridge can
+// lag the auth state, so the first users listen comes back permission-denied
+// even though the read is authorized. Without the retry, one such error
+// permanently breaks role upgrades and disable/delete detection for the
+// session. Re-subscribing after a short delay succeeds; a genuine denial
+// survives every retry and surfaces as before.
+bool _isAuthPropagationDenied(Object error) =>
+    error is FirebaseException && error.code == 'permission-denied';

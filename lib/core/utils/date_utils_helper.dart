@@ -6,6 +6,7 @@ class DateUtilsHelper {
   // per appointment row inside list item builders.
   static final Map<String, DateFormat> _timeFormats = {};
   static final Map<String, DateFormat> _dateFormats = {};
+  static final Map<String, DateFormat> _dayHeaderFormats = {};
 
   static String get _locale => Intl.defaultLocale ?? 'en_CA';
 
@@ -21,6 +22,15 @@ class DateUtilsHelper {
     final format = _dateFormats.putIfAbsent(
       _locale,
       () => DateFormat.yMMMd(_locale),
+    );
+    return format.format(date);
+  }
+
+  /// "Tuesday, June 23" day-group header for the history list.
+  static String formatDayHeader(DateTime date) {
+    final format = _dayHeaderFormats.putIfAbsent(
+      _locale,
+      () => DateFormat('EEEE, MMMM d', _locale),
     );
     return format.format(date);
   }
