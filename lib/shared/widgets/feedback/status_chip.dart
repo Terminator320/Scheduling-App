@@ -29,10 +29,16 @@ enum AppointmentStatus {
   /// [overdue], which is display-only and never chosen by the user.
   static const appointmentValues = [pending, inProgress, done];
 
-  /// The raw string for this status. [overdue] is display-only and must never
-  /// be written — the editor seeds from the stored status, never this.
+  /// The stored raw string for this status. [overdue] is display-only and has
+  /// no stored form — reading its [raw] throws so an accidental write path
+  /// fails loudly at the source instead of emitting an off-allowlist value that
+  /// the rules reject with an opaque `permission-denied`. Write paths seed from
+  /// the stored `status`, so this is never reached in correct code.
   String get raw => switch (this) {
     inProgress => 'in_progress',
+    overdue => throw StateError(
+      'overdue is display-only; it has no stored raw',
+    ),
     _ => name,
   };
 

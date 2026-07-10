@@ -214,7 +214,6 @@ class DetailsViewBody extends ConsumerWidget {
 /// callbacks stay in `build`.
 class _DetailsViewData {
   const _DetailsViewData({
-    required this.status,
     required this.displayStatus,
     required this.isCancelled,
     required this.isDone,
@@ -245,7 +244,6 @@ class _DetailsViewData {
         .where((m) => m.isNotEmpty)
         .toList();
     return _DetailsViewData(
-      status: status,
       displayStatus: displayStatus,
       isCancelled: status.isCancelled,
       isDone: status.isDone,
@@ -264,7 +262,6 @@ class _DetailsViewData {
     );
   }
 
-  final AppointmentStatus status;
   final AppointmentStatus displayStatus;
   final bool isCancelled;
   final bool isDone;
