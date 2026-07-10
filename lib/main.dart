@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -29,6 +30,7 @@ import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/home_widget/application/widget_sync_service.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/onboarding/screens/onboarding_gate.dart';
 import 'package:scheduling/features/settings/application/settings_providers.dart';
@@ -215,7 +217,9 @@ class _PaulAppState extends ConsumerState<PaulApp> {
       final message = selectMessage(AppLocalizations.of(navContext));
       // Best-effort device de-registration first — sign-out must not be blocked
       // by it (the controller swallows its own failures).
-      await ref.read(pushRegistrationControllerProvider).unregisterCurrentDevice();
+      await ref
+          .read(pushRegistrationControllerProvider)
+          .unregisterCurrentDevice();
       await ref.read(authServiceProvider).signOut();
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -256,6 +260,24 @@ class _PaulAppState extends ConsumerState<PaulApp> {
       next,
     ) {
       unawaited(ref.read(pushRegistrationControllerProvider).sync());
+    });
+  }
+
+  void _listenForWidgetSync() {
+    // iOS home-screen widget only. On Android (dev harness) this never wires,
+    // so the employee-appointments listener it would open is never opened.
+    if (!Platform.isIOS) return;
+    ref.listen<AsyncValue<Map<String, dynamic>?>>(widgetPayloadProvider, (
+      prev,
+      next,
+    ) {
+      final payload = next.value;
+      final service = ref.read(widgetSyncServiceProvider);
+      if (payload == null) {
+        unawaited(service.clear());
+      } else {
+        unawaited(service.sync(payload));
+      }
     });
   }
 
@@ -310,6 +332,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _listenForRoleRevocation();
     _listenForDeletedAccount();
     _listenForPushRegistration();
+    _listenForWidgetSync();
     return AppLanguageScope(
       controller: _languageController,
       child: ThemeNotifier(
