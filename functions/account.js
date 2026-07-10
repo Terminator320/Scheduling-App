@@ -137,7 +137,11 @@ const deleteAccount = onCall(
 
       if (docId) {
         try {
-          await db.collection("users").doc(docId).delete();
+          // recursiveDelete removes the users doc AND all its subcollections
+          // (fcmTokens now, presence later) in one call — a plain doc delete
+          // would orphan the subcollections, leaving a deleted account still
+          // receiving pushes.
+          await db.recursiveDelete(db.collection("users").doc(docId));
         } catch (err) {
           // The Auth user is already gone (the irreversible, policy-relevant
           // part). A doc-delete failure only leaves recoverable orphaned data
