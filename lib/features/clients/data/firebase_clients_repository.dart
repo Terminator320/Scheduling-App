@@ -120,6 +120,17 @@ class FirebaseClientsRepository implements ClientsRepository {
   }
 
   @override
+  Future<List<ClientRecord>> fetchClientsCreatedSince(DateTime since) async {
+    final snapshot = await _clients
+        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
+        .orderBy('createdAt')
+        .get();
+    return snapshot.docs
+        .map((doc) => ClientRecord.fromMap(doc.id, doc.data()))
+        .toList();
+  }
+
+  @override
   Future<ClientRecord> addClient(ClientRecord client) async {
     final map = _normalizedMap(client);
     final docRef = await _clients.add({
