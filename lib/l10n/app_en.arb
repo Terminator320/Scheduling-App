@@ -1466,5 +1466,121 @@
   "common_copied": "Copied",
   "@common_copied": {
     "description": "Inline confirmation shown after copying text to the clipboard"
-  }
+  },
+  "dashboard_title": "Dashboard",
+  "@dashboard_title": {
+    "description": "Admin dashboard screen title, drawer nav item, and settings tile label"
+  },
+  "dashboard_visitsToday": "{count, plural, =1{visit today} other{visits today}}",
+  "@dashboard_visitsToday": {
+    "description": "Label rendered beside the hero's big count of today's visits; the number itself is a separate Text",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_employeeWorkload": "Employee workload",
+  "@dashboard_employeeWorkload": {
+    "description": "Dashboard section header: jobs per active employee today / this week"
+  },
+  "dashboard_workloadCounts": "{today} today · {week} this week",
+  "@dashboard_workloadCounts": {
+    "description": "Trailing counts on a workload row: jobs today and jobs this week",
+    "placeholders": {
+      "today": {
+        "type": "int"
+      },
+      "week": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_businessTrends": "Business trends",
+  "@dashboard_businessTrends": {
+    "description": "Dashboard section header: 8-week completed/cancelled chart and new-client sparkline"
+  },
+  "dashboard_attentionFlags": "Needs attention",
+  "@dashboard_attentionFlags": {
+    "description": "Dashboard section header: pending-soon and never-closed visit flags"
+  },
+  "dashboard_unassignedCount": "{count, plural, =1{1 unassigned job today} other{{count} unassigned jobs today}}",
+  "@dashboard_unassignedCount": {
+    "description": "Warning pill in the hero counting today's visits with no assignee",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_unassigned": "Unassigned",
+  "@dashboard_unassigned": {
+    "description": "Assignee line on a timeline or alert row for a visit with no employees"
+  },
+  "dashboard_upcomingToday": "Next up today",
+  "@dashboard_upcomingToday": {
+    "description": "Section header above the timeline of today's upcoming visits"
+  },
+  "dashboard_noVisitsToday": "No upcoming visits today",
+  "@dashboard_noVisitsToday": {
+    "description": "Empty state under the next-up header when today has no future visits"
+  },
+  "dashboard_noActiveEmployees": "No active employees",
+  "@dashboard_noActiveEmployees": {
+    "description": "Empty state for the workload section when there are no active employees"
+  },
+  "dashboard_completedVsCancelled": "Completed vs cancelled — last 8 weeks",
+  "@dashboard_completedVsCancelled": {
+    "description": "Title of the grouped weekly bar chart of done vs cancelled visits"
+  },
+  "dashboard_newClients": "New clients",
+  "@dashboard_newClients": {
+    "description": "Caption of the new-clients sparkline inside the trends card"
+  },
+  "dashboard_newClientsTotal": "{count, plural, =1{1 in the last 8 weeks} other{{count} in the last 8 weeks}}",
+  "@dashboard_newClientsTotal": {
+    "description": "Total line under the new-clients caption, summing the 8 weekly buckets",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_busiestWeekday": "Busiest day: {day}",
+  "@dashboard_busiestWeekday": {
+    "description": "Text row naming the weekday with the most visits over the 8-week window",
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "dashboard_allClear": "All clear — nothing needs attention",
+  "@dashboard_allClear": {
+    "description": "Shown in the attention section when there are no flags"
+  },
+  "dashboard_pendingSoonHeader": "{count, plural, =1{1 pending visit starts within 48 hours} other{{count} pending visits start within 48 hours}}",
+  "@dashboard_pendingSoonHeader": {
+    "description": "Attention flag group header for pending visits starting within 48 hours",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_overdueOpenHeader": "{count, plural, =1{1 past visit was never closed} other{{count} past visits were never closed}}",
+  "@dashboard_overdueOpenHeader": {
+    "description": "Attention flag group header for ended visits never marked done or cancelled",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "settings_management": "Management",
+  "@settings_management": {
+    "description": "Settings section header for the admin management area (dashboard entry)"
+  },
+  "error_introLoadDashboard": "Couldn't load the dashboard",
+  "@error_introLoadDashboard": {"description": "Error intro for DASH-LOAD"}
 }
