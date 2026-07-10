@@ -219,6 +219,8 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     required this.onInvitedContainer,
     required this.inProgressContainer,
     required this.onInProgressContainer,
+    required this.overdueContainer,
+    required this.onOverdueContainer,
     required this.accent,
   });
 
@@ -232,6 +234,8 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
   final Color onInvitedContainer;
   final Color inProgressContainer;
   final Color onInProgressContainer;
+  final Color overdueContainer;
+  final Color onOverdueContainer;
   final Color accent;
 
   static const light = AppStatusColors(
@@ -245,6 +249,8 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     onInvitedContainer: AppColors.invitedText,
     inProgressContainer: Color(0xFFE0F2FE),
     onInProgressContainer: Color(0xFF0369A1),
+    overdueContainer: Color(0xFFFFEDD5),
+    onOverdueContainer: Color(0xFFC2410C),
     accent: AppColors.accent,
   );
 
@@ -259,6 +265,8 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     onInvitedContainer: AppColors.darkInvitedText,
     inProgressContainer: Color(0xFF0C4A6E),
     onInProgressContainer: Color(0xFF7DD3FC),
+    overdueContainer: Color(0xFF7C2D12),
+    onOverdueContainer: Color(0xFFFDBA74),
     accent: AppColors.darkAccent,
   );
 
@@ -274,6 +282,8 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     Color? onInvitedContainer,
     Color? inProgressContainer,
     Color? onInProgressContainer,
+    Color? overdueContainer,
+    Color? onOverdueContainer,
     Color? accent,
   }) {
     return AppStatusColors(
@@ -288,6 +298,8 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
       inProgressContainer: inProgressContainer ?? this.inProgressContainer,
       onInProgressContainer:
           onInProgressContainer ?? this.onInProgressContainer,
+      overdueContainer: overdueContainer ?? this.overdueContainer,
+      onOverdueContainer: onOverdueContainer ?? this.onOverdueContainer,
       accent: accent ?? this.accent,
     );
   }
@@ -336,6 +348,16 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
       onInProgressContainer: Color.lerp(
         onInProgressContainer,
         other.onInProgressContainer,
+        t,
+      )!,
+      overdueContainer: Color.lerp(
+        overdueContainer,
+        other.overdueContainer,
+        t,
+      )!,
+      onOverdueContainer: Color.lerp(
+        onOverdueContainer,
+        other.onOverdueContainer,
         t,
       )!,
       accent: Color.lerp(accent, other.accent, t)!,
