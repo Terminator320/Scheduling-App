@@ -106,7 +106,9 @@ the iOS `FirebaseOptions`). Android also needs `google-services.json`.
   card/tile and the read-only detail header render `displayStatus`, but the edit
   picker and all writes seed from the real stored `status` (so `overdue` can't
   leak into a write). Don't add `overdue` to `appointmentValues` or the
-  allowlist. (`confirmed` was retired 2026-07-09 when the picker
+  allowlist; reading `AppointmentStatus.overdue.raw` **throws** on purpose so a
+  stray write path fails loudly at the source instead of emitting an
+  off-allowlist value that the rules reject with an opaque `permission-denied`. (`confirmed` was retired 2026-07-09 when the picker
   collapsed to three states; `done` is labeled "Complete" in the UI. Account
   statuses `active`/`invited`/`disabled` live in the separate `UserStatus` enum
   — `shared/widgets/feedback/user_status_chip.dart` — not `AppointmentStatus`.)

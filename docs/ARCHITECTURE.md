@@ -167,7 +167,10 @@ tappable `InfoCardRow`s. Its **Contacts** list (`ClientContactsCards`) skips
 business contacts.
 
 The read-only **appointment** view (`details_view_body.dart`) follows the same
-shape: a `StatusChip` under the title, a Call / Directions quick-action row, and
+shape: a `StatusChip` under the title (showing the time-derived `displayStatus`
+— In progress / Overdue — so the header matches the calendar card, while the
+mark-done/cancel/edit actions still gate on the real stored status), a Call /
+Directions quick-action row, and
 the client shown by **name only** in an `InfoCard` (phone and address are reached
 through the buttons, not repeated as rows), with any extra business contacts
 below via the same `ClientContactsCards`. Empty sections — notes, materials,
@@ -272,11 +275,11 @@ Free-text input length caps live in `lib/core/validators/text_limits.dart`. The 
 2. Form validators (`AppointmentFormValidator`) — defensive backup.
 3. Firestore rules (where applicable) — defense in depth.
 
-Status enums (`AppointmentStatus` written by `updateAppointmentStatus`) are allowlisted at both the repository (`{pending, in_progress, done, cancelled}`) and `firestore.rules`. Employees can only write `status='done'`. Edits that re-serialize a whole record normalize the stored status through `AppointmentStatus.fromRaw(status).raw` first (seed + series `propagate`) so a legacy `confirmed`/unknown value can't be re-written verbatim and rejected.
+Status enums (`AppointmentStatus` written by `updateAppointmentStatus`) are allowlisted at both the repository (`{pending, in_progress, done, cancelled}`) and `firestore.rules`. Employees can only write `status='done'`. Edits that re-serialize a whole record normalize the stored status through `AppointmentStatus.fromRaw(status).raw` first (seed + series `propagate`) so a legacy `confirmed`/unknown value can't be re-written verbatim and rejected. `AppointmentStatus.overdue` is a **display-only** state — never stored, never in the picker (`appointmentValues`) or allowlist; `AppointmentRecord.displayStatus` derives it (and `in_progress`) from the clock, and reading `overdue.raw` throws so it can't leak into a write.
 
 ### Theming
 
-`ThemeNotifier` (InheritedWidget) holds `ThemeMode`, `textScale`, and language. `design_tokens.dart` is the single source of truth for spacing, radius, shadows, and durations. **Never hardcode raw colours in `build()`** — always use `Theme.of(context).colorScheme.*`. Status colours that have no Material 3 analog (success green, warning amber, invited purple) live in `AppStatusColors`, a `ThemeExtension` registered on both light and dark `ThemeData`.
+`ThemeNotifier` (InheritedWidget) holds `ThemeMode`, `textScale`, and language. `design_tokens.dart` is the single source of truth for spacing, radius, shadows, and durations. **Never hardcode raw colours in `build()`** — always use `Theme.of(context).colorScheme.*`. Status colours that have no Material 3 analog (success green, warning amber, invited purple, in-progress blue, overdue orange) live in `AppStatusColors`, a `ThemeExtension` registered on both light and dark `ThemeData`.
 
 ### Platform Adaptivity (iOS)
 
@@ -594,7 +597,7 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (742 test cases as of 2026-07-09). `flutter analyze` is
+Run: `flutter test` (743 test cases as of 2026-07-10). `flutter analyze` is
 clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.
