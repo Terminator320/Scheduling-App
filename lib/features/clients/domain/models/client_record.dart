@@ -1,5 +1,7 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'package:scheduling/core/utils/firestore_parsing.dart';
+
 part 'client_record.freezed.dart';
 
 @freezed
@@ -86,7 +88,7 @@ abstract class ClientRecord with _$ClientRecord {
           .map((c) => ClientContact.fromMap(Map<String, dynamic>.from(c)))
           .toList(),
       noFixedAddress: (data['noFixedAddress'] as bool?) ?? false,
-      createdAt: _parseDateTime(data['createdAt']),
+      createdAt: firestoreDateTime(data['createdAt']),
       waveCustomerId: data['waveCustomerId']?.toString(),
       waveSyncState: (wave?['syncState'] ?? '').toString(),
       waveSyncError: wave?['syncError']?.toString(),
@@ -114,15 +116,4 @@ abstract class ClientRecord with _$ClientRecord {
   };
 
   String get displayName => name;
-
-  static DateTime? _parseDateTime(dynamic value) {
-    if (value == null) return null;
-    if (value is DateTime) return value;
-    if (value is String) return DateTime.tryParse(value);
-    final typeName = value.runtimeType.toString();
-    if (typeName == 'Timestamp') {
-      return (value as dynamic).toDate() as DateTime;
-    }
-    return null;
-  }
 }

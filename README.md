@@ -36,11 +36,17 @@ Building for iOS requires a Mac — see [docs/IOS_MAC_BUILD.md](docs/IOS_MAC_BUI
 ### Appointment Scheduling
 A full-featured monthly calendar lets administrators plan, assign, and manage service appointments. Each appointment captures everything needed in the field: client details, service address, assigned employees, time window, materials required, internal notes, and status. Administrators have a complete view of all scheduled work; employees see only the appointments assigned to them.
 
+### Admin Dashboard
+A single overview screen gives administrators the day at a glance: today's visits broken down by status, how many are still unassigned, each employee's workload for today and the week, an eight-week trend of completed versus cancelled jobs and new clients, the busiest weekday, and an attention list flagging jobs starting soon or already running overdue.
+
+### Push Notifications
+Field employees are kept in the loop automatically — they receive a push when they're assigned to, rescheduled on, or removed from a visit, a reminder shortly before a job is due to start, a nudge to close out a job once it runs past its end time, and an end-of-day summary of the next day's work. On iPhone, a home-screen widget shows an employee's remaining jobs for the day and their next upcoming visit.
+
 ### Client Records
 A searchable directory of clients, listed alphabetically by name — including customer name, optional first/last name, service address, billing contacts, phone, and mobile numbers. Records update in real time across all devices. The search engine matches customer name, first name, last name, phone, and mobile, handling accent characters and partial matches to keep lookups fast even with large client bases.
 
 ### Wave Accounting Sync
-Administrators can connect the business's [Wave](https://www.waveapps.com) account and import its existing customers into the app. From then on, every client added or edited is synced to Wave automatically in the background, and each client carries a small status badge — *synced*, *sync pending*, or *sync error*. The sync runs entirely server-side, so it never slows the app down, and a Wave outage simply leaves a client "pending" rather than failing the save. The target Wave business is selected server-side, so nothing about the account is configured in the app.
+Administrators can connect the business's [Wave](https://www.waveapps.com) account and import its existing customers into the app. From then on, every client added or edited is synced to Wave automatically in the background, and each client carries a small status badge — *synced*, *sync pending*, or *sync error*. Customer imports can also be scheduled to run automatically on a weekly or monthly cadence (or left off). The sync runs entirely server-side, so it never slows the app down, and a Wave outage simply leaves a client "pending" rather than failing the save. The target Wave business is selected server-side, so nothing about the account is configured in the app.
 
 ### Employee Management
 Administrators onboard employees through a controlled invite flow: an employee account is created by the admin first, and only pre-invited email addresses are permitted to self-register. Each employee is assigned a distinct display color that appears on the calendar, making workload distribution and scheduling conflicts immediately visible.

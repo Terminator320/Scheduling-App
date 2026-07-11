@@ -16,6 +16,35 @@
 > (`sendOverdueJobPrompts` + `runOverduePromptSweep` + ledger rules + tests);
 > deploy + device verify pending with the rest of Phase 4.
 
+## Deployment status (2026-07-11)
+
+**Live in prod:** all 4 push Cloud Functions + the updated `firestore.rules`
+were deployed 2026-07-11 (Phase 4's function/rules step is DONE), and the
+Flutter client (Phase 3) plus the widget Flutter/Swift sources (Phase 5) are
+merged on the `notification` branch.
+
+**Done on the Mac (Phase 6, 2026-07-11):**
+
+- [x] **iOS-native push** — APNs Auth Key (.p8) in the Firebase Console +
+      **Push Notifications** capability/entitlement on Runner.
+- [x] **iOS widget wiring** — `ScheduleWidget` Widget Extension target added
+      with the pre-authored `ios/ScheduleWidget/*.swift` and the **App Groups**
+      entitlement (`group.net.vogas.scheduling`) on BOTH Runner and the
+      extension.
+
+**Still remaining before push + widget actually work end-to-end:**
+
+- [ ] **App release** — the client changes are unshipped (uncommitted at release
+      `1.29.0+48`); nothing is on the App Store yet. Push/widget only exist in
+      local builds until an iOS release goes out (App Store only, needs a Mac).
+- [ ] **Firestore TTL policy** — enable TTL on `expiresAt` for **both**
+      `appointmentReminders` and `appointmentOverduePrompts` (GCP Console →
+      Firestore → Time-to-live). The functions already write `expiresAt +7d`,
+      but without the policy the ledger docs never self-delete.
+- [ ] **On-device verification** — push delivery (assignment/reminder/overdue/
+      digest) and the home-screen widget still need a real-hardware pass now
+      that the native wiring is in place.
+
 ## Context
 
 Employees currently have no way to know a job was assigned, moved, or cancelled unless they open the app. This feature adds phone notifications (user-approved decisions):

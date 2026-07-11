@@ -1,5 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 
@@ -34,8 +35,8 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     return AppointmentRecord(
       id: id,
       title: (data['title'] ?? '').toString(),
-      startTime: _parseDateTime(data['startTime']) ?? DateTime.now(),
-      endTime: _parseDateTime(data['endTime']) ?? DateTime.now(),
+      startTime: firestoreDateTime(data['startTime']) ?? DateTime.now(),
+      endTime: firestoreDateTime(data['endTime']) ?? DateTime.now(),
       clientId: (data['clientId'] ?? '').toString(),
       clientName: (data['clientName'] ?? '').toString(),
       clientPhone: (data['clientPhone'] ?? '').toString(),
@@ -47,8 +48,8 @@ abstract class AppointmentRecord with _$AppointmentRecord {
       status: (data['status'] ?? 'pending').toString(),
       repeat: RepeatInterval.fromRaw((data['repeat'] ?? '').toString()),
       seriesId: (data['seriesId'] ?? '').toString(),
-      createdAt: _parseDateTime(data['createdAt']),
-      updatedAt: _parseDateTime(data['updatedAt']),
+      createdAt: firestoreDateTime(data['createdAt']),
+      updatedAt: firestoreDateTime(data['updatedAt']),
       pictures: _parseImageList(data['pictures']),
     );
   }
@@ -86,17 +87,6 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     if (now.isAfter(endTime)) return 'overdue';
     if (now.isAfter(startTime)) return 'in_progress';
     return status;
-  }
-
-  static DateTime? _parseDateTime(dynamic value) {
-    if (value == null) return null;
-    if (value is DateTime) return value;
-    if (value is String) return DateTime.tryParse(value);
-    final typeName = value.runtimeType.toString();
-    if (typeName == 'Timestamp') {
-      return (value as dynamic).toDate() as DateTime;
-    }
-    return null;
   }
 
   static List<String> _parseStringList(dynamic value) {

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/dashboard/domain/assignee_names.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
@@ -131,7 +132,8 @@ class _AlertRow extends StatelessWidget {
     ).format(appointment.startTime);
     final timeLabel = DateUtilsHelper.formatTime(appointment.startTime);
     final who =
-        _assigneeNames(appointment) ?? context.l10n.dashboard_unassigned;
+        resolveAssigneeNames(appointment, nameMap) ??
+        context.l10n.dashboard_unassigned;
     return Container(
       decoration: appCardDecoration(theme, color: scheme.surface),
       clipBehavior: Clip.antiAlias,
@@ -181,17 +183,5 @@ class _AlertRow extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  String? _assigneeNames(AppointmentRecord appointment) {
-    final names = [
-      for (final id in appointment.employeeIds)
-        if (nameMap[id] != null) nameMap[id]!,
-    ];
-    if (names.isNotEmpty) return names.join(', ');
-    if (appointment.employeeNames.isNotEmpty) {
-      return appointment.employeeNames.join(', ');
-    }
-    return null;
   }
 }

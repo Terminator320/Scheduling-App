@@ -55,12 +55,15 @@ lib/
     ├── auth/                        Sign-in, account creation, password reset, account-status monitoring
     ├── calendar/                    Appointments — creation, editing, viewing, repeating series, image uploads
     ├── clients/                     Client management — CRUD, contacts, appointment history
+    ├── dashboard/                   Admin dashboard — pure stat reducers (DashboardAggregator) over one 8-week appointments range → hero/workload/trends/attention sections + fl_chart WeeklyBarChart
     ├── employees/                   Employee roster — colours, roles, disable/enable
+    ├── home_widget/                 iOS home-screen schedule widget — WidgetSyncService writes remaining-today + next jobs into the App Group (home_widget); Android no-op
     ├── maps/                        Google Places address autocomplete and map launcher
+    ├── notifications/               FCM push client — PushRegistrationController (token upsert for active employees/admins), FcmTokenRepository, push_notification_service
     ├── onboarding/                  First-launch intro carousel (OnboardingGate = app home) + onboardingSeen gate
     ├── settings/                    Theme, text scale, language, app version, biometric app-lock toggle
     ├── splash/                      Auth resolution on cold start (screen + routing logic)
-    └── wave/                        Wave Accounting integration — read-only connection status + per-client sync badge (all writes are Cloud-Function-owned)
+    └── wave/                        Wave Accounting integration — read-only connection status + per-client sync badge + auto-import cadence picker (all writes are Cloud-Function-owned)
 ```
 
 ---
@@ -549,6 +552,9 @@ clients/{docId}
                        Functions (Admin SDK). The app reads `wave.syncState` /
                        `wave.syncError` for the per-client sync badge; `toMap`
                        must never emit these (firestore.rules rejects it)
+  createdAt, updatedAt         server timestamps; the list/search order by
+                       `createdAt`, so Firestore excludes any doc missing it
+                       (legacy docs without it are invisible in-app)
 ```
 
 Backend-managed collections (Admin SDK only — `firestore.rules` denies client writes;
@@ -574,22 +580,28 @@ signupCodes/{sha256(code)}  One-time invited-signup codes (hash only — the
   email: string        must equal the redeemer's auth token email
   expiresAt: timestamp 14-day lifetime; expired codes rejected (read+write denied)
 
-appointmentReminders/{apptId_startMs}   Idempotency ledger for the 30-min
-                       reminder sweep: create() fails if the doc exists → one
-                       reminder per occurrence; a reschedule changes the key
+appointmentReminders/{apptId_startMs_employeeDocId}   Per-recipient idempotency
+                       ledger for the 30-min reminder sweep: create() fails if
+                       the doc exists → one reminder per occurrence per assignee;
+                       a reschedule changes the key. A claim that delivered zero
+                       pushes is released so a late-registering token retries
+                       without re-notifying an already-delivered assignee
                        (read+write denied).
   createdAt: timestamp
   expiresAt: timestamp +7d — target of the console-enabled Firestore TTL policy
 
-appointmentOverduePrompts/{apptId_endMs}   Same ledger pattern for the overdue
-                       "job finished?" prompt, keyed on END time; a claim that
-                       delivered zero pushes is released (doc deleted) so a
-                       later sweep retries (read+write denied).
+appointmentOverduePrompts/{apptId_endMs_employeeDocId}   Same per-recipient
+                       ledger pattern for the overdue "job finished?" prompt,
+                       keyed on END time; a claim that delivered zero pushes is
+                       released (doc deleted) so a later sweep retries
+                       (read+write denied).
   createdAt, expiresAt same shape/TTL as appointmentReminders
 
 wave/{docId}           Wave Accounting connection metadata (e.g. wave/connection:
-                       status, businessId, last-sync timestamps). Token lives only
-                       in Secret Manager. Read only via the waveGetConnection
+                       status, businessId, businessName, last-sync timestamps,
+                       importSchedule 'off'|'weekly'|'monthly' + lastAutoImportAt
+                       for the daily waveScheduledImport). Token lives only in
+                       Secret Manager. Read only via the waveGetConnection
                        callable — never client-side (read+write denied).
 
 waveSyncQueue/{jobId}  Outbox for Wave sync jobs — enqueued by the waveUpsertCustomer
@@ -622,7 +634,7 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (743 test cases as of 2026-07-10). `flutter analyze` is
+Run: `flutter test` (792 test cases as of 2026-07-11). `flutter analyze` is
 clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.

@@ -177,20 +177,16 @@ Swift widget (`ios/ScheduleWidget/ScheduleWidget.swift`). These Mac-only steps
 remain.
 
 ### Push notifications
-- [ ] **APNs Auth Key** — Apple Developer portal → Keys → create an APNs Auth
-  Key (`.p8`); note the **Key ID** and your **Team ID**.
-- [ ] **Firebase** — Console → Project settings → Cloud Messaging → the iOS app
-  `net.vogas.scheduling` → upload the `.p8` (Key ID + Team ID).
-- [ ] **Xcode capability** — Runner target → Signing & Capabilities → add
-  **Push Notifications**. Commit the generated `Runner.entitlements`.
+- [x] **APNs Auth Key** — created + noted Key ID / Team ID (2026-07-11).
+- [x] **Firebase** — `.p8` uploaded to Cloud Messaging for the iOS app
+  `net.vogas.scheduling` (2026-07-11).
+- [x] **Xcode capability** — **Push Notifications** added to Runner;
+  `Runner.entitlements` committed (2026-07-11).
 - [ ] No `UIBackgroundModes` needed (display messages only). **Never** run
   `flutterfire configure`. SwiftPM pulls `FirebaseMessaging` automatically on
   first open.
-- [ ] Deploy the functions + rules from any machine with the Firebase CLI:
-  `firebase deploy --only firestore:rules` then
-  `--only functions:notifyAppointmentChanges,functions:sendUpcomingJobReminders,functions:sendDailyJobDigest,functions:sendOverdueJobPrompts,functions:deleteAccount`
-  (the last re-deploys the `recursiveDelete` change that also clears
-  `fcmTokens`).
+- [x] Functions + rules deployed 2026-07-11 (all 4 push functions +
+  `deleteAccount` re-deploy + `firestore:rules`).
 - [ ] One-time: enable a Firestore **TTL policy** on the `expiresAt` field of
   BOTH ledger collections (`appointmentReminders` and
   `appointmentOverduePrompts`) — Google Cloud Console → Firestore →
@@ -199,14 +195,11 @@ remain.
   after creation instead of accumulating forever.
 
 ### iOS home-screen widget
-- [ ] **Widget Extension target** — File → New → Target → Widget Extension named
-  `ScheduleWidget` (no intent configuration). Delete the template Swift files
-  and add the pre-authored `ios/ScheduleWidget/ScheduleWidget.swift`.
-- [ ] **App Groups** — add the **App Groups** capability
-  (`group.net.vogas.scheduling`) to **BOTH** the Runner target and the
-  ScheduleWidget extension. (The Flutter side already writes to this group via
-  `home_widget`.)
-- [ ] Set the extension's deployment target to **iOS 15.0** (matches Runner).
+- [x] **Widget Extension target** — `ScheduleWidget` extension added with the
+  pre-authored `ios/ScheduleWidget/ScheduleWidget.swift` (2026-07-11).
+- [x] **App Groups** — `group.net.vogas.scheduling` added to **BOTH** Runner
+  and the ScheduleWidget extension (2026-07-11).
+- [x] Extension deployment target set to **iOS 15.0** (matches Runner).
 
 ### Device verification (physical iPhone — App Attest fails on Simulator)
 - [ ] Employee sign-in → a `users/{docId}/fcmTokens/{token}` doc appears in the
