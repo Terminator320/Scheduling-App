@@ -1,14 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/wave/application/wave_providers.dart';
 import 'package:scheduling/features/wave/domain/models/wave_connection.dart';
+import 'package:scheduling/features/wave/domain/models/wave_import_schedule.dart';
 import 'package:scheduling/features/wave/domain/wave_failure.dart';
 import 'package:scheduling/l10n/l10n.dart';
+
+/// Localized label for an automatic-import cadence — used by the picker row and
+/// the action sheet.
+String _scheduleLabel(BuildContext context, WaveImportSchedule schedule) =>
+    switch (schedule) {
+      WaveImportSchedule.off => context.l10n.wave_autoImportOff,
+      WaveImportSchedule.weekly => context.l10n.wave_autoImportWeekly,
+      WaveImportSchedule.monthly => context.l10n.wave_autoImportMonthly,
+    };
 
 /// Admin-only Wave integration controls shown inside the Settings screen.
 ///
@@ -31,6 +42,7 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
   WaveConnection? _connection;
   bool _connectBusy = false;
   bool _importBusy = false;
+  bool _scheduleBusy = false;
 
   Future<void> _connect() async {
     setState(() => _connectBusy = true);
@@ -80,6 +92,45 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
       ref.read(noticeServiceProvider).error(e.toLocalizedMessage(context));
     } finally {
       if (mounted) setState(() => _importBusy = false);
+    }
+  }
+
+  Future<void> _pickSchedule(WaveImportSchedule current) async {
+    final choice = await showAdaptiveActionSheet<WaveImportSchedule>(
+      context,
+      title: context.l10n.wave_autoImportLabel,
+      actions: [
+        for (final s in WaveImportSchedule.values)
+          AdaptiveSheetAction(value: s, label: _scheduleLabel(context, s)),
+      ],
+    );
+    if (choice == null || choice == current) return;
+
+    setState(() => _scheduleBusy = true);
+    try {
+      await ref.read(waveServiceProvider).setImportSchedule(choice);
+      if (!mounted) return;
+      // Reflect the new cadence locally; the connection provider is invalidated
+      // so a later Settings mount re-reads the persisted value.
+      final base = _connection ?? ref.read(waveConnectionProvider).value;
+      if (base != null) {
+        setState(() {
+          _connection = WaveConnection(
+            businessId: base.businessId,
+            businessName: base.businessName,
+            importSchedule: choice,
+          );
+        });
+      }
+      ref.invalidate(waveConnectionProvider);
+      ref
+          .read(noticeServiceProvider)
+          .success(context.l10n.wave_autoImportUpdated);
+    } on WaveFailure catch (e) {
+      if (!mounted) return;
+      ref.read(noticeServiceProvider).error(e.toLocalizedMessage(context));
+    } finally {
+      if (mounted) setState(() => _scheduleBusy = false);
     }
   }
 
@@ -133,6 +184,32 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
                 ),
               ],
             ),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.sync_rounded),
+            title: Text(context.l10n.wave_autoImportLabel),
+            trailing: _scheduleBusy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: AdaptiveProgressIndicator(),
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _scheduleLabel(context, connection.importSchedule),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right_rounded),
+                    ],
+                  ),
+            onTap: _connectBusy || _importBusy || _scheduleBusy
+                ? null
+                : () => _pickSchedule(connection.importSchedule),
           ),
         ],
         // Connect is first-time setup only — once connected, the persisted
