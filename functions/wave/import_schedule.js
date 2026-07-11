@@ -16,10 +16,10 @@ const SCHEDULE_VALUES = ["off", "weekly", "monthly"];
 
 /**
  * Decides whether a scheduled Wave import should run now.
- * @param {string} schedule One of `off` | `weekly` | `monthly`. Anything else
- *   (including undefined/"") is treated as `off`.
- * @param {?number} lastAutoImportMs Epoch ms of the last successful auto-import,
- *   or null/undefined when it has never run.
+ * @param {string} schedule One of `off` | `weekly` | `monthly`. Anything
+ *   else (including undefined/"") is treated as `off`.
+ * @param {?number} lastAutoImportMs Epoch ms of the last successful
+ *   auto-import, or null/undefined when it has never run.
  * @param {number} nowMs Current epoch ms.
  * @return {boolean} True when the import is due.
  */

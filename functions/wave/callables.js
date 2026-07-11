@@ -15,12 +15,18 @@ const {
 } = require("./worker");
 const {mappedFieldsHash} = require("./mappers");
 const {classifyWaveError} = require("./errors");
+const {isImportDue, SCHEDULE_VALUES} = require("./import_schedule");
 
 const {
   assertPayloadShape,
   assertAdmin,
   enforceDurableRateLimit,
 } = require("../security");
+
+// Accepted automatic-import cadences (mirrors the app's WaveImportSchedule enum
+// and the wave/connection field). "off" is the default when the field is
+// absent.
+const IMPORT_SCHEDULE_SET = new Set(SCHEDULE_VALUES);
 
 // waveImportCustomers is a heavy one-shot admin op (it paginates ~650 customers
 // across ~7 Wave pages). A modest durable cap keeps a stuck/retried admin from
@@ -211,7 +217,46 @@ const waveGetConnection = onCall(
         data.businessId : "";
       const businessName = data && typeof data.businessName === "string" ?
         data.businessName : "";
-      return {connected: Boolean(businessId), businessId, businessName};
+      const rawSchedule = data && typeof data.importSchedule === "string" ?
+        data.importSchedule : "off";
+      const importSchedule =
+        IMPORT_SCHEDULE_SET.has(rawSchedule) ? rawSchedule : "off";
+      return {
+        connected: Boolean(businessId),
+        businessId,
+        businessName,
+        importSchedule,
+      };
+    },
+);
+
+// 2b) waveSetImportSchedule — admin-only setter for the automatic-import
+// cadence. Writes the `importSchedule` field on the single wave/connection doc.
+// No secret, no rate limit (a cheap Firestore write); App Check + admin only.
+const waveSetImportSchedule = onCall(
+    {enforceAppCheck: true},
+    async (req) => {
+      if (!req.auth || !req.auth.uid) {
+        throw new HttpsError("unauthenticated", "auth-required");
+      }
+      assertPayloadShape(req.data, new Set(["schedule"]));
+      await assertAdmin(req.auth.uid);
+
+      const schedule = req.data && req.data.schedule;
+      if (typeof schedule !== "string" || !IMPORT_SCHEDULE_SET.has(schedule)) {
+        throw new HttpsError("invalid-argument", "wave/invalid-schedule");
+      }
+
+      const ref = getFirestore().collection("wave").doc("connection");
+      const snap = await ref.get();
+      const data = snap.exists ? snap.data() : null;
+      if (!data || typeof data.businessId !== "string" || !data.businessId) {
+        throw new HttpsError("failed-precondition", "wave/not-bootstrapped");
+      }
+
+      await ref.update({importSchedule: schedule});
+      logger.info("WAVE-SCHED set", {uid: req.auth.uid, schedule});
+      return {schedule};
     },
 );
 
@@ -372,11 +417,66 @@ const waveSyncWorker = onSchedule(
     },
 );
 
+// 5) waveScheduledImport — daily Wave → App auto-import. Runs importCustomers()
+// only when the configured cadence is due (see isImportDue). Server-triggered,
+// so no App Check / rate limit. Idempotent import path; a per-run failure is
+// logged (there is no user to surface it to) and retried on the next day's run.
+const waveScheduledImport = onSchedule(
+    {
+      schedule: "every 24 hours",
+      secrets: [WAVE_FULL_ACCESS_TOKEN],
+      maxInstances: 1,
+      timeoutSeconds: 300,
+    },
+    async () => {
+      const snap = await getFirestore()
+          .collection("wave").doc("connection").get();
+      const data = snap.exists ? snap.data() : null;
+      const businessId = data && typeof data.businessId === "string" ?
+        data.businessId : "";
+      if (!businessId) {
+        logger.debug("waveScheduledImport: not connected — nothing to do");
+        return;
+      }
+      const schedule = data && typeof data.importSchedule === "string" ?
+        data.importSchedule : "off";
+      const lastAt = data && data.lastAutoImportAt &&
+        typeof data.lastAutoImportAt.toMillis === "function" ?
+        data.lastAutoImportAt.toMillis() : null;
+      if (!isImportDue(schedule, lastAt, Date.now())) {
+        logger.debug("waveScheduledImport: not due", {schedule});
+        return;
+      }
+
+      logger.info("WAVE-SCHED import starting", {businessId, schedule});
+      let summary;
+      try {
+        summary = await importCustomers({businessId, graphql});
+      } catch (e) {
+        const {code, message} = classifyWaveError(e);
+        logger.warn("WAVE-SCHED import failed", {code, message});
+        return; // leave lastAutoImportAt unchanged → retried next run
+      }
+
+      await getFirestore().collection("wave").doc("connection").update({
+        lastAutoImportAt: FieldValue.serverTimestamp(),
+      });
+      logger.info("WAVE-SCHED import done", {
+        imported: summary.imported,
+        updated: summary.updated,
+        skippedArchived: summary.skippedArchived,
+        pages: summary.pages,
+      });
+    },
+);
+
 module.exports = {
   selectBusiness,
   waveBootstrap,
   waveGetConnection,
+  waveSetImportSchedule,
   waveImportCustomers,
   waveUpsertCustomer,
+  waveScheduledImport,
   waveSyncWorker,
 };
