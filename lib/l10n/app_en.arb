@@ -157,6 +157,10 @@
   "@calendar_noAppointmentsForDay": {
     "description": "Empty-state body shown to employees (who cannot create appointments) when the selected day has none."
   },
+  "calendar_appointmentUnavailable": "This appointment is no longer available.",
+  "@calendar_appointmentUnavailable": {
+    "description": "Info notice shown when a tapped notification's appointment can't be opened because it was deleted or is no longer accessible."
+  },
   "common_language": "Language",
   "@common_language": {
     "description": "Language"
@@ -1401,6 +1405,26 @@
   "wave_importCustomers": "Import customers from Wave",
   "@wave_importCustomers": {
     "description": "Button label: triggers Wave customer import"
+  },
+  "wave_autoImportLabel": "Automatic import",
+  "@wave_autoImportLabel": {
+    "description": "Settings label for the Wave automatic-import cadence picker."
+  },
+  "wave_autoImportOff": "Off",
+  "@wave_autoImportOff": {
+    "description": "Wave automatic-import cadence: disabled."
+  },
+  "wave_autoImportWeekly": "Weekly",
+  "@wave_autoImportWeekly": {
+    "description": "Wave automatic-import cadence: once a week."
+  },
+  "wave_autoImportMonthly": "Monthly",
+  "@wave_autoImportMonthly": {
+    "description": "Wave automatic-import cadence: once a month."
+  },
+  "wave_autoImportUpdated": "Automatic import updated.",
+  "@wave_autoImportUpdated": {
+    "description": "Success notice after changing the Wave automatic-import cadence."
   },
   "wave_connectedSuccess": "Connected to {businessName}",
   "@wave_connectedSuccess": {
