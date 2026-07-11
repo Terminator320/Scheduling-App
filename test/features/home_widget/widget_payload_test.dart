@@ -37,6 +37,16 @@ void main() {
       expect((jobs.last as Map)['title'], 'Job later');
     });
 
+    test('each job carries its appointment id for the widget deep-link', () {
+      final payload = buildWidgetPayload([
+        _appt(id: 'soon', start: DateTime(2026, 7, 8, 14)),
+      ], _now);
+
+      final jobs = payload['jobs'] as List;
+      expect((jobs.first as Map)['id'], 'soon');
+      expect((payload['nextJob'] as Map)['id'], 'soon');
+    });
+
     test('nextJob can be on a later day when today has none left', () {
       final payload = buildWidgetPayload([
         _appt(id: 'past', start: DateTime(2026, 7, 8, 9)),

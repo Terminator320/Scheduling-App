@@ -29,6 +29,7 @@ private let isoWithMillis: ISO8601DateFormatter = {
 private let isoNoMillis = ISO8601DateFormatter()
 
 struct Job: Codable, Hashable {
+    let id: String
     let startTime: String
     let clientName: String
     let title: String
@@ -38,6 +39,13 @@ struct Job: Codable, Hashable {
     var start: Date? {
         isoWithMillis.date(from: startTime)
             ?? isoNoMillis.date(from: startTime)
+    }
+
+    /// Deep link into the app's calendar for this appointment. The Flutter
+    /// side (home_widget `widgetClicked`) opens its detail sheet. Scheme is
+    /// registered in Info.plist (`CFBundleURLTypes`).
+    var deepLink: URL? {
+        URL(string: "esproschedule://appointment?id=\(id)")
     }
 }
 
@@ -227,7 +235,13 @@ struct ListView: View {
                 Spacer()
             } else {
                 ForEach(jobs.prefix(maxRows), id: \.self) { job in
-                    JobRow(job: job, french: french)
+                    if let url = job.deepLink {
+                        Link(destination: url) {
+                            JobRow(job: job, french: french)
+                        }
+                    } else {
+                        JobRow(job: job, french: french)
+                    }
                 }
                 if jobs.count > maxRows {
                     Text(moreLabel(jobs.count - maxRows, french: french))
@@ -257,7 +271,11 @@ struct ScheduleWidgetEntryView: View {
     private var content: some View {
         switch family {
         case .systemSmall:
+            // systemSmall can't host per-row Links, so the whole widget links
+            // to the shown "next job" (falls back to a plain app launch when
+            // there's none).
             SmallView(payload: entry.payload)
+                .widgetURL(entry.payload?.nextJob?.deepLink)
         case .systemLarge:
             ListView(payload: entry.payload, maxRows: 6)
         default:
