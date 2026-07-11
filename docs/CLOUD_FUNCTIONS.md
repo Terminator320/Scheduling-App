@@ -3,9 +3,10 @@
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
 refreshed 2026-07-10 by auditing the source against the app's call sites and
-the live deployment. **Every callable now enforces App Check**
-(`enforceAppCheck: true`); the earlier `TODO(pre-ship)` carve-outs were retired
-in 1.25.1 (`grep -rn "enforceAppCheck: false" functions` returns nothing).
+the live deployment (push-notification functions added the same day).
+**Every callable now enforces App Check** (`enforceAppCheck: true`); the
+earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
+(`grep -rn "enforceAppCheck: false" functions` returns nothing).
 
 - **Project:** `schedulingapp-88727` · **Region:** `us-central1` (except
   `validateUploadedImage`, pinned to `us-east1` by its Storage bucket)
@@ -20,9 +21,17 @@ in 1.25.1 (`grep -rn "enforceAppCheck: false" functions` returns nothing).
 
 ## Deployment status
 
-- **14 functions defined** in code, **all 14 deployed** — verified live against
+- **18 functions defined** in code; **14 deployed** — verified live against
   `schedulingapp-88727` on 2026-07-10 (v2, Node.js 24, 256 MB; `us-central1`
   except `validateUploadedImage` in `us-east1`).
+- The 4 **push-notification functions** (`notifyAppointmentChanges`,
+  `sendUpcomingJobReminders`, `sendDailyJobDigest`, `sendOverdueJobPrompts`)
+  are built + tested but **NOT yet deployed** (2026-07-10) — pending the
+  Phase 4 deploy in `docs/plans/2026-07-08-push-notifications.md`, together
+  with the updated `firestore.rules`, a `deleteAccount` re-deploy (its
+  `recursiveDelete` change), and the one-time Firestore **TTL policy** on
+  `expiresAt` for the `appointmentReminders` / `appointmentOverduePrompts`
+  ledgers.
 - `backfillLegacyClientNames` (a one-time migration completed `2026-06-29`,
   `fixed: 0`) was removed from the codebase 2026-07-05 and is **no longer in the
   deployed set** (confirmed 2026-07-10) — it was pruned by a full
@@ -44,15 +53,21 @@ in 1.25.1 (`grep -rn "enforceAppCheck: false" functions` returns nothing).
 | `propagateClientEdits` | trigger | `onDocumentUpdated clients/{id}` | `client_propagation.js` | any `clients` doc edit | — | `retry: true` |
 | `waveUpsertCustomer` | trigger | `onDocumentWritten clients/{id}` | `wave/callables.js` | any `clients` doc write | — | `retry: true` |
 | `validateUploadedImage` | trigger | `onObjectFinalized` (Storage) | `maintenance.js` | `appointments/*/images/*` upload | — | region `us-east1` |
+| `notifyAppointmentChanges` | trigger | `onDocumentWritten appointments/{id}` | `notifications.js` | any appointment write | — | no `retry` (dupe push worse than missed) |
 | `purgeExpiredHistory` | scheduled | `every day 03:00` (Toronto) | `maintenance.js` | nightly | — | `maxInstances: 1` · 540s |
 | `waveSyncWorker` | scheduled | `every 5 minutes` | `wave/callables.js` | timer | `WAVE_FULL_ACCESS_TOKEN` | `maxInstances: 1` · 540s |
+| `sendUpcomingJobReminders` | scheduled | `every 5 minutes` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` · ledger |
+| `sendDailyJobDigest` | scheduled | `0 18 * * *` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` |
+| `sendOverdueJobPrompts` | scheduled | `every 15 minutes` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` · ledger |
 
 ## Auth & accounts
 
 ### `deleteAccount` — `account.js`
 Self-service account deletion (Apple 5.1.1(v) / Google Play account-deletion
-policy). Deletes the caller's `users/{docId}` doc and their Firebase Auth user;
-the `syncUsersByUid` trigger then clears the `usersByUid` bridge. Deliberately
+policy). Deletes the caller's `users/{docId}` doc via `recursiveDelete` (the
+doc **plus all its subcollections** — `fcmTokens` today, `presence` when the
+travel-time plan lands) and their Firebase Auth user; the `syncUsersByUid`
+trigger then clears the `usersByUid` bridge. Deliberately
 does **not** touch shared business data (appointments, clients, images).
 Requires a fresh re-auth: rejects `stale-auth` if the ID token's `auth_time` is
 older than 5 minutes (checked before the rate limiter so a stale rejection
@@ -111,6 +126,52 @@ Nightly at 03:00 America/Toronto. Deletes `done`/`cancelled` appointments whose
 deleted before the Firestore doc so a Storage failure keeps the doc for the next
 night's retry rather than orphaning PII bytes. Non-terminal appointments are
 never touched. 540s timeout; leftovers carry to the next run.
+
+## Push notifications (FCM)
+
+All four live in `notifications.js` (thin trigger registrations); the logic —
+diff/message/candidate helpers plus the injectable orchestration — is in
+`notification_utils.js` (no admin/scheduler requires, so jest drives it with
+mocked `{db, messaging, now, logger}`). Recipients are always filtered
+server-side to `role == 'employee' && status == 'active'`; tokens live in
+`users/{docId}/fcmTokens/{token}` (doc id = token, keyed by users **doc id**
+so the send path needs no uid translation), and stale tokens are deleted on
+send failure. Text is localized per token doc (`locale: 'en'|'fr'`) from an
+inline EN/FR table; every message sets `android: {priority: 'high'}` and an
+APNs `sound` so delivery isn't doze-deferred/silent. **NOT yet deployed** —
+see Deployment status. Design: `docs/plans/2026-07-08-push-notifications.md`.
+
+### `notifyAppointmentChanges` — `notifications.js`
+`appointments/{id}` write trigger → assignment / reschedule / cancel /
+unassignment pushes. Diffs before/after (`diffAppointmentForNotifications`):
+one event per employee, priority `cancelled > removed > rescheduled >
+assigned`; past appointments skipped. Deliberately **no `retry: true`** — a
+duplicate push is worse than a rare missed one.
+
+### `sendUpcomingJobReminders` — `notifications.js`
+Every 5 min (Toronto). Queries `status in [pending, confirmed]` (legacy alias)
+with `startTime` in `(now, now+30min]` on the existing `(status, startTime)`
+index, then fires one localized reminder per assignee. Exactly-once via the
+Admin-SDK-only `appointmentReminders/{id}_{startMs}` ledger (`create()` fails
+if it exists; a reschedule changes the key → fresh reminder). Ledger docs
+carry `expiresAt` (+7 d) for the console-enabled Firestore TTL policy.
+
+### `sendDailyJobDigest` — `notifications.js`
+Daily 18:00 Toronto. Groups tomorrow's (Toronto-midnight-bounded) jobs by
+employee; one summary push per employee with ≥1 job. No ledger (runs once
+daily; a rare crash-retry duplicate is accepted).
+
+### `sendOverdueJobPrompts` — `notifications.js`
+Every 15 min (Toronto). The "job finished?" nudge: pushes assignees of a job
+whose `endTime` passed within the last 24 h while its status is still open
+(`pending`/`in_progress`/legacy `confirmed` — server mirror of the app's
+display-only `overdue` state; nothing is ever stored). Queries by `startTime`
+over the last **48 h** (24 h eligibility + the <24 h max booking) so no new
+index is needed, then filters `endTime ∈ (now-24h, now]` in code. At-most-once
+via the `appointmentOverduePrompts/{id}_{endMs}` ledger; a claim that
+delivered **zero** pushes is released (doc deleted) so a later sweep retries,
+and each candidate's send loop is isolated so one transient failure can't
+abort the sweep.
 
 ## User → uid bridge
 
