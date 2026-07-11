@@ -23,7 +23,11 @@ bool _isTerminal(AppointmentRecord a) {
 }
 
 Map<String, dynamic> _job(AppointmentRecord a) => {
-  'startTime': a.startTime.toIso8601String(),
+  // Emit an absolute UTC instant (…Z). startTime is a *local* DateTime
+  // (Firestore Timestamp.toDate()), so a bare toIso8601String() has no zone
+  // designator — which the widget's ISO8601DateFormatter cannot parse. The
+  // Swift side renders it back in the device's local time zone.
+  'startTime': a.startTime.toUtc().toIso8601String(),
   'clientName': a.clientName,
   'title': a.title,
   'address': a.address,
