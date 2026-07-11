@@ -22,8 +22,11 @@ class FcmTokenRepository {
       .collection('fcmTokens')
       .doc(token);
 
-  /// Upserts a device token. The field set is exactly the five the security
-  /// rule allows (`hasOnly([platform, locale, uid, createdAt, updatedAt])`).
+  /// Upserts a device token. The written fields stay within the five the
+  /// security rule allows (`hasOnly([platform, locale, uid, createdAt,
+  /// updatedAt])`). `createdAt` is stamped only when the doc is first created
+  /// so a token refresh (which re-upserts) preserves the original registration
+  /// time instead of overwriting it; every write refreshes `updatedAt`.
   Future<void> upsertToken({
     required String userDocId,
     required String token,
@@ -32,13 +35,16 @@ class FcmTokenRepository {
     required String uid,
   }) async {
     try {
-      await _tokenDoc(userDocId, token).set({
+      final ref = _tokenDoc(userDocId, token);
+      final snap = await ref.get();
+      final data = <String, dynamic>{
         'platform': platform,
         'locale': locale,
         'uid': uid,
-        'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+        if (!snap.exists) 'createdAt': FieldValue.serverTimestamp(),
+      };
+      await ref.set(data, SetOptions(merge: true));
     } catch (e, st) {
       _logger.warn('FCM upsertToken failed', e, st);
     }

@@ -16,12 +16,20 @@ class _MockCollection extends Mock
 class _MockDoc extends Mock
     implements DocumentReference<Map<String, dynamic>> {}
 
+class _MockSnap extends Mock
+    implements DocumentSnapshot<Map<String, dynamic>> {}
+
 void main() {
   late _MockFirestore firestore;
   late _MockCollection usersCol;
   late _MockDoc userDoc;
   late _MockCollection tokensCol;
   late _MockDoc tokenDoc;
+  late _MockSnap tokenSnap;
+
+  setUpAll(() {
+    registerFallbackValue(SetOptions(merge: true));
+  });
 
   setUp(() {
     firestore = _MockFirestore();
@@ -29,15 +37,19 @@ void main() {
     userDoc = _MockDoc();
     tokensCol = _MockCollection();
     tokenDoc = _MockDoc();
+    tokenSnap = _MockSnap();
     when(() => firestore.collection('users')).thenReturn(usersCol);
     when(() => usersCol.doc('u1')).thenReturn(userDoc);
     when(() => userDoc.collection('fcmTokens')).thenReturn(tokensCol);
     when(() => tokensCol.doc('tok')).thenReturn(tokenDoc);
-    when(() => tokenDoc.set(any())).thenAnswer((_) async {});
+    when(() => tokenDoc.get()).thenAnswer((_) async => tokenSnap);
+    when(() => tokenDoc.set(any(), any())).thenAnswer((_) async {});
     when(() => tokenDoc.delete()).thenAnswer((_) async {});
   });
 
-  test('upsertToken writes exactly the rule-allowed field set', () async {
+  test('upsertToken on a new doc stamps createdAt (rule-allowed field set)',
+      () async {
+    when(() => tokenSnap.exists).thenReturn(false);
     final repo = FcmTokenRepository(firestore: firestore);
     await repo.upsertToken(
       userDocId: 'u1',
@@ -48,7 +60,7 @@ void main() {
     );
 
     final captured =
-        (verify(() => tokenDoc.set(captureAny())).captured.single as Map)
+        (verify(() => tokenDoc.set(captureAny(), any())).captured.single as Map)
             .cast<String, dynamic>();
     expect(
       captured.keys.toSet(),
@@ -57,6 +69,30 @@ void main() {
     expect(captured['platform'], 'android');
     expect(captured['locale'], 'fr');
     expect(captured['uid'], 'uid1');
+  });
+
+  test('upsertToken on an existing doc preserves createdAt (omits it)',
+      () async {
+    when(() => tokenSnap.exists).thenReturn(true);
+    final repo = FcmTokenRepository(firestore: firestore);
+    await repo.upsertToken(
+      userDocId: 'u1',
+      token: 'tok',
+      platform: 'ios',
+      locale: 'en',
+      uid: 'uid1',
+    );
+
+    final captured =
+        (verify(() => tokenDoc.set(captureAny(), any())).captured.single as Map)
+            .cast<String, dynamic>();
+    // A refresh must not re-stamp createdAt, but still refreshes updatedAt and
+    // stays within the rule allowlist (subset is permitted by hasOnly).
+    expect(captured.containsKey('createdAt'), isFalse);
+    expect(
+      captured.keys.toSet(),
+      {'platform', 'locale', 'uid', 'updatedAt'},
+    );
   });
 
   test('deleteToken deletes the token doc', () async {

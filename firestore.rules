@@ -160,9 +160,9 @@ service cloud.firestore {
       // FCM device tokens (push notifications). A user owns only the tokens
       // under their OWN users doc — the send path (Cloud Functions, Admin SDK)
       // reads them but clients can never see another user's tokens. Writes are
-      // shape-constrained: only the known fields, a valid locale/platform, and
-      // a uid that matches the caller (so a token can't be planted under a
-      // spoofed identity).
+      // shape-constrained: only the known fields, a valid locale/platform,
+      // timestamp-typed audit fields, and a uid that matches the caller (so a
+      // token can't be planted under a spoofed identity).
       match /fcmTokens/{token} {
         allow read, delete: if isActiveUser() && myDocId() == userId;
         allow create, update: if isActiveUser()
@@ -171,7 +171,11 @@ service cloud.firestore {
               ['platform', 'locale', 'uid', 'createdAt', 'updatedAt'])
           && request.resource.data.locale in ['en', 'fr']
           && request.resource.data.platform in ['ios', 'android']
-          && request.resource.data.uid == request.auth.uid;
+          && request.resource.data.uid == request.auth.uid
+          && (!('createdAt' in request.resource.data.keys())
+              || request.resource.data.createdAt is timestamp)
+          && (!('updatedAt' in request.resource.data.keys())
+              || request.resource.data.updatedAt is timestamp);
       }
     }
 

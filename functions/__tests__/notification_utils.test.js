@@ -292,7 +292,11 @@ describe("reminderLedgerId / isStaleTokenError", () => {
   test("stale-token error codes", () => {
     expect(isStaleTokenError(
         "messaging/registration-token-not-registered")).toBe(true);
+    expect(isStaleTokenError(
+        "messaging/invalid-registration-token")).toBe(true);
     expect(isStaleTokenError("messaging/internal-error")).toBe(false);
+    // Generic — could be a payload problem, not a dead token; not stale.
+    expect(isStaleTokenError("messaging/invalid-argument")).toBe(false);
   });
 });
 
@@ -522,6 +526,29 @@ describe("runReminderSweep", () => {
     );
     expect(res.reminded).toBe(0);
     expect(messaging.sent).toHaveLength(0);
+  });
+
+  test("a zero-delivery claim is released for a later retry", async () => {
+    // Active assignee but no fcmTokens yet (fresh install) — the ledger is
+    // claimed then released so the next sweep can retry while still upcoming.
+    const {db, ledgerCreates, ledgerDeletes} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {},
+      appointments: [
+        {id: "soon", status: "pending", employeeIds: ["e1"],
+          startTime: future(20 * MIN)},
+      ],
+    });
+    const messaging = makeMessaging();
+    const res = await runReminderSweep(
+        {db, messaging, now: NOW, logger: silentLogger},
+    );
+    expect(res.reminded).toBe(0);
+    expect(ledgerCreates).toHaveLength(1);
+    expect(ledgerDeletes).toEqual([
+      `appointmentReminders/${
+        reminderLedgerId("soon", future(20 * MIN).getTime())}`,
+    ]);
   });
 });
 

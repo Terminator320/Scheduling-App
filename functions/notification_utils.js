@@ -486,15 +486,17 @@ function overduePromptLedgerId(appointmentId, endTimeMillis) {
 }
 
 /**
- * True for FCM error codes that mean the token is dead and its doc should be
- * deleted. Pure — unit-testable.
+ * True for FCM error codes that mean the token itself is dead and its doc
+ * should be deleted. Deliberately narrow: the generic
+ * `messaging/invalid-argument` is NOT included — it can signal a malformed
+ * message payload, not a bad token, and treating it as stale would delete
+ * valid tokens on any payload bug. Pure — unit-testable.
  * @param {string} code
  * @return {boolean}
  */
 function isStaleTokenError(code) {
   return code === "messaging/registration-token-not-registered" ||
-      code === "messaging/invalid-registration-token" ||
-      code === "messaging/invalid-argument";
+      code === "messaging/invalid-registration-token";
 }
 
 /**
@@ -623,8 +625,10 @@ async function handleAppointmentWrite(id, before, after, deps) {
 }
 
 /**
- * Orchestrates the 30-minute reminder sweep. Injectable deps
- * `{db, messaging, now, logger}`.
+ * Orchestrates the 30-minute reminder sweep. The ledger fires each occurrence
+ * at most once; a claim that delivered zero pushes (no live tokens yet, or the
+ * send threw) is released so a later sweep can retry while the job is still
+ * upcoming. Injectable deps `{db, messaging, now, logger}`.
  * @param {!Object} deps
  * @return {!Promise<{reminded: number}>}
  */
@@ -662,14 +666,36 @@ async function runReminderSweep(deps) {
       continue;
     }
     const ctx = _contextFor("reminder", null, c);
-    for (const employeeDocId of toIdList(c.employeeIds)) {
-      reminded += await sendToEmployee(
-          deps,
-          employeeDocId,
-          {appointmentId: String(c.id), kind: "reminder"},
-          (locale) => buildNotificationMessage("reminder", ctx, locale),
-      );
+    let sent = 0;
+    try {
+      for (const employeeDocId of toIdList(c.employeeIds)) {
+        sent += await sendToEmployee(
+            deps,
+            employeeDocId,
+            {appointmentId: String(c.id), kind: "reminder"},
+            (locale) => buildNotificationMessage("reminder", ctx, locale),
+        );
+      }
+    } catch (err) {
+      // A transient send failure must not abort the sweep for the remaining
+      // candidates.
+      if (logger) logger.warn("reminder: send failed", {id: c.id, err});
     }
+    if (sent === 0) {
+      // Nothing delivered (no live tokens registered yet, or the send threw)
+      // — release the claim so a later sweep can retry while the job is still
+      // upcoming. Mirrors runOverduePromptSweep; once sent > 0 the ledger
+      // persists, so there is no double-send risk.
+      try {
+        await ledgerRef.delete();
+      } catch (err) {
+        if (logger) {
+          logger.warn("reminder: ledger release failed", {id: c.id, err});
+        }
+      }
+      continue;
+    }
+    reminded += sent;
   }
   return {reminded};
 }
