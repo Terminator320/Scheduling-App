@@ -101,7 +101,6 @@ void main() {
       final a = _appt(
         id: 'a',
         start: DateTime(2026, 7, 8, 14),
-        status: 'pending',
       );
       expect(DashboardAggregator.displayStatusAt(a, _now), 'pending');
     });
@@ -115,7 +114,6 @@ void main() {
         _appt(
           id: 'later',
           start: DateTime(2026, 7, 8, 14),
-          status: 'pending',
         ),
         // Legacy raw 'completed' normalizes to done.
         _appt(

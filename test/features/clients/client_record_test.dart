@@ -180,7 +180,7 @@ void main() {
       test('toMap never emits createdAt (function-owned server timestamp)', () {
         final record = ClientRecord.fromMap('c3', {
           'name': 'Carol',
-          'createdAt': DateTime(2026, 7, 1),
+          'createdAt': DateTime(2026, 7),
         });
         expect(record.toMap().containsKey('createdAt'), isFalse);
       });

@@ -24,7 +24,7 @@ final fcmTokenRepositoryProvider = Provider<FcmTokenRepository>(
 );
 
 final pushRegistrationControllerProvider = Provider<PushRegistrationController>(
-  (ref) => PushRegistrationController(ref),
+  PushRegistrationController.new,
 );
 
 /// Pure gate (mirrors the `isAccountDeletionSignal` helper style): only active
