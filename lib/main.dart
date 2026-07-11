@@ -261,6 +261,12 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     ) {
       unawaited(ref.read(pushRegistrationControllerProvider).sync());
     });
+    // Also sync against a value already present at registration: on relaunch
+    // while already authenticated, the employee doc can resolve before this
+    // listener is set up, and a plain listen would miss it (no prompt / no
+    // token registration). Harmless when the doc isn't ready yet — the gate
+    // returns early and the listener above catches the later emission.
+    unawaited(ref.read(pushRegistrationControllerProvider).sync());
   }
 
   void _listenForWidgetSync() {

@@ -53,12 +53,17 @@ class PushRegistrationController {
   /// Idempotent. A no-op for admins / signed-out users. Safe to call on every
   /// account-doc emission and on language change (re-upserts the locale).
   Future<void> sync() async {
-    if (_busy) return;
+    if (_busy) {
+      _logger.warn('PUSH sync: skipped (busy)');
+      return;
+    }
     final signedIn = FirebaseAuth.instance.currentUser != null;
     final doc = _ref.read(currentUserDocProvider).value ?? const {};
     final role = (doc['role'] ?? '').toString().trim();
     final status = (doc['status'] ?? '').toString().trim();
+    _logger.warn('PUSH sync: signedIn=$signedIn role="$role" status="$status"');
     if (!shouldRegisterPush(role: role, status: status, signedIn: signedIn)) {
+      _logger.warn('PUSH sync: gate=false (not an active employee)');
       await _refreshSub?.cancel();
       _refreshSub = null;
       return;
@@ -69,6 +74,7 @@ class PushRegistrationController {
       await _ref.read(firebaseReadyProvider.future).catchError((Object _) {});
       final service = _ref.read(pushNotificationServiceProvider);
       final granted = await service.requestPermission();
+      _logger.warn('PUSH sync: permission granted=$granted');
       if (!granted) return;
       await service.configureForegroundPresentation();
 
@@ -82,12 +88,14 @@ class PushRegistrationController {
         return;
       }
       final token = await service.currentToken();
+      _logger.warn('PUSH sync: docId=$docId token=${token == null ? "NULL" : "ok"}');
       if (token == null) return;
 
       await _upsert(docId, token, uid);
       _registeredDocId = docId;
       _registeredToken = token;
       _subscribeRefresh(docId, uid);
+      _logger.warn('PUSH sync: token upserted for $docId');
     } finally {
       _busy = false;
     }

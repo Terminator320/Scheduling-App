@@ -250,6 +250,11 @@ struct ScheduleWidgetEntryView: View {
     var entry: Provider.Entry
 
     var body: some View {
+        content.widgetContainerBackground()
+    }
+
+    @ViewBuilder
+    private var content: some View {
         switch family {
         case .systemSmall:
             SmallView(payload: entry.payload)
@@ -257,6 +262,21 @@ struct ScheduleWidgetEntryView: View {
             ListView(payload: entry.payload, maxRows: 6)
         default:
             ListView(payload: entry.payload, maxRows: 3)
+        }
+    }
+}
+
+extension View {
+    /// iOS 17 requires widgets to declare a container background or they render
+    /// a "Please adopt containerBackground" placeholder. Gated so it still
+    /// compiles at the iOS 15 deployment target. `.background` follows the
+    /// phone's light/dark mode, matching the "System Card" design.
+    @ViewBuilder
+    func widgetContainerBackground() -> some View {
+        if #available(iOS 17.0, *) {
+            containerBackground(.background, for: .widget)
+        } else {
+            self
         }
     }
 }
