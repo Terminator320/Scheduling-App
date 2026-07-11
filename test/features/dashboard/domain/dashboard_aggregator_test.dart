@@ -70,9 +70,16 @@ void main() {
   });
 
   group('displayStatusAt', () {
-    test('non-terminal past start becomes in_progress', () {
-      final a = _appt(id: 'a', start: DateTime(2026, 7, 8, 9));
+    test('non-terminal past start (not yet ended) becomes in_progress', () {
+      // Starts 11:30, ends 12:30 — now (12:00) is inside the visit.
+      final a = _appt(id: 'a', start: DateTime(2026, 7, 8, 11, 30));
       expect(DashboardAggregator.displayStatusAt(a, _now), 'in_progress');
+    });
+
+    test('non-terminal past end becomes overdue', () {
+      // Starts 9:00, ends 10:00 — now (12:00) is past the end, still open.
+      final a = _appt(id: 'a', start: DateTime(2026, 7, 8, 9));
+      expect(DashboardAggregator.displayStatusAt(a, _now), 'overdue');
     });
 
     test('terminal statuses pass through even when started', () {
@@ -103,7 +110,8 @@ void main() {
   group('computeTodayOps', () {
     test('counts today by normalized display status', () {
       final ops = DashboardAggregator.computeTodayOps([
-        _appt(id: 'started', start: DateTime(2026, 7, 8, 9)), // -> in_progress
+        // Started 11:30, ends 12:30 -> in_progress (not yet ended).
+        _appt(id: 'running', start: DateTime(2026, 7, 8, 11, 30)),
         _appt(
           id: 'later',
           start: DateTime(2026, 7, 8, 14),
@@ -122,6 +130,18 @@ void main() {
         'pending': 1,
         'done': 1,
       });
+    });
+
+    test('ended-but-open today visits land in the overdue bucket', () {
+      final ops = DashboardAggregator.computeTodayOps([
+        // Started 9:00, ended 10:00, still pending -> overdue.
+        _appt(id: 'ended', start: DateTime(2026, 7, 8, 9)),
+        // Started 11:30, ends 12:30 -> in_progress.
+        _appt(id: 'running', start: DateTime(2026, 7, 8, 11, 30)),
+      ], _now);
+      // Overdue keys on the literal 'overdue' (AppointmentStatus.overdue.raw
+      // throws), so computeTodayOps must not round-trip through `.raw`.
+      expect(ops.statusCounts, {'overdue': 1, 'in_progress': 1});
     });
 
     test('unassigned counts empty employeeIds today, excluding cancelled', () {
