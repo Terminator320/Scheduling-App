@@ -281,12 +281,12 @@ describe("buildDigestMessage", () => {
 });
 
 describe("reminderLedgerId / isStaleTokenError", () => {
-  test("ledger id joins appointment and startTime", () => {
-    expect(reminderLedgerId("a", 123)).toBe("a_123");
+  test("ledger id joins appointment, startTime and recipient", () => {
+    expect(reminderLedgerId("a", 123, "e1")).toBe("a_123_e1");
   });
 
-  test("overdue ledger id joins appointment and endTime", () => {
-    expect(overduePromptLedgerId("a", 456)).toBe("a_456");
+  test("overdue ledger id joins appointment, endTime and recipient", () => {
+    expect(overduePromptLedgerId("a", 456, "e1")).toBe("a_456_e1");
   });
 
   test("stale-token error codes", () => {
@@ -501,7 +501,7 @@ describe("runReminderSweep", () => {
     expect(res.reminded).toBe(1);
     expect(ledgerCreates.map((c) => c.key)).toEqual([
       `appointmentReminders/${
-        reminderLedgerId("soon", future(20 * MIN).getTime())}`,
+        reminderLedgerId("soon", future(20 * MIN).getTime(), "e1")}`,
     ]);
     expect(ledgerCreates[0].data.expiresAt).toBeInstanceOf(Date);
     expect(messaging.sent[0].data.kind).toBe("reminder");
@@ -517,7 +517,7 @@ describe("runReminderSweep", () => {
           startTime: future(20 * MIN)},
       ],
       ledgerExisting: [
-        `appointmentReminders/${reminderLedgerId("soon", startMs)}`,
+        `appointmentReminders/${reminderLedgerId("soon", startMs, "e1")}`,
       ],
     });
     const messaging = makeMessaging();
@@ -547,9 +547,77 @@ describe("runReminderSweep", () => {
     expect(ledgerCreates).toHaveLength(1);
     expect(ledgerDeletes).toEqual([
       `appointmentReminders/${
-        reminderLedgerId("soon", future(20 * MIN).getTime())}`,
+        reminderLedgerId("soon", future(20 * MIN).getTime(), "e1")}`,
     ]);
   });
+
+  test("a token-less assignee is retried without re-sending the delivered one",
+      async () => {
+        // Two assignees on one job: e1 has a live token, e2 has none yet. The
+        // per-recipient ledger keeps e1's claim (delivered) and releases e2's
+        // (nothing delivered), so a later sweep retries ONLY e2 and never
+        // re-notifies e1.
+        const startMs = future(20 * MIN).getTime();
+        const {db, ledgerCreates, ledgerDeletes} = makeDb({
+          users: {
+            e1: {role: "employee", status: "active"},
+            e2: {role: "employee", status: "active"},
+          },
+          tokens: {e1: [{id: "t1", locale: "en"}]},
+          appointments: [
+            {id: "soon", status: "pending", employeeIds: ["e1", "e2"],
+              startTime: future(20 * MIN)},
+          ],
+        });
+        const messaging = makeMessaging();
+        const res = await runReminderSweep(
+            {db, messaging, now: NOW, logger: silentLogger},
+        );
+        expect(res.reminded).toBe(1);
+        expect(messaging.sent).toHaveLength(1);
+        // Both recipients were claimed; only the undelivered one was released.
+        expect(ledgerCreates.map((c) => c.key)).toEqual([
+          `appointmentReminders/${reminderLedgerId("soon", startMs, "e1")}`,
+          `appointmentReminders/${reminderLedgerId("soon", startMs, "e2")}`,
+        ]);
+        expect(ledgerDeletes).toEqual([
+          `appointmentReminders/${reminderLedgerId("soon", startMs, "e2")}`,
+        ]);
+      });
+
+  test("a delivered recipient is not re-sent while a pending one still fires",
+      async () => {
+        // e1 already has a persisted ledger from an earlier sweep; e2 does not.
+        // Only e2 should be notified this sweep.
+        const startMs = future(20 * MIN).getTime();
+        const {db, ledgerCreates} = makeDb({
+          users: {
+            e1: {role: "employee", status: "active"},
+            e2: {role: "employee", status: "active"},
+          },
+          tokens: {
+            e1: [{id: "t1", locale: "en"}],
+            e2: [{id: "t2", locale: "en"}],
+          },
+          appointments: [
+            {id: "soon", status: "pending", employeeIds: ["e1", "e2"],
+              startTime: future(20 * MIN)},
+          ],
+          ledgerExisting: [
+            `appointmentReminders/${reminderLedgerId("soon", startMs, "e1")}`,
+          ],
+        });
+        const messaging = makeMessaging();
+        const res = await runReminderSweep(
+            {db, messaging, now: NOW, logger: silentLogger},
+        );
+        expect(res.reminded).toBe(1);
+        expect(messaging.sent).toHaveLength(1);
+        expect(messaging.sent[0].token).toBe("t2");
+        expect(ledgerCreates.map((c) => c.key)).toEqual([
+          `appointmentReminders/${reminderLedgerId("soon", startMs, "e2")}`,
+        ]);
+      });
 });
 
 describe("runOverduePromptSweep", () => {
@@ -562,7 +630,7 @@ describe("runOverduePromptSweep", () => {
     endTime: future(-30 * MIN),
   };
   const overdueKey = `appointmentOverduePrompts/${
-    overduePromptLedgerId("over", future(-30 * MIN).getTime())}`;
+    overduePromptLedgerId("over", future(-30 * MIN).getTime(), "e1")}`;
 
   test("writes the endTime-keyed ledger and prompts assignees", async () => {
     const {db, ledgerCreates, ledgerDeletes, appointmentQueries} = makeDb({
