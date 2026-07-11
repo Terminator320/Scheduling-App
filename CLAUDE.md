@@ -292,7 +292,7 @@ the iOS `FirebaseOptions`). Android also needs `google-services.json`.
 ## Cloud Functions
 
 Functions live in `functions/` (project `schedulingapp-88727`, region
-`us-central1`). `index.js` is now a thin wiring surface that re-exports all 14
+`us-central1`). `index.js` is now a thin wiring surface that re-exports all 18
 functions under their original names — the implementations are split into
 domain modules: `security.js` (shared callable guards — `assertPayloadShape`,
 `requireString`, `readSessionToken`, `enforceDurableRateLimit`, `assertAdmin`),
@@ -301,19 +301,23 @@ domain modules: `security.js` (shared callable guards — `assertPayloadShape`,
 (invited-employee signup codes — `createEmployeeInvite` + `redeemSignupCode`,
 backed by pure helpers in `signup_code_utils.js`), `maintenance.js`
 (image validation + history purge; the pure JPEG/PNG magic-byte check lives in
-`image_magic.js`), and `wave/callables.js`.
+`image_magic.js`), `notifications.js` (FCM push triggers, backed by
+`notification_utils.js`), and `wave/callables.js`. Full per-function
+reference: `docs/CLOUD_FUNCTIONS.md`.
 Add a new function to its domain module and re-export it from `index.js`; put
 shared guards in `security.js`, not back in `index.js`.
 **Unit-testing trigger logic:** `onObjectFinalized`/`onSchedule` modules eagerly
 resolve a Storage bucket at load, so a jest test can't `require()` them (throws
 "Missing bucket name"). Extract the pure logic into a plain sibling module
-(`image_magic.js`, `signup_code_utils.js`) and test that; `onCall`/`onDocument*`
-modules load lazily and are safe to `require` directly.
+(`image_magic.js`, `signup_code_utils.js`, `notification_utils.js`) and test
+that; `onCall`/`onDocument*` modules load lazily and are safe to `require`
+directly.
 - `syncUsersByUid` — Firestore trigger: mirrors `users/{id}` into `usersByUid/{uid}` bridge collection so security rules can resolve roles from auth UID alone.
 - `placesAutocomplete` — proxies Google Places API (New) autocomplete. Requires App Check + auth. Key in Secret Manager (`GOOGLE_MAP_API_KEY`).
 - `placesGetDetails` — proxies Google Places API (New) place details. Same guards.
 - `validateUploadedImage` — Storage trigger: validates JPEG/PNG magic bytes for `appointments/*/images/*` uploads; deletes non-conforming files server-side.
 - `propagateClientEdits` — Firestore `clients/{id}` update trigger: fans a client's name/phone/address edit onto that client's FUTURE appointments (the denormalized `clientName`/`clientPhone`/`address` copies). Per-appointment custom addresses (stored address ≠ client's previous address) and past/history visits are left untouched. Idempotent (absolute writes, `retry: true`); needs the `(clientId ASC, startTime ASC)` composite index. Pure helpers (`relevantClientChange`/`buildAppointmentPatch`) exported for unit tests.
+- **Push notifications** (`notifications.js` + jest-testable `notification_utils.js`; **NOT yet deployed** — Phase 4 of `docs/plans/2026-07-08-push-notifications.md`): `notifyAppointmentChanges` (appointment write trigger → assignment/reschedule/cancel/unassign pushes; deliberately no `retry` — a duplicate push is worse than a missed one), `sendUpcomingJobReminders` (every 5 min, 30-min-before reminder), `sendDailyJobDigest` (18:00 Toronto), and `sendOverdueJobPrompts` (every 15 min, "job finished?" nudge for jobs past `endTime` but still open — server mirror of the display-only `overdue` state, keep in sync with `AppointmentRecord.displayStatus`). Recipients always filtered to active employees; tokens in `users/{docId}/fcmTokens/{token}` (per-device `locale` drives EN/FR text). Idempotency via Admin-SDK-only ledgers `appointmentReminders/{id}_{startMs}` and `appointmentOverduePrompts/{id}_{endMs}` (create()-fails-if-exists; overdue claims with zero delivered pushes are released for retry; both write `expiresAt` +7d for a console-enabled Firestore TTL). The overdue sweep queries `startTime` over 48h (24h eligibility + <24h max booking) — no new index; don't "simplify" it to an `endTime` query without adding one.
 - **Wave Accounting** (`functions/wave/*`): admin callables (`waveBootstrap`,
   `waveImportCustomers` — App Check + `assertAdmin` + `enforceDurableRateLimit`),
   the read-only `waveGetConnection` (admin + App Check; **no secret, no rate

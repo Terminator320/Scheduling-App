@@ -511,6 +511,15 @@ users/{docId}
   status: 'active' | 'disabled' | 'invited'
   colorValue: string   int-as-string; drives appointment card borders and avatars
 
+users/{docId}/fcmTokens/{token}   FCM push tokens, one doc per device (doc id =
+                       the token). Owner-only per firestore.rules, shape-locked
+                       to these fields; deleteAccount recursiveDelete()s them
+                       with the parent doc; stale tokens self-clean on send failure
+  platform: 'ios' | 'android'
+  locale: 'en' | 'fr'  drives per-device notification language server-side
+  uid: string          must equal the caller's auth uid
+  createdAt, updatedAt server timestamps
+
 appointments/{docId}
   title, startTime, endTime, status, address, notes, materialsNeeded
   repeat: 'none' | 'four_months' | 'six_months' | 'one_year'   stored on every visit of a series
@@ -543,7 +552,8 @@ clients/{docId}
 ```
 
 Backend-managed collections (Admin SDK only — `firestore.rules` denies client writes;
-`rateLimits`, `wave`, and `waveSyncQueue` deny client reads too):
+`rateLimits`, `wave`, `waveSyncQueue`, and both notification ledgers deny client
+reads too):
 
 ```
 usersByUid/{uid}       Bridge maintained by the syncUsersByUid Cloud Function.
@@ -563,6 +573,19 @@ signupCodes/{sha256(code)}  One-time invited-signup codes (hash only — the
   inviteDocId: string  → users/{docId}
   email: string        must equal the redeemer's auth token email
   expiresAt: timestamp 14-day lifetime; expired codes rejected (read+write denied)
+
+appointmentReminders/{apptId_startMs}   Idempotency ledger for the 30-min
+                       reminder sweep: create() fails if the doc exists → one
+                       reminder per occurrence; a reschedule changes the key
+                       (read+write denied).
+  createdAt: timestamp
+  expiresAt: timestamp +7d — target of the console-enabled Firestore TTL policy
+
+appointmentOverduePrompts/{apptId_endMs}   Same ledger pattern for the overdue
+                       "job finished?" prompt, keyed on END time; a claim that
+                       delivered zero pushes is released (doc deleted) so a
+                       later sweep retries (read+write denied).
+  createdAt, expiresAt same shape/TTL as appointmentReminders
 
 wave/{docId}           Wave Accounting connection metadata (e.g. wave/connection:
                        status, businessId, last-sync timestamps). Token lives only
