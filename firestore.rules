@@ -86,6 +86,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // appointmentOverduePrompts is the Admin-SDK-only idempotency ledger for
+    // the overdue "job finished?" sweep (one doc per appointment occurrence,
+    // keyed on endTime). Same posture as appointmentReminders.
+    match /appointmentOverduePrompts/{id} {
+      allow read, write: if false;
+    }
+
     // ── users ─────────────────────────────────────────────────────────────────
     // Read: admins see all; active employees see active peers (picker/display);
     // a registering user can find their own invited doc by email match.

@@ -18,10 +18,30 @@
 // 30 minutes before start, in ms.
 const REMINDER_WINDOW_MS = 30 * 60 * 1000;
 
+// How long after its endTime a job stays eligible for the overdue prompt; a
+// job left open longer than this gets no prompt (accepted v1 gap).
+const OVERDUE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+
+// The overdue sweep queries by startTime (endTime would need a new index),
+// so its floor must cover the eligibility window PLUS the longest bookable
+// duration (the form caps a visit just under 24h): 48h total.
+const OVERDUE_QUERY_WINDOW_MS = 2 * OVERDUE_LOOKBACK_MS;
+
+// Ledger docs are useless once their occurrence ages out of eligibility;
+// expiresAt + a Firestore TTL policy on both ledger collections keeps them
+// from accumulating forever.
+const LEDGER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 // Statuses that still expect the visit to happen. `confirmed` is the retired
 // legacy alias (treated as pending; new writes are rejected since 2026-07-09)
 // and stays here only so pre-retirement docs still earn reminders/digests.
 const PENDING_LIKE = new Set(["pending", "confirmed"]);
+
+// Statuses that leave a job still open once its endTime passes — the app then
+// shows it as `overdue` (AppointmentRecord.displayStatus). Deliberately an
+// allowlist so terminal statuses (`done`/`cancelled` and the legacy
+// `completed` alias of `done`) stay excluded.
+const OPEN_LIKE = new Set(["pending", "in_progress", "confirmed"]);
 
 // Dedupe priority when one employee accrues multiple events for one write.
 const KIND_PRIORITY = {
@@ -224,6 +244,11 @@ const _MESSAGES = {
         body: addr ? `${base} · ${addr}` : base,
       };
     },
+    doneCheck: (c, who) => ({
+      title: "Job finished?",
+      body: `Is the job for ${who} done yet? Open the app to update its ` +
+          "status.",
+    }),
   },
   fr: {
     who: (c) => (c.clientName || "").trim() || "un client",
@@ -251,13 +276,19 @@ const _MESSAGES = {
         body: addr ? `${base} · ${addr}` : base,
       };
     },
+    doneCheck: (c, who) => ({
+      title: "Travail terminé ?",
+      body: `Le travail pour ${who} est-il terminé ? ` +
+          "Ouvrez l'application pour mettre à jour son statut.",
+    }),
   },
 };
 
 /**
  * Builds a localized {title, body} for a per-appointment notification.
  * Pure — unit-testable.
- * @param {string} kind assigned|rescheduled|cancelled|removed|reminder.
+ * @param {string} kind
+ *   assigned|rescheduled|cancelled|removed|reminder|doneCheck.
  * @param {{clientName: string, startTime: *, address: string}} ctx
  * @param {string} locale 'en' | 'fr'.
  * @return {{title: string, body: string}}
@@ -321,6 +352,30 @@ function selectReminderCandidates(records, now) {
     if (!PENDING_LIKE.has(String(r.status || "").toLowerCase())) return false;
     const ms = toMillis(r.startTime);
     return ms != null && ms > nowMs && ms <= cutoff;
+  });
+}
+
+/**
+ * Filters appointment records to those due for an overdue "job finished?"
+ * prompt: still open (pending/in_progress/legacy confirmed — the OPEN_LIKE
+ * allowlist, so `done`/`cancelled`/legacy `completed` never match) with an
+ * endTime that passed within the last OVERDUE_LOOKBACK_MS. Server mirror of
+ * the app's AppointmentRecord.displayStatus (appointment_record.dart) — keep
+ * the two in sync; nothing is ever stored. Known divergence: a status unknown
+ * to OPEN_LIKE renders Overdue in the app but is never swept (the query can't
+ * enumerate unknown values). Pure — unit-testable.
+ * @param {!Array<!Object>} records Appointment records ({id, status,
+ *   endTime, ...}).
+ * @param {(Date|number)} now
+ * @return {!Array<!Object>}
+ */
+function selectOverdueCandidates(records, now) {
+  const nowMs = nowMillis(now);
+  const floorMs = nowMs - OVERDUE_LOOKBACK_MS;
+  return (records || []).filter((r) => {
+    if (!OPEN_LIKE.has(String(r.status || "").toLowerCase())) return false;
+    const ms = toMillis(r.endTime);
+    return ms != null && ms <= nowMs && ms > floorMs;
   });
 }
 
@@ -416,6 +471,18 @@ function tomorrowWindowToronto(now) {
  */
 function reminderLedgerId(appointmentId, startTimeMillis) {
   return `${appointmentId}_${startTimeMillis}`;
+}
+
+/**
+ * Overdue-prompt ledger doc id: keyed on the END time (that's what makes a
+ * job overdue), so a reschedule that moves endTime re-arms the prompt.
+ * Pure — unit-testable.
+ * @param {string} appointmentId
+ * @param {number} endTimeMillis
+ * @return {string}
+ */
+function overduePromptLedgerId(appointmentId, endTimeMillis) {
+  return `${appointmentId}_${endTimeMillis}`;
 }
 
 /**
@@ -583,10 +650,15 @@ async function runReminderSweep(deps) {
         .doc(reminderLedgerId(c.id, startMs));
     try {
       // create() fails if the doc exists -> fires exactly once per occurrence.
-      await ledgerRef.create({createdAt: nowDate});
+      await ledgerRef.create({
+        createdAt: nowDate,
+        expiresAt: new Date(nowMillis(nowDate) + LEDGER_TTL_MS),
+      });
     } catch (err) {
       if (isAlreadyExists(err)) continue;
-      if (logger) logger.warn("reminder: ledger create failed", {id: c.id});
+      if (logger) {
+        logger.warn("reminder: ledger create failed", {id: c.id, err});
+      }
       continue;
     }
     const ctx = _contextFor("reminder", null, c);
@@ -600,6 +672,85 @@ async function runReminderSweep(deps) {
     }
   }
   return {reminded};
+}
+
+/**
+ * Orchestrates the overdue "job finished?" sweep. Queries by startTime (the
+ * existing `(status, startTime)` index; endTime would need a new one) over
+ * the last OVERDUE_QUERY_WINDOW_MS — wide enough that the longest bookable
+ * visit is still in range when its endTime passes — then filters to
+ * ended-within-24h-but-open in code. The endTime-keyed ledger fires each
+ * occurrence at most once; a claim that delivered zero pushes is released so
+ * a later sweep can retry while the job is still eligible. Injectable deps
+ * `{db, messaging, now, logger}`.
+ * @param {!Object} deps
+ * @return {!Promise<{prompted: number}>}
+ */
+async function runOverduePromptSweep(deps) {
+  const {db, now, logger} = deps;
+  const nowDate = now || new Date();
+  const nowMs = nowMillis(nowDate);
+  const windowStart = new Date(nowMs - OVERDUE_QUERY_WINDOW_MS);
+  const snap = await db
+      .collection("appointments")
+      .where("status", "in", ["pending", "in_progress", "confirmed"])
+      .where("startTime", ">=", windowStart)
+      .where("startTime", "<=", nowDate)
+      .get();
+  const candidates = selectOverdueCandidates(
+      ((snap && snap.docs) || []).map(_record),
+      nowDate,
+  );
+  let prompted = 0;
+  for (const c of candidates) {
+    const endMs = toMillis(c.endTime);
+    const ledgerRef = db
+        .collection("appointmentOverduePrompts")
+        .doc(overduePromptLedgerId(c.id, endMs));
+    try {
+      // create() fails if the doc exists -> fires at most once per occurrence.
+      await ledgerRef.create({
+        createdAt: nowDate,
+        expiresAt: new Date(nowMs + LEDGER_TTL_MS),
+      });
+    } catch (err) {
+      if (isAlreadyExists(err)) continue;
+      if (logger) {
+        logger.warn("overdue: ledger create failed", {id: c.id, err});
+      }
+      continue;
+    }
+    const ctx = _contextFor("doneCheck", null, c);
+    let sent = 0;
+    try {
+      for (const employeeDocId of toIdList(c.employeeIds)) {
+        sent += await sendToEmployee(
+            deps,
+            employeeDocId,
+            {appointmentId: String(c.id), kind: "doneCheck"},
+            (locale) => buildNotificationMessage("doneCheck", ctx, locale),
+        );
+      }
+    } catch (err) {
+      // A transient send failure must not abort the sweep for the remaining
+      // candidates.
+      if (logger) logger.warn("overdue: send failed", {id: c.id, err});
+    }
+    if (sent === 0) {
+      // Nothing was delivered (no live tokens yet, or the send threw) —
+      // release the claim so a later sweep can retry this occurrence.
+      try {
+        await ledgerRef.delete();
+      } catch (err) {
+        if (logger) {
+          logger.warn("overdue: ledger release failed", {id: c.id, err});
+        }
+      }
+      continue;
+    }
+    prompted += 1;
+  }
+  return {prompted};
 }
 
 /**
@@ -639,17 +790,21 @@ async function runDailyDigest(deps) {
 
 module.exports = {
   REMINDER_WINDOW_MS,
+  OVERDUE_LOOKBACK_MS,
   diffAppointmentForNotifications,
   buildNotificationMessage,
   buildDigestMessage,
   selectReminderCandidates,
+  selectOverdueCandidates,
   groupTomorrowsJobsByEmployee,
   tomorrowWindowToronto,
   reminderLedgerId,
+  overduePromptLedgerId,
   isStaleTokenError,
   isAlreadyExists,
   sendToEmployee,
   handleAppointmentWrite,
   runReminderSweep,
   runDailyDigest,
+  runOverduePromptSweep,
 };

@@ -10,13 +10,16 @@ const {
   buildNotificationMessage,
   buildDigestMessage,
   selectReminderCandidates,
+  selectOverdueCandidates,
   groupTomorrowsJobsByEmployee,
   tomorrowWindowToronto,
   reminderLedgerId,
+  overduePromptLedgerId,
   isStaleTokenError,
   handleAppointmentWrite,
   runReminderSweep,
   runDailyDigest,
+  runOverduePromptSweep,
 } = require("../notification_utils");
 
 // Noon Toronto (EDT -4) on Wed 2026-07-08.
@@ -141,6 +144,42 @@ describe("selectReminderCandidates", () => {
   });
 });
 
+describe("selectOverdueCandidates", () => {
+  const rec = (id, endMs, status) => ({
+    id,
+    status,
+    endTime: future(endMs),
+  });
+
+  test("keeps open statuses whose endTime has passed", () => {
+    const got = selectOverdueCandidates(
+        [
+          rec("pend", -10 * MIN, "pending"),
+          rec("prog", -1 * HOUR, "in_progress"),
+          rec("legacy", -20 * MIN, "confirmed"),
+          rec("edgeNow", 0, "pending"),
+          rec("notEnded", 30 * MIN, "pending"),
+          rec("done", -10 * MIN, "done"),
+          rec("completedLegacy", -10 * MIN, "completed"),
+          rec("cxl", -10 * MIN, "cancelled"),
+        ],
+        NOW,
+    );
+    expect(got.map((r) => r.id).sort())
+        .toEqual(["edgeNow", "legacy", "pend", "prog"]);
+  });
+
+  test("drops a record with no endTime", () => {
+    expect(selectOverdueCandidates(
+        [{id: "noEnd", status: "pending"}], NOW)).toEqual([]);
+  });
+
+  test("drops a job that ended more than 24h ago", () => {
+    expect(selectOverdueCandidates(
+        [rec("ancient", -25 * HOUR, "pending")], NOW)).toEqual([]);
+  });
+});
+
 describe("tomorrowWindowToronto", () => {
   test("bounds tomorrow at Toronto midnight (EDT = 04:00Z)", () => {
     const {start, end} = tomorrowWindowToronto(NOW);
@@ -204,6 +243,18 @@ describe("buildNotificationMessage", () => {
     );
     expect(en.body).toContain("Client");
   });
+
+  test("doneCheck EN/FR nudges to update the status", () => {
+    const en = buildNotificationMessage("doneCheck", ctx, "en");
+    const fr = buildNotificationMessage("doneCheck", ctx, "fr");
+    expect(en.title).toBe("Job finished?");
+    expect(en.body).toBe(
+        "Is the job for Alice done yet? Open the app to update its status.");
+    expect(fr.title).toBe("Travail terminé ?");
+    expect(fr.body).toBe(
+        "Le travail pour Alice est-il terminé ? " +
+        "Ouvrez l'application pour mettre à jour son statut.");
+  });
 });
 
 describe("buildDigestMessage", () => {
@@ -234,6 +285,10 @@ describe("reminderLedgerId / isStaleTokenError", () => {
     expect(reminderLedgerId("a", 123)).toBe("a_123");
   });
 
+  test("overdue ledger id joins appointment and endTime", () => {
+    expect(overduePromptLedgerId("a", 456)).toBe("a_456");
+  });
+
   test("stale-token error codes", () => {
     expect(isStaleTokenError(
         "messaging/registration-token-not-registered")).toBe(true);
@@ -244,13 +299,20 @@ describe("reminderLedgerId / isStaleTokenError", () => {
 // ----- orchestration with mocks --------------------------------------------
 
 /**
- * Builds a minimal Firestore mock for the orchestration tests.
+ * Builds a minimal Firestore mock for the orchestration tests. Ledger ids in
+ * `ledgerCreates`/`ledgerDeletes`/`ledgerExisting` are collection-scoped
+ * (`collection/docId`) so a sweep writing to the wrong ledger collection
+ * fails the assertions; `appointmentQueries` records every `where()` so the
+ * query shape itself is testable.
  * @param {!Object} config users/tokens/appointments/ledgerExisting fixtures.
- * @return {!Object} `{db, deletedTokens, ledgerCreates}`.
+ * @return {!Object} `{db, deletedTokens, ledgerCreates, ledgerDeletes,
+ *   appointmentQueries}`.
  */
 function makeDb(config) {
   const deletedTokens = [];
   const ledgerCreates = [];
+  const ledgerDeletes = [];
+  const appointmentQueries = [];
   const existing = new Set(config.ledgerExisting || []);
   const db = {
     collection(name) {
@@ -283,7 +345,8 @@ function makeDb(config) {
       }
       if (name === "appointments") {
         const q = {
-          where() {
+          where(field, op, value) {
+            appointmentQueries.push({field, op, value});
             return q;
           },
           get: async () => ({
@@ -295,17 +358,22 @@ function makeDb(config) {
         };
         return q;
       }
-      if (name === "appointmentReminders") {
+      if (name === "appointmentReminders" ||
+          name === "appointmentOverduePrompts") {
         return {
           doc(id) {
+            const key = `${name}/${id}`;
             return {
-              create: async () => {
-                if (existing.has(id)) {
+              create: async (data) => {
+                if (existing.has(key)) {
                   const e = new Error("exists");
                   e.code = 6;
                   throw e;
                 }
-                ledgerCreates.push(id);
+                ledgerCreates.push({key, data});
+              },
+              delete: async () => {
+                ledgerDeletes.push(key);
               },
             };
           },
@@ -314,7 +382,7 @@ function makeDb(config) {
       return {doc: () => ({})};
     },
   };
-  return {db, deletedTokens, ledgerCreates};
+  return {db, deletedTokens, ledgerCreates, ledgerDeletes, appointmentQueries};
 }
 
 /**
@@ -427,8 +495,11 @@ describe("runReminderSweep", () => {
         {db, messaging, now: NOW, logger: silentLogger},
     );
     expect(res.reminded).toBe(1);
-    expect(ledgerCreates).toEqual([reminderLedgerId(
-        "soon", future(20 * MIN).getTime())]);
+    expect(ledgerCreates.map((c) => c.key)).toEqual([
+      `appointmentReminders/${
+        reminderLedgerId("soon", future(20 * MIN).getTime())}`,
+    ]);
+    expect(ledgerCreates[0].data.expiresAt).toBeInstanceOf(Date);
     expect(messaging.sent[0].data.kind).toBe("reminder");
   });
 
@@ -441,7 +512,9 @@ describe("runReminderSweep", () => {
         {id: "soon", status: "pending", employeeIds: ["e1"],
           startTime: future(20 * MIN)},
       ],
-      ledgerExisting: [reminderLedgerId("soon", startMs)],
+      ledgerExisting: [
+        `appointmentReminders/${reminderLedgerId("soon", startMs)}`,
+      ],
     });
     const messaging = makeMessaging();
     const res = await runReminderSweep(
@@ -449,6 +522,110 @@ describe("runReminderSweep", () => {
     );
     expect(res.reminded).toBe(0);
     expect(messaging.sent).toHaveLength(0);
+  });
+});
+
+describe("runOverduePromptSweep", () => {
+  const overdueJob = {
+    id: "over",
+    status: "in_progress",
+    clientName: "Alice",
+    employeeIds: ["e1"],
+    startTime: future(-2 * HOUR),
+    endTime: future(-30 * MIN),
+  };
+  const overdueKey = `appointmentOverduePrompts/${
+    overduePromptLedgerId("over", future(-30 * MIN).getTime())}`;
+
+  test("writes the endTime-keyed ledger and prompts assignees", async () => {
+    const {db, ledgerCreates, ledgerDeletes, appointmentQueries} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: [{id: "t", locale: "en"}]},
+      appointments: [
+        overdueJob,
+        // Still running -> filtered out in code.
+        {id: "running", status: "in_progress", employeeIds: ["e1"],
+          startTime: future(-1 * HOUR), endTime: future(30 * MIN)},
+        // Closed -> filtered out in code.
+        {id: "closed", status: "done", employeeIds: ["e1"],
+          startTime: future(-2 * HOUR), endTime: future(-30 * MIN)},
+      ],
+    });
+    const messaging = makeMessaging();
+    const res = await runOverduePromptSweep(
+        {db, messaging, now: NOW, logger: silentLogger},
+    );
+    expect(res.prompted).toBe(1);
+    expect(ledgerCreates.map((c) => c.key)).toEqual([overdueKey]);
+    expect(ledgerCreates[0].data.expiresAt).toBeInstanceOf(Date);
+    expect(ledgerDeletes).toEqual([]);
+    // The query itself must cover open statuses over a 48h startTime window
+    // (24h eligibility + the <24h max booking duration).
+    expect(appointmentQueries).toEqual([
+      {field: "status", op: "in",
+        value: ["pending", "in_progress", "confirmed"]},
+      {field: "startTime", op: ">=", value: future(-48 * HOUR)},
+      {field: "startTime", op: "<=", value: NOW},
+    ]);
+    expect(messaging.sent).toHaveLength(1);
+    expect(messaging.sent[0].data).toEqual({
+      appointmentId: "over",
+      kind: "doneCheck",
+    });
+    expect(messaging.sent[0].notification.body).toContain("Alice");
+  });
+
+  test("an existing ledger doc suppresses a re-prompt", async () => {
+    const {db} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: [{id: "t", locale: "en"}]},
+      appointments: [overdueJob],
+      ledgerExisting: [overdueKey],
+    });
+    const messaging = makeMessaging();
+    const res = await runOverduePromptSweep(
+        {db, messaging, now: NOW, logger: silentLogger},
+    );
+    expect(res.prompted).toBe(0);
+    expect(messaging.sent).toHaveLength(0);
+  });
+
+  test("a zero-delivery claim is released for a later retry", async () => {
+    // Active assignee but no fcmTokens yet (fresh install).
+    const {db, ledgerCreates, ledgerDeletes} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {},
+      appointments: [overdueJob],
+    });
+    const messaging = makeMessaging();
+    const res = await runOverduePromptSweep(
+        {db, messaging, now: NOW, logger: silentLogger},
+    );
+    expect(res.prompted).toBe(0);
+    expect(ledgerCreates.map((c) => c.key)).toEqual([overdueKey]);
+    expect(ledgerDeletes).toEqual([overdueKey]);
+  });
+
+  test("a thrown send releases the claim and continues", async () => {
+    const other = {...overdueJob, id: "other", endTime: future(-40 * MIN)};
+    const {db, ledgerCreates, ledgerDeletes} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: [{id: "t", locale: "en"}]},
+      appointments: [overdueJob, other],
+    });
+    const messaging = {
+      sendEach: async () => {
+        throw new Error("transient FCM outage");
+      },
+    };
+    const res = await runOverduePromptSweep(
+        {db, messaging, now: NOW, logger: silentLogger},
+    );
+    // Both candidates were attempted (no sweep abort) and both claims were
+    // released.
+    expect(res.prompted).toBe(0);
+    expect(ledgerCreates).toHaveLength(2);
+    expect(ledgerDeletes).toHaveLength(2);
   });
 });
 
