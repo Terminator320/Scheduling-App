@@ -44,7 +44,7 @@ void main() {
       ], _now);
 
       expect(payload['todayCount'], 0);
-      expect((payload['jobs'] as List), isEmpty);
+      expect(payload['jobs'] as List, isEmpty);
       expect((payload['nextJob'] as Map)['title'], 'Job tomorrow');
     });
 

@@ -68,7 +68,7 @@ class WeeklyBarChart extends StatelessWidget {
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
                   maxY: (maxValue == 0 ? 1 : maxValue).toDouble(),
-                  barTouchData: BarTouchData(enabled: false),
+                  barTouchData: const BarTouchData(enabled: false),
                   gridData: FlGridData(
                     drawVerticalLine: false,
                     getDrawingHorizontalLine: (_) =>

@@ -19,6 +19,7 @@ import 'package:scheduling/features/auth/application/account_status_provider.dar
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/settings/application/app_info_provider.dart';
 import 'package:scheduling/features/settings/application/app_lock_provider.dart';
 import 'package:scheduling/features/settings/screens/text_size_screen.dart';
@@ -26,7 +27,6 @@ import 'package:scheduling/features/settings/widgets/cards/settings_tiles.dart';
 import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dialog.dart';
 import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
 import 'package:scheduling/features/wave/widgets/wave_settings_section.dart';
-import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';

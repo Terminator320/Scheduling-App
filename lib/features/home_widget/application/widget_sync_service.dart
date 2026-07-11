@@ -119,10 +119,11 @@ final widgetPayloadProvider =
       final empIdAsync = ref.watch(widgetEmployeeIdProvider);
       if (empIdAsync.isLoading) return const AsyncValue.loading();
       final empId = empIdAsync.value;
-      if (empId == null)
+      if (empId == null) {
         return const AsyncValue<Map<String, dynamic>?>.data(
           null,
         );
+      }
       final now = DateTime.now();
       final range = AppointmentDateRange(
         start: DateTime(now.year, now.month, now.day),
