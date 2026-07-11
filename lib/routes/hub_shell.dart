@@ -104,6 +104,17 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
     });
   }
 
+  /// Surfaces the calendar tab, preserving the current identity. Used by the
+  /// notification deep-link so a tapped appointment's detail sheet opens over
+  /// the calendar rather than whatever tab was last visited.
+  void showCalendar() {
+    select(
+      AdaptiveDestination.calendar,
+      isAdmin: _isAdmin,
+      employeeId: _employeeId,
+    );
+  }
+
   void _handlePop(bool didPop, Object? result) {
     if (didPop) return;
     // System back on a non-calendar tab mirrors the top bar's back chevron:

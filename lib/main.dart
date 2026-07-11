@@ -17,11 +17,13 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/core/adaptive/app_scroll_behavior.dart';
 import 'package:scheduling/core/connectivity/offline_banner.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/security/app_lock.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
@@ -30,6 +32,9 @@ import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/onboarding/screens/onboarding_gate.dart';
@@ -39,6 +44,7 @@ import 'package:scheduling/features/settings/domain/models/app_settings.dart';
 import 'package:scheduling/firebase_options.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
+import 'package:scheduling/routes/hub_shell.dart';
 import 'package:scheduling/shared/widgets/feedback/error_snack_bar.dart';
 
 const bool _useFirebaseEmulator = bool.fromEnvironment('USE_FIREBASE_EMULATOR');
@@ -151,21 +157,101 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _languageController = AppLanguageController.instance;
     _languageController.setLanguage(widget.settings.language);
     _setupPushTapHandling();
+    _setupWidgetTapHandling();
   }
 
-  /// Notification taps (terminated launch + background) surface the calendar
-  /// hub at the navigation-stack root. Deep-linking to the tapped appointment
-  /// is deferred; `data.appointmentId` is carried for that future link.
+  /// Home-widget taps (iOS only) deep-link to the tapped job's appointment.
+  /// The Swift widget links each row / the small-widget card to
+  /// `esproschedule://appointment?id=<id>`; home_widget surfaces that URI here.
+  void _setupWidgetTapHandling() {
+    if (!Platform.isIOS) return;
+    unawaited(
+      HomeWidget.initiallyLaunchedFromHomeWidget().then(_handleWidgetTap),
+    );
+    HomeWidget.widgetClicked.listen(_handleWidgetTap);
+  }
+
+  Future<void> _handleWidgetTap(Uri? uri) async {
+    if (uri == null) return;
+    final appointmentId = uri.queryParameters['id']?.trim() ?? '';
+    await _openAppointmentDeepLink(appointmentId);
+  }
+
+  /// Notification taps (terminated launch + background) open the tapped
+  /// appointment's detail sheet on the calendar hub. Every per-appointment
+  /// push carries `data.appointmentId` (assignment / reschedule / cancel /
+  /// removal / reminder / done-check); the daily digest carries none and just
+  /// lands on the calendar.
   void _setupPushTapHandling() {
     final service = ref.read(pushNotificationServiceProvider);
     unawaited(service.initialMessage().then(_handlePushTap));
     service.onMessageOpenedApp.listen(_handlePushTap);
   }
 
-  void _handlePushTap(RemoteMessage? message) {
+  Future<void> _handlePushTap(RemoteMessage? message) async {
     if (message == null) return;
+    final appointmentId =
+        (message.data['appointmentId'] as String?)?.trim() ?? '';
+    await _openAppointmentDeepLink(appointmentId);
+  }
+
+  /// Shared deep-link target for a notification or home-widget tap: brings the
+  /// live hub to the calendar tab, collapses any stacked routes, then opens the
+  /// appointment's detail sheet. An empty/missing id (digest, or a widget tap
+  /// with no appointment) just surfaces the calendar. A missing appointment
+  /// (deleted / no longer visible) surfaces an info notice instead.
+  Future<void> _openAppointmentDeepLink(String appointmentId) async {
     if (FirebaseAuth.instance.currentUser == null) return;
+
+    // Terminated-launch taps fire before the post-login hub is built (splash
+    // routes into it), so wait briefly for it to come alive.
+    final shell = await _awaitLiveHub();
+    if (shell == null || !mounted) return;
+    shell.showCalendar();
+
+    AppointmentRecord? record;
+    if (appointmentId.isNotEmpty) {
+      try {
+        record = await ref
+            .read(appointmentsRepositoryProvider)
+            .getAppointmentById(appointmentId);
+      } catch (e, st) {
+        ref
+            .read(loggerProvider)
+            .warn('PUSH-TAP load appointment failed', e, st);
+      }
+    }
+    if (!mounted) return;
+
+    final navContext = _navigatorKey.currentContext;
+    if (navContext == null || !navContext.mounted) return;
+    // Collapse any detail/edit sheet or pushed route so the target opens over
+    // the calendar root.
     _navigatorKey.currentState?.popUntil((route) => route.isFirst);
+
+    if (appointmentId.isEmpty) return;
+    if (record == null) {
+      ref
+          .read(noticeServiceProvider)
+          .info(
+            AppLocalizations.of(navContext).calendar_appointmentUnavailable,
+          );
+      return;
+    }
+    await showEventDetails(navContext, record);
+  }
+
+  /// Polls up to ~10s for the live hub. Background taps resolve on the first
+  /// tick (the hub is already up); a cold launch waits out splash + routing.
+  /// Returns null if the hub never appears (e.g. the user is stuck on login).
+  Future<HubShellState?> _awaitLiveHub() async {
+    for (var i = 0; i < 50; i++) {
+      final shell = HubShell.liveState;
+      if (shell != null && shell.mounted) return shell;
+      if (!mounted) return null;
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+    return null;
   }
 
   @override

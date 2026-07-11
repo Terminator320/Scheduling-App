@@ -23,6 +23,9 @@ bool _isTerminal(AppointmentRecord a) {
 }
 
 Map<String, dynamic> _job(AppointmentRecord a) => {
+  // Carried so a widget tap can deep-link straight to this appointment's
+  // detail sheet (the Swift widget builds `esproschedule://appointment?id=…`).
+  'id': a.id,
   // Emit an absolute UTC instant (…Z). startTime is a *local* DateTime
   // (Firestore Timestamp.toDate()), so a bare toIso8601String() has no zone
   // designator — which the widget's ISO8601DateFormatter cannot parse. The
