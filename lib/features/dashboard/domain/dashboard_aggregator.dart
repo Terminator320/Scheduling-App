@@ -39,9 +39,18 @@ class DashboardAggregator {
     );
   }
 
-  /// Pure re-implementation of [AppointmentRecord.displayStatus] (the model
-  /// getter reads DateTime.now() and is untestable): terminal statuses pass
-  /// through; a non-terminal visit whose start has passed is in_progress.
+  /// Testable stand-in for [AppointmentRecord.displayStatus] (the model getter
+  /// reads DateTime.now()): terminal statuses pass through; a non-terminal
+  /// visit whose start has passed is in_progress.
+  ///
+  /// DELIBERATELY does NOT reproduce the model's `overdue` branch. This drives
+  /// [computeTodayOps]'s status-count map, whose keys round-trip through
+  /// `AppointmentStatus.fromRaw(...).raw` — and `AppointmentStatus.overdue.raw`
+  /// THROWS (overdue is display-only). The dashboard hero renders only the four
+  /// stored statuses; ended-but-open visits are surfaced separately as
+  /// [AttentionFlags.overdueOpen]. Do not "sync" this with `displayStatus` by
+  /// adding an overdue branch without also removing the `.raw` round-trip, or
+  /// [computeTodayOps] will crash.
   static String displayStatusAt(AppointmentRecord appointment, DateTime now) {
     if (_isTerminal(appointment)) return appointment.status;
     if (now.isAfter(appointment.startTime)) return 'in_progress';
