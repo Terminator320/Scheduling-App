@@ -169,7 +169,11 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     unawaited(
       HomeWidget.initiallyLaunchedFromHomeWidget().then(_handleWidgetTap),
     );
-    HomeWidget.widgetClicked.listen(_handleWidgetTap);
+    HomeWidget.widgetClicked.listen(
+      _handleWidgetTap,
+      onError: (Object e, StackTrace st) =>
+          ref.read(loggerProvider).warn('WIDGET-TAP stream error', e, st),
+    );
   }
 
   Future<void> _handleWidgetTap(Uri? uri) async {
@@ -186,7 +190,11 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   void _setupPushTapHandling() {
     final service = ref.read(pushNotificationServiceProvider);
     unawaited(service.initialMessage().then(_handlePushTap));
-    service.onMessageOpenedApp.listen(_handlePushTap);
+    service.onMessageOpenedApp.listen(
+      _handlePushTap,
+      onError: (Object e, StackTrace st) =>
+          ref.read(loggerProvider).warn('PUSH-TAP stream error', e, st),
+    );
   }
 
   Future<void> _handlePushTap(RemoteMessage? message) async {
@@ -297,6 +305,10 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _settingsRepository.save(language: code);
     // Re-upsert the token so its `locale` field follows the app language.
     unawaited(ref.read(pushRegistrationControllerProvider).sync());
+    // The iOS home widget localizes its chrome/status labels from the payload's
+    // `locale`; recompute the payload so the widget follows the app language
+    // instead of waiting for the next appointment-stream emission.
+    ref.invalidate(widgetPayloadProvider);
   }
 
   Future<void> _handleAccountDisabled(
@@ -389,7 +401,15 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     ref.listen<AsyncValue<String>>(userRoleProvider, (prev, next) {
       final prevRole = prev?.value;
       final nextRole = next.value;
-      if (prevRole == 'admin' && nextRole != null && nextRole != 'admin') {
+      // An empty new role means the doc went populated→empty — that's an
+      // account deletion, not a demotion. Let `_listenForDeletedAccount` own it
+      // (both funnel through the shared `_isHandlingAccountExit` flag, and this
+      // listener is registered first) so the user gets the "disabled" message,
+      // not "admin access revoked".
+      if (prevRole == 'admin' &&
+          nextRole != null &&
+          nextRole != '' &&
+          nextRole != 'admin') {
         _handleAccountDisabled((l10n) => l10n.error_yourAdminAccessWasRevoked);
       }
     });

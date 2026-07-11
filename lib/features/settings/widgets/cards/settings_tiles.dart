@@ -134,7 +134,7 @@ class SettingsTile extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.r8),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sp12),
         child: narrowOrLarge
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

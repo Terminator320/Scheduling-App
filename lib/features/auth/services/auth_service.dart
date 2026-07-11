@@ -178,7 +178,9 @@ class AuthService {
   Future<void> _signOutQuietly() async {
     try {
       await _auth.signOut();
-    } catch (_) {}
+    } catch (e, st) {
+      _logger.warn('signUp rollback: quiet signOut failed', e, st);
+    }
   }
 
   Future<void> signOut() async {

@@ -77,8 +77,6 @@
   "clients_areYouSureYouWantToDelete": "Voulez-vous vraiment supprimer",
   "clients_thisCannotBeUndone": "Cette action est irréversible.",
   "clients_clientDeletedSuccessfully": "Client supprimé avec succès.",
-  "error_couldNotSaveChangesTryAgain": "Impossible d’enregistrer les modifications. Réessayez.",
-  "error_couldNotAddClientTryAgain": "Impossible d’ajouter le client. Réessayez.",
   "clients_thisClient": "ce client",
   "clients_additionalBusinessContacts": "Contacts supplémentaires",
   "clients_theFirstContactIsTheMainContactAboveAddMoreContactsHereIfNeeded": "Ajoutez des contacts supplémentaires pour ce client si nécessaire.",

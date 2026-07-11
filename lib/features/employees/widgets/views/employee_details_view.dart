@@ -200,7 +200,7 @@ class _ColorRow extends StatelessWidget {
     return Row(
       children: [
         Padding(
-          padding: const EdgeInsets.only(right: 12),
+          padding: const EdgeInsets.only(right: AppSpacing.sp12),
           child: Icon(
             Icons.palette_outlined,
             size: 16,
