@@ -71,7 +71,7 @@ class DetailsViewBody extends ConsumerWidget {
           ),
         _Header(
           appointment: appointment,
-          status: data.status,
+          status: data.displayStatus,
           compact: compactHeader,
         ),
         const SizedBox(height: AppSpacing.sp16),
@@ -214,7 +214,7 @@ class DetailsViewBody extends ConsumerWidget {
 /// callbacks stay in `build`.
 class _DetailsViewData {
   const _DetailsViewData({
-    required this.status,
+    required this.displayStatus,
     required this.isCancelled,
     required this.isDone,
     required this.isToday,
@@ -231,6 +231,9 @@ class _DetailsViewData {
     ClientRecord? client,
   ) {
     final status = AppointmentStatus.fromRaw(appointment.status);
+    // Real stored status gates the actions (mark-done/cancel/edit); the
+    // time-derived one drives the header chip so it matches the card.
+    final displayStatus = AppointmentStatus.fromRaw(appointment.displayStatus);
     final now = DateTime.now();
     final phone = (client?.phone.isNotEmpty ?? false)
         ? client!.phone
@@ -241,7 +244,7 @@ class _DetailsViewData {
         .where((m) => m.isNotEmpty)
         .toList();
     return _DetailsViewData(
-      status: status,
+      displayStatus: displayStatus,
       isCancelled: status.isCancelled,
       isDone: status.isDone,
       isToday:
@@ -259,7 +262,7 @@ class _DetailsViewData {
     );
   }
 
-  final AppointmentStatus status;
+  final AppointmentStatus displayStatus;
   final bool isCancelled;
   final bool isDone;
   final bool isToday;
