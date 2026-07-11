@@ -1,18 +1,28 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:scheduling/features/wave/domain/models/wave_import_schedule.dart';
+
 @immutable
 class WaveConnection {
-  const WaveConnection({required this.businessId, required this.businessName});
+  const WaveConnection({
+    required this.businessId,
+    required this.businessName,
+    this.importSchedule = WaveImportSchedule.off,
+  });
 
   factory WaveConnection.fromMap(Map<String, dynamic> map) {
     return WaveConnection(
       businessId: (map['businessId'] as String?) ?? '',
       businessName: (map['businessName'] as String?) ?? '',
+      importSchedule: WaveImportSchedule.fromRaw(
+        map['importSchedule'] as String?,
+      ),
     );
   }
 
   final String businessId;
   final String businessName;
+  final WaveImportSchedule importSchedule;
 
   /// True only when a real business is linked. A bootstrap/get that resolves an
   /// empty businessId is not a usable connection.
@@ -24,10 +34,11 @@ class WaveConnection {
       other is WaveConnection &&
           runtimeType == other.runtimeType &&
           businessId == other.businessId &&
-          businessName == other.businessName;
+          businessName == other.businessName &&
+          importSchedule == other.importSchedule;
 
   @override
-  int get hashCode => Object.hash(businessId, businessName);
+  int get hashCode => Object.hash(businessId, businessName, importSchedule);
 }
 
 @immutable
