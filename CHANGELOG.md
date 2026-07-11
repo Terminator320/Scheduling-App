@@ -10,6 +10,19 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.28.0+47] - 2026-07-10
+### Added
+- **Jobs that run past their end time now show "Overdue".** An appointment
+  reads **In progress** while it's underway and flips to **Overdue** once its
+  end time passes without being marked Complete or Cancelled — so it's obvious
+  at a glance which visits still need closing out.
+
+### Fixed
+- **An appointment's status now matches everywhere you look.** A visit whose
+  time had passed could show "In progress" on the calendar card while its edit
+  screen still read "Pending"; the card, the details view, and the editor now
+  agree.
+
 ## [1.27.0+46] - 2026-07-09
 ### Changed
 - **Appointment statuses are simpler: Pending → In progress → Complete.** The

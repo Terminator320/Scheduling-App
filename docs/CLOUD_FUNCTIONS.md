@@ -1,8 +1,11 @@
 # Cloud Functions Reference
 
 Map of every Cloud Function in `functions/` — what it does, how it's
-triggered, who calls it, and its security posture. Generated 2026-07-05 by
-auditing the source against the app's call sites and the live deployment.
+triggered, who calls it, and its security posture. Generated 2026-07-05,
+refreshed 2026-07-10 by auditing the source against the app's call sites and
+the live deployment. **Every callable now enforces App Check**
+(`enforceAppCheck: true`); the earlier `TODO(pre-ship)` carve-outs were retired
+in 1.25.1 (`grep -rn "enforceAppCheck: false" functions` returns nothing).
 
 - **Project:** `schedulingapp-88727` · **Region:** `us-central1` (except
   `validateUploadedImage`, pinned to `us-east1` by its Storage bucket)
@@ -17,15 +20,13 @@ auditing the source against the app's call sites and the live deployment.
 
 ## Deployment status
 
-- **14 functions defined** in code.
-- `propagateClientEdits` is defined and exported but **not yet deployed** — see
-  the note in its section below.
+- **14 functions defined** in code, **all 14 deployed** — verified live against
+  `schedulingapp-88727` on 2026-07-10 (v2, Node.js 24, 256 MB; `us-central1`
+  except `validateUploadedImage` in `us-east1`).
 - `backfillLegacyClientNames` (a one-time migration completed `2026-06-29`,
-  `fixed: 0`) was **removed from the codebase 2026-07-05**. It may still be
-  deployed — delete it with
-  `firebase functions:delete backfillLegacyClientNames`, or it's pruned on the
-  next full `firebase deploy --only functions` (which prompts to delete
-  functions no longer present in source).
+  `fixed: 0`) was removed from the codebase 2026-07-05 and is **no longer in the
+  deployed set** (confirmed 2026-07-10) — it was pruned by a full
+  `firebase deploy --only functions`.
 
 ## Summary
 
@@ -33,14 +34,14 @@ auditing the source against the app's call sites and the live deployment.
 |---|---|---|---|---|---|---|
 | `placesAutocomplete` | callable | `onCall` | `places.js` | `google_places_repository.dart` (address field typing) | `GOOGLE_MAP_API_KEY` | App Check ✓ · in-mem 20/min·uid |
 | `placesGetDetails` | callable | `onCall` | `places.js` | `google_places_repository.dart` (address selected) | `GOOGLE_MAP_API_KEY` | App Check ✓ · durable 40/15min |
-| `deleteAccount` | callable | `onCall` | `account.js` | `account_deletion_service.dart` | — | reauth ≤5min · durable 5/15min |
-| `createEmployeeInvite` | callable | `onCall` | `invites.js` | `firebase_employees_repository.dart` | — | admin · durable 20/hr·uid |
-| `redeemSignupCode` | callable | `onCall` | `invites.js` | `firebase_employees_repository.dart`, `auth_service.dart` | — | durable 5/15min·**email** |
-| `waveBootstrap` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN`, `WAVE_BUSINESS_NAME` | admin · durable 10/hr |
-| `waveGetConnection` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings mount) | — | admin |
-| `waveImportCustomers` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN` | admin · durable 5/hr · 300s |
+| `deleteAccount` | callable | `onCall` | `account.js` | `account_deletion_service.dart` | — | App Check ✓ · reauth ≤5min · durable 5/15min |
+| `createEmployeeInvite` | callable | `onCall` | `invites.js` | `firebase_employees_repository.dart` | — | App Check ✓ · admin · durable 20/hr·uid |
+| `redeemSignupCode` | callable | `onCall` | `invites.js` | `firebase_employees_repository.dart`, `auth_service.dart` | — | App Check ✓ · durable 5/15min·**email** |
+| `waveBootstrap` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN`, `WAVE_BUSINESS_NAME` | App Check ✓ · admin · durable 10/hr |
+| `waveGetConnection` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings mount) | — | App Check ✓ · admin |
+| `waveImportCustomers` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN` | App Check ✓ · admin · durable 5/hr · 300s |
 | `syncUsersByUid` | trigger | `onDocumentWritten users/{id}` | `bridge.js` | any `users` doc write | — | `retry: true` |
-| `propagateClientEdits` | trigger | `onDocumentUpdated clients/{id}` | `client_propagation.js` | any `clients` doc edit | — | `retry: true` · **not deployed** |
+| `propagateClientEdits` | trigger | `onDocumentUpdated clients/{id}` | `client_propagation.js` | any `clients` doc edit | — | `retry: true` |
 | `waveUpsertCustomer` | trigger | `onDocumentWritten clients/{id}` | `wave/callables.js` | any `clients` doc write | — | `retry: true` |
 | `validateUploadedImage` | trigger | `onObjectFinalized` (Storage) | `maintenance.js` | `appointments/*/images/*` upload | — | region `us-east1` |
 | `purgeExpiredHistory` | scheduled | `every day 03:00` (Toronto) | `maintenance.js` | nightly | — | `maxInstances: 1` · 540s |
@@ -57,9 +58,7 @@ Requires a fresh re-auth: rejects `stale-auth` if the ID token's `auth_time` is
 older than 5 minutes (checked before the rate limiter so a stale rejection
 doesn't burn a slot). Durable-rate-limited 5 per 15 min per uid; refunds the
 slot if the Auth delete fails server-side. Auth user is deleted **first**
-(irreversible step), then the Firestore doc.
-> App Check currently `false` (`TODO(pre-ship)` — flip to `true` once shipping
-> via Play Store / Play Integrity).
+(irreversible step), then the Firestore doc. App Check enforced.
 
 ## Employee invites (one-time signup codes)
 
@@ -77,8 +76,7 @@ invite email) and **activates the account atomically** (`uid` + `status:'active'
 code consumed). A valid code whose token email ≠ invite email returns a distinct
 `code-email-mismatch`. Rate-limited 5 per 15 min **by token email**, not caller
 uid — a failed signup mints a fresh uid, which would reset a uid-keyed cap.
-> Both invite callables use `APP_CHECK = {enforceAppCheck: false}`
-> (`TODO(pre-ship)`).
+Both invite callables share `APP_CHECK = {enforceAppCheck: true}`.
 
 ## Maps / Places proxies
 
@@ -126,17 +124,14 @@ absolute, so retries converge.
 
 ## Client → appointment propagation
 
-### `propagateClientEdits` — `client_propagation.js` · ⚠️ not deployed
+### `propagateClientEdits` — `client_propagation.js`
 `clients/{id}` update trigger that propagates a client's edited `clientName` /
 `clientPhone` / `address` to that client's **future** appointments (history is
 left as it was at visit time). `address` follows the client only when the
 appointment's stored address equals the client's *previous* address (a differing
 one is treated as a per-appointment custom address). Requires the composite index
 `(clientId ASC, startTime ASC)` on `appointments`. `retry: true` — writes are
-absolute values.
-> **Defined and exported but not in the deployed set.** Until it's deployed,
-> client edits do not reach existing appointments. Deploy it if that propagation
-> is wanted, or remove it if not.
+absolute values. **Deployed** (verified live 2026-07-10).
 
 ## Wave Accounting
 

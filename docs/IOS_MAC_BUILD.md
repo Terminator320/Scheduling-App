@@ -4,8 +4,12 @@ The config side of the iOS port is **done** (deployment target 15.0 in
 `project.pbxproj` and `AppFrameworkInfo.plist`, `Info.plist` +
 `PrivacyInfo.xcprivacy` in place, `main.dart` already using
 `DefaultFirebaseOptions.currentPlatform`). What's left is Mac-only: native
-tooling, the generated `Podfile` (see Phase C), the two gitignored secret
-files, the Crashlytics build phase, and device verification.
+tooling, the two gitignored secret files, the Crashlytics build phase, the App
+Attest capability, and device verification.
+
+> **This project uses Swift Package Manager — there is no `Podfile` and never
+> will be.** Ignore any older notes mentioning `pod install` / `${PODS_ROOT}`.
+> Xcode resolves `firebase-ios-sdk` (pinned in `Package.resolved`) on first open.
 
 Bundle id: `net.vogas.scheduling`. iOS Firebase app:
 `1:914958291749:ios:c0f5d0899187badf0d00cc`.
@@ -23,15 +27,11 @@ Bundle id: `net.vogas.scheduling`. iOS Firebase app:
    sudo xcodebuild -license accept
    xcode-select --install        # command-line tools
    ```
-2. Install **CocoaPods**:
-   ```bash
-   sudo gem install cocoapods     # or: brew install cocoapods
-   ```
-3. Install **Flutter 3.44** (match the Windows SDK), add it to PATH, then:
+2. Install **Flutter 3.44** (match the Windows SDK), add it to PATH, then:
    ```bash
    flutter doctor                 # resolve any iOS-toolchain ✗ it reports
    ```
-4. **Clone the repo** to the Mac.
+3. **Clone the repo** to the Mac.
 
 ## Phase B — Carry over the gitignored secrets (NOT in git)
 
@@ -41,73 +41,68 @@ AirDrop/USB/secure channel; **never commit them**:
 | File | Needed for |
 |---|---|
 | `dev/.env` | Firebase client config (incl. `IOS_API_KEY` / `IOS_APP_ID`) |
-| `ios/Runner/GoogleService-Info.plist` | iOS Firebase |
+| `ios/GoogleService-Info.plist` | iOS Firebase — lives at the `ios/` **root**, not `ios/Runner/` |
 | `android/app/google-services.json` | only if also building Android on the Mac |
 
 - Confirm `dev/.env` contains **`IOS_API_KEY`** and **`IOS_APP_ID`** —
-  `firebase_options.dart`'s iOS block reads them.
+  `firebase_options.dart`'s iOS block reads them. Do **not** re-run
+  `flutterfire configure` — it rewrites `firebase_options.dart` into the
+  literal-values style and breaks the env-based setup.
 - If `GoogleService-Info.plist` is lost: re-download from Firebase Console → the
-  iOS app above (bundle `net.vogas.scheduling`).
+  iOS app above (bundle `net.vogas.scheduling`) and drop it at `ios/`.
 
-## Phase C — Flutter + Pods
+## Phase C — Flutter deps (no Pods)
 
 ```bash
 flutter pub get
 flutter gen-l10n                                          # generated l10n is gitignored
 dart run build_runner build --delete-conflicting-outputs # only if freezed models changed
-flutter build ios --config-only                           # generates ios/Podfile on first run
-cd ios && pod install                                     # first native install
 ```
 
-`ios/Podfile` is **not committed** — the Flutter tool generates it on the
-first iOS build. After it appears, edit it before `pod install`:
-
-- Uncomment/set `platform :ios, '15.0'` (must match the 15.0 deployment
-  target in `project.pbxproj` / `AppFrameworkInfo.plist`).
-- `permission_handler` needs its macros in the `post_install` hook so only
-  the used permissions compile in — inside `post_install do |installer|`,
-  per target add:
-
-  ```ruby
-  target.build_configurations.each do |config|
-    config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
-      '$(inherited)',
-      'PERMISSION_CAMERA=1',
-      'PERMISSION_PHOTOS=1',
-    ]
-  end
-  ```
-
-Then commit the resulting `Podfile` (and `Podfile.lock`).
+No `pod install` step exists. The Swift Package dependencies (`firebase-ios-sdk`,
+pinned in `ios/Runner.xcodeproj/.../swiftpm/Package.resolved`) are resolved by
+Xcode automatically the first time you open the project — it may take a minute
+on first open while it fetches the packages.
 
 ## Phase D — Xcode config (the Mac-only GUI bits)
 
-1. Open the **workspace**, not the project:
+1. Open the **project** (SPM needs no workspace):
    ```bash
-   open ios/Runner.xcworkspace
+   open ios/Runner.xcodeproj
    ```
+   Wait for *Package Dependencies* to finish resolving in the left navigator.
 2. **Signing:** Runner target → *Signing & Capabilities* → select your Apple
    Developer **Team**. Bundle id is already `net.vogas.scheduling`.
-3. **Add the Crashlytics Run Script phase** (not present yet): Runner target →
+3. **Add the App Attest capability** (App Check uses App Attest in Release —
+   `AppleAppAttestProvider` in `main()`): *Signing & Capabilities* → `+ Capability`
+   → **App Attest**. This adds the entitlement
+   `com.apple.developer.devicecheck.appattest-environment`; set it to
+   **`production`** for the Release configuration. The console provider must
+   match (see Phase G) or attestation is rejected. App Attest requires the iOS
+   15.0 target (≥ its 14+ requirement) and **fails on the Simulator** — verify on
+   real hardware.
+4. **Add the Crashlytics Run Script phase** (not present yet): Runner target →
    *Build Phases* → `+` → *New Run Script Phase*, placed **after** the Flutter
    build phases.
-   - **Script:**
+   - **Script** (SPM checkout path, not `${PODS_ROOT}`):
      ```
-     ${PODS_ROOT}/FirebaseCrashlytics/run
+     "${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run"
      ```
    - **Input Files:**
      ```
      ${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}
      $(SRCROOT)/$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)
      ```
-4. **dSYM build settings** (Runner target → *Build Settings*): *Debug
+5. **dSYM build settings** (Runner target → *Build Settings*): *Debug
    Information Format* = `DWARF with dSYM File` for the Release
    configuration, so Crashlytics gets symbol files to upload.
-5. **Verify** the deployment target shows **iOS 15.0** (set in
-   `project.pbxproj` and `AppFrameworkInfo.plist`; keep the generated
-   `Podfile` in sync — see Phase C).
+6. **Verify** the deployment target shows **iOS 15.0** (set in
+   `project.pbxproj` and `AppFrameworkInfo.plist`).
 
-## Phase E — App Check debug token
+## Phase E — App Check debug token (Simulator / dev builds)
+
+Debug builds use `AppleDebugProvider` (see `main.dart`), so on a simulator or
+dev device App Check runs off a registered debug token — App Attest is Release-only.
 
 1. Run on a simulator/dev device, watch the Xcode console for the **App Check
    debug token** line.
@@ -127,18 +122,17 @@ Walk the **device-only checklist** (none covered by the test harness):
 - **Face ID app-lock** (`NSFaceIDUsageDescription` declared)
 - **Save-to-contacts** (`NSContactsUsageDescription`)
 - Image upload pipeline (compress → upload) and image cleanup on delete
+- **App Attest** on a **real device** in a Release build (fails on Simulator)
 
 ## Phase G — Before TestFlight / App Store (not for dev builds)
 
-1. **Flip App Check back on** — in `functions/index.js`, the two `TODO(pre-ship)`
-   lines (`enforceAppCheck: false` on `deleteAccount` and `resolveMyInvite`).
-   Set both to `true`, then redeploy:
-   ```bash
-   cd functions && npm run lint
-   firebase deploy --only functions
-   ```
-   ⚠️ This blocks sideloaded App Distribution testers — only do it for the store
-   build.
+1. **Enable App Attest in the Firebase Console** (Build → App Check → the iOS
+   app) so the console provider matches the code's `AppleAppAttestProvider`. No
+   `.p8` key is required for App Attest (unlike DeviceCheck). A mismatch between
+   the console provider and the code provider is rejected as `permission-denied`.
+   (All Cloud Function callables already enforce App Check — nothing to flip in
+   `functions/`; the old pre-ship `enforceAppCheck: false` carve-out was retired
+   in 1.25.1.)
 2. Bump `+BUILD` in `pubspec.yaml` + add a `CHANGELOG.md` entry, then **Archive**
    in Xcode (*Product → Archive*) and upload.
 3. **Verify Crashlytics symbolication:** on the first TestFlight build,

@@ -7,6 +7,12 @@
 > `AppointmentStatus.fromRaw`). See also
 > `docs/plans/2026-07-09-travel-time-notifications.md`, which modifies
 > `sendUpcomingJobReminders` into a travel-aware sweep after Phases 1–4 land.
+>
+> **Revised 2026-07-10** — added the **overdue "is the job done yet?" prompt**
+> (item 7 below): a scheduled push nudging an assigned employee to close out a
+> job whose end time has passed while still `pending`/`in_progress`. Mirrors the
+> app's new display-only `overdue` state (`AppointmentRecord.displayStatus`,
+> `AppointmentStatus.overdue`) server-side. NOT yet implemented.
 
 ## Context
 
@@ -16,8 +22,9 @@ Employees currently have no way to know a job was assigned, moved, or cancelled 
 2. **Change alerts** — push when an assigned appointment's `startTime` changes, is cancelled/deleted, or the employee is unassigned.
 3. **30-min reminder** — push ~30 minutes before an employee's next job.
 4. **Nightly digest** — every day at **6:00 PM America/Toronto**, each employee with ≥1 job tomorrow gets a summary push. Employees with no jobs get nothing.
-5. **Employees only** — admins get no notifications and are never prompted for permission.
-6. **iOS home-screen widget** — shows the employee's next job (small) and today's job list (medium/large). Data refreshes whenever the app runs (open or push tap); the widget's own timeline rolls past jobs off without the app. Native WidgetKit target is created on the Mac; Swift code + all Flutter data-sync is authored here.
+5. **Overdue "is the job done yet?" prompt** — push to each assigned employee when a job's `endTime` has passed but its status is still `pending`/`in_progress` (i.e. the app now shows it as `overdue`), nudging them to mark it Done or Cancelled. Fires once per job occurrence.
+6. **Employees only** — admins get no notifications and are never prompted for permission.
+7. **iOS home-screen widget** — shows the employee's next job (small) and today's job list (medium/large). Data refreshes whenever the app runs (open or push tap); the widget's own timeline rolls past jobs off without the app. Native WidgetKit target is created on the Mac; Swift code + all Flutter data-sync is authored here.
 
 **Delivery: Firebase Cloud Messaging (FCM) for everything, server-side.** No `flutter_local_notifications`, no on-device scheduling — reminders/digests come from scheduled Cloud Functions, so they work with the app closed and can't go stale when an admin reschedules a job. The OS notification permission is the on/off control; no in-app toggle in v1.
 
@@ -28,6 +35,7 @@ The app currently has **zero** notification infrastructure (no packages, no FCM 
 - **Token storage:** `users/{docId}/fcmTokens/{token}` subcollection (doc id = the token). Keyed by the users **doc id** because that's what `appointments.employeeIds` contains — the send path needs no uid translation. One doc per device supports multi-device; stale tokens are deleted on send failure (`messaging/registration-token-not-registered`).
 - **Locale per token doc** (`locale: 'en'|'fr'`): functions send localized text per device from an inline EN/FR string table. No ARB keys needed (server owns notification text).
 - **Reminder idempotency:** Admin-SDK-only ledger collection `appointmentReminders`, doc id `${appointmentId}_${startTimeMillis}`. `create()` fails if it exists → fires exactly once; a reschedule changes the key → moved job earns a fresh reminder. No field on the appointment doc (would be wiped by client rewrites, would need appointment-rules churn).
+- **Overdue-prompt idempotency:** separate Admin-SDK-only ledger `appointmentOverduePrompts`, doc id `${appointmentId}_${endTimeMillis}` (keyed on the **end** time, since that's what makes a job overdue). Same `create()`-fails-if-exists → one prompt per occurrence; a reschedule that moves `endTime` re-arms it. `overdue` is display-only and **never stored** (the rules allowlist stays pending/in_progress/done/cancelled) — the sweep derives it from `endTime` + status, exactly as `displayStatus` does client-side; nothing writes `overdue` back to the appointment.
 - **Payload:** notification messages (`notification` block) + `data: {appointmentId, kind}` — OS-displayed with app closed, no extra iOS entitlements beyond Push capability.
 - **No `retry: true` on the trigger** — a duplicate push is worse than a rare missed one.
 - Recipients always filtered server-side to `role == 'employee' && status == 'active'`.
@@ -41,27 +49,29 @@ Following the `client_propagation.js` / `signup_code_utils.js` pattern (no admin
   - deleted OR status → `cancelled` → `cancelled` for `before.employeeIds`.
   - ids removed → `removed`; `startTime` changed → `rescheduled` for remaining ids (just-added ids get `assigned`, not both).
   - Dedupe one event per employee, priority `cancelled > removed > rescheduled > assigned`. Skip past appointments (`startTime < now`).
-- `buildNotificationMessage(kind, {clientName, startTime, address}, locale)` → `{title, body}`; EN/FR table; times via `Intl.DateTimeFormat('fr-CA'|'en-CA', {timeZone: 'America/Toronto'})`. Kinds: assigned / rescheduled / cancelled / removed / reminder / digest. The **reminder** body appends the job's address (user-approved wording in the notification-previews artifact).
+- `buildNotificationMessage(kind, {clientName, startTime, address}, locale)` → `{title, body}`; EN/FR table; times via `Intl.DateTimeFormat('fr-CA'|'en-CA', {timeZone: 'America/Toronto'})`. Kinds: assigned / rescheduled / cancelled / removed / reminder / digest / **doneCheck**. The **reminder** body appends the job's address (user-approved wording in the notification-previews artifact). The **doneCheck** copy: EN title "Job finished?" / body "Is the job for {clientName} done yet? Tap to update its status." — FR title "Travail terminé ?" / body "Le travail pour {clientName} est-il terminé ? Touchez pour mettre à jour son statut."
 - `buildDigestMessage(jobs, locale)` — "You have N jobs tomorrow. First: {clientName} at {time}" (FR variant); `jobs` sorted by startTime.
 - `groupTomorrowsJobsByEmployee(docs, now)` — pure grouping for the digest sweep.
 - `selectReminderCandidates(docs, now)` — window/status filter.
-- `reminderLedgerId(appointmentId, startTimeMillis)`; `isStaleTokenError(code)`.
-- `handleAppointmentWrite(id, before, after, deps)` and `runReminderSweep(deps)` / `runDailyDigest(deps)` orchestration with injected `{db, messaging, now, logger}` so jest can drive them with mocks.
+- `selectOverdueCandidates(docs, now)` — pure filter for the overdue prompt: keep docs whose status is `pending`/`in_progress`/legacy `confirmed` (NOT `done`/`cancelled`) AND `endTime <= now`. Bounded by the sweep's query window (below) so ancient never-closed jobs don't get nudged.
+- `reminderLedgerId(appointmentId, startTimeMillis)`; `overduePromptLedgerId(appointmentId, endTimeMillis)`; `isStaleTokenError(code)`.
+- `handleAppointmentWrite(id, before, after, deps)` and `runReminderSweep(deps)` / `runDailyDigest(deps)` / `runOverduePromptSweep(deps)` orchestration with injected `{db, messaging, now, logger}` so jest can drive them with mocks.
 
 ### New `functions/notifications.js` — trigger registrations only (not require()'d by jest)
 - Shared `sendToEmployees(...)`: `db.getAll()` users docs → filter active employees → read each `fcmTokens` subcollection → per-token localized message → `getMessaging().sendEach()` → delete stale-token docs on failure. No employees/tokens → log and return. Every message sets `android: {priority: 'high'}` and `apns: {payload: {aps: {sound: 'default'}}}` — without these, Android delivery can be doze-deferred and iOS alerts arrive silent.
 - `notifyAppointmentChanges = onDocumentWritten('appointments/{appointmentId}', ...)` — thin wrapper calling `handleAppointmentWrite`.
 - `sendUpcomingJobReminders = onSchedule({schedule: 'every 5 minutes', timeZone: 'America/Toronto', maxInstances: 1}, ...)`: query `status in ['pending', 'confirmed'] && startTime > now && startTime <= now+30min` — `'confirmed'` stays in the filter ONLY as the retired legacy alias (treated as pending by `AppointmentStatus.fromRaw`; new writes are rejected since 2026-07-09, so it ages out naturally); `in_progress` is deliberately excluded (visit already started). Existing `(status, startTime)` composite index covers it — **no new index**. Per candidate, `appointmentReminders` `create()` (skip on ALREADY_EXISTS) then send. First run after entering the window fires (~25–30 min before); missed runs self-heal, never double-send, never fire after start.
 - `sendDailyJobDigest = onSchedule({schedule: '0 18 * * *', timeZone: 'America/Toronto', maxInstances: 1}, ...)`: query `status in ['pending', 'confirmed']` (same legacy-alias note as above) with `startTime` in [tomorrow 00:00, day-after 00:00) Toronto time; group by employee; one digest push per employee with ≥1 job. No ledger (runs once daily; rare crash-retry duplicate accepted).
+- `sendOverdueJobPrompts = onSchedule({schedule: 'every 15 minutes', timeZone: 'America/Toronto', maxInstances: 1}, ...)`: query `status in ['pending', 'in_progress', 'confirmed'] && startTime >= now-24h && startTime <= now` — reuses the existing `(status, startTime)` composite index (**no new index**; querying by `endTime` would need one) and the 24 h `startTime` floor bounds the scan so only recently-run jobs are considered. Then `selectOverdueCandidates` filters to `endTime <= now` in code. Per candidate: `appointmentOverduePrompts` `create(overduePromptLedgerId(id, endTimeMillis))` (skip on ALREADY_EXISTS) then `sendToEmployees(before.employeeIds, 'doneCheck', ...)`. Fires once per occurrence, within ~15 min of the end time; a re-open after a reschedule earns a fresh prompt under the new end-time key. (Accepted v1 gap: a job that ran >24 h ago and was never closed gets no prompt — it's off the query window; digest/next-day surfaces it instead.)
 
 ### Modify `functions/index.js`
-Re-export the three functions (thin wiring surface, per convention).
+Re-export the four functions (thin wiring surface, per convention).
 
 ### Modify `functions/account.js`
 `deleteAccount`: subcollections survive parent deletion, so deleting the doc alone leaves the account still receiving pushes. Replace the doc delete with Admin SDK `firestore.recursiveDelete(userDocRef)` — one call removes the doc plus ALL its subcollections (`fcmTokens` now, `presence` when the travel-time plan lands) with no per-subcollection cleanup list to keep in sync.
 
 ### Tests — `functions/__tests__/notification_utils.test.js`
-Diff matrix (create/cancel/delete/remove+add/reschedule/dedupe-priority/past-appointment), reminder window edges, digest grouping + day-boundary math, ledger id, EN/FR formatting, stale-error codes, injected-deps orchestration tests. `cd functions && npm run lint && npm test`.
+Diff matrix (create/cancel/delete/remove+add/reschedule/dedupe-priority/past-appointment), reminder window edges, digest grouping + day-boundary math, **overdue candidate filter (end-passed-but-open kept; done/cancelled and not-yet-ended dropped) + `overduePromptLedgerId` + `runOverduePromptSweep` fires-once orchestration**, ledger ids, EN/FR formatting (incl. `doneCheck`), stale-error codes, injected-deps orchestration tests. `cd functions && npm run lint && npm test`.
 
 ## Phase 2 — Firestore rules
 
@@ -78,7 +88,7 @@ match /fcmTokens/{token} {
     && request.resource.data.uid == request.auth.uid;
 }
 ```
-Plus deny-all for the ledger (rateLimits style): `match /appointmentReminders/{id} { allow read, write: if false; }`
+Plus deny-all for both ledgers (rateLimits style): `match /appointmentReminders/{id} { allow read, write: if false; }` and `match /appointmentOverduePrompts/{id} { allow read, write: if false; }`
 
 No `firestore.indexes.json` change.
 
@@ -118,12 +128,13 @@ Accepted v1 gap: Android shows no banner while the app is **foregrounded** (back
 ## Phase 4 — Deploy + Android verification (this box)
 
 1. `cd functions && npm run lint && npm test`; `flutter analyze` + `flutter test`.
-2. `firebase deploy --only firestore:rules` then `--only functions:notifyAppointmentChanges,functions:sendUpcomingJobReminders,functions:sendDailyJobDigest,functions:deleteAccount`.
+2. `firebase deploy --only firestore:rules` then `--only functions:notifyAppointmentChanges,functions:sendUpcomingJobReminders,functions:sendDailyJobDigest,functions:sendOverdueJobPrompts,functions:deleteAccount`.
 3. On the Android device/emulator (google-services.json present, App Check debug token registered):
    - Employee sign-in → token doc appears in console.
    - Admin creates/reschedules/cancels/unassigns an appointment → correct push arrives with app killed.
    - Appointment starting 28 min out → reminder within ~5 min; ledger doc written; move the time → fresh reminder under the new key.
    - Digest: temporarily trigger `sendDailyJobDigest` from the console (or wait for 6 PM) with a tomorrow-job seeded.
+   - Overdue prompt: seed a job whose `endTime` is a few minutes past and status still `pending`/`in_progress` → "Job finished?" push within ~15 min; `appointmentOverduePrompts` ledger doc written; a second sweep sends nothing; marking it Done before the sweep suppresses it.
    - Sign-out deletes the token doc; FR-language device gets French text.
 
 ## Phase 5 — iOS home-screen widget (Flutter + Swift authored here; target wired on Mac)
