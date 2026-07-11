@@ -2,6 +2,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/wave/domain/models/wave_connection.dart';
+import 'package:scheduling/features/wave/domain/models/wave_import_schedule.dart';
 import 'package:scheduling/features/wave/domain/wave_error_mapper.dart';
 
 class WaveService {
@@ -87,6 +88,19 @@ class WaveService {
         e,
         st,
       );
+      throw WaveErrorMapper.map(e);
+    }
+  }
+
+  /// Sets the automatic-import cadence via the admin-only
+  /// `waveSetImportSchedule` callable.
+  Future<void> setImportSchedule(WaveImportSchedule schedule) async {
+    try {
+      await _functions.httpsCallable('waveSetImportSchedule').call(
+        <String, dynamic>{'schedule': schedule.raw},
+      );
+    } catch (e, st) {
+      _logger.warn('WAVE-SCHED waveSetImportSchedule callable failed', e, st);
       throw WaveErrorMapper.map(e);
     }
   }
