@@ -43,9 +43,11 @@ bool shouldRegisterPush({
 /// tears it down on sign-out. Driven by `main.dart` on every
 /// `currentUserDocProvider` emission and on app-language change.
 class PushRegistrationController {
-  PushRegistrationController(this._ref);
+  PushRegistrationController(this._ref, {FirebaseAuth? auth})
+    : _auth = auth ?? FirebaseAuth.instance;
 
   final Ref _ref;
+  final FirebaseAuth _auth;
 
   StreamSubscription<String>? _refreshSub;
   bool _busy = false;
@@ -63,7 +65,7 @@ class PushRegistrationController {
   /// account-doc emission and on language change (re-upserts the locale).
   Future<void> sync() async {
     if (_busy) return;
-    final signedIn = FirebaseAuth.instance.currentUser != null;
+    final signedIn = _auth.currentUser != null;
     final doc = _ref.read(currentUserDocProvider).value ?? const {};
     final role = (doc['role'] ?? '').toString().trim();
     final status = (doc['status'] ?? '').toString().trim();
@@ -73,7 +75,7 @@ class PushRegistrationController {
       return;
     }
 
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final uid = _auth.currentUser?.uid;
     final locale = _currentLocale();
     // Fast path: already registered for this uid+locale with a live refresh
     // subscription. Token rotations are handled by that subscription, so

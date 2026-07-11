@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:home_widget/home_widget.dart';
 
@@ -113,6 +114,11 @@ class WidgetSyncService {
     final meaningful = Map<String, dynamic>.of(payload)..remove('generatedAt');
     return jsonEncode(meaningful);
   }
+
+  /// Test hook for the `generatedAt`-insensitive dedup signature.
+  @visibleForTesting
+  static String signatureForTesting(Map<String, dynamic> payload) =>
+      _signatureOf(payload);
 }
 
 final widgetSyncServiceProvider = Provider<WidgetSyncService>(

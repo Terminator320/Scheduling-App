@@ -323,14 +323,6 @@
   "@clients_clientDeletedSuccessfully": {
     "description": "Client deleted successfully."
   },
-  "error_couldNotSaveChangesTryAgain": "Could not save changes. Try again.",
-  "@error_couldNotSaveChangesTryAgain": {
-    "description": "Could not save changes. Try again."
-  },
-  "error_couldNotAddClientTryAgain": "Could not add client. Try again.",
-  "@error_couldNotAddClientTryAgain": {
-    "description": "Could not add client. Try again."
-  },
   "clients_thisClient": "this client",
   "@clients_thisClient": {
     "description": "this client"

@@ -256,9 +256,9 @@ the iOS `FirebaseOptions`). Android also needs `google-services.json`.
   - Adding a key: update both ARBs in lockstep, add the `@key` block in EN,
     run `flutter gen-l10n`. EN/FR drift surfaces in
     `lib/l10n/.gen/untranslated.json`.
-- Failure UX strings already exist — `couldNotAddClientTryAgain`,
-  `couldNotSaveChangesTryAgain`, `somethingWentWrong`,
-  `somethingWentWrongPleaseTryAgain`. Reuse before adding new ones.
+- Failure UX strings already exist — `somethingWentWrong`,
+  `somethingWentWrongPleaseTryAgain`. Reuse before adding new ones. (Most
+  generic catch sites now compose via `composeErrorNotice` cause+tag instead.)
 - Typed failures: each feature defines a sealed `Failure` family at
   `lib/features/<f>/domain/<f>_failure.dart` (see `AuthFailure`,
   `EmployeesFailure`, `MapsFailure`). Repositories throw the typed

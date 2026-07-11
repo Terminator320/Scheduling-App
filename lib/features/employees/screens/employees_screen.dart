@@ -187,7 +187,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         }
 
         return ListView.separated(
-          padding: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.only(bottom: AppSpacing.sp16),
           itemCount: filtered.length,
           separatorBuilder: (context, index) =>
               const Divider(height: 1, indent: 64),

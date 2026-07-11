@@ -10,6 +10,7 @@ import 'package:scheduling/features/auth/application/account_status_provider.dar
 import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart';
 import 'package:scheduling/features/calendar/application/appointment_series_editor.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/application/event_details_outcome.dart';
 import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
@@ -22,6 +23,10 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
+
+// Re-export so existing importers of this controller keep resolving the save
+// outcome family and the provider family key from one place.
+export 'package:scheduling/features/calendar/application/event_details_outcome.dart';
 
 part 'event_details_controller.freezed.dart';
 
@@ -54,38 +59,6 @@ abstract class EventDetailsState
     @Default(<String, AppointmentFormError>{})
     Map<String, AppointmentFormError> errors,
   }) = _EventDetailsState;
-}
-
-sealed class EventDetailsSaveOutcome {
-  const EventDetailsSaveOutcome();
-}
-
-class EventDetailsInvalid extends EventDetailsSaveOutcome {
-  const EventDetailsInvalid();
-}
-
-class EventDetailsSaved extends EventDetailsSaveOutcome {
-  const EventDetailsSaved(
-    this.appointment, {
-    this.futureBookings = 0,
-    this.removedBookings = 0,
-    this.updatedSiblings = 0,
-  });
-  final AppointmentRecord appointment;
-
-  /// Pre-booked repeat occurrences created alongside the save.
-  final int futureBookings;
-
-  /// Old future occurrences deleted by a series rewrite.
-  final int removedBookings;
-
-  /// Future series visits the edit was propagated to (apply-to-all).
-  final int updatedSiblings;
-}
-
-class EventDetailsFailed extends EventDetailsSaveOutcome {
-  const EventDetailsFailed(this.error);
-  final Object error;
 }
 
 class EventDetailsController extends Notifier<EventDetailsState>
@@ -642,24 +615,6 @@ class EventDetailsController extends Notifier<EventDetailsState>
       logger.warn('$tag deleteImages failed (orphaned bytes)', e, st);
     }
   }
-}
-
-/// Family key for [eventDetailsControllerProvider]: carries the record the
-/// sheet opened with, but keys provider identity by the appointment id alone,
-/// so provider lookups don't deep-compare the whole freezed record on every
-/// rebuild and two snapshots of the same visit share one controller.
-@immutable
-class EventDetailsKey {
-  const EventDetailsKey(this.appointment);
-
-  final AppointmentRecord appointment;
-
-  @override
-  bool operator ==(Object other) =>
-      other is EventDetailsKey && other.appointment.id == appointment.id;
-
-  @override
-  int get hashCode => appointment.id.hashCode;
 }
 
 final eventDetailsControllerProvider = NotifierProvider.autoDispose

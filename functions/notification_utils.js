@@ -573,21 +573,34 @@ function isAlreadyExists(err) {
  * @param {!Set<string>=} roles Allowed recipient roles (default: employees
  *   only). Time-based sweeps pass [TIMED_RECIPIENT_ROLES] to also reach an
  *   assigned admin.
+ * @param {!Map<string, {user: ?Object, tokenDocs: !Array<!Object>}>=} cache
+ *   Per-sweep read cache keyed by employee doc id. An employee assigned to
+ *   several jobs in one sweep is otherwise re-read once per job; a sweep passes
+ *   a fresh Map so each employee's user doc + token list is fetched at most
+ *   once. Stale-token pruning still works (deletes are idempotent, and the
+ *   ledger — not the token list — is what prevents a duplicate push).
  * @return {!Promise<number>}
  */
-async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles) {
+async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
+    cache) {
   const {db, messaging, logger} = deps;
   const userRef = db.collection("users").doc(employeeDocId);
-  const userSnap = await userRef.get();
-  if (!userSnap.exists) return 0;
-  const user = userSnap.data() || {};
+
+  let entry = cache && cache.get(employeeDocId);
+  if (!entry) {
+    const userSnap = await userRef.get();
+    const user = userSnap.exists ? (userSnap.data() || {}) : null;
+    const tokensSnap = user ?
+      await userRef.collection("fcmTokens").get() : null;
+    entry = {user, tokenDocs: (tokensSnap && tokensSnap.docs) || []};
+    if (cache) cache.set(employeeDocId, entry);
+  }
+  const {user, tokenDocs} = entry;
+  if (!user) return 0;
   // Recipients are filtered server-side to active accounts of an allowed role
   // (change-driven: employees only; time-based: employees + assigned admins).
   const allowed = roles || CHANGE_RECIPIENT_ROLES;
   if (!allowed.has(user.role) || user.status !== "active") return 0;
-
-  const tokensSnap = await userRef.collection("fcmTokens").get();
-  const tokenDocs = (tokensSnap && tokensSnap.docs) || [];
   if (tokenDocs.length === 0) return 0;
 
   const messages = tokenDocs.map((doc) => {
@@ -717,7 +730,7 @@ async function handleAppointmentWrite(id, before, after, deps) {
 async function _deliverRecipientOnce(deps, opts) {
   const {db, logger} = deps;
   const {collection, ledgerId, appointmentId, employeeDocId, kind, buildMsg,
-    nowDate, label, roles} = opts;
+    nowDate, label, roles, cache} = opts;
   const ledgerRef = db.collection(collection).doc(ledgerId);
   try {
     // create() fails if the doc exists -> fires at most once per recipient.
@@ -740,6 +753,7 @@ async function _deliverRecipientOnce(deps, opts) {
         {appointmentId, kind},
         buildMsg,
         roles,
+        cache,
     );
   } catch (err) {
     // A transient send failure must not abort the sweep for the remaining
@@ -782,6 +796,7 @@ async function runReminderSweep(deps) {
       nowDate,
   );
   let reminded = 0;
+  const cache = new Map();
   for (const c of candidates) {
     const startMs = toMillis(c.startTime);
     const ctx = _contextFor("reminder", null, c);
@@ -797,6 +812,7 @@ async function runReminderSweep(deps) {
         nowDate,
         label: "reminder",
         roles: TIMED_RECIPIENT_ROLES,
+        cache,
       });
     }
   }
@@ -831,6 +847,7 @@ async function runOverduePromptSweep(deps) {
       nowDate,
   );
   let prompted = 0;
+  const cache = new Map();
   for (const c of candidates) {
     const endMs = toMillis(c.endTime);
     const ctx = _contextFor("doneCheck", null, c);
@@ -846,6 +863,7 @@ async function runOverduePromptSweep(deps) {
         nowDate,
         label: "overdue",
         roles: TIMED_RECIPIENT_ROLES,
+        cache,
       });
       // Count recipients actually prompted (a job with N assignees can prompt
       // up to N); single-assignee jobs — the common case — read as before.
@@ -876,6 +894,7 @@ async function runDailyDigest(deps) {
       nowDate,
   );
   let digests = 0;
+  const cache = new Map();
   for (const employeeDocId of Object.keys(grouped)) {
     const jobs = grouped[employeeDocId];
     if (!jobs || jobs.length === 0) continue;
@@ -885,6 +904,7 @@ async function runDailyDigest(deps) {
         {kind: "digest"},
         (locale) => buildDigestMessage(jobs, locale),
         TIMED_RECIPIENT_ROLES,
+        cache,
     );
     if (sent > 0) digests += 1;
   }

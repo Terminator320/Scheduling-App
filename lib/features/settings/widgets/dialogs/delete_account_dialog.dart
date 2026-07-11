@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/adaptive/adaptive.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 // Body for the delete-account confirm (shown via showConfirmDialog).
@@ -79,11 +80,11 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
               child: GestureDetector(
                 onTap: () => setState(() => _obscure = !_obscure),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sp8,
+                  ),
                   child: Icon(
-                    _obscure
-                        ? CupertinoIcons.eye
-                        : CupertinoIcons.eye_slash,
+                    _obscure ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
                     size: 20,
                     color: CupertinoColors.secondaryLabel.resolveFrom(context),
                   ),

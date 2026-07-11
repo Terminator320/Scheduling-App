@@ -117,6 +117,7 @@ service cloud.firestore {
         || (isActiveUser() && resource.data.status == 'active')
         || (isSignedIn() && resource.data.uid == request.auth.uid)
         || (isSignedIn()
+            && request.auth.token.email_verified == true
             && resource.data.status == 'invited'
             && resource.data.email == request.auth.token.email);
 
