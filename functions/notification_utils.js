@@ -51,6 +51,14 @@ const KIND_PRIORITY = {
   assigned: 1,
 };
 
+// Recipient roles per notification category (all must be status:'active').
+// Change-driven pushes (assigned/rescheduled/cancelled/removed) go to
+// EMPLOYEES ONLY — an admin usually makes those edits themselves, so a push
+// for their own change would be noise. Time-based pushes (reminder / overdue /
+// digest) also go to an assigned ADMIN, who still wants the schedule nudges.
+const CHANGE_RECIPIENT_ROLES = new Set(["employee"]);
+const TIMED_RECIPIENT_ROLES = new Set(["employee", "admin"]);
+
 /**
  * Milliseconds since epoch for a Firestore Timestamp / Date / number, else
  * null.
@@ -115,9 +123,11 @@ function _accumulate(acc, employeeDocId, kind) {
  * @param {?Object} before Pre-write appointment fields (null on create).
  * @param {?Object} after Post-write appointment fields (null on delete).
  * @param {(Date|number)} now
+ * @param {string=} id This appointment's doc id (for repeat-series anchor
+ *   dedup; only meaningful on create).
  * @return {!Array<{employeeDocId: string, kind: string}>}
  */
-function diffAppointmentForNotifications(before, after, now) {
+function diffAppointmentForNotifications(before, after, now, id) {
   const nowMs = nowMillis(now);
   const acc = {};
 
@@ -131,8 +141,15 @@ function diffAppointmentForNotifications(before, after, now) {
   if (!before && after) {
     // Created.
     if (isCancelled(after) || !notPast(after.startTime)) return [];
-    for (const id of toIdList(after.employeeIds)) {
-      _accumulate(acc, id, "assigned");
+    // A repeating series pre-books many occurrences in one write. Only the
+    // anchor (id === seriesId) sends the assignment push, so the employee
+    // gets ONE "repeating job" notification instead of one per pre-booked
+    // copy. Non-repeating appointments have an empty seriesId and are never
+    // suppressed.
+    const seriesId = String((after && after.seriesId) || "");
+    if (seriesId !== "" && seriesId !== String(id)) return [];
+    for (const eid of toIdList(after.employeeIds)) {
+      _accumulate(acc, eid, "assigned");
     }
   } else if (before && !after) {
     // Deleted.
@@ -217,13 +234,37 @@ function _timeOnly(locale, startTime) {
   return _fmt(locale, startTime, {hour: "numeric", minute: "2-digit"});
 }
 
+/**
+ * Localized "every 6 months" / "aux 6 mois" recurrence phrase for a
+ * RepeatInterval raw value (repeat_interval.dart); "" for none/unknown so a
+ * one-off job reads as a plain assignment. Mirrors RepeatInterval.raw.
+ * @param {string} raw
+ * @param {string} locale 'en' | 'fr'.
+ * @return {string}
+ */
+function _repeatLabel(raw, locale) {
+  const fr = locale === "fr";
+  switch (String(raw || "").toLowerCase()) {
+    case "four_months": return fr ? "aux 4 mois" : "every 4 months";
+    case "six_months": return fr ? "aux 6 mois" : "every 6 months";
+    case "one_year": return fr ? "chaque année" : "every year";
+    default: return "";
+  }
+}
+
 const _MESSAGES = {
   en: {
     who: (c) => (c.clientName || "").trim() || "Client",
-    assigned: (c, who) => ({
-      title: "New job assigned",
-      body: `${who} · ${_dateTime("en", c.startTime)}`,
-    }),
+    assigned: (c, who) => {
+      const repeat = _repeatLabel(c.repeat, "en");
+      return repeat ? {
+        title: "New repeating job assigned",
+        body: `${who} · ${_dateTime("en", c.startTime)} · repeats ${repeat}`,
+      } : {
+        title: "New job assigned",
+        body: `${who} · ${_dateTime("en", c.startTime)}`,
+      };
+    },
     rescheduled: (c, who) => ({
       title: "Job rescheduled",
       body: `${who} · now ${_dateTime("en", c.startTime)}`,
@@ -252,10 +293,16 @@ const _MESSAGES = {
   },
   fr: {
     who: (c) => (c.clientName || "").trim() || "un client",
-    assigned: (c, who) => ({
-      title: "Nouvelle visite assignée",
-      body: `${who} · ${_dateTime("fr", c.startTime)}`,
-    }),
+    assigned: (c, who) => {
+      const repeat = _repeatLabel(c.repeat, "fr");
+      return repeat ? {
+        title: "Nouvelle visite récurrente",
+        body: `${who} · ${_dateTime("fr", c.startTime)} · se répète ${repeat}`,
+      } : {
+        title: "Nouvelle visite assignée",
+        body: `${who} · ${_dateTime("fr", c.startTime)}`,
+      };
+    },
     rescheduled: (c, who) => ({
       title: "Visite reportée",
       body: `${who} · maintenant ${_dateTime("fr", c.startTime)}`,
@@ -523,16 +570,21 @@ function isAlreadyExists(err) {
  * @param {!Object} data Data payload (string values); `kind` etc.
  * @param {function(string): {title: string, body: string}} buildMsg Localized
  *   message builder keyed by 'en'|'fr'.
+ * @param {!Set<string>=} roles Allowed recipient roles (default: employees
+ *   only). Time-based sweeps pass [TIMED_RECIPIENT_ROLES] to also reach an
+ *   assigned admin.
  * @return {!Promise<number>}
  */
-async function sendToEmployee(deps, employeeDocId, data, buildMsg) {
+async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles) {
   const {db, messaging, logger} = deps;
   const userRef = db.collection("users").doc(employeeDocId);
   const userSnap = await userRef.get();
   if (!userSnap.exists) return 0;
   const user = userSnap.data() || {};
-  // Recipients are always filtered to active employees server-side.
-  if (user.role !== "employee" || user.status !== "active") return 0;
+  // Recipients are filtered server-side to active accounts of an allowed role
+  // (change-driven: employees only; time-based: employees + assigned admins).
+  const allowed = roles || CHANGE_RECIPIENT_ROLES;
+  if (!allowed.has(user.role) || user.status !== "active") return 0;
 
   const tokensSnap = await userRef.collection("fcmTokens").get();
   const tokenDocs = (tokensSnap && tokensSnap.docs) || [];
@@ -615,6 +667,7 @@ function _contextFor(kind, before, after) {
     clientName: d.clientName,
     startTime: d.startTime,
     address: d.address,
+    repeat: d.repeat,
   };
 }
 
@@ -629,7 +682,7 @@ function _contextFor(kind, before, after) {
  */
 async function handleAppointmentWrite(id, before, after, deps) {
   const now = deps.now || new Date();
-  const events = diffAppointmentForNotifications(before, after, now);
+  const events = diffAppointmentForNotifications(before, after, now, id);
   if (events.length === 0) return {events: 0, sent: 0};
   let sent = 0;
   for (const {employeeDocId, kind} of events) {
@@ -664,7 +717,7 @@ async function handleAppointmentWrite(id, before, after, deps) {
 async function _deliverRecipientOnce(deps, opts) {
   const {db, logger} = deps;
   const {collection, ledgerId, appointmentId, employeeDocId, kind, buildMsg,
-    nowDate, label} = opts;
+    nowDate, label, roles} = opts;
   const ledgerRef = db.collection(collection).doc(ledgerId);
   try {
     // create() fails if the doc exists -> fires at most once per recipient.
@@ -686,6 +739,7 @@ async function _deliverRecipientOnce(deps, opts) {
         employeeDocId,
         {appointmentId, kind},
         buildMsg,
+        roles,
     );
   } catch (err) {
     // A transient send failure must not abort the sweep for the remaining
@@ -742,6 +796,7 @@ async function runReminderSweep(deps) {
           buildNotificationMessage("reminder", ctx, locale),
         nowDate,
         label: "reminder",
+        roles: TIMED_RECIPIENT_ROLES,
       });
     }
   }
@@ -790,6 +845,7 @@ async function runOverduePromptSweep(deps) {
           buildNotificationMessage("doneCheck", ctx, locale),
         nowDate,
         label: "overdue",
+        roles: TIMED_RECIPIENT_ROLES,
       });
       // Count recipients actually prompted (a job with N assignees can prompt
       // up to N); single-assignee jobs — the common case — read as before.
@@ -828,6 +884,7 @@ async function runDailyDigest(deps) {
         employeeDocId,
         {kind: "digest"},
         (locale) => buildDigestMessage(jobs, locale),
+        TIMED_RECIPIENT_ROLES,
     );
     if (sent > 0) digests += 1;
   }
@@ -837,6 +894,8 @@ async function runDailyDigest(deps) {
 module.exports = {
   REMINDER_WINDOW_MS,
   OVERDUE_LOOKBACK_MS,
+  CHANGE_RECIPIENT_ROLES,
+  TIMED_RECIPIENT_ROLES,
   diffAppointmentForNotifications,
   buildNotificationMessage,
   buildDigestMessage,

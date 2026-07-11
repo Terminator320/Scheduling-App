@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
@@ -148,7 +149,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
           email: _emailController.text.trim().toLowerCase(),
         ),
       );
-    } catch (error) {
+    } catch (error, st) {
+      AppLogger().warn('auth.create_account signUp failed', error, st);
       if (!mounted) return;
       final failure = AuthErrorMapper.map(error);
       setState(() {

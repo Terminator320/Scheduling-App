@@ -27,13 +27,20 @@ final pushRegistrationControllerProvider = Provider<PushRegistrationController>(
   PushRegistrationController.new,
 );
 
-/// Pure gate (mirrors the `isAccountDeletionSignal` helper style): only active
-/// employees register for push. Admins never register and are never prompted.
+/// Pure gate (mirrors the `isAccountDeletionSignal` helper style): active
+/// employees AND admins register for push. Admins register so an admin who is
+/// assigned to a job still receives the time-based nudges (30-min reminder,
+/// overdue prompt, 6 PM digest); the server withholds change-driven pushes
+/// (assigned/rescheduled/cancelled) from admins (see notification_utils.js
+/// TIMED_RECIPIENT_ROLES vs CHANGE_RECIPIENT_ROLES).
 bool shouldRegisterPush({
   required String role,
   required String status,
   required bool signedIn,
-}) => signedIn && role == 'employee' && status == 'active';
+}) =>
+    signedIn &&
+    status == 'active' &&
+    (role == 'employee' || role == 'admin');
 
 /// Registers this device's FCM token for the signed-in active employee and
 /// tears it down on sign-out. Driven by `main.dart` on every
@@ -53,17 +60,12 @@ class PushRegistrationController {
   /// Idempotent. A no-op for admins / signed-out users. Safe to call on every
   /// account-doc emission and on language change (re-upserts the locale).
   Future<void> sync() async {
-    if (_busy) {
-      _logger.warn('PUSH sync: skipped (busy)');
-      return;
-    }
+    if (_busy) return;
     final signedIn = FirebaseAuth.instance.currentUser != null;
     final doc = _ref.read(currentUserDocProvider).value ?? const {};
     final role = (doc['role'] ?? '').toString().trim();
     final status = (doc['status'] ?? '').toString().trim();
-    _logger.warn('PUSH sync: signedIn=$signedIn role="$role" status="$status"');
     if (!shouldRegisterPush(role: role, status: status, signedIn: signedIn)) {
-      _logger.warn('PUSH sync: gate=false (not an active employee)');
       await _refreshSub?.cancel();
       _refreshSub = null;
       return;
@@ -74,7 +76,6 @@ class PushRegistrationController {
       await _ref.read(firebaseReadyProvider.future).catchError((Object _) {});
       final service = _ref.read(pushNotificationServiceProvider);
       final granted = await service.requestPermission();
-      _logger.warn('PUSH sync: permission granted=$granted');
       if (!granted) return;
       await service.configureForegroundPresentation();
 
@@ -88,14 +89,17 @@ class PushRegistrationController {
         return;
       }
       final token = await service.currentToken();
-      _logger.warn('PUSH sync: docId=$docId token=${token == null ? "NULL" : "ok"}');
       if (token == null) return;
 
       await _upsert(docId, token, uid);
       _registeredDocId = docId;
       _registeredToken = token;
       _subscribeRefresh(docId, uid);
-      _logger.warn('PUSH sync: token upserted for $docId');
+    } catch (e, st) {
+      // Never let a registration failure escape as an uncaught async error
+      // (sync() is called via `unawaited`, so an escape would be logged as a
+      // fatal crash). Report it to Crashlytics as a non-fatal instead.
+      _logger.warn('PUSH sync failed', e, st);
     } finally {
       _busy = false;
     }
@@ -116,10 +120,14 @@ class PushRegistrationController {
     _refreshSub = _ref
         .read(pushNotificationServiceProvider)
         .onTokenRefresh
-        .listen((token) {
-          _registeredToken = token;
-          unawaited(_upsert(docId, token, uid));
-        });
+        .listen(
+          (token) {
+            _registeredToken = token;
+            unawaited(_upsert(docId, token, uid));
+          },
+          onError: (Object e, StackTrace st) =>
+              _logger.warn('PUSH token refresh stream error', e, st),
+        );
   }
 
   /// Best-effort de-registration for sign-out: delete the token doc and

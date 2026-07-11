@@ -25,7 +25,13 @@ Employees currently have no way to know a job was assigned, moved, or cancelled 
 3. **30-min reminder** — push ~30 minutes before an employee's next job.
 4. **Nightly digest** — every day at **6:00 PM America/Toronto**, each employee with ≥1 job tomorrow gets a summary push. Employees with no jobs get nothing.
 5. **Overdue "is the job done yet?" prompt** — push to each assigned employee when a job's `endTime` has passed but its status is still `pending`/`in_progress` (i.e. the app now shows it as `overdue`), nudging them to mark it Done or Cancelled. Fires once per job occurrence.
-6. **Employees only** — admins get no notifications and are never prompted for permission.
+6. **Employees always; admins for time-based only.** Employees get every
+   notification. An **admin assigned to a job** also registers a token and
+   receives the **time-based** pushes (30-min reminder, overdue prompt, 6 PM
+   digest) but **not** change-driven ones (assigned/rescheduled/cancelled) —
+   an admin usually makes those edits themselves, so a push for their own
+   change would be noise. (Revised 2026-07-11 from the original "admins get no
+   notifications"; admins are now prompted for permission on sign-in.)
 7. **iOS home-screen widget** — shows the employee's next job (small) and today's job list (medium/large). Data refreshes whenever the app runs (open or push tap); the widget's own timeline rolls past jobs off without the app. Native WidgetKit target is created on the Mac; Swift code + all Flutter data-sync is authored here.
 
 **Delivery: Firebase Cloud Messaging (FCM) for everything, server-side.** No `flutter_local_notifications`, no on-device scheduling — reminders/digests come from scheduled Cloud Functions, so they work with the app closed and can't go stale when an admin reschedules a job. The OS notification permission is the on/off control; no in-app toggle in v1.
@@ -40,7 +46,11 @@ The app currently has **zero** notification infrastructure (no packages, no FCM 
 - **Overdue-prompt idempotency:** separate Admin-SDK-only ledger `appointmentOverduePrompts`, doc id `${appointmentId}_${endTimeMillis}` (keyed on the **end** time, since that's what makes a job overdue). Same `create()`-fails-if-exists → at most one prompt per occurrence; a reschedule that moves `endTime` re-arms it, and a claim that delivered **zero** pushes (no live tokens yet, or the send threw) is **released** (ledger doc deleted) so a later sweep retries while the job is still eligible. `overdue` is display-only and **never stored** (the rules allowlist stays pending/in_progress/done/cancelled) — the sweep derives it from `endTime` + status, exactly as `displayStatus` does client-side; nothing writes `overdue` back to the appointment. Both ledgers write an `expiresAt` (+7 days) for a console-enabled Firestore TTL policy so they don't grow forever.
 - **Payload:** notification messages (`notification` block) + `data: {appointmentId, kind}` — OS-displayed with app closed, no extra iOS entitlements beyond Push capability.
 - **No `retry: true` on the trigger** — a duplicate push is worse than a rare missed one.
-- Recipients always filtered server-side to `role == 'employee' && status == 'active'`.
+- Recipients filtered server-side by `status == 'active'` and a per-category
+  role set (`notification_utils.js`): `CHANGE_RECIPIENT_ROLES = {employee}` for
+  assigned/rescheduled/cancelled; `TIMED_RECIPIENT_ROLES = {employee, admin}`
+  for reminder/overdue/digest. `sendToEmployee` takes the allowed-roles set
+  (default: employees only).
 
 ## Phase 1 — Cloud Functions (all buildable/testable on Windows)
 
@@ -163,6 +173,15 @@ User-approved scope: **small** widget = next job (client, time, address); **medi
 - [ ] Verify on a **physical** iPhone: permission prompt → token doc → all four trigger scenarios + reminder + digest → tap-from-killed lands on the calendar → add the widget in all three sizes, confirm today's jobs render and roll over.
 
 ## Risks / notes
-- Series bulk edits write N docs → N pushes; accepted v1 (each is a real change).
+- **Repeating-series creation sends ONE assignment push, not one per
+  occurrence.** A repeat pre-books many docs in a single write; only the
+  **anchor** occurrence (`id === seriesId`) emits the `assigned` event
+  (`diffAppointmentForNotifications` suppresses copies where
+  `seriesId !== "" && seriesId !== id`), and its message uses the "repeating
+  job" variant naming the interval (`_repeatLabel`, EN "repeats every 6 months"
+  / FR "se répète aux 6 mois"). Non-repeating appointments have an empty
+  `seriesId` and are never suppressed. This dedup applies to `assigned`
+  (create) only — a series **reschedule/cancel** (`propagate`) still writes N
+  docs → N pushes (each a real per-occurrence change; accepted v1).
 - Client can only read/write its own tokens; ledger and other users' tokens are invisible.
 - `sendEach` batching keeps one bad token from failing the batch; stale tokens self-clean.
