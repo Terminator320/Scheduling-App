@@ -41,21 +41,27 @@ class DashboardAggregator {
 
   /// Testable stand-in for [AppointmentRecord.displayStatus] (the model getter
   /// reads DateTime.now()): terminal statuses pass through; a non-terminal
-  /// visit whose start has passed is in_progress.
+  /// visit reads `overdue` once its end has passed, else `in_progress` once its
+  /// start has passed, else its raw status. Mirror of the model getter — keep
+  /// the two in sync.
   ///
-  /// DELIBERATELY does NOT reproduce the model's `overdue` branch. This drives
-  /// [computeTodayOps]'s status-count map, whose keys round-trip through
-  /// `AppointmentStatus.fromRaw(...).raw` — and `AppointmentStatus.overdue.raw`
-  /// THROWS (overdue is display-only). The dashboard hero renders only the four
-  /// stored statuses; ended-but-open visits are surfaced separately as
-  /// [AttentionFlags.overdueOpen]. Do not "sync" this with `displayStatus` by
-  /// adding an overdue branch without also removing the `.raw` round-trip, or
-  /// [computeTodayOps] will crash.
+  /// NOTE: [computeTodayOps] keys its counts via [statusCountKey], NOT
+  /// `AppointmentStatus.raw`, precisely because this can now return 'overdue'
+  /// and `AppointmentStatus.overdue.raw` THROWS (overdue is display-only).
   static String displayStatusAt(AppointmentRecord appointment, DateTime now) {
     if (_isTerminal(appointment)) return appointment.status;
+    if (now.isAfter(appointment.endTime)) return 'overdue';
     if (now.isAfter(appointment.startTime)) return 'in_progress';
     return appointment.status;
   }
+
+  /// Stable string key for a display status in [TodayOps.statusCounts].
+  /// [AppointmentStatus.overdue] has no stored `raw` (reading it throws), so it
+  /// keys on the literal 'overdue'; every other status keys on its stored raw.
+  /// Both the reducer and the hero legend go through this — never `.raw`
+  /// directly, or an overdue count crashes.
+  static String statusCountKey(AppointmentStatus status) =>
+      status == AppointmentStatus.overdue ? 'overdue' : status.raw;
 
   static TodayOps computeTodayOps(
     List<AppointmentRecord> appointments,
@@ -67,7 +73,9 @@ class DashboardAggregator {
     final upcoming = <AppointmentRecord>[];
     for (final a in appointments) {
       if (!_startsOnDay(a, dayStart)) continue;
-      final display = AppointmentStatus.fromRaw(displayStatusAt(a, now)).raw;
+      final display = statusCountKey(
+        AppointmentStatus.fromRaw(displayStatusAt(a, now)),
+      );
       counts[display] = (counts[display] ?? 0) + 1;
       if (a.employeeIds.isEmpty && !_isCancelled(a)) unassigned++;
       if (a.startTime.isAfter(now) && !_isTerminal(a)) upcoming.add(a);
