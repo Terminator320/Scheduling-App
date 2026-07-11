@@ -439,6 +439,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final logger = ref.read(loggerProvider);
     try {
       await _deletionService.reauthenticateWithPassword(password);
+      // Best-effort: drop this device's push token while still authenticated —
+      // after deleteAccount removes the users doc the rules would reject the
+      // token delete, leaving an orphan fcmTokens doc behind.
+      await ref
+          .read(pushRegistrationControllerProvider)
+          .unregisterCurrentDevice();
       await _deletionService.deleteAccount();
     } on AuthFailure catch (e) {
       if (!mounted) return;

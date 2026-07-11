@@ -153,8 +153,12 @@ Every 5 min (Toronto). Queries `status in [pending, confirmed]` (legacy alias)
 with `startTime` in `(now, now+30min]` on the existing `(status, startTime)`
 index, then fires one localized reminder per assignee. Exactly-once via the
 Admin-SDK-only `appointmentReminders/{id}_{startMs}` ledger (`create()` fails
-if it exists; a reschedule changes the key → fresh reminder). Ledger docs
-carry `expiresAt` (+7 d) for the console-enabled Firestore TTL policy.
+if it exists; a reschedule changes the key → fresh reminder). As in the overdue
+sweep, a claim that delivered **zero** pushes (no live token registered yet, or
+the send threw) is released so a later sweep retries while the job is still
+upcoming, and each candidate's send loop is isolated so one transient failure
+can't abort the sweep. Ledger docs carry `expiresAt` (+7 d) for the
+console-enabled Firestore TTL policy.
 
 ### `sendDailyJobDigest` — `notifications.js`
 Daily 18:00 Toronto. Groups tomorrow's (Toronto-midnight-bounded) jobs by
