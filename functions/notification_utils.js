@@ -463,38 +463,45 @@ function tomorrowWindowToronto(now) {
 }
 
 /**
- * Reminder ledger doc id: one per appointment occurrence, so a reschedule
- * (new startTime) earns a fresh reminder. Pure — unit-testable.
+ * Reminder ledger doc id: one per (occurrence, recipient), so a reschedule
+ * (new startTime) earns a fresh reminder and each assignee is tracked
+ * independently — an assignee whose token registers late is retried without
+ * re-sending to assignees already delivered. Pure — unit-testable.
  * @param {string} appointmentId
  * @param {number} startTimeMillis
+ * @param {string} employeeDocId
  * @return {string}
  */
-function reminderLedgerId(appointmentId, startTimeMillis) {
-  return `${appointmentId}_${startTimeMillis}`;
+function reminderLedgerId(appointmentId, startTimeMillis, employeeDocId) {
+  return `${appointmentId}_${startTimeMillis}_${employeeDocId}`;
 }
 
 /**
  * Overdue-prompt ledger doc id: keyed on the END time (that's what makes a
- * job overdue), so a reschedule that moves endTime re-arms the prompt.
- * Pure — unit-testable.
+ * job overdue) and the recipient, so a reschedule that moves endTime re-arms
+ * the prompt and each assignee is tracked independently. Pure —
+ * unit-testable.
  * @param {string} appointmentId
  * @param {number} endTimeMillis
+ * @param {string} employeeDocId
  * @return {string}
  */
-function overduePromptLedgerId(appointmentId, endTimeMillis) {
-  return `${appointmentId}_${endTimeMillis}`;
+function overduePromptLedgerId(appointmentId, endTimeMillis, employeeDocId) {
+  return `${appointmentId}_${endTimeMillis}_${employeeDocId}`;
 }
 
 /**
- * True for FCM error codes that mean the token is dead and its doc should be
- * deleted. Pure — unit-testable.
+ * True for FCM error codes that mean the token itself is dead and its doc
+ * should be deleted. Deliberately narrow: the generic
+ * `messaging/invalid-argument` is NOT included — it can signal a malformed
+ * message payload, not a bad token, and treating it as stale would delete
+ * valid tokens on any payload bug. Pure — unit-testable.
  * @param {string} code
  * @return {boolean}
  */
 function isStaleTokenError(code) {
   return code === "messaging/registration-token-not-registered" ||
-      code === "messaging/invalid-registration-token" ||
-      code === "messaging/invalid-argument";
+      code === "messaging/invalid-registration-token";
 }
 
 /**
@@ -546,25 +553,41 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg) {
   });
 
   const resp = await messaging.sendEach(messages);
-  const responses = (resp && resp.responses) || [];
-  let sent = 0;
-  const deletions = [];
-  responses.forEach((r, i) => {
-    if (r && r.success) {
-      sent += 1;
-      return;
+  // Once sendEach resolves the pushes are already delivered. Nothing below may
+  // throw OUT of this function: the caller reads a 0 return as "nothing went
+  // out" and releases the idempotency claim, so a post-delivery throw here
+  // would re-send an already-delivered message on the next sweep. Bookkeeping
+  // (success count + stale-token pruning) is therefore fully self-contained.
+  try {
+    const responses = (resp && resp.responses) || [];
+    let sent = 0;
+    const deletions = [];
+    responses.forEach((r, i) => {
+      if (r && r.success) {
+        sent += 1;
+        return;
+      }
+      const code = r && r.error && r.error.code;
+      if (isStaleTokenError(code)) {
+        deletions.push(tokenDocs[i].ref.delete().catch((err) => {
+          if (logger) logger.warn("fcm: stale-token delete failed", {err});
+        }));
+      } else if (logger) {
+        logger.warn("fcm: send failed", {employeeDocId, code});
+      }
+    });
+    if (deletions.length > 0) await Promise.all(deletions);
+    return sent;
+  } catch (err) {
+    // Post-delivery bookkeeping failed. We can't recount reliably, but the
+    // batch DID go out — report the batch size so the caller keeps the claim
+    // rather than re-sending. Erring toward a possible missed stale-token
+    // cleanup (self-heals next send) over a duplicate push.
+    if (logger) {
+      logger.warn("fcm: post-send bookkeeping failed", {employeeDocId, err});
     }
-    const code = r && r.error && r.error.code;
-    if (isStaleTokenError(code)) {
-      deletions.push(tokenDocs[i].ref.delete().catch((err) => {
-        if (logger) logger.warn("fcm: stale-token delete failed", {err});
-      }));
-    } else if (logger) {
-      logger.warn("fcm: send failed", {employeeDocId, code});
-    }
-  });
-  if (deletions.length > 0) await Promise.all(deletions);
-  return sent;
+    return messages.length;
+  }
 }
 
 /**
@@ -623,13 +646,75 @@ async function handleAppointmentWrite(id, before, after, deps) {
 }
 
 /**
- * Orchestrates the 30-minute reminder sweep. Injectable deps
- * `{db, messaging, now, logger}`.
+ * Claim → send → release for ONE (occurrence, recipient) pair, keyed on a
+ * per-recipient ledger doc. `create()` is the atomic exactly-once claim: a
+ * recipient already delivered keeps its claim and is never re-sent, while a
+ * claim that delivered zero pushes (no live token registered yet, or the send
+ * threw) is released so a later sweep retries THAT recipient while the job is
+ * still eligible — and a newly-added assignee simply earns its own claim on a
+ * later sweep. Because the claim is per-recipient (not per-occurrence), one
+ * assignee with a late-registering token no longer suppresses reminders for
+ * the others (and no assignee is permanently missed). Concurrent sweeps are
+ * safe: `create()` is atomic, so at most one wins the claim per recipient.
+ * Returns the number of pushes delivered to this recipient.
+ * @param {!Object} deps `{db, messaging, now, logger}`.
+ * @param {!Object} opts
+ * @return {!Promise<number>}
+ */
+async function _deliverRecipientOnce(deps, opts) {
+  const {db, logger} = deps;
+  const {collection, ledgerId, appointmentId, employeeDocId, kind, buildMsg,
+    nowDate, label} = opts;
+  const ledgerRef = db.collection(collection).doc(ledgerId);
+  try {
+    // create() fails if the doc exists -> fires at most once per recipient.
+    await ledgerRef.create({
+      createdAt: nowDate,
+      expiresAt: new Date(nowMillis(nowDate) + LEDGER_TTL_MS),
+    });
+  } catch (err) {
+    if (isAlreadyExists(err)) return 0;
+    if (logger) {
+      logger.warn(`${label}: ledger create failed`, {id: appointmentId, err});
+    }
+    return 0;
+  }
+  let sent = 0;
+  try {
+    sent = await sendToEmployee(
+        deps,
+        employeeDocId,
+        {appointmentId, kind},
+        buildMsg,
+    );
+  } catch (err) {
+    // A transient send failure must not abort the sweep for the remaining
+    // recipients/candidates.
+    if (logger) logger.warn(`${label}: send failed`, {id: appointmentId, err});
+  }
+  if (sent === 0) {
+    try {
+      await ledgerRef.delete();
+    } catch (err) {
+      if (logger) {
+        logger.warn(
+            `${label}: ledger release failed`, {id: appointmentId, err});
+      }
+    }
+  }
+  return sent;
+}
+
+/**
+ * Orchestrates the 30-minute reminder sweep. Each assignee is claimed on its
+ * own per-recipient ledger (see [_deliverRecipientOnce]): fired at most once,
+ * retried while upcoming if nothing was delivered, and never re-sent once
+ * delivered. Injectable deps `{db, messaging, now, logger}`.
  * @param {!Object} deps
  * @return {!Promise<{reminded: number}>}
  */
 async function runReminderSweep(deps) {
-  const {db, now, logger} = deps;
+  const {db, now} = deps;
   const nowDate = now || new Date();
   const windowEnd = new Date(nowMillis(nowDate) + REMINDER_WINDOW_MS);
   const snap = await db
@@ -645,30 +730,19 @@ async function runReminderSweep(deps) {
   let reminded = 0;
   for (const c of candidates) {
     const startMs = toMillis(c.startTime);
-    const ledgerRef = db
-        .collection("appointmentReminders")
-        .doc(reminderLedgerId(c.id, startMs));
-    try {
-      // create() fails if the doc exists -> fires exactly once per occurrence.
-      await ledgerRef.create({
-        createdAt: nowDate,
-        expiresAt: new Date(nowMillis(nowDate) + LEDGER_TTL_MS),
-      });
-    } catch (err) {
-      if (isAlreadyExists(err)) continue;
-      if (logger) {
-        logger.warn("reminder: ledger create failed", {id: c.id, err});
-      }
-      continue;
-    }
     const ctx = _contextFor("reminder", null, c);
     for (const employeeDocId of toIdList(c.employeeIds)) {
-      reminded += await sendToEmployee(
-          deps,
-          employeeDocId,
-          {appointmentId: String(c.id), kind: "reminder"},
-          (locale) => buildNotificationMessage("reminder", ctx, locale),
-      );
+      reminded += await _deliverRecipientOnce(deps, {
+        collection: "appointmentReminders",
+        ledgerId: reminderLedgerId(String(c.id), startMs, employeeDocId),
+        appointmentId: String(c.id),
+        employeeDocId,
+        kind: "reminder",
+        buildMsg: (locale) =>
+          buildNotificationMessage("reminder", ctx, locale),
+        nowDate,
+        label: "reminder",
+      });
     }
   }
   return {reminded};
@@ -679,15 +753,15 @@ async function runReminderSweep(deps) {
  * existing `(status, startTime)` index; endTime would need a new one) over
  * the last OVERDUE_QUERY_WINDOW_MS — wide enough that the longest bookable
  * visit is still in range when its endTime passes — then filters to
- * ended-within-24h-but-open in code. The endTime-keyed ledger fires each
- * occurrence at most once; a claim that delivered zero pushes is released so
- * a later sweep can retry while the job is still eligible. Injectable deps
- * `{db, messaging, now, logger}`.
+ * ended-within-24h-but-open in code. Each assignee is claimed on its own
+ * endTime-keyed per-recipient ledger (see [_deliverRecipientOnce]): fired at
+ * most once, retried while eligible if nothing was delivered, never re-sent
+ * once delivered. Injectable deps `{db, messaging, now, logger}`.
  * @param {!Object} deps
  * @return {!Promise<{prompted: number}>}
  */
 async function runOverduePromptSweep(deps) {
-  const {db, now, logger} = deps;
+  const {db, now} = deps;
   const nowDate = now || new Date();
   const nowMs = nowMillis(nowDate);
   const windowStart = new Date(nowMs - OVERDUE_QUERY_WINDOW_MS);
@@ -704,51 +778,23 @@ async function runOverduePromptSweep(deps) {
   let prompted = 0;
   for (const c of candidates) {
     const endMs = toMillis(c.endTime);
-    const ledgerRef = db
-        .collection("appointmentOverduePrompts")
-        .doc(overduePromptLedgerId(c.id, endMs));
-    try {
-      // create() fails if the doc exists -> fires at most once per occurrence.
-      await ledgerRef.create({
-        createdAt: nowDate,
-        expiresAt: new Date(nowMs + LEDGER_TTL_MS),
-      });
-    } catch (err) {
-      if (isAlreadyExists(err)) continue;
-      if (logger) {
-        logger.warn("overdue: ledger create failed", {id: c.id, err});
-      }
-      continue;
-    }
     const ctx = _contextFor("doneCheck", null, c);
-    let sent = 0;
-    try {
-      for (const employeeDocId of toIdList(c.employeeIds)) {
-        sent += await sendToEmployee(
-            deps,
-            employeeDocId,
-            {appointmentId: String(c.id), kind: "doneCheck"},
-            (locale) => buildNotificationMessage("doneCheck", ctx, locale),
-        );
-      }
-    } catch (err) {
-      // A transient send failure must not abort the sweep for the remaining
-      // candidates.
-      if (logger) logger.warn("overdue: send failed", {id: c.id, err});
+    for (const employeeDocId of toIdList(c.employeeIds)) {
+      const delivered = await _deliverRecipientOnce(deps, {
+        collection: "appointmentOverduePrompts",
+        ledgerId: overduePromptLedgerId(String(c.id), endMs, employeeDocId),
+        appointmentId: String(c.id),
+        employeeDocId,
+        kind: "doneCheck",
+        buildMsg: (locale) =>
+          buildNotificationMessage("doneCheck", ctx, locale),
+        nowDate,
+        label: "overdue",
+      });
+      // Count recipients actually prompted (a job with N assignees can prompt
+      // up to N); single-assignee jobs — the common case — read as before.
+      if (delivered > 0) prompted += 1;
     }
-    if (sent === 0) {
-      // Nothing was delivered (no live tokens yet, or the send threw) —
-      // release the claim so a later sweep can retry this occurrence.
-      try {
-        await ledgerRef.delete();
-      } catch (err) {
-        if (logger) {
-          logger.warn("overdue: ledger release failed", {id: c.id, err});
-        }
-      }
-      continue;
-    }
-    prompted += 1;
   }
   return {prompted};
 }

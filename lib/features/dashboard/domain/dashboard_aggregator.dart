@@ -39,14 +39,29 @@ class DashboardAggregator {
     );
   }
 
-  /// Pure re-implementation of [AppointmentRecord.displayStatus] (the model
-  /// getter reads DateTime.now() and is untestable): terminal statuses pass
-  /// through; a non-terminal visit whose start has passed is in_progress.
+  /// Testable stand-in for [AppointmentRecord.displayStatus] (the model getter
+  /// reads DateTime.now()): terminal statuses pass through; a non-terminal
+  /// visit reads `overdue` once its end has passed, else `in_progress` once its
+  /// start has passed, else its raw status. Mirror of the model getter — keep
+  /// the two in sync.
+  ///
+  /// NOTE: [computeTodayOps] keys its counts via [statusCountKey], NOT
+  /// `AppointmentStatus.raw`, precisely because this can now return 'overdue'
+  /// and `AppointmentStatus.overdue.raw` THROWS (overdue is display-only).
   static String displayStatusAt(AppointmentRecord appointment, DateTime now) {
     if (_isTerminal(appointment)) return appointment.status;
+    if (now.isAfter(appointment.endTime)) return 'overdue';
     if (now.isAfter(appointment.startTime)) return 'in_progress';
     return appointment.status;
   }
+
+  /// Stable string key for a display status in [TodayOps.statusCounts].
+  /// [AppointmentStatus.overdue] has no stored `raw` (reading it throws), so it
+  /// keys on the literal 'overdue'; every other status keys on its stored raw.
+  /// Both the reducer and the hero legend go through this — never `.raw`
+  /// directly, or an overdue count crashes.
+  static String statusCountKey(AppointmentStatus status) =>
+      status == AppointmentStatus.overdue ? 'overdue' : status.raw;
 
   static TodayOps computeTodayOps(
     List<AppointmentRecord> appointments,
@@ -58,7 +73,9 @@ class DashboardAggregator {
     final upcoming = <AppointmentRecord>[];
     for (final a in appointments) {
       if (!_startsOnDay(a, dayStart)) continue;
-      final display = AppointmentStatus.fromRaw(displayStatusAt(a, now)).raw;
+      final display = statusCountKey(
+        AppointmentStatus.fromRaw(displayStatusAt(a, now)),
+      );
       counts[display] = (counts[display] ?? 0) + 1;
       if (a.employeeIds.isEmpty && !_isCancelled(a)) unassigned++;
       if (a.startTime.isAfter(now) && !_isTerminal(a)) upcoming.add(a);

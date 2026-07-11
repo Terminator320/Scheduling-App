@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/features/dashboard/domain/dashboard_aggregator.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
@@ -14,10 +15,11 @@ class DashboardHero extends StatelessWidget {
   final TodayOps ops;
   final DateTime now;
 
-  // On-primary data hue, deliberately theme-invariant: the hero ground is
+  // On-primary data hues, deliberately theme-invariant: the hero ground is
   // scheme.primary in BOTH themes (appBarTheme), and ColorScheme has no
   // "data color on primary" role. The legend text carries the meaning.
   static const Color _inProgressSegment = Color(0xFF00A6F4);
+  static const Color _overdueSegment = Color(0xFFF54A00);
 
   @override
   Widget build(BuildContext context) {
@@ -27,6 +29,7 @@ class DashboardHero extends StatelessWidget {
     final l10n = context.l10n;
     final segments = [
       (AppointmentStatus.inProgress, _inProgressSegment),
+      (AppointmentStatus.overdue, _overdueSegment),
       (AppointmentStatus.pending, statusColors.warning),
       (AppointmentStatus.done, statusColors.success),
       (AppointmentStatus.cancelled, scheme.error),
@@ -94,9 +97,9 @@ class DashboardHero extends StatelessWidget {
                   : Row(
                       children: [
                         for (final (status, color) in segments)
-                          if ((ops.statusCounts[status.raw] ?? 0) > 0)
+                          if ((ops.statusCounts[DashboardAggregator.statusCountKey(status)] ?? 0) > 0)
                             Expanded(
-                              flex: ops.statusCounts[status.raw]!,
+                              flex: ops.statusCounts[DashboardAggregator.statusCountKey(status)]!,
                               child: ColoredBox(color: color),
                             ),
                       ],
@@ -109,27 +112,35 @@ class DashboardHero extends StatelessWidget {
             runSpacing: AppSpacing.sp4,
             children: [
               for (final (status, color) in segments)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
+                // Only chips with a non-zero count are shown, mirroring the
+                // bar above — an absent status (e.g. no overdue jobs) adds no
+                // legend clutter.
+                if ((ops.statusCounts[DashboardAggregator.statusCountKey(
+                          status,
+                        )] ??
+                        0) >
+                    0)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: AppSpacing.sp4),
-                    Text(
-                      '${ops.statusCounts[status.raw] ?? 0} '
-                      '${statusLabel(l10n, status)}',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: scheme.onPrimary,
+                      const SizedBox(width: AppSpacing.sp4),
+                      Text(
+                        '${ops.statusCounts[DashboardAggregator.statusCountKey(status)]} '
+                        '${statusLabel(l10n, status)}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.onPrimary,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
             ],
           ),
           if (ops.unassignedCount > 0) ...[
