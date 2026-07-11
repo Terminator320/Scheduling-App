@@ -107,9 +107,29 @@ under their original names (thin wiring surface, per CLAUDE.md).
 
 ### Client (`lib/features/wave/`)
 
-**`WaveImportSchedule` enum (new, domain)** — `{ off, weekly, monthly }` with
-`raw` and `fromRaw(String)` (unknown/empty → `off`). Single string↔enum mapper;
-no per-widget switch.
+**`WaveImportSchedule` enum (new, domain)** — `{ off, weekly, monthly }`, the
+single string↔enum mapper (no per-widget switch). Mirrors `AppointmentStatus`:
+`fromRaw` pins the accepted wire strings explicitly rather than trusting `.name`,
+so the persisted/cross-boundary contract (`'off'/'weekly'/'monthly'`, also
+validated in `waveSetImportSchedule` and switched on in `isImportDue`) can't be
+silently changed by an enum-constant rename. Any null/empty/unknown value falls
+to `off` — the fail-safe default (never accidentally enables automation).
+
+```dart
+enum WaveImportSchedule {
+  off,
+  weekly,
+  monthly;
+
+  static WaveImportSchedule fromRaw(String? raw) => switch (raw) {
+    'weekly' => weekly,
+    'monthly' => monthly,
+    _ => off,
+  };
+
+  String get raw => name; // safe: names already equal the wire strings
+}
+```
 
 **`WaveConnection`** — add `final WaveImportSchedule importSchedule;`, parsed in
 `fromMap` from `map['importSchedule']` via `WaveImportSchedule.fromRaw`,
@@ -154,6 +174,12 @@ New keys, each with an EN `@key` block:
 **jest (`functions/wave/__tests__/`)**
 - `isImportDue`: off → false; weekly/monthly with `null` last → true; just under
   vs. just over each threshold; unknown schedule → false.
+
+**Flutter plain `test()` (`test/features/wave/`)**
+- `WaveImportSchedule.fromRaw`: `'weekly'`/`'monthly'` map through; `null`, `''`,
+  `'off'`, and an unknown string all fall to `off`; `raw` round-trips
+  (`fromRaw(s.raw) == s`) — locks the wire contract against an enum rename. No
+  Firebase needed.
 
 **Flutter widget test (`test/features/wave/`)**
 - Settings section connected: tapping the cadence row opens the sheet; choosing
