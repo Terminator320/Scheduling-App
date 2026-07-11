@@ -15,6 +15,8 @@ lib/
 ├── core/                            Cross-cutting concerns — nothing feature-specific lives here
 │   ├── adaptive/                     iOS adaptive layer — context.isCupertino (the single iOS-vs-Android UI seam) + showAdaptiveActionSheet, AdaptiveProgressIndicator, AppScrollBehavior (iOS CupertinoScrollbar); Android unchanged
 │   ├── animations/                  Shared animation widgets (FadeInItem, TapScale, AnimatedLoadingButton, AnimatedFormFieldWrapper — transition-only field shake)
+│   ├── connectivity/                App-wide connectivity — connectivity_providers.dart + offline_banner.dart (OfflineBanner shown when the device drops offline; connectivity_plus)
+│   ├── constants/                   app_urls.dart — external URL constants (e.g. the Settings privacy-policy link)
 │   ├── errors/                      Base Failure class + error_cause.dart (sanitized cause classifier + tagged notice composer)
 │   ├── images/                      Image picker (native resize/compress at pick time) + Firebase Storage upload service
 │   ├── launchers/                   phone_call_launcher.dart (launchPhoneCall — shared tel: dialer) + web_url_launcher.dart (launchWebUrl — external https: opener for the Settings privacy-policy link); parallel AddressMapLauncher / EmailComposeLauncher
@@ -550,7 +552,7 @@ usersByUid/{uid}       Bridge maintained by the syncUsersByUid Cloud Function.
   status: 'active' | 'disabled'
 
 rateLimits/{route__uid}  True sliding window written by enforceDurableRateLimit.
-  route: string        endpoint id ('deleteAccount' | 'redeemSignupCode')
+  route: string        endpoint id ('deleteAccount' | 'redeemSignupCode' | 'createEmployeeInvite')
   attempts: [number]   epoch-ms timestamps; entries older than the window are
                        dropped each call, and a call is rejected when >= max remain
   expiresAt: timestamp optional Firestore TTL target
