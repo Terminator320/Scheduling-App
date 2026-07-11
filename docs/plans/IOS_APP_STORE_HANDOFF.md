@@ -188,9 +188,15 @@ remain.
   first open.
 - [ ] Deploy the functions + rules from any machine with the Firebase CLI:
   `firebase deploy --only firestore:rules` then
-  `--only functions:notifyAppointmentChanges,functions:sendUpcomingJobReminders,functions:sendDailyJobDigest,functions:deleteAccount`
+  `--only functions:notifyAppointmentChanges,functions:sendUpcomingJobReminders,functions:sendDailyJobDigest,functions:sendOverdueJobPrompts,functions:deleteAccount`
   (the last re-deploys the `recursiveDelete` change that also clears
   `fcmTokens`).
+- [ ] One-time: enable a Firestore **TTL policy** on the `expiresAt` field of
+  BOTH ledger collections (`appointmentReminders` and
+  `appointmentOverduePrompts`) — Google Cloud Console → Firestore →
+  Time-to-live, or `gcloud firestore fields ttls update expiresAt
+  --collection-group=<name> --enable-ttl` — so ledger docs self-delete ~7 days
+  after creation instead of accumulating forever.
 
 ### iOS home-screen widget
 - [ ] **Widget Extension target** — File → New → Target → Widget Extension named
@@ -212,6 +218,10 @@ remain.
   a fresh reminder under the new key (no duplicate for the old one).
 - [ ] Digest: seed a job for tomorrow, then trigger `sendDailyJobDigest` from
   the console (or wait for 18:00 America/Toronto) → one summary push.
+- [ ] Overdue prompt: seed a job whose `endTime` passed a few minutes ago,
+  status still `pending`/`in_progress` → "Job finished?" push within ~15 min;
+  an `appointmentOverduePrompts/{id}_{endMs}` ledger doc is written; a second
+  sweep sends nothing; marking it Done before the sweep suppresses it.
 - [ ] FR-language device receives French text (the token's `locale` field).
 - [ ] Tapping a notification from killed/background surfaces the calendar hub.
 - [ ] Add the widget in all three sizes → today's jobs render; a job rolls off

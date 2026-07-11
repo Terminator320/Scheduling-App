@@ -19,6 +19,7 @@ const {
   handleAppointmentWrite,
   runReminderSweep,
   runDailyDigest,
+  runOverduePromptSweep,
 } = require("./notification_utils");
 
 /**
@@ -82,8 +83,26 @@ const sendDailyJobDigest = onSchedule(
     },
 );
 
+// Overdue "job finished?" prompts every 15 minutes: a job whose endTime
+// passed within the last 24h while still pending/in_progress earns one nudge
+// per occurrence (the endTime-keyed ledger re-arms on reschedule; a
+// zero-delivery claim is released for retry). Queries by startTime over the
+// last 48h — eligibility plus the <24h max booking — so the existing
+// `(status, startTime)` index covers it.
+const sendOverdueJobPrompts = onSchedule(
+    {
+      schedule: "every 15 minutes",
+      timeZone: "America/Toronto",
+      maxInstances: 1,
+    },
+    async () => {
+      await runOverduePromptSweep(liveDeps());
+    },
+);
+
 module.exports = {
   notifyAppointmentChanges,
   sendUpcomingJobReminders,
   sendDailyJobDigest,
+  sendOverdueJobPrompts,
 };

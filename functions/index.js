@@ -37,3 +37,4 @@ exports.waveSyncWorker = waveCallables.waveSyncWorker;
 exports.notifyAppointmentChanges = notifications.notifyAppointmentChanges;
 exports.sendUpcomingJobReminders = notifications.sendUpcomingJobReminders;
 exports.sendDailyJobDigest = notifications.sendDailyJobDigest;
+exports.sendOverdueJobPrompts = notifications.sendOverdueJobPrompts;
