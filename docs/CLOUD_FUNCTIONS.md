@@ -2,8 +2,9 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-07-10 by auditing the source against the app's call sites and
-the live deployment (push-notification functions added the same day).
+refreshed 2026-07-11 by auditing the source against the app's call sites and
+the live deployment (push-notification functions deployed + Wave auto-import
+cadence functions added the same day).
 **Every callable now enforces App Check** (`enforceAppCheck: true`); the
 earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 (`grep -rn "enforceAppCheck: false" functions` returns nothing).
@@ -21,17 +22,18 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 
 ## Deployment status
 
-- **18 functions defined** in code; **14 deployed** — verified live against
-  `schedulingapp-88727` on 2026-07-10 (v2, Node.js 24, 256 MB; `us-central1`
+- **20 functions defined** in code; **all 20 deployed** — verified live against
+  `schedulingapp-88727` on 2026-07-11 (v2, Node.js 24, 256 MB; `us-central1`
   except `validateUploadedImage` in `us-east1`).
 - The 4 **push-notification functions** (`notifyAppointmentChanges`,
   `sendUpcomingJobReminders`, `sendDailyJobDigest`, `sendOverdueJobPrompts`)
-  are built + tested but **NOT yet deployed** (2026-07-10) — pending the
-  Phase 4 deploy in `docs/plans/2026-07-08-push-notifications.md`, together
-  with the updated `firestore.rules`, a `deleteAccount` re-deploy (its
-  `recursiveDelete` change), and the one-time Firestore **TTL policy** on
+  and the 2 **Wave auto-import cadence functions** (`waveSetImportSchedule`,
+  `waveScheduledImport`) were **deployed 2026-07-11** together with the updated
+  `firestore.rules`. Still outstanding: the one-time Firestore **TTL policy** on
   `expiresAt` for the `appointmentReminders` / `appointmentOverduePrompts`
-  ledgers.
+  ledgers (console-enabled), plus on-device push verification. The iOS-native
+  APNs key + Push/App-Groups entitlements were wired on the Mac 2026-07-11 (see
+  `docs/plans/2026-07-08-push-notifications.md`).
 - `backfillLegacyClientNames` (a one-time migration completed `2026-06-29`,
   `fixed: 0`) was removed from the codebase 2026-07-05 and is **no longer in the
   deployed set** (confirmed 2026-07-10) — it was pruned by a full
@@ -48,6 +50,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `redeemSignupCode` | callable | `onCall` | `invites.js` | `firebase_employees_repository.dart`, `auth_service.dart` | — | App Check ✓ · durable 5/15min·**email** |
 | `waveBootstrap` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN`, `WAVE_BUSINESS_NAME` | App Check ✓ · admin · durable 10/hr |
 | `waveGetConnection` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings mount) | — | App Check ✓ · admin |
+| `waveSetImportSchedule` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings cadence picker) | — | App Check ✓ · admin |
 | `waveImportCustomers` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN` | App Check ✓ · admin · durable 5/hr · 300s |
 | `syncUsersByUid` | trigger | `onDocumentWritten users/{id}` | `bridge.js` | any `users` doc write | — | `retry: true` |
 | `propagateClientEdits` | trigger | `onDocumentUpdated clients/{id}` | `client_propagation.js` | any `clients` doc edit | — | `retry: true` |
@@ -56,6 +59,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `notifyAppointmentChanges` | trigger | `onDocumentWritten appointments/{id}` | `notifications.js` | any appointment write | — | no `retry` (dupe push worse than missed) |
 | `purgeExpiredHistory` | scheduled | `every day 03:00` (Toronto) | `maintenance.js` | nightly | — | `maxInstances: 1` · 540s |
 | `waveSyncWorker` | scheduled | `every 5 minutes` | `wave/callables.js` | timer | `WAVE_FULL_ACCESS_TOKEN` | `maxInstances: 1` · 540s |
+| `waveScheduledImport` | scheduled | `every 24 hours` | `wave/callables.js` | timer | `WAVE_FULL_ACCESS_TOKEN` | `maxInstances: 1` · 300s |
 | `sendUpcomingJobReminders` | scheduled | `every 5 minutes` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` · ledger |
 | `sendDailyJobDigest` | scheduled | `0 18 * * *` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` |
 | `sendOverdueJobPrompts` | scheduled | `every 15 minutes` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` · ledger |
@@ -138,8 +142,8 @@ server-side to `role == 'employee' && status == 'active'`; tokens live in
 so the send path needs no uid translation), and stale tokens are deleted on
 send failure. Text is localized per token doc (`locale: 'en'|'fr'`) from an
 inline EN/FR table; every message sets `android: {priority: 'high'}` and an
-APNs `sound` so delivery isn't doze-deferred/silent. **NOT yet deployed** —
-see Deployment status. Design: `docs/plans/2026-07-08-push-notifications.md`.
+APNs `sound` so delivery isn't doze-deferred/silent. **Deployed 2026-07-11**
+— see Deployment status. Design: `docs/plans/2026-07-08-push-notifications.md`.
 
 ### `notifyAppointmentChanges` — `notifications.js`
 `appointments/{id}` write trigger → assignment / reschedule / cancel /
@@ -222,6 +226,12 @@ Admin-only read of `wave/connection` — the **only** Wave read path for the app
 (the Settings Wave section calls it on mount to show "Connected to X"). No
 secret, no rate limit.
 
+### `waveSetImportSchedule` — `wave/callables.js`
+Admin-only setter for the automatic-import cadence — writes the `importSchedule`
+field (`off` | `weekly` | `monthly`) on `wave/connection`. Validates the value
+against the shared `SCHEDULE_VALUES` set and requires an already-bootstrapped
+connection. No secret, no rate limit (a single cheap Firestore write).
+
 ### `waveImportCustomers` — `wave/callables.js`
 Admin one-shot Wave → app customer seed (paginates ~650 customers over ~7 Wave
 pages). Writes `createdAt`/`updatedAt` on every client doc (the list/search order
@@ -244,3 +254,11 @@ instance. `batchLimit` 30 × 5-min cadence = 6 Wave calls/min (Wave allows 60/mi
 cleanly. Skips entirely (cheap cached read) while Wave isn't connected.
 Needs composite indexes `(status ASC, nextAttemptAt ASC)` and
 `(status ASC, claimedAt ASC)` on `waveSyncQueue`.
+
+### `waveScheduledImport` — `wave/callables.js`
+Scheduled Wave → app auto-import, **every 24 hours**, single instance. Reads
+`wave/connection` and re-runs `importCustomers` only when the configured
+`importSchedule` cadence is due (`isImportDue` in `wave/import_schedule.js`, a
+pure jest-testable helper — `off` or any unknown value never runs). Server-
+triggered, so no App Check / rate limit. A due run stamps `lastAutoImportAt`; a
+failed run leaves it unchanged so the next day retries. 300s timeout.

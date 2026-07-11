@@ -10,6 +10,24 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.29.0+48] - 2026-07-11
+### Added
+- **An admin Dashboard gives you the day at a glance.** A new Dashboard screen
+  (from the menu and Settings) shows today's visits by status, who's unassigned,
+  each employee's workload for today and this week, an eight-week trend of
+  completed vs. cancelled jobs and new clients, your busiest weekday, and an
+  attention list of jobs starting soon or already overdue.
+- **Push notifications keep your team on top of every job.** Employees now get
+  alerts when they're assigned to, rescheduled on, or removed from a visit,
+  a reminder 30 minutes before a job starts, a "job finished?" nudge once a
+  visit runs past its end time, and a 6 PM summary of the next day's work.
+- **See your schedule on your iPhone home screen.** A new home-screen widget
+  shows an employee's remaining jobs for today and their next upcoming visit;
+  tapping it opens that appointment.
+- **Wave can import your customers automatically.** Settings → Wave now has an
+  automatic-import cadence you can set to Off, Weekly, or Monthly, so new Wave
+  customers flow into the app without a manual import.
+
 ## [1.28.0+47] - 2026-07-10
 ### Added
 - **Jobs that run past their end time now show "Overdue".** An appointment

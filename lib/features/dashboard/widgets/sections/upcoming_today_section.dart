@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/dashboard/domain/assignee_names.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
@@ -143,7 +144,7 @@ class _TimelineRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    _assigneeNames(appointment) ??
+                    resolveAssigneeNames(appointment, nameMap) ??
                         context.l10n.dashboard_unassigned,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: scheme.onSurfaceVariant,
@@ -156,18 +157,5 @@ class _TimelineRow extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String? _assigneeNames(AppointmentRecord appointment) {
-    final names = [
-      for (final id in appointment.employeeIds)
-        if (nameMap[id] != null) nameMap[id]!,
-    ];
-    if (names.isNotEmpty) return names.join(', ');
-    // Denormalized fallback for assignees missing from the users stream.
-    if (appointment.employeeNames.isNotEmpty) {
-      return appointment.employeeNames.join(', ');
-    }
-    return null;
   }
 }

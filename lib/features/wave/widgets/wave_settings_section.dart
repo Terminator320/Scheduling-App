@@ -114,13 +114,7 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
       // so a later Settings mount re-reads the persisted value.
       final base = _connection ?? ref.read(waveConnectionProvider).value;
       if (base != null) {
-        setState(() {
-          _connection = WaveConnection(
-            businessId: base.businessId,
-            businessName: base.businessName,
-            importSchedule: choice,
-          );
-        });
+        setState(() => _connection = base.copyWith(importSchedule: choice));
       }
       ref.invalidate(waveConnectionProvider);
       ref

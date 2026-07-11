@@ -292,7 +292,7 @@ the iOS `FirebaseOptions`). Android also needs `google-services.json`.
 ## Cloud Functions
 
 Functions live in `functions/` (project `schedulingapp-88727`, region
-`us-central1`). `index.js` is now a thin wiring surface that re-exports all 18
+`us-central1`). `index.js` is now a thin wiring surface that re-exports all 20
 functions under their original names — the implementations are split into
 domain modules: `security.js` (shared callable guards — `assertPayloadShape`,
 `requireString`, `readSessionToken`, `enforceDurableRateLimit`, `assertAdmin`),
@@ -317,13 +317,24 @@ directly.
 - `placesGetDetails` — proxies Google Places API (New) place details. Same guards.
 - `validateUploadedImage` — Storage trigger: validates JPEG/PNG magic bytes for `appointments/*/images/*` uploads; deletes non-conforming files server-side.
 - `propagateClientEdits` — Firestore `clients/{id}` update trigger: fans a client's name/phone/address edit onto that client's FUTURE appointments (the denormalized `clientName`/`clientPhone`/`address` copies). Per-appointment custom addresses (stored address ≠ client's previous address) and past/history visits are left untouched. Idempotent (absolute writes, `retry: true`); needs the `(clientId ASC, startTime ASC)` composite index. Pure helpers (`relevantClientChange`/`buildAppointmentPatch`) exported for unit tests.
-- **Push notifications** (`notifications.js` + jest-testable `notification_utils.js`; **NOT yet deployed** — Phase 4 of `docs/plans/2026-07-08-push-notifications.md`): `notifyAppointmentChanges` (appointment write trigger → assignment/reschedule/cancel/unassign pushes; deliberately no `retry` — a duplicate push is worse than a missed one), `sendUpcomingJobReminders` (every 5 min, 30-min-before reminder), `sendDailyJobDigest` (18:00 Toronto), and `sendOverdueJobPrompts` (every 15 min, "job finished?" nudge for jobs past `endTime` but still open — server mirror of the display-only `overdue` state, keep in sync with `AppointmentRecord.displayStatus`). Recipients always filtered to active employees; tokens in `users/{docId}/fcmTokens/{token}` (per-device `locale` drives EN/FR text). Idempotency via Admin-SDK-only **per-recipient** ledgers `appointmentReminders/{id}_{startMs}_{employeeDocId}` and `appointmentOverduePrompts/{id}_{endMs}_{employeeDocId}` (create()-fails-if-exists; any claim — reminder OR overdue — with zero delivered pushes is released for retry, keyed per assignee so a late-registering token is retried without re-notifying an already-delivered assignee; both write `expiresAt` +7d for a console-enabled Firestore TTL). The overdue sweep queries `startTime` over 48h (24h eligibility + <24h max booking) — no new index; don't "simplify" it to an `endTime` query without adding one.
+- **Push notifications** (`notifications.js` + jest-testable `notification_utils.js`; functions + rules **deployed to prod 2026-07-11**; iOS-native APNs key + Push/App-Groups entitlements wired on the Mac 2026-07-11 — Firestore ledger TTL policy + on-device verify still pending, see the push-notifications plan): `notifyAppointmentChanges` (appointment write trigger → assignment/reschedule/cancel/unassign pushes; deliberately no `retry` — a duplicate push is worse than a missed one), `sendUpcomingJobReminders` (every 5 min, 30-min-before reminder), `sendDailyJobDigest` (18:00 Toronto), and `sendOverdueJobPrompts` (every 15 min, "job finished?" nudge for jobs past `endTime` but still open — server mirror of the display-only `overdue` state, keep in sync with `AppointmentRecord.displayStatus`). Recipients always filtered to active employees; tokens in `users/{docId}/fcmTokens/{token}` (per-device `locale` drives EN/FR text). Idempotency via Admin-SDK-only **per-recipient** ledgers `appointmentReminders/{id}_{startMs}_{employeeDocId}` and `appointmentOverduePrompts/{id}_{endMs}_{employeeDocId}` (create()-fails-if-exists; any claim — reminder OR overdue — with zero delivered pushes is released for retry, keyed per assignee so a late-registering token is retried without re-notifying an already-delivered assignee; both write `expiresAt` +7d for a console-enabled Firestore TTL). The overdue sweep queries `startTime` over 48h (24h eligibility + <24h max booking) — no new index; don't "simplify" it to an `endTime` query without adding one.
+  - **Client side:** `PushRegistrationController` (`features/notifications`) registers this device's FCM token for active employees AND admins (`shouldRegisterPush` — admins register only for the timed nudges; the server withholds change-driven pushes from them), keyed by the users-doc id at `users/{docId}/fcmTokens/{token}`; `main.dart` drives `sync()` on every account-doc emission + on language change (re-upserts `locale`). A notification tap AND an iOS home-screen widget tap both deep-link to the appointment detail sheet.
+  - **iOS home-screen widget** (`features/home_widget` + `ios/ScheduleWidget`, `home_widget` package, iOS-only): `WidgetSyncService` writes an employee's remaining-today + next-upcoming jobs into the App Group `group.net.vogas.scheduling`. The widget payload's `startTime` MUST be an absolute UTC instant (`toUtc().toIso8601String()`, …Z) — a bare local `toIso8601String()` has no zone designator and the Swift `ISO8601DateFormatter` can't parse it. Widget/notification taps use the `esproschedule://appointment?id=…` deep link.
 - **Wave Accounting** (`functions/wave/*`): admin callables (`waveBootstrap`,
   `waveImportCustomers` — App Check + `assertAdmin` + `enforceDurableRateLimit`),
   the read-only `waveGetConnection` (admin + App Check; **no secret, no rate
-  limit** — it only reads the `wave/connection` doc), the `waveUpsertCustomer`
-  `clients` trigger that enqueues an outbox job, and the scheduled
-  `waveSyncWorker` that drains the `waveSyncQueue` collection. The full-access
+  limit** — it only reads the `wave/connection` doc), `waveSetImportSchedule`
+  (admin + App Check, no secret/rate limit — writes the `importSchedule` field
+  on `wave/connection`), the `waveUpsertCustomer`
+  `clients` trigger that enqueues an outbox job, the scheduled
+  `waveSyncWorker` that drains the `waveSyncQueue` collection, and the daily
+  `waveScheduledImport` (server-triggered `onSchedule`, so no App Check/rate
+  limit) which re-runs `importCustomers` only when the configured cadence is due.
+  **Auto-import cadence:** `importSchedule` on `wave/connection` is one of
+  `off`/`weekly`/`monthly` (`WaveImportSchedule` enum client-side; `SCHEDULE_VALUES`
+  server-side). The `isImportDue` helper (`wave/import_schedule.js`, pure/jest-testable)
+  treats **off or any unknown value as never-run**; a due import stamps
+  `lastAutoImportAt` and a failed one leaves it unchanged (retried next day). The full-access
   Wave token lives in Secret Manager (`WAVE_FULL_ACCESS_TOKEN`) only — **no
   OAuth**. The Connect target is chosen **server-side**: `waveBootstrap` resolves
   the business from the `WAVE_BUSINESS_NAME` secret when the client sends no

@@ -28,6 +28,13 @@ class WaveConnection {
   /// empty businessId is not a usable connection.
   bool get isConnected => businessId.isNotEmpty;
 
+  WaveConnection copyWith({WaveImportSchedule? importSchedule}) =>
+      WaveConnection(
+        businessId: businessId,
+        businessName: businessName,
+        importSchedule: importSchedule ?? this.importSchedule,
+      );
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

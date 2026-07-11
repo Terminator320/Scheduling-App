@@ -34,6 +34,19 @@ class DashboardHero extends StatelessWidget {
       (AppointmentStatus.done, statusColors.success),
       (AppointmentStatus.cancelled, scheme.error),
     ];
+    // Resolve each segment's count once (the bar and legend both need it), and
+    // keep only the non-zero ones so the two views can't drift out of sync.
+    final visible = [
+      for (final (status, color) in segments)
+        if ((ops.statusCounts[DashboardAggregator.statusCountKey(status)] ??
+                0) >
+            0)
+          (
+            status,
+            color,
+            ops.statusCounts[DashboardAggregator.statusCountKey(status)]!,
+          ),
+    ];
     final total = ops.total;
 
     return Container(
@@ -96,12 +109,11 @@ class DashboardHero extends StatelessWidget {
                     )
                   : Row(
                       children: [
-                        for (final (status, color) in segments)
-                          if ((ops.statusCounts[DashboardAggregator.statusCountKey(status)] ?? 0) > 0)
-                            Expanded(
-                              flex: ops.statusCounts[DashboardAggregator.statusCountKey(status)]!,
-                              child: ColoredBox(color: color),
-                            ),
+                        for (final (_, color, count) in visible)
+                          Expanded(
+                            flex: count,
+                            child: ColoredBox(color: color),
+                          ),
                       ],
                     ),
             ),
@@ -111,36 +123,29 @@ class DashboardHero extends StatelessWidget {
             spacing: AppSpacing.sp12,
             runSpacing: AppSpacing.sp4,
             children: [
-              for (final (status, color) in segments)
-                // Only chips with a non-zero count are shown, mirroring the
-                // bar above — an absent status (e.g. no overdue jobs) adds no
-                // legend clutter.
-                if ((ops.statusCounts[DashboardAggregator.statusCountKey(
-                          status,
-                        )] ??
-                        0) >
-                    0)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                        ),
+              // Only non-zero statuses appear, mirroring the bar above (same
+              // `visible` list) — an absent status adds no legend clutter.
+              for (final (status, color, count) in visible)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
                       ),
-                      const SizedBox(width: AppSpacing.sp4),
-                      Text(
-                        '${ops.statusCounts[DashboardAggregator.statusCountKey(status)]} '
-                        '${statusLabel(l10n, status)}',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: scheme.onPrimary,
-                        ),
+                    ),
+                    const SizedBox(width: AppSpacing.sp4),
+                    Text(
+                      '$count ${statusLabel(l10n, status)}',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.onPrimary,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
+                ),
             ],
           ),
           if (ops.unassignedCount > 0) ...[

@@ -11,16 +11,12 @@ import 'package:scheduling/features/auth/application/account_status_provider.dar
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 /// App Group shared with the iOS WidgetKit extension.
 const _appGroupId = 'group.net.vogas.scheduling';
 const _iosWidgetName = 'ScheduleWidget';
 const _payloadKey = 'schedulePayload';
-
-bool _isTerminal(AppointmentRecord a) {
-  final s = a.status.toLowerCase();
-  return s == 'done' || s == 'completed' || s == 'cancelled';
-}
 
 Map<String, dynamic> _job(AppointmentRecord a) => {
   // Carried so a widget tap can deep-link straight to this appointment's
@@ -49,7 +45,11 @@ Map<String, dynamic> buildWidgetPayload(
   final dayEnd = DateTime(now.year, now.month, now.day + 1);
   final upcoming =
       appointments
-          .where((a) => !_isTerminal(a) && a.startTime.isAfter(now))
+          .where(
+            (a) =>
+                !AppointmentStatus.fromRaw(a.status).isTerminal &&
+                a.startTime.isAfter(now),
+          )
           .toList()
         ..sort((x, y) => x.startTime.compareTo(y.startTime));
   final todayRemaining = upcoming
@@ -72,12 +72,23 @@ class WidgetSyncService {
 
   final AppLogger _logger;
 
+  /// Signature of the last successful write: `null` = nothing written yet,
+  /// [_clearedState] = the widget was cleared, otherwise the encoded
+  /// job-relevant payload. Lets `sync`/`clear` skip the App Group write +
+  /// WidgetKit reload when the visible jobs are unchanged — the appointments
+  /// stream re-emits far more often than the schedule actually changes.
+  static const _clearedState = '__cleared__';
+  String? _lastState;
+
   Future<void> sync(Map<String, dynamic> payload) async {
     if (!Platform.isIOS) return;
+    final signature = _signatureOf(payload);
+    if (signature == _lastState) return;
     try {
       await HomeWidget.setAppGroupId(_appGroupId);
       await HomeWidget.saveWidgetData<String>(_payloadKey, jsonEncode(payload));
       await HomeWidget.updateWidget(iOSName: _iosWidgetName);
+      _lastState = signature;
     } catch (e, st) {
       _logger.warn('WIDGET sync failed', e, st);
     }
@@ -85,13 +96,22 @@ class WidgetSyncService {
 
   Future<void> clear() async {
     if (!Platform.isIOS) return;
+    if (_lastState == _clearedState) return;
     try {
       await HomeWidget.setAppGroupId(_appGroupId);
       await HomeWidget.saveWidgetData<String>(_payloadKey, null);
       await HomeWidget.updateWidget(iOSName: _iosWidgetName);
+      _lastState = _clearedState;
     } catch (e, st) {
       _logger.warn('WIDGET clear failed', e, st);
     }
+  }
+
+  /// The job-relevant slice of [payload] — everything except the ever-changing
+  /// `generatedAt` stamp, which must not defeat the unchanged-jobs check.
+  static String _signatureOf(Map<String, dynamic> payload) {
+    final meaningful = Map<String, dynamic>.of(payload)..remove('generatedAt');
+    return jsonEncode(meaningful);
   }
 }
 

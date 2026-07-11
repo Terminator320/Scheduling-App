@@ -29,6 +29,7 @@ import 'package:scheduling/core/security/app_lock.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/core/utils/app_language.dart';
+import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
@@ -203,24 +204,34 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   Future<void> _openAppointmentDeepLink(String appointmentId) async {
     if (FirebaseAuth.instance.currentUser == null) return;
 
+    // Fetch the appointment concurrently with the (cold-launch: multi-second)
+    // wait for the hub — the read doesn't depend on the hub being alive, so
+    // overlapping it hides the network round-trip behind the splash/routing
+    // wait. One retry survives the post-sign-in `permission-denied` race while
+    // the auth token propagates (a missing doc returns null, not an error, so
+    // it isn't retried). `.catchError` keeps this a non-throwing future so an
+    // early bail-out below can't leak an unhandled rejection.
+    final recordFuture = appointmentId.isEmpty
+        ? Future<AppointmentRecord?>.value()
+        : retryAsync<AppointmentRecord?>(
+            () => ref
+                .read(appointmentsRepositoryProvider)
+                .getAppointmentById(appointmentId),
+            delays: const [Duration(milliseconds: 600)],
+          ).catchError((Object e, StackTrace st) {
+            ref
+                .read(loggerProvider)
+                .warn('PUSH-TAP load appointment failed', e, st);
+            return null;
+          });
+
     // Terminated-launch taps fire before the post-login hub is built (splash
     // routes into it), so wait briefly for it to come alive.
     final shell = await _awaitLiveHub();
     if (shell == null || !mounted) return;
     shell.showCalendar();
 
-    AppointmentRecord? record;
-    if (appointmentId.isNotEmpty) {
-      try {
-        record = await ref
-            .read(appointmentsRepositoryProvider)
-            .getAppointmentById(appointmentId);
-      } catch (e, st) {
-        ref
-            .read(loggerProvider)
-            .warn('PUSH-TAP load appointment failed', e, st);
-      }
-    }
+    final record = await recordFuture;
     if (!mounted) return;
 
     final navContext = _navigatorKey.currentContext;

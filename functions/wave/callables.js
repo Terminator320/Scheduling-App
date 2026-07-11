@@ -429,8 +429,8 @@ const waveScheduledImport = onSchedule(
       timeoutSeconds: 300,
     },
     async () => {
-      const snap = await getFirestore()
-          .collection("wave").doc("connection").get();
+      const ref = getFirestore().collection("wave").doc("connection");
+      const snap = await ref.get();
       const data = snap.exists ? snap.data() : null;
       const businessId = data && typeof data.businessId === "string" ?
         data.businessId : "";
@@ -458,7 +458,7 @@ const waveScheduledImport = onSchedule(
         return; // leave lastAutoImportAt unchanged → retried next run
       }
 
-      await getFirestore().collection("wave").doc("connection").update({
+      await ref.update({
         lastAutoImportAt: FieldValue.serverTimestamp(),
       });
       logger.info("WAVE-SCHED import done", {

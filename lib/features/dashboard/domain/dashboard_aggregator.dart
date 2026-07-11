@@ -149,9 +149,9 @@ class DashboardAggregator {
     for (final a in appointments) {
       final i = _bucketIndex(weekStarts, horizon, a.startTime);
       if (i < 0) continue;
-      final s = a.status.toLowerCase();
-      if (s == 'done' || s == 'completed') completed[i]++;
-      if (s == 'cancelled') cancelled[i]++;
+      final status = AppointmentStatus.fromRaw(a.status);
+      if (status.isDone) completed[i]++;
+      if (status.isCancelled) cancelled[i]++;
     }
     for (final date in clientCreatedDates) {
       final i = _bucketIndex(weekStarts, horizon, date);
@@ -230,12 +230,10 @@ class DashboardAggregator {
   );
 
   static bool _isCancelled(AppointmentRecord a) =>
-      a.status.toLowerCase() == 'cancelled';
+      AppointmentStatus.fromRaw(a.status).isCancelled;
 
-  static bool _isTerminal(AppointmentRecord a) {
-    final s = a.status.toLowerCase();
-    return s == 'done' || s == 'completed' || s == 'cancelled';
-  }
+  static bool _isTerminal(AppointmentRecord a) =>
+      AppointmentStatus.fromRaw(a.status).isTerminal;
 
   static bool _startsOnDay(AppointmentRecord a, DateTime dayStart) {
     final dayEnd = DateTime(dayStart.year, dayStart.month, dayStart.day + 1);

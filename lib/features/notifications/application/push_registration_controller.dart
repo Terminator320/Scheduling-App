@@ -37,10 +37,7 @@ bool shouldRegisterPush({
   required String role,
   required String status,
   required bool signedIn,
-}) =>
-    signedIn &&
-    status == 'active' &&
-    (role == 'employee' || role == 'admin');
+}) => signedIn && status == 'active' && (role == 'employee' || role == 'admin');
 
 /// Registers this device's FCM token for the signed-in active employee and
 /// tears it down on sign-out. Driven by `main.dart` on every
@@ -54,8 +51,13 @@ class PushRegistrationController {
   bool _busy = false;
   String? _registeredDocId;
   String? _registeredToken;
+  String? _registeredUid;
+  String? _registeredLocale;
 
   AppLogger get _logger => _ref.read(loggerProvider);
+
+  static String _currentLocale() =>
+      AppLanguageController.instance.value == 'fr' ? 'fr' : 'en';
 
   /// Idempotent. A no-op for admins / signed-out users. Safe to call on every
   /// account-doc emission and on language change (re-upserts the locale).
@@ -71,6 +73,20 @@ class PushRegistrationController {
       return;
     }
 
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final locale = _currentLocale();
+    // Fast path: already registered for this uid+locale with a live refresh
+    // subscription. Token rotations are handled by that subscription, so
+    // there's nothing to re-read or re-write — skip the findUserByUid query
+    // and the upsert transaction that would otherwise run on every
+    // account-doc emission.
+    if (uid != null &&
+        uid == _registeredUid &&
+        locale == _registeredLocale &&
+        _refreshSub != null) {
+      return;
+    }
+
     _busy = true;
     try {
       await _ref.read(firebaseReadyProvider.future).catchError((Object _) {});
@@ -79,10 +95,10 @@ class PushRegistrationController {
       if (!granted) return;
       await service.configureForegroundPresentation();
 
-      final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) return;
-      final match =
-          await _ref.read(employeesRepositoryProvider).findUserByUid(uid);
+      final match = await _ref
+          .read(employeesRepositoryProvider)
+          .findUserByUid(uid);
       final docId = match?.id;
       if (docId == null) {
         _logger.warn('PUSH no users doc for uid; skip token upsert');
@@ -91,9 +107,11 @@ class PushRegistrationController {
       final token = await service.currentToken();
       if (token == null) return;
 
-      await _upsert(docId, token, uid);
+      await _upsert(docId, token, uid, locale);
       _registeredDocId = docId;
       _registeredToken = token;
+      _registeredUid = uid;
+      _registeredLocale = locale;
       _subscribeRefresh(docId, uid);
     } catch (e, st) {
       // Never let a registration failure escape as an uncaught async error
@@ -105,14 +123,16 @@ class PushRegistrationController {
     }
   }
 
-  Future<void> _upsert(String docId, String token, String uid) {
-    return _ref.read(fcmTokenRepositoryProvider).upsertToken(
-      userDocId: docId,
-      token: token,
-      platform: Platform.isIOS ? 'ios' : 'android',
-      locale: AppLanguageController.instance.value == 'fr' ? 'fr' : 'en',
-      uid: uid,
-    );
+  Future<void> _upsert(String docId, String token, String uid, String locale) {
+    return _ref
+        .read(fcmTokenRepositoryProvider)
+        .upsertToken(
+          userDocId: docId,
+          token: token,
+          platform: Platform.isIOS ? 'ios' : 'android',
+          locale: locale,
+          uid: uid,
+        );
   }
 
   void _subscribeRefresh(String docId, String uid) {
@@ -123,7 +143,7 @@ class PushRegistrationController {
         .listen(
           (token) {
             _registeredToken = token;
-            unawaited(_upsert(docId, token, uid));
+            unawaited(_upsert(docId, token, uid, _currentLocale()));
           },
           onError: (Object e, StackTrace st) =>
               _logger.warn('PUSH token refresh stream error', e, st),
@@ -149,6 +169,8 @@ class PushRegistrationController {
       _refreshSub = null;
       _registeredDocId = null;
       _registeredToken = null;
+      _registeredUid = null;
+      _registeredLocale = null;
     }
   }
 }
