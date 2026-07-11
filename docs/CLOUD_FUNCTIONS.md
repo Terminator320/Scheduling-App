@@ -151,10 +151,18 @@ duplicate push is worse than a rare missed one.
 ### `sendUpcomingJobReminders` — `notifications.js`
 Every 5 min (Toronto). Queries `status in [pending, confirmed]` (legacy alias)
 with `startTime` in `(now, now+30min]` on the existing `(status, startTime)`
-index, then fires one localized reminder per assignee. Exactly-once via the
-Admin-SDK-only `appointmentReminders/{id}_{startMs}` ledger (`create()` fails
-if it exists; a reschedule changes the key → fresh reminder). Ledger docs
-carry `expiresAt` (+7 d) for the console-enabled Firestore TTL policy.
+index, then fires one localized reminder per assignee. Exactly-once **per
+recipient** via the Admin-SDK-only
+`appointmentReminders/{id}_{startMs}_{employeeDocId}` ledger (`create()` fails
+if it exists; a reschedule changes the key → fresh reminder). Per-recipient
+keying means an assignee whose token registers late is retried independently
+without re-notifying an assignee already delivered (a per-occurrence ledger
+would drop the late one for good). As in the overdue sweep, a claim that
+delivered **zero** pushes (no live token registered yet, or the send threw) is
+released so a later sweep retries while the job is still upcoming, and each
+recipient's send is isolated so one transient failure can't abort the sweep.
+Ledger docs carry `expiresAt` (+7 d) for the console-enabled Firestore TTL
+policy.
 
 ### `sendDailyJobDigest` — `notifications.js`
 Daily 18:00 Toronto. Groups tomorrow's (Toronto-midnight-bounded) jobs by
@@ -168,10 +176,11 @@ whose `endTime` passed within the last 24 h while its status is still open
 display-only `overdue` state; nothing is ever stored). Queries by `startTime`
 over the last **48 h** (24 h eligibility + the <24 h max booking) so no new
 index is needed, then filters `endTime ∈ (now-24h, now]` in code. At-most-once
-via the `appointmentOverduePrompts/{id}_{endMs}` ledger; a claim that
-delivered **zero** pushes is released (doc deleted) so a later sweep retries,
-and each candidate's send loop is isolated so one transient failure can't
-abort the sweep.
+**per recipient** via the
+`appointmentOverduePrompts/{id}_{endMs}_{employeeDocId}` ledger; a claim that
+delivered **zero** pushes is released (doc deleted) so a later sweep retries
+that recipient, and each recipient's send is isolated so one transient failure
+can't abort the sweep.
 
 ## User → uid bridge
 

@@ -16,6 +16,18 @@ import WidgetKit
 private let appGroupId = "group.net.vogas.scheduling"
 private let payloadKey = "schedulePayload"
 
+// The Flutter side emits an absolute UTC instant with milliseconds
+// (e.g. 2026-07-11T18:30:00.000Z). A default ISO8601DateFormatter has NO
+// `.withFractionalSeconds` and returns nil for that string, so job times would
+// render blank and the timeline would never roll over. Parse with fractional
+// seconds first, then fall back to the no-millis form for safety.
+private let isoWithMillis: ISO8601DateFormatter = {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return f
+}()
+private let isoNoMillis = ISO8601DateFormatter()
+
 struct Job: Codable, Hashable {
     let startTime: String
     let clientName: String
@@ -24,7 +36,8 @@ struct Job: Codable, Hashable {
     let status: String
 
     var start: Date? {
-        ISO8601DateFormatter().date(from: startTime)
+        isoWithMillis.date(from: startTime)
+            ?? isoNoMillis.date(from: startTime)
     }
 }
 

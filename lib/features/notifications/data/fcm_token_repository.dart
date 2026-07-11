@@ -22,8 +22,17 @@ class FcmTokenRepository {
       .collection('fcmTokens')
       .doc(token);
 
-  /// Upserts a device token. The field set is exactly the five the security
-  /// rule allows (`hasOnly([platform, locale, uid, createdAt, updatedAt])`).
+  /// Upserts a device token. The written fields stay within the five the
+  /// security rule allows (`hasOnly([platform, locale, uid, createdAt,
+  /// updatedAt])`). `createdAt` is stamped only when the doc is first created
+  /// so a token refresh (which re-upserts) preserves the original registration
+  /// time instead of overwriting it; every write refreshes `updatedAt`.
+  ///
+  /// The existence check and the write run in a single transaction so two
+  /// near-simultaneous upserts of the same token can't both observe "absent"
+  /// and race on `createdAt`. (A read is inherent to a conditional
+  /// `createdAt` — Firestore has no field-level create-only write — so the
+  /// transaction makes that read-modify-write atomic rather than removing it.)
   Future<void> upsertToken({
     required String userDocId,
     required String token,
@@ -32,12 +41,17 @@ class FcmTokenRepository {
     required String uid,
   }) async {
     try {
-      await _tokenDoc(userDocId, token).set({
-        'platform': platform,
-        'locale': locale,
-        'uid': uid,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
+      final ref = _tokenDoc(userDocId, token);
+      await _firestore.runTransaction<void>((txn) async {
+        final snap = await txn.get(ref);
+        final data = <String, dynamic>{
+          'platform': platform,
+          'locale': locale,
+          'uid': uid,
+          'updatedAt': FieldValue.serverTimestamp(),
+          if (!snap.exists) 'createdAt': FieldValue.serverTimestamp(),
+        };
+        txn.set(ref, data, SetOptions(merge: true));
       });
     } catch (e, st) {
       _logger.warn('FCM upsertToken failed', e, st);
