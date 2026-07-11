@@ -112,27 +112,35 @@ class DashboardHero extends StatelessWidget {
             runSpacing: AppSpacing.sp4,
             children: [
               for (final (status, color) in segments)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
+                // Only chips with a non-zero count are shown, mirroring the
+                // bar above — an absent status (e.g. no overdue jobs) adds no
+                // legend clutter.
+                if ((ops.statusCounts[DashboardAggregator.statusCountKey(
+                          status,
+                        )] ??
+                        0) >
+                    0)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: AppSpacing.sp4),
-                    Text(
-                      '${ops.statusCounts[DashboardAggregator.statusCountKey(status)] ?? 0} '
-                      '${statusLabel(l10n, status)}',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: scheme.onPrimary,
+                      const SizedBox(width: AppSpacing.sp4),
+                      Text(
+                        '${ops.statusCounts[DashboardAggregator.statusCountKey(status)]} '
+                        '${statusLabel(l10n, status)}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.onPrimary,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
             ],
           ),
           if (ops.unassignedCount > 0) ...[

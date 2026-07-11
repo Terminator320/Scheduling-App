@@ -19,6 +19,12 @@ class _MockDoc extends Mock
 class _MockSnap extends Mock
     implements DocumentSnapshot<Map<String, dynamic>> {}
 
+class _MockTransaction extends Mock implements Transaction {}
+
+// Typed tear-off so registerFallbackValue records the exact
+// `Future<void> Function(Transaction)` type runTransaction's handler expects.
+Future<void> _noopTxnHandler(Transaction _) async {}
+
 void main() {
   late _MockFirestore firestore;
   late _MockCollection usersCol;
@@ -26,9 +32,14 @@ void main() {
   late _MockCollection tokensCol;
   late _MockDoc tokenDoc;
   late _MockSnap tokenSnap;
+  late _MockTransaction txn;
+  late List<Map<String, dynamic>> setData;
 
   setUpAll(() {
     registerFallbackValue(SetOptions(merge: true));
+    registerFallbackValue(<String, dynamic>{});
+    registerFallbackValue(_noopTxnHandler);
+    registerFallbackValue(Duration.zero);
   });
 
   setUp(() {
@@ -38,13 +49,36 @@ void main() {
     tokensCol = _MockCollection();
     tokenDoc = _MockDoc();
     tokenSnap = _MockSnap();
+    txn = _MockTransaction();
+    setData = [];
     when(() => firestore.collection('users')).thenReturn(usersCol);
     when(() => usersCol.doc('u1')).thenReturn(userDoc);
     when(() => userDoc.collection('fcmTokens')).thenReturn(tokensCol);
     when(() => tokensCol.doc('tok')).thenReturn(tokenDoc);
-    when(() => tokenDoc.get()).thenAnswer((_) async => tokenSnap);
-    when(() => tokenDoc.set(any(), any())).thenAnswer((_) async {});
     when(() => tokenDoc.delete()).thenAnswer((_) async {});
+    // upsertToken runs its get + set inside a transaction; drive the handler
+    // with the mock transaction.
+    when(
+      () => firestore.runTransaction<void>(
+        any(),
+        timeout: any(named: 'timeout'),
+        maxAttempts: any(named: 'maxAttempts'),
+      ),
+    ).thenAnswer((inv) async {
+      final handler =
+          inv.positionalArguments.first as Future<void> Function(Transaction);
+      await handler(txn);
+    });
+    when(() => txn.get(tokenDoc)).thenAnswer((_) async => tokenSnap);
+    // Record the written payload here (rather than verify(captureAny())) so the
+    // assertion doesn't hinge on mocktail's concrete-vs-matcher arg mixing.
+    when(() => txn.set<Map<String, dynamic>>(tokenDoc, any(), any()))
+        .thenAnswer((inv) {
+      setData.add(
+        (inv.positionalArguments[1] as Map).cast<String, dynamic>(),
+      );
+      return txn;
+    });
   });
 
   test('upsertToken on a new doc stamps createdAt (rule-allowed field set)',
@@ -59,9 +93,7 @@ void main() {
       uid: 'uid1',
     );
 
-    final captured =
-        (verify(() => tokenDoc.set(captureAny(), any())).captured.single as Map)
-            .cast<String, dynamic>();
+    final captured = setData.single;
     expect(
       captured.keys.toSet(),
       {'platform', 'locale', 'uid', 'createdAt', 'updatedAt'},
@@ -83,9 +115,7 @@ void main() {
       uid: 'uid1',
     );
 
-    final captured =
-        (verify(() => tokenDoc.set(captureAny(), any())).captured.single as Map)
-            .cast<String, dynamic>();
+    final captured = setData.single;
     // A refresh must not re-stamp createdAt, but still refreshes updatedAt and
     // stays within the rule allowlist (subset is permitted by hasOnly).
     expect(captured.containsKey('createdAt'), isFalse);
