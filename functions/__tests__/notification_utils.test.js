@@ -114,6 +114,21 @@ describe("diffAppointmentForNotifications", () => {
     );
     expect(evs).toEqual([]);
   });
+
+  test("repeating series: only the anchor sends assigned", () => {
+    const after = {
+      employeeIds: ["e1"],
+      startTime: future(3 * HOUR),
+      seriesId: "s1",
+      repeat: "six_months",
+    };
+    // The anchor occurrence (its own id === seriesId) sends one push.
+    expect(kinds(diffAppointmentForNotifications(null, after, NOW, "s1")))
+        .toEqual(["e1:assigned"]);
+    // A pre-booked copy of the same series (id !== seriesId) is suppressed.
+    expect(diffAppointmentForNotifications(null, after, NOW, "copy2"))
+        .toEqual([]);
+  });
 });
 
 describe("selectReminderCandidates", () => {
@@ -254,6 +269,25 @@ describe("buildNotificationMessage", () => {
     expect(fr.body).toBe(
         "Le travail pour Alice est-il terminé ? " +
         "Ouvrez l'application pour mettre à jour son statut.");
+  });
+
+  test("repeating assigned announces the recurrence EN/FR", () => {
+    const en = buildNotificationMessage(
+        "assigned", {...ctx, repeat: "six_months"}, "en");
+    const fr = buildNotificationMessage(
+        "assigned", {...ctx, repeat: "one_year"}, "fr");
+    expect(en.title).toBe("New repeating job assigned");
+    expect(en.body).toContain("repeats every 6 months");
+    expect(fr.title).toBe("Nouvelle visite récurrente");
+    expect(fr.body).toContain("chaque année");
+  });
+
+  test("repeat none/absent falls back to the plain assigned message", () => {
+    const withNone = buildNotificationMessage(
+        "assigned", {...ctx, repeat: "none"}, "en");
+    const absent = buildNotificationMessage("assigned", ctx, "en");
+    expect(withNone.title).toBe("New job assigned");
+    expect(absent.title).toBe("New job assigned");
   });
 });
 
@@ -482,6 +516,24 @@ describe("handleAppointmentWrite", () => {
     );
     expect(res).toEqual({events: 0, sent: 0});
   });
+
+  test("an active admin assignee gets NO change-driven push", async () => {
+    const {db} = makeDb({
+      users: {a1: {role: "admin", status: "active"}},
+      tokens: {a1: [{id: "t", locale: "en"}]},
+    });
+    const messaging = makeMessaging();
+    const res = await handleAppointmentWrite(
+        "appt1",
+        null,
+        {employeeIds: ["a1"], startTime: future(3 * HOUR)},
+        {db, messaging, now: NOW, logger: silentLogger},
+    );
+    // Assignment/reschedule/cancel are employee-only — an admin usually makes
+    // those edits, so no push for their own change.
+    expect(res.sent).toBe(0);
+    expect(messaging.sent).toHaveLength(0);
+  });
 });
 
 describe("runReminderSweep", () => {
@@ -504,6 +556,23 @@ describe("runReminderSweep", () => {
         reminderLedgerId("soon", future(20 * MIN).getTime(), "e1")}`,
     ]);
     expect(ledgerCreates[0].data.expiresAt).toBeInstanceOf(Date);
+    expect(messaging.sent[0].data.kind).toBe("reminder");
+  });
+
+  test("an active admin assignee still gets the reminder", async () => {
+    const {db} = makeDb({
+      users: {a1: {role: "admin", status: "active"}},
+      tokens: {a1: [{id: "t", locale: "en"}]},
+      appointments: [
+        {id: "soon", status: "pending", employeeIds: ["a1"],
+          startTime: future(20 * MIN)},
+      ],
+    });
+    const messaging = makeMessaging();
+    const res = await runReminderSweep(
+        {db, messaging, now: NOW, logger: silentLogger},
+    );
+    expect(res.reminded).toBe(1);
     expect(messaging.sent[0].data.kind).toBe("reminder");
   });
 

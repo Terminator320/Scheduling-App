@@ -253,8 +253,9 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   }
 
   void _listenForPushRegistration() {
-    // Employees only: registers this device's FCM token when an active
-    // employee's account doc resolves; a no-op for admins / signed-out.
+    // Registers this device's FCM token when an active employee's or admin's
+    // account doc resolves (admins get time-based nudges for jobs they're
+    // assigned to); a no-op for signed-out users.
     ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
       prev,
       next,

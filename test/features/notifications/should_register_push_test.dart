@@ -11,9 +11,23 @@ void main() {
       );
     });
 
-    test('admins never register', () {
+    test('active admin signed in registers (for time-based nudges)', () {
       expect(
         shouldRegisterPush(role: 'admin', status: 'active', signedIn: true),
+        isTrue,
+      );
+    });
+
+    test('a non-active admin does not register', () {
+      expect(
+        shouldRegisterPush(role: 'admin', status: 'invited', signedIn: true),
+        isFalse,
+      );
+    });
+
+    test('an unknown role does not register', () {
+      expect(
+        shouldRegisterPush(role: '', status: 'active', signedIn: true),
         isFalse,
       );
     });

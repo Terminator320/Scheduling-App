@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
@@ -64,7 +65,8 @@ class _ForgotPasswordState extends State<ForgotPasswordScreen> {
     String? systemError;
     try {
       await _authService.sendPasswordResetEmail(email);
-    } catch (error) {
+    } catch (error, st) {
+      AppLogger().warn('auth.forgot_password reset failed', error, st);
       if (!mounted) return;
       final failure = AuthErrorMapper.map(error);
       systemError = failure.toForgotPasswordMessage(context);
