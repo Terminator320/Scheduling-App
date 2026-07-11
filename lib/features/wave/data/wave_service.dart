@@ -96,7 +96,7 @@ class WaveService {
   /// `waveSetImportSchedule` callable.
   Future<void> setImportSchedule(WaveImportSchedule schedule) async {
     try {
-      await _functions.httpsCallable('waveSetImportSchedule').call(
+      await _functions.httpsCallable('waveSetImportSchedule').call<void>(
         <String, dynamic>{'schedule': schedule.raw},
       );
     } catch (e, st) {
