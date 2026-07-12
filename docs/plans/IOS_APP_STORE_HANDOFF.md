@@ -194,9 +194,12 @@ remain.
   `Runner.entitlements` committed (2026-07-11). `aps-environment` corrected
   from `development` → **`production`** (2026-07-11) so TestFlight/App Store
   builds hit the production APNs gateway.
-- [ ] No `UIBackgroundModes` needed (display messages only). **Never** run
-  `flutterfire configure`. SwiftPM pulls `FirebaseMessaging` automatically on
-  first open.
+- [x] **`UIBackgroundModes` → `remote-notification`** committed in
+  `ios/Runner/Info.plist` (no Mac action — it's in-repo). Required so the
+  change-driven pushes, which now ride with `content-available`, wake the app
+  in the background to rewrite the home-screen widget with the app closed (see
+  "Wake-on-push widget refresh" below). **Never** run `flutterfire configure`.
+  SwiftPM pulls `FirebaseMessaging` automatically on first open.
 - [x] Functions + rules deployed 2026-07-11 (all 4 push functions +
   `deleteAccount` re-deploy + `firestore:rules`).
 - [x] Firestore **TTL policies** enabled on the `expiresAt` field of BOTH
@@ -228,6 +231,14 @@ remain.
 - [ ] Tapping a notification from killed/background surfaces the calendar hub.
 - [ ] Add the widget in all three sizes → today's jobs render; a job rolls off
   the small widget once it starts; sign-out clears the widget.
+- [ ] **Wake-on-push widget refresh** — with the employee's app **fully closed
+  or backgrounded**, have an admin assign / reschedule / cancel a job for a
+  later time today. The home-screen widget updates to reflect it **without
+  opening the app** (`content-available` wakes
+  `firebaseMessagingBackgroundHandler`, which rewrites the App Group payload).
+  The visible push still shows alongside. iOS throttles background wakes under
+  Low Power Mode — allow a short delay. A FR-language device shows the widget
+  chrome in French (the push carries a per-token-locale payload).
 
 ### Known deferrals (documented, not bugs)
 - **Deep-link on notification tap**: the tap surfaces the calendar hub at the
