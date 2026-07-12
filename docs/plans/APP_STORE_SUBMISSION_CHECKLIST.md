@@ -62,8 +62,12 @@ Legend: `[x]` done/verified · `[ ]` to do · ⚠️ blocker
 - [ ] Age-rating questionnaire, support URL.
 
 ## H. App Store Connect — compliance (content blockers)
-- [ ] ⚠️ **Privacy policy URL** — none exists in the repo. Must be authored +
-  hosted before submission (required for any account-based app).
+- [x] **Privacy policy authored + hosted (live 2026-07-11)** —
+  `docs/legal/privacy-policy.html`, published at
+  `https://gvogas.github.io/es-pro-legal/`, linked in-app via
+  `AppUrls.privacyPolicy`.
+- [ ] Paste `https://gvogas.github.io/es-pro-legal/` into the App Store Connect
+  "Privacy Policy URL" field at submission.
 - [ ] ⚠️ **Demo account for App Review** — signup is invite-only (one-time
   codes), so Review can't self-register. Create a dedicated demo account
   (employee role safest; admin for full app), put credentials in Review notes.

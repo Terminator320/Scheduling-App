@@ -166,14 +166,20 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   /// `esproschedule://appointment?id=<id>`; home_widget surfaces that URI here.
   void _setupWidgetTapHandling() {
     if (!Platform.isIOS) return;
-    unawaited(
-      HomeWidget.initiallyLaunchedFromHomeWidget().then(_handleWidgetTap),
-    );
-    HomeWidget.widgetClicked.listen(
-      _handleWidgetTap,
-      onError: (Object e, StackTrace st) =>
-          ref.read(loggerProvider).warn('WIDGET-TAP stream error', e, st),
-    );
+    // Register the App Group BEFORE any widget read — home_widget throws
+    // `AppGroupId not set` otherwise, and the launch-from-widget tap below is
+    // the first read on a cold start (the sync service that also sets it only
+    // runs after the first account emission).
+    unawaited(() async {
+      await HomeWidget.setAppGroupId(widgetAppGroupId);
+      HomeWidget.widgetClicked.listen(
+        _handleWidgetTap,
+        onError: (Object e, StackTrace st) =>
+            ref.read(loggerProvider).warn('WIDGET-TAP stream error', e, st),
+      );
+      final launchUri = await HomeWidget.initiallyLaunchedFromHomeWidget();
+      await _handleWidgetTap(launchUri);
+    }());
   }
 
   Future<void> _handleWidgetTap(Uri? uri) async {

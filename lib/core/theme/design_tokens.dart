@@ -118,6 +118,10 @@ class AppMotion {
     reverseDuration: Duration(milliseconds: 220),
     curve: Curves.easeOutCubic,
   );
+
+  /// Cross-fade duration when switching hub tabs (the persistent shell keeps
+  /// every tab alive, so it fades between them instead of pushing routes).
+  static const Duration tabSwitch = Duration(milliseconds: 220);
 }
 
 /// Black or white, whichever contrasts with [background] (e.g. initials on an

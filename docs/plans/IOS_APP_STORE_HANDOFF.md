@@ -1,6 +1,9 @@
 # iOS App Store Handoff — Mac Runbook
 
 Written 2026-07-08 · branch `moblie` · v1.25.1+44 · launch scope: **App Store only**
+(status re-verified against the committed Xcode project on 2026-07-11, branch
+`notification`, v1.29.0+48 — the iOS project tasks in steps 3 and 9 are already
+done in-repo; the remaining `[ ]` items are console/hardware/App-Store-Connect).
 (Android stays a dev-only target on the Windows box — see
 `docs/audits/CODEBASE_AUDIT.md` for the full readiness audit; its Play items are
 parked as N/A).
@@ -64,15 +67,19 @@ App Attest steps are the critical path.
 
 Open `ios/Runner.xcworkspace`.
 
-- [ ] **App Attest capability** — Runner target → Signing & Capabilities →
-  `+ Capability` → App Attest. This creates `Runner.entitlements` (none exists
-  today) with `com.apple.developer.devicecheck.appattest-environment`. Set the
-  value to **`production`** (a `development` value breaks attestation on
-  TestFlight/App Store builds). **Commit the new entitlements file and the
-  pbxproj change.**
-- [ ] **Crashlytics dSYM upload Run Script** — Build Phases → `+` → New Run
-  Script Phase, dragged to be the **last** phase. SPM path (not the CocoaPods
-  one):
+> **Status (verified against committed project 2026-07-11):** the three project
+> tasks below are already DONE in `ios/Runner/Runner.entitlements` and
+> `Runner.xcodeproj/project.pbxproj` — App Attest env = `production`, the
+> Crashlytics dSYM Run Script (SPM path + 5 input files, dependency-analysis
+> off), and Release `DEBUG_INFORMATION_FORMAT = dwarf-with-dsym`. Also present:
+> Push Notifications (`aps-environment = production`) and App Groups on both
+> Runner and the widget extension. Left as reference / verify-don't-redo.
+
+- [x] **App Attest capability** — `Runner.entitlements` has
+  `com.apple.developer.devicecheck.appattest-environment = production`.
+  (A `development` value breaks attestation on TestFlight/App Store builds.)
+- [x] **Crashlytics dSYM upload Run Script** — Build Phases, **last** phase.
+  SPM path (not the CocoaPods one):
 
   ```
   "${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run"
@@ -87,9 +94,8 @@ Open `ios/Runner.xcworkspace`.
   $(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)
   ```
   Uncheck "Based on dependency analysis". Commit the pbxproj change.
-- [ ] **Verify Release "Debug Information Format" = DWARF with dSYM File**
-  (Build Settings → Runner target → Release/Profile). Flutter's template
-  default usually already is — verify, don't assume.
+- [x] **Release "Debug Information Format" = DWARF with dSYM File** — confirmed
+  in `project.pbxproj` (Release/Profile = `dwarf-with-dsym`, Debug = `dwarf`).
 - [ ] **Signing sanity check** — automatic signing, team H5XWLU87AX, bundle
   `net.vogas.scheduling` are already in the project; once signed into the team
   it should Just Work.
@@ -143,9 +149,13 @@ Open `ios/Runner.xcworkspace`.
   name/phone/address/email), photos (appointment images), crash data
   (Crashlytics). Data is linked to identity (account-based); **no tracking**
   (matches `NSPrivacyTracking = false`).
-- [ ] **Privacy policy URL** — App Store Connect requires one for any
-  account-based app. None exists in the repo; this needs to be authored and
-  hosted before submission.
+- [x] **Privacy policy authored + hosted (live 2026-07-11)** —
+  `docs/legal/privacy-policy.html`, published at
+  `https://gvogas.github.io/es-pro-legal/`; the app links it from
+  Settings → Legal via `AppUrls.privacyPolicy`
+  (`lib/core/constants/app_urls.dart`).
+- [ ] Paste that URL into the App Store Connect "Privacy Policy URL" field
+  at submission (App Store Connect requires one for any account-based app).
 - [ ] **Demo account for App Review** — signup is invite-only (one-time codes),
   so App Review cannot self-register. Create a dedicated demo account
   (employee role is safest; admin if you want them to see the full app) and put
@@ -181,7 +191,9 @@ remain.
 - [x] **Firebase** — `.p8` uploaded to Cloud Messaging for the iOS app
   `net.vogas.scheduling` (2026-07-11).
 - [x] **Xcode capability** — **Push Notifications** added to Runner;
-  `Runner.entitlements` committed (2026-07-11).
+  `Runner.entitlements` committed (2026-07-11). `aps-environment` corrected
+  from `development` → **`production`** (2026-07-11) so TestFlight/App Store
+  builds hit the production APNs gateway.
 - [ ] No `UIBackgroundModes` needed (display messages only). **Never** run
   `flutterfire configure`. SwiftPM pulls `FirebaseMessaging` automatically on
   first open.
@@ -206,12 +218,12 @@ remain.
   console; sign-out deletes it. (Admins get no prompt and no token doc.)
 - [ ] Admin creates / reschedules / cancels / unassigns an appointment → the
   correct localized push arrives with the app **killed**.
-- [ ] Appointment starting ~28 min out → a reminder within ~5 min; an
+- [x] Appointment starting ~28 min out → a reminder within ~5 min; an
   `appointmentReminders/{id}_{startMs}` ledger doc is written; move the time →
   a fresh reminder under the new key (no duplicate for the old one).
-- [ ] Digest: seed a job for tomorrow, then trigger `sendDailyJobDigest` from
+- [x] Digest: seed a job for tomorrow, then trigger `sendDailyJobDigest` from
   the console (or wait for 18:00 America/Toronto) → one summary push.
-- [ ] Overdue prompt: seed a job whose `endTime` passed a few minutes ago,
+- [x] Overdue prompt: seed a job whose `endTime` passed a few minutes ago,
   status still `pending`/`in_progress` → "Job finished?" push within ~15 min;
   an `appointmentOverduePrompts/{id}_{endMs}` ledger doc is written; a second
   sweep sends nothing; marking it Done before the sweep suppresses it.

@@ -101,7 +101,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _onTextSizeTap() async {
-    if (context.isSplitLayout) {
+    if (context.isTwoPane) {
       setState(() => _selectedDetail = _SettingsDetail.textSize);
       return;
     }
@@ -141,25 +141,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         _securityCard(scheme),
         if (_isAdmin) ...[
-          const SizedBox(height: AppSpacing.sp24),
-          SettingsSectionHeader(
-            label: context.l10n.settings_management.toUpperCase(),
-          ),
-          SettingsSectionCard(
-            child: SettingsTile(
-              iconBg: scheme.primaryContainer,
-              icon: Icons.insights_rounded,
-              iconColor: scheme.primary,
-              label: context.l10n.dashboard_title,
-              trailing: Icon(
-                Icons.chevron_right_rounded,
-                size: 18,
-                color: scheme.onSurfaceVariant,
-              ),
-              onTap: () => Navigator.pushNamed(context, AppRoutes.dashboard),
-              isLast: true,
-            ),
-          ),
           const SizedBox(height: AppSpacing.sp24),
           SettingsSectionHeader(
             label: context.l10n.settings_integrations.toUpperCase(),

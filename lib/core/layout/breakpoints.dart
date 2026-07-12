@@ -8,6 +8,12 @@ class Breakpoints {
   /// column; only genuinely large screens (landscape, large tablets) split.
   static const double tablet = 840;
 
+  /// Tablet-class cutoff on the device's *shortest* side (Material's tablet
+  /// definition). Drives the master-detail two-pane: a phone's shortest side
+  /// stays below this in both orientations, so a landscape phone (too narrow
+  /// for a readable detail pane) uses the list + pushed sheet instead.
+  static const double tabletShortestSide = 600;
+
   /// Extended (labelled) nav-rail threshold — only on large screens, so the
   /// rail doesn't expand the moment two-pane appears.
   static const double expanded = 1200;
@@ -37,6 +43,14 @@ extension ResponsiveContext on BuildContext {
   /// single-column — this never lowers the [Breakpoints.tablet] width gate,
   /// it only adds the orientation path.
   bool get isSplitLayout => isWide || isLandscape;
+
+  /// Show the two-pane master-detail (list + detail side by side). Tablet-class
+  /// devices only — a landscape phone reports [isSplitLayout] (it gets the nav
+  /// rail) but is too narrow to render a readable detail pane beside the list,
+  /// so it falls back to the single list + a pushed detail sheet. Orientation-
+  /// independent (shortest side) so rotating a phone never swaps the pane in.
+  bool get isTwoPane =>
+      MediaQuery.sizeOf(this).shortestSide >= Breakpoints.tabletShortestSide;
 
   /// Dense rows (cards, headers, action bars) stack vertically: a narrow phone
   /// OR a large text scale that would otherwise overflow a horizontal row.

@@ -40,9 +40,9 @@
   "@status_invited": {
     "description": "Invited"
   },
-  "status_pending": "Pending",
+  "status_pending": "Scheduled",
   "@status_pending": {
-    "description": "Pending"
+    "description": "Label for the 'pending' appointment status (stored value stays 'pending')"
   },
   "status_cancelled": "Cancelled",
   "@status_cancelled": {

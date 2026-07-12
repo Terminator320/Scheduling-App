@@ -23,11 +23,11 @@ void main() {
     expect(find.text('Complete'), findsOneWidget);
   });
 
-  testWidgets('StatusChip renders Pending label', (tester) async {
+  testWidgets('StatusChip renders Scheduled label', (tester) async {
     await tester.pumpWidget(
       _wrap(const StatusChip(status: AppointmentStatus.pending)),
     );
-    expect(find.text('Pending'), findsOneWidget);
+    expect(find.text('Scheduled'), findsOneWidget);
   });
 
   testWidgets('StatusChip renders Cancelled label', (tester) async {
