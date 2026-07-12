@@ -72,12 +72,18 @@ Legend: `[x]` done/verified · `[ ]` to do · ⚠️ blocker
   codes), so Review can't self-register. Create a dedicated demo account
   (employee role safest; admin for full app), put credentials in Review notes.
   Prefer a demo dataset over a real customer's data.
-- [ ] **Privacy questionnaire** — declare: account email + name/phone (users),
-  customer contact data (clients: name/phone/address/email), photos
-  (appointment images), crash data (Crashlytics). Data **linked to identity**,
-  **no tracking** (matches `NSPrivacyTracking = false`).
+- [x] **Privacy questionnaire — completed in App Store Connect (2026-07-11).**
+  Final declaration:
+  - Data Linked to You: Contact Info (Name, Phone, Email, Physical Address);
+    Identifiers (Device ID = FCM push token, App Functionality, **not** tracking).
+  - Data Not Linked to You: User Content (Photos); Diagnostics (Crash Data).
+  - Tracking = No throughout (matches `NSPrivacyTracking = false`). Over-declared
+    Usage Data/Product Interaction, Contacts, and Performance Data were removed —
+    the app has no analytics/Performance SDK and only writes a contact card.
   - [x] Repo half done: `PrivacyInfo.xcprivacy` tracked;
     `ITSAppUsesNonExemptEncryption=false` (no export-compliance prompt).
+  - [x] Privacy policy updated + re-hosted 2026-07-11 (push notifications + iOS
+    widget); live at `https://gvogas.github.io/es-pro-legal/`.
 - [x] **Account deletion** requirement satisfied (`deleteAccount` callable +
   in-app ACCT-DEL flow) — mention in Review notes if asked.
 

@@ -42,7 +42,7 @@
 <h1>Privacy Policy</h1>
 <p class="meta">
   Application: <strong>ES Pro</strong> · Effective date: July 8, 2026 ·
-  Last updated: July 8, 2026
+  Last updated: July 11, 2026
 </p>
 
 <p>
@@ -172,6 +172,14 @@
   <li><strong>Address lookups.</strong> When you type an address, the partial
     text is sent, through our secure backend, to Google Maps Platform (Places
     API) to return address suggestions.</li>
+  <li><strong>Push notification token.</strong> If you allow notifications, the
+    App registers a device push token (provided by Apple Push Notification
+    service through Firebase Cloud Messaging) so we can send you job-related
+    notifications — such as a new or changed appointment, an upcoming-job
+    reminder, a daily summary, or a “job finished?” prompt. The token is a
+    device identifier used to deliver messages to your device; it is not used to
+    track you and can be revoked at any time by turning off notifications for
+    the App in your device Settings.</li>
 </ul>
 <p>
   The App does <strong>not</strong> use third-party advertising SDKs, does
@@ -186,6 +194,10 @@
   <li>provide the core scheduling features — appointments, clients, and
     employees — and control which appointments each user can see;</li>
   <li>store and display the records and photos you create;</li>
+  <li>send job-related push notifications about your appointments (if you
+    allow notifications), and, on iOS, show your upcoming jobs in the optional
+    home-screen widget — the widget’s data is stored only on your device in a
+    shared app container and is not transmitted anywhere;</li>
   <li>provide address autocomplete when you enter an address;</li>
   <li>diagnose crashes, maintain security, and improve reliability; and</li>
   <li>comply with legal obligations and respond to lawful requests.</li>
@@ -215,8 +227,8 @@
     <tr>
       <td>Google (Firebase &amp; Google Cloud)</td>
       <td>Authentication, database (Cloud Firestore), file storage (Cloud
-        Storage), crash reporting (Crashlytics), and app-integrity checks
-        (App Check).</td>
+        Storage), crash reporting (Crashlytics), app-integrity checks
+        (App Check), and push-notification delivery (Cloud Messaging).</td>
       <td><a href="https://firebase.google.com/support/privacy">firebase.google.com/support/privacy</a></td>
     </tr>
     <tr>
@@ -234,7 +246,8 @@
     </tr>
     <tr>
       <td>Apple</td>
-      <td>App distribution and App Attest device attestation.</td>
+      <td>App distribution, App Attest device attestation, and push-notification
+        delivery (Apple Push Notification service).</td>
       <td><a href="https://www.apple.com/legal/privacy/">apple.com/legal/privacy</a></td>
     </tr>
   </tbody>
@@ -270,6 +283,9 @@
     keeps them, and are deleted when the business deletes them.</li>
   <li><strong>Crash diagnostics</strong> are retained by Firebase Crashlytics
     for a limited period in accordance with Google’s policies.</li>
+  <li><strong>Push notification tokens</strong> are kept only while your device
+    is registered for notifications; the token for a device is removed when you
+    sign out on it or turn off notifications.</li>
 </ul>
 <p>
   We keep personal information only as long as necessary for the purposes
@@ -367,7 +383,7 @@
 
 <footer>
   © 2026 Plombier Eau Secours. ES Pro Privacy Policy — last updated
-  July 8, 2026.
+  July 11, 2026.
 </footer>
 
 </body>
