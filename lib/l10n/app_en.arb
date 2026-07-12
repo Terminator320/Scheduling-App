@@ -1029,6 +1029,18 @@
   "@settings_security": {
     "description": "Security settings section header"
   },
+  "settings_notifications": "Notifications",
+  "@settings_notifications": {
+    "description": "Notifications settings section header and row label"
+  },
+  "settings_notificationsOn": "On",
+  "@settings_notificationsOn": {
+    "description": "Status pill on the notifications row when notifications are authorized"
+  },
+  "settings_notificationsOff": "Off",
+  "@settings_notificationsOff": {
+    "description": "Status pill on the notifications row when notifications are not authorized"
+  },
   "settings_appLock": "App Lock",
   "@settings_appLock": {
     "description": "Toggle label for the biometric app lock"

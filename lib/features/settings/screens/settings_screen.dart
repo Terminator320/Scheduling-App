@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +15,7 @@ import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
+import 'package:scheduling/core/notifications/push_notification_service.dart';
 import 'package:scheduling/core/security/biometric_auth_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
@@ -55,13 +59,39 @@ class SettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen>
+    with WidgetsBindingObserver {
   late final AccountDeletionService _deletionService =
       widget.accountDeletionService ?? ref.read(accountDeletionServiceProvider);
 
   _SettingsDetail? _selectedDetail;
   bool _isSigningOut = false;
   bool _isDeletingAccount = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Returning from the OS Settings app (where the user may have just toggled
+    // notifications on) — re-read the status so the row updates, and re-run
+    // registration so a newly-granted device actually gets its FCM token
+    // stored server-side. Without the re-sync, "enabled in Settings" would
+    // still deliver no pushes.
+    if (state == AppLifecycleState.resumed && mounted) {
+      ref.invalidate(notificationAuthStatusProvider);
+      unawaited(ref.read(pushRegistrationControllerProvider).sync());
+    }
+  }
 
   String get _displayName {
     if (widget.name.isNotEmpty) return widget.name;
@@ -140,6 +170,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           label: context.l10n.settings_security.toUpperCase(),
         ),
         _securityCard(scheme),
+        const SizedBox(height: AppSpacing.sp24),
+        SettingsSectionHeader(
+          label: context.l10n.settings_notifications.toUpperCase(),
+        ),
+        _notificationsCard(scheme),
         if (_isAdmin) ...[
           const SizedBox(height: AppSpacing.sp24),
           SettingsSectionHeader(
@@ -229,6 +264,62 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  Widget _notificationsCard(ColorScheme scheme) {
+    // valueOrNull keeps the row rendering during the first async read; default
+    // to notDetermined so the row offers the enable action rather than a
+    // misleading "On" before the status resolves.
+    final status =
+        ref.watch(notificationAuthStatusProvider).asData?.value ??
+        AuthorizationStatus.notDetermined;
+    final granted = PushNotificationService.isGranted(status);
+    return SettingsSectionCard(
+      child: SettingsTile(
+        iconBg: granted ? scheme.primaryContainer : scheme.errorContainer,
+        icon: granted
+            ? Icons.notifications_active_rounded
+            : Icons.notifications_off_rounded,
+        iconColor: granted ? scheme.primary : scheme.error,
+        label: context.l10n.settings_notifications,
+        isLast: true,
+        trailing: Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: AppSpacing.sp4,
+          runSpacing: AppSpacing.sp4,
+          children: [
+            SettingsTrailingPill(
+              label: granted
+                  ? context.l10n.settings_notificationsOn
+                  : context.l10n.settings_notificationsOff,
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: scheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+        onTap: () => _onNotificationsTap(status),
+      ),
+    );
+  }
+
+  /// notDetermined → show the one-time OS prompt (the app updated but the ask
+  /// never fired for this user). Any other non-granted state can ONLY be
+  /// recovered from the OS Settings app — iOS never re-shows the system dialog
+  /// once it has been answered. Granted taps also open Settings so the user can
+  /// fine-tune or turn it off. Either way, re-read the status and re-register.
+  Future<void> _onNotificationsTap(AuthorizationStatus status) async {
+    final service = ref.read(pushNotificationServiceProvider);
+    if (status == AuthorizationStatus.notDetermined) {
+      await service.requestPermission();
+    } else {
+      await service.openSystemSettings();
+    }
+    if (!mounted) return;
+    ref.invalidate(notificationAuthStatusProvider);
+    unawaited(ref.read(pushRegistrationControllerProvider).sync());
   }
 
   Widget _accountCard(ColorScheme scheme) {
