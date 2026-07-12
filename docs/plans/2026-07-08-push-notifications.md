@@ -32,6 +32,20 @@ merged on the `notification` branch.
       entitlement (`group.net.vogas.scheduling`) on BOTH Runner and the
       extension.
 
+**Follow-up (2026-07-12) — wake-on-push widget refresh:** the widget originally
+refreshed only while the app was running (its live appointment stream), so a job
+assigned while the app was closed/backgrounded left the widget stale until the
+employee next opened the app. Change-driven pushes (assigned / rescheduled /
+cancelled / removed) now carry a freshly-rebuilt, per-token-locale
+`widgetPayload` plus APNs `content-available`; a top-level
+`firebaseMessagingBackgroundHandler` (registered in `main()`) rewrites the App
+Group payload from a background isolate, and `ios/Runner/Info.plist` gains the
+`remote-notification` `UIBackgroundModes`. Server payload built by
+`functions/widget_payload_utils.js` (JS mirror of the Dart `buildWidgetPayload`,
+Toronto day boundary; jest-tested). Reminder/digest/overdue pushes are unchanged
+(they don't alter the schedule). Needs the on-device background-refresh check
+added to the handoff runbook.
+
 **Still remaining before push + widget actually work end-to-end:**
 
 - [ ] **App release** — the client changes are unshipped (uncommitted at release

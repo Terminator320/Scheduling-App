@@ -15,6 +15,14 @@
  * @module notification_utils
  */
 
+const {
+  buildWidgetPayload,
+  torontoDayStartMs,
+  WIDGET_LOOKAHEAD_DAYS,
+} = require("./widget_payload_utils");
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 // 30 minutes before start, in ms.
 const REMINDER_WINDOW_MS = 30 * 60 * 1000;
 
@@ -579,10 +587,16 @@ function isAlreadyExists(err) {
  *   a fresh Map so each employee's user doc + token list is fetched at most
  *   once. Stale-token pruning still works (deletes are idempotent, and the
  *   ledger — not the token list — is what prevents a duplicate push).
+ * @param {function(string): !Object=} augmentData Optional per-token extra data
+ *   fields, keyed by the token's locale ('en'|'fr') — used to attach a
+ *   locale-correct `widgetPayload` so the change push can rewrite the iOS
+ *   home-screen widget from a background isolate. When the merged data carries
+ *   a non-empty `widgetPayload`, the APNs payload also sets `content-available`
+ *   so iOS wakes the app to apply it with the app closed.
  * @return {!Promise<number>}
  */
 async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
-    cache) {
+    cache, augmentData) {
   const {db, messaging, logger} = deps;
   const userRef = db.collection("users").doc(employeeDocId);
 
@@ -606,14 +620,24 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
   const messages = tokenDocs.map((doc) => {
     const locale = (doc.data() || {}).locale === "fr" ? "fr" : "en";
     const {title, body} = buildMsg(locale);
+    const msgData = augmentData ? {...data, ...augmentData(locale)} : data;
+    const aps = {sound: "default"};
+    // A change push that carries a fresh widget payload also wakes the app in
+    // the background (iOS) so the background handler can rewrite the
+    // home-screen widget with the app closed. content-available needs the
+    // `remote-notification` UIBackgroundMode + the registered background
+    // handler; the visible alert still shows alongside it.
+    if (typeof msgData.widgetPayload === "string" && msgData.widgetPayload) {
+      aps["content-available"] = 1;
+    }
     return {
       token: doc.id,
       notification: {title, body},
-      data,
+      data: msgData,
       // Without these Android delivery can be doze-deferred and iOS alerts
       // arrive silent.
       android: {priority: "high"},
-      apns: {payload: {aps: {sound: "default"}}},
+      apns: {payload: {aps}},
     };
   });
 
@@ -685,8 +709,43 @@ function _contextFor(kind, before, after) {
 }
 
 /**
- * Orchestrates an appointment write: diff -> per-employee localized send.
- * Injectable deps `{db, messaging, now, logger}`.
+ * Reads an employee's appointments in the widget lookahead window
+ * ([today 00:00 Toronto, +WIDGET_LOOKAHEAD_DAYS days)) so the change push can
+ * carry a freshly-rebuilt widget payload. Served by the existing
+ * `(employeeIds CONTAINS, startTime ASC)` composite index. Never throws — a
+ * failed read just yields an empty window so the notification still sends
+ * (the widget then updates on the next app run, as before this feature).
+ * @param {!Object} db
+ * @param {string} employeeDocId
+ * @param {(Date|number)} now
+ * @param {?Object=} logger
+ * @return {!Promise<!Array<!Object>>}
+ */
+async function fetchEmployeeWidgetWindow(db, employeeDocId, now, logger) {
+  try {
+    const startMs = torontoDayStartMs(now);
+    const start = new Date(startMs);
+    const end = new Date(startMs + WIDGET_LOOKAHEAD_DAYS * DAY_MS);
+    const snap = await db
+        .collection("appointments")
+        .where("employeeIds", "array-contains", employeeDocId)
+        .where("startTime", ">=", start)
+        .where("startTime", "<", end)
+        .get();
+    return ((snap && snap.docs) || []).map(_record);
+  } catch (err) {
+    if (logger) {
+      logger.warn("widget: window query failed", {employeeDocId, err});
+    }
+    return [];
+  }
+}
+
+/**
+ * Orchestrates an appointment write: diff -> per-employee localized send. Each
+ * change push also carries a fresh, locale-correct `widgetPayload` (+ APNs
+ * content-available) so the employee's iOS home-screen widget updates even with
+ * the app closed. Injectable deps `{db, messaging, now, logger}`.
  * @param {string} id appointment doc id.
  * @param {?Object} before
  * @param {?Object} after
@@ -698,14 +757,30 @@ async function handleAppointmentWrite(id, before, after, deps) {
   const events = diffAppointmentForNotifications(before, after, now, id);
   if (events.length === 0) return {events: 0, sent: 0};
   let sent = 0;
+  // One window read per distinct employee across this write's events.
+  const windows = new Map();
   for (const {employeeDocId, kind} of events) {
     const ctx = _contextFor(kind, before, after);
     const data = {appointmentId: String(id), kind};
+    if (!windows.has(employeeDocId)) {
+      windows.set(
+          employeeDocId,
+          await fetchEmployeeWidgetWindow(
+              deps.db, employeeDocId, now, deps.logger),
+      );
+    }
+    const records = windows.get(employeeDocId);
     sent += await sendToEmployee(
         deps,
         employeeDocId,
         data,
         (locale) => buildNotificationMessage(kind, ctx, locale),
+        undefined,
+        undefined,
+        (locale) => ({
+          widgetPayload: JSON.stringify(
+              buildWidgetPayload(records, now, locale)),
+        }),
     );
   }
   return {events: events.length, sent};
@@ -928,6 +1003,7 @@ module.exports = {
   isStaleTokenError,
   isAlreadyExists,
   sendToEmployee,
+  fetchEmployeeWidgetWindow,
   handleAppointmentWrite,
   runReminderSweep,
   runDailyDigest,

@@ -68,6 +68,27 @@ Map<String, dynamic> buildWidgetPayload(
   };
 }
 
+/// Writes an already-encoded payload JSON into the App Group and reloads the
+/// widget. iOS-only (no-op elsewhere). Used by the FCM background handler
+/// (`fcm_background_handler.dart`), which runs in its own isolate with no
+/// Riverpod container / live streams — so it hands over the JSON the change
+/// push carried rather than rebuilding it. Single-sources the App Group id +
+/// payload key + widget name so the background path and [WidgetSyncService]
+/// can never drift. Never throws — the background isolate has nowhere to
+/// surface an error.
+Future<void> writeWidgetPayloadJson(String payloadJson) async {
+  if (!Platform.isIOS) return;
+  if (payloadJson.isEmpty) return;
+  try {
+    await HomeWidget.setAppGroupId(widgetAppGroupId);
+    await HomeWidget.saveWidgetData<String>(_payloadKey, payloadJson);
+    await HomeWidget.updateWidget(iOSName: _iosWidgetName);
+  } catch (_) {
+    // Best-effort: a background write failure just leaves the widget showing
+    // its last state until the app next runs and syncs.
+  }
+}
+
 /// Writes the widget payload into the App Group and refreshes the widget.
 /// iOS-only (no-op elsewhere); device-verified (platform-channel plugin, no
 /// unit tests — the payload builder above is the tested part).

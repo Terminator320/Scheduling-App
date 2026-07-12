@@ -24,6 +24,7 @@ import 'package:scheduling/core/connectivity/offline_banner.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
+import 'package:scheduling/core/notifications/fcm_background_handler.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/security/app_lock.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
@@ -82,6 +83,12 @@ Future<void> main() async {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
+
+      // Wake-on-push widget refresh (iOS): a change push carries a fresh
+      // widgetPayload + content-available, so this fires in its own isolate
+      // with the app closed/backgrounded and rewrites the home-screen widget.
+      // Must be registered before runApp with a top-level handler.
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
       Future<void> firebaseReady;
       if (_useFirebaseEmulator) {
