@@ -162,11 +162,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         _appearanceCard(scheme, notifier, langCode: langCode),
         const SizedBox(height: AppSpacing.sp24),
         SettingsSectionHeader(
-          label: context.l10n.settings_notifications.toUpperCase(),
-        ),
-        _notificationsCard(scheme),
-        const SizedBox(height: AppSpacing.sp24),
-        SettingsSectionHeader(
           label: context.l10n.settings_account.toUpperCase(),
         ),
         _accountCard(scheme),
@@ -175,6 +170,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           label: context.l10n.settings_security.toUpperCase(),
         ),
         _securityCard(scheme),
+        const SizedBox(height: AppSpacing.sp24),
+        SettingsSectionHeader(
+          label: context.l10n.settings_notifications.toUpperCase(),
+        ),
+        _notificationsCard(scheme),
         if (_isAdmin) ...[
           const SizedBox(height: AppSpacing.sp24),
           SettingsSectionHeader(
@@ -271,7 +271,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     // to notDetermined so the row offers the enable action rather than a
     // misleading "On" before the status resolves.
     final status =
-        ref.watch(notificationAuthStatusProvider).valueOrNull ??
+        ref.watch(notificationAuthStatusProvider).asData?.value ??
         AuthorizationStatus.notDetermined;
     final granted = PushNotificationService.isGranted(status);
     return SettingsSectionCard(
