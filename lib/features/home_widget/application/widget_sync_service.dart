@@ -14,8 +14,11 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-/// App Group shared with the iOS WidgetKit extension.
-const _appGroupId = 'group.net.vogas.scheduling';
+/// App Group shared with the iOS WidgetKit extension. Public because the app
+/// must register it (`HomeWidget.setAppGroupId`) once at startup — before any
+/// widget read (e.g. a launch-from-widget tap in `main.dart`), which otherwise
+/// throws `AppGroupId not set` on iOS.
+const widgetAppGroupId = 'group.net.vogas.scheduling';
 const _iosWidgetName = 'ScheduleWidget';
 const _payloadKey = 'schedulePayload';
 
@@ -86,7 +89,7 @@ class WidgetSyncService {
     final signature = _signatureOf(payload);
     if (signature == _lastState) return;
     try {
-      await HomeWidget.setAppGroupId(_appGroupId);
+      await HomeWidget.setAppGroupId(widgetAppGroupId);
       await HomeWidget.saveWidgetData<String>(_payloadKey, jsonEncode(payload));
       await HomeWidget.updateWidget(iOSName: _iosWidgetName);
       _lastState = signature;
@@ -99,7 +102,7 @@ class WidgetSyncService {
     if (!Platform.isIOS) return;
     if (_lastState == _clearedState) return;
     try {
-      await HomeWidget.setAppGroupId(_appGroupId);
+      await HomeWidget.setAppGroupId(widgetAppGroupId);
       await HomeWidget.saveWidgetData<String>(_payloadKey, null);
       await HomeWidget.updateWidget(iOSName: _iosWidgetName);
       _lastState = _clearedState;

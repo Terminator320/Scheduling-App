@@ -10,7 +10,7 @@
   "employees_role": "Rôle",
   "status_active": "Actif",
   "status_invited": "Invité",
-  "status_pending": "En attente",
+  "status_pending": "Planifié",
   "status_cancelled": "Annulé",
   "status_disabled": "Désactivé",
   "status_inProgress": "En cours",

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/primary_scroll_scope.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
 import 'package:scheduling/features/clients/screens/clients_screen.dart';
 import 'package:scheduling/features/clients/screens/history_screen.dart';
@@ -126,6 +127,41 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
     );
   }
 
+  // iOS-style left-edge back-swipe for the non-calendar tabs. The tabs live in
+  // an IndexedStack (no pushed route), so they'd otherwise lack the native
+  // edge-swipe the pushed dashboard gets — a left-to-right edge swipe here
+  // returns to the calendar tab, matching the top-bar chevron and system back.
+  static const double _kBackSwipeEdge = 24;
+  static const double _kBackSwipeMinVelocity = 250;
+  bool _backSwipeArmed = false;
+  double _backSwipeDx = 0;
+
+  Widget _withBackSwipe(Widget child) {
+    return GestureDetector(
+      // Translucent so the tab's own scrollables still receive vertical drags;
+      // only horizontal drags land here.
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: (details) {
+        _backSwipeArmed = details.globalPosition.dx <= _kBackSwipeEdge;
+        _backSwipeDx = 0;
+      },
+      onHorizontalDragUpdate: (details) {
+        if (_backSwipeArmed) _backSwipeDx += details.delta.dx;
+      },
+      onHorizontalDragEnd: (details) {
+        if (!_backSwipeArmed) return;
+        _backSwipeArmed = false;
+        final width = MediaQuery.of(context).size.width;
+        final velocity = details.primaryVelocity ?? 0;
+        // A rightward fling, or a drag past a third of the width, goes back.
+        if (velocity > _kBackSwipeMinVelocity || _backSwipeDx > width * 0.35) {
+          showCalendar();
+        }
+      },
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     _refreshScreenCache();
@@ -156,7 +192,24 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
                     // the shared one — a Scrollbar requires its controller to
                     // hold a single ScrollPosition.
                     child: PrimaryScrollScope(
-                      child: _cachedScreenFor(destination),
+                      // IndexedStack keeps the outgoing tab offstage instantly
+                      // (no cross-fade of the old page); the newly-shown tab
+                      // gently fades in via AnimatedOpacity so the switch reads
+                      // as a smooth transition rather than a hard cut. An
+                      // offstage tab holds opacity 0, so re-showing it animates
+                      // 0 -> 1. Reduced-motion collapses it to an instant swap.
+                      child: AnimatedOpacity(
+                        opacity: destination == _current ? 1 : 0,
+                        duration: MediaQuery.disableAnimationsOf(context)
+                            ? Duration.zero
+                            : AppMotion.tabSwitch,
+                        curve: Curves.easeInOut,
+                        // The calendar tab owns its own horizontal week-swipe,
+                        // so only the other tabs get the edge back-swipe.
+                        child: destination == AdaptiveDestination.calendar
+                            ? _cachedScreenFor(destination)
+                            : _withBackSwipe(_cachedScreenFor(destination)),
+                      ),
                     ),
                   ),
                 )

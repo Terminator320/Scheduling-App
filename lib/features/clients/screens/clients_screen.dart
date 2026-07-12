@@ -44,7 +44,7 @@ class _ListInformationState extends State<ListInformation> {
   }
 
   Future<void> _onClientTap(ClientRecord client) async {
-    if (context.isSplitLayout) {
+    if (context.isTwoPane) {
       setState(() => _selectedClient = client);
       return;
     }
@@ -119,7 +119,10 @@ class _ListInformationState extends State<ListInformation> {
             builder: (context, _) => ClientsListView(
               searchQuery: _searchController.text,
               isAdmin: widget.isAdmin,
-              selectedClientId: _selectedClient?.id,
+              // Only highlight the selected row when the detail pane is
+              // actually shown (two-pane). On a single-pane phone a tap opens a
+              // sheet instead, so there is no persistent selection to reflect.
+              selectedClientId: context.isTwoPane ? _selectedClient?.id : null,
               onClientTap: _onClientTap,
             ),
           ),

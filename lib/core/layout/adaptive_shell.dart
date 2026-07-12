@@ -163,25 +163,45 @@ class AdaptiveShell extends StatelessWidget {
 
     return Row(
       children: [
-        NavigationRail(
-          backgroundColor: scheme.surfaceContainerLow,
-          extended: context.isExpanded,
-          selectedIndex: selectedIndex,
-          labelType: context.isExpanded
-              ? NavigationRailLabelType.none
-              : (isShort
-                    ? NavigationRailLabelType.selected
-                    : NavigationRailLabelType.all),
-          onDestinationSelected: (index) =>
-              _onSelect(context, destinations[index].destination),
-          destinations: [
-            for (final d in destinations)
-              NavigationRailDestination(
-                icon: Icon(d.icon),
-                selectedIcon: Icon(d.selectedIcon),
-                label: Text(d.label),
+        // NavigationRail lays its destinations out in a plain Column (no
+        // internal scroll view), so on a short viewport — a landscape phone —
+        // the icons+labels can be a couple pixels too tall and overflow. Make
+        // the rail scrollable: give it at least the viewport height (so its
+        // internal Expanded still works) but let it grow and scroll when the
+        // content doesn't fit. PrimaryScrollController.none keeps this scroll
+        // view off the ambient (hub-tab) controller, so it never shares a
+        // controller with the content list (which the app-wide Scrollbar
+        // rejects).
+        PrimaryScrollController.none(
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: NavigationRail(
+                    backgroundColor: scheme.surfaceContainerLow,
+                    extended: context.isExpanded,
+                    selectedIndex: selectedIndex,
+                    labelType: context.isExpanded
+                        ? NavigationRailLabelType.none
+                        : (isShort
+                              ? NavigationRailLabelType.selected
+                              : NavigationRailLabelType.all),
+                    onDestinationSelected: (index) =>
+                        _onSelect(context, destinations[index].destination),
+                    destinations: [
+                      for (final d in destinations)
+                        NavigationRailDestination(
+                          icon: Icon(d.icon),
+                          selectedIcon: Icon(d.selectedIcon),
+                          label: Text(d.label),
+                        ),
+                    ],
+                  ),
+                ),
               ),
-          ],
+            ),
+          ),
         ),
         const VerticalDivider(width: 1, thickness: 1),
         Expanded(child: child),

@@ -87,7 +87,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     await Future<void>.delayed(const Duration(milliseconds: 80));
     if (!mounted) return;
 
-    if (context.isSplitLayout) {
+    if (context.isTwoPane) {
       setState(() => _selectedEmployee = employee);
       return;
     }
@@ -198,7 +198,10 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
               index: index,
               child: EmployeeCard(
                 employee: employee,
-                selected: _selectedEmployee?.id == employee.id,
+                // Only highlight when the detail pane is actually shown
+                // (two-pane); a single-pane phone opens a sheet instead.
+                selected:
+                    context.isTwoPane && _selectedEmployee?.id == employee.id,
                 onTap: () => _onEmployeeTap(employee),
               ),
             );

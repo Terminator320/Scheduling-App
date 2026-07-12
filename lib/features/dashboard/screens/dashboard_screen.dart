@@ -15,6 +15,7 @@ import 'package:scheduling/features/dashboard/widgets/sections/employee_workload
 import 'package:scheduling/features/dashboard/widgets/sections/upcoming_today_section.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/routes/hub_shell.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 
@@ -50,7 +51,12 @@ class DashboardScreen extends ConsumerWidget {
       appBar: AppTopBar(
         title: context.l10n.dashboard_title,
         compact: context.isLandscape,
-        onBack: () => Navigator.pop(context),
+        onBack: () {
+          // Return to the calendar tab specifically (not whatever tab was
+          // showing when the dashboard was opened), then pop this route.
+          HubShell.liveState?.showCalendar();
+          Navigator.pop(context);
+        },
       ),
       body: switch (stats) {
         AsyncData(:final value) => _StatsList(stats: value),
