@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -20,7 +21,7 @@ class CreateAccountResult {
   final String? email;
 }
 
-class CreateAccountScreen extends StatefulWidget {
+class CreateAccountScreen extends ConsumerStatefulWidget {
   const CreateAccountScreen({super.key, this.initialEmail, this.authService});
 
   final String? initialEmail;
@@ -28,11 +29,13 @@ class CreateAccountScreen extends StatefulWidget {
   final AuthService? authService;
 
   @override
-  State<CreateAccountScreen> createState() => _CreateAccountScreenState();
+  ConsumerState<CreateAccountScreen> createState() =>
+      _CreateAccountScreenState();
 }
 
-class _CreateAccountScreenState extends State<CreateAccountScreen> {
-  late final AuthService _authService = widget.authService ?? AuthService();
+class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
+  late final AuthService _authService =
+      widget.authService ?? ref.read(authServiceProvider);
   late final TextEditingController _emailController;
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =

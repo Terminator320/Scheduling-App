@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -12,6 +13,12 @@ import 'package:scheduling/l10n/l10n.dart';
 class _MockAuthService extends Mock implements AuthService {}
 
 Widget _wrap(AuthService auth, {String? initialEmail}) {
+  return ProviderScope(
+    child: _wrapInner(auth, initialEmail: initialEmail),
+  );
+}
+
+Widget _wrapInner(AuthService auth, {String? initialEmail}) {
   return ThemeNotifier(
     themeMode: ThemeMode.light,
     toggleTheme: () {},

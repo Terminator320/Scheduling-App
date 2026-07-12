@@ -283,6 +283,9 @@ class EventDetailsController extends Notifier<EventDetailsState>
   ) async {
     final id = appointment.id;
     if (id == null) return StateError('appointment has no id');
+    // Reject a concurrent status write (fast double-tap before the buttons
+    // rebuild disabled) — consistent with save()'s reentrancy guard.
+    if (state.isSaving) return null;
     state = state.copyWith(isSaving: true);
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
