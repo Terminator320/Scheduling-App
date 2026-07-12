@@ -462,10 +462,77 @@ describe("handleAppointmentWrite", () => {
     // Delivery hints are always set.
     expect(messaging.sent[0].android.priority).toBe("high");
     expect(messaging.sent[0].apns.payload.aps.sound).toBe("default");
-    expect(messaging.sent[0].data).toEqual({
-      appointmentId: "appt1",
-      kind: "assigned",
+    expect(messaging.sent[0].data.appointmentId).toBe("appt1");
+    expect(messaging.sent[0].data.kind).toBe("assigned");
+    // A change push carries a fresh widget payload and wakes iOS in the
+    // background (content-available) to rewrite the home-screen widget.
+    expect(typeof messaging.sent[0].data.widgetPayload).toBe("string");
+    expect(messaging.sent[0].apns.payload.aps["content-available"]).toBe(1);
+  });
+
+  test("attaches a locale-correct widget payload with the assigned job",
+      async () => {
+        const {db} = makeDb({
+          users: {e1: {role: "employee", status: "active"}},
+          tokens: {e1: [
+            {id: "t-en", locale: "en"},
+            {id: "t-fr", locale: "fr"},
+          ]},
+          // Post-write state the widget window read sees.
+          appointments: [{
+            id: "appt1",
+            employeeIds: ["e1"],
+            startTime: future(3 * HOUR),
+            status: "pending",
+            clientName: "Acme",
+          }],
+        });
+        const messaging = makeMessaging();
+        await handleAppointmentWrite(
+            "appt1",
+            null,
+            {employeeIds: ["e1"], startTime: future(3 * HOUR)},
+            {db, messaging, now: NOW, logger: silentLogger},
+        );
+        const byToken = Object.fromEntries(
+            messaging.sent.map((m) => [m.token, m]));
+        const en = JSON.parse(byToken["t-en"].data.widgetPayload);
+        const fr = JSON.parse(byToken["t-fr"].data.widgetPayload);
+        expect(en.locale).toBe("en");
+        expect(fr.locale).toBe("fr");
+        expect(en.todayCount).toBe(1);
+        expect(en.jobs).toHaveLength(1);
+        expect(en.jobs[0].id).toBe("appt1");
+        expect(en.jobs[0].clientName).toBe("Acme");
+        // startTime is an absolute UTC instant (…Z) for the Swift decoder.
+        expect(en.jobs[0].startTime).toBe(future(3 * HOUR).toISOString());
+      });
+
+  test("cancelling a job yields a widget payload without it", async () => {
+    const {db} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: [{id: "t-en", locale: "en"}]},
+      // The cancelled doc still exists but is terminal -> filtered out.
+      appointments: [{
+        id: "appt1",
+        employeeIds: ["e1"],
+        startTime: future(3 * HOUR),
+        status: "cancelled",
+        clientName: "Acme",
+      }],
     });
+    const messaging = makeMessaging();
+    await handleAppointmentWrite(
+        "appt1",
+        {employeeIds: ["e1"], startTime: future(3 * HOUR), status: "pending"},
+        {employeeIds: ["e1"], startTime: future(3 * HOUR), status: "cancelled"},
+        {db, messaging, now: NOW, logger: silentLogger},
+    );
+    expect(messaging.sent[0].data.kind).toBe("cancelled");
+    const payload = JSON.parse(messaging.sent[0].data.widgetPayload);
+    expect(payload.todayCount).toBe(0);
+    expect(payload.jobs).toHaveLength(0);
+    expect(payload.nextJob).toBeNull();
   });
 
   test("skips a non-active or non-employee user", async () => {
