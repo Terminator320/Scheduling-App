@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -10,7 +11,7 @@ import 'package:scheduling/features/auth/widgets/auth_banner.dart';
 import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-class ForgotPasswordScreen extends StatefulWidget {
+class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key, this.initialEmail, this.authService});
 
   final String? initialEmail;
@@ -18,11 +19,12 @@ class ForgotPasswordScreen extends StatefulWidget {
   final AuthService? authService;
 
   @override
-  State<ForgotPasswordScreen> createState() => _ForgotPasswordState();
+  ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordState();
 }
 
-class _ForgotPasswordState extends State<ForgotPasswordScreen> {
-  late final AuthService _authService = widget.authService ?? AuthService();
+class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
+  late final AuthService _authService =
+      widget.authService ?? ref.read(authServiceProvider);
   late final TextEditingController _emailController;
 
   bool _isLoading = false;

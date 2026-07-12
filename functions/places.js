@@ -7,6 +7,7 @@ const {
   requireString,
   readSessionToken,
   enforceDurableRateLimit,
+  assertAdmin,
 } = require("./security");
 
 // Both callables proxy the Places API v1 so the billing-sensitive key never
@@ -75,6 +76,11 @@ const placesAutocomplete = onCall(
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
       }
+      // Address autocomplete is only surfaced on admin-only appointment forms.
+      // Gate on admin so a non-admin (or invited-but-inactive) principal can't
+      // script the billable Places API — the in-memory limiter below is a
+      // per-instance cost guard, not a hard ceiling.
+      await assertAdmin(req.auth.uid);
       assertPayloadShape(req.data, new Set(["input", "sessionToken"]));
       const input = requireString(req.data, "input", INPUT_MAX_LEN);
       const sessionToken = readSessionToken(req.data);
@@ -150,6 +156,9 @@ const placesGetDetails = onCall(
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
       }
+      // Place details is admin-only for the same reason as autocomplete; it
+      // also keeps the durable Firestore rate cap below.
+      await assertAdmin(req.auth.uid);
       assertPayloadShape(req.data, new Set(["placeId", "sessionToken"]));
       const placeId = requireString(req.data, "placeId", 256);
       if (!PLACE_ID_PATTERN.test(placeId)) {

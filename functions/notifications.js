@@ -94,6 +94,9 @@ const sendOverdueJobPrompts = onSchedule(
       schedule: "every 15 minutes",
       timeZone: "America/Toronto",
       maxInstances: 1,
+      // The sweep processes candidates serially; give it well over the default
+      // 60s so a backlog can't leave the newest overdue jobs unprompted.
+      timeoutSeconds: 300,
     },
     async () => {
       await runOverduePromptSweep(liveDeps());

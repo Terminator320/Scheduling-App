@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -27,6 +28,13 @@ final pushRegistrationControllerProvider = Provider<PushRegistrationController>(
   PushRegistrationController.new,
 );
 
+/// The live OS notification-authorization status, read WITHOUT prompting.
+/// Backs the Settings notifications row. Invalidate it to re-read (e.g. after
+/// returning from system Settings, or after requesting the prompt).
+final notificationAuthStatusProvider = FutureProvider.autoDispose<
+  AuthorizationStatus
+>((ref) => ref.watch(pushNotificationServiceProvider).authorizationStatus());
+
 /// Pure gate (mirrors the `isAccountDeletionSignal` helper style): active
 /// employees AND admins register for push. Admins register so an admin who is
 /// assigned to a job still receives the time-based nudges (30-min reminder,
@@ -51,6 +59,7 @@ class PushRegistrationController {
 
   StreamSubscription<String>? _refreshSub;
   bool _busy = false;
+  bool _pendingResync = false;
   String? _registeredDocId;
   String? _registeredToken;
   String? _registeredUid;
@@ -64,7 +73,14 @@ class PushRegistrationController {
   /// Idempotent. A no-op for admins / signed-out users. Safe to call on every
   /// account-doc emission and on language change (re-upserts the locale).
   Future<void> sync() async {
-    if (_busy) return;
+    // A concurrent call (e.g. a language change re-upserting `locale` while a
+    // prior sync is mid-flight) would otherwise be silently dropped, leaving a
+    // stale locale until the next account-doc emission. Remember it and re-run
+    // once in the finally so the latest locale/doc always wins.
+    if (_busy) {
+      _pendingResync = true;
+      return;
+    }
     final signedIn = _auth.currentUser != null;
     final doc = _ref.read(currentUserDocProvider).value ?? const {};
     final role = (doc['role'] ?? '').toString().trim();
@@ -122,6 +138,10 @@ class PushRegistrationController {
       _logger.warn('PUSH sync failed', e, st);
     } finally {
       _busy = false;
+      if (_pendingResync) {
+        _pendingResync = false;
+        unawaited(sync());
+      }
     }
   }
 

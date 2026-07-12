@@ -121,9 +121,12 @@ class FirebaseClientsRepository implements ClientsRepository {
 
   @override
   Future<List<ClientRecord>> fetchClientsCreatedSince(DateTime since) async {
+    // Defensive ceiling consistent with the other windowed reads: the
+    // dashboard range is small in practice, but never issue an unbounded query.
     final snapshot = await _clients
         .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
         .orderBy('createdAt')
+        .limit(ClientSearchPolicy.serverReadLimit)
         .get();
     return snapshot.docs
         .map((doc) => ClientRecord.fromMap(doc.id, doc.data()))

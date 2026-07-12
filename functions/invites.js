@@ -121,15 +121,18 @@ const createEmployeeInvite = onCall(APP_CHECK, async (req) => {
     throw new HttpsError("unauthenticated", "auth-required");
   }
   await assertAdmin(req.auth.uid);
-  await enforceDurableRateLimit(
-      "createEmployeeInvite", req.auth.uid, INVITE_RATE_MAX,
-      INVITE_RATE_WINDOW_MS);
+  // Validate the payload BEFORE consuming a rate-limit slot, so ~20 malformed
+  // submissions can't lock a legitimate admin out of inviting for an hour.
+  // assertAdmin stays above the limiter so non-admins still can't burn slots.
   assertPayloadShape(req.data,
       new Set(["name", "email", "phone", "colorValue"]));
   const name = requireString(req.data, "name", 100);
   const email = requireString(req.data, "email", 254).toLowerCase();
   const phone = optionalString(req.data, "phone", 40);
   const colorValue = requireString(req.data, "colorValue", 40);
+  await enforceDurableRateLimit(
+      "createEmployeeInvite", req.auth.uid, INVITE_RATE_MAX,
+      INVITE_RATE_WINDOW_MS);
 
   const db = getFirestore();
   // The code is generated OUTSIDE the transaction so a transaction retry

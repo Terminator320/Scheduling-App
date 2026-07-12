@@ -387,6 +387,9 @@ function makeDb(config) {
             appointmentQueries.push({field, op, value});
             return q;
           },
+          limit() {
+            return q;
+          },
           get: async () => ({
             docs: (config.appointments || []).map((r) => ({
               id: r.id,

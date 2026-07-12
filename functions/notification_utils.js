@@ -35,6 +35,13 @@ const OVERDUE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 // duration (the form caps a visit just under 24h): 48h total.
 const OVERDUE_QUERY_WINDOW_MS = 2 * OVERDUE_LOOKBACK_MS;
 
+// Safety valve on the serial sweep: bound the candidate set so one run can't
+// blow the function timeout under an unexpected backlog. Far above any real
+// small-business volume in a 48h window; if it's ever hit we log a warning
+// rather than silently truncate (the oldest jobs age out and later runs catch
+// the remainder).
+const OVERDUE_SWEEP_MAX = 500;
+
 // Ledger docs are useless once their occurrence ages out of eligibility;
 // expiresAt + a Firestore TTL policy on both ledger collections keeps them
 // from accumulating forever.
@@ -916,7 +923,13 @@ async function runOverduePromptSweep(deps) {
       .where("status", "in", ["pending", "in_progress", "confirmed"])
       .where("startTime", ">=", windowStart)
       .where("startTime", "<=", nowDate)
+      .limit(OVERDUE_SWEEP_MAX)
       .get();
+  if (snap && snap.size === OVERDUE_SWEEP_MAX && deps.logger) {
+    deps.logger.warn(
+        "runOverduePromptSweep: candidate cap hit; " +
+        "newest jobs deferred to a later run", {cap: OVERDUE_SWEEP_MAX});
+  }
   const candidates = selectOverdueCandidates(
       ((snap && snap.docs) || []).map(_record),
       nowDate,
