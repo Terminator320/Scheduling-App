@@ -59,15 +59,17 @@ Legend: `[x]` done/verified · `[ ]` to do · ⚠️ blocker
 - [ ] App record: name **ES Pro**, bundle `net.vogas.scheduling`.
 - [ ] **French metadata alongside English** (Quebec audience; app is bilingual).
 - [ ] Screenshots: iPhone **6.9"** + **6.5"** sets **and** a **13" iPad** set.
-- [ ] Age-rating questionnaire, support URL.
+- [x] Age-rating questionnaire completed (2026-07-11).
+- [x] Support URL set in App Store Connect (2026-07-11) —
+  `https://gvogas.github.io/es-pro-legal/support.html` (page live).
 
 ## H. App Store Connect — compliance (content blockers)
 - [x] **Privacy policy authored + hosted (live 2026-07-11)** —
   `docs/legal/privacy-policy.html`, published at
   `https://gvogas.github.io/es-pro-legal/`, linked in-app via
   `AppUrls.privacyPolicy`.
-- [ ] Paste `https://gvogas.github.io/es-pro-legal/` into the App Store Connect
-  "Privacy Policy URL" field at submission.
+- [x] Privacy Policy URL set in App Store Connect (2026-07-11) —
+  `https://gvogas.github.io/es-pro-legal/`.
 - [ ] ⚠️ **Demo account for App Review** — signup is invite-only (one-time
   codes), so Review can't self-register. Create a dedicated demo account
   (employee role safest; admin for full app), put credentials in Review notes.

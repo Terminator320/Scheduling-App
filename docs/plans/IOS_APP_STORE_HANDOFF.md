@@ -199,12 +199,9 @@ remain.
   first open.
 - [x] Functions + rules deployed 2026-07-11 (all 4 push functions +
   `deleteAccount` re-deploy + `firestore:rules`).
-- [ ] One-time: enable a Firestore **TTL policy** on the `expiresAt` field of
-  BOTH ledger collections (`appointmentReminders` and
-  `appointmentOverduePrompts`) — Google Cloud Console → Firestore →
-  Time-to-live, or `gcloud firestore fields ttls update expiresAt
-  --collection-group=<name> --enable-ttl` — so ledger docs self-delete ~7 days
-  after creation instead of accumulating forever.
+- [x] Firestore **TTL policies** enabled on the `expiresAt` field of BOTH
+  ledger collections (`appointmentReminders` and `appointmentOverduePrompts`)
+  (2026-07-11) — ledger docs self-delete ~7 days after creation.
 
 ### iOS home-screen widget
 - [x] **Widget Extension target** — `ScheduleWidget` extension added with the
