@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -26,6 +27,13 @@ final fcmTokenRepositoryProvider = Provider<FcmTokenRepository>(
 final pushRegistrationControllerProvider = Provider<PushRegistrationController>(
   PushRegistrationController.new,
 );
+
+/// The live OS notification-authorization status, read WITHOUT prompting.
+/// Backs the Settings notifications row. Invalidate it to re-read (e.g. after
+/// returning from system Settings, or after requesting the prompt).
+final notificationAuthStatusProvider = FutureProvider.autoDispose<
+  AuthorizationStatus
+>((ref) => ref.watch(pushNotificationServiceProvider).authorizationStatus());
 
 /// Pure gate (mirrors the `isAccountDeletionSignal` helper style): active
 /// employees AND admins register for push. Admins register so an admin who is
