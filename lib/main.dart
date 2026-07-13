@@ -20,6 +20,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/core/adaptive/app_scroll_behavior.dart';
+import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/connectivity/offline_banner.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
@@ -35,6 +36,7 @@ import 'package:scheduling/features/auth/application/account_status_provider.dar
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart';
@@ -444,6 +446,29 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     });
   }
 
+  void _listenForUploadDrain() {
+    // Reconnect: retry queued photo batches once per offline→online flip.
+    ref.listen<bool>(isOfflineProvider, (previous, next) {
+      final isSignedIn =
+          ref.read(currentUserDocProvider).value?.isNotEmpty ?? false;
+      if (previous == true && !next && isSignedIn) {
+        unawaited(ref.read(appointmentImageUploadProvider).drainPending());
+      }
+    });
+    // Startup / sign-in: one drain when the account doc first arrives (Storage
+    // rules need an authed user; a signed-out drain would just re-queue).
+    ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
+      previous,
+      next,
+    ) {
+      final wasEmpty = previous?.value?.isEmpty ?? true;
+      final hasDoc = next.value?.isNotEmpty ?? false;
+      if (wasEmpty && hasDoc) {
+        unawaited(ref.read(appointmentImageUploadProvider).drainPending());
+      }
+    });
+  }
+
   void _listenForRoleRevocation() {
     ref.listen<AsyncValue<String>>(userRoleProvider, (prev, next) {
       final prevRole = prev?.value;
@@ -504,6 +529,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _listenForDeletedAccount();
     _listenForPushRegistration();
     _listenForWidgetSync();
+    _listenForUploadDrain();
     return AppLanguageScope(
       controller: _languageController,
       child: ThemeNotifier(
