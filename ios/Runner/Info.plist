@@ -60,10 +60,6 @@
 	<string>This app opens a pre-filled contact card so you can save a client to your phone contacts.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>This app uses Face ID to unlock the app lock you enabled in Settings.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>The microphone lets you dictate text into notes and other fields.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Speech recognition converts your dictation into text.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app accesses your photo library to attach images to appointments and profiles.</string>
 	<key>UIApplicationSceneManifest</key>
