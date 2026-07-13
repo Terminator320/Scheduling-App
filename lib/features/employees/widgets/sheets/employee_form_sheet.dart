@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
+import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -86,6 +89,22 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
 
   Future<void> _save() async {
     if (!_validate()) return;
+
+    // Fail fast offline: the invite callable / employee write would otherwise
+    // hang until reconnect, leaving the Save spinner stuck.
+    if (ref.read(isOfflineProvider)) {
+      ref
+          .read(noticeServiceProvider)
+          .error(
+            composeErrorNotice(
+              context,
+              intro: context.l10n.error_introSaveEmployee,
+              tag: 'EMP-CREATE',
+              error: const SocketException('offline'),
+            ),
+          );
+      return;
+    }
 
     final controller = ref.read(employeeFormControllerProvider.notifier);
     final name = _nameController.text.trim();

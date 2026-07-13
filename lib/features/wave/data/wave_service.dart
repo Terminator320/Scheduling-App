@@ -20,7 +20,10 @@ class WaveService {
     final HttpsCallableResult<dynamic> result;
     try {
       result = await _functions
-          .httpsCallable('waveBootstrap')
+          .httpsCallable(
+            'waveBootstrap',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+          )
           .call(<String, dynamic>{});
     } catch (e, st) {
       _logger.warn('WAVE-BOOT waveBootstrap callable failed', e, st);
@@ -47,7 +50,10 @@ class WaveService {
     final HttpsCallableResult<dynamic> result;
     try {
       result = await _functions
-          .httpsCallable('waveGetConnection')
+          .httpsCallable(
+            'waveGetConnection',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+          )
           .call(<String, dynamic>{});
     } catch (e, st) {
       _logger.warn('WAVE-CONN waveGetConnection callable failed', e, st);
@@ -70,7 +76,10 @@ class WaveService {
     final HttpsCallableResult<dynamic> result;
     try {
       result = await _functions
-          .httpsCallable('waveImportCustomers')
+          .httpsCallable(
+            'waveImportCustomers',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+          )
           .call(<String, dynamic>{});
     } catch (e, st) {
       _logger.warn('WAVE-CUST waveImportCustomers callable failed', e, st);
@@ -96,9 +105,12 @@ class WaveService {
   /// `waveSetImportSchedule` callable.
   Future<void> setImportSchedule(WaveImportSchedule schedule) async {
     try {
-      await _functions.httpsCallable('waveSetImportSchedule').call<void>(
-        <String, dynamic>{'schedule': schedule.raw},
-      );
+      await _functions
+          .httpsCallable(
+            'waveSetImportSchedule',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+          )
+          .call<void>(<String, dynamic>{'schedule': schedule.raw});
     } catch (e, st) {
       _logger.warn('WAVE-SCHED waveSetImportSchedule callable failed', e, st);
       throw WaveErrorMapper.map(e);

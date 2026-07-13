@@ -41,6 +41,8 @@ class _MockTransaction extends Mock implements Transaction {}
 
 class _FakeFieldValue extends Fake implements FieldValue {}
 
+class _FakeHttpsCallableOptions extends Fake implements HttpsCallableOptions {}
+
 void main() {
   late _MockFirestore firestore;
   late _MockFirebaseFunctions functions;
@@ -57,6 +59,7 @@ void main() {
     registerFallbackValue(_MockDocRef());
     registerFallbackValue((Transaction txn) async {});
     registerFallbackValue(Duration.zero);
+    registerFallbackValue(_FakeHttpsCallableOptions());
   });
 
   setUp(() {
@@ -122,7 +125,10 @@ void main() {
       final callable = _MockHttpsCallable();
       final result = _MockHttpsCallableResult();
       when(
-        () => functions.httpsCallable('createEmployeeInvite'),
+        () => functions.httpsCallable(
+          any(that: equals('createEmployeeInvite')),
+          options: any(named: 'options'),
+        ),
       ).thenReturn(callable);
       when(() => result.data).thenReturn({'code': 'K7Q2-9MZ4-XR8T'});
       when(
@@ -152,7 +158,10 @@ void main() {
       () async {
         final callable = _MockHttpsCallable();
         when(
-          () => functions.httpsCallable('createEmployeeInvite'),
+          () => functions.httpsCallable(
+            any(that: equals('createEmployeeInvite')),
+            options: any(named: 'options'),
+          ),
         ).thenReturn(callable);
         when(() => callable.call<dynamic>(any<Object?>())).thenThrow(
           FirebaseFunctionsException(
@@ -182,7 +191,10 @@ void main() {
       final callable = _MockHttpsCallable();
       final result = _MockHttpsCallableResult();
       when(
-        () => functions.httpsCallable('redeemSignupCode'),
+        () => functions.httpsCallable(
+          any(that: equals('redeemSignupCode')),
+          options: any(named: 'options'),
+        ),
       ).thenReturn(callable);
       when(() => result.data).thenReturn({'role': 'employee', 'name': 'A'});
       when(
@@ -236,9 +248,9 @@ void main() {
 
       final captured =
           (verify(
-                () => transaction.update(docRef, captureAny()),
-              ).captured.single
-              as Map)
+                    () => transaction.update(docRef, captureAny()),
+                  ).captured.single
+                  as Map)
               .cast<String, dynamic>();
       expect(captured.containsKey('updatedAt'), isTrue);
       expect(captured['email'], 'alice@example.com');
@@ -317,10 +329,12 @@ void main() {
 
         final emissions = <Map<String, dynamic>>[];
         Object? error;
-        repo().watchUserDoc('uid-1').listen(
-          emissions.add,
-          onError: (Object e) => error = e,
-        );
+        repo()
+            .watchUserDoc('uid-1')
+            .listen(
+              emissions.add,
+              onError: (Object e) => error = e,
+            );
 
         async.elapse(const Duration(seconds: 1));
         expect(subscriptions, 2);
@@ -342,10 +356,12 @@ void main() {
         });
 
         Object? error;
-        repo().watchUserDoc('uid-1').listen(
-          (_) {},
-          onError: (Object e) => error = e,
-        );
+        repo()
+            .watchUserDoc('uid-1')
+            .listen(
+              (_) {},
+              onError: (Object e) => error = e,
+            );
 
         async.elapse(const Duration(seconds: 5));
         expect(subscriptions, 1);
