@@ -84,6 +84,13 @@ Future<void> main() async {
         options: DefaultFirebaseOptions.currentPlatform,
       );
 
+      // Pin the offline cache explicitly so an SDK default-flip can never
+      // silently drop it. Must run before the first Firestore read (it does —
+      // SplashScreen reads later).
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: true,
+      );
+
       // Wake-on-push widget refresh (iOS): a change push carries a fresh
       // widgetPayload + content-available, so this fires in its own isolate
       // with the app closed/backgrounded and rewrites the home-screen widget.
