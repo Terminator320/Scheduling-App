@@ -60,19 +60,19 @@ class _TextSizeViewState extends State<TextSizeView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Appointment Title',
+                      context.l10n.settings_previewApptTitle,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Tuesday, May 12 - 9:00 - 9:45 AM',
+                      context.l10n.settings_previewApptWhen,
                       style: theme.textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Sarah Johnson - 514-555-0101',
+                      context.l10n.settings_previewApptContact,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),

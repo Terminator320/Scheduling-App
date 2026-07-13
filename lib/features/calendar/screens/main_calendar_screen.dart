@@ -476,15 +476,31 @@ class _CalendarMonthBar extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Semantics(
-            button: true,
-            label: context.l10n.calendar_selectDate,
-            child: GestureDetector(
-              onTap: onPickMonth,
-              child: Text(monthLabel, style: labelStyle),
+          Flexible(
+            child: Semantics(
+              button: true,
+              label: context.l10n.calendar_selectDate,
+              child: GestureDetector(
+                onTap: onPickMonth,
+                child: Text(
+                  monthLabel,
+                  style: labelStyle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ),
           ),
-          Text(jobLabel, style: labelStyle),
+          const SizedBox(width: AppSpacing.sp8),
+          Flexible(
+            child: Text(
+              jobLabel,
+              style: labelStyle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+            ),
+          ),
         ],
       ),
     );

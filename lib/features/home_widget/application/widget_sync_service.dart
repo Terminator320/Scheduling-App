@@ -8,6 +8,7 @@ import 'package:home_widget/home_widget.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/utils/app_language.dart';
+import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -211,7 +212,14 @@ final widgetEmployeeIdProvider = FutureProvider.autoDispose<String?>((
   }
   final uid = ref.watch(authUidProvider).value;
   if (uid == null) return null;
-  final match = await ref.watch(employeesRepositoryProvider).findUserByUid(uid);
+  // Retry the post-sign-in read: the ID-token/role bridge can lag sign-in, so a
+  // transient `permission-denied` would otherwise resolve null and clear the
+  // widget. Mirrors the splash/sign-in reads.
+  final repo = ref.watch(employeesRepositoryProvider);
+  final match = await retryAsync(
+    () => repo.findUserByUid(uid),
+    delays: const [Duration(milliseconds: 500), Duration(milliseconds: 1500)],
+  );
   return match?.id;
 });
 
