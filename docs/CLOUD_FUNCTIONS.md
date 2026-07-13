@@ -2,9 +2,10 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-07-11 by auditing the source against the app's call sites and
-the live deployment (push-notification functions deployed + Wave auto-import
-cadence functions added the same day).
+refreshed 2026-07-13 by auditing the source against the app's call sites and
+the live deployment (Places callables tightened to admin-only + the overdue
+sweep given a 300s timeout; both Places proxies and the overdue prompt
+redeployed with the rest of the set).
 **Every callable now enforces App Check** (`enforceAppCheck: true`); the
 earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 (`grep -rn "enforceAppCheck: false" functions` returns nothing).
@@ -23,7 +24,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 ## Deployment status
 
 - **20 functions defined** in code; **all 20 deployed** — verified live against
-  `schedulingapp-88727` on 2026-07-11 (v2, Node.js 24, 256 MB; `us-central1`
+  `schedulingapp-88727` on 2026-07-13 (v2, Node.js 24, 256 MB; `us-central1`
   except `validateUploadedImage` in `us-east1`).
 - The 4 **push-notification functions** (`notifyAppointmentChanges`,
   `sendUpcomingJobReminders`, `sendDailyJobDigest`, `sendOverdueJobPrompts`)
@@ -43,8 +44,8 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 
 | Function | Type | Trigger / event | Module | Called by / fired on | Secret | Guard |
 |---|---|---|---|---|---|---|
-| `placesAutocomplete` | callable | `onCall` | `places.js` | `google_places_repository.dart` (address field typing) | `GOOGLE_MAP_API_KEY` | App Check ✓ · in-mem 20/min·uid |
-| `placesGetDetails` | callable | `onCall` | `places.js` | `google_places_repository.dart` (address selected) | `GOOGLE_MAP_API_KEY` | App Check ✓ · durable 40/15min |
+| `placesAutocomplete` | callable | `onCall` | `places.js` | `google_places_repository.dart` (address field typing) | `GOOGLE_MAP_API_KEY` | App Check ✓ · admin · in-mem 20/min·uid |
+| `placesGetDetails` | callable | `onCall` | `places.js` | `google_places_repository.dart` (address selected) | `GOOGLE_MAP_API_KEY` | App Check ✓ · admin · durable 40/15min |
 | `deleteAccount` | callable | `onCall` | `account.js` | `account_deletion_service.dart` | — | App Check ✓ · reauth ≤5min · durable 5/15min |
 | `createEmployeeInvite` | callable | `onCall` | `invites.js` | `firebase_employees_repository.dart` | — | App Check ✓ · admin · durable 20/hr·uid |
 | `redeemSignupCode` | callable | `onCall` | `invites.js` | `firebase_employees_repository.dart`, `auth_service.dart` | — | App Check ✓ · durable 5/15min·**email** |
@@ -62,7 +63,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `waveScheduledImport` | scheduled | `every 24 hours` | `wave/callables.js` | timer | `WAVE_FULL_ACCESS_TOKEN` | `maxInstances: 1` · 300s |
 | `sendUpcomingJobReminders` | scheduled | `every 5 minutes` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` · ledger |
 | `sendDailyJobDigest` | scheduled | `0 18 * * *` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` |
-| `sendOverdueJobPrompts` | scheduled | `every 15 minutes` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` · ledger |
+| `sendOverdueJobPrompts` | scheduled | `every 15 minutes` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` · 300s · ledger |
 
 ## Auth & accounts
 
@@ -87,7 +88,10 @@ Admin-only. Creates (or idempotently re-issues) an `invited` `users` doc plus a
 admin to share out-of-band. Everything — duplicate-email lookup, prior-code
 sweep, writes — runs in one Firestore transaction to close create/redeem races.
 A claimed (non-`invited`) email is rejected. Durable-rate-limited 20/hr per admin
-uid. Full flow: `docs/plans/INVITED_SIGNUP_REDESIGN.md`.
+uid — the payload is validated (`assertPayloadShape`/`requireString`) **before**
+the limiter, so a burst of malformed submissions can't exhaust a legitimate
+admin's window, while `assertAdmin` stays above the limiter so non-admins still
+can't burn slots. Full flow: `docs/plans/INVITED_SIGNUP_REDESIGN.md`.
 
 ### `redeemSignupCode` — `invites.js`
 Validates a signup code server-side (14-day expiry; token email must equal the
@@ -102,16 +106,19 @@ Both invite callables share `APP_CHECK = {enforceAppCheck: true}`.
 ### `placesAutocomplete` — `places.js`
 Proxies Google Places API (New) autocomplete so the billing-sensitive
 `GOOGLE_MAP_API_KEY` (Secret Manager) never ships in the app binary. App Check +
-auth required. Fires on address-field typing, so it's the **highest-volume,
-highest-cost** function — the Places API bills separately per request.
-Rate-limited in-memory 20/min per uid (per-instance, resets on cold start,
-multiplies by `maxInstances` — set a GCP Maps Platform billing alert; this is
-not a hard cap).
+auth + **`assertAdmin`** required — the address field is only surfaced on the
+admin-only appointment form, so gating on admin stops a non-admin (or
+invited-but-inactive) principal from scripting the billable API. Fires on
+address-field typing, so it's the **highest-volume, highest-cost** function —
+the Places API bills separately per request. Rate-limited in-memory 20/min per
+uid (per-instance, resets on cold start, multiplies by `maxInstances` — set a
+GCP Maps Platform billing alert; this is not a hard cap).
 
 ### `placesGetDetails` — `places.js`
 Proxies Places details for a selected address (one billable call per address the
-user actually picks). Uses the durable Firestore rate limiter (40 per 15 min) —
-lower volume, but each call is more expensive, so a hard cap matters.
+user actually picks). Same guards as autocomplete (App Check + auth +
+`assertAdmin`). Uses the durable Firestore rate limiter (40 per 15 min) — lower
+volume, but each call is more expensive, so a hard cap matters.
 
 ## Images
 
@@ -184,7 +191,9 @@ index is needed, then filters `endTime ∈ (now-24h, now]` in code. At-most-once
 `appointmentOverduePrompts/{id}_{endMs}_{employeeDocId}` ledger; a claim that
 delivered **zero** pushes is released (doc deleted) so a later sweep retries
 that recipient, and each recipient's send is isolated so one transient failure
-can't abort the sweep.
+can't abort the sweep. Candidates are processed serially, so it carries a **300s
+timeout** (well over the 60s default) to keep a backlog from leaving the newest
+overdue jobs unprompted.
 
 ## User → uid bridge
 

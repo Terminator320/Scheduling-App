@@ -2,7 +2,7 @@ name: scheduling
 description: "ES Pro — appointment, client, and employee scheduling."
 publish_to: 'none'
 
-version: 1.29.0+48
+version: 1.30.0+49
 
 environment:
   sdk: ^3.10.7

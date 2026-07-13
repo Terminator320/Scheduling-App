@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -204,9 +205,13 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
                             ? Duration.zero
                             : AppMotion.tabSwitch,
                         curve: Curves.easeInOut,
-                        // The calendar tab owns its own horizontal week-swipe,
-                        // so only the other tabs get the edge back-swipe.
-                        child: destination == AdaptiveDestination.calendar
+                        // iOS-only edge back-swipe. The calendar tab owns its
+                        // own horizontal week-swipe, so only the other tabs get
+                        // it, and only on iOS (context.isCupertino is the single
+                        // platform seam) so Android keeps its plain tabs.
+                        child:
+                            destination == AdaptiveDestination.calendar ||
+                                !context.isCupertino
                             ? _cachedScreenFor(destination)
                             : _withBackSwipe(_cachedScreenFor(destination)),
                       ),
