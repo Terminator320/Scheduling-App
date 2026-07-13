@@ -10,6 +10,28 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.30.0+49] - 2026-07-13
+### Added
+- **Manage notifications from Settings.** Settings now has a Notifications row
+  that shows whether notifications are On or Off. If they're off — or you
+  dismissed the first-time prompt — tapping it either asks again or opens your
+  system settings so you can turn them back on and start receiving job alerts.
+
+### Changed
+- **The iPhone home-screen widget now shows today and tomorrow.** It lists your
+  remaining jobs for today and, once the day's work is done, rolls over to
+  tomorrow's schedule on its own — no app launch needed.
+- **Dashboard job lists are now full appointment cards.** The "starting soon /
+  overdue" and "today" lists on the Dashboard show the same tappable,
+  colour-coded cards as the calendar, so you can open a visit straight from
+  there.
+
+### Fixed
+- **The home-screen widget stays current even when the app is closed.** Being
+  assigned to, rescheduled on, or removed from a job now refreshes the widget in
+  the background, so it no longer shows a stale schedule until you next open the
+  app.
+
 ## [1.29.0+48] - 2026-07-11
 ### Added
 - **An admin Dashboard gives you the day at a glance.** A new Dashboard screen

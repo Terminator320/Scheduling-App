@@ -20,7 +20,7 @@ lib/
 │   ├── errors/                      Base Failure class + error_cause.dart (sanitized cause classifier + tagged notice composer)
 │   ├── images/                      Image picker (native resize/compress at pick time) + Firebase Storage upload service
 │   ├── launchers/                   phone_call_launcher.dart (launchPhoneCall — shared tel: dialer) + web_url_launcher.dart (launchWebUrl — external https: opener for the Settings privacy-policy link); parallel AddressMapLauncher / EmailComposeLauncher
-│   ├── layout/                      Responsive shell — AdaptiveShell (nav rail), MasterDetailScaffold, PrimaryScrollScope (per-pane PrimaryScrollController so simultaneously-alive primary scrollables don't share one — the app-wide Scrollbar needs one ScrollPosition per controller), breakpoints (context.isWide / isLandscape / isSplitLayout for the split chrome; isCompact / isNarrowWidth for small-phone & large-text row folding)
+│   ├── layout/                      Responsive shell — AdaptiveShell (nav rail), MasterDetailScaffold, PrimaryScrollScope (per-pane PrimaryScrollController so simultaneously-alive primary scrollables don't share one — the app-wide Scrollbar needs one ScrollPosition per controller), breakpoints (context.isWide / isLandscape / isSplitLayout for the rail chrome; isTwoPane (shortestSide ≥ 600) for the list master-detail; isCompact / isNarrowWidth for small-phone & large-text row folding)
 │   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics)
 │   ├── notices/                     In-app toast system: AppNotice types, NoticeService (stream), NoticeListener (widget)
 │   ├── permissions/                 MediaPermissionService — camera permission gate (permission_handler)
@@ -57,9 +57,9 @@ lib/
     ├── clients/                     Client management — CRUD, contacts, appointment history
     ├── dashboard/                   Admin dashboard — pure stat reducers (DashboardAggregator) over one 8-week appointments range → hero/workload/trends/attention sections + fl_chart WeeklyBarChart
     ├── employees/                   Employee roster — colours, roles, disable/enable
-    ├── home_widget/                 iOS home-screen schedule widget — WidgetSyncService writes remaining-today + next jobs into the App Group (home_widget); Android no-op
-    ├── maps/                        Google Places address autocomplete and map launcher
-    ├── notifications/               FCM push client — PushRegistrationController (token upsert for active employees/admins), FcmTokenRepository, push_notification_service
+    ├── home_widget/                 iOS home-screen schedule widget — WidgetSyncService writes a two-day payload (todayJobs + tomorrowJobs + on-device rolloverAt) into the App Group (home_widget); mirrors functions/widget_payload_utils.js; Android no-op
+    ├── maps/                        Google Places address autocomplete and map launcher (callables admin-gated)
+    ├── notifications/               FCM push client — PushRegistrationController (token upsert for active employees/admins, resync-coalesced), FcmTokenRepository, push_notification_service, notificationAuthStatusProvider (Settings recovery row); core/notifications/fcm_background_handler rewrites the widget from a push while the app is closed
     ├── onboarding/                  First-launch intro carousel (OnboardingGate = app home) + onboardingSeen gate
     ├── settings/                    Theme, text scale, language, app version, biometric app-lock toggle
     ├── splash/                      Auth resolution on cold start (screen + routing logic)
@@ -311,21 +311,25 @@ Cross-destination navigation has a second SSOT in `adaptive_shell.dart`: `destin
 ### Responsive Layout
 
 `lib/core/layout/` adapts the UI to screen size **and orientation**. `Breakpoints`
-defines `tablet` (840) and `expanded` (1200). The `context` extensions are
-`isWide` (`width >= 840`), `isExpanded` (`width >= 1200`), `isLandscape`
-(orientation), and `isSplitLayout` (`isWide || isLandscape`) — the last is the
-trigger for the desktop-style chrome.
+defines `tablet` (840), `tabletShortestSide` (600), and `expanded` (1200). The
+`context` extensions are `isWide` (`width >= 840`), `isExpanded` (`width >= 1200`),
+`isLandscape` (orientation), `isSplitLayout` (`isWide || isLandscape`), and
+`isTwoPane` (`MediaQuery.shortestSide >= 600`) — the last two drive two
+DIFFERENT chromes. `isSplitLayout` triggers the desktop-style rail chrome.
 On a portrait phone screens render single-column with a hamburger drawer; in
 landscape or on a tablet `AdaptiveShell` wraps them with a navigation rail over
 the `AdaptiveDestination` enum (`calendar`, `clients`, `employees`, `history`,
 `settings`) and the drawer is dropped (`SettingsDrawer.endDrawerFor` returns
 `null`, which also strips the app bar's auto hamburger). In that mode the
 **calendar** renders a side-by-side Split (month grid | day agenda, details in a
-sheet — no detail pane), its month-row height adapting to the pane; the **list
-screens** use `MasterDetailScaffold` (list + detail side by side at ≥ 840). Every
-screen's app bar is the shared `AppTopBar`, which also slims itself in landscape
-(`compact: context.isLandscape`). `isSplitLayout` only adds the orientation path
-— it never lowers the 840 width gate. The `history` destination is its own
+sheet — no detail pane), its month-row height adapting to the pane. The **list
+screens** gate their `MasterDetailScaffold` (list + detail side by side) on
+`isTwoPane` instead — tablet-class only and orientation-independent, so a
+landscape phone gets the rail (`isSplitLayout`) but stays single-list + pushed
+detail sheet (too narrow for a readable pane), and rotating a phone never swaps
+a pane in. Every screen's app bar is the shared `AppTopBar`, which also slims
+itself in landscape (`compact: context.isLandscape`). The `history` destination
+is its own
 `HistoryScreen` (`clients/screens/history_screen.dart`, route `AppRoutes.history`
 + `HistoryArgs`) — chrome only (search + shell), delegating the list to
 `clients/widgets/views/appointment_history_view.dart`, which groups by year then
@@ -634,7 +638,7 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (792 test cases as of 2026-07-11). `flutter analyze` is
+Run: `flutter test` (807 test cases as of 2026-07-13). `flutter analyze` is
 clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.

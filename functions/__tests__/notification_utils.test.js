@@ -503,12 +503,11 @@ describe("handleAppointmentWrite", () => {
         const fr = JSON.parse(byToken["t-fr"].data.widgetPayload);
         expect(en.locale).toBe("en");
         expect(fr.locale).toBe("fr");
-        expect(en.todayCount).toBe(1);
-        expect(en.jobs).toHaveLength(1);
-        expect(en.jobs[0].id).toBe("appt1");
-        expect(en.jobs[0].clientName).toBe("Acme");
+        expect(en.todayJobs).toHaveLength(1);
+        expect(en.todayJobs[0].id).toBe("appt1");
+        expect(en.todayJobs[0].clientName).toBe("Acme");
         // startTime is an absolute UTC instant (…Z) for the Swift decoder.
-        expect(en.jobs[0].startTime).toBe(future(3 * HOUR).toISOString());
+        expect(en.todayJobs[0].startTime).toBe(future(3 * HOUR).toISOString());
       });
 
   test("cancelling a job yields a widget payload without it", async () => {
@@ -533,9 +532,8 @@ describe("handleAppointmentWrite", () => {
     );
     expect(messaging.sent[0].data.kind).toBe("cancelled");
     const payload = JSON.parse(messaging.sent[0].data.widgetPayload);
-    expect(payload.todayCount).toBe(0);
-    expect(payload.jobs).toHaveLength(0);
-    expect(payload.nextJob).toBeNull();
+    expect(payload.todayJobs).toHaveLength(0);
+    expect(payload.tomorrowJobs).toHaveLength(0);
   });
 
   test("skips a non-active or non-employee user", async () => {

@@ -132,18 +132,6 @@ function torontoDayStartMs(now) {
 }
 
 /**
- * End of the current Toronto day (next 00:00) as an epoch-ms UTC instant —
- * i.e. the "today" cutoff the widget uses for its remaining-today list.
- * @param {(Date|number)} now
- * @return {number}
- */
-function torontoDayEndMs(now) {
-  const date = now instanceof Date ? now : new Date(Number(now));
-  const [y, m, d] = _torontoYmd(date);
-  return _torontoMidnightMs(y, m, d + 1);
-}
-
-/**
  * Serializes one appointment record into the widget's job JSON. Mirrors `_job`
  * in widget_sync_service.dart — `startTime` is an absolute UTC instant with
  * milliseconds (…Z) so the Swift ISO8601DateFormatter (with fractional
@@ -262,7 +250,6 @@ module.exports = {
   isTerminalStatus,
   isCancelledStatus,
   torontoDayStartMs,
-  torontoDayEndMs,
   serializeWidgetJob,
   buildWidgetPayload,
 };

@@ -10,7 +10,6 @@ const {
   buildWidgetPayload,
   serializeWidgetJob,
   isTerminalStatus,
-  torontoDayEndMs,
 } = require("../widget_payload_utils");
 
 // Noon Toronto (EDT -4) on Wed 2026-07-08.
@@ -117,17 +116,12 @@ describe("serializeWidgetJob", () => {
       });
 });
 
-describe("isTerminalStatus / torontoDayEndMs", () => {
+describe("isTerminalStatus", () => {
   test("terminal set is done/completed/cancelled", () => {
     expect(isTerminalStatus("done")).toBe(true);
     expect(isTerminalStatus("COMPLETED")).toBe(true);
     expect(isTerminalStatus("cancelled")).toBe(true);
     expect(isTerminalStatus("pending")).toBe(false);
     expect(isTerminalStatus("in_progress")).toBe(false);
-  });
-
-  test("Toronto day end for a summer (EDT) noon is next 04:00Z", () => {
-    expect(new Date(torontoDayEndMs(NOW)).toISOString())
-        .toBe("2026-07-09T04:00:00.000Z");
   });
 });
