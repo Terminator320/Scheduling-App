@@ -277,6 +277,19 @@ the iOS `FirebaseOptions`). Android also needs `google-services.json`.
 - Text-field length caps live in `lib/core/validators/text_limits.dart`.
   Use the constants via `LabeledTextField(maxLength: TextLimits.x)` —
   don't hardcode integer caps at call sites.
+- **Speech dictation** goes through `DictationService`
+  (`lib/core/speech/dictation_service.dart`) — never call `speech_to_text`
+  directly from UI. The mic is opt-in via `LabeledTextField(enableDictation:
+  true)`, which adds `DictationMicButton` to the suffix (beside the clear "x")
+  and a transient `DictationListeningBar` (waveform + Stop) below the field
+  while listening. Currently enabled only on appointment Notes + Materials.
+  `DictationService` holds a single active session (starting a new one cancels
+  the old and fires its `onSessionEnded`); partial results replay against the
+  caret snapshot via the pure `mergeDictation` (`dictation_text_merge.dart`,
+  respects `maxLength`). Permission is gated by
+  `MediaPermissionService.ensureMicrophone()` (mic + iOS speech recognition);
+  failures surface via `NoticeService`. Method-channel plugin — device-only
+  verification, same as `ImagePickerService`.
 - `StatusChip` internally caps user text scaling at 1.3×. Never wrap a
   `StatusChip` call site in `MediaQuery(textScaler: noScaling)` — the
   chip handles it.

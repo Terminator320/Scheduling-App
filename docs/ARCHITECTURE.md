@@ -23,7 +23,8 @@ lib/
 │   ├── layout/                      Responsive shell — AdaptiveShell (nav rail), MasterDetailScaffold, PrimaryScrollScope (per-pane PrimaryScrollController so simultaneously-alive primary scrollables don't share one — the app-wide Scrollbar needs one ScrollPosition per controller), breakpoints (context.isWide / isLandscape / isSplitLayout for the rail chrome; isTwoPane (shortestSide ≥ 600) for the list master-detail; isCompact / isNarrowWidth for small-phone & large-text row folding)
 │   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics)
 │   ├── notices/                     In-app toast system: AppNotice types, NoticeService (stream), NoticeListener (widget)
-│   ├── permissions/                 MediaPermissionService — camera permission gate (permission_handler)
+│   ├── permissions/                 MediaPermissionService — camera + microphone/speech permission gates (permission_handler)
+│   ├── speech/                       Dictation — DictationService (single-session wrapper over speech_to_text) + mergeDictation (pure caret-splice merge of partial results)
 │   ├── providers/                   firebase_providers.dart — Riverpod providers for Auth/Firestore/Storage instances
 │   ├── security/                    BiometricAuthService (local_auth) + AppLock app-wide biometric gate
 │   ├── storage/                     SecureStorageService + SecureStorageKeys — encrypted local storage (flutter_secure_storage)
