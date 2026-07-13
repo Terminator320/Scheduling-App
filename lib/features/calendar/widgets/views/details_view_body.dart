@@ -247,10 +247,7 @@ class _DetailsViewData {
       displayStatus: displayStatus,
       isCancelled: status.isCancelled,
       isDone: status.isDone,
-      isToday:
-          appointment.startTime.year == now.year &&
-          appointment.startTime.month == now.month &&
-          appointment.startTime.day == now.day,
+      isToday: DateUtils.isSameDay(appointment.startTime, now),
       clientName: client?.displayName ?? appointment.clientName,
       phone: phone,
       displayAddress: appointment.address.isNotEmpty

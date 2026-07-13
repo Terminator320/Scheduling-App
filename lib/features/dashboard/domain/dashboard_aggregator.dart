@@ -202,7 +202,7 @@ class DashboardAggregator {
     final pendingSoon = <AppointmentRecord>[];
     final overdueOpen = <AppointmentRecord>[];
     for (final a in appointments) {
-      if (a.status.toLowerCase() == 'pending' &&
+      if (AppointmentStatus.fromRaw(a.status) == AppointmentStatus.pending &&
           a.startTime.isAfter(now) &&
           !a.startTime.isAfter(soonCutoff)) {
         pendingSoon.add(a);
