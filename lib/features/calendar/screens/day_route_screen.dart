@@ -113,9 +113,13 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     ref.listen(myAppointmentsProvider(key), _onAppointmentsAsyncChange);
     final async = ref.watch(myAppointmentsProvider(key));
 
-    final jobs = (async.value ?? const <AppointmentRecord>[])
-        .where((a) => a.status != 'cancelled')
-        .toList();
+    final jobs =
+        (async.value ?? const <AppointmentRecord>[])
+            .where((a) => a.status != 'cancelled')
+            .toList()
+          // The range query already returns startTime order; sort defensively so
+          // numbering and the launched route stay in driving order regardless.
+          ..sort((a, b) => a.startTime.compareTo(b.startTime));
     final stops = jobs
         .where(
           (a) =>
