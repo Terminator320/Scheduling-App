@@ -15,6 +15,7 @@ class AppointmentCard extends StatelessWidget {
     this.employeeName,
     this.onTap,
     this.selected = false,
+    this.footer,
   });
 
   final AppointmentRecord appointment;
@@ -22,6 +23,10 @@ class AppointmentCard extends StatelessWidget {
   final String? employeeName;
   final VoidCallback? onTap;
   final bool selected;
+
+  /// Optional widget rendered inside the padded column below the meta rows
+  /// (e.g. the day-route navigate pill). Existing call sites pass nothing.
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -72,6 +77,10 @@ class AppointmentCard extends StatelessWidget {
                             color: employeeColor,
                             compact: compact,
                           ),
+                        ],
+                        if (footer != null) ...[
+                          const SizedBox(height: AppSpacing.sp8),
+                          footer!,
                         ],
                       ],
                     ),
