@@ -19,6 +19,7 @@ import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/error_snack_bar.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -293,6 +294,18 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         title: context.l10n.common_calendar,
         compact: context.isLandscape,
         actions: [
+          IconButton(
+            icon: Icon(Icons.alt_route_rounded, color: scheme.onPrimary),
+            tooltip: context.l10n.calendar_dayRouteTitle,
+            onPressed: () => Navigator.pushNamed(
+              context,
+              AppRoutes.dayRoute,
+              arguments: DayRouteArgs(
+                isAdmin: widget.isAdmin,
+                employeeId: widget.employeeId,
+              ),
+            ),
+          ),
           // In landscape / on tablets the nav rail replaces the drawer.
           if (!context.isSplitLayout)
             IconButton(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/features/auth/screens/forgot_password_screen.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
+import 'package:scheduling/features/calendar/screens/day_route_screen.dart';
 import 'package:scheduling/features/dashboard/screens/dashboard_screen.dart';
 import 'package:scheduling/routes/hub_shell.dart';
 
@@ -16,6 +17,7 @@ class AppRoutes {
   static const String history = '/history';
   static const String settings = '/settings';
   static const String dashboard = '/dashboard';
+  static const String dayRoute = '/day-route';
 
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -37,6 +39,16 @@ class AppRoutes {
         return AppPageRoute(
           settings: settings,
           builder: (_) => const DashboardScreen(),
+        );
+
+      case dayRoute:
+        final args = settings.arguments! as DayRouteArgs;
+        return AppPageRoute(
+          settings: settings,
+          builder: (_) => DayRouteScreen(
+            isAdmin: args.isAdmin,
+            employeeId: args.employeeId,
+          ),
         );
 
       case mainCalendar:
@@ -178,6 +190,12 @@ class ClientsListArgs {
 
 class HistoryArgs {
   const HistoryArgs({required this.isAdmin, required this.employeeId});
+  final bool isAdmin;
+  final String employeeId;
+}
+
+class DayRouteArgs {
+  const DayRouteArgs({required this.isAdmin, required this.employeeId});
   final bool isAdmin;
   final String employeeId;
 }
