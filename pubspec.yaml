@@ -15,7 +15,14 @@ dependencies:
     sdk: flutter
 
   # Firebase
-  firebase_core: ^4.7.0
+  # Pinned to 4.11.0: the whole FlutterFire patch wave that needs firebase_core
+  # 4.12.0 (cloud_firestore 6.7.0, firebase_auth 6.5.5, cloud_functions 6.3.4, …)
+  # is broken — those releases `extends FirebasePlugin`, a type
+  # firebase_core_platform_interface 7.1.0 removed (now FirebasePluginPlatform),
+  # so any Firebase-importing build/test fails to compile. Holding firebase_core
+  # at 4.11.0 keeps the whole suite on the last good (4.x/6.6.0/6.5.4/…) set.
+  # Revert to a range once a fixed wave ships.
+  firebase_core: 4.11.0
   firebase_auth: ^6.4.0
   cloud_firestore: ^6.3.0
   firebase_storage: ^13.3.0

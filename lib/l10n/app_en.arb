@@ -1545,10 +1545,6 @@
       }
     }
   },
-  "dashboard_unassigned": "Unassigned",
-  "@dashboard_unassigned": {
-    "description": "Assignee line on a timeline or alert row for a visit with no employees"
-  },
   "dashboard_upcomingToday": "Next up today",
   "@dashboard_upcomingToday": {
     "description": "Section header above the timeline of today's upcoming visits"
@@ -1608,10 +1604,6 @@
         "type": "int"
       }
     }
-  },
-  "settings_management": "Management",
-  "@settings_management": {
-    "description": "Settings section header for the admin management area (dashboard entry)"
   },
   "error_introLoadDashboard": "Couldn't load the dashboard",
   "@error_introLoadDashboard": {"description": "Error intro for DASH-LOAD"}

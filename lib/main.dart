@@ -178,21 +178,32 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     // the first read on a cold start (the sync service that also sets it only
     // runs after the first account emission).
     unawaited(() async {
-      await HomeWidget.setAppGroupId(widgetAppGroupId);
-      HomeWidget.widgetClicked.listen(
-        _handleWidgetTap,
-        onError: (Object e, StackTrace st) =>
-            ref.read(loggerProvider).warn('WIDGET-TAP stream error', e, st),
-      );
-      final launchUri = await HomeWidget.initiallyLaunchedFromHomeWidget();
-      await _handleWidgetTap(launchUri);
+      try {
+        await HomeWidget.setAppGroupId(widgetAppGroupId);
+        HomeWidget.widgetClicked.listen(
+          _handleWidgetTap,
+          onError: (Object e, StackTrace st) =>
+              ref.read(loggerProvider).warn('WIDGET-TAP stream error', e, st),
+        );
+        final launchUri = await HomeWidget.initiallyLaunchedFromHomeWidget();
+        await _handleWidgetTap(launchUri);
+      } catch (e, st) {
+        ref.read(loggerProvider).warn('WIDGET-TAP setup failed', e, st);
+      }
     }());
   }
 
   Future<void> _handleWidgetTap(Uri? uri) async {
     if (uri == null) return;
     final appointmentId = uri.queryParameters['id']?.trim() ?? '';
-    await _openAppointmentDeepLink(appointmentId);
+    // A failed deep-link open is a non-crash — swallow it here so the async
+    // handler can't leak an unhandled rejection into runZonedGuarded /
+    // PlatformDispatcher.onError, which would record it as a FATAL crash.
+    try {
+      await _openAppointmentDeepLink(appointmentId);
+    } catch (e, st) {
+      ref.read(loggerProvider).warn('WIDGET-TAP open failed', e, st);
+    }
   }
 
   /// Notification taps (terminated launch + background) open the tapped
@@ -202,7 +213,16 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   /// lands on the calendar.
   void _setupPushTapHandling() {
     final service = ref.read(pushNotificationServiceProvider);
-    unawaited(service.initialMessage().then(_handlePushTap));
+    unawaited(
+      service
+          .initialMessage()
+          .then(_handlePushTap)
+          .catchError(
+            (Object e, StackTrace st) => ref
+                .read(loggerProvider)
+                .warn('PUSH-TAP initial message failed', e, st),
+          ),
+    );
     service.onMessageOpenedApp.listen(
       _handlePushTap,
       onError: (Object e, StackTrace st) =>
@@ -214,7 +234,14 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     if (message == null) return;
     final appointmentId =
         (message.data['appointmentId'] as String?)?.trim() ?? '';
-    await _openAppointmentDeepLink(appointmentId);
+    // A failed deep-link open is a non-crash — swallow it here so the async
+    // handler can't leak an unhandled rejection into runZonedGuarded /
+    // PlatformDispatcher.onError, which would record it as a FATAL crash.
+    try {
+      await _openAppointmentDeepLink(appointmentId);
+    } catch (e, st) {
+      ref.read(loggerProvider).warn('PUSH-TAP open failed', e, st);
+    }
   }
 
   /// Shared deep-link target for a notification or home-widget tap: brings the

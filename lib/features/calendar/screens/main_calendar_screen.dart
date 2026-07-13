@@ -207,9 +207,19 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     if (picked != null) _setFocusedDay(picked);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+  /// Watches the appointment/employee providers, wires the async-change and
+  /// role-upgrade listeners, refreshes the day-index / selected-day / locale
+  /// caches, and returns just the values [build]'s widget tree renders — so
+  /// `build` stays a plain tree with the imperative wiring lifted out here.
+  ({
+    String userName,
+    Map<String, Color> colorMap,
+    Map<String, String> nameMap,
+    bool isLoading,
+    String monthLabel,
+    String jobLabel,
+  })
+  _prepareBuild(BuildContext context) {
     final myAppointmentsKey = (
       employeeId: widget.employeeId,
       range: _appointmentRange,
@@ -256,16 +266,26 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     final selectedEvents = _getEventsForDay(selectedDay);
     _selectedEvents.value = selectedEvents;
 
-    final isLoading = appointmentsAsync.isLoading;
     final locale = Localizations.localeOf(context).toString();
     if (locale != _lastLocale) {
       _monthLabelFormat = DateFormat.yMMMM(locale);
       _lastLocale = locale;
     }
-    final monthLabel = _monthLabelFormat.format(_focusedDay);
-    final jobLabel = context.l10n.calendar_appointmentCount(
-      selectedEvents.length,
+
+    return (
+      userName: userName,
+      colorMap: colorMap,
+      nameMap: nameMap,
+      isLoading: appointmentsAsync.isLoading,
+      monthLabel: _monthLabelFormat.format(_focusedDay),
+      jobLabel: context.l10n.calendar_appointmentCount(selectedEvents.length),
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final data = _prepareBuild(context);
 
     return Scaffold(
       key: _scaffoldKey,
@@ -290,8 +310,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
             ).scale(context.isLandscape ? 22 : 28),
           ),
           child: _CalendarMonthBar(
-            monthLabel: monthLabel,
-            jobLabel: jobLabel,
+            monthLabel: data.monthLabel,
+            jobLabel: data.jobLabel,
             onPickMonth: _pickMonth,
           ),
         ),
@@ -313,20 +333,20 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         context,
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
-        userName: userName,
+        userName: data.userName,
       ),
       body: AdaptiveShell(
         currentDestination: AdaptiveDestination.calendar,
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
-        userName: userName,
+        userName: data.userName,
         child: SafeArea(
           child: Stack(
             children: [
               _content(
-                isLoading: isLoading,
-                colorMap: colorMap,
-                nameMap: nameMap,
+                isLoading: data.isLoading,
+                colorMap: data.colorMap,
+                nameMap: data.nameMap,
               ),
               Positioned(
                 bottom: 16,

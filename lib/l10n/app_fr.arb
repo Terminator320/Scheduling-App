@@ -370,7 +370,6 @@
   "dashboard_businessTrends": "Tendances de l'activité",
   "dashboard_attentionFlags": "À surveiller",
   "dashboard_unassignedCount": "{count, plural, =1{1 visite non assignée aujourd'hui} other{{count} visites non assignées aujourd'hui}}",
-  "dashboard_unassigned": "Non assignée",
   "dashboard_upcomingToday": "À venir aujourd'hui",
   "dashboard_noVisitsToday": "Aucune visite à venir aujourd'hui",
   "dashboard_noActiveEmployees": "Aucun employé actif",
@@ -381,6 +380,5 @@
   "dashboard_allClear": "Tout est en ordre — rien à signaler",
   "dashboard_pendingSoonHeader": "{count, plural, =1{1 visite en attente commence d'ici 48 heures} other{{count} visites en attente commencent d'ici 48 heures}}",
   "dashboard_overdueOpenHeader": "{count, plural, =1{1 visite passée n'a jamais été clôturée} other{{count} visites passées n'ont jamais été clôturées}}",
-  "settings_management": "Gestion",
   "error_introLoadDashboard": "Impossible de charger le tableau de bord"
 }
