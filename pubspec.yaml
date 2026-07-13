@@ -45,6 +45,7 @@ dependencies:
 
   # Local storage
   shared_preferences: ^2.5.5
+  path_provider: ^2.1.5
 
   # Images
   image_picker: ^1.2.2
