@@ -153,6 +153,45 @@
   "@calendar_openMenuTooltip": {
     "description": "Tooltip for the calendar app-bar button that opens the settings drawer."
   },
+  "calendar_dayRouteTitle": "Day route",
+  "@calendar_dayRouteTitle": {
+    "description": "App bar title of the day-route screen"
+  },
+  "calendar_dayRouteOpenInMaps": "Open route in Google Maps ({count})",
+  "@calendar_dayRouteOpenInMaps": {
+    "description": "Label of the pinned bottom button opening the remaining stops as a multi-stop route; count is the number of launched stops",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "calendar_dayRouteNavigate": "Navigate",
+  "@calendar_dayRouteNavigate": {
+    "description": "Label of the per-stop navigate pill on the day-route timeline"
+  },
+  "calendar_dayRouteEmptyTitle": "No jobs this day",
+  "@calendar_dayRouteEmptyTitle": {
+    "description": "Empty-state title when the selected day has no visits"
+  },
+  "calendar_dayRouteEmptyBody": "Jobs scheduled for this day will appear here in driving order.",
+  "@calendar_dayRouteEmptyBody": {
+    "description": "Empty-state body of the day-route screen"
+  },
+  "calendar_dayRouteTruncated": "Route limited to the first 10 stops",
+  "@calendar_dayRouteTruncated": {
+    "description": "Info notice when the day has more stops than Google Maps supports"
+  },
+  "calendar_dayRouteEmployeeLabel": "Employee",
+  "@calendar_dayRouteEmployeeLabel": {
+    "description": "Label of the admin-only employee picker on the day-route screen"
+  },
+  "calendar_dayRoutePreviousDay": "Previous day",
+  "@calendar_dayRoutePreviousDay": {
+    "description": "Tooltip of the day switcher's back chevron"
+  },
+  "calendar_dayRouteNextDay": "Next day",
+  "@calendar_dayRouteNextDay": {
+    "description": "Tooltip of the day switcher's forward chevron"
+  },
   "calendar_noAppointmentsForDay": "No appointments for this day.",
   "@calendar_noAppointmentsForDay": {
     "description": "Empty-state body shown to employees (who cannot create appointments) when the selected day has none."
