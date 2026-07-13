@@ -13,7 +13,6 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
-import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/route_url_builder.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -61,12 +60,15 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     );
   }
 
-  // Admin picker may point at a since-deactivated employee; fall back to the
-  // first active one. Non-admins always view their own jobs (visibility rule).
-  String _resolveEmployeeId(List<EmployeeRecord> employees) {
-    if (!widget.isAdmin || employees.isEmpty) return _selectedEmployeeId;
-    final inList = employees.any((e) => e.id == _selectedEmployeeId);
-    return inList ? _selectedEmployeeId : employees.first.id;
+  // The admin picker lists only employees with a job on the viewed day, so the
+  // selection can point at someone who has nothing on the newly-picked day;
+  // fall back to the first assignee. Non-admins always view their own jobs.
+  String _resolveEmployeeId(List<String> assigneeIds) {
+    if (!widget.isAdmin) return widget.employeeId;
+    if (assigneeIds.isEmpty) return _selectedEmployeeId;
+    return assigneeIds.contains(_selectedEmployeeId)
+        ? _selectedEmployeeId
+        : assigneeIds.first;
   }
 
   // Fires only on the data→error transition, mirroring the main calendar; a
@@ -104,22 +106,56 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final employees = widget.isAdmin
-        ? (ref.watch(employeesStreamProvider).value ?? const <EmployeeRecord>[])
-        : const <EmployeeRecord>[];
-    final employeeId = _resolveEmployeeId(employees);
+    final range = _dayRange(_day);
 
-    final key = (employeeId: employeeId, range: _dayRange(_day));
-    ref.listen(myAppointmentsProvider(key), _onAppointmentsAsyncChange);
-    final async = ref.watch(myAppointmentsProvider(key));
+    // Admins read the whole day (admin rule) so the picker can list only the
+    // employees who actually have a job that day, and so switching assignees
+    // needs no second query. Employees read just their own visible jobs.
+    final async = widget.isAdmin
+        ? ref.watch(appointmentsInRangeProvider(range))
+        : ref.watch(
+            myAppointmentsProvider((
+              employeeId: widget.employeeId,
+              range: range,
+            )),
+          );
+    if (widget.isAdmin) {
+      ref.listen(
+        appointmentsInRangeProvider(range),
+        _onAppointmentsAsyncChange,
+      );
+    } else {
+      ref.listen(
+        myAppointmentsProvider((employeeId: widget.employeeId, range: range)),
+        _onAppointmentsAsyncChange,
+      );
+    }
 
-    final jobs =
+    final dayAppointments =
         (async.value ?? const <AppointmentRecord>[])
             .where((a) => a.status != 'cancelled')
             .toList()
           // The range query already returns startTime order; sort defensively so
           // numbering and the launched route stay in driving order regardless.
           ..sort((a, b) => a.startTime.compareTo(b.startTime));
+
+    // Admin picker options: distinct employees assigned to a job that day,
+    // ordered by name. Names come from the users map, falling back to the
+    // appointment's denormalized names so a since-removed assignee still reads.
+    final assigneeEntries = widget.isAdmin
+        ? _assigneesWithJobs(dayAppointments)
+        : const <MapEntry<String, String>>[];
+    final employeeId = _resolveEmployeeId([
+      for (final e in assigneeEntries) e.key,
+    ]);
+
+    // The selected employee's jobs. For an employee the query already scoped
+    // it; for an admin, filter the whole-day list down to the picked assignee.
+    final jobs = widget.isAdmin
+        ? dayAppointments
+              .where((a) => a.employeeIds.contains(employeeId))
+              .toList()
+        : dayAppointments;
     final stops = jobs
         .where(
           (a) =>
@@ -140,12 +176,36 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
         child: Column(
           children: [
             _daySwitcher(),
-            if (widget.isAdmin && employees.isNotEmpty)
-              _employeePicker(employees, employeeId),
+            if (widget.isAdmin && assigneeEntries.isNotEmpty)
+              _employeePicker(assigneeEntries, employeeId),
             Expanded(child: _timeline(async, jobs, employeeId)),
           ],
         ),
       ),
+    );
+  }
+
+  // Distinct `id -> display name` for every employee assigned to a job in
+  // [dayAppointments], ordered by name for a stable picker.
+  List<MapEntry<String, String>> _assigneesWithJobs(
+    List<AppointmentRecord> dayAppointments,
+  ) {
+    final nameMap = ref.watch(employeeNameMapProvider);
+    final byId = <String, String>{};
+    for (final a in dayAppointments) {
+      for (var i = 0; i < a.employeeIds.length; i++) {
+        final id = a.employeeIds[i];
+        if (id.isEmpty) continue;
+        byId.putIfAbsent(
+          id,
+          () =>
+              nameMap[id] ??
+              (i < a.employeeNames.length ? a.employeeNames[i] : id),
+        );
+      }
+    }
+    return byId.entries.toList()..sort(
+      (a, b) => a.value.toLowerCase().compareTo(b.value.toLowerCase()),
     );
   }
 
@@ -188,7 +248,10 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     );
   }
 
-  Widget _employeePicker(List<EmployeeRecord> employees, String value) {
+  Widget _employeePicker(
+    List<MapEntry<String, String>> assignees,
+    String value,
+  ) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.sp16,
@@ -208,10 +271,10 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
         ),
         borderRadius: BorderRadius.circular(AppRadius.r12),
         items: [
-          for (final e in employees)
+          for (final e in assignees)
             DropdownMenuItem(
-              value: e.id,
-              child: Text(e.name, overflow: TextOverflow.ellipsis),
+              value: e.key,
+              child: Text(e.value, overflow: TextOverflow.ellipsis),
             ),
         ],
         onChanged: (id) {

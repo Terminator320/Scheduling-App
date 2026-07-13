@@ -25,6 +25,8 @@ AppointmentRecord _job({
   required int hour,
   required String status,
   String address = '',
+  List<String> employeeIds = const [],
+  List<String> employeeNames = const [],
 }) => AppointmentRecord(
   id: 'a$id',
   title: 'Appt $id',
@@ -32,6 +34,8 @@ AppointmentRecord _job({
   endTime: DateTime(2026, 5, 16, hour + 1),
   status: status,
   address: address,
+  employeeIds: employeeIds,
+  employeeNames: employeeNames,
 );
 
 Widget _wrap({
@@ -43,7 +47,6 @@ Widget _wrap({
   return ProviderScope(
     overrides: [
       myAppointmentsProvider.overrideWith((_, _) => Stream.value(jobs)),
-      employeesStreamProvider.overrideWith((_) => Stream.value(employees)),
       employeeColorMapProvider.overrideWithValue({
         for (final e in employees) e.id: e.color,
       }),
@@ -70,27 +73,19 @@ Widget _wrap({
   );
 }
 
-Future<void> _pump(
-  WidgetTester tester,
-  Widget widget, {
-  Size size = const Size(412, 915),
-}) async {
-  tester.view.physicalSize = size * 3;
-  tester.view.devicePixelRatio = 3;
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
-  await tester.pumpWidget(widget);
-  await tester.pumpAndSettle();
-}
-
-// The screen is admin-gated via the widget arg, so build a wrapper whose home
-// uses the requested isAdmin/textScale (the top-level _wrap fixes isAdmin:false
-// so most tests read the employee view directly).
-Widget _screen({required bool isAdmin, double textScale = 1}) => ProviderScope(
+// Admin view: the picker is derived from the day's appointments (whole-day
+// admin query) + the users name map, not the active-employee list.
+Widget _adminScreen({
+  required List<AppointmentRecord> dayJobs,
+  Map<String, String> names = const {'e1': 'Jane Doe', 'e2': 'Bob Smith'},
+  double textScale = 1,
+}) => ProviderScope(
   overrides: [
-    myAppointmentsProvider.overrideWith((_, _) => Stream.value(const [])),
-    employeesStreamProvider.overrideWith((_) => Stream.value(const [_jane])),
-    employeeColorMapProvider.overrideWithValue({'e1': _jane.color}),
+    appointmentsInRangeProvider.overrideWith((_, _) => Stream.value(dayJobs)),
+    employeeNameMapProvider.overrideWithValue(names),
+    employeeColorMapProvider.overrideWithValue({
+      for (final id in names.keys) id: const Color(0xFF2196F3),
+    }),
   ],
   child: ThemeNotifier(
     themeMode: ThemeMode.light,
@@ -108,10 +103,23 @@ Widget _screen({required bool isAdmin, double textScale = 1}) => ProviderScope(
         ).copyWith(textScaler: TextScaler.linear(textScale)),
         child: child!,
       ),
-      home: DayRouteScreen(isAdmin: isAdmin, employeeId: 'e1'),
+      home: const DayRouteScreen(isAdmin: true, employeeId: 'admin'),
     ),
   ),
 );
+
+Future<void> _pump(
+  WidgetTester tester,
+  Widget widget, {
+  Size size = const Size(412, 915),
+}) async {
+  tester.view.physicalSize = size * 3;
+  tester.view.devicePixelRatio = 3;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(widget);
+  await tester.pumpAndSettle();
+}
 
 FilledButton _routeButton(WidgetTester tester) => tester.widget<FilledButton>(
   find.byWidgetPredicate((w) => w is FilledButton),
@@ -241,12 +249,47 @@ void main() {
     expect(_routeButton(tester).onPressed, isNotNull);
   });
 
-  testWidgets('admin picker visible only for admins', (tester) async {
-    await _pump(tester, _screen(isAdmin: true));
-    expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
-    expect(find.text('Employee'), findsWidgets);
+  testWidgets('admin picker lists only employees with a job that day', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _adminScreen(
+        dayJobs: [
+          _job(
+            id: 1,
+            hour: 9,
+            status: 'pending',
+            address: '1 A St',
+            employeeIds: const ['e1'],
+          ),
+        ],
+      ),
+    );
 
-    await _pump(tester, _screen(isAdmin: false));
+    expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+    // Jane has the job → listed; Bob has none that day → absent.
+    expect(find.text('Jane Doe'), findsWidgets);
+    expect(find.text('Bob Smith'), findsNothing);
+    // The selected assignee's job renders in the timeline.
+    expect(find.text('Appt 1'), findsOneWidget);
+  });
+
+  testWidgets('no admin picker when the day has no jobs', (tester) async {
+    await _pump(tester, _adminScreen(dayJobs: const []));
+
+    expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+    expect(find.byType(AppEmptyState), findsOneWidget);
+  });
+
+  testWidgets('no employee picker for a non-admin', (tester) async {
+    await _pump(
+      tester,
+      _wrap(
+        jobs: [_job(id: 1, hour: 9, status: 'pending', address: '1 A St')],
+      ),
+    );
+
     expect(find.byType(DropdownButtonFormField<String>), findsNothing);
   });
 
