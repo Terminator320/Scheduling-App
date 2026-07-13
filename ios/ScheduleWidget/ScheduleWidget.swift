@@ -2,9 +2,14 @@
 //
 // Reads the JSON payload the Flutter app writes into the shared App Group
 // (`group.net.vogas.scheduling`, key `schedulePayload`) via home_widget, and
-// renders the "System Card" design: small = next job, medium/large = today's
-// job list. The timeline advances an entry at each job's end time so "next
-// job" rolls over without the app running.
+// renders the "System Card" design: small = next job, medium/large = the day's
+// job list.
+//
+// The payload carries BOTH today's and tomorrow's jobs plus a `rolloverAt`
+// instant. The timeline seeds an entry at that instant so the widget flips from
+// today to tomorrow ON-DEVICE — with no app run or push — one hour after the
+// last job of the day is finished (see buildWidgetPayload in
+// widget_sync_service.dart).
 //
 // This file is compiled only on macOS/Xcode (see the Mac handoff runbook).
 
@@ -49,12 +54,36 @@ struct Job: Codable, Hashable {
     }
 }
 
+private func parseInstant(_ s: String?) -> Date? {
+    guard let s = s else { return nil }
+    return isoWithMillis.date(from: s) ?? isoNoMillis.date(from: s)
+}
+
 struct SchedulePayload: Codable {
     let locale: String
     let generatedAt: String
-    let todayCount: Int
-    let jobs: [Job]
-    let nextJob: Job?
+    let todayDate: String?
+    let tomorrowDate: String?
+    // When to switch today -> tomorrow (1h after the last job of the day is
+    // finished). Nil while any job is still open, so the widget stays on today.
+    let rolloverAt: String?
+    let todayJobs: [Job]?
+    let tomorrowJobs: [Job]?
+
+    /// The day (today or tomorrow) the widget should render at `date`, resolved
+    /// purely from the payload so a future timeline entry can flip on-device.
+    func resolved(at date: Date) -> DaySchedule {
+        if let rollover = parseInstant(rolloverAt), date >= rollover {
+            return DaySchedule(
+                headerDate: parseInstant(tomorrowDate) ?? date,
+                isTomorrow: true,
+                jobs: tomorrowJobs ?? [])
+        }
+        return DaySchedule(
+            headerDate: parseInstant(todayDate) ?? date,
+            isTomorrow: false,
+            jobs: todayJobs ?? [])
+    }
 
     static func load() -> SchedulePayload? {
         guard
@@ -64,6 +93,19 @@ struct SchedulePayload: Codable {
         else { return nil }
         return try? JSONDecoder().decode(SchedulePayload.self, from: data)
     }
+}
+
+/// The resolved single-day view the widget renders for a given timeline entry.
+struct DaySchedule {
+    let headerDate: Date
+    let isTomorrow: Bool
+    let jobs: [Job]
+
+    var nextJob: Job? { jobs.first }
+    var count: Int { jobs.count }
+
+    static let empty = DaySchedule(
+        headerDate: Date(), isTomorrow: false, jobs: [])
 }
 
 // MARK: - Timeline
@@ -91,15 +133,24 @@ struct Provider: TimelineProvider {
     ) {
         let payload = SchedulePayload.load()
         let now = Date()
-        var entries = [ScheduleEntry(date: now, payload: payload)]
-        // Advance an entry at each job's start so the widget dims/rolls jobs
-        // off as they begin, without the app running.
+        // One entry at now, one at each future job start (so times/relative
+        // labels refresh), and — crucially — one at the rollover instant so the
+        // widget flips from today to tomorrow with the app closed.
+        var dates: Set<Date> = [now]
         if let payload = payload {
-            for job in payload.jobs {
-                if let start = job.start, start > now {
-                    entries.append(ScheduleEntry(date: start, payload: payload))
-                }
+            for job in payload.todayJobs ?? [] {
+                if let start = job.start, start > now { dates.insert(start) }
             }
+            for job in payload.tomorrowJobs ?? [] {
+                if let start = job.start, start > now { dates.insert(start) }
+            }
+            if let rollover = parseInstant(payload.rolloverAt),
+                rollover > now {
+                dates.insert(rollover)
+            }
+        }
+        let entries = dates.sorted().map {
+            ScheduleEntry(date: $0, payload: payload)
         }
         // Refresh again in an hour as a floor.
         let refresh = Calendar.current.date(
@@ -110,8 +161,18 @@ struct Provider: TimelineProvider {
 
 // MARK: - Localization helpers
 
-private func isFrench(_ payload: SchedulePayload?) -> Bool {
-    payload?.locale == "fr"
+private func emptyLabel(french: Bool, tomorrow: Bool) -> String {
+    if french {
+        return tomorrow ? "Aucune visite demain" : "Aucune visite aujourd'hui"
+    }
+    return tomorrow ? "No jobs tomorrow" : "No jobs today"
+}
+
+private func moreLabel(_ n: Int, french: Bool, tomorrow: Bool) -> String {
+    if french {
+        return tomorrow ? "+\(n) autres demain" : "+\(n) autres aujourd'hui"
+    }
+    return tomorrow ? "+\(n) more tomorrow" : "+\(n) more today"
 }
 
 private func timeLabel(_ job: Job, french: Bool) -> String {
@@ -134,13 +195,14 @@ private func statusColor(_ status: String) -> Color {
 // MARK: - Views
 
 struct DateHeader: View {
+    let date: Date
     let french: Bool
 
     var body: some View {
         let fmt = DateFormatter()
         fmt.locale = Locale(identifier: french ? "fr_CA" : "en_CA")
         fmt.dateFormat = french ? "EEEE d MMMM" : "EEEE, MMM d"
-        return Text(fmt.string(from: Date()).uppercased())
+        return Text(fmt.string(from: date).uppercased())
             .font(.caption2).bold()
             .foregroundColor(.red)
             .lineLimit(1)
@@ -171,13 +233,13 @@ struct JobRow: View {
 }
 
 struct SmallView: View {
-    let payload: SchedulePayload?
+    let day: DaySchedule
+    let french: Bool
 
     var body: some View {
-        let french = isFrench(payload)
-        return VStack(alignment: .leading, spacing: 6) {
-            DateHeader(french: french)
-            if let next = payload?.nextJob {
+        VStack(alignment: .leading, spacing: 6) {
+            DateHeader(date: day.headerDate, french: french)
+            if let next = day.nextJob {
                 Text(next.clientName.isEmpty ? next.title : next.clientName)
                     .font(.headline).lineLimit(1)
                 Text(timeLabel(next, french: french))
@@ -189,12 +251,12 @@ struct SmallView: View {
                         .foregroundColor(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                Text(remainingFooter(payload, french: french))
+                Text(remainingFooter())
                     .font(.caption2).foregroundColor(.secondary).lineLimit(1)
             } else {
                 Spacer()
                 Label(
-                    french ? "Aucune visite" : "No more jobs today",
+                    emptyLabel(french: french, tomorrow: day.isTomorrow),
                     systemImage: "checkmark.circle.fill"
                 )
                 .font(.footnote).foregroundColor(.green).lineLimit(1)
@@ -204,10 +266,14 @@ struct SmallView: View {
         .padding(12)
     }
 
-    private func remainingFooter(
-        _ payload: SchedulePayload?, french: Bool
-    ) -> String {
-        let count = payload?.todayCount ?? 0
+    private func remainingFooter() -> String {
+        let count = day.count
+        if day.isTomorrow {
+            if french {
+                return count == 1 ? "1 demain" : "\(count) demain"
+            }
+            return count == 1 ? "1 tomorrow" : "\(count) tomorrow"
+        }
         if french {
             return count == 1 ? "1 restante aujourd'hui"
                 : "\(count) restantes aujourd'hui"
@@ -217,19 +283,19 @@ struct SmallView: View {
 }
 
 struct ListView: View {
-    let payload: SchedulePayload?
+    let day: DaySchedule
+    let french: Bool
     let maxRows: Int
 
     var body: some View {
-        let french = isFrench(payload)
-        let jobs = payload?.jobs ?? []
+        let tomorrow = day.isTomorrow
+        let jobs = day.jobs
         return VStack(alignment: .leading, spacing: 8) {
-            DateHeader(french: french)
+            DateHeader(date: day.headerDate, french: french)
             if jobs.isEmpty {
                 Spacer()
                 Label(
-                    french ? "Aucune visite aujourd'hui"
-                        : "No jobs today",
+                    emptyLabel(french: french, tomorrow: tomorrow),
                     systemImage: "checkmark.circle.fill"
                 ).font(.footnote).foregroundColor(.green).lineLimit(1)
                 Spacer()
@@ -244,7 +310,9 @@ struct ListView: View {
                     }
                 }
                 if jobs.count > maxRows {
-                    Text(moreLabel(jobs.count - maxRows, french: french))
+                    Text(moreLabel(
+                        jobs.count - maxRows, french: french,
+                        tomorrow: tomorrow))
                         .font(.caption2).foregroundColor(.secondary)
                         .lineLimit(1)
                 }
@@ -253,15 +321,19 @@ struct ListView: View {
         }
         .padding(14)
     }
-
-    private func moreLabel(_ n: Int, french: Bool) -> String {
-        french ? "+\(n) autres aujourd'hui" : "+\(n) more today"
-    }
 }
 
 struct ScheduleWidgetEntryView: View {
     @Environment(\.widgetFamily) var family
     var entry: Provider.Entry
+
+    // Resolve which day to show FOR THIS ENTRY'S DATE — a future entry seeded at
+    // the rollover instant renders tomorrow even though the payload was written
+    // (with the app open / by a push) while it was still today.
+    private var day: DaySchedule {
+        entry.payload?.resolved(at: entry.date) ?? .empty
+    }
+    private var french: Bool { entry.payload?.locale == "fr" }
 
     var body: some View {
         content.widgetContainerBackground()
@@ -274,12 +346,12 @@ struct ScheduleWidgetEntryView: View {
             // systemSmall can't host per-row Links, so the whole widget links
             // to the shown "next job" (falls back to a plain app launch when
             // there's none).
-            SmallView(payload: entry.payload)
-                .widgetURL(entry.payload?.nextJob?.deepLink)
+            SmallView(day: day, french: french)
+                .widgetURL(day.nextJob?.deepLink)
         case .systemLarge:
-            ListView(payload: entry.payload, maxRows: 6)
+            ListView(day: day, french: french, maxRows: 6)
         default:
-            ListView(payload: entry.payload, maxRows: 3)
+            ListView(day: day, french: french, maxRows: 3)
         }
     }
 }

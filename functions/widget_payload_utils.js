@@ -165,10 +165,40 @@ function serializeWidgetJob(r) {
 }
 
 /**
- * Builds the widget payload for one employee: today's remaining non-terminal
- * jobs plus the next upcoming job (which may be on a later day). Pure mirror of
- * `buildWidgetPayload` (widget_sync_service.dart) — keep the two and the Swift
- * decoder in lockstep.
+ * Start of the Toronto day `n` days from `now` (n=0 today, 1 tomorrow, ...) as
+ * an epoch-ms UTC instant.
+ * @param {(Date|number)} now
+ * @param {number} n
+ * @return {number}
+ */
+function torontoDayStartOffsetMs(now, n) {
+  const date = now instanceof Date ? now : new Date(Number(now));
+  const [y, m, d] = _torontoYmd(date);
+  return _torontoMidnightMs(y, m, d + n);
+}
+
+// How long after the last job of the day is finished the widget keeps showing
+// today before rolling forward to tomorrow (mirrors widgetRolloverGrace in
+// widget_sync_service.dart).
+const ROLLOVER_GRACE_MS = 60 * 60 * 1000;
+
+/**
+ * True for a cancelled job (excluded when computing the last job's end time).
+ * @param {*} status
+ * @return {boolean}
+ */
+function isCancelledStatus(status) {
+  return String(status || "").toLowerCase() === "cancelled";
+}
+
+/**
+ * Builds the widget payload for one employee. Carries BOTH days plus a
+ * `rolloverAt` instant so the WidgetKit timeline flips today -> tomorrow
+ * on-device, with no app run or push: `todayJobs`/`tomorrowJobs` are each day's
+ * upcoming non-terminal visits; `rolloverAt` is set only once today has no
+ * incomplete job left (then last-job `endTime` + 1h; empty/all-cancelled today
+ * rolls immediately). Pure mirror of `buildWidgetPayload`
+ * (widget_sync_service.dart) — keep the two and the Swift decoder in lockstep.
  * @param {!Array<!Object>} records The employee's appointments in the lookahead
  *   window.
  * @param {(Date|number)} now
@@ -178,28 +208,59 @@ function serializeWidgetJob(r) {
 function buildWidgetPayload(records, now, locale) {
   const loc = locale === "fr" ? "fr" : "en";
   const nowMs = nowMillis(now);
-  const dayEndMs = torontoDayEndMs(now);
-  const upcoming = (records || [])
-      .filter((r) => {
-        const ms = toMillis(r.startTime);
-        return !isTerminalStatus(r.status) && ms != null && ms > nowMs;
-      })
-      .sort((a, b) => toMillis(a.startTime) - toMillis(b.startTime));
-  const todayRemaining = upcoming.filter(
-      (r) => toMillis(r.startTime) < dayEndMs,
-  );
+  const startTodayMs = torontoDayStartOffsetMs(now, 0);
+  const startTomorrowMs = torontoDayStartOffsetMs(now, 1);
+  const startDayAfterMs = torontoDayStartOffsetMs(now, 2);
+  const inRange = (r, lo, hi) => {
+    const ms = toMillis(r.startTime);
+    return ms != null && ms >= lo && ms < hi;
+  };
+  const sortByStart = (a, b) => toMillis(a.startTime) - toMillis(b.startTime);
+
+  const todayAll = (records || [])
+      .filter((r) => inRange(r, startTodayMs, startTomorrowMs));
+  const todayIncomplete = todayAll.filter((r) => !isTerminalStatus(r.status));
+  const todayJobs = todayIncomplete
+      .filter((r) => toMillis(r.startTime) > nowMs)
+      .sort(sortByStart);
+  const tomorrowJobs = (records || [])
+      .filter((r) =>
+        inRange(r, startTomorrowMs, startDayAfterMs) &&
+        !isTerminalStatus(r.status))
+      .sort(sortByStart);
+
+  let rolloverMs = null;
+  if (todayIncomplete.length === 0) {
+    const finished = todayAll.filter((r) => !isCancelledStatus(r.status));
+    if (finished.length === 0) {
+      rolloverMs = startTodayMs;
+    } else {
+      const lastEnd = finished.reduce((mx, r) => {
+        const e = toMillis(r.endTime);
+        return e != null && e > mx ? e : mx;
+      }, -Infinity);
+      rolloverMs = lastEnd === -Infinity ?
+        startTodayMs : lastEnd + ROLLOVER_GRACE_MS;
+    }
+  }
+
+  const iso = (ms) => new Date(ms).toISOString();
   return {
     locale: loc,
-    generatedAt: new Date(nowMs).toISOString(),
-    todayCount: todayRemaining.length,
-    jobs: todayRemaining.map(serializeWidgetJob),
-    nextJob: upcoming.length === 0 ? null : serializeWidgetJob(upcoming[0]),
+    generatedAt: iso(nowMs),
+    todayDate: iso(startTodayMs),
+    tomorrowDate: iso(startTomorrowMs),
+    rolloverAt: rolloverMs == null ? null : iso(rolloverMs),
+    todayJobs: todayJobs.map(serializeWidgetJob),
+    tomorrowJobs: tomorrowJobs.map(serializeWidgetJob),
   };
 }
 
 module.exports = {
   WIDGET_LOOKAHEAD_DAYS,
+  ROLLOVER_GRACE_MS,
   isTerminalStatus,
+  isCancelledStatus,
   torontoDayStartMs,
   torontoDayEndMs,
   serializeWidgetJob,

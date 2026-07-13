@@ -35,6 +35,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSApplicationQueriesSchemes</key>
@@ -85,9 +87,6 @@
 	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
-		<!-- Lets a content-available change push wake the app in the
-		     background so firebaseMessagingBackgroundHandler can rewrite the
-		     home-screen widget with the app closed. -->
 		<string>remote-notification</string>
 	</array>
 	<key>UILaunchStoryboardName</key>

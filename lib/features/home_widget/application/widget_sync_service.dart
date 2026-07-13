@@ -37,34 +37,80 @@ Map<String, dynamic> _job(AppointmentRecord a) => {
   'status': a.status,
 };
 
-/// Serializes an employee's remaining-today jobs and next upcoming job into
-/// the JSON the iOS widget renders. Pure — unit-testable. `nextJob` may be a
-/// job on a later day (so the small widget still shows something after today's
-/// jobs are done); `jobs` is only today's remaining, non-terminal visits.
+/// How long after the last job of the day is finished the widget keeps showing
+/// today before it rolls forward to tomorrow's schedule.
+const widgetRolloverGrace = Duration(hours: 1);
+
+/// Serializes an employee's schedule into the JSON the iOS widget renders.
+/// Pure — unit-testable.
+///
+/// Carries **both** days plus a `rolloverAt` instant so the WidgetKit timeline
+/// can switch from today to tomorrow **on-device**, with no app run or push:
+/// - `todayJobs` — today's upcoming, not-yet-started, non-terminal visits.
+/// - `tomorrowJobs` — tomorrow's non-terminal visits.
+/// - `rolloverAt` — when the widget flips to tomorrow. Set **only once today
+///   has no incomplete jobs left** (all `done`/`cancelled`, or none): then it's
+///   the last job's `endTime` + [widgetRolloverGrace]; an empty/all-cancelled
+///   today flips immediately (`now`). While any today job is still open it's
+///   `null` and the widget stays on today (so a running-late job isn't skipped).
+/// - `todayDate`/`tomorrowDate` — start-of-day instants driving the widget's
+///   date header for whichever day it's showing.
 Map<String, dynamic> buildWidgetPayload(
   List<AppointmentRecord> appointments,
   DateTime now, {
   String locale = 'en',
 }) {
-  final dayEnd = DateTime(now.year, now.month, now.day + 1);
-  final upcoming =
+  final startOfToday = DateTime(now.year, now.month, now.day);
+  final startOfTomorrow = DateTime(now.year, now.month, now.day + 1);
+  final startOfDayAfter = DateTime(now.year, now.month, now.day + 2);
+
+  bool inRange(AppointmentRecord a, DateTime lo, DateTime hi) =>
+      !a.startTime.isBefore(lo) && a.startTime.isBefore(hi);
+  AppointmentStatus statusOf(AppointmentRecord a) =>
+      AppointmentStatus.fromRaw(a.status);
+
+  final todayAll = appointments
+      .where((a) => inRange(a, startOfToday, startOfTomorrow))
+      .toList();
+  final todayIncomplete = todayAll
+      .where((a) => !statusOf(a).isTerminal)
+      .toList();
+  final todayJobs =
+      todayIncomplete.where((a) => a.startTime.isAfter(now)).toList()
+        ..sort((x, y) => x.startTime.compareTo(y.startTime));
+  final tomorrowJobs =
       appointments
           .where(
             (a) =>
-                !AppointmentStatus.fromRaw(a.status).isTerminal &&
-                a.startTime.isAfter(now),
+                inRange(a, startOfTomorrow, startOfDayAfter) &&
+                !statusOf(a).isTerminal,
           )
           .toList()
         ..sort((x, y) => x.startTime.compareTo(y.startTime));
-  final todayRemaining = upcoming
-      .where((a) => a.startTime.isBefore(dayEnd))
-      .toList();
+
+  DateTime? rolloverAt;
+  if (todayIncomplete.isEmpty) {
+    final finished = todayAll.where((a) => !statusOf(a).isCancelled).toList();
+    // A stable already-past instant when there's nothing left to finish today
+    // (empty/all-cancelled) so the payload signature doesn't churn every tick;
+    // otherwise 1h after the last job's scheduled end.
+    rolloverAt = finished.isEmpty
+        ? startOfToday
+        : finished
+              .map((a) => a.endTime)
+              .reduce((a, b) => a.isAfter(b) ? a : b)
+              .add(widgetRolloverGrace);
+  }
+
+  String iso(DateTime d) => d.toUtc().toIso8601String();
   return {
     'locale': locale,
     'generatedAt': now.toIso8601String(),
-    'todayCount': todayRemaining.length,
-    'jobs': [for (final a in todayRemaining) _job(a)],
-    'nextJob': upcoming.isEmpty ? null : _job(upcoming.first),
+    'todayDate': iso(startOfToday),
+    'tomorrowDate': iso(startOfTomorrow),
+    'rolloverAt': rolloverAt == null ? null : iso(rolloverAt),
+    'todayJobs': [for (final a in todayJobs) _job(a)],
+    'tomorrowJobs': [for (final a in tomorrowJobs) _job(a)],
   };
 }
 
@@ -149,15 +195,20 @@ final widgetSyncServiceProvider = Provider<WidgetSyncService>(
   (ref) => WidgetSyncService(logger: ref.watch(loggerProvider)),
 );
 
-/// The signed-in active employee's users doc id (the key
-/// `appointments.employeeIds` holds), or null for admins / signed-out.
+/// The signed-in active user's users doc id (the key `appointments.employeeIds`
+/// holds), or null when signed-out / inactive. Both employees **and admins**
+/// qualify — admins can assign themselves to jobs, so they see their own
+/// schedule on the widget too (their appointment stream is still scoped to
+/// visits whose `employeeIds` contains this id).
 final widgetEmployeeIdProvider = FutureProvider.autoDispose<String?>((
   ref,
 ) async {
   final doc = ref.watch(currentUserDocProvider).value ?? const {};
   final role = (doc['role'] ?? '').toString().trim();
   final status = (doc['status'] ?? '').toString().trim();
-  if (role != 'employee' || status != 'active') return null;
+  if (status != 'active' || (role != 'employee' && role != 'admin')) {
+    return null;
+  }
   final uid = ref.watch(authUidProvider).value;
   if (uid == null) return null;
   final match = await ref.watch(employeesRepositoryProvider).findUserByUid(uid);

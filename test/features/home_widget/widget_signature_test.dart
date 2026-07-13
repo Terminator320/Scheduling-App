@@ -4,18 +4,22 @@ import 'package:scheduling/features/home_widget/application/widget_sync_service.
 
 void main() {
   group('WidgetSyncService.signatureForTesting', () {
-    test('ignores generatedAt so the same jobs dedupe', () {
+    test('ignores generatedAt so the same schedule dedupes', () {
       final a = {
         'generatedAt': '2026-07-08T12:00:00Z',
-        'jobs': [
+        'rolloverAt': null,
+        'todayJobs': [
           {'id': 'j1', 'clientName': 'Ada'},
         ],
+        'tomorrowJobs': const <Object>[],
       };
       final b = {
         'generatedAt': '2026-07-08T12:05:00Z',
-        'jobs': [
+        'rolloverAt': null,
+        'todayJobs': [
           {'id': 'j1', 'clientName': 'Ada'},
         ],
+        'tomorrowJobs': const <Object>[],
       };
 
       expect(
@@ -24,16 +28,20 @@ void main() {
       );
     });
 
-    test('changed jobs produce a different signature', () {
+    test('a changed rollover instant produces a different signature', () {
       final a = {
         'generatedAt': '2026-07-08T12:00:00Z',
-        'jobs': [
+        'rolloverAt': null,
+        'todayJobs': [
           {'id': 'j1', 'clientName': 'Ada'},
         ],
+        'tomorrowJobs': const <Object>[],
       };
       final b = {
         'generatedAt': '2026-07-08T12:00:00Z',
-        'jobs': [
+        'rolloverAt': '2026-07-08T17:00:00Z',
+        'todayJobs': const <Object>[],
+        'tomorrowJobs': [
           {'id': 'j2', 'clientName': 'Grace'},
         ],
       };
