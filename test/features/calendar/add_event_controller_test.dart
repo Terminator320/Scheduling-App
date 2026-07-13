@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
@@ -73,6 +75,8 @@ void main() {
         appointmentsRepositoryProvider.overrideWithValue(appointments),
         clientsRepositoryProvider.overrideWithValue(clients),
         appointmentImageUploadProvider.overrideWithValue(uploader),
+        // Deterministic online by default; the offline test builds its own.
+        isOfflineProvider.overrideWithValue(false),
       ],
     );
     addTearDown(container.dispose);
@@ -334,6 +338,50 @@ void main() {
 
         expect(outcome, isA<AddEventFailed>());
         expect(readState().isSubmitting, isFalse);
+      },
+    );
+
+    test(
+      'offline fails fast without touching the repo or the busy flag',
+      () async {
+        final offline = ProviderContainer(
+          overrides: [
+            appointmentsRepositoryProvider.overrideWithValue(appointments),
+            clientsRepositoryProvider.overrideWithValue(clients),
+            appointmentImageUploadProvider.overrideWithValue(uploader),
+            isOfflineProvider.overrideWithValue(true),
+          ],
+        );
+        addTearDown(offline.dispose);
+        final c = offline.read(addEventControllerProvider(null).notifier);
+        c
+          ..selectDate(DateTime(2026, 5, 10))
+          ..selectStartTime(const TimeOfDay(hour: 9, minute: 0))
+          ..selectEndTime(const TimeOfDay(hour: 10, minute: 0))
+          ..selectClient(_aClient)
+          ..toggleEmployee(_employeeA);
+
+        final outcome = await c.submit(
+          title: 'Leak fix',
+          address: '999 Maple',
+          notes: '',
+          materialsNeeded: '',
+        );
+
+        expect(outcome, isA<AddEventFailed>());
+        expect((outcome as AddEventFailed).error, isA<SocketException>());
+        verifyNever(() => appointments.addAppointment(any()));
+        verifyNever(
+          () => appointments.findBusyEmployees(
+            candidates: any(named: 'candidates'),
+            start: any(named: 'start'),
+            end: any(named: 'end'),
+          ),
+        );
+        expect(
+          offline.read(addEventControllerProvider(null)).isSubmitting,
+          isFalse,
+        );
       },
     );
   });
