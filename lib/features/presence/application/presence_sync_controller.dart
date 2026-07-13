@@ -34,20 +34,23 @@ const minPresenceUploadGap = Duration(minutes: 2);
 /// in sync: window comfortably above two missed heartbeats).
 const presenceHeartbeatEvery = Duration(minutes: 10);
 
-/// Pure gate: only signed-in ACTIVE EMPLOYEES track presence. Deliberately
-/// narrower than [shouldRegisterPush] — admins get push nudges but are never
-/// location-tracked (and never see the OS location prompt).
+/// Pure gate: signed-in active employees AND admins track presence (same
+/// audience as [shouldRegisterPush]) — an admin assigned to a job gets the
+/// timed "leave now" push, so their leave time deserves the same live-GPS
+/// accuracy (decided 2026-07-13).
 bool shouldTrackPresence({
   required String role,
   required String status,
   required bool signedIn,
-}) => signedIn && status == 'active' && role == 'employee';
+}) => signedIn && status == 'active' && (role == 'employee' || role == 'admin');
 
 /// Pure throttle for movement-driven fixes.
 bool shouldWritePresenceFix({
   required DateTime? lastUploadAt,
   required DateTime now,
-}) => lastUploadAt == null || now.difference(lastUploadAt) >= minPresenceUploadGap;
+}) =>
+    lastUploadAt == null ||
+    now.difference(lastUploadAt) >= minPresenceUploadGap;
 
 /// Pure gate for the heartbeat tick: only re-upsert when no movement fix has
 /// gone out for a full heartbeat period (a fresh fix already reset the clock).
@@ -98,7 +101,11 @@ class PresenceSyncController {
       final doc = _ref.read(currentUserDocProvider).value ?? const {};
       final role = (doc['role'] ?? '').toString().trim();
       final status = (doc['status'] ?? '').toString().trim();
-      if (!shouldTrackPresence(role: role, status: status, signedIn: signedIn)) {
+      if (!shouldTrackPresence(
+        role: role,
+        status: status,
+        signedIn: signedIn,
+      )) {
         _stop();
         return;
       }
@@ -115,8 +122,8 @@ class PresenceSyncController {
           .read(locationPermissionServiceProvider)
           .ensureLocation();
       // Silent no-op on any non-grant — the OS prompt appears once on first
-      // activation as an employee; never nag. The server's address-fallback
-      // chain covers an untracked employee.
+      // activation; never nag. The server's address-fallback chain covers an
+      // untracked user.
       if (permission != LocationPermissionResult.granted) return;
 
       final match = await _ref

@@ -432,8 +432,8 @@ class _PaulAppState extends ConsumerState<PaulApp> {
 
   void _listenForPresenceSync() {
     // Starts/stops the background location stream that feeds the travel-time
-    // "leave now" reminders — active employees only (admins are never
-    // tracked). Same emission-driven shape as push registration above.
+    // "leave now" reminders — active employees and admins (both receive the
+    // timed pushes). Same emission-driven shape as push registration above.
     ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
       prev,
       next,
