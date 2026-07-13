@@ -1,8 +1,11 @@
 # Speech-to-Text Dictation Implementation Plan
 
-> **STATUS: PLAN ONLY — NOT STARTED (user directive 2026-07-10).**
-> Implementation waits for an explicit "go" — same convention as the
-> push-notifications and admin-dashboard plans.
+> **STATUS: IMPLEMENTED 2026-07-13 (branch `notification`).** All 9 tasks built
+> with the mockup-decided UI (inline mic + transient waveform listening bar);
+> `flutter analyze` clean, full suite green (873 tests, incl. merge/service/
+> button/bar/field coverage). **Only Task 9 Step 4 (on-device mic verification)
+> remains** — method-channel plugin, same class as `ImagePickerService`, can't
+> run on this Windows box. See the device checklist in Task 9.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -13,6 +16,10 @@
 **Tech Stack:** Flutter/Dart (`^3.10.7`), `speech_to_text` (new dep, v7.x), `permission_handler ^12.0.2` (existing), Riverpod manual providers, mocktail for tests.
 
 **Scope decisions (user, 2026-07-10):** Notes-style fields only (appointment Notes + Materials) — no mic on names, email, phone, or search bars. Live-as-you-speak partial results. Note the iOS system keyboard's dictation key already works in every field; this in-app mic adds an always-discoverable affordance that doesn't depend on keyboard settings.
+
+**UI design decision (mockup, 2026-07-13):** "A's inline mic, but only show B's waveform bar while listening" — the resting state is just the inline suffix mic beside the clear-✕ (no new chrome; idle fields are byte-for-byte the current form); tapping it lights the mic blue + pulsing and slides in a transient **waveform bar with a Stop** *under that field only*, which collapses back the moment dictation stops. Two independent state cues (mic icon shape+color AND the bar) so state never relies on color alone (a11y rule). The bar animates in/out with the app's standard field-error entrance (fade+slide), collapsing to instant under reduce-motion. Mockup artifact: https://claude.ai/code/artifact/8ef8190a-4926-45d4-8152-486e94307567
+
+> **Task 6 impact:** the `DictationMicButton` in the plan below renders only the mic-icon swap. The chosen design ALSO requires a transient listening bar (waveform + "Listening…" label + Stop) rendered beneath the field while `_isListening` is true. Two clean ways to fit it: (a) have `LabeledTextField` render the bar below the field when its `DictationMicButton` reports a listening state (lift `_isListening` via a callback/`ValueNotifier`), or (b) keep the button self-contained and add a sibling `DictationListeningBar` that `LabeledTextField._defaultSuffix`/body wires in. Reuse the app's fade+slide error-row entrance and gate motion on `MediaQuery.disableAnimationsOf`. Waveform can be a lightweight CustomPaint/animated bars (no new dep). This is a UI addition only — the merge logic (T3), service (T5), and permission gate (T4) are unaffected.
 
 **Background facts an implementer must know (verified in-code 2026-07-10):**
 - `LabeledTextField` (`lib/shared/widgets/fields/labeled_text_field.dart:87-94`) has ONE suffix slot: a custom `suffixIcon` displaces the built-in `ClearTextButton`. The mic must be composed WITH the clear-x in a `Row(mainAxisSize: min)`.
