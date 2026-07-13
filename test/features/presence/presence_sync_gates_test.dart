@@ -13,9 +13,16 @@ void main() {
       );
     });
 
-    test('admins are never tracked', () {
+    test('admins are tracked too (they receive the timed pushes)', () {
       expect(
         shouldTrackPresence(role: 'admin', status: 'active', signedIn: true),
+        isTrue,
+      );
+    });
+
+    test('unknown roles are excluded', () {
+      expect(
+        shouldTrackPresence(role: '', status: 'active', signedIn: true),
         isFalse,
       );
     });

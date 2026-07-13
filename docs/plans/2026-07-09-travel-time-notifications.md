@@ -265,9 +265,10 @@ mirrors `PushRegistrationController` (provider + `sync()` driven from
 call):
 - Pure top-level helpers (unit-tested, no plugins):
   - `bool shouldTrackPresence({required String role, required String status,
-    required bool signedIn})` — employee ∧ active ∧ signed-in. Admins: hard
-    no-op, never prompted. (Deliberately narrower than `shouldRegisterPush`,
-    which includes admins.)
+    required bool signedIn})` — (employee ∨ admin) ∧ active ∧ signed-in, the
+    same audience as `shouldRegisterPush` (revised 2026-07-13: an admin
+    assigned to a job receives the timed "leave now" push, so their leave time
+    gets the same live-GPS accuracy; originally admins were untracked).
   - `bool shouldWritePresenceFix({required DateTime? lastUploadAt,
     required DateTime now})` — `lastUploadAt == null` ∨ ≥2 min elapsed
     (`minUploadGap`). Movement granularity itself comes from the stream's
@@ -355,7 +356,8 @@ the listener registration). Sign-out path: `presenceSyncControllerProvider`
 - `cd functions && npm run lint && npm test`.
 
 **Flutter — `test/features/presence/`:**
-- `shouldTrackPresence`: role/status/signed-in gating (admin excluded).
+- `shouldTrackPresence`: role/status/signed-in gating (admin included,
+  unknown roles excluded).
 - `shouldWritePresenceFix`: throttle boundary (1 min 59 s vs 2 min, injected
   `now`); null `lastUploadAt` → true.
 - `shouldHeartbeat`: boundary at 10 min; null `lastUploadAt` → false.
