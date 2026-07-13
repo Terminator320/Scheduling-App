@@ -101,7 +101,11 @@ class _StatsList extends ConsumerWidget {
                 busiestWeekday: stats.busiestWeekday,
               ),
               const SizedBox(height: AppSpacing.sp24),
-              AttentionFlagsSection(flags: stats.flags, nameMap: nameMap),
+              AttentionFlagsSection(
+                flags: stats.flags,
+                colorMap: colorMap,
+                nameMap: nameMap,
+              ),
               const SizedBox(height: AppSpacing.sp16),
             ],
           ),

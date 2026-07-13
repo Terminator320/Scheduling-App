@@ -986,6 +986,12 @@ async function runDailyDigest(deps) {
   for (const employeeDocId of Object.keys(grouped)) {
     const jobs = grouped[employeeDocId];
     if (!jobs || jobs.length === 0) continue;
+    // The 18:00 digest also carries a fresh widget payload (+ content-
+    // available) so the home-screen widget rolls forward to tomorrow with the
+    // app closed, matching the digest text.
+    const records = await fetchEmployeeWidgetWindow(
+        db, employeeDocId, nowDate, deps.logger,
+    );
     const sent = await sendToEmployee(
         deps,
         employeeDocId,
@@ -993,6 +999,10 @@ async function runDailyDigest(deps) {
         (locale) => buildDigestMessage(jobs, locale),
         TIMED_RECIPIENT_ROLES,
         cache,
+        (locale) => ({
+          widgetPayload: JSON.stringify(
+              buildWidgetPayload(records, nowDate, locale)),
+        }),
     );
     if (sent > 0) digests += 1;
   }

@@ -22,12 +22,13 @@ const appt = (id, startIso, extra) => ({
   title: `Job ${id}`,
   clientName: "Client",
   startTime: at(startIso),
+  endTime: at(new Date(at(startIso).getTime() + 3600000).toISOString()),
   status: "pending",
   ...(extra || {}),
 });
 
 describe("buildWidgetPayload", () => {
-  test("today's remaining jobs are future, non-terminal, and sorted", () => {
+  test("todayJobs are future, non-terminal, and sorted", () => {
     const payload = buildWidgetPayload([
       appt("past", "2026-07-08T13:00:00.000Z"),
       appt("later", "2026-07-08T20:00:00.000Z"),
@@ -36,55 +37,56 @@ describe("buildWidgetPayload", () => {
       appt("tomorrow", "2026-07-09T13:00:00.000Z"),
     ], NOW);
 
-    expect(payload.todayCount).toBe(2);
-    expect(payload.jobs.map((j) => j.id)).toEqual(["soon", "later"]);
+    expect(payload.todayJobs.map((j) => j.id)).toEqual(["soon", "later"]);
+    expect(payload.tomorrowJobs.map((j) => j.id)).toEqual(["tomorrow"]);
+    // an open job today means no rollover yet.
+    expect(payload.rolloverAt).toBeNull();
   });
 
   test("each job carries its id and a …Z startTime for the deep link", () => {
     const payload = buildWidgetPayload([
       appt("soon", "2026-07-08T18:00:00.000Z"),
     ], NOW);
-    expect(payload.jobs[0].id).toBe("soon");
-    expect(payload.jobs[0].startTime).toBe("2026-07-08T18:00:00.000Z");
-    expect(payload.nextJob.id).toBe("soon");
+    expect(payload.todayJobs[0].id).toBe("soon");
+    expect(payload.todayJobs[0].startTime).toBe("2026-07-08T18:00:00.000Z");
   });
 
-  test("nextJob can be on a later day when today has none left", () => {
+  test("rolloverAt is last endTime + 1h once today is all complete", () => {
     const payload = buildWidgetPayload([
-      appt("past", "2026-07-08T13:00:00.000Z"),
-      appt("tomorrow", "2026-07-09T13:00:00.000Z"),
+      appt("done", "2026-07-08T13:00:00.000Z", {
+        status: "done",
+        endTime: at("2026-07-08T14:00:00.000Z"),
+      }),
+      appt("tmwLater", "2026-07-09T18:00:00.000Z"),
+      appt("tmwFirst", "2026-07-09T13:00:00.000Z"),
     ], NOW);
-    expect(payload.todayCount).toBe(0);
-    expect(payload.jobs).toHaveLength(0);
-    expect(payload.nextJob.id).toBe("tomorrow");
+    expect(payload.rolloverAt).toBe("2026-07-08T15:00:00.000Z");
+    expect(payload.todayJobs).toHaveLength(0);
+    expect(payload.tomorrowJobs.map((j) => j.id)).toEqual(
+        ["tmwFirst", "tmwLater"]);
+    expect(payload.todayDate).toBe("2026-07-08T04:00:00.000Z");
+    expect(payload.tomorrowDate).toBe("2026-07-09T04:00:00.000Z");
   });
 
-  test("no upcoming jobs yields a null nextJob", () => {
-    const payload = buildWidgetPayload([
-      appt("past", "2026-07-08T13:00:00.000Z"),
-    ], NOW);
-    expect(payload.nextJob).toBeNull();
-  });
-
-  test("cancelled and completed jobs are excluded", () => {
-    const payload = buildWidgetPayload([
+  test("empty / all-cancelled today rolls over at start of today", () => {
+    expect(buildWidgetPayload([], NOW).rolloverAt)
+        .toBe("2026-07-08T04:00:00.000Z");
+    const cancelled = buildWidgetPayload([
       appt("cxl", "2026-07-08T18:00:00.000Z", {status: "cancelled"}),
-      appt("cmp", "2026-07-08T19:00:00.000Z", {status: "completed"}),
     ], NOW);
-    expect(payload.jobs).toHaveLength(0);
-    expect(payload.nextJob).toBeNull();
+    expect(cancelled.rolloverAt).toBe("2026-07-08T04:00:00.000Z");
+    expect(cancelled.todayJobs).toHaveLength(0);
   });
 
   test("the today cutoff is Toronto midnight, not UTC", () => {
     // 23:00 Toronto today (03:00Z next day) is still today; 01:00 Toronto
-    // tomorrow (05:00Z) is not — it only surfaces as nextJob.
+    // tomorrow (05:00Z) is tomorrow.
     const payload = buildWidgetPayload([
       appt("tonight", "2026-07-09T03:00:00.000Z"),
       appt("after-midnight", "2026-07-09T05:00:00.000Z"),
     ], NOW);
-    expect(payload.jobs.map((j) => j.id)).toEqual(["tonight"]);
-    expect(payload.todayCount).toBe(1);
-    expect(payload.nextJob.id).toBe("tonight");
+    expect(payload.todayJobs.map((j) => j.id)).toEqual(["tonight"]);
+    expect(payload.tomorrowJobs.map((j) => j.id)).toEqual(["after-midnight"]);
   });
 
   test("locale is carried through", () => {
