@@ -60,6 +60,10 @@
 	<string>This app opens a pre-filled contact card so you can save a client to your phone contacts.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>This app uses Face ID to unlock the app lock you enabled in Settings.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Allowing location in the background keeps your time-to-leave alerts accurate even when the app is closed.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Your location tells you when it is time to leave for your next appointment.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app accesses your photo library to attach images to appointments and profiles.</string>
 	<key>UIApplicationSceneManifest</key>
@@ -87,6 +91,7 @@
 	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>location</string>
 		<string>remote-notification</string>
 	</array>
 	<key>UILaunchStoryboardName</key>

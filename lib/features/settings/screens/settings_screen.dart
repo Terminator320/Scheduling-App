@@ -26,6 +26,7 @@ import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
+import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/features/settings/application/app_info_provider.dart';
 import 'package:scheduling/features/settings/application/app_lock_provider.dart';
 import 'package:scheduling/features/settings/screens/text_size_screen.dart';
@@ -463,10 +464,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     if (_isSigningOut) return;
     setState(() => _isSigningOut = true);
     try {
-      // Best-effort: drop this device's push token before the session ends.
+      // Best-effort: drop this device's push token and live location before
+      // the session ends.
       await ref
           .read(pushRegistrationControllerProvider)
           .unregisterCurrentDevice();
+      await ref.read(presenceSyncControllerProvider).unregister();
       await ref.read(authServiceProvider).signOut();
     } catch (e, st) {
       // signOut clears local state and effectively never throws; if it does,
@@ -529,10 +532,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       await _deletionService.reauthenticateWithPassword(password);
       // Best-effort: drop this device's push token while still authenticated —
       // after deleteAccount removes the users doc the rules would reject the
-      // token delete, leaving an orphan fcmTokens doc behind.
+      // token delete, leaving an orphan fcmTokens doc behind. Also stop the
+      // location stream (the server's recursiveDelete removes the presence
+      // doc itself).
       await ref
           .read(pushRegistrationControllerProvider)
           .unregisterCurrentDevice();
+      await ref.read(presenceSyncControllerProvider).unregister();
       await _deletionService.deleteAccount();
     } on AuthFailure catch (e) {
       if (!mounted) return;

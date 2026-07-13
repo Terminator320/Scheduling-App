@@ -1,7 +1,7 @@
 # Travel-Time "Leave Now" Notifications — Implementation Plan
 
-**Status: PLANNED — approved design 2026-07-09, not started.**
-**Prerequisite: the push-notifications plan (`docs/plans/2026-07-08-push-notifications.md`) Phases 1–4 must be implemented first.**
+**Status: REVISED 2026-07-13 — v1 now ships with LIVE BACKGROUND GPS (design approved; supersedes the 2026-07-09 while-in-use-only design).**
+**Prerequisite: the push-notifications plan (`docs/plans/2026-07-08-push-notifications.md`) Phases 1–4 — implemented and deployed 2026-07-11. Met.**
 
 ## Context
 
@@ -11,11 +11,23 @@ computes drive time from the employee's location to their next job and pushes a
 
 ### Decisions made with the user (2026-07-09)
 
-- **Origin location:** last-known GPS captured *while the app is in use*
-  (when-in-use permission only), uploaded to Firestore. If stale → fall back to
-  the previous appointment's address; if neither → fall back to a fixed 30-min
-  reminder. **Live background GPS is a deferred future phase** — the
-  origin-decision seam (`decideOrigin`) is designed so it slots in later.
+- **Origin location (revised 2026-07-13):** **live background GPS.** A
+  geolocator background position stream keeps `users/{docId}/presence/location`
+  fresh while the app is foregrounded OR backgrounded/screen-off ("backgrounded
+  app" depth — tracking stops on force-quit/reboot until the next app open;
+  the survives-force-quit tier via paid plugins was explicitly rejected).
+  Employee control is the **OS location permission only** — no in-app toggle
+  (same philosophy as push). If presence is stale → fall back to the previous
+  appointment's address; if neither → fall back to a fixed 30-min reminder.
+  A while-in-use-only grant (iOS lets users downgrade) degrades gracefully:
+  the stream simply stops delivering in background and the fallback chain
+  covers it.
+- **Upload discipline (2026-07-13):** stream `distanceFilter: 250` m, uploads
+  throttled to ≥2 min apart, plus a **10-min heartbeat** re-upsert of the last
+  known position so a *stationary* employee's doc stays fresh — freshness means
+  "tracking is alive", not "recently moved". Server staleness window
+  `PRESENCE_STALE_MINUTES = 25` (two missed heartbeats + slack; stale now
+  reliably means tracking is dead, so the address fallback is correct).
 - **Delivery:** FCM push from a scheduled Cloud Function, built on the push plan.
 - **Travel time:** Google Routes API `computeRoutes` with traffic
   (`TRAFFIC_AWARE`), server-side only, same Secret Manager key as Places
@@ -62,9 +74,12 @@ employee (each pair in its own try/catch):
       `endTime > now` (they'll depart from *that* job, not from wherever they
       are now — critical for back-to-back bookings; marking the earlier job
       `done` makes it terminal, which promotes GPS below).
-   2. **Fresh GPS** — presence doc `updatedAt` ≤ 45 min old.
-   3. **Recently-ended previous appointment's address** — newest non-terminal→
-      ended job (non-empty address, `endTime` within the last 4 h).
+   2. **Fresh GPS** — presence doc `updatedAt` ≤ 25 min old (the background
+      stream's 10-min heartbeat keeps a live tracker well inside this).
+   3. **Recently-ended previous appointment's address** — newest job whose
+      `endTime` passed within the last 4 h, non-empty address, any status
+      except `cancelled` (a cancelled visit never happened; a `done` one did —
+      the employee was physically there).
    4. **null** → fixed 30-min fallback.
 
    Prongs 1 and 3 are served by ONE per-employee query
@@ -140,7 +155,7 @@ index (verified in `firestore.indexes.json`).
 (the `image_magic.js` / `signup_code_utils.js` jest convention).
 
 Constants: `BUFFER_MINUTES = 10`, `MAX_LEAD_MINUTES = 90`,
-`FALLBACK_LEAD_MINUTES = 30`, `PRESENCE_STALE_MINUTES = 45`,
+`FALLBACK_LEAD_MINUTES = 30`, `PRESENCE_STALE_MINUTES = 25`,
 `PREV_APPOINTMENT_LOOKBACK_HOURS = 4`.
 
 Exports:
@@ -148,12 +163,12 @@ Exports:
   `{kind:'gps', lat, lng} | {kind:'address', address} | null`.
   Priority: intervening appointment (non-terminal, `startTime <
   candidate.startTime`, `endTime > now`, non-empty address) → fresh GPS
-  (≤45 min) → recently-ended previous appointment (ended within 4 h) → null.
+  (≤25 min) → recently-ended previous appointment (ended within 4 h) → null.
   `employeeAppointments` is the one per-employee context query result
   (terminal filtering uses the same set as `_terminalStatuses`: done /
-  completed / cancelled). **This is the background-GPS seam** — a future phase
-  only changes what writes the presence doc and tightens
-  `PRESENCE_STALE_MINUTES`.
+  completed / cancelled). The origin seam absorbed the background-GPS upgrade
+  exactly as designed: only the presence writer (now a background stream) and
+  `PRESENCE_STALE_MINUTES` changed; nothing downstream moved.
 - `selectTravelCandidates(docs, now)` — status pending (+ legacy `confirmed`),
   `now < startTime <= now+90min`.
 - `computeLeadMinutes(travelSeconds)` — `min(ceil(s/60)+10, 90)`; `null` → 30.
@@ -215,20 +230,25 @@ Project `schedulingapp-88727`:
 
 No new secret; nothing enters `dev/.env` (server-side only per CLAUDE.md).
 
-### 4. Flutter — presence capture + upload
+### 4. Flutter — live background presence stream (revised 2026-07-13)
 
 **Package:** `geolocator: ^14.x` (`flutter pub add geolocator` — needs sandbox
 disabled on this box). Chosen over `permission_handler`'s location group
 (under SwiftPM there's no Podfile macro to strip unused permission groups;
-geolocator keeps location contained in the one plugin that declares it) and it
-provides `getLastKnownPosition`.
+geolocator keeps location contained in the one plugin that declares it), it
+provides `getPositionStream` with per-platform background settings, and
+`geolocator_apple` ships SwiftPM support (required — no Podfile).
 
 **New `lib/core/permissions/location_permission_service.dart`** — mirrors
 `MediaPermissionService`:
 `enum LocationPermissionResult {granted, denied, permanentlyDenied, servicesDisabled}`;
-`Future<LocationPermissionResult> ensureWhenInUse()` wrapping geolocator's
-`isLocationServiceEnabled()` + `checkPermission()` + `requestPermission()`;
-injectable function fields for tests; `locationPermissionServiceProvider`.
+`Future<LocationPermissionResult> ensureLocation()` wrapping geolocator's
+`isLocationServiceEnabled()` + `checkPermission()` + `requestPermission()`.
+With BOTH usage-description keys in Info.plist, iOS runs the provisional
+Always flow (user sees the while-in-use prompt; iOS confirms Always later),
+so `LocationPermission.whileInUse` AND `.always` both map to `granted` —
+while-in-use is a *working degraded mode* (no background delivery), never an
+error. Injectable function fields for tests; `locationPermissionServiceProvider`.
 
 **New `lib/features/presence/data/presence_repository.dart`** —
 `PresenceRepository(FirebaseFirestore, {AppLogger? logger})`:
@@ -239,40 +259,84 @@ injectable function fields for tests; `locationPermissionServiceProvider`.
 - `deleteLocation({userDocId})` — best-effort, called on sign-out (privacy: no
   stale coordinates after leaving).
 
-**New `lib/features/presence/application/presence_sync_controller.dart`:**
-- Pure top-level
-  `bool shouldUploadPresence({role, status, signedIn, lastUploadAt, now})` —
-  employee ∧ active ∧ signed-in ∧ (`lastUploadAt == null` ∨ ≥10 min elapsed).
-- `presenceSyncProvider` — gated exactly like the push plan's
-  `pushRegistrationProvider` (watches `currentUserDocProvider` +
-  `userRoleProvider` + `firebaseReadyProvider`; resolves own users doc id via
-  `findUserByUid`). Owns an `AppLifecycleListener(onResume: _maybeUpload)` plus
-  an initial upload on activation. `_maybeUpload`: pure-gate check →
-  `ensureWhenInUse()` → **silent no-op on denied/permanentlyDenied/servicesDisabled**
-  (the OS prompt appears once on first resume as an employee; never nag) →
-  `getCurrentPosition(LocationSettings(accuracy: medium, timeLimit: 10s))`,
-  falling back to `getLastKnownPosition()` on timeout → `upsertLocation`.
-  Admins: hard no-op, never prompted.
+**New `lib/features/presence/application/presence_sync_controller.dart`** —
+mirrors `PushRegistrationController` (provider + `sync()` driven from
+`main.dart`, `_busy`/`_pendingResync` reentrancy guard, gate re-checked every
+call):
+- Pure top-level helpers (unit-tested, no plugins):
+  - `bool shouldTrackPresence({required String role, required String status,
+    required bool signedIn})` — employee ∧ active ∧ signed-in. Admins: hard
+    no-op, never prompted. (Deliberately narrower than `shouldRegisterPush`,
+    which includes admins.)
+  - `bool shouldWritePresenceFix({required DateTime? lastUploadAt,
+    required DateTime now})` — `lastUploadAt == null` ∨ ≥2 min elapsed
+    (`minUploadGap`). Movement granularity itself comes from the stream's
+    250 m `distanceFilter`; this guards Firestore write volume on a highway.
+  - `bool shouldHeartbeat({required DateTime? lastUploadAt,
+    required DateTime now})` — lastUploadAt != null ∧ ≥10 min elapsed
+    (`heartbeatEvery`); the timer tick re-upserts the last known position so a
+    stationary employee stays fresh (their old coordinates are still correct).
+- `sync()`: gate fails → `_stop()` (cancel stream + heartbeat timer; keep the
+  presence doc — sign-out deletes it). Gate passes and stream already live for
+  this uid → no-op fast path. Otherwise: `ensureLocation()` → **silent no-op on
+  denied/permanentlyDenied/servicesDisabled** (the one OS prompt appears on
+  first activation as an employee; never nag) → resolve own users-doc id via
+  `findUserByUid` (as push does) → start:
+  - `Geolocator.getPositionStream(locationSettings: _settingsForPlatform())`
+    where iOS gets `AppleSettings(accuracy: LocationAccuracy.medium,
+    distanceFilter: 250, activityType: ActivityType.automotiveNavigation,
+    allowBackgroundLocationUpdates: true, showBackgroundLocationIndicator:
+    true, pauseLocationUpdatesAutomatically: true)` and Android gets
+    `AndroidSettings(accuracy: LocationAccuracy.medium, distanceFilter: 250,
+    foregroundNotificationConfig: ForegroundNotificationConfig(...))` — the
+    foreground-service notification is what keeps the stream alive in
+    background on Android (dev harness; text can be plain English, it never
+    ships).
+  - Platform branch uses `defaultTargetPlatform` (no BuildContext in a
+    controller; the `context.isCupertino` seam is for UI look, and this is
+    device capability — same rationale as `AddressMapLauncher`).
+  - Stream listener: keep `_lastPosition`; if `shouldWritePresenceFix` →
+    `upsertLocation` + stamp `_lastUploadAt`.
+  - `Timer.periodic(heartbeatEvery ~ 10 min)`: if stream alive ∧
+    `shouldHeartbeat` ∧ `_lastPosition != null` → re-upsert.
+  - Stream `onError`: `logger.warn('PRESENCE stream error', e, st)` + `_stop()`
+    (a revoked permission kills the stream); the next `sync()` (account-doc
+    emission or app resume) retries the whole gate.
+  - An `AppLifecycleListener(onResume:)` calls `sync()` — restarts a dead
+    stream after the user flips permission in system Settings, and pushes one
+    immediate fix on return to foreground.
+- `unregister()`: called from sign-out — `_stop()` + best-effort
+  `deleteLocation` (try/catch + `logger.warn`, never block sign-out).
 
-**Modify `lib/main.dart`** (`_PaulAppState`): activate `presenceSyncProvider`
-alongside `pushRegistrationProvider`. Sign-out path: best-effort
-`deleteLocation` next to the push plan's token unregister (try/catch +
-`logger.warn`, never block sign-out).
+**Modify `lib/main.dart`** (`_PaulAppState`): a `_listenForPresenceSync()`
+sibling of `_listenForPushRegistration()` — `ref.listen(currentUserDocProvider,
+… sync())` plus the same eager first `sync()` (relaunch-while-authed can beat
+the listener registration). Sign-out path: `presenceSyncControllerProvider`
+`.unregister()` next to `unregisterCurrentDevice()`.
 
 **Manifests:**
-- `android/app/src/main/AndroidManifest.xml`: add
-  `ACCESS_COARSE_LOCATION` + `ACCESS_FINE_LOCATION` (geolocator requires both
-  declared even for when-in-use).
-- `ios/Runner/Info.plist`: add `NSLocationWhenInUseUsageDescription` — "Your
-  location while using the app tells you when it's time to leave for your next
-  appointment." No background modes, no `NSLocationAlways*` keys.
+- `android/app/src/main/AndroidManifest.xml`: add `ACCESS_COARSE_LOCATION`,
+  `ACCESS_FINE_LOCATION`, `ACCESS_BACKGROUND_LOCATION` (Android 10+ background
+  delivery), and `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_LOCATION`
+  (Android 14 requires the typed foreground-service permission in the app
+  manifest for geolocator's service).
+- `ios/Runner/Info.plist`:
+  - `NSLocationWhenInUseUsageDescription` — "Your location tells you when it's
+    time to leave for your next appointment."
+  - `NSLocationAlwaysAndWhenInUseUsageDescription` — "Allowing location in the
+    background keeps your 'time to leave' alerts accurate even when the app is
+    closed."
+  - `UIBackgroundModes` gains `location` (array already exists with
+    `remote-notification`). This IS the Xcode "Background Modes → Location
+    updates" capability — authored here on Windows; nothing extra on the Mac
+    for it.
 
 ### 5. Tests
 
 **Jest — `functions/__tests__/travel_utils.test.js`:**
 - `decideOrigin` full chain + boundaries: intervening appointment beats fresh
   GPS; intervening marked `done`/`cancelled` is skipped (GPS takes over);
-  intervening with empty address skipped; fresh vs exactly-45-min presence;
+  intervening with empty address skipped; fresh vs exactly-25-min presence;
   previous-appointment filters (terminal-status handling, empty address
   skipped, outside 4-h lookback skipped, newest `endTime` wins); nothing →
   null.
@@ -291,14 +355,18 @@ alongside `pushRegistrationProvider`. Sign-out path: best-effort
 - `cd functions && npm run lint && npm test`.
 
 **Flutter — `test/features/presence/`:**
-- `shouldUploadPresence`: role/status/signed-in gating; throttle boundary
-  (9 min 59 s vs 10 min, injected `now`).
+- `shouldTrackPresence`: role/status/signed-in gating (admin excluded).
+- `shouldWritePresenceFix`: throttle boundary (1 min 59 s vs 2 min, injected
+  `now`); null `lastUploadAt` → true.
+- `shouldHeartbeat`: boundary at 10 min; null `lastUploadAt` → false.
 - `PresenceRepository` with mocktail-mocked Firestore (remember
   `(captured as Map).cast<String, dynamic>()`).
 - `LocationPermissionService` mapping with injected fakes
-  (servicesDisabled / denied / deniedForever / granted).
+  (servicesDisabled / denied / deniedForever / whileInUse→granted /
+  always→granted).
 - No plugin-channel tests for geolocator itself (same policy as
-  `ImagePickerService` — device verification instead).
+  `ImagePickerService` — device verification instead; the background stream is
+  device-only behavior).
 
 ## Failure guarantees
 
@@ -306,11 +374,14 @@ alongside `pushRegistrationProvider`. Sign-out path: best-effort
 |---|---|
 | Routes non-200 / transport throw / bad JSON / no route | null → 30-min fixed lead, plain `reminder` text |
 | Back-to-back jobs (earlier job still occupies the employee) | origin = that job's address, not GPS |
-| Presence doc absent or >45 min stale | recently-ended previous appointment's address |
+| Presence doc absent or >25 min stale | recently-ended previous appointment's address |
 | No intervening job, no fresh GPS, no recent previous job | 30-min fixed lead |
 | Appointment `address` empty | 30-min fixed lead; Routes never called |
 | One (appointment × employee) pair throws | caught + `logger.warn`, sweep continues |
 | Location permission denied on device | silent client no-op; server falls through the chain |
+| Permission downgraded to while-in-use | stream delivers only while foregrounded; presence goes stale in background → address fallback |
+| App force-quit / phone rebooted | stream dead until next app open (accepted depth); presence stale → address fallback |
+| Stream error (permission revoked mid-run) | `logger.warn` + stop; next `sync()` (resume / account emission) retries the gate |
 | Duplicate sends | ledger `create()` atomicity; no `retry: true` |
 
 ## Sequencing
@@ -336,8 +407,12 @@ alongside `pushRegistrationProvider`. Sign-out path: best-effort
 
 **On this Windows box (Android emulator/device):**
 - Emulator Extended Controls → Location → set a point ~20 min from a test
-  address. Employee sign-in → app resume → `users/{docId}/presence/location`
-  appears; second resume within 10 min → `updatedAt` unchanged (throttle).
+  address. Employee sign-in → `users/{docId}/presence/location` appears and
+  the geolocator foreground-service notification shows.
+- Background the app → move the emulator location >250 m → presence doc
+  updates without reopening the app (background stream). Two moves inside
+  2 min → one write (throttle). Leave it stationary >10 min → `updatedAt`
+  refreshes anyway (heartbeat).
 - Seed a pending appointment ~60 min out at a real address → push arrives at
   ≈ `startTime − travel − 10` (function logs show the computed duration), not
   at −30.
@@ -357,21 +432,29 @@ alongside `pushRegistrationProvider`. Sign-out path: best-effort
 - FR-locale device receives the French `leaveNow` text.
 
 **Needs the Mac** (append to `docs/plans/IOS_APP_STORE_HANDOFF.md`): iOS
-location permission prompt wording (Info.plist), real-device APNs delivery of
-the `leaveNow` push, **Time Sensitive Notifications capability** (Xcode →
-Signing & Capabilities; entitlement
-`com.apple.developer.usernotifications.time-sensitive`) so `leaveNow` breaks
-through Focus modes, and App Attest–gated presence writes on hardware. All
-other Xcode-side push work is already the push plan's Phase 6; this feature
-adds only the Info.plist key (authored on Windows).
+location permission prompt wording + the provisional-Always confirmation flow,
+background delivery on a real device (blue location indicator while
+backgrounded), real-device APNs delivery of the `leaveNow` push, **Time
+Sensitive Notifications capability** (Xcode → Signing & Capabilities;
+entitlement `com.apple.developer.usernotifications.time-sensitive`) so
+`leaveNow` breaks through Focus modes, and App Attest–gated presence writes on
+hardware. All other Xcode-side push work is already the push plan's Phase 6;
+this feature's Info.plist keys AND the location background mode are authored on
+Windows (UIBackgroundModes edit — no separate entitlement).
+
+**App Store submission items (user-owned, not code):** App Review note
+justifying Always + background location ("field employees receive 'time to
+leave' alerts computed from live drive time to their next appointment"); App
+Store Connect privacy form gains precise-location collection (linked to
+identity, not used for tracking); privacy policy gains a location clause.
 
 ## Future phase (explicitly out of scope for v1)
 
-- **Live background GPS:** `NSLocationAlwaysAndWhenInUse` + background modes +
-  App Store review justification + privacy policy update. Slots in behind
-  `decideOrigin` — only the presence writer and `PRESENCE_STALE_MINUTES`
-  change; nothing downstream moves.
-- **In-app "travel notifications" toggle:** would need a Firestore-backed
-  user-doc field (the server must read it); v1 follows the push plan — the OS
-  notification permission is the switch.
+- **Survives-force-quit tracking:** iOS significant-location-change relaunch /
+  the paid `flutter_background_geolocation` plugin. Rejected 2026-07-13 for v1
+  (hardest App Store justification, worst surveillance optics); the same
+  `decideOrigin` seam absorbs it if ever wanted.
+- **In-app "travel notifications" / background-location toggle:** decided
+  against 2026-07-13 — the OS location permission is the one switch (matches
+  the push plan's philosophy).
 - **`travelEstimates` cache** if the Maps bill ever warrants it.
