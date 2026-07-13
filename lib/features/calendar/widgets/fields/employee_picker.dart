@@ -90,16 +90,20 @@ class EmployeePicker extends StatelessWidget {
                           size: AvatarSize.xs,
                         ),
                         const SizedBox(width: AppSpacing.sp8),
-                        Text(
-                          employee.name.split(' ').first,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                            color: isSelected
-                                ? scheme.primary
-                                : scheme.onSurfaceVariant,
+                        Flexible(
+                          child: Text(
+                            employee.name.split(' ').first,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                              color: isSelected
+                                  ? scheme.primary
+                                  : scheme.onSurfaceVariant,
+                            ),
                           ),
                         ),
                       ],

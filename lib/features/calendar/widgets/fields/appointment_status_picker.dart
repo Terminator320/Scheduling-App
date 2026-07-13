@@ -35,8 +35,12 @@ class AppointmentStatusPicker extends StatelessWidget {
           child: GestureDetector(
             onTap: () => onChanged(s.raw),
             child: ConstrainedBox(
-              // Material 48px-ish minimum tap target.
-              constraints: const BoxConstraints(minHeight: 44),
+              // Material 48px-ish minimum tap target; cap width to the viewport
+              // so a long label at large text scale can't overflow the Wrap.
+              constraints: BoxConstraints(
+                minHeight: 44,
+                maxWidth: MediaQuery.sizeOf(context).width - AppSpacing.sp32,
+              ),
               child: Container(
                 alignment: Alignment.center,
                 padding: const EdgeInsets.symmetric(
@@ -55,6 +59,8 @@ class AppointmentStatusPicker extends StatelessWidget {
                 ),
                 child: Text(
                   label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.labelMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: isSelected

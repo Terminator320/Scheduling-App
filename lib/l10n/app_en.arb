@@ -173,6 +173,18 @@
   "@settings_previewText": {
     "description": "Preview text"
   },
+  "settings_previewApptTitle": "Appointment Title",
+  "@settings_previewApptTitle": {
+    "description": "Sample appointment title shown in the text-size preview card"
+  },
+  "settings_previewApptWhen": "Tuesday, May 12 - 9:00 - 9:45 AM",
+  "@settings_previewApptWhen": {
+    "description": "Sample appointment date/time shown in the text-size preview card"
+  },
+  "settings_previewApptContact": "Sarah Johnson - 514-555-0101",
+  "@settings_previewApptContact": {
+    "description": "Sample client name and phone shown in the text-size preview card"
+  },
   "settings_darkMode": "Dark Mode",
   "@settings_darkMode": {
     "description": "Dark Mode"
