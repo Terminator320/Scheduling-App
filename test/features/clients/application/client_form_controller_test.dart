@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/features/clients/application/client_form_controller.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/data/contact_link_store.dart';
@@ -41,10 +44,24 @@ void main() {
       overrides: [
         clientsRepositoryProvider.overrideWithValue(repo),
         contactLinkStoreProvider.overrideWithValue(linkStore),
+        // Deterministic online by default; the offline tests build their own.
+        isOfflineProvider.overrideWithValue(false),
       ],
     );
     addTearDown(container.dispose);
   });
+
+  ClientFormController offlineNotifier() {
+    final offline = ProviderContainer(
+      overrides: [
+        clientsRepositoryProvider.overrideWithValue(repo),
+        contactLinkStoreProvider.overrideWithValue(linkStore),
+        isOfflineProvider.overrideWithValue(true),
+      ],
+    );
+    addTearDown(offline.dispose);
+    return offline.read(clientFormControllerProvider.notifier);
+  }
 
   ClientFormController notifier() =>
       container.read(clientFormControllerProvider.notifier);
@@ -81,6 +98,15 @@ void main() {
       expect(outcome, isA<ClientSaveFailed>());
       expect(refreshCount(), 0);
       expect(activity().isSaving, isFalse);
+    });
+
+    test('offline fails fast without touching the repo', () async {
+      final outcome = await offlineNotifier().addClient(_client);
+
+      expect(outcome, isA<ClientSaveFailed>());
+      expect((outcome as ClientSaveFailed).error, isA<SocketException>());
+      verifyNever(() => repo.addClient(any()));
+      expect(refreshCount(), 0);
     });
   });
 
@@ -119,6 +145,16 @@ void main() {
       expect(refreshCount(), 0);
       verifyNever(() => linkStore.contactIdFor(any()));
       expect(activity().isSaving, isFalse);
+    });
+
+    test('offline fails fast without touching the repo', () async {
+      final outcome = await offlineNotifier().updateClient(_client);
+
+      expect(outcome, isA<ClientSaveFailed>());
+      expect((outcome as ClientSaveFailed).error, isA<SocketException>());
+      verifyNever(() => repo.updateClient(any()));
+      verifyNever(() => linkStore.contactIdFor(any()));
+      expect(refreshCount(), 0);
     });
   });
 

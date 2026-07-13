@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
@@ -18,7 +19,9 @@ import 'package:scheduling/features/employees/domain/models/employee_record.dart
 part 'add_event_controller.freezed.dart';
 
 @freezed
-abstract class AddEventState with _$AddEventState implements AppointmentFormFields {
+abstract class AddEventState
+    with _$AddEventState
+    implements AppointmentFormFields {
   const factory AddEventState({
     DateTime? selectedDate,
     TimeOfDay? selectedStartTime,
@@ -165,6 +168,13 @@ class AddEventController extends Notifier<AddEventState>
     );
     state = state.copyWith(errors: errors);
     if (errors.isNotEmpty) return const AddEventInvalid();
+
+    // Fail fast offline (before isSubmitting is set): an awaited Firestore write
+    // resolves only on server ack, so the Save button would otherwise spin until
+    // reconnect. The sheet maps this SocketException to the offline notice.
+    if (ref.read(isOfflineProvider)) {
+      return const AddEventFailed(SocketException('offline'));
+    }
 
     final start = combineDateAndTime(
       state.selectedDate!,

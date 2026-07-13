@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/images/image_storage_service.dart';
 import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
@@ -113,6 +116,8 @@ void main() {
               employeesRepositoryProvider.overrideWithValue(employees),
               appointmentImageUploadProvider.overrideWithValue(uploader),
               imageStorageProvider.overrideWithValue(storage),
+              // Deterministic online by default; the offline test builds its own.
+              isOfflineProvider.overrideWithValue(false),
             ],
           )
           // Keep the provider alive across reads so autoDispose doesn't tear
@@ -783,6 +788,42 @@ void main() {
         );
         expect(outcome, isA<EventDetailsFailed>());
         expect(readState().isSaving, isFalse);
+      },
+    );
+
+    test(
+      'offline fails fast without touching the repo or the busy flag',
+      () async {
+        final key = EventDetailsKey(_appointment);
+        final offline = ProviderContainer(
+          overrides: [
+            appointmentsRepositoryProvider.overrideWithValue(appointments),
+            clientsRepositoryProvider.overrideWithValue(clients),
+            employeesRepositoryProvider.overrideWithValue(employees),
+            appointmentImageUploadProvider.overrideWithValue(uploader),
+            imageStorageProvider.overrideWithValue(storage),
+            isOfflineProvider.overrideWithValue(true),
+          ],
+        )..listen(eventDetailsControllerProvider(key), (_, _) {});
+        addTearDown(offline.dispose);
+
+        final outcome = await offline
+            .read(eventDetailsControllerProvider(key).notifier)
+            .save(
+              _appointment,
+              title: 'x',
+              address: 'y',
+              notes: '',
+              materialsNeeded: '',
+            );
+
+        expect(outcome, isA<EventDetailsFailed>());
+        expect((outcome as EventDetailsFailed).error, isA<SocketException>());
+        verifyNever(() => appointments.updateAppointment(any()));
+        expect(
+          offline.read(eventDetailsControllerProvider(key)).isSaving,
+          isFalse,
+        );
       },
     );
   });

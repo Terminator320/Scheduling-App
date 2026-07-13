@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/contact_export_launcher.dart';
@@ -77,6 +80,12 @@ class ClientFormController extends Notifier<ClientFormActivity> {
   /// after the add sheet pops — a lingering `isSaving` would brick the next
   /// add/edit. The sheet pops in the same frame, so no double-tap window opens.
   Future<ClientSaveOutcome> addClient(ClientRecord client) async {
+    // Fail fast offline: an awaited Firestore write resolves only on server ack,
+    // so the Save button would otherwise spin until reconnect. The add sheet
+    // maps this SocketException to the offline notice (CLI-ADD).
+    if (ref.read(isOfflineProvider)) {
+      return const ClientSaveFailed(SocketException('offline'));
+    }
     // Resolve dependencies before the first await: the sheet can be dismissed
     // mid-save, and using the Ref of a disposed notifier throws in Riverpod 3.
     final repo = ref.read(clientsRepositoryProvider);
@@ -99,6 +108,10 @@ class ClientFormController extends Notifier<ClientFormActivity> {
   /// saved as (no-op unless it was saved on this device; best-effort — never
   /// blocks or fails the save).
   Future<ClientSaveOutcome> updateClient(ClientRecord client) async {
+    // Fail fast offline — see addClient. The edit form maps this to CLI-SAVE.
+    if (ref.read(isOfflineProvider)) {
+      return const ClientSaveFailed(SocketException('offline'));
+    }
     // Resolved before the first await — see addClient.
     final repo = ref.read(clientsRepositoryProvider);
     final refresh = ref.read(clientsRefreshProvider.notifier);

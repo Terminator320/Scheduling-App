@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
@@ -355,6 +356,13 @@ class EventDetailsController extends Notifier<EventDetailsState>
     // (which would double-write a series rewrite). The Save button and its
     // call-site guard both read state.isSaving.
     if (state.isSaving) return const EventDetailsInvalid();
+
+    // Fail fast offline (before isSaving is set): an awaited Firestore write
+    // resolves only on server ack, so the Save button would otherwise spin until
+    // reconnect. The edit body maps this SocketException to the offline notice.
+    if (ref.read(isOfflineProvider)) {
+      return EventDetailsFailed(const SocketException('offline'));
+    }
     state = state.copyWith(isSaving: true);
 
     // Resolve dependencies before the first await: the sheet can be dismissed
