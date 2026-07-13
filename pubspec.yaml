@@ -84,6 +84,8 @@ dependencies:
 
   # Network reachability (app-wide offline banner)
   connectivity_plus: ^7.2.0
+  # On-device speech recognition (dictation mic on notes fields)
+  speech_to_text: ^7.0.0
   firebase_messaging: ^16.4.1
   home_widget: ^0.9.3
 
