@@ -10,6 +10,30 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.31.0+50] - 2026-07-13
+### Added
+- **Drive a whole day's jobs as one route.** Open a day's schedule to see every
+  stop numbered in start-time order, then hand the full run off to Google Maps
+  as a multi-stop driving route with one tap. Admins can switch between the
+  employees who have jobs that day; each person sees their own route.
+
+### Changed
+- **The app now handles going offline gracefully.** Photos you attach to a
+  visit no longer vanish if you lose signal mid-upload — they're kept and
+  uploaded automatically the moment you reconnect or next sign in. Saving an
+  appointment or client while offline now tells you right away instead of
+  leaving the Save button spinning.
+
+### Fixed
+- **Text no longer overflows at large text sizes.** The calendar's month bar
+  and the employee and status chips stay tidy when you crank up the system
+  font size.
+- **The text-size preview reads in French.** The sample text on the text-size
+  screen now follows your app language instead of always showing English.
+- **The home-screen widget no longer flickers empty after sign-in.** A brief
+  hiccup right after signing in can no longer momentarily blank the iPhone
+  widget.
+
 ## [1.30.0+49] - 2026-07-13
 ### Added
 - **Manage notifications from Settings.** Settings now has a Notifications row

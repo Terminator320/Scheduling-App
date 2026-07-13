@@ -2,7 +2,7 @@ name: scheduling
 description: "ES Pro — appointment, client, and employee scheduling."
 publish_to: 'none'
 
-version: 1.30.0+49
+version: 1.31.0+50
 
 environment:
   sdk: ^3.10.7
@@ -84,8 +84,6 @@ dependencies:
 
   # Network reachability (app-wide offline banner)
   connectivity_plus: ^7.2.0
-  # On-device speech recognition (dictation mic on notes fields)
-  speech_to_text: ^7.0.0
   firebase_messaging: ^16.4.1
   home_widget: ^0.9.3
 

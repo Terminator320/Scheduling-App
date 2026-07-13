@@ -19,10 +19,11 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
+import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-/// Statuses whose jobs are still "to drive to" — numbered on the timeline and
-/// included in the launched multi-stop route. `confirmed` is a legacy alias.
-const _openStatuses = {'pending', 'in_progress', 'confirmed'};
+/// A job is still "to drive to" (numbered on the timeline and included in the
+/// launched multi-stop route) while its status is non-terminal.
+bool _isOpen(String status) => !AppointmentStatus.fromRaw(status).isTerminal;
 
 /// A day's jobs as a numbered route timeline, with per-stop navigation and a
 /// pinned multi-stop Google Maps hand-off. Admins pick which employee to view.
@@ -111,29 +112,15 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     // Admins read the whole day (admin rule) so the picker can list only the
     // employees who actually have a job that day, and so switching assignees
     // needs no second query. Employees read just their own visible jobs.
-    final async = widget.isAdmin
-        ? ref.watch(appointmentsInRangeProvider(range))
-        : ref.watch(
-            myAppointmentsProvider((
-              employeeId: widget.employeeId,
-              range: range,
-            )),
-          );
-    if (widget.isAdmin) {
-      ref.listen(
-        appointmentsInRangeProvider(range),
-        _onAppointmentsAsyncChange,
-      );
-    } else {
-      ref.listen(
-        myAppointmentsProvider((employeeId: widget.employeeId, range: range)),
-        _onAppointmentsAsyncChange,
-      );
-    }
+    final provider = widget.isAdmin
+        ? appointmentsInRangeProvider(range)
+        : myAppointmentsProvider((employeeId: widget.employeeId, range: range));
+    final async = ref.watch(provider);
+    ref.listen(provider, _onAppointmentsAsyncChange);
 
     final dayAppointments =
         (async.value ?? const <AppointmentRecord>[])
-            .where((a) => a.status != 'cancelled')
+            .where((a) => !AppointmentStatus.fromRaw(a.status).isCancelled)
             .toList()
           // The range query already returns startTime order; sort defensively so
           // numbering and the launched route stay in driving order regardless.
@@ -158,8 +145,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
         : dayAppointments;
     final stops = jobs
         .where(
-          (a) =>
-              _openStatuses.contains(a.status) && a.address.trim().isNotEmpty,
+          (a) => _isOpen(a.status) && a.address.trim().isNotEmpty,
         )
         .map((a) => a.address)
         .toList();
@@ -339,7 +325,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     final numbers = <int?>[];
     var open = 0;
     for (final j in jobs) {
-      numbers.add(_openStatuses.contains(j.status) ? ++open : null);
+      numbers.add(_isOpen(j.status) ? ++open : null);
     }
     final empColor =
         ref.watch(employeeColorMapProvider)[employeeId] ??

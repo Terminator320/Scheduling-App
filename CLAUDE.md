@@ -93,6 +93,27 @@ the iOS `FirebaseOptions`). Android also needs `google-services.json`.
   uploads. `ImageCompressService` was removed — don't reintroduce a second
   compression pass. Background dispatch via `AppointmentImageUploadService`
   after appointment save; the picker's temp files are deleted in a `finally`.
+- **Offline photo-upload queue:** a failed/incomplete photo batch is persisted
+  by `PendingUploadStore` (one JSON list under the SharedPreferences key
+  `pending_photo_uploads`, entries pruned after 7 days) so uploads survive
+  going offline. `AppointmentImageUploadService.drainPending()` retries the
+  queue — it's reentrancy-guarded (`_draining`), re-queues only the *unsent*
+  paths on a transient failure (preserving `enqueuedAtMs` so a batch can't
+  retry past the prune window), and `arrayUnion`-appends uploaded pictures so a
+  concurrent edit or the batch's other half never clobbers them. `main.dart`
+  drives the drain on the offline→online flip AND when the account doc first
+  arrives (Storage rules need an authed user — a signed-out drain just
+  re-queues). Method-channel plugin — device-only verification.
+- **Offline write guard:** the appointment/client submit controllers
+  (`add_event`, `event_details`, `client_form`) fail fast when
+  `ref.read(isOfflineProvider)` is true by returning a fabricated
+  `SocketException('offline')` **before** the in-flight flag is set; the widget
+  maps it to the offline notice via `composeErrorNotice`/`error_cause.dart`
+  (which keys on the `SocketException` *type*, so the message string is cosmetic).
+  An awaited Firestore write only resolves on server ack, so without this Save
+  spins until reconnect. Deliberate asymmetry: entity writes fail fast offline
+  while photos retry via the queue above. `persistenceEnabled: true` is pinned in
+  `main()` (serves cached reads) — don't remove it.
 - **App Check:** `FirebaseAppCheck.instance.activate()` in `main()`. Do not remove.
 - **Appointment status allowlist:** The lifecycle is `pending` →
   `in_progress` → `done`, plus `cancelled` (set by the separate Cancel action).
@@ -277,19 +298,6 @@ the iOS `FirebaseOptions`). Android also needs `google-services.json`.
 - Text-field length caps live in `lib/core/validators/text_limits.dart`.
   Use the constants via `LabeledTextField(maxLength: TextLimits.x)` —
   don't hardcode integer caps at call sites.
-- **Speech dictation** goes through `DictationService`
-  (`lib/core/speech/dictation_service.dart`) — never call `speech_to_text`
-  directly from UI. The mic is opt-in via `LabeledTextField(enableDictation:
-  true)`, which adds `DictationMicButton` to the suffix (beside the clear "x")
-  and a transient `DictationListeningBar` (waveform + Stop) below the field
-  while listening. Currently enabled only on appointment Notes + Materials.
-  `DictationService` holds a single active session (starting a new one cancels
-  the old and fires its `onSessionEnded`); partial results replay against the
-  caret snapshot via the pure `mergeDictation` (`dictation_text_merge.dart`,
-  respects `maxLength`). Permission is gated by
-  `MediaPermissionService.ensureMicrophone()` (mic + iOS speech recognition);
-  failures surface via `NoticeService`. Method-channel plugin — device-only
-  verification, same as `ImagePickerService`.
 - `StatusChip` internally caps user text scaling at 1.3×. Never wrap a
   `StatusChip` call site in `MediaQuery(textScaler: noScaling)` — the
   chip handles it.

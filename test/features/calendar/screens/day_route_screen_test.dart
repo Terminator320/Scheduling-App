@@ -41,7 +41,6 @@ AppointmentRecord _job({
 Widget _wrap({
   required List<AppointmentRecord> jobs,
   List<EmployeeRecord> employees = const [_jane],
-  bool isAdmin = false,
   double textScale = 1,
 }) {
   return ProviderScope(

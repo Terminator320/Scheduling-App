@@ -361,7 +361,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     // resolves only on server ack, so the Save button would otherwise spin until
     // reconnect. The edit body maps this SocketException to the offline notice.
     if (ref.read(isOfflineProvider)) {
-      return EventDetailsFailed(const SocketException('offline'));
+      return const EventDetailsFailed(SocketException('offline'));
     }
     state = state.copyWith(isSaving: true);
 

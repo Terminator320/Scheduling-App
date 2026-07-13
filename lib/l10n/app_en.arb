@@ -108,22 +108,6 @@
   "@common_clearText": {
     "description": "Tooltip on the x button that empties a text field"
   },
-  "common_dictate": "Dictate",
-  "@common_dictate": {
-    "description": "Tooltip on the microphone button that starts voice dictation into a text field"
-  },
-  "common_stopDictation": "Stop dictation",
-  "@common_stopDictation": {
-    "description": "Tooltip on the microphone button while dictation is actively listening"
-  },
-  "common_listening": "Listening…",
-  "@common_listening": {
-    "description": "Label on the live dictation bar shown while the microphone is capturing speech"
-  },
-  "common_stop": "Stop",
-  "@common_stop": {
-    "description": "Button on the live dictation bar that stops the active dictation"
-  },
   "clients_clearAddress": "Clear address",
   "@clients_clearAddress": {
     "description": "Button that empties every field of the client address block at once"
@@ -853,18 +837,6 @@
   "error_cameraPermissionPermanentlyDenied": "Camera access is off. Enable it in Settings to take photos.",
   "@error_cameraPermissionPermanentlyDenied": {
     "description": "Shown when the camera permission is permanently denied and must be enabled in system settings"
-  },
-  "error_microphonePermissionDenied": "Microphone access is needed to dictate.",
-  "@error_microphonePermissionDenied": {
-    "description": "Shown when the microphone permission request is denied"
-  },
-  "error_microphonePermissionPermanentlyDenied": "Enable microphone access in Settings to use dictation.",
-  "@error_microphonePermissionPermanentlyDenied": {
-    "description": "Shown when the microphone permission is permanently denied and must be enabled from system settings"
-  },
-  "error_dictationUnavailable": "Dictation is not available on this device.",
-  "@error_dictationUnavailable": {
-    "description": "Shown when the device speech recognizer fails to initialize or start"
   },
   "validation_pleaseEnterYourEmail": "Please enter your email",
   "@validation_pleaseEnterYourEmail": {
