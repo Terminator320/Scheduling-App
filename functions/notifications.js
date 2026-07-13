@@ -17,10 +17,11 @@ const {getMessaging} = require("firebase-admin/messaging");
 
 const {
   handleAppointmentWrite,
-  runReminderSweep,
   runDailyDigest,
   runOverduePromptSweep,
 } = require("./notification_utils");
+const {runTravelAwareReminderSweep} = require("./travel_utils");
+const {GOOGLE_MAP_API_KEY} = require("./places");
 
 /**
  * Real injected deps for the orchestration functions.
@@ -54,18 +55,35 @@ const notifyAppointmentChanges = onDocumentWritten(
     },
 );
 
-// 30-minute reminders. Runs every 5 minutes; the `(status, startTime)`
-// composite index already covers the query — no new index. First run after a
-// job enters the window fires (~25-30 min out); the ledger makes it fire
-// exactly once, and a missed run self-heals without double-sending.
+// Travel-aware "time to leave" reminders (was: fixed 30-minute reminders).
+// Runs every 5 minutes; the `(status, startTime)` composite index covers the
+// candidate query and `(employeeIds CONTAINS, endTime ASC, startTime ASC)`
+// covers the per-employee origin-context query — no new index. Drive time
+// comes from Routes API computeRoutes (TRAFFIC_AWARE); every failure path
+// degrades to the original fixed 30-min reminder. The per-recipient ledger
+// makes each (occurrence, employee) fire exactly once, and a missed run
+// self-heals without double-sending.
 const sendUpcomingJobReminders = onSchedule(
     {
       schedule: "every 5 minutes",
       timeZone: "America/Toronto",
       maxInstances: 1,
+      secrets: [GOOGLE_MAP_API_KEY],
+      // Serial pairs, each with up to one Routes round-trip.
+      timeoutSeconds: 120,
     },
     async () => {
-      await runReminderSweep(liveDeps());
+      try {
+        await runTravelAwareReminderSweep({
+          ...liveDeps(),
+          fetchImpl: fetch,
+          apiKey: GOOGLE_MAP_API_KEY.value().trim(),
+        });
+      } catch (err) {
+        // Log rather than rethrow: a retried sweep would re-pay Routes for
+        // pairs already claimed; the next 5-min run self-heals anyway.
+        logger.error("sendUpcomingJobReminders failed", {err});
+      }
     },
 );
 

@@ -259,6 +259,25 @@ describe("buildNotificationMessage", () => {
     expect(en.body).toContain("Client");
   });
 
+  test("leaveNow EN/FR carry the drive time and address", () => {
+    const travelCtx = {...ctx, travelMinutes: 25};
+    const en = buildNotificationMessage("leaveNow", travelCtx, "en");
+    const fr = buildNotificationMessage("leaveNow", travelCtx, "fr");
+    expect(en.title).toBe("Time to leave — Alice at 2:30 p.m.");
+    expect(en.body).toBe("About 25 min drive · 123 Main St");
+    expect(fr.title).toBe("C'est l'heure de partir — Alice à 14 h 30");
+    expect(fr.body).toBe("Environ 25 min de route · 123 Main St");
+  });
+
+  test("leaveNow omits a blank address", () => {
+    const en = buildNotificationMessage(
+        "leaveNow",
+        {...ctx, address: " ", travelMinutes: 25},
+        "en",
+    );
+    expect(en.body).toBe("About 25 min drive");
+  });
+
   test("doneCheck EN/FR nudges to update the status", () => {
     const en = buildNotificationMessage("doneCheck", ctx, "en");
     const fr = buildNotificationMessage("doneCheck", ctx, "fr");

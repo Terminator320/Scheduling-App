@@ -178,6 +178,29 @@ service cloud.firestore {
           && (!('updatedAt' in request.resource.data.keys())
               || request.resource.data.updatedAt is timestamp);
       }
+
+      // Live-location presence (travel-time "leave now" reminders). Strictly
+      // self-only: peers and admins read nothing client-side — the reminder
+      // sweep reads it via the Admin SDK. `updatedAt == request.time` forces
+      // FieldValue.serverTimestamp(), so a client can't post a future
+      // timestamp to make a stale location look fresh. (An employee spoofing
+      // their own coordinates only games their own reminder — accepted.)
+      match /presence/{presenceId} {
+        allow read, delete: if isActiveUser() && myDocId() == userId;
+        allow create, update: if isActiveUser()
+          && myDocId() == userId
+          && presenceId == 'location'
+          && request.resource.data.keys().hasOnly(
+              ['lat', 'lng', 'updatedAt', 'uid'])
+          && request.resource.data.lat is number
+          && request.resource.data.lat >= -90
+          && request.resource.data.lat <= 90
+          && request.resource.data.lng is number
+          && request.resource.data.lng >= -180
+          && request.resource.data.lng <= 180
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.uid == request.auth.uid;
+      }
     }
 
     // ── appointments ──────────────────────────────────────────────────────────

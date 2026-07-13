@@ -41,6 +41,7 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
+import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/features/onboarding/screens/onboarding_gate.dart';
 import 'package:scheduling/features/settings/application/settings_providers.dart';
 import 'package:scheduling/features/settings/data/shared_prefs_settings_repository.dart';
@@ -378,6 +379,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
       await ref
           .read(pushRegistrationControllerProvider)
           .unregisterCurrentDevice();
+      await ref.read(presenceSyncControllerProvider).unregister();
       await ref.read(authServiceProvider).signOut();
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -426,6 +428,19 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     // token registration). Harmless when the doc isn't ready yet — the gate
     // returns early and the listener above catches the later emission.
     unawaited(ref.read(pushRegistrationControllerProvider).sync());
+  }
+
+  void _listenForPresenceSync() {
+    // Starts/stops the background location stream that feeds the travel-time
+    // "leave now" reminders — active employees only (admins are never
+    // tracked). Same emission-driven shape as push registration above.
+    ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
+      prev,
+      next,
+    ) {
+      unawaited(ref.read(presenceSyncControllerProvider).sync());
+    });
+    unawaited(ref.read(presenceSyncControllerProvider).sync());
   }
 
   void _listenForWidgetSync() {
@@ -528,6 +543,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _listenForRoleRevocation();
     _listenForDeletedAccount();
     _listenForPushRegistration();
+    _listenForPresenceSync();
     _listenForWidgetSync();
     _listenForUploadDrain();
     return AppLanguageScope(

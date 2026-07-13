@@ -300,6 +300,14 @@ const _MESSAGES = {
         body: addr ? `${base} · ${addr}` : base,
       };
     },
+    leaveNow: (c, who) => {
+      const addr = (c.address || "").trim();
+      const drive = `About ${c.travelMinutes} min drive`;
+      return {
+        title: `Time to leave — ${who} at ${_timeOnly("en", c.startTime)}`,
+        body: addr ? `${drive} · ${addr}` : drive,
+      };
+    },
     doneCheck: (c, who) => ({
       title: "Job finished?",
       body: `Is the job for ${who} done yet? Open the app to update its ` +
@@ -336,6 +344,15 @@ const _MESSAGES = {
       return {
         title: "Visite à venir",
         body: addr ? `${base} · ${addr}` : base,
+      };
+    },
+    leaveNow: (c, who) => {
+      const addr = (c.address || "").trim();
+      const drive = `Environ ${c.travelMinutes} min de route`;
+      return {
+        title: `C'est l'heure de partir — ${who} à ` +
+            `${_timeOnly("fr", c.startTime)}`,
+        body: addr ? `${drive} · ${addr}` : drive,
       };
     },
     doneCheck: (c, who) => ({
@@ -636,6 +653,13 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
     // handler; the visible alert still shows alongside it.
     if (typeof msgData.widgetPayload === "string" && msgData.widgetPayload) {
       aps["content-available"] = 1;
+    }
+    // A departure alert is useless buried in a Focus-mode summary. Needs the
+    // Time Sensitive Notifications entitlement on the Xcode side; until that
+    // lands iOS silently downgrades it to `active` (safe to ship
+    // server-first). Other kinds keep the default level.
+    if (msgData.kind === "leaveNow") {
+      aps["interruption-level"] = "time-sensitive";
     }
     return {
       token: doc.id,
@@ -1026,6 +1050,7 @@ module.exports = {
   isStaleTokenError,
   isAlreadyExists,
   sendToEmployee,
+  deliverRecipientOnce: _deliverRecipientOnce,
   fetchEmployeeWidgetWindow,
   handleAppointmentWrite,
   runReminderSweep,

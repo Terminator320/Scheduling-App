@@ -225,4 +225,6 @@ const placesGetDetails = onCall(
     },
 );
 
-module.exports = {placesAutocomplete, placesGetDetails};
+// The secret param is shared with the travel-aware reminder sweep
+// (notifications.js) — defining the same param twice would collide.
+module.exports = {placesAutocomplete, placesGetDetails, GOOGLE_MAP_API_KEY};

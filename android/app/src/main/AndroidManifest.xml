@@ -11,6 +11,15 @@
     <!-- Android 13+ push-notification permission (FCM). Requested at runtime
          via firebase_messaging's requestPermission(). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Live background GPS for travel-time "leave now" reminders (geolocator).
+         Requested at runtime; background delivery rides geolocator's
+         foreground service, which Android 14+ requires the app itself to
+         declare the typed foreground-service permission for. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
     <!-- enableOnBackInvokedCallback opts into Android 13+ predictive back
          (system back-gesture preview animation); Flutter handles it natively. -->
     <application
