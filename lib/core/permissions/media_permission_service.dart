@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -18,6 +20,21 @@ class MediaPermissionService {
     }
     if (status.isPermanentlyDenied || status.isRestricted) {
       return MediaPermissionResult.permanentlyDenied;
+    }
+    return MediaPermissionResult.denied;
+  }
+
+  /// Microphone + (iOS-only) speech recognition, gated for dictation.
+  Future<MediaPermissionResult> ensureMicrophone() async {
+    final results = <PermissionStatus>[await Permission.microphone.request()];
+    if (Platform.isIOS) {
+      results.add(await Permission.speech.request());
+    }
+    if (results.any((s) => s.isPermanentlyDenied || s.isRestricted)) {
+      return MediaPermissionResult.permanentlyDenied;
+    }
+    if (results.every((s) => s.isGranted || s.isLimited)) {
+      return MediaPermissionResult.granted;
     }
     return MediaPermissionResult.denied;
   }
