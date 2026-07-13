@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
+import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/constants/app_urls.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/launchers/web_url_launcher.dart';
@@ -481,6 +483,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Future<void> _confirmDeleteAccount() async {
     if (_isDeletingAccount) return;
+    // Fail fast offline: the deleteAccount callable would otherwise hang ~30 s.
+    if (ref.read(isOfflineProvider)) {
+      ref
+          .read(noticeServiceProvider)
+          .error(
+            composeErrorNotice(
+              context,
+              intro: context.l10n.error_introDeleteAccount,
+              tag: 'ACCT-DEL',
+              error: const SocketException('offline'),
+            ),
+          );
+      return;
+    }
     final result = await showConfirmDialog(
       context,
       title: context.l10n.settings_deleteAccountConfirmTitle,

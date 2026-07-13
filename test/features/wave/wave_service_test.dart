@@ -22,7 +22,12 @@ void main() {
   late WaveService service;
 
   void bind(String name) {
-    when(() => functions.httpsCallable(name)).thenReturn(callable);
+    when(
+      () => functions.httpsCallable(
+        any(that: equals(name)),
+        options: any(named: 'options'),
+      ),
+    ).thenReturn(callable);
   }
 
   setUp(() {

@@ -27,10 +27,12 @@ class GooglePlacesRepository implements PlacesRepository {
 
     final HttpsCallableResult<dynamic> result;
     try {
-      result = await _functions.httpsCallable('placesAutocomplete').call({
-        'input': stripped,
-        'sessionToken': sessionToken,
-      });
+      result = await _functions
+          .httpsCallable(
+            'placesAutocomplete',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 10)),
+          )
+          .call({'input': stripped, 'sessionToken': sessionToken});
     } catch (e, st) {
       _logger.warn('placesAutocomplete callable failed', e, st);
       throw MapsErrorMapper.map(e, st);
@@ -57,10 +59,12 @@ class GooglePlacesRepository implements PlacesRepository {
   }) async {
     final HttpsCallableResult<dynamic> result;
     try {
-      result = await _functions.httpsCallable('placesGetDetails').call({
-        'placeId': placeId,
-        'sessionToken': sessionToken,
-      });
+      result = await _functions
+          .httpsCallable(
+            'placesGetDetails',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 10)),
+          )
+          .call({'placeId': placeId, 'sessionToken': sessionToken});
     } catch (e, st) {
       _logger.warn('placesGetDetails callable failed', e, st);
       throw MapsErrorMapper.map(e, st);

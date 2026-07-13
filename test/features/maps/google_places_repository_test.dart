@@ -28,9 +28,17 @@ void main() {
     autocomplete = _MockCallable();
     details = _MockCallable();
     when(
-      () => functions.httpsCallable('placesAutocomplete'),
+      () => functions.httpsCallable(
+        any(that: equals('placesAutocomplete')),
+        options: any(named: 'options'),
+      ),
     ).thenReturn(autocomplete);
-    when(() => functions.httpsCallable('placesGetDetails')).thenReturn(details);
+    when(
+      () => functions.httpsCallable(
+        any(that: equals('placesGetDetails')),
+        options: any(named: 'options'),
+      ),
+    ).thenReturn(details);
     repo = GooglePlacesRepository(functions: functions);
   });
 

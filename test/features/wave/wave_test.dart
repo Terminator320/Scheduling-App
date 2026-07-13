@@ -243,13 +243,22 @@ void main() {
       importCallable = _MockCallable();
       getConnectionCallable = _MockCallable();
       when(
-        () => functions.httpsCallable('waveBootstrap'),
+        () => functions.httpsCallable(
+          any(that: equals('waveBootstrap')),
+          options: any(named: 'options'),
+        ),
       ).thenReturn(bootstrapCallable);
       when(
-        () => functions.httpsCallable('waveImportCustomers'),
+        () => functions.httpsCallable(
+          any(that: equals('waveImportCustomers')),
+          options: any(named: 'options'),
+        ),
       ).thenReturn(importCallable);
       when(
-        () => functions.httpsCallable('waveGetConnection'),
+        () => functions.httpsCallable(
+          any(that: equals('waveGetConnection')),
+          options: any(named: 'options'),
+        ),
       ).thenReturn(getConnectionCallable);
       service = WaveService(functions: functions);
     });

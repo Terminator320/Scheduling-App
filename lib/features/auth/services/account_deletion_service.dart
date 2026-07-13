@@ -53,7 +53,12 @@ class AccountDeletionService {
 
   Future<void> deleteAccount() async {
     try {
-      await _functions.httpsCallable('deleteAccount').call<dynamic>();
+      await _functions
+          .httpsCallable(
+            'deleteAccount',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+          )
+          .call<dynamic>();
     } on FirebaseFunctionsException catch (e) {
       if (e.code == 'unauthenticated') {
         throw const AuthFailureRequiresRecentLogin();

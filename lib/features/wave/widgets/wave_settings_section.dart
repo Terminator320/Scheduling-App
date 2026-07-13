@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
+import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/wave/application/wave_providers.dart';
@@ -44,7 +45,19 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
   bool _importBusy = false;
   bool _scheduleBusy = false;
 
+  /// Fail-fast offline guard: the Wave callables would otherwise hang ~20 s.
+  /// Surfaces the same network message their catch would, and returns true so
+  /// the caller aborts before flipping its busy flag.
+  bool _blockedOffline() {
+    if (!ref.read(isOfflineProvider)) return false;
+    ref
+        .read(noticeServiceProvider)
+        .error(const WaveNetwork().toLocalizedMessage(context));
+    return true;
+  }
+
   Future<void> _connect() async {
+    if (_blockedOffline()) return;
     setState(() => _connectBusy = true);
     try {
       // No business is chosen client-side — waveBootstrap resolves the target
@@ -74,6 +87,7 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
   }
 
   Future<void> _import() async {
+    if (_blockedOffline()) return;
     setState(() => _importBusy = true);
     try {
       final summary = await ref.read(waveServiceProvider).importCustomers();
@@ -105,6 +119,7 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
       ],
     );
     if (choice == null || choice == current) return;
+    if (_blockedOffline()) return;
 
     setState(() => _scheduleBusy = true);
     try {

@@ -75,7 +75,10 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }) async {
     try {
       final res = await _functions
-          .httpsCallable('createEmployeeInvite')
+          .httpsCallable(
+            'createEmployeeInvite',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+          )
           .call<dynamic>({
             'name': name.trim(),
             'email': email.trim().toLowerCase(),
@@ -98,9 +101,12 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
 
   @override
   Future<void> redeemSignupCode(String code) async {
-    await _functions.httpsCallable('redeemSignupCode').call<dynamic>({
-      'code': code,
-    });
+    await _functions
+        .httpsCallable(
+          'redeemSignupCode',
+          options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+        )
+        .call<dynamic>({'code': code});
   }
 
   @override
