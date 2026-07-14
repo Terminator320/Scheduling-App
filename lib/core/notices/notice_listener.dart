@@ -175,6 +175,16 @@ class _TopNoticeState extends State<_TopNotice>
     // those too or the banner slides under it and the cutout covers its text.
     // Both are 0 in portrait, so this is a no-op there.
     final padding = MediaQuery.of(context).padding;
+    // Push the banner toward the side with more room — away from the notch /
+    // camera cutout, which in landscape sits on whichever side has the larger
+    // safe inset. When the notch is on the right, the banner slides left into
+    // the free space instead of sitting centered with an awkward gap. Symmetric
+    // insets (portrait, notchless tablets) stay centered.
+    final alignment = padding.left > padding.right
+        ? Alignment.centerRight
+        : padding.right > padding.left
+        ? Alignment.centerLeft
+        : Alignment.center;
     return Positioned(
       top: padding.top + 8,
       left: padding.left + AppSpacing.sp16,
@@ -183,10 +193,11 @@ class _TopNoticeState extends State<_TopNotice>
         position: _slide,
         child: FadeTransition(
           opacity: _fade,
-          // Cap the width and center so a landscape/tablet banner reads as a
-          // tidy card instead of stretching the full width of the screen.
+          // Cap the width so a landscape/tablet banner reads as a tidy card
+          // instead of stretching the full width; [alignment] pushes it clear
+          // of the notch toward the free side.
           child: Align(
-            alignment: Alignment.topCenter,
+            alignment: alignment,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 520),
               child: Semantics(
