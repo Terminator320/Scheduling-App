@@ -22,7 +22,7 @@ AppointmentImage _img(String name) => AppointmentImage(
   url: 'https://example.com/$name',
   storagePath: 'appointments/a1/images/$name',
   fileName: name,
-  uploadedAt: DateTime(2026, 1, 1),
+  uploadedAt: DateTime(2026, 1),
 );
 
 void main() {

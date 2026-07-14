@@ -14,7 +14,7 @@ void main() {
 
   test('add then load round-trips an entry', () async {
     final store = PendingUploadStore();
-    final entry = PendingUpload(
+    const entry = PendingUpload(
       appointmentId: 'a1',
       paths: const ['/x/1.jpg', '/x/2.jpg'],
       enqueuedAtMs: 1000,
@@ -30,16 +30,16 @@ void main() {
   test('remove drops only the matching entry', () async {
     final store = PendingUploadStore();
     await store.add(
-      PendingUpload(
+      const PendingUpload(
         appointmentId: 'a1',
-        paths: const ['/x/1.jpg'],
+        paths: ['/x/1.jpg'],
         enqueuedAtMs: 1,
       ),
     );
     await store.add(
-      PendingUpload(
+      const PendingUpload(
         appointmentId: 'a1',
-        paths: const ['/x/2.jpg'],
+        paths: ['/x/2.jpg'],
         enqueuedAtMs: 2,
       ),
     );
@@ -50,7 +50,7 @@ void main() {
 
   test('prune removes entries older than maxAge and returns them', () async {
     final store = PendingUploadStore();
-    final old = PendingUpload(
+    const old = PendingUpload(
       appointmentId: 'old',
       paths: const ['/x/o.jpg'],
       enqueuedAtMs: 0,
