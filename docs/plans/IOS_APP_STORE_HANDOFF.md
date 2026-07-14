@@ -44,6 +44,19 @@ App Attest steps are the critical path.
   no Podfile and never will be. Ignore any older notes mentioning
   `pod install` or `${PODS_ROOT}`. Xcode resolves `firebase-ios-sdk` (pinned in
   `Package.resolved`) on first open.
+- ⚠️ **Flutter SPM iOS-floor bug — patch the local SDK (redo after every
+  `flutter upgrade`).** Flutter 3.44.2 hardcodes the generated
+  `FlutterGeneratedPluginSwiftPackage/Package.swift` to `.iOS("13.0")`
+  (`packages/flutter_tools/lib/src/darwin/darwin.dart`, `deploymentTarget()` →
+  `ios => Version(13, 0, null)`), **ignoring** the app's real 15.0 target. The
+  pinned `firebase-ios-sdk` requires iOS 15, so the build fails fast (~30s,
+  before real compile) with `Target Integrity … requires minimum platform
+  version 15.0 … but this target supports 13.0` for every Firebase product +
+  `home-widget`. Fix: edit that switch arm to `Version(15, 0, null)`, then
+  `rm bin/cache/flutter_tools.{stamp,snapshot}` and run any `flutter` command to
+  force a tool rebuild (source edits alone don't rebuild the snapshot). Verify
+  with `grep iOS ios/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage/Package.swift`
+  → must show `.iOS("15.0")`. `flutter upgrade` reverts the edit — reapply it.
 - [x] **Do NOT run `flutterfire configure`.** `lib/firebase_options.dart`
   already builds iOS options from `dev/.env` (`IOS_API_KEY`, `IOS_APP_ID`) with
   `iosBundleId: net.vogas.scheduling` — re-running it would rewrite the file
