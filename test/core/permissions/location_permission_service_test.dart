@@ -44,7 +44,7 @@ void main() {
     );
     expect(
       await service(
-        afterRequest: LocationPermission.denied,
+        
       ).ensureLocation(),
       LocationPermissionResult.denied,
     );

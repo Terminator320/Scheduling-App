@@ -41,8 +41,8 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
-import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/features/onboarding/screens/onboarding_gate.dart';
+import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/features/settings/application/settings_providers.dart';
 import 'package:scheduling/features/settings/data/shared_prefs_settings_repository.dart';
 import 'package:scheduling/features/settings/domain/models/app_settings.dart';

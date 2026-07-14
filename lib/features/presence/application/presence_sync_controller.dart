@@ -11,6 +11,7 @@ import 'package:scheduling/core/permissions/location_permission_service.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/notifications/application/push_registration_controller.dart' show PushRegistrationController;
 import 'package:scheduling/features/presence/data/presence_repository.dart';
 
 final presenceRepositoryProvider = Provider<PresenceRepository>(
