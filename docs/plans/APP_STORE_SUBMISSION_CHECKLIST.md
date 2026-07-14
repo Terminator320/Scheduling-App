@@ -70,10 +70,12 @@ Legend: `[x]` done/verified · `[ ]` to do · ⚠️ blocker
   `AppUrls.privacyPolicy`.
 - [x] Privacy Policy URL set in App Store Connect (2026-07-11) —
   `https://gvogas.github.io/es-pro-legal/`.
-- [ ] ⚠️ **Demo account for App Review** — signup is invite-only (one-time
-  codes), so Review can't self-register. Create a dedicated demo account
-  (employee role safest; admin for full app), put credentials in Review notes.
-  Prefer a demo dataset over a real customer's data.
+- [x] **Demo account for App Review created (2026-07-14).** Signup is
+  invite-only (one-time codes), so Review can't self-register — a dedicated
+  demo account exists. Still to do at submission: **paste its email + password
+  into App Store Connect → App Review Information → Sign-In Required** (creds
+  live there, NOT in the repo). Prefer a demo dataset over a real customer's
+  data.
 - [x] **Privacy questionnaire — completed in App Store Connect (2026-07-11).**
   Final declaration:
   - Data Linked to You: Contact Info (Name, Phone, Email, Physical Address);
