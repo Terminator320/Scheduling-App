@@ -1657,5 +1657,15 @@
     }
   },
   "error_introLoadDashboard": "Couldn't load the dashboard",
-  "@error_introLoadDashboard": {"description": "Error intro for DASH-LOAD"}
+  "@error_introLoadDashboard": {"description": "Error intro for DASH-LOAD"},
+  "common_share": "Share",
+  "@common_share": {"description": "Tooltip/label for the share action in the full-screen photo viewer"},
+  "calendar_savePhoto": "Save to Photos",
+  "@calendar_savePhoto": {"description": "Tooltip/label for saving the current appointment photo to the device photo library"},
+  "calendar_photoSavedToPhotos": "Saved to Photos",
+  "@calendar_photoSavedToPhotos": {"description": "Success notice after saving an appointment photo to the device photo library"},
+  "calendar_couldNotSavePhoto": "Couldn't save the photo. Please try again.",
+  "@calendar_couldNotSavePhoto": {"description": "Error notice when saving an appointment photo to the photo library fails"},
+  "calendar_photoLibraryAccessNeeded": "Photo access is off. Enable it in Settings to save photos.",
+  "@calendar_photoLibraryAccessNeeded": {"description": "Error notice when the OS denies photo-library add access while saving a photo"}
 }
