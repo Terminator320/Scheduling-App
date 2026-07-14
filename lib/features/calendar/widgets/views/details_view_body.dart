@@ -62,7 +62,9 @@ class DetailsViewBody extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (showActions && !data.isCancelled)
+        // Cancelled visits keep the edit affordance (fix details or re-activate
+        // via the status picker); only `showActions` gates it.
+        if (showActions)
           Align(
             alignment: compactHeader
                 ? Alignment.centerLeft
