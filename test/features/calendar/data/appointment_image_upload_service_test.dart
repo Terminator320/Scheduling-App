@@ -3,8 +3,6 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:scheduling/core/images/image_storage_service.dart';
 import 'package:scheduling/core/images/image_upload_failure.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
@@ -12,6 +10,7 @@ import 'package:scheduling/features/calendar/data/appointment_image_upload_servi
 import 'package:scheduling/features/calendar/data/pending_upload_store.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _MockAppointmentsRepository extends Mock
     implements AppointmentsRepository {}
@@ -22,7 +21,7 @@ AppointmentImage _img(String name) => AppointmentImage(
   url: 'https://example.com/$name',
   storagePath: 'appointments/a1/images/$name',
   fileName: name,
-  uploadedAt: DateTime(2026, 1),
+  uploadedAt: DateTime(2026),
 );
 
 void main() {

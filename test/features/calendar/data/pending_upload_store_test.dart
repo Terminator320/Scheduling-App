@@ -16,7 +16,7 @@ void main() {
     final store = PendingUploadStore();
     const entry = PendingUpload(
       appointmentId: 'a1',
-      paths: const ['/x/1.jpg', '/x/2.jpg'],
+      paths: ['/x/1.jpg', '/x/2.jpg'],
       enqueuedAtMs: 1000,
     );
     await store.add(entry);
@@ -52,7 +52,7 @@ void main() {
     final store = PendingUploadStore();
     const old = PendingUpload(
       appointmentId: 'old',
-      paths: const ['/x/o.jpg'],
+      paths: ['/x/o.jpg'],
       enqueuedAtMs: 0,
     );
     final fresh = PendingUpload(
