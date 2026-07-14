@@ -170,55 +170,68 @@ class _TopNoticeState extends State<_TopNotice>
 
   @override
   Widget build(BuildContext context) {
+    // Respect the safe-area insets on all sides: in landscape the notch /
+    // camera cutout sits on the left or right (padding.left/right), so pad
+    // those too or the banner slides under it and the cutout covers its text.
+    // Both are 0 in portrait, so this is a no-op there.
+    final padding = MediaQuery.of(context).padding;
     return Positioned(
-      top: MediaQuery.of(context).padding.top + 8,
-      left: AppSpacing.sp16,
-      right: AppSpacing.sp16,
+      top: padding.top + 8,
+      left: padding.left + AppSpacing.sp16,
+      right: padding.right + AppSpacing.sp16,
       child: SlideTransition(
         position: _slide,
         child: FadeTransition(
           opacity: _fade,
-          child: Semantics(
-            liveRegion: true,
-            // U5: swipe the banner up to dismiss. Dismissible animates the
-            // slide itself, so skip the reverse animation and remove the
-            // overlay entry directly; the auto-dismiss timer stays as-is
-            // (it no-ops once unmounted).
-            child: Dismissible(
-              key: const ValueKey('app-notice-banner'),
-              direction: DismissDirection.up,
-              onDismissed: (_) => widget.onDismiss(),
-              child: Material(
-                color: widget.bg,
-                borderRadius: BorderRadius.circular(AppRadius.r12),
-                elevation: 4,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.sp12,
-                    AppSpacing.sp4,
-                    AppSpacing.sp4,
-                    AppSpacing.sp4,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(widget.icon, color: widget.fg, size: 20),
-                      const SizedBox(width: AppSpacing.sp12),
-                      Expanded(
-                        child: Text(
-                          widget.message,
-                          style: TextStyle(color: widget.fg, fontSize: 14),
-                        ),
+          // Cap the width and center so a landscape/tablet banner reads as a
+          // tidy card instead of stretching the full width of the screen.
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Semantics(
+                liveRegion: true,
+                // U5: swipe the banner up to dismiss. Dismissible animates the
+                // slide itself, so skip the reverse animation and remove the
+                // overlay entry directly; the auto-dismiss timer stays as-is
+                // (it no-ops once unmounted).
+                child: Dismissible(
+                  key: const ValueKey('app-notice-banner'),
+                  direction: DismissDirection.up,
+                  onDismissed: (_) => widget.onDismiss(),
+                  child: Material(
+                    color: widget.bg,
+                    borderRadius: BorderRadius.circular(AppRadius.r12),
+                    elevation: 4,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.sp12,
+                        AppSpacing.sp4,
+                        AppSpacing.sp4,
+                        AppSpacing.sp4,
                       ),
-                      const SizedBox(width: AppSpacing.sp4),
-                      // U5: a real IconButton — 48px minimum tap target plus
-                      // tooltip/semantics — instead of the old bare 18px
-                      // GestureDetector icon.
-                      IconButton(
-                        onPressed: _dismiss,
-                        tooltip: context.l10n.common_close,
-                        icon: Icon(Icons.close, color: widget.fg, size: 20),
+                      child: Row(
+                        children: [
+                          Icon(widget.icon, color: widget.fg, size: 20),
+                          const SizedBox(width: AppSpacing.sp12),
+                          Expanded(
+                            child: Text(
+                              widget.message,
+                              style: TextStyle(color: widget.fg, fontSize: 14),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sp4),
+                          // U5: a real IconButton — 48px minimum tap target plus
+                          // tooltip/semantics — instead of the old bare 18px
+                          // GestureDetector icon.
+                          IconButton(
+                            onPressed: _dismiss,
+                            tooltip: context.l10n.common_close,
+                            icon: Icon(Icons.close, color: widget.fg, size: 20),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
