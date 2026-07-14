@@ -463,25 +463,26 @@ class _PaulAppState extends ConsumerState<PaulApp> {
 
   void _listenForUploadDrain() {
     // Reconnect: retry queued photo batches once per offline→online flip.
-    ref.listen<bool>(isOfflineProvider, (previous, next) {
-      final isSignedIn =
-          ref.read(currentUserDocProvider).value?.isNotEmpty ?? false;
-      if (previous == true && !next && isSignedIn) {
-        unawaited(ref.read(appointmentImageUploadProvider).drainPending());
-      }
-    });
-    // Startup / sign-in: one drain when the account doc first arrives (Storage
-    // rules need an authed user; a signed-out drain would just re-queue).
-    ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
-      previous,
-      next,
-    ) {
-      final wasEmpty = previous?.value?.isEmpty ?? true;
-      final hasDoc = next.value?.isNotEmpty ?? false;
-      if (wasEmpty && hasDoc) {
-        unawaited(ref.read(appointmentImageUploadProvider).drainPending());
-      }
-    });
+    ref
+      ..listen<bool>(isOfflineProvider, (previous, next) {
+        final isSignedIn =
+            ref.read(currentUserDocProvider).value?.isNotEmpty ?? false;
+        if (previous == true && !next && isSignedIn) {
+          unawaited(ref.read(appointmentImageUploadProvider).drainPending());
+        }
+      })
+      // Startup / sign-in: one drain when the account doc first arrives
+      // (Storage rules need an authed user; a signed-out drain re-queues).
+      ..listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
+        previous,
+        next,
+      ) {
+        final wasEmpty = previous?.value?.isEmpty ?? true;
+        final hasDoc = next.value?.isNotEmpty ?? false;
+        if (wasEmpty && hasDoc) {
+          unawaited(ref.read(appointmentImageUploadProvider).drainPending());
+        }
+      });
   }
 
   void _listenForRoleRevocation() {
