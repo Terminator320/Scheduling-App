@@ -33,6 +33,12 @@ maintained against the current code. Archived 2026-07-10.
   Google Maps hand-off (Tasks 1–5 implemented on `notification`;
   `lib/features/calendar/screens/day_route_screen.dart`). Task 6 is a
   device-only verification pass.
+- `2026-07-09-travel-time-notifications.md` — travel-aware "time to leave"
+  reminders with live background GPS presence (implemented + committed on
+  `notification`, shipped in 1.31.0+50; `functions/travel_utils.js`,
+  `lib/features/presence/`). Residual ops items (Routes API console enable +
+  functions deploy + Mac Time-Sensitive entitlement) are tracked in CLAUDE.md,
+  not here.
 
 ## Superseded audit snapshots
 Point-in-time whole-repo audits; each run's findings were implemented at the

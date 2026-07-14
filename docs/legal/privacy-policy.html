@@ -42,7 +42,7 @@
 <h1>Privacy Policy</h1>
 <p class="meta">
   Application: <strong>ES Pro</strong> · Effective date: July 8, 2026 ·
-  Last updated: July 11, 2026
+  Last updated: July 13, 2026
 </p>
 
 <p>
@@ -154,9 +154,53 @@
   <li><strong>Contacts</strong> — to open a pre-filled contact card so you can
     save a client to your phone’s contacts. The App does not read, collect, or
     upload your device’s contact list.</li>
+  <li><strong>Location (including in the background)</strong> — if you are an
+    employee or administrator and you grant location access, the App uses your
+    device’s location to power “time to leave” reminders that tell you when to
+    depart for your next appointment. See Section 2.4 for exactly what is
+    collected, how it is used, and how to turn it off. This feature is optional:
+    if you deny location access, or grant it only while using the App, the
+    reminders fall back to a simpler fixed-time reminder and everything else
+    keeps working.</li>
   <li><strong>Face ID / biometrics</strong> — to unlock the optional in-app
     lock you can enable in Settings. Biometric data is processed entirely by
     iOS on your device and never leaves it; we do not receive or store it.</li>
+</ul>
+
+<h3>2.4 Location for “time to leave” reminders</h3>
+<p>
+  To help employees and administrators arrive at appointments on time, the App
+  can calculate how long it will take to drive to your next job and remind you
+  when to leave. This feature works only if you allow location access, and you
+  can turn it off at any time (see below).
+</p>
+<ul>
+  <li><strong>What is collected.</strong> Your device’s approximate
+    geographic coordinates (latitude and longitude) and the time of the reading.
+    While the feature is active, your device may report location in the
+    background — that is, even when the App is not open on screen — so a reminder
+    can still be calculated when you are on the move. Background location
+    reporting stops when you close the App from the app switcher and resumes the
+    next time you open it.</li>
+  <li><strong>How often.</strong> To limit data collection and save battery, a
+    new location is recorded only after you have moved a meaningful distance
+    (about 250 metres) or roughly every couple of minutes, with an occasional
+    check-in so a stationary location stays current.</li>
+  <li><strong>How it is used.</strong> Your most recent location is used as the
+    starting point to estimate live, traffic-aware drive time to your next
+    appointment (via Google Maps Platform, through our secure backend) so the
+    App can send the reminder at the right moment. It is <strong>not</strong>
+    used to monitor your movements, build a location history, or share your
+    whereabouts with anyone.</li>
+  <li><strong>Where it is stored and who can see it.</strong> Only your single
+    most recent location is stored, in your own record in our database, readable
+    only by you and by the backend that calculates your reminder. It is not
+    shown to other employees. It is overwritten each time a newer reading is
+    taken.</li>
+  <li><strong>How to turn it off.</strong> Deny or revoke location permission for
+    the App in your device Settings, or grant “While Using the App” instead of
+    “Always.” Your stored location is also deleted when you sign out or delete
+    your account.</li>
 </ul>
 
 <h3>2.3 Information collected automatically</h3>
@@ -182,9 +226,10 @@
     the App in your device Settings.</li>
 </ul>
 <p>
-  The App does <strong>not</strong> use third-party advertising SDKs, does
-  <strong>not</strong> collect precise background location, and does
-  <strong>not</strong> track you across other companies’ apps or websites.
+  The App does <strong>not</strong> use third-party advertising SDKs and does
+  <strong>not</strong> track you across other companies’ apps or websites. The
+  only location the App collects is for the optional “time to leave” reminder
+  feature described in Section 2.4, and only if you grant location access.
 </p>
 
 <h2 id="use">3. How and why we use information</h2>
@@ -199,6 +244,8 @@
     home-screen widget — the widget’s data is stored only on your device in a
     shared app container and is not transmitted anywhere;</li>
   <li>provide address autocomplete when you enter an address;</li>
+  <li>if you enable location access, estimate traffic-aware drive time to your
+    next appointment and send you a “time to leave” reminder (Section 2.4);</li>
   <li>diagnose crashes, maintain security, and improve reliability; and</li>
   <li>comply with legal obligations and respond to lawful requests.</li>
 </ul>
@@ -233,7 +280,9 @@
     </tr>
     <tr>
       <td>Google Maps Platform</td>
-      <td>Address autocomplete and place details.</td>
+      <td>Address autocomplete, place details, and — for the optional “time to
+        leave” reminders — traffic-aware drive-time estimates between your
+        location and your next appointment (Routes API).</td>
       <td><a href="https://policies.google.com/privacy">policies.google.com/privacy</a></td>
     </tr>
     <tr>
@@ -286,6 +335,10 @@
   <li><strong>Push notification tokens</strong> are kept only while your device
     is registered for notifications; the token for a device is removed when you
     sign out on it or turn off notifications.</li>
+  <li><strong>Location for reminders</strong> is not kept as a history: only your
+    single most recent reading is stored, each new reading overwrites the last,
+    and it is deleted when you sign out, delete your account, or turn off
+    location access for the App.</li>
 </ul>
 <p>
   We keep personal information only as long as necessary for the purposes
@@ -332,9 +385,10 @@
     delete your personal information or withdraw your consent to certain
     processing. Some information may be retained where required by law.</li>
   <li><strong>Device permissions.</strong> You can grant or revoke camera,
-    photo, contacts, and Face ID permissions at any time in your device’s
-    Settings; features that rely on a permission will be limited if it is
-    revoked.</li>
+    photo, contacts, location, and Face ID permissions at any time in your
+    device’s Settings; features that rely on a permission will be limited if it
+    is revoked. Turning off location access disables only the “time to leave”
+    reminders.</li>
   <li><strong>If you are a client of a business</strong> that uses the App,
     please direct access, correction, and deletion requests to that business,
     which controls its records; you may also contact us and we will assist or
@@ -383,7 +437,7 @@
 
 <footer>
   © 2026 Plombier Eau Secours. ES Pro Privacy Policy — last updated
-  July 11, 2026.
+  July 13, 2026.
 </footer>
 
 </body>
