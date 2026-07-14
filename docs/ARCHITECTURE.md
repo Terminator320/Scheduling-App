@@ -23,7 +23,7 @@ lib/
 │   ├── layout/                      Responsive shell — AdaptiveShell (nav rail), MasterDetailScaffold, PrimaryScrollScope (per-pane PrimaryScrollController so simultaneously-alive primary scrollables don't share one — the app-wide Scrollbar needs one ScrollPosition per controller), breakpoints (context.isWide / isLandscape / isSplitLayout for the rail chrome; isTwoPane (shortestSide ≥ 600) for the list master-detail; isCompact / isNarrowWidth for small-phone & large-text row folding)
 │   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics)
 │   ├── notices/                     In-app toast system: AppNotice types, NoticeService (stream), NoticeListener (widget)
-│   ├── permissions/                 MediaPermissionService — camera permission gate (permission_handler)
+│   ├── permissions/                 MediaPermissionService — camera permission gate (permission_handler); LocationPermissionService — location gate for presence tracking (geolocator; whileInUse/always both → granted)
 │   ├── providers/                   firebase_providers.dart — Riverpod providers for Auth/Firestore/Storage instances
 │   ├── security/                    BiometricAuthService (local_auth) + AppLock app-wide biometric gate
 │   ├── storage/                     SecureStorageService + SecureStorageKeys — encrypted local storage (flutter_secure_storage)
@@ -60,6 +60,7 @@ lib/
     ├── home_widget/                 iOS home-screen schedule widget — WidgetSyncService writes a two-day payload (todayJobs + tomorrowJobs + on-device rolloverAt) into the App Group (home_widget); mirrors functions/widget_payload_utils.js; Android no-op
     ├── maps/                        Google Places address autocomplete and map launcher (callables admin-gated); route_url_builder (multi-stop Google Maps directions URL, 9-waypoint cap)
     ├── notifications/               FCM push client — PushRegistrationController (token upsert for active employees/admins, resync-coalesced), FcmTokenRepository, push_notification_service, notificationAuthStatusProvider (Settings recovery row); core/notifications/fcm_background_handler rewrites the widget from a push while the app is closed
+    ├── presence/                    Live-location tracking for travel-time reminders — PresenceSyncController owns a background geolocator stream (250 m / 2-min throttle + 10-min heartbeat) for active employees/admins, PresenceRepository writes users/{docId}/presence/location (self-only); OS permission is the only switch
     ├── onboarding/                  First-launch intro carousel (OnboardingGate = app home) + onboardingSeen gate
     ├── settings/                    Theme, text scale, language, app version, biometric app-lock toggle
     ├── splash/                      Auth resolution on cold start (screen + routing logic)
@@ -527,6 +528,16 @@ users/{docId}/fcmTokens/{token}   FCM push tokens, one doc per device (doc id =
   uid: string          must equal the caller's auth uid
   createdAt, updatedAt server timestamps
 
+users/{docId}/presence/location   single live-location doc (id always
+                       'location') for travel-time reminders. Self-only per
+                       firestore.rules — peers/admins read nothing client-side;
+                       the reminder sweep reads it via the Admin SDK.
+                       recursiveDelete()d with the parent doc; deleted on sign-out
+  lat, lng: number     -90..90 / -180..180 (rules-enforced)
+  uid: string          must equal the caller's auth uid
+  updatedAt            server timestamp; rules force == request.time so a client
+                       can't backdate/forward-date to fake freshness
+
 appointments/{docId}
   title, startTime, endTime, status, address, notes, materialsNeeded
   repeat: 'none' | 'four_months' | 'six_months' | 'one_year'   stored on every visit of a series
@@ -638,7 +649,7 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (838 test cases as of 2026-07-13). `flutter analyze` is
+Run: `flutter test` (856 test cases as of 2026-07-13). `flutter analyze` is
 clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.

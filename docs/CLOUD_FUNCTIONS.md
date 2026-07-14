@@ -3,9 +3,10 @@
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
 refreshed 2026-07-13 by auditing the source against the app's call sites and
-the live deployment (Places callables tightened to admin-only + the overdue
-sweep given a 300s timeout; both Places proxies and the overdue prompt
-redeployed with the rest of the set).
+the live deployment (`sendUpcomingJobReminders` rebuilt into the travel-aware
+"time to leave" sweep — `travel_utils.js`, Routes API, `GOOGLE_MAP_API_KEY`
+now shared via `params.js`; Places callables previously tightened to admin-only
++ the overdue sweep given a 300s timeout).
 **Every callable now enforces App Check** (`enforceAppCheck: true`); the
 earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 (`grep -rn "enforceAppCheck: false" functions` returns nothing).
@@ -35,6 +36,12 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   ledgers (console-enabled), plus on-device push verification. The iOS-native
   APNs key + Push/App-Groups entitlements were wired on the Mac 2026-07-11 (see
   `docs/plans/2026-07-08-push-notifications.md`).
+- **Not yet deployed (1.32.0):** `sendUpcomingJobReminders` was rebuilt into the
+  travel-aware sweep; the new code needs a redeploy AND a one-time console step —
+  enable the **Routes API** and add it to the `GOOGLE_MAP_API_KEY` restriction.
+  Until then the deployed 30-min reminder keeps running; after deploy but before
+  the console step, the sweep just logs Routes failures and delivers the 30-min
+  fallback. See `docs/plans/2026-07-09-travel-time-notifications.md`.
 - `backfillLegacyClientNames` (a one-time migration completed `2026-06-29`,
   `fixed: 0`) was removed from the codebase 2026-07-05 and is **no longer in the
   deployed set** (confirmed 2026-07-10) — it was pruned by a full
@@ -61,7 +68,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `purgeExpiredHistory` | scheduled | `every day 03:00` (Toronto) | `maintenance.js` | nightly | — | `maxInstances: 1` · 540s |
 | `waveSyncWorker` | scheduled | `every 5 minutes` | `wave/callables.js` | timer | `WAVE_FULL_ACCESS_TOKEN` | `maxInstances: 1` · 540s |
 | `waveScheduledImport` | scheduled | `every 24 hours` | `wave/callables.js` | timer | `WAVE_FULL_ACCESS_TOKEN` | `maxInstances: 1` · 300s |
-| `sendUpcomingJobReminders` | scheduled | `every 5 minutes` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` · ledger |
+| `sendUpcomingJobReminders` | scheduled | `every 5 minutes` (Toronto) | `notifications.js` + `travel_utils.js` | timer | `GOOGLE_MAP_API_KEY` | `maxInstances: 1` · `timeoutSeconds: 120` · ledger · Routes API |
 | `sendDailyJobDigest` | scheduled | `0 18 * * *` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` |
 | `sendOverdueJobPrompts` | scheduled | `every 15 minutes` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` · 300s · ledger |
 
@@ -159,11 +166,24 @@ one event per employee, priority `cancelled > removed > rescheduled >
 assigned`; past appointments skipped. Deliberately **no `retry: true`** — a
 duplicate push is worse than a rare missed one.
 
-### `sendUpcomingJobReminders` — `notifications.js`
-Every 5 min (Toronto). Queries `status in [pending, confirmed]` (legacy alias)
-with `startTime` in `(now, now+30min]` on the existing `(status, startTime)`
-index, then fires one localized reminder per assignee. Exactly-once **per
-recipient** via the Admin-SDK-only
+### `sendUpcomingJobReminders` — `notifications.js` (+ `travel_utils.js`)
+Every 5 min (Toronto). **Travel-aware "time to leave" sweep**
+(`runTravelAwareReminderSweep`): queries `status in [pending, confirmed]`
+(legacy alias) with `startTime` in `(now, now+90min]` on the existing
+`(status, startTime)` index. Per (job, assignee) it picks a departure origin —
+an intervening job's address → a fresh background-GPS presence doc
+(`updatedAt` ≤ 25 min) → a recently-ended job's address (≤ 4 h) → none — via one
+per-employee context query (`(employeeIds CONTAINS, endTime ASC, startTime ASC)`
+index) plus a batched `getAll` of the presence docs, then calls Google Routes
+API `computeRoutes` (`TRAFFIC_AWARE`) and fires at
+`startTime − driveTime − 10min` (lead capped at 90 min). **Every failure path —
+no origin, empty address, any Routes error — degrades to the fixed 30-min
+`reminder` kind**, so it never regresses below the old behavior; the `leaveNow`
+kind sets APNs `interruption-level: time-sensitive`. Needs the
+`GOOGLE_MAP_API_KEY` secret (shared via `params.js`) and `timeoutSeconds: 120`;
+requires the **Routes API** enabled and added to the key's API restriction.
+Fires one localized reminder per assignee, exactly-once **per recipient** via
+the Admin-SDK-only
 `appointmentReminders/{id}_{startMs}_{employeeDocId}` ledger (`create()` fails
 if it exists; a reschedule changes the key → fresh reminder). Per-recipient
 keying means an assignee whose token registers late is retried independently

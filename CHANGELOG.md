@@ -10,7 +10,25 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
-## [1.31.0+50] - 2026-07-13
+## [1.32.0+51] - 2026-07-13
+### Added
+- **"Time to leave" reminders that account for real drive time.** Instead of a
+  fixed 30-minute heads-up, you now get a departure alert timed to when you
+  actually need to leave for your next job — calculated from live traffic
+  between where you are and the job's address, plus a 10-minute buffer. A short
+  hop across town nudges you later; a cross-city drive nudges you sooner. The
+  alert names the client, the start time, and the estimated drive, and (on
+  iPhone) is marked time-sensitive so it breaks through Focus modes. If your
+  location or a route can't be determined, it quietly falls back to the usual
+  30-minute reminder.
+- **The app can share your location in the background to time those alerts.**
+  Field staff (and admins assigned to jobs) are asked once for location
+  permission; with it granted, the app keeps your last position current even
+  while it's in the background so the leave-now timing stays accurate. Your
+  location is visible only to the reminder system — never to coworkers — and is
+  dropped the moment you sign out. Granting only "while using the app," or
+  denying location entirely, still works: reminders just fall back to timing
+  from your previous job's address or the fixed 30-minute heads-up.
 ### Added
 - **Drive a whole day's jobs as one route.** Open a day's schedule to see every
   stop numbered in start-time order, then hand the full run off to Google Maps

@@ -21,7 +21,7 @@ const {
   runOverduePromptSweep,
 } = require("./notification_utils");
 const {runTravelAwareReminderSweep} = require("./travel_utils");
-const {GOOGLE_MAP_API_KEY} = require("./places");
+const {GOOGLE_MAP_API_KEY} = require("./params");
 
 /**
  * Real injected deps for the orchestration functions.
