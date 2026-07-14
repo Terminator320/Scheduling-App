@@ -13,6 +13,17 @@ class MediaPermissionService {
 
   Future<MediaPermissionResult> ensureCamera() async {
     final status = await Permission.camera.request();
+    return _map(status);
+  }
+
+  /// Add-only photo-library access (iOS `NSPhotoLibraryAddUsageDescription`),
+  /// needed to save an appointment photo to the device gallery.
+  Future<MediaPermissionResult> ensurePhotoAddOnly() async {
+    final status = await Permission.photosAddOnly.request();
+    return _map(status);
+  }
+
+  MediaPermissionResult _map(PermissionStatus status) {
     if (status.isGranted || status.isLimited) {
       return MediaPermissionResult.granted;
     }
