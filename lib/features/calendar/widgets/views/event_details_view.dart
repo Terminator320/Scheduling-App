@@ -9,7 +9,6 @@ import 'package:scheduling/features/calendar/widgets/sections/appointment_form_f
 import 'package:scheduling/features/calendar/widgets/views/details_edit_body.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_view_body.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
 class EventDetailsView extends ConsumerStatefulWidget {
@@ -94,10 +93,9 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
     final state = ref.watch(
       eventDetailsControllerProvider(EventDetailsKey(widget.appointment)),
     );
-    final isCancelled = AppointmentStatus.fromRaw(
-      widget.appointment.status,
-    ).isCancelled;
-    final showEdit = state.isEditing && !isCancelled && widget.showActions;
+    // Cancelled visits stay editable (e.g. to fix details or re-activate by
+    // picking a new status) — only `showActions` gates the edit form.
+    final showEdit = state.isEditing && widget.showActions;
     return DetailSheetListView(
       scrollController: widget.scrollController,
       showHandle: widget.showHandle,
