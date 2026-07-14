@@ -367,9 +367,12 @@
       Across every function, trigger, and supporting service, the backend runs
       almost entirely inside Google's free tiers &mdash; a realistic
       <b>~$0.30/month</b> (six Cloud Scheduler jobs, only three free), with a
-      ceiling near <b>$5</b>. No function's compute is a lever; the only usage
-      that scales cost is <b>Google Places autocomplete</b>, because it bills per
-      keystroke.
+      ceiling near <b>$5</b>. No function's compute is a lever. Two Google Maps
+      Platform SKUs scale cost: <b>Places autocomplete</b> (bills per keystroke)
+      and the <b>Routes API</b> the travel-time reminder sweep now calls
+      (~13&ndash;16 calls per job as it approaches, ledger-capped once fired).
+      Both sit under their 10K-free-per-SKU monthly caps at this business's
+      volume (a busy 20-jobs/day month is ~9.6K Routes calls).
     </p>
     <div class="meta">
       <span class="chip">Project <b>schedulingapp-88727</b></span>
@@ -446,7 +449,7 @@
             <td class="idx">02</td>
             <td class="fn">sendUpcomingJobReminders</td>
             <td><span class="trig">every 5 min</span></td>
-            <td>Timer pushes 30-min-before reminders</td>
+            <td>Timer; travel-aware "time to leave" &mdash; calls Routes API*</td>
             <td class="num">8,640</td>
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
@@ -607,7 +610,7 @@
     <div class="legend">
       <span><span class="pill pill--free">free tier</span> within Google's free allowance</span>
       <span><span class="pill pill--watch">watch</span> can incur cost as usage grows</span>
-      <span>* Places cost lives in the services table below</span>
+      <span>* Places &amp; Routes API cost lives in the services table below</span>
     </div>
   </section>
 
@@ -615,8 +618,9 @@
     <h2>Supporting services</h2>
     <p class="section-note">
       Where any real cost would first appear. Cloud Scheduler's fourth-through-sixth
-      job is the only guaranteed charge (~$0.30/mo); the only usage-scaling external
-      API is Google Places. FCM push and Wave Accounting bill nothing per call.
+      job is the only guaranteed charge (~$0.30/mo); the usage-scaling external
+      APIs are Google Places and the Routes API (both Maps Platform, each with its
+      own 10K-free-per-SKU cap). FCM push and Wave Accounting bill nothing per call.
     </p>
     <div class="table-scroll">
       <table>
@@ -659,6 +663,14 @@
             <td class="fn">Places &middot; Details</td>
             <td>Address selected (#4)</td>
             <td class="num">450</td>
+            <td class="num">10,000</td>
+            <td class="num">~$5 / K</td>
+            <td><span class="pill pill--free">$0</span></td>
+          </tr>
+          <tr>
+            <td class="fn">Routes &middot; computeRoutes</td>
+            <td>Leave-now sweep (#2)</td>
+            <td class="num">~4,500</td>
             <td class="num">10,000</td>
             <td class="num">~$5 / K</td>
             <td><span class="pill pill--free">$0</span></td>
@@ -719,8 +731,9 @@
   <section>
     <h2>Scenarios</h2>
     <p class="section-note">
-      How the total moves as the shop grows. The number that changes first &mdash; and
-      almost the only one that changes &mdash; is Places autocomplete.
+      How the total moves as the shop grows. The two numbers that change are the
+      Maps Platform SKUs &mdash; Places autocomplete (per keystroke) and the Routes
+      API the leave-now sweep calls (per job as it approaches).
     </p>
     <div class="table-scroll">
       <table>
@@ -744,7 +757,7 @@
           </tr>
           <tr>
             <td class="fn">First billed dollar</td>
-            <td>placesAutocomplete crosses its 10K free cap (~1,600 new-address bookings)</td>
+            <td>placesAutocomplete or Routes computeRoutes crosses its 10K free cap (Routes ≈ 625 jobs/mo at ~16 calls each)</td>
             <td class="num"><span class="pill pill--watch">set alert</span></td>
           </tr>
         </tbody>
@@ -755,13 +768,15 @@
   <div class="callout">
     <span class="mark">!</span>
     <p>
-      <b>The one guardrail worth setting:</b> a GCP Maps Platform billing alert on
-      <b>placesAutocomplete</b>. Its in-code rate limit is per-instance, not a hard
-      cap, and it's the only function whose cost scales with everyday use &mdash; it
-      fires once per keystroke while an address is typed. Both Places proxies are
-      now <b>admin-only</b> (server-side <code>assertAdmin</code>), so only a
-      trusted admin session can drive that spend &mdash; a compromised employee or
-      invited account can't script the billable API.
+      <b>The one guardrail worth setting:</b> a GCP Maps Platform billing alert
+      covering both <b>placesAutocomplete</b> and the <b>Routes API</b>. Places'
+      in-code rate limit is per-instance, not a hard cap, and it fires once per
+      keystroke while an address is typed; both Places proxies are now
+      <b>admin-only</b> (server-side <code>assertAdmin</code>), so only a trusted
+      admin session can drive that spend. The Routes API is called server-side by
+      the leave-now sweep (never from the app) and is ledger-capped to fire once
+      per job, so its spend scales only with job volume &mdash; the single alert
+      backstops both.
     </p>
   </div>
 

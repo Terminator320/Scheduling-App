@@ -1,5 +1,4 @@
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
-const {defineSecret} = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 
 const {
@@ -9,11 +8,11 @@ const {
   enforceDurableRateLimit,
   assertAdmin,
 } = require("./security");
+const {GOOGLE_MAP_API_KEY} = require("./params");
 
 // Both callables proxy the Places API v1 so the billing-sensitive key never
 // ships in the Flutter binary. The key lives in Secret Manager; clients must
 // be authenticated and pass App Check.
-const GOOGLE_MAP_API_KEY = defineSecret("GOOGLE_MAP_API_KEY");
 
 const PLACE_ID_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const INPUT_MAX_LEN = 200;
@@ -225,6 +224,4 @@ const placesGetDetails = onCall(
     },
 );
 
-// The secret param is shared with the travel-aware reminder sweep
-// (notifications.js) — defining the same param twice would collide.
-module.exports = {placesAutocomplete, placesGetDetails, GOOGLE_MAP_API_KEY};
+module.exports = {placesAutocomplete, placesGetDetails};

@@ -23,9 +23,6 @@ const {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// 30 minutes before start, in ms.
-const REMINDER_WINDOW_MS = 30 * 60 * 1000;
-
 // How long after its endTime a job stays eligible for the overdue prompt; a
 // job left open longer than this gets no prompt (accepted v1 gap).
 const OVERDUE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
@@ -46,11 +43,6 @@ const OVERDUE_SWEEP_MAX = 500;
 // expiresAt + a Firestore TTL policy on both ledger collections keeps them
 // from accumulating forever.
 const LEDGER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-// Statuses that still expect the visit to happen. `confirmed` is the retired
-// legacy alias (treated as pending; new writes are rejected since 2026-07-09)
-// and stays here only so pre-retirement docs still earn reminders/digests.
-const PENDING_LIKE = new Set(["pending", "confirmed"]);
 
 // Statuses that leave a job still open once its endTime passes — the app then
 // shows it as `overdue` (AppointmentRecord.displayStatus). Deliberately an
@@ -416,25 +408,6 @@ function buildDigestMessage(jobs, locale) {
 }
 
 /**
- * Filters appointment records to those due for a 30-minute reminder: still
- * pending-like and starting within (now, now+30min]. `in_progress` is
- * excluded (already started). Pure — unit-testable.
- * @param {!Array<!Object>} records Appointment records ({id, status,
- *   startTime, ...}).
- * @param {(Date|number)} now
- * @return {!Array<!Object>}
- */
-function selectReminderCandidates(records, now) {
-  const nowMs = nowMillis(now);
-  const cutoff = nowMs + REMINDER_WINDOW_MS;
-  return (records || []).filter((r) => {
-    if (!PENDING_LIKE.has(String(r.status || "").toLowerCase())) return false;
-    const ms = toMillis(r.startTime);
-    return ms != null && ms > nowMs && ms <= cutoff;
-  });
-}
-
-/**
  * Filters appointment records to those due for an overdue "job finished?"
  * prompt: still open (pending/in_progress/legacy confirmed — the OPEN_LIKE
  * allowlist, so `done`/`cancelled`/legacy `completed` never match) with an
@@ -539,20 +512,6 @@ function tomorrowWindowToronto(now) {
     start: midnightUtc(y, m, d + 1),
     end: midnightUtc(y, m, d + 2),
   };
-}
-
-/**
- * Reminder ledger doc id: one per (occurrence, recipient), so a reschedule
- * (new startTime) earns a fresh reminder and each assignee is tracked
- * independently — an assignee whose token registers late is retried without
- * re-sending to assignees already delivered. Pure — unit-testable.
- * @param {string} appointmentId
- * @param {number} startTimeMillis
- * @param {string} employeeDocId
- * @return {string}
- */
-function reminderLedgerId(appointmentId, startTimeMillis, employeeDocId) {
-  return `${appointmentId}_${startTimeMillis}_${employeeDocId}`;
 }
 
 /**
@@ -880,52 +839,6 @@ async function _deliverRecipientOnce(deps, opts) {
 }
 
 /**
- * Orchestrates the 30-minute reminder sweep. Each assignee is claimed on its
- * own per-recipient ledger (see [_deliverRecipientOnce]): fired at most once,
- * retried while upcoming if nothing was delivered, and never re-sent once
- * delivered. Injectable deps `{db, messaging, now, logger}`.
- * @param {!Object} deps
- * @return {!Promise<{reminded: number}>}
- */
-async function runReminderSweep(deps) {
-  const {db, now} = deps;
-  const nowDate = now || new Date();
-  const windowEnd = new Date(nowMillis(nowDate) + REMINDER_WINDOW_MS);
-  const snap = await db
-      .collection("appointments")
-      .where("status", "in", ["pending", "confirmed"])
-      .where("startTime", ">", nowDate)
-      .where("startTime", "<=", windowEnd)
-      .get();
-  const candidates = selectReminderCandidates(
-      ((snap && snap.docs) || []).map(_record),
-      nowDate,
-  );
-  let reminded = 0;
-  const cache = new Map();
-  for (const c of candidates) {
-    const startMs = toMillis(c.startTime);
-    const ctx = _contextFor("reminder", null, c);
-    for (const employeeDocId of toIdList(c.employeeIds)) {
-      reminded += await _deliverRecipientOnce(deps, {
-        collection: "appointmentReminders",
-        ledgerId: reminderLedgerId(String(c.id), startMs, employeeDocId),
-        appointmentId: String(c.id),
-        employeeDocId,
-        kind: "reminder",
-        buildMsg: (locale) =>
-          buildNotificationMessage("reminder", ctx, locale),
-        nowDate,
-        label: "reminder",
-        roles: TIMED_RECIPIENT_ROLES,
-        cache,
-      });
-    }
-  }
-  return {reminded};
-}
-
-/**
  * Orchestrates the overdue "job finished?" sweep. Queries by startTime (the
  * existing `(status, startTime)` index; endTime would need a new one) over
  * the last OVERDUE_QUERY_WINDOW_MS — wide enough that the longest bookable
@@ -1034,18 +947,18 @@ async function runDailyDigest(deps) {
 }
 
 module.exports = {
-  REMINDER_WINDOW_MS,
   OVERDUE_LOOKBACK_MS,
   CHANGE_RECIPIENT_ROLES,
   TIMED_RECIPIENT_ROLES,
+  toMillis,
+  nowMillis,
+  toIdList,
   diffAppointmentForNotifications,
   buildNotificationMessage,
   buildDigestMessage,
-  selectReminderCandidates,
   selectOverdueCandidates,
   groupTomorrowsJobsByEmployee,
   tomorrowWindowToronto,
-  reminderLedgerId,
   overduePromptLedgerId,
   isStaleTokenError,
   isAlreadyExists,
@@ -1053,7 +966,6 @@ module.exports = {
   deliverRecipientOnce: _deliverRecipientOnce,
   fetchEmployeeWidgetWindow,
   handleAppointmentWrite,
-  runReminderSweep,
   runDailyDigest,
   runOverduePromptSweep,
 };

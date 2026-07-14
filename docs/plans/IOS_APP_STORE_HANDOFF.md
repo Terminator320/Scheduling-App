@@ -35,16 +35,16 @@ App Attest steps are the critical path.
 
 ## 1. Mac environment
 
-- [ ] **Xcode** — latest stable (Firebase iOS SDK 12.x requires Xcode 16.2+;
+- [x] **Xcode** — latest stable (Firebase iOS SDK 12.x requires Xcode 16.2+;
   deployment target is iOS 15.0). Sign into the Apple ID for team
   **H5XWLU87AX**; Developer Program membership must be active.
-- [ ] **Flutter 3.44.1 stable** — match the Windows box version to avoid
+- [x] **Flutter 3.44.1 stable** — match the Windows box version to avoid
   `Package.resolved`/codegen churn. `flutter doctor` until clean.
-- [ ] **No CocoaPods.** The project uses **Swift Package Manager** — there is
+- [x] **No CocoaPods.** The project uses **Swift Package Manager** — there is
   no Podfile and never will be. Ignore any older notes mentioning
   `pod install` or `${PODS_ROOT}`. Xcode resolves `firebase-ios-sdk` (pinned in
   `Package.resolved`) on first open.
-- [ ] **Do NOT run `flutterfire configure`.** `lib/firebase_options.dart`
+- [x] **Do NOT run `flutterfire configure`.** `lib/firebase_options.dart`
   already builds iOS options from `dev/.env` (`IOS_API_KEY`, `IOS_APP_ID`) with
   `iosBundleId: net.vogas.scheduling` — re-running it would rewrite the file
   into the literal-values style and break the env-based setup.
@@ -96,7 +96,7 @@ Open `ios/Runner.xcworkspace`.
   Uncheck "Based on dependency analysis". Commit the pbxproj change.
 - [x] **Release "Debug Information Format" = DWARF with dSYM File** — confirmed
   in `project.pbxproj` (Release/Profile = `dwarf-with-dsym`, Debug = `dwarf`).
-- [ ] **Signing sanity check** — automatic signing, team H5XWLU87AX, bundle
+- [x] **Signing sanity check** — automatic signing, team H5XWLU87AX, bundle
   `net.vogas.scheduling` are already in the project; once signed into the team
   it should Just Work.
 - [x] **iPad: KEEP (decided 2026-07-08).** `TARGETED_DEVICE_FAMILY = "1,2"`
@@ -108,24 +108,24 @@ Open `ios/Runner.xcworkspace`.
 
 ## 4. Firebase Console (any browser)
 
-- [ ] App Check → apps → **iOS app → register App Attest** as the attestation
+- [x] App Check → apps → **iOS app → register App Attest** as the attestation
   provider. No `.p8` key — that's DeviceCheck, which this app does not use.
   The console provider MUST match the code (`AppleAppAttestProvider`,
   `lib/main.dart:100`).
-- [ ] Keep the debug-token registrations for the Simulator/dev devices.
+- [x] Keep the debug-token registrations for the Simulator/dev devices.
 
 ## 5. Verify on real hardware (App Attest does NOT work on the Simulator)
 
-- [ ] `flutter run --release` on a physical iPhone.
-- [ ] Sign in, then **exercise a callable end-to-end** to prove attestation —
+- [x] `flutter run --release` on a physical iPhone.
+- [x] Sign in, then **exercise a callable end-to-end** to prove attestation —
   e.g. type an address in the appointment form (`placesAutocomplete`) or open
   Settings → Wave section as admin (`waveGetConnection`). If App Attest is
   misconfigured, these fail while plain Firestore reads may still work.
-- [ ] Device-only feature sweep (never covered by the test harness): camera
+- [x] Device-only feature sweep (never covered by the test harness): camera
   capture, photo-library picker, contacts save-flow, biometric app-lock
   (Face ID — usage description already declared), map launching, phone/email
   launchers.
-- [ ] Both locales: flip the device to French and spot-check (EN/FR parity is
+- [x] Both locales: flip the device to French and spot-check (EN/FR parity is
   clean in code — this is a rendering sanity pass).
 
 ## 6. Archive + upload
@@ -140,7 +140,7 @@ Open `ios/Runner.xcworkspace`.
 
 ## 7. App Store Connect
 
-- [ ] App record: **ES Pro**, bundle `net.vogas.scheduling`. Provide **French
+- [x] App record: **ES Pro**, bundle `net.vogas.scheduling`. Provide **French
   metadata alongside English** (Quebec audience; the app itself is bilingual).
 - [ ] **Privacy questionnaire** — the repo half is done
   (`PrivacyInfo.xcprivacy` tracked; `ITSAppUsesNonExemptEncryption=false` so no
@@ -154,9 +154,9 @@ Open `ios/Runner.xcworkspace`.
   `https://gvogas.github.io/es-pro-legal/`; the app links it from
   Settings → Legal via `AppUrls.privacyPolicy`
   (`lib/core/constants/app_urls.dart`).
-- [ ] Paste that URL into the App Store Connect "Privacy Policy URL" field
+- [x] Paste that URL into the App Store Connect "Privacy Policy URL" field
   at submission (App Store Connect requires one for any account-based app).
-- [ ] **Demo account for App Review** — signup is invite-only (one-time codes),
+- [x] **Demo account for App Review** — signup is invite-only (one-time codes),
   so App Review cannot self-register. Create a dedicated demo account
   (employee role is safest; admin if you want them to see the full app) and put
   the credentials in the Review notes. Don't hand Review a real customer's
@@ -164,7 +164,7 @@ Open `ios/Runner.xcworkspace`.
 - [ ] **Account deletion requirement** — already satisfied: in-app account
   deletion exists (`deleteAccount` callable + ACCT-DEL flow). Mention it in
   Review notes if asked.
-- [ ] Screenshots: 6.9" and 6.5" iPhone sets **plus a 13" iPad set** (iPad is
+- [x] Screenshots: 6.9" and 6.5" iPhone sets **plus a 13" iPad set** (iPad is
   kept — see step 3). Age rating questionnaire, support URL.
 
 ## 8. What's intentionally NOT here
@@ -214,9 +214,9 @@ remain.
 - [x] Extension deployment target set to **iOS 15.0** (matches Runner).
 
 ### Device verification (physical iPhone — App Attest fails on Simulator)
-- [ ] Employee sign-in → a `users/{docId}/fcmTokens/{token}` doc appears in the
+- [x] Employee sign-in → a `users/{docId}/fcmTokens/{token}` doc appears in the
   console; sign-out deletes it. (Admins get no prompt and no token doc.)
-- [ ] Admin creates / reschedules / cancels / unassigns an appointment → the
+- [x] Admin creates / reschedules / cancels / unassigns an appointment → the
   correct localized push arrives with the app **killed**.
 - [x] Appointment starting ~28 min out → a reminder within ~5 min; an
   `appointmentReminders/{id}_{startMs}` ledger doc is written; move the time →
@@ -227,7 +227,7 @@ remain.
   status still `pending`/`in_progress` → "Job finished?" push within ~15 min;
   an `appointmentOverduePrompts/{id}_{endMs}` ledger doc is written; a second
   sweep sends nothing; marking it Done before the sweep suppresses it.
-- [ ] FR-language device receives French text (the token's `locale` field).
+- [x] FR-language device receives French text (the token's `locale` field).
 - [ ] Tapping a notification from killed/background surfaces the calendar hub.
 - [ ] Add the widget in all three sizes → today's jobs render; a job rolls off
   the small widget once it starts; sign-out clears the widget.

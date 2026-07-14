@@ -18,6 +18,9 @@
 const {
   buildNotificationMessage,
   deliverRecipientOnce,
+  toMillis,
+  nowMillis,
+  toIdList,
   TIMED_RECIPIENT_ROLES,
 } = require("./notification_utils");
 
@@ -48,46 +51,14 @@ const PREV_APPOINTMENT_LOOKBACK_HOURS = 4;
 // lead is already in range when it becomes due.
 const TRAVEL_WINDOW_MS = MAX_LEAD_MINUTES * MINUTE_MS;
 
-// Statuses that still expect the visit to happen (legacy `confirmed` alias —
-// see notification_utils.PENDING_LIKE).
+// Statuses that still expect the visit to happen. `confirmed` is the retired
+// legacy alias (treated as pending; new writes rejected since 2026-07-09),
+// kept so pre-retirement docs still earn reminders.
 const PENDING_LIKE = new Set(["pending", "confirmed"]);
 
 // A job in one of these no longer occupies the employee (intervening prong).
 // Legacy `completed` is the retired alias of `done`.
 const TERMINAL = new Set(["done", "completed", "cancelled"]);
-
-/**
- * Milliseconds since epoch for a Firestore Timestamp / Date / number, else
- * null.
- * @param {*} value
- * @return {?number}
- */
-function toMillis(value) {
-  if (value == null) return null;
-  if (typeof value.toMillis === "function") return value.toMillis();
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === "number") return value;
-  return null;
-}
-
-/**
- * Epoch ms for a `now` that may be a Date or a number.
- * @param {(Date|number)} now
- * @return {number}
- */
-function nowMillis(now) {
-  return now instanceof Date ? now.getTime() : Number(now);
-}
-
-/**
- * Normalizes an employeeIds field to an array of strings.
- * @param {*} value
- * @return {!Array<string>}
- */
-function toIdList(value) {
-  if (!Array.isArray(value)) return [];
-  return value.filter((v) => typeof v === "string" && v !== "");
-}
 
 /**
  * Trimmed address or "".
@@ -372,10 +343,13 @@ async function runTravelAwareReminderSweep(deps) {
       if (logger) logger.warn("travel: presence getAll failed", {err});
     }
   }
+  // The per-employee context queries are independent — issue them
+  // concurrently (one throwing employee falls back to [] without failing the
+  // others) rather than blocking on each in turn.
   const contextByEmployee = new Map();
   const lookbackStart = new Date(
       nowMs - PREV_APPOINTMENT_LOOKBACK_HOURS * 60 * MINUTE_MS);
-  for (const employeeDocId of employeeIds) {
+  await Promise.all(employeeIds.map(async (employeeDocId) => {
     try {
       const ctxSnap = await db
           .collection("appointments")
@@ -393,7 +367,7 @@ async function runTravelAwareReminderSweep(deps) {
       }
       contextByEmployee.set(employeeDocId, []);
     }
-  }
+  }));
 
   let reminded = 0;
   const cache = new Map();
