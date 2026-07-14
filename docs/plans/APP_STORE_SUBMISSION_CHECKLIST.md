@@ -76,8 +76,19 @@ Legend: `[x]` done/verified · `[ ]` to do · ⚠️ blocker
   into App Store Connect → App Review Information → Sign-In Required** (creds
   live there, NOT in the repo). Prefer a demo dataset over a real customer's
   data.
-- [x] **Privacy questionnaire — completed in App Store Connect (2026-07-11).**
-  Final declaration:
+- [ ] ⚠️ **Privacy questionnaire — needs a Location update before submit.**
+  Completed 2026-07-11, but **background GPS presence was added 2026-07-13**
+  (`4d9f000`, `1e0828a`) — *after* the questionnaire — so the current
+  declaration is missing Location. Add in App Store Connect → App Privacy:
+  - **Location → Precise Location**, **Linked to the user** (stored per-uid at
+    `users/{docId}/presence/location`), purpose **App Functionality**
+    (travel-time "time to leave" reminders), **not** used for tracking.
+  - The privacy *policy* webpage already covers this (section 2.4, updated
+    2026-07-13); only the ASC questionnaire/nutrition label is stale.
+  - `PrivacyInfo.xcprivacy` has an empty `NSPrivacyCollectedDataTypes` — left
+    as-is on purpose (ASC questionnaire is authoritative; Firebase ships its own
+    SDK manifests; required-reason APIs are declared). Not a rejection risk.
+  Declaration as of 2026-07-11 (add Location to this):
   - Data Linked to You: Contact Info (Name, Phone, Email, Physical Address);
     Identifiers (Device ID = FCM push token, App Functionality, **not** tracking).
   - Data Not Linked to You: User Content (Photos); Diagnostics (Crash Data).
