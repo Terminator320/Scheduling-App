@@ -353,8 +353,7 @@ void main() {
           ],
         );
         addTearDown(offline.dispose);
-        final c = offline.read(addEventControllerProvider(null).notifier);
-        c
+        final c = offline.read(addEventControllerProvider(null).notifier)
           ..selectDate(DateTime(2026, 5, 10))
           ..selectStartTime(const TimeOfDay(hour: 9, minute: 0))
           ..selectEndTime(const TimeOfDay(hour: 10, minute: 0))

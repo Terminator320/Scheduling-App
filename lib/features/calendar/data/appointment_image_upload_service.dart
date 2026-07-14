@@ -202,7 +202,7 @@ class AppointmentImageUploadService {
 
   Future<void> _deleteQuietly(File f) async {
     try {
-      if (await f.exists()) await f.delete();
+      if (f.existsSync()) await f.delete();
     } catch (e, st) {
       _logger.warn('IMG-UPLOAD cleanup failed for ${f.path}', e, st);
     }
