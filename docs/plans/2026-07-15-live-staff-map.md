@@ -13,7 +13,8 @@ at** (reverse-geocoded server-side), and an "Open in Maps" action. The map is
 its own hub tab in the menu bar (NavigationRail + settings drawer), between
 History and Settings.
 
-**Architecture:** The tracking side already exists and is NOT touched:
+**Architecture:** The tracking side already exists and is nearly untouched
+(one freshness amendment — Task 4b's trailing flush):
 `PresenceSyncController` (background GPS) writes
 `users/{docId}/presence/location` = `{lat, lng, uid, updatedAt:
 serverTimestamp}` throttled to 250 m / ≥2 min + a 10-min stationary
@@ -58,6 +59,24 @@ implementation — it would reintroduce a Podfile.
   existing admin-only cluster. Not a dashboard card, not a pushed route.
 - **Tap a marker ⇒ show the street address** the person is currently at
   (reverse geocoding), plus freshness and "Open in Maps".
+
+### Optimizations folded in (2026-07-15 post-review)
+
+- **Pause the data side while the tab is hidden (Tasks 6/7).** The kept-alive
+  `IndexedStack` posture stays (GL view + camera state survive tab switches),
+  but the screen only *watches* the presence stream + 30 s tick while the
+  Live map tab is current. `TickerMode` mutes Flutter tickers, not Riverpod
+  streams — without this the collectionGroup listener bills a read for every
+  staff presence write all day and the ticker rebuilds an invisible tab every
+  30 s. Supersedes the earlier "optional later refinement".
+- **Tick ≠ marker rebuild (Tasks 6/7).** Freshness labels re-render every
+  30 s, but the marker set only re-assembles when a staleness flag actually
+  flips — via a set-equality `staleDocIdsProvider`; the markers provider
+  never watches the raw tick.
+- **Tracking-side trailing flush (Task 4b).** A fix throttled by the 2-min
+  upload gap is currently dropped, leaving a drive-then-park position up to
+  ~12 min stale on the server; a one-shot trailing timer flushes the last
+  fix when the gap expires. Same write volume, worst-case staleness ~2 min.
 
 ### Why the docs must change too (blocking)
 
@@ -157,6 +176,8 @@ blocking for anything user-facing.
     // by the rules engine (see the query-rules invariant in CLAUDE.md).
     // NOTE: {path=**} reserves the subcollection name `presence` — any
     // future subcollection with that name becomes admin-readable.
+    // (Verified 2026-07-15: users/{docId}/presence is the ONLY presence
+    // subcollection in the codebase today.)
     match /{path=**}/presence/{presenceId} {
       allow read: if isAdmin();
     }
@@ -210,6 +231,30 @@ Stream<List<PresenceFix>> watchAllPresence()
     surfaces them via the dashboard-style notice pattern — no new `Failure`
     family needed).
 
+## Task 4b — Tracking-side freshness: flush the throttled last fix
+
+The map inherits the reminder sweep's write cadence, which has one freshness
+hole: in `presence_sync_controller.dart`, a fix arriving inside the 2-min
+`minPresenceUploadGap` is **dropped** (only `_lastPosition` updates), so a
+drive-then-park inside the window isn't written until the 10-min heartbeat —
+the marker can sit ~12 min behind where the person actually stopped.
+
+- [ ] Pure helper beside `shouldWritePresenceFix` (same file, unit-testable):
+      `Duration? trailingFlushDelay({required DateTime? lastUploadAt,
+      required DateTime now})` — null when a write is allowed now (no timer
+      needed), else the remaining portion of `minPresenceUploadGap`.
+- [ ] In `_start`'s position listener, when a fix is throttled: cancel any
+      armed trailing timer and arm a one-shot
+      `Timer(trailingFlushDelay(...))` that re-checks
+      `shouldWritePresenceFix` and uploads `_lastPosition` (setting
+      `_lastUploadAt`). Cancel the timer in `_stop()` and whenever a
+      movement/heartbeat write goes out. Write volume is unchanged (writes
+      stay ≥2 min apart); worst-case staleness drops from ~12 min to ~2 min.
+- [ ] Tests: `trailingFlushDelay` boundaries (null lastUploadAt ⇒ null; at/
+      past the gap ⇒ null; inside it ⇒ exact remainder). The timer wiring
+      itself is device-only, per the existing no-geolocator-channel-tests
+      convention.
+
 ## Task 5 — Domain (pure, unit-testable)
 
 - [ ] **New** `lib/features/presence/domain/live_map_aggregator.dart`,
@@ -241,11 +286,21 @@ Stream<List<PresenceFix>> watchAllPresence()
     (existing admin path = `watchAllUsers()`; `join()` filters to active)
     into `AsyncValue<List<StaffMapPoint>>`, same reduction shape as
     `dashboardStatsProvider`.
-- [ ] Note: as a kept-alive `IndexedStack` tab, the screen (listeners +
-      ticker + the GL platform view) stays mounted after first visit — same
-      posture as other hub tabs; acceptable at this data volume. (Optional
-      later refinement: pause the tick/stream watches when the tab isn't
-      `HubShellScope.current`.)
+  - `staleDocIdsProvider` — `Provider.autoDispose<Set<String>>` deriving the
+    set of currently-stale user doc-ids from `liveMapPointsProvider` + tick +
+    clock, **with set-equality notification** (compare against the previous
+    value via `setEquals`, e.g. through `ref.watch(...).select(...)` or a
+    cached-previous provider) so dependents are only notified when membership
+    actually changes. A 30 s tick that flips nobody must not rebuild the
+    marker set — only the freshness labels re-render.
+- [ ] Pause-when-hidden: providers stay `autoDispose`; the SCREEN gates its
+      watches on the tab being current (Task 7), so leaving the tab
+      un-watches them and autoDispose tears down the collectionGroup
+      listener and the ticker automatically. `TickerMode` alone can't do
+      this — it mutes Flutter tickers, not Riverpod streams. The GL platform
+      view stays alive across tab switches (camera state preserved) — its
+      offstage memory is the accepted cost; the live listener + ticker are
+      not.
 
 ## Task 7 — UI
 
@@ -292,7 +347,11 @@ Stream<List<PresenceFix>> watchAllPresence()
       awaiting in build causes frame churn): a small `liveMapMarkersProvider`
       (or screen-owned memoized step) maps `AsyncValue<List<StaffMapPoint>>`
       + dpr + selected id → `AsyncValue<Set<Marker>>`, re-rendering only
-      icons whose cache key changed.
+      icons whose cache key changed. Its staleness input is
+      `staleDocIdsProvider` (set-equality, Task 6) — it must NEVER watch the
+      raw tick or a per-tick `now`, or the whole set re-assembles every 30 s
+      even when nothing flipped. Full dependency list: (points, staleIds,
+      selectedId, dpr).
 - [ ] **New** `lib/features/presence/widgets/staff_info_card.dart` — bottom
       overlay on marker tap (local `_selectedDocId`, `AnimatedSwitcher` +
       `SafeArea`): `AppAvatar`, name, freshness line
@@ -301,10 +360,30 @@ Stream<List<PresenceFix>> watchAllPresence()
       the person is at** (Task 8 — `liveMap_resolvingAddress` shimmer while
       resolving, line hidden on failure), and `liveMap_openInMaps` →
       `AddressMapLauncher.showMapChoices(context, address: <resolved address,
-      falling back to '<lat>,<lng>'>)`. Verify `AddressParser` passes a bare
-      coordinate pair through unmangled; else build the launch URIs directly.
+      falling back to '<lat>,<lng>'>)`. **Verified 2026-07-15:** none of
+      `AddressParser.splitApt`'s four regexes match a bare `lat,lng` string
+      (no `Apt`/unit token; the dash rule's first group can't contain `.` or
+      `,`), so `splitApt` returns null and the launcher passes the raw string
+      through to Google `query=` / Apple `q=` / Waze `q=`, which all accept
+      coordinates. Lock it with the unit test in Task 12.
 - [ ] Freshness recompute: `ref.watch(liveMapTickProvider)` (value unused —
       drives the 30 s rebuild) + `now = ref.watch(liveMapClockProvider)()`.
+      Scope the tick watch to the freshness-label subtrees (info card, stale
+      dimming), not the whole screen build.
+- [ ] **Pause-when-hidden:** add a dependency-creating accessor beside
+      `HubShellScope.maybeOf` in `adaptive_shell.dart` —
+      `static AdaptiveDestination? currentOf(BuildContext context)` via
+      `dependOnInheritedWidgetOfExactType` (`updateShouldNotify` already
+      fires on `current` changes; `maybeOf` deliberately creates no
+      dependency, so it can't be reused for this). When hosted in a shell and
+      `currentOf(context) != AdaptiveDestination.liveMap`, the screen skips
+      the `ref.watch` of the points/tick/markers providers and renders the
+      kept-alive map with its last-known marker set — autoDispose then drops
+      the Firestore listener + ticker within a frame of switching away. A
+      null scope (standalone route, widget tests) counts as visible.
+      Returning to the tab re-attaches the stream (Firestore serves the warm
+      cache, so the refresh is quick); keep the last `Set<Marker>` in screen
+      state so there's no marker blink while the stream re-settles.
 
 ## Task 8 — Reverse geocoding ("what address are they at")
 
@@ -418,6 +497,23 @@ key — same as `placesAutocomplete`/`placesGetDetails`):
       `disabled`/`invited` dropped; sorted by name; staleness boundary
       (24m59s fresh, 25m00s fresh, 25m01s stale; null fresh); freshness
       buckets (<60 s justNow; 1–59 min minutesAgo; ≥60 min hoursAgo).
+- [ ] Trailing-flush helper (Task 4b): `trailingFlushDelay` boundary cases
+      beside the existing `shouldWritePresenceFix`/`shouldHeartbeat` tests.
+- [ ] `AddressParser` pass-through: `splitApt('45.5017,-73.5673')` returns
+      null and `toCanonical`/`canonicalToDisplay` return the string unchanged
+      (pins the coordinate-fallback launch path, Task 7).
+- [ ] `functions/` jest: bridge isolation — when the presence purge throws,
+      the `usersByUid` bridge mirror still writes (tests the wiring order,
+      not just the pure decision helper).
+- [ ] Provider test: a tick that flips no one's staleness leaves
+      `staleDocIdsProvider` un-notified (same set instance / no dependent
+      rebuild) and the marker set identical; a tick that crosses the 25-min
+      boundary for one person rebuilds only that marker's icon variant.
+- [ ] Screen test (pause-when-hidden): hosted under a fake `HubShellScope`
+      with `current` ≠ liveMap, the presence stream/tick providers are not
+      listened to (autoDispose released — assert via `ProviderContainer`
+      observer or an override recording listener counts); flipping `current`
+      to liveMap re-attaches.
 - [ ] `test/features/presence/presence_repository_watch_test.dart`
       (mocktail, pattern of the existing `presence_repository_test.dart`,
       which stays untouched): collectionGroup snapshot → `PresenceFix` list
@@ -460,7 +556,9 @@ key — same as `placesAutocomplete`/`placesGetDetails`):
       the address. Employee account → no Live map tab; presence self-writes
       still work (rules regression). Disable a test employee → their presence
       doc disappears from Firestore (purge trigger) and their marker leaves
-      the map.
+      the map. Trailing flush: simulate movement then stop inside the 2-min
+      gap (AVD route playback) → the presence doc updates ~when the gap
+      expires, not 10 min later at the heartbeat.
 - [ ] iOS remains Mac-side: SPM resolution of the Maps SDK, AppDelegate key
       parse, on-device map render — tracked in the handoff doc.
 
@@ -468,8 +566,10 @@ key — same as `placesAutocomplete`/`placesGetDetails`):
 
 Branch reset → pubspec + pub get → rules + purge trigger (early, so the user
 can deploy) → Android manifest/gradle + iOS AppDelegate key wiring → domain
-model/aggregator + pure tests → repository + tests → l10n + gen-l10n →
-providers → marker icon renderer + tests → screen + widgets →
+model/aggregator + pure tests → repository + tests → tracking trailing flush
+(Task 4b) + tests → l10n + gen-l10n →
+providers (incl. staleDocIds) → marker icon renderer + tests → screen +
+widgets (incl. pause-when-hidden) →
 reverse-geocode callable + client + tests → hub-tab wiring (enum, routes,
 shell, drawer) → hub/screen tests → legal/docs/CLAUDE.md → verify → commit →
 force-push `-u`.
@@ -497,11 +597,16 @@ force-push `-u`.
 - `syncUsersByUid` is the auth-critical bridge — the presence purge added to
   it must stay isolated (post-bridge, own try/catch) so it can never break
   role resolution.
-- `AddressMapLauncher` with raw "lat,lng" needs a pass-through check on
-  `AddressParser`.
+- `AddressMapLauncher` with raw "lat,lng" — RETIRED 2026-07-15: verified
+  pass-through by inspection (see Task 7); pinned by a Task 12 unit test.
 - Kept-alive GL platform view in the IndexedStack costs memory while on
-  other tabs — accepted, same lifecycle as other tabs. (Optional later
-  refinement: pause the tick/stream watches when the tab isn't
-  `HubShellScope.current`.)
+  other tabs — accepted (camera state preserved). The data side does NOT
+  stay hot: the screen un-watches the presence stream + tick when the tab
+  isn't current (Task 7 pause-when-hidden), so the collectionGroup listener
+  and ticker die with autoDispose while hidden.
+- Task 4b touches the auth-adjacent tracking controller — keep the trailing
+  timer strictly inside the existing throttle contract (cancel in `_stop()`,
+  cancel on every real write) so it can never double-write or outlive the
+  stream.
 - Reverse-geocode spend is bounded three ways: tap-driven only, client-side
   ~11 m cache, server-side per-uid durable rate limit.
