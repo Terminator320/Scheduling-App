@@ -179,9 +179,11 @@ service cloud.firestore {
               || request.resource.data.updatedAt is timestamp);
       }
 
-      // Live-location presence (travel-time "leave now" reminders). Strictly
-      // self-only: peers and admins read nothing client-side — the reminder
-      // sweep reads it via the Admin SDK. `updatedAt == request.time` forces
+      // Live-location presence (travel-time "leave now" reminders). Owner
+      // get/create/update/delete is self-only here; admins additionally read
+      // ALL presence client-side via the collectionGroup rule below (admin
+      // live-map). The reminder sweep still reads it via the Admin SDK.
+      // `updatedAt == request.time` forces
       // FieldValue.serverTimestamp(), so a client can't post a future
       // timestamp to make a stale location look fresh. (An employee spoofing
       // their own coordinates only games their own reminder — accepted.)
@@ -201,6 +203,21 @@ service cloud.firestore {
           && request.resource.data.updatedAt == request.time
           && request.resource.data.uid == request.auth.uid;
       }
+    }
+
+    // ── presence (admin live-map read) ───────────────────────────────────
+    // The nested self-only presence rules above still govern the owner's
+    // get/create/update/delete. This grants ADMINS read (get + list,
+    // including collectionGroup('presence')) over every presence
+    // subcollection. isAdmin() is caller-side only — no resource-data
+    // condition — so the UNFILTERED collection-group query stays provable
+    // by the rules engine (see the query-rules invariant in CLAUDE.md).
+    // NOTE: {path=**} reserves the subcollection name `presence` — any
+    // future subcollection with that name becomes admin-readable.
+    // (Verified 2026-07-15: users/{docId}/presence is the ONLY presence
+    // subcollection in the codebase today.)
+    match /{path=**}/presence/{presenceId} {
+      allow read: if isAdmin();
     }
 
     // ── appointments ──────────────────────────────────────────────────────────

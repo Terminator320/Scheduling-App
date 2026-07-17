@@ -217,6 +217,26 @@ void main() {
     });
   });
 
+  group('AddressParser coordinate-fallback pass-through', () {
+    // A GPS-derived "lat,lng" string (the live-location map's fallback when
+    // reverse geocoding fails) has no apt indicator and must pass straight
+    // through every canonicalization helper unchanged, so the map-launch path
+    // that consumes it never mangles it.
+    const coordinate = '45.5017,-73.5673';
+
+    test('splitApt does not treat it as an apt-prefixed address', () {
+      expect(AddressParser.splitApt(coordinate), isNull);
+    });
+
+    test('toCanonical returns it unchanged', () {
+      expect(AddressParser.toCanonical(coordinate), coordinate);
+    });
+
+    test('canonicalToDisplay returns it unchanged', () {
+      expect(AddressParser.canonicalToDisplay(coordinate), coordinate);
+    });
+  });
+
   group('AddressParser.parse', () {
     test('extracts postal code, province, country, city from full address', () {
       final f = AddressParser.parse(

@@ -211,18 +211,27 @@
   <li><strong>How it is used.</strong> Your most recent location is used as the
     starting point to estimate live, traffic-aware drive time to your next
     appointment (via Google Maps Platform, through our secure backend) so the
-    App can send the reminder at the right moment. It is <strong>not</strong>
-    used to monitor your movements, build a location history, or share your
-    whereabouts with anyone.</li>
+    App can send the reminder at the right moment. If you are an employee or
+    administrator, administrators can also view your single most recent
+    location on a live staff map in the App while location sharing is active.
+    It is <strong>not</strong> used to monitor your movements over time or
+    build a location history — only the latest reading is ever available,
+    never a trail of where you have been.</li>
   <li><strong>Where it is stored and who can see it.</strong> Only your single
-    most recent location is stored, in your own record in our database, readable
-    only by you and by the backend that calculates your reminder. It is not
-    shown to other employees. It is overwritten each time a newer reading is
-    taken.</li>
+    most recent location is stored, in your own record in our database. It is
+    readable by you, by the backend that calculates your reminder, and by
+    administrators, who can view each active staff member’s most recent
+    location — but not a history or trail — on a live map in the App while
+    location sharing is active. It is not shown to other, non-administrator
+    employees. It is overwritten each time a newer reading is taken. When an
+    administrator views the live map, your coordinates may also be sent,
+    through our secure backend, to Google’s Geocoding service so the App can
+    display a street address instead of raw coordinates.</li>
   <li><strong>How to turn it off.</strong> Deny or revoke location permission for
     the App in your device Settings, or grant “While Using the App” instead of
     “Always.” Your stored location is also deleted when you sign out or delete
-    your account.</li>
+    your account, and it is automatically removed from our systems if your
+    account is deleted or disabled by an administrator.</li>
 </ul>
 
 <p>
@@ -280,9 +289,10 @@
     </tr>
     <tr>
       <td>Google Maps Platform</td>
-      <td>Address autocomplete, place details, and — for the optional “time to
-        leave” reminders — traffic-aware drive-time estimates between your
-        location and your next appointment (Routes API).</td>
+      <td>Address autocomplete, place details, traffic-aware drive-time
+        estimates for the optional “time to leave” reminders (Routes API), and
+        — when an administrator views the live staff map — converting a staff
+        member’s coordinates to a street address (Geocoding API).</td>
       <td><a href="https://policies.google.com/privacy">policies.google.com/privacy</a></td>
     </tr>
     <tr>
@@ -337,8 +347,9 @@
     sign out on it or turn off notifications.</li>
   <li><strong>Location for reminders</strong> is not kept as a history: only your
     single most recent reading is stored, each new reading overwrites the last,
-    and it is deleted when you sign out, delete your account, or turn off
-    location access for the App.</li>
+    and it is deleted when you sign out, delete your account, turn off
+    location access for the App, or have your account deleted or disabled by
+    an administrator.</li>
 </ul>
 <p>
   We keep personal information only as long as necessary for the purposes

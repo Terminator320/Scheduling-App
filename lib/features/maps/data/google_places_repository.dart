@@ -120,4 +120,35 @@ class GooglePlacesRepository implements PlacesRepository {
       throw MapsFailureParse(cause: e, stackTrace: st);
     }
   }
+
+  @override
+  Future<String?> reverseGeocode({
+    required double lat,
+    required double lng,
+    required String locale,
+  }) async {
+    final HttpsCallableResult<dynamic> result;
+    try {
+      result = await _functions
+          .httpsCallable(
+            'placesReverseGeocode',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 10)),
+          )
+          .call({'lat': lat, 'lng': lng, 'locale': locale});
+    } catch (e, st) {
+      _logger.warn('placesReverseGeocode callable failed', e, st);
+      throw MapsErrorMapper.map(e, st);
+    }
+
+    try {
+      // NOTE: loose `as Map?` is required — Android callables return
+      // Map<dynamic, dynamic>, so a direct Map<String, dynamic> cast throws.
+      final data = (result.data as Map?)?.cast<String, dynamic>() ?? const {};
+      final address = data['address'];
+      return address == null ? null : address as String;
+    } catch (e, st) {
+      _logger.warn('placesReverseGeocode response parse failed', e, st);
+      throw MapsFailureParse(cause: e, stackTrace: st);
+    }
+  }
 }

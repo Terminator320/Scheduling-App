@@ -15,6 +15,7 @@ class AppRoutes {
   static const String employees = '/employees';
   static const String clients = '/clients';
   static const String history = '/history';
+  static const String liveMap = '/live-map';
   static const String settings = '/settings';
   static const String dashboard = '/dashboard';
   static const String dayRoute = '/day-route';
@@ -88,6 +89,15 @@ class AppRoutes {
         return _hubRoute(
           settings,
           AdaptiveDestination.history,
+          isAdmin: args.isAdmin,
+          employeeId: args.employeeId,
+        );
+
+      case liveMap:
+        final args = settings.arguments! as MainCalendarArgs;
+        return _hubRoute(
+          settings,
+          AdaptiveDestination.liveMap,
           isAdmin: args.isAdmin,
           employeeId: args.employeeId,
         );

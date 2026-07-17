@@ -1667,5 +1667,46 @@
   "calendar_couldNotSavePhoto": "Couldn't save the photo. Please try again.",
   "@calendar_couldNotSavePhoto": {"description": "Error notice when saving an appointment photo to the photo library fails"},
   "calendar_photoLibraryAccessNeeded": "Photo access is off. Enable it in Settings to save photos.",
-  "@calendar_photoLibraryAccessNeeded": {"description": "Error notice when the OS denies photo-library add access while saving a photo"}
+  "@calendar_photoLibraryAccessNeeded": {"description": "Error notice when the OS denies photo-library add access while saving a photo"},
+  "common_liveMap": "Live map",
+  "@common_liveMap": {"description": "Label for the button/nav entry that opens the admin live staff location map"},
+  "liveMap_title": "Staff map",
+  "@liveMap_title": {"description": "App bar title for the admin live staff location map screen"},
+  "liveMap_emptyState": "No one is sharing their location right now",
+  "@liveMap_emptyState": {"description": "Empty state message when no active employees have a live location to show"},
+  "liveMap_lastUpdatedJustNow": "Just now",
+  "@liveMap_lastUpdatedJustNow": {"description": "Relative timestamp label for a staff location update that just happened"},
+  "liveMap_lastUpdatedMinutesAgo": "{minutes, plural, =1{1 min ago} other{{minutes} min ago}}",
+  "@liveMap_lastUpdatedMinutesAgo": {
+    "description": "Relative timestamp label for a staff location update, in minutes",
+    "placeholders": {
+      "minutes": {"type": "int"}
+    }
+  },
+  "liveMap_lastUpdatedHoursAgo": "{hours, plural, =1{1 hr ago} other{{hours} hrs ago}}",
+  "@liveMap_lastUpdatedHoursAgo": {
+    "description": "Relative timestamp label for a staff location update, in hours",
+    "placeholders": {
+      "hours": {"type": "int"}
+    }
+  },
+  "liveMap_offlineLastSeen": "Offline — last seen {ago}",
+  "@liveMap_offlineLastSeen": {
+    "description": "Status label for an employee whose location is stale/offline, with a relative last-seen time",
+    "placeholders": {
+      "ago": {"type": "String"}
+    }
+  },
+  "liveMap_resolvingAddress": "Finding address…",
+  "@liveMap_resolvingAddress": {"description": "Placeholder shown while reverse-geocoding a staff pin's coordinates into an address"},
+  "liveMap_openInMaps": "Open in Maps",
+  "@liveMap_openInMaps": {"description": "Button label to open a selected staff pin's location in the device map app"},
+  "liveMap_trafficToggle": "Traffic",
+  "@liveMap_trafficToggle": {"description": "Toggle label for showing live traffic overlay on the staff map"},
+  "liveMap_satelliteToggle": "Satellite",
+  "@liveMap_satelliteToggle": {"description": "Toggle label for switching the staff map to satellite view"},
+  "liveMap_recenter": "Recenter map",
+  "@liveMap_recenter": {"description": "Accessibility label / tooltip for the button that recenters the staff map on all staff pins"},
+  "error_introLoadLiveMap": "Couldn't load the staff map",
+  "@error_introLoadLiveMap": {"description": "Error intro for LIVEMAP-LOAD"}
 }

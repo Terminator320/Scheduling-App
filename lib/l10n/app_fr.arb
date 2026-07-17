@@ -397,5 +397,18 @@
   "calendar_savePhoto": "Enregistrer dans Photos",
   "calendar_photoSavedToPhotos": "Enregistrée dans Photos",
   "calendar_couldNotSavePhoto": "Impossible d'enregistrer la photo. Veuillez réessayer.",
-  "calendar_photoLibraryAccessNeeded": "L'accès aux photos est désactivé. Activez-le dans Réglages pour enregistrer des photos."
+  "calendar_photoLibraryAccessNeeded": "L'accès aux photos est désactivé. Activez-le dans Réglages pour enregistrer des photos.",
+  "common_liveMap": "Carte en direct",
+  "liveMap_title": "Carte du personnel",
+  "liveMap_emptyState": "Personne ne partage sa position en ce moment",
+  "liveMap_lastUpdatedJustNow": "À l'instant",
+  "liveMap_lastUpdatedMinutesAgo": "{minutes, plural, =1{il y a 1 min} other{il y a {minutes} min}}",
+  "liveMap_lastUpdatedHoursAgo": "{hours, plural, =1{il y a 1 h} other{il y a {hours} h}}",
+  "liveMap_offlineLastSeen": "Hors ligne — vu {ago}",
+  "liveMap_resolvingAddress": "Recherche de l'adresse…",
+  "liveMap_openInMaps": "Ouvrir dans Maps",
+  "liveMap_trafficToggle": "Circulation",
+  "liveMap_satelliteToggle": "Satellite",
+  "liveMap_recenter": "Recentrer la carte",
+  "error_introLoadLiveMap": "Impossible de charger la carte du personnel"
 }

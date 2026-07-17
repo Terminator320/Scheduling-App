@@ -32,6 +32,16 @@ val keystoreProperties = Properties().apply {
 val hasReleaseKeystore = keystorePropertiesFile.exists() &&
     keystoreProperties.getProperty("storeFile")?.isNotBlank() == true
 
+// Android client Maps key for the admin live staff location map
+// (google_maps_flutter). Distinct from the server-side Secret-Manager
+// GOOGLE_MAP_API_KEY; loaded defensively since local.properties may not exist.
+val localPropertiesFile = rootProject.file("local.properties")
+val localProperties = Properties().apply {
+    if (localPropertiesFile.exists()) {
+        load(FileInputStream(localPropertiesFile))
+    }
+}
+
 android {
     namespace = "net.vogas.scheduling"
     compileSdk = flutter.compileSdkVersion
@@ -50,6 +60,8 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        manifestPlaceholders["MAPS_API_KEY"] = localProperties.getProperty("MAPS_API_KEY") ?: ""
     }
 
     signingConfigs {

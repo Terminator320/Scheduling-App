@@ -3,7 +3,14 @@ import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 
-enum AdaptiveDestination { calendar, clients, employees, history, settings }
+enum AdaptiveDestination {
+  calendar,
+  clients,
+  employees,
+  history,
+  liveMap,
+  settings,
+}
 
 /// Route + typed args for a destination — shared by the nav rail and the
 /// settings drawer so the two nav surfaces can't drift.
@@ -29,6 +36,10 @@ enum AdaptiveDestination { calendar, clients, employees, history, settings }
   AdaptiveDestination.history => (
     route: AppRoutes.history,
     arguments: HistoryArgs(isAdmin: isAdmin, employeeId: employeeId),
+  ),
+  AdaptiveDestination.liveMap => (
+    route: AppRoutes.liveMap,
+    arguments: MainCalendarArgs(isAdmin: isAdmin, employeeId: employeeId),
   ),
   AdaptiveDestination.settings => (
     route: AppRoutes.settings,
@@ -248,6 +259,12 @@ class AdaptiveShell extends StatelessWidget {
           icon: Icons.history_rounded,
           selectedIcon: Icons.history_rounded,
           label: l.common_history,
+        ),
+        _RailEntry(
+          destination: AdaptiveDestination.liveMap,
+          icon: Icons.map_outlined,
+          selectedIcon: Icons.map_rounded,
+          label: l.common_liveMap,
         ),
       ],
       _RailEntry(

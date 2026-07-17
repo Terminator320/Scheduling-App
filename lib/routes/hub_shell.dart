@@ -8,11 +8,13 @@ import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
 import 'package:scheduling/features/clients/screens/clients_screen.dart';
 import 'package:scheduling/features/clients/screens/history_screen.dart';
 import 'package:scheduling/features/employees/screens/employees_screen.dart';
+import 'package:scheduling/features/presence/screens/live_map_screen.dart';
 import 'package:scheduling/features/settings/screens/settings_screen.dart';
 
-/// The persistent post-login shell (U1/P4). Hosts the five hub destinations
-/// (calendar, clients, employees, history, settings) in a single route with
-/// an [IndexedStack], so switching tabs swaps an index instead of replacing
+/// The persistent post-login shell (U1/P4). Hosts the six hub destinations
+/// (calendar, clients, employees, history, live map, settings) in a single
+/// route with an [IndexedStack], so switching tabs swaps an index instead of
+/// replacing
 /// routes: screens are built lazily on first visit and then kept alive (no
 /// listener churn, page-1 refetch or skeleton flash), and the navigator
 /// stack keeps a stable root that deep pushes (detail screens, sheets) stack
@@ -276,6 +278,11 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
         employeeId: _employeeId,
       ),
       AdaptiveDestination.history => HistoryScreen(
+        key: key,
+        isAdmin: _isAdmin,
+        employeeId: _employeeId,
+      ),
+      AdaptiveDestination.liveMap => LiveMapScreen(
         key: key,
         isAdmin: _isAdmin,
         employeeId: _employeeId,

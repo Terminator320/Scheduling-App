@@ -11,4 +11,10 @@ abstract class PlacesRepository {
     String placeId, {
     required String sessionToken,
   });
+
+  Future<String?> reverseGeocode({
+    required double lat,
+    required double lng,
+    required String locale,
+  });
 }

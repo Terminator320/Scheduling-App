@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/shared/widgets/primitives/name_initials.dart';
 
 enum AvatarSize { xs, sm, md, lg }
 
@@ -29,7 +30,7 @@ class AppAvatar extends StatelessWidget {
       AvatarSize.md => 13.0,
       AvatarSize.lg => 17.0,
     };
-    final initials = _initials(name);
+    final initials = nameInitials(name);
     final background = color ?? _colorFromName(name);
     final foreground = contrastingForegroundFor(background);
     return Container(
@@ -50,13 +51,6 @@ class AppAvatar extends StatelessWidget {
               ),
             ),
     );
-  }
-
-  static String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty || parts.first.isEmpty) return '?';
-    if (parts.length == 1) return parts[0][0].toUpperCase();
-    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
   }
 
   static Color _colorFromName(String name) {

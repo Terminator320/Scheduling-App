@@ -61,6 +61,9 @@ App Attest steps are the critical path.
   already builds iOS options from `dev/.env` (`IOS_API_KEY`, `IOS_APP_ID`) with
   `iosBundleId: net.vogas.scheduling` — re-running it would rewrite the file
   into the literal-values style and break the env-based setup.
+- [ ] **First Xcode open resolves the new Google Maps SPM package**
+  (`google_maps_flutter_ios_sdk9`, which pins Maps SDK 9.x, iOS 15+) alongside
+  `firebase-ios-sdk` — no Podfile, same SPM flow as everything else.
 
 ## 2. Clone, restore, first run
 
@@ -138,6 +141,11 @@ Open `ios/Runner.xcworkspace`.
   capture, photo-library picker, contacts save-flow, biometric app-lock
   (Face ID — usage description already declared), map launching, phone/email
   launchers.
+- [ ] **Admin live staff map renders** — `AppDelegate` parses
+  `IOS_MAPS_API_KEY` from the bundled `dev/.env` at launch and calls
+  `GMSServices.provideAPIKey(...)`. If the key is missing/empty the map is
+  blank and the console logs "IOS_MAPS_API_KEY missing — live map will be
+  blank" (never a crash).
 - [x] Both locales: flip the device to French and spot-check (EN/FR parity is
   clean in code — this is a rendering sanity pass).
 

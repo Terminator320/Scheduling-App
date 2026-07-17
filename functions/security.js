@@ -72,6 +72,24 @@ function requireString(data, key, maxLen) {
 }
 
 /**
+ * Validates and returns a finite number field within [min, max] (inclusive).
+ * Throws HttpsError("invalid-argument") when the value is missing, not a
+ * number, NaN, non-finite (Infinity/-Infinity), or out of range.
+ * @param {*} value raw payload value.
+ * @param {string} name field name, used to build the error code.
+ * @param {number} min minimum allowed value (inclusive).
+ * @param {number} max maximum allowed value (inclusive).
+ * @return {number}
+ */
+function requireNumberInRange(value, name, min, max) {
+  if (typeof value !== "number" || !Number.isFinite(value) ||
+      value < min || value > max) {
+    throw new HttpsError("invalid-argument", `invalid-${name}`);
+  }
+  return value;
+}
+
+/**
  * Reads an optional sessionToken from the payload. Returns "" if absent;
  * throws HttpsError("invalid-argument") when present but malformed (wrong
  * type, too long, or containing control characters).
@@ -204,6 +222,7 @@ module.exports = {
   hasControlChar,
   assertPayloadShape,
   requireString,
+  requireNumberInRange,
   readSessionToken,
   enforceDurableRateLimit,
   assertAdmin,

@@ -244,6 +244,15 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp12),
           child: _NavItem(
+            icon: Icons.map_rounded,
+            iconColor: scheme.primary,
+            label: context.l10n.common_liveMap,
+            onTap: () => go(AdaptiveDestination.liveMap),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp12),
+          child: _NavItem(
             icon: Icons.insights_rounded,
             iconColor: scheme.secondary,
             label: context.l10n.dashboard_title,

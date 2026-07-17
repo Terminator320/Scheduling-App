@@ -11,7 +11,8 @@ import 'package:scheduling/core/permissions/location_permission_service.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
-import 'package:scheduling/features/notifications/application/push_registration_controller.dart' show PushRegistrationController, shouldRegisterPush;
+import 'package:scheduling/features/notifications/application/push_registration_controller.dart'
+    show PushRegistrationController, shouldRegisterPush;
 import 'package:scheduling/features/presence/data/presence_repository.dart';
 
 final presenceRepositoryProvider = Provider<PresenceRepository>(
@@ -62,6 +63,18 @@ bool shouldHeartbeat({
     lastUploadAt != null &&
     now.difference(lastUploadAt) >= presenceHeartbeatEvery;
 
+/// Delay until a throttled fix would be allowed to write, or null when a
+/// write is already allowed now (mirrors [shouldWritePresenceFix]'s gate).
+/// Used to arm a trailing-flush timer so the last fix in a burst of movement
+/// still lands instead of being silently dropped by the throttle.
+Duration? trailingFlushDelay({
+  required DateTime? lastUploadAt,
+  required DateTime now,
+}) {
+  if (shouldWritePresenceFix(lastUploadAt: lastUploadAt, now: now)) return null;
+  return minPresenceUploadGap - now.difference(lastUploadAt!);
+}
+
 /// Owns the background position stream that keeps
 /// `users/{docId}/presence/location` fresh for the travel-time reminders.
 /// Driven by `main.dart` on every `currentUserDocProvider` emission (mirrors
@@ -76,6 +89,7 @@ class PresenceSyncController {
 
   StreamSubscription<Position>? _positionSub;
   Timer? _heartbeat;
+  Timer? _trailingFlush;
   AppLifecycleListener? _lifecycle;
   bool _busy = false;
   bool _pendingResync = false;
@@ -162,7 +176,11 @@ class PresenceSyncController {
             final now = DateTime.now();
             if (shouldWritePresenceFix(lastUploadAt: _lastUploadAt, now: now)) {
               _lastUploadAt = now;
+              _trailingFlush?.cancel();
+              _trailingFlush = null;
               unawaited(_upload(position));
+            } else {
+              _armTrailingFlush(now);
             }
           },
           onError: (Object e, StackTrace st) {
@@ -179,8 +197,29 @@ class PresenceSyncController {
       final now = DateTime.now();
       if (shouldHeartbeat(lastUploadAt: _lastUploadAt, now: now)) {
         _lastUploadAt = now;
+        _trailingFlush?.cancel();
+        _trailingFlush = null;
         unawaited(_upload(position));
       }
+    });
+  }
+
+  /// Arms a one-shot timer so the last fix in a throttled burst still lands
+  /// once the throttle window clears, instead of being silently dropped.
+  void _armTrailingFlush(DateTime now) {
+    final delay = trailingFlushDelay(lastUploadAt: _lastUploadAt, now: now);
+    if (delay == null) return;
+    _trailingFlush?.cancel();
+    _trailingFlush = Timer(delay, () {
+      _trailingFlush = null;
+      final position = _lastPosition;
+      final fireNow = DateTime.now();
+      if (position == null ||
+          !shouldWritePresenceFix(lastUploadAt: _lastUploadAt, now: fireNow)) {
+        return;
+      }
+      _lastUploadAt = fireNow;
+      unawaited(_upload(position));
     });
   }
 
@@ -221,7 +260,8 @@ class PresenceSyncController {
       // untranslated text is acceptable).
       foregroundNotificationConfig: const ForegroundNotificationConfig(
         notificationTitle: 'ES Pro',
-        notificationText: 'Sharing your location for time-to-leave alerts.',
+        notificationText:
+            'Sharing your location for time-to-leave alerts and the staff map.',
       ),
     );
   }
@@ -231,6 +271,8 @@ class PresenceSyncController {
     _positionSub = null;
     _heartbeat?.cancel();
     _heartbeat = null;
+    _trailingFlush?.cancel();
+    _trailingFlush = null;
     _trackedUid = null;
     _docId = null;
     _lastPosition = null;

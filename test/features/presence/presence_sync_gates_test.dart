@@ -111,4 +111,40 @@ void main() {
       );
     });
   });
+
+  group('trailingFlushDelay', () {
+    test('null lastUploadAt allows a write now', () {
+      expect(trailingFlushDelay(lastUploadAt: null, now: now), isNull);
+    });
+
+    test('exactly at the gap allows a write now', () {
+      expect(
+        trailingFlushDelay(
+          lastUploadAt: now.subtract(const Duration(minutes: 2)),
+          now: now,
+        ),
+        isNull,
+      );
+    });
+
+    test('past the gap allows a write now', () {
+      expect(
+        trailingFlushDelay(
+          lastUploadAt: now.subtract(const Duration(minutes: 3)),
+          now: now,
+        ),
+        isNull,
+      );
+    });
+
+    test('inside the gap returns the exact remainder', () {
+      expect(
+        trailingFlushDelay(
+          lastUploadAt: now.subtract(const Duration(seconds: 30)),
+          now: now,
+        ),
+        const Duration(seconds: 90),
+      );
+    });
+  });
 }

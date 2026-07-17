@@ -24,6 +24,7 @@ exports.syncUsersByUid = bridge.syncUsersByUid;
 exports.propagateClientEdits = clientPropagation.propagateClientEdits;
 exports.placesAutocomplete = places.placesAutocomplete;
 exports.placesGetDetails = places.placesGetDetails;
+exports.placesReverseGeocode = places.placesReverseGeocode;
 exports.validateUploadedImage = maintenance.validateUploadedImage;
 exports.deleteAccount = account.deleteAccount;
 exports.createEmployeeInvite = invites.createEmployeeInvite;

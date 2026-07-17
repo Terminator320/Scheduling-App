@@ -17,6 +17,7 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/hub_shell.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
+import 'package:scheduling/shared/widgets/feedback/centered_error_text.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 
 /// Admin-only at-a-glance view of the business. Reached only from admin
@@ -60,7 +61,9 @@ class DashboardScreen extends ConsumerWidget {
       ),
       body: switch (stats) {
         AsyncData(:final value) => _StatsList(stats: value),
-        AsyncError() => const _ErrorBody(),
+        AsyncError() => CenteredErrorText(
+          message: context.l10n.error_introLoadDashboard,
+        ),
         _ => const _LoadingList(),
       },
     );
@@ -123,27 +126,6 @@ class _LoadingList extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.sp16),
       children: [for (var i = 0; i < 8; i++) const SkeletonAppointmentRow()],
-    );
-  }
-}
-
-class _ErrorBody extends StatelessWidget {
-  const _ErrorBody();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sp24),
-        child: Text(
-          context.l10n.error_introLoadDashboard,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ),
     );
   }
 }
