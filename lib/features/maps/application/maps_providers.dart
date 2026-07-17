@@ -6,3 +6,50 @@ import 'package:scheduling/features/maps/domain/places_repository.dart';
 final placesRepositoryProvider = Provider<PlacesRepository>(
   (ref) => GooglePlacesRepository(),
 );
+
+/// Family key for [reverseGeocodeProvider]. The constructor rounds raw
+/// coordinates to a 4-decimal-degree cell (~11m at the equator) so nearby GPS
+/// fixes within the same cell share one reverse-geocode lookup instead of
+/// firing a fresh billable call per fix, and carries [locale] so a language
+/// switch keys a fresh lookup rather than serving the other language's cached
+/// address. Build it directly with the raw lat/lng — it self-normalizes.
+class ReverseGeocodeQuery {
+  ReverseGeocodeQuery({
+    required double lat,
+    required double lng,
+    required this.locale,
+  }) : lat = double.parse(lat.toStringAsFixed(4)),
+       lng = double.parse(lng.toStringAsFixed(4));
+
+  final double lat;
+  final double lng;
+  final String locale;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ReverseGeocodeQuery &&
+      other.lat == lat &&
+      other.lng == lng &&
+      other.locale == locale;
+
+  @override
+  int get hashCode => Object.hash(lat, lng, locale);
+}
+
+/// Resolves the display address for a rounded lat/lng cell (build the key with
+/// [ReverseGeocodeQuery]). A successful lookup calls [Ref.keepAlive] so it
+/// stays cached for the rest of the session — staff addresses don't change
+/// mid-session — while a failed lookup stays autoDispose so it's retried on
+/// the next watch. The widget layer should treat an [AsyncError] as "no
+/// address available", not surface a notice for it.
+final reverseGeocodeProvider = FutureProvider.autoDispose
+    .family<String?, ReverseGeocodeQuery>((ref, key) async {
+      final repo = ref.watch(placesRepositoryProvider);
+      final address = await repo.reverseGeocode(
+        lat: key.lat,
+        lng: key.lng,
+        locale: key.locale,
+      );
+      ref.keepAlive();
+      return address;
+    });

@@ -24,9 +24,11 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 
 ## Deployment status
 
-- **20 functions defined** in code; **all 20 deployed** — verified live against
+- **21 functions defined** in code; **20 deployed** — verified live against
   `schedulingapp-88727` on 2026-07-13 (v2, Node.js 24, 256 MB; `us-central1`
-  except `validateUploadedImage` in `us-east1`).
+  except `validateUploadedImage` in `us-east1`). `placesReverseGeocode` (added
+  for the live staff-location map) is **not yet deployed** — pending the next
+  `firebase deploy --only functions`.
 - The 4 **push-notification functions** (`notifyAppointmentChanges`,
   `sendUpcomingJobReminders`, `sendDailyJobDigest`, `sendOverdueJobPrompts`)
   and the 2 **Wave auto-import cadence functions** (`waveSetImportSchedule`,
@@ -53,6 +55,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 |---|---|---|---|---|---|---|
 | `placesAutocomplete` | callable | `onCall` | `places.js` | `google_places_repository.dart` (address field typing) | `GOOGLE_MAP_API_KEY` | App Check ✓ · admin · in-mem 20/min·uid |
 | `placesGetDetails` | callable | `onCall` | `places.js` | `google_places_repository.dart` (address selected) | `GOOGLE_MAP_API_KEY` | App Check ✓ · admin · durable 40/15min |
+| `placesReverseGeocode` | callable | `onCall` | `places.js` | live staff-location map (admin) | `GOOGLE_MAP_API_KEY` | App Check ✓ · admin · durable 120/hr — **not yet deployed** |
 | `deleteAccount` | callable | `onCall` | `account.js` | `account_deletion_service.dart` | — | App Check ✓ · reauth ≤5min · durable 5/15min |
 | `createEmployeeInvite` | callable | `onCall` | `invites.js` | `firebase_employees_repository.dart` | — | App Check ✓ · admin · durable 20/hr·uid |
 | `redeemSignupCode` | callable | `onCall` | `invites.js` | `firebase_employees_repository.dart`, `auth_service.dart` | — | App Check ✓ · durable 5/15min·**email** |
@@ -126,6 +129,19 @@ Proxies Places details for a selected address (one billable call per address the
 user actually picks). Same guards as autocomplete (App Check + auth +
 `assertAdmin`). Uses the durable Firestore rate limiter (40 per 15 min) — lower
 volume, but each call is more expensive, so a hard cap matters.
+
+### `placesReverseGeocode` — `places.js`
+Backs the live staff-location map: turns a lat/lng into a human-readable
+address. Callable — App Check + auth + `assertAdmin` + durable Firestore rate
+limiter (120 per hour per uid; a tap-driven, not keystroke-driven, surface, so
+a generous hourly cap suffices). Validates `lat`/`lng` are numbers in their
+valid ranges and `locale` is an allowlisted value (`en`/`fr`); rounds
+coordinates to 5 decimal places before the upstream call so GPS jitter can't
+multiply request volume. Calls the classic Geocoding API (not Places v1, which
+has no reverse-geocode mode) with `GOOGLE_MAP_API_KEY`, and returns only the
+top result's `formatted_address` (or `null` on `ZERO_RESULTS`) — never logs
+coordinates or resolved addresses. **Not yet deployed** — see Deployment
+status.
 
 ## Images
 

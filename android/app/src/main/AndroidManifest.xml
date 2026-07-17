@@ -56,6 +56,13 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Android client Maps key for the admin live staff location map
+             (google_maps_flutter). Read from android/local.properties
+             (gitignored) via the build.gradle.kts manifest placeholder —
+             distinct from the server-side Secret-Manager GOOGLE_MAP_API_KEY. -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${MAPS_API_KEY}"/>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

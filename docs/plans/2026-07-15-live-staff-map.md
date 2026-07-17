@@ -2,7 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status: PLANNED — approved design 2026-07-15, not started.**
+**Status: IMPLEMENTED 2026-07-17 on branch `notification` (uncommitted).**
+All tasks done; analyze clean, 909 Flutter + 358 jest tests green. Remaining:
+user-side prerequisites (client Maps keys, Maps SDKs + Geocoding API enable),
+`firebase deploy --only functions,firestore:rules`, and the on-device manual
+pass in Task 13.
 
 **Goal:** A Find My-style live map, **admin-only**, showing the most recent
 location of every active staff member (employees AND admins) as colored
@@ -109,16 +113,6 @@ blocking for anything user-facing.
 
 ---
 
-## Task 0 — Git setup
-
-- [ ] `git fetch origin notification main`
-- [ ] **SAFETY GATE:** `git log --oneline origin/main..claude/live-location-tracking-z49h7o`
-      must print nothing (verified 2026-07-15: branch tip `f8284de` ==
-      `origin/main`). Abort and reassess if it prints commits.
-- [ ] `git checkout -B claude/live-location-tracking-z49h7o origin/notification`
-- [ ] Final push is `git push -u --force-with-lease origin
-      claude/live-location-tracking-z49h7o` (`origin/notification` has
-      diverged from main). Any PR targets `notification`, NOT `main`.
 
 ## Task 1 — Dependencies (`pubspec.yaml`)
 

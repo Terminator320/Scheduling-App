@@ -91,6 +91,26 @@ void main() {
     expect(popScopeOnClients.canPop, isFalse);
   });
 
+  testWidgets('the live-map tab builds lazily and selects via the shell', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app());
+    expect(find.text('screen-liveMap', skipOffstage: false), findsNothing);
+
+    _shellState(tester).select(
+      AdaptiveDestination.liveMap,
+      isAdmin: true,
+      employeeId: 'e1',
+    );
+    await tester.pump();
+
+    expect(
+      _shellState(tester).currentDestination,
+      AdaptiveDestination.liveMap,
+    );
+    expect(find.text('screen-liveMap'), findsOneWidget);
+  });
+
   testWidgets('tabs build lazily on first visit, then stay alive', (
     tester,
   ) async {

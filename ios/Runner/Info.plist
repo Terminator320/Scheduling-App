@@ -61,9 +61,9 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>This app uses Face ID to unlock the app lock you enabled in Settings.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Allowing location in the background keeps your time-to-leave alerts accurate even when the app is closed.</string>
+	<string>Allowing location in the background keeps your time-to-leave alerts and your position on the staff map accurate even when the app is closed.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Your location tells you when it is time to leave for your next appointment.</string>
+	<string>Your location tells you when it is time to leave for your next appointment and lets your managers see your current location on the staff map.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app accesses your photo library to attach images to appointments and profiles.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
