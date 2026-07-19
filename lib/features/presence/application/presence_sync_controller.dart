@@ -36,15 +36,16 @@ const minPresenceUploadGap = Duration(minutes: 2);
 /// in sync: window comfortably above two missed heartbeats).
 const presenceHeartbeatEvery = Duration(minutes: 10);
 
-/// Pure gate: signed-in active employees AND admins track presence (same
-/// audience as [shouldRegisterPush]) — an admin assigned to a job gets the
-/// timed "leave now" push, so their leave time deserves the same live-GPS
-/// accuracy (decided 2026-07-13).
+/// Pure gate: presence tracks exactly the timed-push audience — an admin
+/// assigned to a job gets the timed "leave now" push, so their leave time
+/// deserves the same live-GPS accuracy (decided 2026-07-13). Delegates to
+/// [shouldRegisterPush] so the "presence audience == push audience" invariant
+/// holds by construction and can't drift.
 bool shouldTrackPresence({
   required String role,
   required String status,
   required bool signedIn,
-}) => signedIn && status == 'active' && (role == 'employee' || role == 'admin');
+}) => shouldRegisterPush(role: role, status: status, signedIn: signedIn);
 
 /// Pure throttle for movement-driven fixes.
 bool shouldWritePresenceFix({

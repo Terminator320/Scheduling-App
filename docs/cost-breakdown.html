@@ -362,7 +362,7 @@
 <div class="wrap">
   <header>
     <p class="eyebrow">Firebase Backend &middot; Cost Analysis</p>
-    <h1>What the 20 Cloud Functions actually cost</h1>
+    <h1>What the 21 Cloud Functions actually cost</h1>
     <p class="lede">
       Across every function, trigger, and supporting service, the backend runs
       almost entirely inside Google's free tiers &mdash; a realistic
@@ -408,7 +408,7 @@
   <div class="callout">
     <span class="mark">$0</span>
     <p>
-      <b>Why compute is free:</b> all 20 functions' invocations pool into a
+      <b>Why compute is free:</b> all 21 functions' invocations pool into a
       single <b>2,000,000/month</b> free allowance, and combined compute
       (~9,000 vCPU-seconds) sits far under the <b>180,000 vCPU-s</b> free tier.
       You'd need roughly <b>70&times; more traffic</b> to leave the free tier on
@@ -495,6 +495,14 @@
           </tr>
           <tr>
             <td class="idx">08</td>
+            <td class="fn">placesReverseGeocode</td>
+            <td><span class="trig">onCall</span></td>
+            <td>Admin taps a staff pin on the live map</td>
+            <td class="num">300</td>
+            <td><span class="pill pill--free">$0 &middot; under cap*</span></td>
+          </tr>
+          <tr>
+            <td class="idx">09</td>
             <td class="fn">waveUpsertCustomer</td>
             <td><span class="trig">clients write</span></td>
             <td>A client is created or edited</td>
@@ -502,7 +510,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">09</td>
+            <td class="idx">10</td>
             <td class="fn">propagateClientEdits</td>
             <td><span class="trig">clients update</span></td>
             <td>Client name / phone / address edited</td>
@@ -510,7 +518,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">10</td>
+            <td class="idx">11</td>
             <td class="fn">waveGetConnection</td>
             <td><span class="trig">onCall</span></td>
             <td>Admin opens Settings &rarr; Wave</td>
@@ -518,7 +526,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">11</td>
+            <td class="idx">12</td>
             <td class="fn">syncUsersByUid</td>
             <td><span class="trig">users write</span></td>
             <td>Invite created / account activated</td>
@@ -526,7 +534,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">12</td>
+            <td class="idx">13</td>
             <td class="fn">purgeExpiredHistory</td>
             <td><span class="trig">daily 03:00</span></td>
             <td>Timer deletes 2-year-old history</td>
@@ -534,7 +542,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">13</td>
+            <td class="idx">14</td>
             <td class="fn">sendDailyJobDigest</td>
             <td><span class="trig">daily 18:00</span></td>
             <td>Timer pushes each employee's daily digest</td>
@@ -542,7 +550,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">14</td>
+            <td class="idx">15</td>
             <td class="fn">waveScheduledImport</td>
             <td><span class="trig">every 24 h</span></td>
             <td>Timer re-imports Wave customers when due</td>
@@ -550,7 +558,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">15</td>
+            <td class="idx">16</td>
             <td class="fn">createEmployeeInvite</td>
             <td><span class="trig">onCall</span></td>
             <td>Admin invites an employee</td>
@@ -558,7 +566,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">16</td>
+            <td class="idx">17</td>
             <td class="fn">redeemSignupCode</td>
             <td><span class="trig">onCall</span></td>
             <td>New employee redeems an invite code</td>
@@ -566,7 +574,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">17</td>
+            <td class="idx">18</td>
             <td class="fn">deleteAccount</td>
             <td><span class="trig">onCall</span></td>
             <td>User deletes their own account</td>
@@ -574,7 +582,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">18</td>
+            <td class="idx">19</td>
             <td class="fn">waveSetImportSchedule</td>
             <td><span class="trig">onCall</span></td>
             <td>Admin changes the Wave import cadence</td>
@@ -582,7 +590,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">19</td>
+            <td class="idx">20</td>
             <td class="fn">waveBootstrap</td>
             <td><span class="trig">onCall</span></td>
             <td>One-time Wave connection setup</td>
@@ -590,7 +598,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">20</td>
+            <td class="idx">21</td>
             <td class="fn">waveImportCustomers</td>
             <td><span class="trig">onCall</span></td>
             <td>Admin seeds clients from Wave</td>
@@ -663,6 +671,14 @@
             <td class="fn">Places &middot; Details</td>
             <td>Address selected (#4)</td>
             <td class="num">450</td>
+            <td class="num">10,000</td>
+            <td class="num">~$5 / K</td>
+            <td><span class="pill pill--free">$0</span></td>
+          </tr>
+          <tr>
+            <td class="fn">Geocoding &middot; Reverse</td>
+            <td>Staff-pin address (#8)</td>
+            <td class="num">300</td>
             <td class="num">10,000</td>
             <td class="num">~$5 / K</td>
             <td><span class="pill pill--free">$0</span></td>
@@ -788,7 +804,7 @@
       <li>Free tiers cited: Functions <b>2M invocations + 180K vCPU-s</b>; Places <b>10K calls per SKU</b>; Firestore <b>50K reads / 20K writes / 20K deletes per day</b>; Storage <b>5 GB</b>; Scheduler <b>3 jobs</b> (six now run, so three bill at $0.10/job); FCM push <b>unlimited &amp; free</b>; Secret Manager <b>6 versions + 10K access</b>.</li>
       <li>Google Places replaced its $200 monthly credit (March 2025) with a per-SKU free monthly cap; session tokens can bill in-session autocomplete as $0.</li>
       <li>Wave Accounting and Firebase Cloud Messaging charge nothing per call &mdash; those functions cost only their (free-tier) Firebase compute.</li>
-      <li>All 20 functions are wired in <code>functions/index.js</code> for <code>schedulingapp-88727</code>; counts reflect the source as of 2026-07-13.</li>
+      <li>All 21 functions are wired in <code>functions/index.js</code> for <code>schedulingapp-88727</code>; counts reflect the source as of 2026-07-18.</li>
     </ul>
   </div>
 </div>

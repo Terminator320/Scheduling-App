@@ -82,7 +82,9 @@ Legend: `[x]` done/verified · `[ ]` to do · ⚠️ blocker
   declaration is missing Location. Add in App Store Connect → App Privacy:
   - **Location → Precise Location**, **Linked to the user** (stored per-uid at
     `users/{docId}/presence/location`), purpose **App Functionality**
-    (travel-time "time to leave" reminders), **not** used for tracking.
+    (travel-time "time to leave" reminders, and — as of 1.32.0+51 — the admin
+    live staff map, which reads the same presence data), **not** used for
+    tracking.
   - The privacy *policy* webpage already covers this (section 2.4, updated
     2026-07-13); only the ASC questionnaire/nutrition label is stale.
   - `PrivacyInfo.xcprivacy` has an empty `NSPrivacyCollectedDataTypes` — left

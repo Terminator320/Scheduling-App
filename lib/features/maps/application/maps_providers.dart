@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/features/maps/data/google_places_repository.dart';
@@ -13,6 +14,7 @@ final placesRepositoryProvider = Provider<PlacesRepository>(
 /// firing a fresh billable call per fix, and carries [locale] so a language
 /// switch keys a fresh lookup rather than serving the other language's cached
 /// address. Build it directly with the raw lat/lng — it self-normalizes.
+@immutable
 class ReverseGeocodeQuery {
   ReverseGeocodeQuery({
     required double lat,

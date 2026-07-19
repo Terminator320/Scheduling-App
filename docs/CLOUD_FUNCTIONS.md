@@ -2,7 +2,7 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-07-13 by auditing the source against the app's call sites and
+refreshed 2026-07-18 by auditing the source against the app's call sites and
 the live deployment (`sendUpcomingJobReminders` rebuilt into the travel-aware
 "time to leave" sweep — `travel_utils.js`, Routes API, `GOOGLE_MAP_API_KEY`
 now shared via `params.js`; Places callables previously tightened to admin-only

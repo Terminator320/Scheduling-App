@@ -127,10 +127,31 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     return null;
   }
 
-  Future<void> _saveToPhotos() async {
+  /// Runs [body] under the shared `_busy` guard, so a double-tap can't launch
+  /// two saves/shares. On throw it logs under [logTag] and shows [errorMessage];
+  /// [body] may also surface its own notices (e.g. a partial-success path).
+  Future<void> _runExclusive(
+    String logTag,
+    String errorMessage,
+    Future<void> Function() body,
+  ) async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
+      await body();
+    } catch (e, st) {
+      ref.read(loggerProvider).warn('$logTag failed', e, st);
+      if (!mounted) return;
+      ref.read(noticeServiceProvider).error(errorMessage);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _saveToPhotos() => _runExclusive(
+    'IMG-SAVE',
+    context.l10n.calendar_couldNotSavePhoto,
+    () async {
       // iOS gates on add-only Photos access; saver_gallery would fail silently
       // without it. Android (dev-only) handles its own permission natively.
       if (Platform.isIOS) {
@@ -165,21 +186,13 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
             .read(noticeServiceProvider)
             .error(context.l10n.calendar_couldNotSavePhoto);
       }
-    } catch (e, st) {
-      ref.read(loggerProvider).warn('IMG-SAVE failed', e, st);
-      if (!mounted) return;
-      ref
-          .read(noticeServiceProvider)
-          .error(context.l10n.calendar_couldNotSavePhoto);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
+    },
+  );
 
-  Future<void> _share() async {
-    if (_busy) return;
-    setState(() => _busy = true);
-    try {
+  Future<void> _share() => _runExclusive(
+    'IMG-SHARE',
+    context.l10n.error_somethingWentWrongPleaseTryAgain,
+    () async {
       final file = await _currentImageFile();
       if (file == null) throw StateError('image source not resolvable');
       // iPad anchors the share popover to the button's frame, else it throws.
@@ -191,16 +204,8 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
       await SharePlus.instance.share(
         ShareParams(files: [XFile(file.path)], sharePositionOrigin: origin),
       );
-    } catch (e, st) {
-      ref.read(loggerProvider).warn('IMG-SHARE failed', e, st);
-      if (!mounted) return;
-      ref
-          .read(noticeServiceProvider)
-          .error(context.l10n.error_somethingWentWrongPleaseTryAgain);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
+    },
+  );
 
   @override
   Widget build(BuildContext context) {
