@@ -20,8 +20,8 @@
 
 // The Swift `ActivityAttributes` type name the `aps` envelope must name so
 // ActivityKit can route a push-to-start to the right activity
-// (`ios/ScheduleWidget/JobActivityAttributes.swift`).
-const ATTRIBUTES_TYPE = "JobActivityAttributes";
+// (`ios/ScheduleWidget/LiveActivitiesAppAttributes.swift`).
+const ATTRIBUTES_TYPE = "LiveActivitiesAppAttributes";
 
 const PHASE_TRAVEL = "travel";
 const PHASE_ON_SITE = "onSite";

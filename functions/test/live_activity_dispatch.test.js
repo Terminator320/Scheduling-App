@@ -121,7 +121,7 @@ describe("startLiveActivity", () => {
     expect(started).toBe(2);
     const {payload} = sendLiveActivityPush.mock.calls[0][0];
     expect(payload.aps.event).toBe("start");
-    expect(payload.aps["attributes-type"]).toBe("JobActivityAttributes");
+    expect(payload.aps["attributes-type"]).toBe("LiveActivitiesAppAttributes");
     expect(payload.aps["attributes"].appointmentId).toBe("appt1");
     expect(payload.aps["attributes"].employeeColorValue).toBe(4283215696);
     expect(payload.aps["content-state"].clientName).toBe("Ada");

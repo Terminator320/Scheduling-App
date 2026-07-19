@@ -41,7 +41,7 @@ const {sendLiveActivityPush} = require("./apns_client");
 /**
  * The ActivityKit `attributes` a push-to-start carries — the immutable half of
  * the activity. Hand-mirrored with the `ActivityAttributes` struct in
- * `ios/ScheduleWidget/JobActivityAttributes.swift`; change one, change both.
+ * `ios/ScheduleWidget/LiveActivitiesAppAttributes.swift`; change one, change both.
  * @param {{appointmentId: string, employeeDocId: string,
  *   employeeColorValue: (number|undefined)}} args
  * @return {!Object}

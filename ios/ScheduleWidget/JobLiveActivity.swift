@@ -30,8 +30,8 @@ private let lapsedRed = Color.red
 private let onSiteGreen = Color(red: 0.13, green: 0.65, blue: 0.35)
 
 @available(iOS 16.1, *)
-private func accentColor(
-    for state: JobActivityAttributes.ContentState, now: Date
+private func phaseAccent(
+    for state: LiveActivitiesAppAttributes.ContentState, now: Date
 ) -> Color {
     if state.isOnSite { return onSiteGreen }
     return state.isLapsed(at: now) ? lapsedRed : amber
@@ -117,9 +117,9 @@ private struct BrandGlyph: View {
 
 @available(iOS 17.2, *)
 private struct LockScreenCard: View {
-    let context: ActivityViewContext<JobActivityAttributes>
+    let context: ActivityViewContext<LiveActivitiesAppAttributes>
 
-    private var state: JobActivityAttributes.ContentState {
+    private var state: LiveActivitiesAppAttributes.ContentState {
         context.state
     }
 
@@ -127,7 +127,7 @@ private struct LockScreenCard: View {
         // Read once per render: the amber -> red lapse repaints when the next
         // update push lands, which the 5-minute sweep already provides.
         let now = Date()
-        let tint = accentColor(for: state, now: now)
+        let tint = phaseAccent(for: state, now: now)
         return HStack(alignment: .top, spacing: 10) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(context.attributes.railColor)
@@ -233,12 +233,12 @@ private struct LockScreenCard: View {
 @available(iOS 17.2, *)
 struct JobLiveActivity: Widget {
     var body: some WidgetConfiguration {
-        ActivityConfiguration(for: JobActivityAttributes.self) { context in
+        ActivityConfiguration(for: LiveActivitiesAppAttributes.self) { context in
             LockScreenCard(context: context)
                 .activitySystemActionForegroundColor(.primary)
         } dynamicIsland: { context in
             let state = context.state
-            let tint = accentColor(for: state, now: Date())
+            let tint = phaseAccent(for: state, now: Date())
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     // Leads on an ABSOLUTE time ("Leave at 7:54"), never a
