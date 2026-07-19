@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -16,6 +18,7 @@ import 'package:scheduling/features/presence/application/live_map_providers.dart
 import 'package:scheduling/features/presence/domain/live_map_aggregator.dart';
 import 'package:scheduling/features/presence/widgets/staff_info_card.dart';
 import 'package:scheduling/features/presence/widgets/staff_marker_icon.dart';
+import 'package:scheduling/features/presence/widgets/staff_roster_sheet.dart';
 import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
@@ -346,6 +349,24 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     _maybeFitCamera(_lastPoints);
   }
 
+  Future<void> _openRoster() async {
+    final selected = await showStaffRosterSheet(
+      context,
+      selfDocId: widget.employeeId,
+    );
+    if (!mounted || selected == null) return;
+    _focusOn(selected);
+  }
+
+  /// Selects a staff member (opens their info card) and eases the camera to
+  /// them — the roster row → map bridge.
+  void _focusOn(StaffMapPoint point) {
+    _selectMarker(point.userDocId);
+    _mapController?.animateCamera(
+      CameraUpdate.newLatLngZoom(LatLng(point.lat, point.lng), 15),
+    );
+  }
+
   void _maybeFitCamera(List<StaffMapPoint> points) {
     if (_didInitialFit || _mapController == null || points.isEmpty) return;
     _didInitialFit = true;
@@ -421,11 +442,23 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
           bottom: AppSpacing.sp16,
           right: AppSpacing.sp16,
           child: SafeArea(
-            child: FloatingActionButton.small(
-              heroTag: 'liveMapRecenterFab',
-              tooltip: context.l10n.liveMap_recenter,
-              onPressed: () => _applyFit(_lastPoints),
-              child: const Icon(Icons.my_location),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'liveMapRosterFab',
+                  tooltip: context.l10n.liveMap_rosterButton,
+                  onPressed: paused ? null : _openRoster,
+                  child: const Icon(Icons.groups_outlined),
+                ),
+                const SizedBox(height: AppSpacing.sp12),
+                FloatingActionButton.small(
+                  heroTag: 'liveMapRecenterFab',
+                  tooltip: context.l10n.liveMap_recenter,
+                  onPressed: () => _applyFit(_lastPoints),
+                  child: const Icon(Icons.my_location),
+                ),
+              ],
             ),
           ),
         ),
@@ -460,6 +493,12 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     myLocationButtonEnabled: false,
     onMapCreated: config.onMapCreated,
     onTap: config.onTap,
+    // The map is a platform view nested inside a Stack/shell; without an
+    // eager recognizer the Flutter gesture arena swallows pan/zoom drags
+    // (taps still reach the map), so the map appears frozen on iOS.
+    gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{
+      Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
+    },
   );
 }
 

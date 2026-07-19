@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -57,6 +59,92 @@ class LiveMapAggregator {
     }
     return FreshnessHoursAgo(elapsed.inHours);
   }
+
+  /// Great-circle distance in metres between two lat/lng pairs (haversine).
+  /// Pure math so the roster ordering tests without the geolocator plugin.
+  static double distanceMeters(
+    double lat1,
+    double lng1,
+    double lat2,
+    double lng2,
+  ) {
+    const earthRadius = 6371000.0; // metres
+    final dLat = _radians(lat2 - lat1);
+    final dLng = _radians(lng2 - lng1);
+    final a =
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_radians(lat1)) *
+            math.cos(_radians(lat2)) *
+            math.sin(dLng / 2) *
+            math.sin(dLng / 2);
+    return earthRadius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+  }
+
+  static double _radians(double degrees) => degrees * math.pi / 180.0;
+
+  /// Orders roster rows nearest-first relative to [selfDocId]'s point; the
+  /// self row (if present) always leads. With no self point in [points]
+  /// (self untracked / no fix), the incoming name order is preserved.
+  static List<StaffMapPoint> sortedByProximity(
+    List<StaffMapPoint> points, {
+    required String? selfDocId,
+  }) {
+    StaffMapPoint? self;
+    if (selfDocId != null) {
+      for (final p in points) {
+        if (p.userDocId == selfDocId) {
+          self = p;
+          break;
+        }
+      }
+    }
+    if (self == null) return List.of(points);
+    final origin = self;
+    final rest =
+        points.where((p) => p.userDocId != origin.userDocId).toList()..sort(
+          (a, b) => distanceMeters(origin.lat, origin.lng, a.lat, a.lng)
+              .compareTo(
+                distanceMeters(origin.lat, origin.lng, b.lat, b.lng),
+              ),
+        );
+    return [origin, ...rest];
+  }
+
+  /// Best-effort city/locality pulled from a Google-formatted address such as
+  /// `"123 Rue X, Montréal, QC H2X 1Y4, Canada"` → `"Montréal"`. Returns null
+  /// when nothing usable can be isolated (caller then hides the line). Tuned
+  /// for the Canadian `street, City, PROV Postal, Country` shape.
+  static String? cityFromAddress(String? formatted) {
+    final raw = formatted?.trim() ?? '';
+    if (raw.isEmpty) return null;
+    var parts = raw
+        .split(',')
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
+    if (parts.length > 1 && _looksLikeCountry(parts.last)) {
+      parts = parts.sublist(0, parts.length - 1);
+    }
+    if (parts.length > 1 && _looksLikeProvince(parts.last)) {
+      parts = parts.sublist(0, parts.length - 1);
+    }
+    final city = parts.isEmpty ? '' : parts.last;
+    return city.isEmpty ? null : city;
+  }
+
+  static bool _looksLikeCountry(String s) {
+    final t = s.toLowerCase();
+    return t == 'canada' ||
+        t == 'united states' ||
+        t == 'usa' ||
+        t == 'états-unis';
+  }
+
+  // "QC", "QC H2X 1Y4", "ON M5V 2T6" — a 2-letter province code, optionally
+  // trailed by a postal code. Not a false-positive risk for city names.
+  static final RegExp _provincePattern = RegExp(r'^[A-Z]{2}(\s|$)');
+
+  static bool _looksLikeProvince(String s) => _provincePattern.hasMatch(s);
 }
 
 /// One staff member's plotted position, ready for the map widget.
