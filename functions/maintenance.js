@@ -104,10 +104,10 @@ const purgeExpiredHistory = onSchedule(
       timeZone: "America/Toronto",
       maxInstances: 1,
       // Image deletion is a Storage round-trip per appointment, and a quarterly
-      // run clears a quarter of newly-expired history at once. 3600s (the gen2
-      // max) gives that backlog room to finish in a single run rather than
-      // stranding leftovers until next quarter.
-      timeoutSeconds: 3600,
+      // run clears a quarter of newly-expired history at once. 1800s (the max
+      // for a scheduled trigger) gives that backlog room to finish in a single
+      // run rather than stranding leftovers until next quarter.
+      timeoutSeconds: 1800,
     },
     async () => {
       const db = getFirestore();
