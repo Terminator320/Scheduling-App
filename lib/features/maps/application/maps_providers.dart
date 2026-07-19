@@ -9,19 +9,22 @@ final placesRepositoryProvider = Provider<PlacesRepository>(
 );
 
 /// Family key for [reverseGeocodeProvider]. The constructor rounds raw
-/// coordinates to a 4-decimal-degree cell (~11m at the equator) so nearby GPS
+/// coordinates to a 3-decimal-degree cell (~110m at the equator) so nearby GPS
 /// fixes within the same cell share one reverse-geocode lookup instead of
 /// firing a fresh billable call per fix, and carries [locale] so a language
 /// switch keys a fresh lookup rather than serving the other language's cached
-/// address. Build it directly with the raw lat/lng — it self-normalizes.
+/// address. The cell is coarser than the presence stream's 250m fix filter so
+/// a moving staff member's consecutive fixes collapse to few billable calls
+/// (an ~11m cell would key a fresh lookup on almost every fix). Build it
+/// directly with the raw lat/lng — it self-normalizes.
 @immutable
 class ReverseGeocodeQuery {
   ReverseGeocodeQuery({
     required double lat,
     required double lng,
     required this.locale,
-  }) : lat = double.parse(lat.toStringAsFixed(4)),
-       lng = double.parse(lng.toStringAsFixed(4));
+  }) : lat = double.parse(lat.toStringAsFixed(3)),
+       lng = double.parse(lng.toStringAsFixed(3));
 
   final double lat;
   final double lng;

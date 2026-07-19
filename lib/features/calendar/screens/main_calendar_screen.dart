@@ -8,6 +8,7 @@ import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
@@ -135,8 +136,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   ) {
     final index = <DateTime, List<AppointmentRecord>>{};
     for (final app in source) {
-      final start = app.startTime;
-      final key = DateTime(start.year, start.month, start.day);
+      final key = app.startTime.dateOnly;
       (index[key] ??= <AppointmentRecord>[]).add(app);
     }
     for (final list in index.values) {
@@ -146,7 +146,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   }
 
   List<AppointmentRecord> _getEventsForDay(DateTime day) {
-    final key = DateTime(day.year, day.month, day.day);
+    final key = day.dateOnly;
     return _dayIndex?[key] ?? const <AppointmentRecord>[];
   }
 

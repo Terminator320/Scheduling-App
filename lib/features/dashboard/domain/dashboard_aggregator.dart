@@ -1,3 +1,4 @@
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -67,7 +68,7 @@ class DashboardAggregator {
     List<AppointmentRecord> appointments,
     DateTime now,
   ) {
-    final dayStart = DateTime(now.year, now.month, now.day);
+    final dayStart = now.dateOnly;
     final counts = <String, int>{};
     var unassigned = 0;
     final upcoming = <AppointmentRecord>[];
@@ -96,7 +97,7 @@ class DashboardAggregator {
     List<EmployeeRecord> employees,
     DateTime now,
   ) {
-    final dayStart = DateTime(now.year, now.month, now.day);
+    final dayStart = now.dateOnly;
     final weekStart = mondayOf(now);
     final weekEnd = DateTime(
       weekStart.year,

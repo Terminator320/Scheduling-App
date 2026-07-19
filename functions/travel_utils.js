@@ -47,6 +47,15 @@ const PRESENCE_STALE_MINUTES = 25;
 // employee just was".
 const PREV_APPOINTMENT_LOOKBACK_HOURS = 4;
 
+// Safety cap on the per-employee origin-context read. `decideOrigin` only ever
+// consumes intervening jobs starting within MAX_LEAD_MINUTES and previous jobs
+// ended within PREV_APPOINTMENT_LOOKBACK_HOURS, so the relevant set is tiny;
+// the unbounded query would otherwise pull every future appointment (repeating
+// pre-booked series → dozens–hundreds of docs) every 5-min sweep. Ordered by
+// endTime ASC, so the cap keeps the earliest-ending — the just-finished
+// previous jobs and current/imminent ones — which is exactly what matters.
+const CONTEXT_QUERY_MAX = 50;
+
 // Sweep candidate window: MAX_LEAD_MINUTES ahead, so the longest computable
 // lead is already in range when it becomes due.
 const TRAVEL_WINDOW_MS = MAX_LEAD_MINUTES * MINUTE_MS;
@@ -356,6 +365,7 @@ async function runTravelAwareReminderSweep(deps) {
           .where("employeeIds", "array-contains", employeeDocId)
           .where("endTime", ">", lookbackStart)
           .orderBy("endTime")
+          .limit(CONTEXT_QUERY_MAX)
           .get();
       contextByEmployee.set(
           employeeDocId,

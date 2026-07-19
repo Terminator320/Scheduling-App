@@ -8,6 +8,7 @@ import 'package:home_widget/home_widget.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/utils/app_language.dart';
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
@@ -61,7 +62,7 @@ Map<String, dynamic> buildWidgetPayload(
   DateTime now, {
   String locale = 'en',
 }) {
-  final startOfToday = DateTime(now.year, now.month, now.day);
+  final startOfToday = now.dateOnly;
   final startOfTomorrow = DateTime(now.year, now.month, now.day + 1);
   final startOfDayAfter = DateTime(now.year, now.month, now.day + 2);
 
@@ -238,7 +239,7 @@ final widgetPayloadProvider =
       }
       final now = DateTime.now();
       final range = AppointmentDateRange(
-        start: DateTime(now.year, now.month, now.day),
+        start: now.dateOnly,
         end: DateTime(now.year, now.month, now.day + 3),
       );
       final appts = ref.watch(

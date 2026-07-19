@@ -8,6 +8,7 @@ import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
@@ -48,13 +49,12 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    _day = DateTime(now.year, now.month, now.day);
+    _day = DateTime.now().dateOnly;
     _selectedEmployeeId = widget.employeeId;
   }
 
   AppointmentDateRange _dayRange(DateTime day) {
-    final start = DateTime(day.year, day.month, day.day);
+    final start = day.dateOnly;
     return AppointmentDateRange(
       start: start,
       end: start.add(const Duration(days: 1)),

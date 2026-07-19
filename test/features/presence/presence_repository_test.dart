@@ -49,13 +49,14 @@ void main() {
 
   test('upsertLocation writes exactly the rule-allowed field set', () async {
     final repo = PresenceRepository(firestore: firestore);
-    await repo.upsertLocation(
+    final ok = await repo.upsertLocation(
       userDocId: 'u1',
       uid: 'uid1',
       lat: 45.5,
       lng: -73.6,
     );
 
+    expect(ok, isTrue);
     final captured = setData.single;
     expect(captured.keys.toSet(), {'lat', 'lng', 'uid', 'updatedAt'});
     expect(captured['lat'], 45.5);
@@ -65,13 +66,16 @@ void main() {
     expect(captured['updatedAt'], isA<FieldValue>());
   });
 
-  test('upsertLocation swallows a write failure', () async {
+  test('upsertLocation swallows a write failure and reports false', () async {
     when(() => locationDoc.set(any())).thenThrow(Exception('offline'));
     final repo = PresenceRepository(firestore: firestore);
-    await expectLater(
-      repo.upsertLocation(userDocId: 'u1', uid: 'uid1', lat: 1, lng: 2),
-      completes,
+    final ok = await repo.upsertLocation(
+      userDocId: 'u1',
+      uid: 'uid1',
+      lat: 1,
+      lng: 2,
     );
+    expect(ok, isFalse);
   });
 
   test('deleteLocation deletes the location doc', () async {
