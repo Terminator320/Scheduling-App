@@ -10,6 +10,35 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.34.0+54] - 2026-07-19
+### Added
+- **Ask Siri about your day.** On iPhone you can now ask Siri "what's my next
+  appointment", "what's on my schedule today", or how many jobs you have left,
+  and hear the answer without opening the app. Admins hear the whole business,
+  technicians hear only their own assigned visits.
+- **A live job card when it's time to leave.** When the app tells you to head
+  to a job, a card now appears on the Lock Screen and in the Dynamic Island
+  showing the client, the address, the drive time, and when to leave — with a
+  Directions button that opens your maps app. It switches to "On site" once the
+  job's start time arrives and clears itself when the job is complete.
+- **Turn the live job card off.** Settings has a new "Live job card" switch for
+  anyone who would rather not have jobs on their Lock Screen. It's on by
+  default, and switching it off clears any card already showing. The row only
+  appears on iPhones that support the card.
+### Changed
+- **The dashboard has the menu button again.** Opening the dashboard on a phone
+  now shows the same menu as every other screen, so you can reach settings
+  without going back first.
+- **Staff pins stay readable on the live map.** A team member whose location
+  hasn't updated recently no longer has their map pin greyed out — how long ago
+  they updated is still spelled out in the info card and the staff list.
+- **Booking an empty day goes through the + button.** The "New appointment"
+  button inside an empty day's schedule was removed; use the + button, which is
+  always in the same place.
+### Fixed
+- **The "today" button disappears when you're already on this month.** Swiping
+  back to the current month used to leave the jump-to-today button on screen.
+
 ## [1.33.0+52] - 2026-07-19
 ### Added
 - **Book common jobs in a couple of taps.** The add-appointment form now has a

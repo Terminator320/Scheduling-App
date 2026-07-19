@@ -33,7 +33,10 @@ const {
 } = require("./params");
 
 /**
- * Real injected deps for the orchestration functions.
+ * Real injected deps for the orchestration functions. Carries NO APNs
+ * credentials — a function that doesn't bind the secrets must not read them,
+ * or firebase-functions logs a "No value found for secret parameter" warning
+ * on every invocation.
  * @return {{db: !Object, messaging: !Object, now: !Date, logger: !Object}}
  */
 function liveDeps() {
@@ -42,8 +45,17 @@ function liveDeps() {
     messaging: getMessaging(),
     now: new Date(),
     logger,
-    apnsAuth: apnsAuth(),
   };
+}
+
+/**
+ * [liveDeps] plus the APNs credentials. ONLY for the two functions that bind
+ * [APNS_SECRETS] and actually push Live Activity cards — the digest's TTL
+ * prune and the overdue sweep are Firestore-only and use [liveDeps].
+ * @return {!Object}
+ */
+function liveActivityDeps() {
+  return {...liveDeps(), apnsAuth: apnsAuth()};
 }
 
 /**
@@ -86,7 +98,7 @@ const notifyAppointmentChanges = onDocumentWritten(
           event.params.appointmentId,
           before,
           after,
-          liveDeps(),
+          liveActivityDeps(),
       );
     },
 );
@@ -111,7 +123,7 @@ const sendUpcomingJobReminders = onSchedule(
     async () => {
       try {
         await runTravelAwareReminderSweep({
-          ...liveDeps(),
+          ...liveActivityDeps(),
           fetchImpl: fetch,
           apiKey: GOOGLE_MAP_API_KEY.value().trim(),
         });

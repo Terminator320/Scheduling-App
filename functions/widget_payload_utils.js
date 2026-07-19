@@ -9,12 +9,18 @@
  * load it directly and so the JSON shape stays in lockstep with the Dart
  * builder and the Swift decoder (`ios/ScheduleWidget/ScheduleWidget.swift`).
  *
- * Day boundaries use America/Toronto (the business time zone the rest of the
- * notification backend already hardcodes); a Toronto-based device computes the
- * same local midnight, so the server- and app-written payloads agree.
+ * Day boundaries use America/Toronto (`BUSINESS_TIME_ZONE`, the one business
+ * time zone); a Toronto-based device computes the same local midnight, so the
+ * server- and app-written payloads agree.
  *
  * @module widget_payload_utils
  */
+
+const {
+  toMillis,
+  businessYmd,
+  businessMidnight,
+} = require("./time_utils");
 
 // Terminal statuses are filtered out of the widget's job list. Mirrors
 // AppointmentStatus.isTerminal (status_chip.dart): done/cancelled, plus the
@@ -24,20 +30,6 @@ const TERMINAL_STATUSES = new Set(["done", "completed", "cancelled"]);
 // How many days past today the "next job" lookahead spans (matches the Dart
 // widget range: [today 00:00, today + 3 days)).
 const WIDGET_LOOKAHEAD_DAYS = 3;
-
-/**
- * Milliseconds since epoch for a Firestore Timestamp / Date / number, else
- * null.
- * @param {*} value
- * @return {?number}
- */
-function toMillis(value) {
-  if (value == null) return null;
-  if (typeof value.toMillis === "function") return value.toMillis();
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === "number") return value;
-  return null;
-}
 
 /**
  * Epoch ms for a `now` that may be a Date or a number.
@@ -58,77 +50,12 @@ function isTerminalStatus(status) {
 }
 
 /**
- * The Toronto-local year/month/day of an instant, as numbers.
- * @param {!Date} date
- * @return {!Array<number>} `[year, month, day]` (month is 1-based).
- */
-function _torontoYmd(date) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Toronto",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  })
-      .format(date)
-      .split("-")
-      .map(Number);
-}
-
-/**
- * Toronto UTC offset (ms to add to a UTC instant to get local wall time) at
- * `date`.
- * @param {!Date} date
- * @return {number}
- */
-function _torontoOffsetMs(date) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Toronto",
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  })
-      .formatToParts(date)
-      .reduce((acc, p) => {
-        acc[p.type] = p.value;
-        return acc;
-      }, {});
-  const asUtc = Date.UTC(
-      Number(parts.year),
-      Number(parts.month) - 1,
-      Number(parts.day),
-      Number(parts.hour),
-      Number(parts.minute),
-      Number(parts.second),
-  );
-  return asUtc - date.getTime();
-}
-
-/**
- * The UTC instant (ms) of Toronto-local midnight on (y, m, d). DST shifts
- * happen at 02:00, not midnight, so the midnight offset is stable.
- * @param {number} y
- * @param {number} m One-based month.
- * @param {number} d
- * @return {number}
- */
-function _torontoMidnightMs(y, m, d) {
-  const guess = Date.UTC(y, m - 1, d, 0, 0, 0);
-  return guess - _torontoOffsetMs(new Date(guess));
-}
-
-/**
  * Start of the current Toronto day (00:00) as an epoch-ms UTC instant.
  * @param {(Date|number)} now
  * @return {number}
  */
 function torontoDayStartMs(now) {
-  const date = now instanceof Date ? now : new Date(Number(now));
-  const [y, m, d] = _torontoYmd(date);
-  return _torontoMidnightMs(y, m, d);
+  return torontoDayStartOffsetMs(now, 0);
 }
 
 /**
@@ -161,8 +88,8 @@ function serializeWidgetJob(r) {
  */
 function torontoDayStartOffsetMs(now, n) {
   const date = now instanceof Date ? now : new Date(Number(now));
-  const [y, m, d] = _torontoYmd(date);
-  return _torontoMidnightMs(y, m, d + n);
+  const [y, m, d] = businessYmd(date);
+  return businessMidnight(y, m, d + n).getTime();
 }
 
 // How long after the last job of the day is finished the widget keeps showing

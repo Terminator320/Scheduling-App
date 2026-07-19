@@ -1100,6 +1100,10 @@
   "@settings_notificationsOff": {
     "description": "Status pill on the notifications row when notifications are not authorized"
   },
+  "settings_liveActivity": "Live job card",
+  "@settings_liveActivity": {
+    "description": "Settings switch label for the iOS Live Activity Lock Screen card shown when it is time to leave for a job."
+  },
   "settings_appLock": "App Lock",
   "@settings_appLock": {
     "description": "Toggle label for the biometric app lock"

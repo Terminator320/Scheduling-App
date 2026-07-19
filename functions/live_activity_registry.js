@@ -280,28 +280,25 @@ async function deleteActivityToken(deps, {ref}) {
 }
 
 /**
- * Deletes rows whose `expiresAt` has passed. A card the server never got to
- * end would otherwise leak its token row forever; this is the TTL sweep the
- * design doc's "Still open" section flagged. Bounded by PRUNE_MAX — a hit cap
- * just defers the remainder to the next run. Never throws.
- * @param {!Object} deps `{db, now, logger}`.
- * @param {{limit: (number|undefined)}=} args
+ * Deletes rows of `query` whose `expiresAt` has passed. Bounded by `cap` — a
+ * hit cap just defers the remainder to the next run. Never throws.
+ * @param {!Object} deps `{now, logger}`.
+ * @param {!Object} collection A collection or collection-group ref.
+ * @param {number} cap
+ * @param {string} label Distinguishes the two sweeps in the warn lines.
  * @return {!Promise<{pruned: number}>}
  */
-async function pruneExpiredActivityTokens(deps, args) {
-  const {db, now, logger} = deps;
-  const cap = (args && args.limit) || PRUNE_MAX;
-  const nowDate = now || new Date();
+async function _pruneExpired(deps, collection, cap, label) {
+  const {now, logger} = deps;
   let rows = [];
   try {
-    const snap = await db
-        .collectionGroup("liveActivityTokens")
-        .where("expiresAt", "<=", nowDate)
+    const snap = await collection
+        .where("expiresAt", "<=", now || new Date())
         .limit(cap)
         .get();
     rows = _rows(snap);
   } catch (err) {
-    if (logger) logger.warn("liveActivity: prune query failed", {err});
+    if (logger) logger.warn(`liveActivity: ${label} prune query failed`, {err});
     return {pruned: 0};
   }
   let pruned = 0;
@@ -311,38 +308,42 @@ async function pruneExpiredActivityTokens(deps, args) {
     if (await deleteActivityToken(deps, row)) pruned += 1;
   }
   if (rows.length === cap && logger) {
-    logger.warn("liveActivity: prune cap hit; remainder deferred", {cap});
+    logger.warn(`liveActivity: ${label} prune cap hit; deferred`, {cap});
   }
   return {pruned};
 }
 
 /**
- * Deletes card markers whose `expiresAt` has passed — the backstop for a card
- * that was started but whose end push never landed. Never throws.
+ * Deletes token rows whose `expiresAt` has passed. A card the server never got
+ * to end would otherwise leak its token row forever; this is the TTL sweep the
+ * design doc's "Still open" section flagged.
  * @param {!Object} deps `{db, now, logger}`.
  * @param {{limit: (number|undefined)}=} args
  * @return {!Promise<{pruned: number}>}
  */
-async function pruneExpiredCardMarkers(deps, args) {
-  const {db, now, logger} = deps;
-  const nowDate = now || new Date();
-  let rows = [];
-  try {
-    const snap = await db
-        .collection(CARDS_COLLECTION)
-        .where("expiresAt", "<=", nowDate)
-        .limit((args && args.limit) || PRUNE_MAX)
-        .get();
-    rows = _rows(snap);
-  } catch (err) {
-    if (logger) logger.warn("liveActivity: card prune query failed", {err});
-    return {pruned: 0};
-  }
-  let pruned = 0;
-  for (const row of rows) {
-    if (await deleteActivityToken(deps, row)) pruned += 1;
-  }
-  return {pruned};
+function pruneExpiredActivityTokens(deps, args) {
+  return _pruneExpired(
+      deps,
+      deps.db.collectionGroup("liveActivityTokens"),
+      (args && args.limit) || PRUNE_MAX,
+      "token",
+  );
+}
+
+/**
+ * Deletes card markers whose `expiresAt` has passed — the backstop for a card
+ * that was started but whose end push never landed.
+ * @param {!Object} deps `{db, now, logger}`.
+ * @param {{limit: (number|undefined)}=} args
+ * @return {!Promise<{pruned: number}>}
+ */
+function pruneExpiredCardMarkers(deps, args) {
+  return _pruneExpired(
+      deps,
+      deps.db.collection(CARDS_COLLECTION),
+      (args && args.limit) || PRUNE_MAX,
+      "card",
+  );
 }
 
 module.exports = {

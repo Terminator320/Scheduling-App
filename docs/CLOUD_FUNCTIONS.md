@@ -2,11 +2,13 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-07-18 by auditing the source against the app's call sites and
-the live deployment (`sendUpcomingJobReminders` rebuilt into the travel-aware
-"time to leave" sweep — `travel_utils.js`, Routes API, `GOOGLE_MAP_API_KEY`
-now shared via `params.js`; Places callables previously tightened to admin-only
-+ the overdue sweep given a 300s timeout).
+refreshed 2026-07-19 by auditing the source against the app's call sites and
+the live deployment (the iOS Live Activity stack added behind
+`notifyAppointmentChanges` / `sendUpcomingJobReminders` — APNs secrets, direct
+HTTP/2 client; `purgeExpiredHistory`'s timeout corrected to the 1800s scheduled
+-trigger max; `sendUpcomingJobReminders` previously rebuilt into the
+travel-aware "time to leave" sweep — `travel_utils.js`, Routes API,
+`GOOGLE_MAP_API_KEY` shared via `params.js`).
 **Every callable now enforces App Check** (`enforceAppCheck: true`); the
 earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 (`grep -rn "enforceAppCheck: false" functions` returns nothing).
@@ -45,6 +47,13 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   restriction; until that's verified the sweep logs Routes failures and delivers
   the 30-min fallback (never worse than the old behavior). See
   `docs/plans/2026-07-09-travel-time-notifications.md`.
+- **Built, not yet deployed (1.34.0):** the iOS Live Activity dispatch inside
+  `notifyAppointmentChanges` / `sendUpcomingJobReminders`. The three APNs
+  secrets (`APNS_AUTH_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID`) were **created in
+  Secret Manager 2026-07-19**, so secret binding no longer blocks the deploy.
+  Deploying is safe at any time: with no registered device tokens the dispatch
+  no-ops and the plain `leaveNow` push is unchanged. Remaining gate is on-device
+  verification. Runbook: `ios/ScheduleWidget/LIVE_ACTIVITY_README.md`.
 - `backfillLegacyClientNames` (a one-time migration completed `2026-06-29`,
   `fixed: 0`) was removed from the codebase 2026-07-05 and is **no longer in the
   deployed set** (confirmed 2026-07-10) — it was pruned by a full
@@ -68,11 +77,11 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `propagateClientEdits` | trigger | `onDocumentUpdated clients/{id}` | `client_propagation.js` | any `clients` doc edit | — | `retry: true` |
 | `waveUpsertCustomer` | trigger | `onDocumentWritten clients/{id}` | `wave/callables.js` | any `clients` doc write | — | `retry: true` |
 | `validateUploadedImage` | trigger | `onObjectFinalized` (Storage) | `maintenance.js` | `appointments/*/images/*` upload | — | region `us-east1` |
-| `notifyAppointmentChanges` | trigger | `onDocumentWritten appointments/{id}` | `notifications.js` | any appointment write | — | no `retry` (dupe push worse than missed) |
-| `purgeExpiredHistory` | scheduled | `0 3 1 1,4,7,10 *` — quarterly, 1st of Jan/Apr/Jul/Oct 03:00 (Toronto) | `maintenance.js` | quarterly | — | `maxInstances: 1` · 3600s |
+| `notifyAppointmentChanges` | trigger | `onDocumentWritten appointments/{id}` | `notifications.js` | any appointment write | `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | no `retry` (dupe push worse than missed) |
+| `purgeExpiredHistory` | scheduled | `0 3 1 1,4,7,10 *` — quarterly, 1st of Jan/Apr/Jul/Oct 03:00 (Toronto) | `maintenance.js` | quarterly | — | `maxInstances: 1` · 1800s |
 | `waveSyncWorker` | scheduled | `every 5 minutes` | `wave/callables.js` | timer | `WAVE_FULL_ACCESS_TOKEN` | `maxInstances: 1` · 540s |
 | `waveScheduledImport` | scheduled | `every 24 hours` | `wave/callables.js` | timer | `WAVE_FULL_ACCESS_TOKEN` | `maxInstances: 1` · 300s |
-| `sendUpcomingJobReminders` | scheduled | `every 5 minutes` (Toronto) | `notifications.js` + `travel_utils.js` | timer | `GOOGLE_MAP_API_KEY` | `maxInstances: 1` · `timeoutSeconds: 120` · ledger · Routes API |
+| `sendUpcomingJobReminders` | scheduled | `every 5 minutes` (Toronto) | `notifications.js` + `travel_utils.js` | timer | `GOOGLE_MAP_API_KEY` · `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | `maxInstances: 1` · `timeoutSeconds: 120` · ledger · Routes API |
 | `sendDailyJobDigest` | scheduled | `0 18 * * *` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` |
 | `sendOverdueJobPrompts` | scheduled | `every 15 minutes` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` · 300s · ledger |
 
@@ -161,9 +170,11 @@ Quarterly on the 1st of Jan/Apr/Jul/Oct at 03:00 America/Toronto
 is older than 2 years, **and** their Storage images. Images are deleted before
 the Firestore doc so a Storage failure keeps the doc for the next run's retry
 rather than orphaning PII bytes. Non-terminal appointments are never touched.
-3600s (gen2 max) timeout so a quarter of newly-expired history clears in one run;
-any leftovers (a timeout, or a full page whose image deletes all fail) carry to
-the next run — ~3 months away at this cadence.
+1800s timeout — the real max for a **scheduled** trigger (a higher value is
+rejected at deploy, not silently clamped) — so a quarter of newly-expired
+history clears in one run; the loop commits page-by-page, so any leftovers (a
+timeout, or a full page whose image deletes all fail) carry to the next run —
+~3 months away at this cadence.
 
 ## Push notifications (FCM)
 
@@ -184,7 +195,24 @@ APNs `sound` so delivery isn't doze-deferred/silent. **Deployed 2026-07-11**
 unassignment pushes. Diffs before/after (`diffAppointmentForNotifications`):
 one event per employee, priority `cancelled > removed > rescheduled >
 assigned`; past appointments skipped. Deliberately **no `retry: true`** — a
-duplicate push is worse than a rare missed one.
+duplicate push is worse than a rare missed one. Also updates/ends any live
+"time to leave" card for the changed job, so it binds `APNS_SECRETS` and gets
+`liveActivityDeps()`; the two Firestore-only sweeps below take `liveDeps()`
+instead, because reading a secret param a function didn't bind logs a warning
+on every invocation.
+
+### Live Activity dispatch (no separate export)
+The iOS Lock Screen card has **no function of its own** — it rides
+`notifyAppointmentChanges` (update/end) and `sendUpcomingJobReminders` (start).
+FCM cannot carry it: a Live Activity push needs `apns-push-type: liveactivity`
+on topic `net.vogas.scheduling.push-type.liveactivity`, so `apns_client.js`
+talks **directly to APNs over HTTP/2** with an ES256 provider JWT (cached, re-
+minted at 50 min) built from `APNS_AUTH_KEY` / `APNS_KEY_ID` / `APNS_TEAM_ID`.
+Every path is best-effort: missing secrets, no registered token, or any APNs
+error degrades to the plain `leaveNow` push, which is unchanged. Targets resolve
+through the Admin-SDK-only `liveActivityCards/{employeeDocId}` marker plus the
+self-only `users/{docId}/liveActivityTokens` rows; both carry `expiresAt` for a
+TTL prune. Card text is built server-side in EN/FR (`live_activity_utils.js`).
 
 ### `sendUpcomingJobReminders` — `notifications.js` (+ `travel_utils.js`)
 Every 5 min (Toronto). **Travel-aware "time to leave" sweep**

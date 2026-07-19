@@ -26,19 +26,7 @@ const ATTRIBUTES_TYPE = "LiveActivitiesAppAttributes";
 const PHASE_TRAVEL = "travel";
 const PHASE_ON_SITE = "onSite";
 
-/**
- * Milliseconds since epoch for a Firestore Timestamp / Date / number, else
- * null. Mirrors the same helper in widget_payload_utils.js.
- * @param {*} value
- * @return {?number}
- */
-function toMillis(value) {
-  if (value == null) return null;
-  if (typeof value.toMillis === "function") return value.toMillis();
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === "number") return value;
-  return null;
-}
+const {toMillis, formatTimeOfDay} = require("./time_utils");
 
 /**
  * Absolute UTC ISO-8601 for an instant, or null. The Swift decoder uses
@@ -63,20 +51,14 @@ function toEpochSeconds(value) {
 }
 
 /**
- * Toronto-local time-of-day string ("7:54"), matching the notification
- * formatter so the card and the push read identically.
+ * Toronto-local time-of-day string ("7:54"). Shares [formatTimeOfDay] with the
+ * notification text so the card and the push read identically.
  * @param {*} value
  * @param {string} locale 'en' | 'fr'.
  * @return {string}
  */
 function _timeOnly(value, locale) {
-  const ms = toMillis(value);
-  if (ms == null) return "";
-  return new Intl.DateTimeFormat(locale === "fr" ? "fr-CA" : "en-CA", {
-    timeZone: "America/Toronto",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(ms));
+  return formatTimeOfDay(locale, value);
 }
 
 const _STRINGS = {
