@@ -13,6 +13,7 @@ import 'package:scheduling/features/auth/application/account_status_provider.dar
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart'
     show widgetAppGroupId;
+import 'package:scheduling/features/live_activity/application/live_activity_preference.dart';
 import 'package:scheduling/features/live_activity/data/live_activity_token_repository.dart';
 import 'package:scheduling/features/live_activity/domain/live_activity_token.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart'
@@ -30,6 +31,14 @@ final liveActivityRegistrationControllerProvider =
     Provider<LiveActivityRegistrationController>(
       LiveActivityRegistrationController.new,
     );
+
+/// Whether this device can host a push-started Live Activity at all. Drives
+/// whether the Settings row is shown — an Android or iOS 16 device gets no row
+/// rather than a dead control. See
+/// [LiveActivityRegistrationController.canHostCards].
+final liveActivitySupportedProvider = FutureProvider<bool>(
+  (ref) => ref.watch(liveActivityRegistrationControllerProvider).canHostCards(),
+);
 
 /// Pure gate: the Live Activity card is the lock-screen face of the travel-time
 /// "leave now" push, so its audience is exactly the push audience. Delegates to
@@ -107,6 +116,37 @@ class LiveActivityRegistrationController {
       _pendingResync = true;
       return;
     }
+    // Set BEFORE the first await below — the preference read is async, and an
+    // unguarded await here would let a second sync() slip past the check above.
+    _busy = true;
+    try {
+      await _syncGuarded();
+    } catch (e, st) {
+      // sync() is called via `unawaited` — never let a failure escape as an
+      // uncaught async error (that would be recorded as a fatal crash).
+      _logger.warn('LIVE-ACT sync failed', e, st);
+    } finally {
+      _busy = false;
+      if (_pendingResync) {
+        _pendingResync = false;
+        unawaited(sync());
+      }
+    }
+  }
+
+  /// The body of [sync], run with `_busy` already held.
+  Future<void> _syncGuarded() async {
+    // User opted out in Settings. The toggle itself calls [unregister] to end
+    // the live card and drop the token rows; this only stops a later
+    // account-doc emission from silently re-registering them. Awaiting `ready`
+    // is required, not defensive: the provider returns its optimistic `true`
+    // default until the stored value lands, so a cold-start sync would
+    // otherwise re-register a device whose user had turned the card off.
+    await _ref.read(liveActivityEnabledProvider.notifier).ready;
+    if (!_ref.read(liveActivityEnabledProvider)) {
+      await _cancelStreams();
+      return;
+    }
     final signedIn = _auth.currentUser != null;
     final doc = _ref.read(currentUserDocProvider).value ?? const {};
     final role = (doc['role'] ?? '').toString().trim();
@@ -131,47 +171,46 @@ class LiveActivityRegistrationController {
       return;
     }
 
-    _busy = true;
+    await _ref.read(firebaseReadyProvider.future).catchError((Object _) {});
+    if (uid == null) return;
+    if (!await _ensurePlugin()) return;
+
+    final match = await _ref.read(employeesRepositoryProvider).findUserByUid(uid);
+    final docId = match?.id;
+    if (docId == null) {
+      _logger.warn('LIVE-ACT no users doc for uid; skip token upsert');
+      return;
+    }
+
+    _docId = docId;
+    _uid = uid;
+    _locale = locale;
+    await _reupsertKnownTokens();
+    _subscribePushToStart();
+    _subscribeActivityUpdates();
+  }
+
+  /// Whether this device can host a push-started card: iOS 17.2+
+  /// (`allowsPushStart`), ActivityKit available, and Live Activities not
+  /// switched off by the user in iOS Settings. Never throws — any plugin
+  /// failure answers false, matching the feature's degrade-to-plain-push
+  /// posture. Backs both the registration gate and the Settings row's
+  /// visibility, so the two can't drift.
+  Future<bool> canHostCards() async {
+    if (!Platform.isIOS) return false;
     try {
-      await _ref.read(firebaseReadyProvider.future).catchError((Object _) {});
-      if (uid == null) return;
-      if (!await _ensurePlugin()) return;
-
-      final match = await _ref
-          .read(employeesRepositoryProvider)
-          .findUserByUid(uid);
-      final docId = match?.id;
-      if (docId == null) {
-        _logger.warn('LIVE-ACT no users doc for uid; skip token upsert');
-        return;
-      }
-
-      _docId = docId;
-      _uid = uid;
-      _locale = locale;
-      await _reupsertKnownTokens();
-      _subscribePushToStart();
-      _subscribeActivityUpdates();
+      return await _plugin.areActivitiesSupported() &&
+          await _plugin.areActivitiesEnabled() &&
+          await _plugin.allowsPushStart();
     } catch (e, st) {
-      // sync() is called via `unawaited` — never let a failure escape as an
-      // uncaught async error (that would be recorded as a fatal crash).
-      _logger.warn('LIVE-ACT sync failed', e, st);
-    } finally {
-      _busy = false;
-      if (_pendingResync) {
-        _pendingResync = false;
-        unawaited(sync());
-      }
+      _logger.warn('LIVE-ACT support probe failed', e, st);
+      return false;
     }
   }
 
-  /// Initializes the plugin once and answers whether this device can host a
-  /// push-started card: iOS 17.2+ (`pushToStartTokenUpdates`), Live Activities
-  /// supported, and not switched off by the user in Settings.
+  /// [canHostCards], plus a one-time plugin init for the device that can.
   Future<bool> _ensurePlugin() async {
-    if (!await _plugin.areActivitiesSupported()) return false;
-    if (!await _plugin.areActivitiesEnabled()) return false;
-    if (!await _plugin.allowsPushStart()) return false;
+    if (!await canHostCards()) return false;
     if (!_pluginReady) {
       await _plugin.init(appGroupId: widgetAppGroupId);
       _pluginReady = true;
@@ -295,19 +334,16 @@ class LiveActivityRegistrationController {
   /// card (no client's name left on a signed-out Lock Screen) and delete this
   /// device's token rows. Never throws — sign-out must not be blocked.
   Future<void> unregister() async {
-    final docId = _docId;
-    final activityIds = _activityTokens.keys.toList();
     final pushToStart = _pushToStartToken;
     try {
-      if (_pluginReady) await _plugin.endAllActivities();
-      if (docId != null) {
-        final repository = _ref.read(liveActivityTokenRepositoryProvider);
-        for (final activityId in activityIds) {
-          await repository.deleteToken(userDocId: docId, docId: activityId);
-        }
-        if (pushToStart != null) {
-          await repository.deleteToken(userDocId: docId, docId: pushToStart);
-        }
+      // Ends the cards and drops every per-activity row; only the device-wide
+      // push-to-start row (which survives a completed job) is left to clear.
+      await endLocalCards();
+      final docId = _docId;
+      if (docId != null && pushToStart != null) {
+        await _ref
+            .read(liveActivityTokenRepositoryProvider)
+            .deleteToken(userDocId: docId, docId: pushToStart);
       }
     } catch (e, st) {
       _logger.warn('LIVE-ACT unregister failed', e, st);

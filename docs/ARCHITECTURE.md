@@ -52,17 +52,19 @@ lib/
 │   └── .gen/                        Auto-generated app_localizations*.dart (gitignored); regenerate with `flutter gen-l10n`
 │
 └── features/
-    ├── auth/                        Sign-in, account creation, password reset, account-status monitoring
+    ├── auth/                        Sign-in, account creation, password reset, account-status monitoring; activeUserIdentityProvider resolves (role, docId) for the off-screen schedule mirrors (widget + Siri) — null wipes them
     ├── calendar/                    Appointments — creation, editing, viewing, repeating series, image uploads (offline-durable via PendingUploadStore), day_route_screen (a day's stops numbered in start order, day picker + employee switcher → multi-stop maps handoff); JobTemplate quick-fill chips seed title/duration on the add form (display-only, never stored)
     ├── clients/                     Client management — CRUD, contacts, appointment history; client detail shows a Job history section (ClientJobHistorySection → fetchClientHistory, clientId-only single-field query sorted in Dart)
     ├── dashboard/                   Admin dashboard — pure stat reducers (DashboardAggregator) over one 8-week appointments range → hero/workload/trends/attention sections + fl_chart WeeklyBarChart
     ├── employees/                   Employee roster — colours, roles, disable/enable
     ├── home_widget/                 iOS home-screen schedule widget — WidgetSyncService writes a two-day payload (todayJobs + tomorrowJobs + on-device rolloverAt) into the App Group (home_widget); mirrors functions/widget_payload_utils.js; Android no-op
+    ├── live_activity/               iOS "time to leave" Lock Screen / Dynamic Island card — LiveActivityRegistrationController upserts the device push-to-start token + one update token per live card into users/{docId}/liveActivityTokens; canHostCards() is the single capability probe; liveActivityEnabledProvider is the device-local opt-out whose Settings toggle must also unregister(). Cards are push-STARTED by functions/live_activity_dispatch.js; Android no-op
     ├── maps/                        Google Places address autocomplete, reverse-geocode (staff-map coords → address), and map launcher (callables admin-gated); route_url_builder (multi-stop Google Maps directions URL, 9-waypoint cap)
     ├── notifications/               FCM push client — PushRegistrationController (token upsert for active employees/admins, resync-coalesced), FcmTokenRepository, push_notification_service, notificationAuthStatusProvider (Settings recovery row); core/notifications/fcm_background_handler rewrites the widget from a push while the app is closed
     ├── presence/                    Live-location tracking + admin live staff map — PresenceSyncController owns a background geolocator stream (250 m / 2-min throttle + 10-min heartbeat, throttle clock rolls back on a failed write) for active employees/admins, PresenceRepository writes users/{docId}/presence/location (self-only); OS permission is the only switch. Admin-only live_map_screen joins collectionGroup('presence') to watchAllUsers() via LiveMapAggregator (pure reducers, presenceStaleAfter == PRESENCE_STALE_MINUTES) → google_maps_flutter markers; staff_roster_sheet lists everyone sharing location nearest-first (LiveMapAggregator.sortedByProximity/distanceMeters/cityFromAddress — all pure)
     ├── onboarding/                  First-launch intro carousel (OnboardingGate = app home) + onboardingSeen gate
-    ├── settings/                    Theme, text scale, language, app version, biometric app-lock toggle
+    ├── settings/                    Theme, text scale, language, app version, biometric app-lock toggle, notification-permission recovery row, Live job card switch (iOS-only, hidden where unsupported)
+    ├── siri/                        Siri App Intents snapshot — ScheduleSnapshotService writes a today+7d payload under the App Group key `schedule_snapshot` (nothing renders it); buildScheduleSnapshot is hand-mirrored with ios/SiriIntents/ScheduleSnapshot.swift; payload is field-limited because the App Group reads while locked
     ├── splash/                      Auth resolution on cold start (screen + routing logic)
     └── wave/                        Wave Accounting integration — read-only connection status + per-client sync badge + auto-import cadence picker (all writes are Cloud-Function-owned)
 ```
@@ -528,6 +530,24 @@ users/{docId}/fcmTokens/{token}   FCM push tokens, one doc per device (doc id =
   uid: string          must equal the caller's auth uid
   createdAt, updatedAt server timestamps
 
+users/{docId}/liveActivityTokens/{id}   APNs Live Activity tokens. Self-only,
+                       shape-locked, iOS-only. Doc id is the token itself for
+                       the device-wide push-to-start row and the ActivityKit
+                       activity id for a per-card update row. `expiresAt` backs
+                       a server TTL prune (30 d / 1 d)
+  kind: 'pushToStart' | 'update'
+  token: string        the APNs token the server pushes to
+  locale: 'en' | 'fr'  drives the card's EN/FR text server-side
+  uid: string          must equal the caller's auth uid
+
+liveActivityCards/{employeeDocId}   Admin-SDK-only marker binding an employee's
+                       live card to the appointment it is showing. Load-bearing:
+                       a push-started activity's id is minted by ActivityKit and
+                       its attributes can't be read back, so the device cannot
+                       stamp appointmentId on its own token row — update/end
+                       resolve the target through this doc. Clients cannot read
+                       or write it
+
 users/{docId}/presence/location   single live-location doc (id always
                        'location') for travel-time reminders + the admin live
                        staff map. Writes are self-only; reads are self OR admin
@@ -651,7 +671,7 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (926 test cases as of 2026-07-19). `flutter analyze` is
+Run: `flutter test` (954 test cases as of 2026-07-19). `flutter analyze` is
 clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.

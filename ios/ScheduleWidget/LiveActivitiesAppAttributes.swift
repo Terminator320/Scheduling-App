@@ -70,9 +70,11 @@ struct LiveActivitiesAppAttributes: Codable, Hashable {
         /// only if the server could not read it.
         let startTime: String?
 
-        /// ISO-8601 UTC instant for the absolute "leave at" time. Null when
-        /// the sweep fell back to the fixed 30-minute reminder. Also the
-        /// boundary for the amber → red lapsed state.
+        /// ISO-8601 UTC instant for the absolute "leave at" time, and the
+        /// boundary for the amber → red lapsed state. Only the push that
+        /// STARTS the card carries it; every later update (reschedule, the
+        /// travel → on-site flip) sends null, since "leave at" is meaningless
+        /// once the tech is under way.
         let leaveAt: String?
 
         /// Drive minutes from the one Routes API call the sweep already makes.
@@ -163,9 +165,10 @@ struct LiveActivitiesAppAttributes: Codable, Hashable {
     let employeeDocId: String
 
     /// The assignee's `colorValue` (ARGB32 int, see `EmployeeRecord`) driving
-    /// the Lock Screen colour rail. Optional because `buildAttributes` does
-    /// not send it yet — a missing key on a non-optional field would fail the
-    /// whole push-to-start decode and drop the card.
+    /// the Lock Screen colour rail. `buildAttributes` always sends it (0 when
+    /// the employee doc has no colour); optional purely for decode safety — a
+    /// missing key on a non-optional field would fail the whole push-to-start
+    /// decode and drop the card.
     let employeeColorValue: Int?
 
     init(

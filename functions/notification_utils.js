@@ -24,6 +24,13 @@ const {
   updateLiveActivity,
   endLiveActivity,
 } = require("./live_activity_dispatch");
+const {
+  toMillis,
+  formatBusinessTime,
+  formatTimeOfDay,
+  businessYmd,
+  businessMidnight,
+} = require("./time_utils");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -69,20 +76,6 @@ const KIND_PRIORITY = {
 // digest) also go to an assigned ADMIN, who still wants the schedule nudges.
 const CHANGE_RECIPIENT_ROLES = new Set(["employee"]);
 const TIMED_RECIPIENT_ROLES = new Set(["employee", "admin"]);
-
-/**
- * Milliseconds since epoch for a Firestore Timestamp / Date / number, else
- * null.
- * @param {*} value
- * @return {?number}
- */
-function toMillis(value) {
-  if (value == null) return null;
-  if (typeof value.toMillis === "function") return value.toMillis();
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === "number") return value;
-  return null;
-}
 
 /**
  * Normalizes an employeeIds field to an array of strings.
@@ -203,30 +196,13 @@ function diffAppointmentForNotifications(before, after, now, id) {
 }
 
 /**
- * Formats a Toronto-local datetime/time string.
- * @param {string} locale 'en' | 'fr'.
- * @param {*} startTime Timestamp/Date/number.
- * @param {!Object} opts Intl.DateTimeFormat options (timeZone added).
- * @return {string}
- */
-function _fmt(locale, startTime, opts) {
-  const ms = toMillis(startTime);
-  if (ms == null) return "";
-  const loc = locale === "fr" ? "fr-CA" : "en-CA";
-  return new Intl.DateTimeFormat(loc, {
-    timeZone: "America/Toronto",
-    ...opts,
-  }).format(new Date(ms));
-}
-
-/**
  * Localized "Wed, Jul 8, 2:00 p.m." style datetime.
  * @param {string} locale
  * @param {*} startTime
  * @return {string}
  */
 function _dateTime(locale, startTime) {
-  return _fmt(locale, startTime, {
+  return formatBusinessTime(locale, startTime, {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -242,7 +218,7 @@ function _dateTime(locale, startTime) {
  * @return {string}
  */
 function _timeOnly(locale, startTime) {
-  return _fmt(locale, startTime, {hour: "numeric", minute: "2-digit"});
+  return formatTimeOfDay(locale, startTime);
 }
 
 /**
@@ -464,57 +440,16 @@ function groupTomorrowsJobsByEmployee(records, now) {
 }
 
 /**
- * Toronto UTC offset (ms to add to a UTC instant to get local wall time) at
- * `date`.
- * @param {!Date} date
- * @return {number}
- */
-function _torontoOffsetMs(date) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Toronto",
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(date).reduce((acc, p) => {
-    acc[p.type] = p.value;
-    return acc;
-  }, {});
-  const asUtc = Date.UTC(
-      Number(parts.year),
-      Number(parts.month) - 1,
-      Number(parts.day),
-      Number(parts.hour),
-      Number(parts.minute),
-      Number(parts.second),
-  );
-  return asUtc - date.getTime();
-}
-
-/**
- * [tomorrow 00:00, day-after 00:00) in Toronto local time, as UTC Dates. DST
- * shifts happen at 02:00, not midnight, so the midnight offset is stable.
+ * [tomorrow 00:00, day-after 00:00) in Toronto local time, as UTC Dates.
  * @param {(Date|number)} now
  * @return {{start: !Date, end: !Date}}
  */
 function tomorrowWindowToronto(now) {
   const date = now instanceof Date ? now : new Date(Number(now));
-  const [y, m, d] = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Toronto",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date).split("-").map(Number);
-  const midnightUtc = (yy, mm, dd) => {
-    const guess = Date.UTC(yy, mm - 1, dd, 0, 0, 0);
-    return new Date(guess - _torontoOffsetMs(new Date(guess)));
-  };
+  const [y, m, d] = businessYmd(date);
   return {
-    start: midnightUtc(y, m, d + 1),
-    end: midnightUtc(y, m, d + 2),
+    start: businessMidnight(y, m, d + 1),
+    end: businessMidnight(y, m, d + 2),
   };
 }
 

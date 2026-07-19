@@ -25,6 +25,7 @@ import 'package:scheduling/features/auth/application/account_status_provider.dar
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/live_activity/application/live_activity_preference.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
@@ -278,35 +279,77 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         ref.watch(notificationAuthStatusProvider).asData?.value ??
         AuthorizationStatus.notDetermined;
     final granted = PushNotificationService.isGranted(status);
+    // Hidden off iOS, below 17.2, and when the user turned Live Activities off
+    // in iOS Settings — a device that can't host the card gets no control at
+    // all rather than a permanently dead switch.
+    final showLiveActivity =
+        ref.watch(liveActivitySupportedProvider).asData?.value ?? false;
     return SettingsSectionCard(
-      child: SettingsTile(
-        iconBg: granted ? scheme.primaryContainer : scheme.errorContainer,
-        icon: granted
-            ? Icons.notifications_active_rounded
-            : Icons.notifications_off_rounded,
-        iconColor: granted ? scheme.primary : scheme.error,
-        label: context.l10n.settings_notifications,
-        isLast: true,
-        trailing: Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: AppSpacing.sp4,
-          runSpacing: AppSpacing.sp4,
-          children: [
-            SettingsTrailingPill(
-              label: granted
-                  ? context.l10n.settings_notificationsOn
-                  : context.l10n.settings_notificationsOff,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SettingsTile(
+            iconBg: granted ? scheme.primaryContainer : scheme.errorContainer,
+            icon: granted
+                ? Icons.notifications_active_rounded
+                : Icons.notifications_off_rounded,
+            iconColor: granted ? scheme.primary : scheme.error,
+            label: context.l10n.settings_notifications,
+            isLast: !showLiveActivity,
+            trailing: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: AppSpacing.sp4,
+              runSpacing: AppSpacing.sp4,
+              children: [
+                SettingsTrailingPill(
+                  label: granted
+                      ? context.l10n.settings_notificationsOn
+                      : context.l10n.settings_notificationsOff,
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ],
             ),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 18,
-              color: scheme.onSurfaceVariant,
+            onTap: () => _onNotificationsTap(status),
+          ),
+          if (showLiveActivity) ...[
+            const SettingsTileDivider(),
+            SettingsTile(
+              iconBg: scheme.primaryContainer,
+              icon: Icons.directions_car_rounded,
+              iconColor: scheme.primary,
+              label: context.l10n.settings_liveActivity,
+              isLast: true,
+              trailing: Switch.adaptive(
+                value: ref.watch(liveActivityEnabledProvider),
+                onChanged: (value) => _toggleLiveActivity(value: value),
+                activeTrackColor: scheme.primary,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
             ),
           ],
-        ),
-        onTap: () => _onNotificationsTap(status),
+        ],
       ),
     );
+  }
+
+  /// Turning the card OFF must do more than set a flag: the server *push-starts*
+  /// it, so a registered token would keep producing cards. Unregistering ends
+  /// any live card and deletes this device's token rows; turning it back on
+  /// re-registers. Both are best-effort and never throw.
+  Future<void> _toggleLiveActivity({required bool value}) async {
+    await ref
+        .read(liveActivityEnabledProvider.notifier)
+        .setEnabled(value: value);
+    final controller = ref.read(liveActivityRegistrationControllerProvider);
+    if (value) {
+      await controller.sync();
+    } else {
+      await controller.unregister();
+    }
   }
 
   /// notDetermined → show the one-time OS prompt (the app updated but the ask

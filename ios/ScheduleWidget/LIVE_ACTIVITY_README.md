@@ -83,7 +83,12 @@ built clean end-to-end (`flutter build ios --debug --no-codesign`), with both
    pushes reuse it — no new entitlement. Time Sensitive Notifications stays as
    wired for the `leaveNow` push.
 
-## APNs key (owner, once)
+## APNs key (owner, once) — DONE 2026-07-19
+
+All three secrets exist and are ENABLED in Secret Manager; the steps below are
+kept for the next key rotation. What still remains is `firebase deploy --only
+functions` and the on-device pass.
+
 
 Live Activity pushes cannot go through FCM — they need
 `apns-push-type: liveactivity` on topic
@@ -103,8 +108,8 @@ directly (`functions/apns_client.js`).
    firebase deploy --only functions
    ```
 
-Until these land, every Live Activity path no-ops and the plain `leaveNow`
-push behaves exactly as it does today.
+Until a deploy carries them into the functions, every Live Activity path no-ops
+and the plain `leaveNow` push behaves exactly as it does today.
 
 ## Device verification (real iPhone — the Simulator is meaningless here)
 

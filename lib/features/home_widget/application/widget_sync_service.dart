@@ -6,14 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:home_widget/home_widget.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
-import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
-import 'package:scheduling/core/utils/retry.dart';
-import 'package:scheduling/features/auth/application/account_status_provider.dart';
+import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
-import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 /// App Group shared with the iOS WidgetKit extension. Public because the app
@@ -202,27 +199,9 @@ final widgetSyncServiceProvider = Provider<WidgetSyncService>(
 /// qualify — admins can assign themselves to jobs, so they see their own
 /// schedule on the widget too (their appointment stream is still scoped to
 /// visits whose `employeeIds` contains this id).
-final widgetEmployeeIdProvider = FutureProvider.autoDispose<String?>((
-  ref,
-) async {
-  final doc = ref.watch(currentUserDocProvider).value ?? const {};
-  final role = (doc['role'] ?? '').toString().trim();
-  final status = (doc['status'] ?? '').toString().trim();
-  if (status != 'active' || (role != 'employee' && role != 'admin')) {
-    return null;
-  }
-  final uid = ref.watch(authUidProvider).value;
-  if (uid == null) return null;
-  // Retry the post-sign-in read: the ID-token/role bridge can lag sign-in, so a
-  // transient `permission-denied` would otherwise resolve null and clear the
-  // widget. Mirrors the splash/sign-in reads.
-  final repo = ref.watch(employeesRepositoryProvider);
-  final match = await retryAsync(
-    () => repo.findUserByUid(uid),
-    delays: const [Duration(milliseconds: 500), Duration(milliseconds: 1500)],
-  );
-  return match?.id;
-});
+final widgetEmployeeIdProvider = FutureProvider.autoDispose<String?>(
+  (ref) async => (await ref.watch(activeUserIdentityProvider.future))?.docId,
+);
 
 /// The current widget payload for the signed-in employee, or `data(null)` when
 /// the widget should be cleared (admin / signed-out). Watches a today+lookahead

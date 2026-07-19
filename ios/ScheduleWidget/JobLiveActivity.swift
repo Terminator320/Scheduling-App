@@ -124,8 +124,10 @@ private struct LockScreenCard: View {
     }
 
     var body: some View {
-        // Read once per render: the amber -> red lapse repaints when the next
-        // update push lands, which the 5-minute sweep already provides.
+        // Read once per render. The amber -> red lapse is evaluated here, not
+        // scheduled: no push fires between `leaveAt` and `startTime` (the sweep
+        // only pushes the on-site flip at `startTime`), so the colour turns on
+        // whatever redraw WidgetKit next grants the card.
         let now = Date()
         let tint = phaseAccent(for: state, now: now)
         return HStack(alignment: .top, spacing: 10) {

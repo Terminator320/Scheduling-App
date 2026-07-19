@@ -264,6 +264,7 @@
   "settings_notifications": "Notifications",
   "settings_notificationsOn": "Activées",
   "settings_notificationsOff": "Désactivées",
+  "settings_liveActivity": "Carte de tâche en direct",
   "settings_appLock": "Verrouillage de l’app",
   "settings_appLockUnavailable": "Le verrouillage biométrique n’est pas disponible sur cet appareil.",
   "applock_title": "Verrouillé",
