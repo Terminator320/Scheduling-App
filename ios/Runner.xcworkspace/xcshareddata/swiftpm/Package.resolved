@@ -1,5 +1,4 @@
 {
-  "originHash" : "4585b6d54785c6ba4e982d08590c49365568559079fbce8511fb3808f644dd1e",
   "pins" : [
     {
       "identity" : "abseil-cpp-binary",
@@ -35,6 +34,15 @@
       "state" : {
         "revision" : "dc39082d8881109d35b94b1c122164c0e8d08a55",
         "version" : "3.6.1"
+      }
+    },
+    {
+      "identity" : "google-maps-ios-utils",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/googlemaps/google-maps-ios-utils",
+      "state" : {
+        "revision" : "22c6e764d14daaf5de2aa4a3700bc2e9dccae5ac",
+        "version" : "6.1.0"
       }
     },
     {
@@ -92,6 +100,15 @@
       }
     },
     {
+      "identity" : "ios-maps-sdk",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/googlemaps/ios-maps-sdk",
+      "state" : {
+        "revision" : "02f8f144ef266da44d50a68d1562ca051bac27cc",
+        "version" : "9.4.0"
+      }
+    },
+    {
       "identity" : "leveldb",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/firebase/leveldb.git",
@@ -128,5 +145,5 @@
       }
     }
   ],
-  "version" : 3
+  "version" : 2
 }

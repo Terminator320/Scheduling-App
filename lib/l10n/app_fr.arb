@@ -410,5 +410,12 @@
   "liveMap_trafficToggle": "Circulation",
   "liveMap_satelliteToggle": "Satellite",
   "liveMap_recenter": "Recentrer la carte",
+  "liveMap_rosterButton": "Afficher la liste du personnel",
+  "liveMap_rosterTitle": "Personnel",
+  "liveMap_rosterCount": "{count, plural, =1{1 en partage} other{{count} en partage}}",
+  "liveMap_you": "Vous",
+  "liveMap_locatingCity": "Localisation…",
+  "liveMap_distanceKm": "{value} km",
+  "liveMap_distanceMeters": "{value} m",
   "error_introLoadLiveMap": "Impossible de charger la carte du personnel"
 }

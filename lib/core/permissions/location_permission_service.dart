@@ -17,6 +17,14 @@ enum LocationPermissionResult {
 /// while-in-use is a working degraded mode (no background delivery, the
 /// server's address fallback covers it), never an error.
 ///
+/// **Always escalation:** background presence (and the "time to leave" pushes)
+/// only keep updating while the app is closed under an *Always* grant. So on
+/// the first-grant path — right after the initial while-in-use prompt is
+/// answered — we request once more to surface iOS's "Change to Always Allow?"
+/// upgrade. iOS shows that prompt at most once, and we deliberately do NOT
+/// re-request when a returning user is *already* while-in-use, so a user who
+/// chose to keep while-in-use is never nagged on subsequent launches.
+///
 /// Injectable function fields for tests; mirrors [MediaPermissionService].
 class LocationPermissionService {
   LocationPermissionService({
@@ -39,6 +47,12 @@ class LocationPermissionService {
     var permission = await _checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await _requestPermission();
+      // Fresh while-in-use grant: ask again to escalate to Always so the
+      // background stream survives the app being closed. Only on this
+      // first-grant path — never for an already-while-in-use returning user.
+      if (permission == LocationPermission.whileInUse) {
+        permission = await _requestPermission();
+      }
     }
     switch (permission) {
       case LocationPermission.always:

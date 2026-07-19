@@ -116,6 +116,93 @@ void main() {
     });
   });
 
+  StaffMapPoint point(String id, double lat, double lng) => StaffMapPoint(
+    userDocId: id,
+    name: id,
+    color: Colors.blue,
+    lat: lat,
+    lng: lng,
+    updatedAt: null,
+  );
+
+  group('LiveMapAggregator.distanceMeters', () {
+    test('zero distance for the same point', () {
+      expect(LiveMapAggregator.distanceMeters(45.5, -73.6, 45.5, -73.6), 0);
+    });
+
+    test('~1.11 km per 0.01 degree of latitude', () {
+      final d = LiveMapAggregator.distanceMeters(45, -73, 45.01, -73);
+      expect(d, closeTo(1113, 5));
+    });
+  });
+
+  group('LiveMapAggregator.sortedByProximity', () {
+    test('self leads, rest ordered nearest-first', () {
+      final points = [
+        point('far', 45.6, -73.6),
+        point('me', 45.5, -73.6),
+        point('near', 45.51, -73.6),
+      ];
+      final ordered = LiveMapAggregator.sortedByProximity(
+        points,
+        selfDocId: 'me',
+      );
+      expect(ordered.map((p) => p.userDocId), ['me', 'near', 'far']);
+    });
+
+    test('no self point preserves incoming order', () {
+      final points = [point('b', 1, 1), point('a', 2, 2)];
+      final ordered = LiveMapAggregator.sortedByProximity(
+        points,
+        selfDocId: 'ghost',
+      );
+      expect(ordered.map((p) => p.userDocId), ['b', 'a']);
+    });
+
+    test('null selfDocId preserves incoming order', () {
+      final points = [point('b', 1, 1), point('a', 2, 2)];
+      final ordered = LiveMapAggregator.sortedByProximity(
+        points,
+        selfDocId: null,
+      );
+      expect(ordered.map((p) => p.userDocId), ['b', 'a']);
+    });
+  });
+
+  group('LiveMapAggregator.cityFromAddress', () {
+    test('extracts city from a full Canadian street address', () {
+      expect(
+        LiveMapAggregator.cityFromAddress(
+          '123 Rue Example, Montréal, QC H2X 1Y4, Canada',
+        ),
+        'Montréal',
+      );
+    });
+
+    test('extracts city from a province-only tail', () {
+      expect(
+        LiveMapAggregator.cityFromAddress('Québec, QC, Canada'),
+        'Québec',
+      );
+    });
+
+    test('handles no postal code', () {
+      expect(
+        LiveMapAggregator.cityFromAddress('45 Main St, Laval, QC, Canada'),
+        'Laval',
+      );
+    });
+
+    test('null / empty returns null', () {
+      expect(LiveMapAggregator.cityFromAddress(null), isNull);
+      expect(LiveMapAggregator.cityFromAddress('   '), isNull);
+    });
+
+    test('a bare single token is returned as-is', () {
+      expect(LiveMapAggregator.cityFromAddress('Sherbrooke'), 'Sherbrooke');
+    });
+  });
+
   group('LiveMapAggregator.freshnessOf', () {
     test('null updatedAt is justNow', () {
       expect(
