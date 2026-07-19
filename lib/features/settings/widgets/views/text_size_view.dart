@@ -88,7 +88,10 @@ class _TextSizeViewState extends State<TextSizeView> {
           builder: (context) {
             final options = _buildOptions(context.l10n);
             return _Card(
-              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+              padding: const EdgeInsets.symmetric(
+                vertical: AppSpacing.sp4,
+                horizontal: AppSpacing.sp8,
+              ),
               child: Column(
                 children: [
                   for (int i = 0; i < options.length; i++) ...[

@@ -71,6 +71,15 @@ abstract class AppointmentsRepository {
   /// returns the matches newest-first.
   Future<List<AppointmentRecord>> searchHistory(String query);
 
+  /// This client's appointments (any status), most-recent first and bounded by
+  /// [limit], for the admin-only client detail "Job history" section. Filters
+  /// on `clientId` alone (automatic single-field index) and sorts by startTime
+  /// descending in Dart, so it needs no composite index.
+  Future<List<AppointmentRecord>> fetchClientHistory({
+    required String clientId,
+    int limit,
+  });
+
   /// Fires after every local appointment write (add/update/delete/status/
   /// pictures/series). Lets watched search providers invalidate committed
   /// results instead of serving a just-deleted appointment until their TTL.

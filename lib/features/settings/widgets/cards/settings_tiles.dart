@@ -41,7 +41,11 @@ class SettingsSectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 8, top: 2),
+      padding: const EdgeInsets.only(
+        left: AppSpacing.sp4,
+        bottom: AppSpacing.sp8,
+        top: 2,
+      ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(

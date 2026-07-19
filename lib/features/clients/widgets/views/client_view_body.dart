@@ -6,6 +6,7 @@ import 'package:scheduling/features/clients/contact_export_launcher.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/email_compose_launcher.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_contacts_cards.dart';
+import 'package:scheduling/features/clients/widgets/sections/client_job_history_section.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/features/wave/widgets/wave_sync_badge.dart';
@@ -133,6 +134,8 @@ class ClientDetailViewBody extends ConsumerWidget {
           ),
         ],
         ClientContactsCards(contacts: extraContacts),
+        const SizedBox(height: AppSpacing.sp24),
+        ClientJobHistorySection(clientId: client.id),
         if (hasSyncBadge) ...[
           const SizedBox(height: AppSpacing.sp16),
           Align(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -15,6 +16,7 @@ void main() {
     List<ClientRecord> clientResults = const [],
     ValueChanged<ClientRecord>? onSelectClient,
     Future<ClientRecord?> Function(String initialName)? onRequestAddClient,
+    ValueChanged<JobTemplate>? onApplyTemplate,
   }) async {
     tester.view.physicalSize = Size(width, 740);
     tester.view.devicePixelRatio = 1.0;
@@ -69,6 +71,7 @@ void main() {
               onSelectRepeat: (_) {},
               onUseCustomAddress: (_) {},
               onRequestAddClient: onRequestAddClient,
+              onApplyTemplate: onApplyTemplate,
             ),
           ),
         ),
@@ -89,6 +92,30 @@ void main() {
     expect(endLabel.dy, greaterThan(startLabel.dy + 20));
     expect((endLabel.dx - startLabel.dx).abs(), lessThan(4));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('job template chips fire onApplyTemplate with the picked type', (
+    tester,
+  ) async {
+    JobTemplate? picked;
+    await pumpAppointmentForm(
+      tester,
+      width: 400,
+      onApplyTemplate: (t) => picked = t,
+    );
+
+    expect(find.text('Common jobs'), findsOneWidget);
+    await tester.tap(find.text('Water heater'));
+    await tester.pumpAndSettle();
+    expect(picked, JobTemplate.waterHeater);
+  });
+
+  testWidgets('no template chips render without onApplyTemplate (edit flow)', (
+    tester,
+  ) async {
+    await pumpAppointmentForm(tester, width: 400);
+    expect(find.text('Common jobs'), findsNothing);
+    expect(find.text('Water heater'), findsNothing);
   });
 
   testWidgets('inline add-client auto-selects the created client', (

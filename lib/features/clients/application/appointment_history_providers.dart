@@ -41,3 +41,15 @@ final historySearchProvider = FutureProvider.autoDispose
       ref.onDispose(sub.cancel);
       return repo.searchHistory(query);
     });
+
+/// This client's appointments (most-recent first) for the client detail
+/// "Job history" section. AutoDispose + family keyed by clientId so a closed
+/// detail view frees the read; re-fetches on any local appointment write so an
+/// edit made while the detail is open reflects immediately.
+final clientJobHistoryProvider = FutureProvider.autoDispose
+    .family<List<AppointmentRecord>, String>((ref, clientId) async {
+      final repo = ref.watch(appointmentsRepositoryProvider);
+      final sub = repo.onLocalWrite.listen((_) => ref.invalidateSelf());
+      ref.onDispose(sub.cancel);
+      return repo.fetchClientHistory(clientId: clientId);
+    });

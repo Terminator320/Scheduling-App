@@ -658,6 +658,14 @@
   "@clients_contactInfo": {
     "description": "Section header above the client's phone, email and address"
   },
+  "clients_jobHistory": "Job history",
+  "@clients_jobHistory": {
+    "description": "Section header on the client detail view above the client's past appointments"
+  },
+  "clients_noPastJobs": "No jobs yet",
+  "@clients_noPastJobs": {
+    "description": "Shown in the client detail Job history section when the client has no appointments"
+  },
   "clients_directions": "Directions",
   "@clients_directions": {
     "description": "Quick-action button that opens the client's address in a map app"
@@ -1183,6 +1191,34 @@
   "calendar_newAppointment": "New Appointment",
   "@calendar_newAppointment": {
     "description": "New Appointment"
+  },
+  "calendar_jobTemplatesLabel": "Common jobs",
+  "@calendar_jobTemplatesLabel": {
+    "description": "Section label above the quick-fill job template chips on the add-appointment form"
+  },
+  "calendar_jobTemplateLeakDiagnostic": "Leak diagnostic",
+  "@calendar_jobTemplateLeakDiagnostic": {
+    "description": "Job template name: a leak diagnostic visit"
+  },
+  "calendar_jobTemplateDrainCleaning": "Drain cleaning",
+  "@calendar_jobTemplateDrainCleaning": {
+    "description": "Job template name: a drain cleaning visit"
+  },
+  "calendar_jobTemplateFaucetOrValve": "Faucet / valve",
+  "@calendar_jobTemplateFaucetOrValve": {
+    "description": "Job template name: a faucet or valve repair"
+  },
+  "calendar_jobTemplateToiletRepair": "Toilet repair",
+  "@calendar_jobTemplateToiletRepair": {
+    "description": "Job template name: a toilet repair"
+  },
+  "calendar_jobTemplateEmergencyCall": "Emergency call",
+  "@calendar_jobTemplateEmergencyCall": {
+    "description": "Job template name: an emergency call-out"
+  },
+  "calendar_jobTemplateWaterHeater": "Water heater",
+  "@calendar_jobTemplateWaterHeater": {
+    "description": "Job template name: a water heater install or repair"
   },
   "calendar_saveAppointment": "Save Appointment",
   "@calendar_saveAppointment": {
@@ -1717,6 +1753,8 @@
   "@liveMap_you": {"description": "Badge marking the admin's own row in the staff roster list"},
   "liveMap_locatingCity": "Locating…",
   "@liveMap_locatingCity": {"description": "Placeholder shown in a roster row while the staff member's city is being resolved"},
+  "liveMap_noLocation": "No location",
+  "@liveMap_noLocation": {"description": "Shown in a roster row when the staff member's position can't be resolved to a place (reverse-geocode returned nothing usable)"},
   "liveMap_distanceKm": "{value} km",
   "@liveMap_distanceKm": {"description": "Distance from the viewing admin to a staff member, in kilometres (value already locale-formatted, e.g. 2.4)", "placeholders": {"value": {"type": "String"}}},
   "liveMap_distanceMeters": "{value} m",

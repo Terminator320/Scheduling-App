@@ -8,7 +8,6 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
-import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/splash/application/splash_controller.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/branding/brand_logo.dart';
@@ -50,12 +49,29 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   /// Optimistic fast path. On a cache hit we route immediately (as employee);
   /// on a miss we fall back to the authoritative [splashDestinationProvider].
   Future<void> _decideRoute() async {
+    // FirebaseAuth restores the session synchronously (Firebase.initializeApp
+    // ran in main() before runApp), so read uid now and kick off the
+    // independent secure-storage auth-cache read up front — it overlaps App
+    // Check activation below instead of running in series after it. Errors are
+    // swallowed here so this fire-early future can't become unhandled if we
+    // return before awaiting it.
+    final uid = ref.read(firebaseAuthProvider).currentUser?.uid;
+    final cacheFuture = uid == null
+        ? null
+        : ref.read(authCacheProvider).loadIfMatch(uid).catchError((
+            Object e,
+            StackTrace st,
+          ) {
+            ref.read(loggerProvider).warn('splash.auth_cache_load', e, st);
+            return null;
+          });
+
     // P10: Crashlytics/App Check activation completes after runApp (main.dart
     // defers it into firebaseReadyProvider). Every Firestore-reading surface
-    // is reached through this splash, so awaiting here guarantees no request
-    // races App Check token issuance. An activation failure is already
-    // recorded by the zone handler — log and proceed rather than wedge
-    // startup on it.
+    // is reached through this splash, so awaiting here before NAVIGATING
+    // guarantees no request races App Check token issuance. An activation
+    // failure is already recorded by the zone handler — log and proceed
+    // rather than wedge startup on it.
     try {
       await ref.read(firebaseReadyProvider.future);
     } catch (e, st) {
@@ -63,18 +79,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     }
     if (!mounted || _navigated) return;
 
-    final uid = ref.read(firebaseAuthProvider).currentUser?.uid;
     if (uid == null) {
       _go(const SplashGoToLogin());
       return;
     }
-    EmployeeRecord? cached;
-    try {
-      cached = await ref.read(authCacheProvider).loadIfMatch(uid);
-    } catch (e, st) {
-      ref.read(loggerProvider).warn('splash.auth_cache_load', e, st);
-      cached = null;
-    }
+    final cached = await cacheFuture;
     if (!mounted || _navigated) return;
     if (cached != null) {
       _go(SplashGoToCalendar(isAdmin: false, employeeId: cached.id));

@@ -10,6 +10,38 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.33.0+52] - 2026-07-19
+### Added
+- **Book common jobs in a couple of taps.** The add-appointment form now has a
+  row of quick-fill chips for the usual job types — leak diagnostic, drain
+  cleaning, faucet or valve, toilet repair, emergency call, water heater.
+  Tapping one fills in the service title and a typical duration; everything
+  stays editable afterwards.
+- **See a client's whole job history.** Opening a client now shows a "Job
+  history" section listing that client's appointments newest-first — tap any one
+  to open its details.
+- **Book straight from an empty day.** An empty day's schedule now shows a "New
+  appointment" button, so you can start a booking without hunting for the plus
+  button.
+- **See everyone on the live map as a sortable list.** The staff map now has a
+  "show staff list" button that opens a roster of every team member sharing
+  their location, ordered nearest-to-farthest from you — each row showing the
+  distance, their nearest town, and how long ago they updated, with your own row
+  marked "You". Tap a name to jump straight to that person on the map.
+### Changed
+- **Jump to any day on the day route.** The day-route screen's date is now
+  tappable to pick any day from a calendar, with a one-tap "today" button to
+  return, and the employee switcher opens as a tidy picker sheet.
+- **Overdue jobs stand out at a glance.** A job that has run past its end time
+  now shows a warning icon on its card, so it's easy to spot in a busy day.
+### Fixed
+- **The staff list says "No location" when a spot can't be pinned.** A roster
+  row whose position can't be resolved to a place now reads "No location"
+  instead of showing "Locating…" indefinitely.
+- **Location sharing stays fresher for on-time "leave now" alerts.** A dropped
+  location update no longer briefly pauses the next one, so your position — and
+  the drive-time reminders that depend on it — stay current.
+
 ## [1.32.0+51] - 2026-07-18
 ### Added
 - **See where your staff are on a live map.** Admins get a new Staff map that

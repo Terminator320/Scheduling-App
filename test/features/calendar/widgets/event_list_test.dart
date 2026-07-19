@@ -12,6 +12,7 @@ Widget _wrap({
   required ValueNotifier<List<AppointmentRecord>> events,
   required bool isAdmin,
   Map<String, String> nameMap = const {},
+  VoidCallback? onSchedule,
 }) => MaterialApp(
   localizationsDelegates: const [
     AppLocalizations.delegate,
@@ -27,6 +28,7 @@ Widget _wrap({
           nameMap: nameMap,
           colorMap: const {},
           isAdmin: isAdmin,
+          onSchedule: onSchedule,
         ),
       ],
     ),
@@ -62,6 +64,30 @@ void main() {
     expect(find.text('No appointments found'), findsOneWidget);
     expect(find.text('No appointments for this day.'), findsOneWidget);
     expect(find.text('Tap + to schedule an appointment.'), findsNothing);
+  });
+
+  testWidgets('admin empty state schedule button fires onSchedule', (
+    tester,
+  ) async {
+    var tapped = 0;
+    await tester.pumpWidget(
+      _wrap(events: events, isAdmin: true, onSchedule: () => tapped++),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(FilledButton, 'New Appointment');
+    expect(button, findsOneWidget);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(tapped, 1);
+  });
+
+  testWidgets('employee empty state shows no schedule button', (tester) async {
+    await tester.pumpWidget(
+      _wrap(events: events, isAdmin: false, onSchedule: () {}),
+    );
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(FilledButton, 'New Appointment'), findsNothing);
   });
 
   testWidgets('appointment card lists every assigned employee', (tester) async {

@@ -399,6 +399,12 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       colorMap: colorMap,
       isLoading: isLoading,
       isAdmin: widget.isAdmin,
+      onSchedule: widget.isAdmin
+          ? () => showAddEventPopup(
+              context,
+              initialDate: _selectedDay ?? _focusedDay,
+            )
+          : null,
     );
 
     if (_splitCalendar) {
@@ -485,7 +491,12 @@ class _CalendarMonthBar extends StatelessWidget {
       color: theme.colorScheme.onPrimary.withValues(alpha: 0.82),
     );
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 0, 16, context.isLandscape ? 4 : 8),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.sp16,
+        0,
+        AppSpacing.sp16,
+        context.isLandscape ? AppSpacing.sp4 : AppSpacing.sp8,
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [

@@ -24,11 +24,12 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 
 ## Deployment status
 
-- **21 functions defined** in code; **20 deployed** — verified live against
-  `schedulingapp-88727` on 2026-07-13 (v2, Node.js 24, 256 MB; `us-central1`
-  except `validateUploadedImage` in `us-east1`). `placesReverseGeocode` (added
-  for the live staff-location map) is **not yet deployed** — pending the next
-  `firebase deploy --only functions`.
+- **21 functions defined** in code; **all 21 deployed** — verified live against
+  `schedulingapp-88727` on 2026-07-18 (v2, Node.js 24, 256 MB; `us-central1`
+  except `validateUploadedImage` in `us-east1`). The 2026-07-18 deploy shipped
+  `placesReverseGeocode`, the travel-aware `sendUpcomingJobReminders` rebuild,
+  and the codebase-audit fixes (overdue-sweep ordering, bounded travel-context
+  query, client-data rule length caps).
 - The 4 **push-notification functions** (`notifyAppointmentChanges`,
   `sendUpcomingJobReminders`, `sendDailyJobDigest`, `sendOverdueJobPrompts`)
   and the 2 **Wave auto-import cadence functions** (`waveSetImportSchedule`,
@@ -38,12 +39,12 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   ledgers (console-enabled), plus on-device push verification. The iOS-native
   APNs key + Push/App-Groups entitlements were wired on the Mac 2026-07-11 (see
   `docs/plans/2026-07-08-push-notifications.md`).
-- **Not yet deployed (1.32.0):** `sendUpcomingJobReminders` was rebuilt into the
-  travel-aware sweep; the new code needs a redeploy AND a one-time console step —
-  enable the **Routes API** and add it to the `GOOGLE_MAP_API_KEY` restriction.
-  Until then the deployed 30-min reminder keeps running; after deploy but before
-  the console step, the sweep just logs Routes failures and delivers the 30-min
-  fallback. See `docs/plans/2026-07-09-travel-time-notifications.md`.
+- **Deployed 2026-07-18 (1.33.0):** the travel-aware `sendUpcomingJobReminders`
+  rebuild went live. One console step still gates full travel-awareness — the
+  **Routes API** must be enabled and added to the `GOOGLE_MAP_API_KEY`
+  restriction; until that's verified the sweep logs Routes failures and delivers
+  the 30-min fallback (never worse than the old behavior). See
+  `docs/plans/2026-07-09-travel-time-notifications.md`.
 - `backfillLegacyClientNames` (a one-time migration completed `2026-06-29`,
   `fixed: 0`) was removed from the codebase 2026-07-05 and is **no longer in the
   deployed set** (confirmed 2026-07-10) — it was pruned by a full
@@ -190,7 +191,8 @@ Every 5 min (Toronto). **Travel-aware "time to leave" sweep**
 an intervening job's address → a fresh background-GPS presence doc
 (`updatedAt` ≤ 25 min) → a recently-ended job's address (≤ 4 h) → none — via one
 per-employee context query (`(employeeIds CONTAINS, endTime ASC, startTime ASC)`
-index) plus a batched `getAll` of the presence docs, then calls Google Routes
+index, bounded by `CONTEXT_QUERY_MAX` so it can't re-read the whole forward
+schedule) plus a batched `getAll` of the presence docs, then calls Google Routes
 API `computeRoutes` (`TRAFFIC_AWARE`) and fires at
 `startTime − driveTime − 10min` (lead capped at 90 min). **Every failure path —
 no origin, empty address, any Routes error — degrades to the fixed 30-min
@@ -221,8 +223,10 @@ Every 15 min (Toronto). The "job finished?" nudge: pushes assignees of a job
 whose `endTime` passed within the last 24 h while its status is still open
 (`pending`/`in_progress`/legacy `confirmed` — server mirror of the app's
 display-only `overdue` state; nothing is ever stored). Queries by `startTime`
-over the last **48 h** (24 h eligibility + the <24 h max booking) so no new
-index is needed, then filters `endTime ∈ (now-24h, now]` in code. At-most-once
+over the last **48 h** (24 h eligibility + the <24 h max booking) **ordered
+`startTime` DESC** (existing `(status, startTime DESC)` index — no new index)
+so the `OVERDUE_SWEEP_MAX` cap keeps the newest-overdue jobs rather than the
+oldest, then filters `endTime ∈ (now-24h, now]` in code. At-most-once
 **per recipient** via the
 `appointmentOverduePrompts/{id}_{endMs}_{employeeDocId}` ledger; a claim that
 delivered **zero** pushes is released (doc deleted) so a later sweep retries

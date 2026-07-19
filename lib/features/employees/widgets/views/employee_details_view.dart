@@ -137,11 +137,11 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
           Row(
             children: [
               Expanded(child: headerTitle),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.sp8),
               statusChip,
             ],
           ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
         const SizedBox(height: AppSpacing.sp24),
         _DetailField(
@@ -149,19 +149,19 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
           label: context.l10n.employees_name,
           value: widget.employee.name,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.sp12),
         _DetailField(
           icon: Icons.email_outlined,
           label: context.l10n.common_email,
           value: widget.employee.email,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.sp12),
         _DetailField(
           icon: Icons.phone_outlined,
           label: context.l10n.employees_phoneNumber,
           value: widget.employee.phone.isEmpty ? '-' : widget.employee.phone,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.sp12),
         _DetailField(
           icon: Icons.shield_outlined,
           label: context.l10n.employees_role,
@@ -169,11 +169,11 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
               ? context.l10n.common_admin
               : context.l10n.common_employeeRoleValue,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.sp12),
         _ColorRow(color: widget.employee.color),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.sp24),
         const Divider(height: 1),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.sp16),
         _ActionButtons(
           isCurrentUserAdmin: widget.isCurrentUserAdmin,
           isDisabled: isDisabled,
@@ -216,7 +216,7 @@ class _ColorRow extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.sp4),
             Container(
               width: 20,
               height: 20,
@@ -293,7 +293,7 @@ class _ActionButtons extends StatelessWidget {
             ),
           ),
         ],
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.sp8),
         OutlinedButton.icon(
           onPressed: isDeleting ? null : onDelete,
           icon: BusyButtonIcon(
@@ -330,7 +330,7 @@ class _DetailField extends StatelessWidget {
       children: [
         if (icon != null)
           Padding(
-            padding: const EdgeInsets.only(top: 2, right: 12),
+            padding: const EdgeInsets.only(top: 2, right: AppSpacing.sp12),
             child: Icon(icon, size: 16, color: theme.colorScheme.primary),
           ),
         Expanded(

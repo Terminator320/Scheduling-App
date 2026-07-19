@@ -79,51 +79,12 @@ class DetailsViewBody extends ConsumerWidget {
         const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
         const SizedBox(height: AppSpacing.sp16),
-        if (onCall != null || onDirections != null) ...[
-          QuickActionsRow(
-            buttons: [
-              if (onCall != null)
-                QuickActionButton(
-                  icon: Icons.phone_outlined,
-                  label: context.l10n.clients_call,
-                  onTap: onCall,
-                ),
-              if (onDirections != null)
-                QuickActionButton(
-                  icon: Icons.directions_outlined,
-                  label: context.l10n.clients_directions,
-                  onTap: onDirections,
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sp24),
-        ],
-        SectionLabel(context.l10n.calendar_client),
-        const SizedBox(height: AppSpacing.sp8),
-        InfoCard(
-          rows: [
-            InfoCardRow(
-              icon: Icons.person_outline,
-              text: data.clientName,
-              emphasize: true,
-            ),
-            if (data.phone.isNotEmpty)
-              InfoCardRow(
-                icon: Icons.phone_outlined,
-                text: data.phone,
-                onTap: onCall,
-                trailingIcon: Icons.chevron_right,
-              ),
-            if (displayAddress.isNotEmpty)
-              InfoCardRow(
-                icon: Icons.location_on_outlined,
-                text: displayAddress,
-                onTap: onDirections,
-                trailingIcon: Icons.open_in_new,
-                semanticLabel:
-                    '$displayAddress, ${context.l10n.maps_openAddressWith}',
-              ),
-          ],
+        _ClientSection(
+          clientName: data.clientName,
+          phone: data.phone,
+          displayAddress: displayAddress,
+          onCall: onCall,
+          onDirections: onDirections,
         ),
         ClientContactsCards(contacts: data.extraContacts, collapsible: true),
         if (data.notes.isNotEmpty) ...[
@@ -271,6 +232,80 @@ class _DetailsViewData {
   final String notes;
   final List<String> materials;
   final List<ClientContact> extraContacts;
+}
+
+/// Quick-actions row + the client info card (name / phone / address). The
+/// call and directions callbacks are resolved in the parent's `build` where
+/// `ref` lives; a null callback hides its affordance.
+class _ClientSection extends StatelessWidget {
+  const _ClientSection({
+    required this.clientName,
+    required this.phone,
+    required this.displayAddress,
+    required this.onCall,
+    required this.onDirections,
+  });
+
+  final String clientName;
+  final String phone;
+  final String displayAddress;
+  final VoidCallback? onCall;
+  final VoidCallback? onDirections;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (onCall != null || onDirections != null) ...[
+          QuickActionsRow(
+            buttons: [
+              if (onCall != null)
+                QuickActionButton(
+                  icon: Icons.phone_outlined,
+                  label: context.l10n.clients_call,
+                  onTap: onCall!,
+                ),
+              if (onDirections != null)
+                QuickActionButton(
+                  icon: Icons.directions_outlined,
+                  label: context.l10n.clients_directions,
+                  onTap: onDirections!,
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sp24),
+        ],
+        SectionLabel(context.l10n.calendar_client),
+        const SizedBox(height: AppSpacing.sp8),
+        InfoCard(
+          rows: [
+            InfoCardRow(
+              icon: Icons.person_outline,
+              text: clientName,
+              emphasize: true,
+            ),
+            if (phone.isNotEmpty)
+              InfoCardRow(
+                icon: Icons.phone_outlined,
+                text: phone,
+                onTap: onCall,
+                trailingIcon: Icons.chevron_right,
+              ),
+            if (displayAddress.isNotEmpty)
+              InfoCardRow(
+                icon: Icons.location_on_outlined,
+                text: displayAddress,
+                onTap: onDirections,
+                trailingIcon: Icons.open_in_new,
+                semanticLabel:
+                    '$displayAddress, ${context.l10n.maps_openAddressWith}',
+              ),
+          ],
+        ),
+      ],
+    );
+  }
 }
 
 class _EditChip extends StatelessWidget {

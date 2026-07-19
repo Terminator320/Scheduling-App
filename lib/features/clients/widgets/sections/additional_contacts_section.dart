@@ -102,7 +102,7 @@ class AdditionalContactsSection extends StatelessWidget {
                 ),
               ],
             ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.sp4),
           Text(
             context
                 .l10n
@@ -112,7 +112,7 @@ class AdditionalContactsSection extends StatelessWidget {
             ),
           ),
           if (contacts.isEmpty) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.sp12),
             OutlinedButton.icon(
               onPressed: onAddContact,
               icon: const Icon(Icons.person_add_alt_1),
@@ -120,7 +120,7 @@ class AdditionalContactsSection extends StatelessWidget {
             ),
           ],
           for (var i = 0; i < contacts.length; i++) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.sp16),
             _AdditionalContactCard(
               index: i,
               contact: contacts[i],
@@ -205,7 +205,7 @@ class _AdditionalContactCard extends StatelessWidget {
                 ),
               ],
             ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sp8),
           SheetFocusScroll(
             child: LabeledTextField(
               label: context.l10n.clients_contactName,
@@ -218,7 +218,7 @@ class _AdditionalContactCard extends StatelessWidget {
               onChanged: (_) => onClearError('contact_${index}_name'),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sp12),
           SheetFocusScroll(
             child: LabeledTextField(
               label: context.l10n.clients_phone,
@@ -230,7 +230,7 @@ class _AdditionalContactCard extends StatelessWidget {
               onChanged: (_) => onClearError('contact_${index}_phone'),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sp12),
           SheetFocusScroll(
             child: LabeledTextField(
               label: context.l10n.common_email,

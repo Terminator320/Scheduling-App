@@ -18,6 +18,15 @@ AppointmentRecord _fakeAppt() => AppointmentRecord(
   employeeIds: const ['e1'],
 );
 
+// Past endTime + non-terminal status → displayStatus resolves to `overdue`.
+AppointmentRecord _overdueAppt() => AppointmentRecord(
+  id: '2',
+  title: 'Water heater leak',
+  startTime: DateTime(2020, 1, 1, 9),
+  endTime: DateTime(2020, 1, 1, 10),
+  employeeIds: const ['e1'],
+);
+
 Widget _wrap(Widget child) => MaterialApp(
   localizationsDelegates: const [
     AppLocalizations.delegate,
@@ -56,5 +65,53 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.textContaining('long appointment title'), findsOneWidget);
+  });
+
+  testWidgets('shows a warning glyph only when the visit is overdue', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentCard(
+          appointment: _overdueAppt(),
+          employeeColor: const Color(0xFF6366F1),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentCard(
+          appointment: _fakeAppt(),
+          employeeColor: const Color(0xFF6366F1),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.warning_amber_rounded), findsNothing);
+  });
+
+  testWidgets('exposes one merged semantics label for the whole card', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentCard(
+          appointment: _fakeAppt(),
+          employeeColor: const Color(0xFF6366F1),
+          employeeName: 'Sarah Johnson',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // Title, status, time, and employee compose into a single readable label.
+    expect(
+      find.bySemanticsLabel(RegExp('long appointment title.*Sarah Johnson')),
+      findsOneWidget,
+    );
+    handle.dispose();
   });
 }

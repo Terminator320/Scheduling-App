@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
+import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/utils/appointment_form_error_text.dart';
@@ -93,6 +94,7 @@ class AppointmentFormFields extends StatelessWidget {
     this.editingStatus,
     this.onStatusChanged,
     this.onRequestAddClient,
+    this.onApplyTemplate,
   });
 
   final AppointmentFormControllers controllers;
@@ -127,6 +129,11 @@ class AppointmentFormFields extends StatelessWidget {
   /// the created client, which is then auto-selected. Null hides the inline
   /// "add new client" affordance in the client picker.
   final Future<ClientRecord?> Function(String initialName)? onRequestAddClient;
+
+  /// Add flow only. When non-null, a row of one-tap job-template chips renders
+  /// above the title; picking one seeds the title (and a typical duration via
+  /// the host). Null hides the chips (edit flow).
+  final ValueChanged<JobTemplate>? onApplyTemplate;
 
   String? _err(BuildContext context, String field) {
     final key = errors[field];
@@ -197,6 +204,23 @@ class AppointmentFormFields extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // --- Quick-fill job templates (add flow only) ---
+        if (onApplyTemplate != null) ...[
+          formLabel(context, l10n.calendar_jobTemplatesLabel, optional: true),
+          const SizedBox(height: AppSpacing.sp4),
+          Wrap(
+            spacing: AppSpacing.sp8,
+            runSpacing: AppSpacing.sp8,
+            children: [
+              for (final template in JobTemplate.values)
+                ActionChip(
+                  label: Text(jobTemplateLabel(l10n, template)),
+                  onPressed: () => onApplyTemplate!(template),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sp16),
+        ],
         // --- Service title ---
         SheetFocusScroll(
           child: LabeledTextField(
