@@ -6,6 +6,10 @@ the *how* — files, order, tests, Mac steps — grounded in the code that alrea
 exists.
 
 **Status: plan written 2026-07-19 — not yet started.**
+**Reviewed 2026-07-19 against the code; corrections applied inline.** Phases 1–3
+are ready to execute. **Phase 4 is blocked** on two paper decisions flagged in
+its Mac steps (App Attest's bundle-ID binding; the not-yet-existing
+`keychain-access-groups` entitlement).
 
 ## Key head-start: the widget already paved this road
 
@@ -49,6 +53,12 @@ New feature dir `lib/features/siri/` (feature-first per convention):
      from the widget builder), **excludes cancelled**, normalizes status via
      `AppointmentStatus.fromRaw(a.status).raw`, per-day cap 30, stamps
      `version: 1` + `generatedAt` + `role`, carries `id` per appointment.
+   - **Drop records with a null `id`.** `AppointmentRecord.id` is `String?`
+     ([appointment_record.dart:14](../../lib/features/calendar/domain/models/appointment_record.dart#L14))
+     and the widget's `_job()` serializes it straight through, so an id-less job
+     can reach the payload as `"id": null`. Phase 4 resolves every write target
+     by snapshot `id`, so an id-less entry is unactionable — filter it at build
+     time and keep `id` **non-optional** in the Swift `Codable`.
    - Pure → plain `test()`, no Firebase. This is the bulk of the testable work.
 2. **`application/schedule_snapshot_service.dart`** — clone `WidgetSyncService`:
    - Same App Group id constant (import `widgetAppGroupId`, don't redefine),
@@ -67,8 +77,16 @@ New feature dir `lib/features/siri/` (feature-first per convention):
 4. **`main.dart`** — add `_listenForSnapshotSync()` mirroring
    `_listenForWidgetSync()` ([main.dart:458](../../lib/main.dart#L458)); call it
    from the same block that calls `_listenForWidgetSync()` (~line 560).
-   `clearSnapshot()` on the sign-out path alongside the existing widget clear.
    (Snapshot writes happen on iOS only — same `Platform.isIOS` gate.)
+   - **Clearing is implicit — do NOT add an explicit sign-out clear.** There is
+     no widget clear on the sign-out path to sit alongside: the sign-out sites
+     ([settings_screen.dart:463](../../lib/features/settings/screens/settings_screen.dart#L463),
+     [main.dart:378](../../lib/main.dart#L378)) only unregister push + presence.
+     The widget clears because sign-out makes `widgetEmployeeIdProvider` resolve
+     null → `widgetPayloadProvider` emits `data(null)` → the listener calls
+     `clear()` ([main.dart:469](../../lib/main.dart#L469)). Mirror that
+     null-for-clear contract in `scheduleSnapshotProvider` and the snapshot wipes
+     itself for free.
 
 **No pubspec change** (`home_widget` already present). No new App Group.
 
@@ -85,9 +103,13 @@ Group `UserDefaults` loader, rejects missing/undecodable/wrong-version, decodes
 The App Group already exists on Runner + `ScheduleWidget`. Remaining:
 1. Add **App Intents extension** target `SiriIntents` (iOS 16.0); add it to the
    existing App Group `group.net.vogas.scheduling`.
-2. Bump `IPHONEOS_DEPLOYMENT_TARGET` 15.0 → **16.0** on Runner + verify App
-   Attest still passes (design doc: iOS 16 keeps the ≥14 App Attest floor).
-   Update the CLAUDE.md "Deployment target is **iOS 15.0**" note when this lands.
+2. Bump `IPHONEOS_DEPLOYMENT_TARGET` 15.0 → **16.0** — across **all 6 build
+   configurations** in `ios/Runner.xcodeproj/project.pbxproj` (lines 512, 569,
+   615, 658, 779, 832), i.e. Runner *and* the `ScheduleWidget` extension, not
+   Runner alone. Verify App Attest still passes (design doc: iOS 16 keeps the
+   ≥14 App Attest floor). **This drops iOS 15 users** — a product decision, not
+   just a build setting. Update the CLAUDE.md "Deployment target is **iOS
+   15.0**" note when this lands.
 3. Pull in the authored Swift files; wire the SPM `firebase-ios-sdk` **only if**
    later phases need it (Phase 1 extension is Firebase-free).
 
@@ -95,11 +117,17 @@ The App Group already exists on Runner + `ScheduleWidget`. Remaining:
 - `buildScheduleSnapshot`: role matrix (admin all vs employee `employeeIds`
   filter), 7-day bucketing + device-local boundaries, cancelled exclusion,
   legacy `confirmed`→allowlist normalization, per-day cap 30, empty input,
-  `version`/`generatedAt`/`id` presence.
-- `ScheduleSnapshotService` with a mocked `home_widget` surface: write, dedup
-  skip (same signature), `clearSnapshot`, iOS-gate no-op elsewhere.
+  `version`/`generatedAt`/`id` presence, **null-`id` records dropped**.
+- `ScheduleSnapshotService.signatureForTesting` — dedup ignores `generatedAt`;
+  a changed schedule changes the signature. **Pure statics only.** `home_widget`
+  is a method-channel plugin, so the write / `clearSnapshot` / iOS-gate paths
+  are *not* unit-testable here (CLAUDE.md's device-only rule) — mirror the
+  existing pattern, which tests exactly these two pure surfaces:
+  `test/features/home_widget/widget_payload_test.dart` +
+  `widget_signature_test.dart`.
 - Device (Mac): EN+FR phrase recognition × 3 intents; normal/empty/stale/
-  signed-out/locked states.
+  signed-out/locked states; snapshot write + clear actually land in the App
+  Group (the part the harness can't cover).
 
 **Phase 1 exit:** three read intents answer from the snapshot on a device;
 sign-out wipes it.
@@ -139,10 +167,13 @@ extension** — a real security-surface + App-Review change (design doc:
 Architecture + Privacy). Ship it as its own reviewed increment.
 
 ### Dart
-- **Auth service:** on sign-in, write the Firebase credential into a **shared
-  Keychain Access Group**; on sign-out/delete, clear it *and* `clearSnapshot()`.
-  (New step in the auth service; mirror the existing sign-out cleanup that wipes
-  FCM tokens + presence.)
+- **No Dart work for credential sharing.** An earlier draft had the Dart auth
+  service writing the Firebase credential into a shared Keychain Access Group —
+  `firebase_auth` exposes no such Dart API. The real mechanism is **native and
+  automatic**: call `Auth.auth().useUserAccessGroup("$(AppIdentifierPrefix)net.vogas.scheduling")`
+  in `AppDelegate.swift` **and** in the extension's bootstrap; Firebase Auth then
+  syncs its own state through the keychain and Dart does nothing. See the Mac
+  steps below — this is a Swift task, not a Dart one.
 - No new write repository — Siri writes must go through the **same** appointment
   repository methods the app uses, so status normalization
   (`AppointmentStatus.fromRaw(...).raw`) and `firestore.rules` apply unchanged.
@@ -158,15 +189,28 @@ Architecture + Privacy). Ship it as its own reviewed increment.
   last (needs client resolution + duration default).
 
 ### Mac steps (Phase 4)
+- ⚠️ **Resolve App Attest's bundle-ID binding BEFORE starting this phase.** App
+  Attest keys are bound to a bundle ID, and `SiriIntents` gets a different one
+  from `net.vogas.scheduling`. So the extension cannot simply inherit Runner's
+  attestation: it likely needs its **own Firebase iOS app registration + its own
+  App Check provider config in the console**, or its Firestore calls are
+  rejected at the App Check gate with an opaque `permission-denied`. Decide this
+  on paper first — discovering it mid-session on the Mac burns the session.
+- Add `keychain-access-groups` to **`ios/Runner/Runner.entitlements`** (it has
+  `appattest-environment`, `aps-environment`, and app groups today, but **no
+  keychain sharing** — this entitlement does not exist yet) and to the extension
+  entitlements; group `$(AppIdentifierPrefix)net.vogas.scheduling`.
+- Call `Auth.auth().useUserAccessGroup(...)` in `AppDelegate.swift` and in the
+  extension bootstrap (see Dart § — this replaces the credential-writing step).
 - App Attest capability + `appattest-environment` entitlement on the **extension**
   target (Runner already has it).
-- Shared Keychain Access Group `$(AppIdentifierPrefix)net.vogas.scheduling` on
-  Runner + extension.
 - Add `firebase-ios-sdk` (Auth, Firestore, AppCheck) to the extension via SPM;
   keep linked products minimal (extension memory budget).
 
 ### Phase 4 tests
-- Dart: sign-out wipes snapshot **and** shared keychain item.
+- Device (not Dart — the keychain sharing is native, see above): sign-out wipes
+  the snapshot **and** drops the shared keychain credential, so a Siri write
+  attempted after sign-out fails closed.
 - Device: confirm-then-commit happy path; offline write → spoken retry, **no
   partial commit**; ambiguous-target disambiguation; role scoping (employee
   can't mutate another's job); Siri-unlock gate before commit.
@@ -206,6 +250,15 @@ button. Each is its own small increment; none blocks the others.
   `AppLocalizations.supportedLocales`); response language follows the device's
   Siri language. Add ARB keys only if any string surfaces in-app (the Swift
   string catalogs are separate from `gen_l10n`).
+- **Snapshot data-protection class (decide in Phase 1, not later):** Siri answers
+  while the device is locked, so the App Group payload must remain readable when
+  locked — which puts client names, addresses, and phones at a weaker protection
+  class than the rest of the app's data. The widget already accepts this for 2
+  days of one employee's jobs; the snapshot widens it to **7 days and, for
+  admins, the whole business**. That's a deliberate widening of at-rest PII
+  exposure — record it in the design doc's Privacy §, and consider trimming the
+  snapshot to the fields the intents actually speak (client name + time + status)
+  rather than copying the full job shape.
 - **Privacy review gate:** Phase 4 is where the extension stops being
   Firebase-free — flag for security-review/App-Review as a conscious change, not
   drift (design doc, Privacy §).
