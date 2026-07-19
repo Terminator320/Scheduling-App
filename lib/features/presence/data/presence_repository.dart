@@ -27,7 +27,11 @@ class PresenceRepository {
   /// the security rule allows (`hasOnly([lat, lng, uid, updatedAt])`), and
   /// `updatedAt` MUST be a server timestamp (the rule enforces
   /// `updatedAt == request.time` so freshness can't be spoofed).
-  Future<void> upsertLocation({
+  ///
+  /// Returns `true` on a successful write, `false` when the write failed (still
+  /// logged and swallowed so a presence write never breaks a flow) — the caller
+  /// uses this to avoid advancing its throttle clock on a failed write.
+  Future<bool> upsertLocation({
     required String userDocId,
     required String uid,
     required double lat,
@@ -40,8 +44,10 @@ class PresenceRepository {
         'uid': uid,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      return true;
     } catch (e, st) {
       _logger.warn('PRESENCE upsertLocation failed', e, st);
+      return false;
     }
   }
 

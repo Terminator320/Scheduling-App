@@ -35,3 +35,10 @@ class DateUtilsHelper {
     return format.format(date);
   }
 }
+
+extension DateOnly on DateTime {
+  /// Midnight of this date in the same zone (drops time-of-day). Centralizes
+  /// the `DateTime(year, month, day)` day-floor so a caller can't forget to
+  /// zero a component.
+  DateTime get dateOnly => DateTime(year, month, day);
+}

@@ -44,6 +44,8 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
   late int selectedYear;
   late final int _startYear;
   late final int _yearCount;
+  late final FixedExtentScrollController _monthController;
+  late final FixedExtentScrollController _yearController;
 
   @override
   void initState() {
@@ -52,6 +54,19 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
     _yearCount = MonthYearPicker._pastYears + MonthYearPicker._futureYears + 1;
     selectedMonth = widget.focusedDay.month;
     selectedYear = widget.focusedDay.year;
+    _monthController = FixedExtentScrollController(
+      initialItem: selectedMonth - 1,
+    );
+    _yearController = FixedExtentScrollController(
+      initialItem: (selectedYear - _startYear).clamp(0, _yearCount - 1),
+    );
+  }
+
+  @override
+  void dispose() {
+    _monthController.dispose();
+    _yearController.dispose();
+    super.dispose();
   }
 
   @override
@@ -106,9 +121,7 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                 children: [
                   Expanded(
                     child: CupertinoPicker(
-                      scrollController: FixedExtentScrollController(
-                        initialItem: selectedMonth - 1,
-                      ),
+                      scrollController: _monthController,
                       itemExtent: 40,
                       useMagnifier: true,
                       magnification: 1.2,
@@ -127,12 +140,7 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                   ),
                   Expanded(
                     child: CupertinoPicker(
-                      scrollController: FixedExtentScrollController(
-                        initialItem: (selectedYear - _startYear).clamp(
-                          0,
-                          _yearCount - 1,
-                        ),
-                      ),
+                      scrollController: _yearController,
                       itemExtent: 40,
                       useMagnifier: true,
                       magnification: 1.2,

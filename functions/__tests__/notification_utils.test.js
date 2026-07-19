@@ -371,6 +371,9 @@ function makeDb(config) {
             appointmentQueries.push({field, op, value});
             return q;
           },
+          orderBy() {
+            return q;
+          },
           limit() {
             return q;
           },

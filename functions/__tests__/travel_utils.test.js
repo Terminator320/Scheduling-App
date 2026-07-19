@@ -434,6 +434,9 @@ function makeTravelDb(config) {
           orderBy() {
             return q;
           },
+          limit() {
+            return q;
+          },
           get: async () => {
             const byEmployee = wheres.find((w) => w.field === "employeeIds");
             const rows = byEmployee ?

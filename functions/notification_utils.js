@@ -855,17 +855,23 @@ async function runOverduePromptSweep(deps) {
   const nowDate = now || new Date();
   const nowMs = nowMillis(nowDate);
   const windowStart = new Date(nowMs - OVERDUE_QUERY_WINDOW_MS);
+  // Order newest-first so the cap keeps the most-recently-started jobs — those
+  // are the ones whose endTime is likeliest still within the eligible 24h
+  // window (`selectOverdueCandidates`). Without the explicit orderBy Firestore
+  // returns the OLDEST first (implicit startTime ASC), spending the cap on
+  // already-aged-out jobs. Uses the existing `(status, startTime DESC)` index.
   const snap = await db
       .collection("appointments")
       .where("status", "in", ["pending", "in_progress", "confirmed"])
       .where("startTime", ">=", windowStart)
       .where("startTime", "<=", nowDate)
+      .orderBy("startTime", "desc")
       .limit(OVERDUE_SWEEP_MAX)
       .get();
   if (snap && snap.size === OVERDUE_SWEEP_MAX && deps.logger) {
     deps.logger.warn(
         "runOverduePromptSweep: candidate cap hit; " +
-        "newest jobs deferred to a later run", {cap: OVERDUE_SWEEP_MAX});
+        "oldest jobs deferred to a later run", {cap: OVERDUE_SWEEP_MAX});
   }
   const candidates = selectOverdueCandidates(
       ((snap && snap.docs) || []).map(_record),

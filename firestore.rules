@@ -263,6 +263,13 @@ service cloud.firestore {
         && (!('phone' in data) || (data.phone is string && data.phone.size() <= 32))
         && (!('mobile' in data) || (data.mobile is string && data.mobile.size() <= 32))
         && (!('email' in data) || (data.email is string && data.email.size() <= 320))
+        && (!('address' in data) || (data.address is string && data.address.size() <= 500))
+        && (!('apt' in data) || (data.apt is string && data.apt.size() <= 64))
+        && (!('city' in data) || (data.city is string && data.city.size() <= 128))
+        && (!('province' in data) || (data.province is string && data.province.size() <= 128))
+        && (!('country' in data) || (data.country is string && data.country.size() <= 128))
+        && (!('postalCode' in data) || (data.postalCode is string && data.postalCode.size() <= 32))
+        && (!('contacts' in data) || (data.contacts is list && data.contacts.size() <= 50))
         && (!('noFixedAddress' in data) || data.noFixedAddress is bool);
     }
 

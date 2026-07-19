@@ -176,10 +176,9 @@ class PresenceSyncController {
             _lastPosition = position;
             final now = DateTime.now();
             if (shouldWritePresenceFix(lastUploadAt: _lastUploadAt, now: now)) {
-              _lastUploadAt = now;
               _trailingFlush?.cancel();
               _trailingFlush = null;
-              unawaited(_upload(position));
+              _uploadThrottled(position, now);
             } else {
               _armTrailingFlush(now);
             }
@@ -197,10 +196,9 @@ class PresenceSyncController {
       if (position == null) return;
       final now = DateTime.now();
       if (shouldHeartbeat(lastUploadAt: _lastUploadAt, now: now)) {
-        _lastUploadAt = now;
         _trailingFlush?.cancel();
         _trailingFlush = null;
-        unawaited(_upload(position));
+        _uploadThrottled(position, now);
       }
     });
   }
@@ -219,15 +217,31 @@ class PresenceSyncController {
           !shouldWritePresenceFix(lastUploadAt: _lastUploadAt, now: fireNow)) {
         return;
       }
-      _lastUploadAt = fireNow;
-      unawaited(_upload(position));
+      _uploadThrottled(position, fireNow);
     });
   }
 
-  Future<void> _upload(Position position) {
+  /// Advances the throttle clock to [attemptedAt] and fires the write. If the
+  /// write fails (swallowed inside the repo), the clock is rolled back to its
+  /// prior value so the next fix/heartbeat isn't suppressed by a write that
+  /// never actually landed — otherwise a dropped write could leave the presence
+  /// doc unrefreshed toward the 25-min server staleness window.
+  void _uploadThrottled(Position position, DateTime attemptedAt) {
+    final previous = _lastUploadAt;
+    _lastUploadAt = attemptedAt;
+    unawaited(
+      _upload(position).then((ok) {
+        if (!ok && _lastUploadAt == attemptedAt) {
+          _lastUploadAt = previous;
+        }
+      }),
+    );
+  }
+
+  Future<bool> _upload(Position position) {
     final docId = _docId;
     final uid = _trackedUid;
-    if (docId == null || uid == null) return Future.value();
+    if (docId == null || uid == null) return Future.value(false);
     return _ref
         .read(presenceRepositoryProvider)
         .upsertLocation(
