@@ -100,14 +100,21 @@ class LiveMapAggregator {
     }
     if (self == null) return List.of(points);
     final origin = self;
+    // Decorate each row with its distance once (haversine is several trig ops
+    // + two sqrt), then sort — a bare comparator would recompute it O(n log n)
+    // times per point.
     final rest =
-        points.where((p) => p.userDocId != origin.userDocId).toList()..sort(
-          (a, b) => distanceMeters(origin.lat, origin.lng, a.lat, a.lng)
-              .compareTo(
-                distanceMeters(origin.lat, origin.lng, b.lat, b.lng),
+        points
+            .where((p) => p.userDocId != origin.userDocId)
+            .map(
+              (p) => (
+                point: p,
+                distance: distanceMeters(origin.lat, origin.lng, p.lat, p.lng),
               ),
-        );
-    return [origin, ...rest];
+            )
+            .toList()
+          ..sort((a, b) => a.distance.compareTo(b.distance));
+    return [origin, ...rest.map((e) => e.point)];
   }
 
   /// Best-effort city/locality pulled from a Google-formatted address such as

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/launchers/route_map_launcher.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
@@ -11,6 +12,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/utils/adaptive_pickers.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
@@ -195,12 +197,26 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     );
   }
 
+  Future<void> _pickDay() async {
+    final now = DateTime.now().dateOnly;
+    final picked = await showAdaptiveDatePicker(
+      context,
+      initialDate: _day,
+      firstDate: now.subtract(const Duration(days: 365)),
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (picked != null && mounted) {
+      setState(() => _day = picked.dateOnly);
+    }
+  }
+
   Widget _daySwitcher() {
     final l10n = context.l10n;
     final theme = Theme.of(context);
     final label = DateFormat.MMMMEEEEd(
       Localizations.localeOf(context).toString(),
     ).format(_day);
+    final isToday = _day == DateTime.now().dateOnly;
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sp8,
@@ -215,14 +231,40 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
                 setState(() => _day = _day.subtract(const Duration(days: 1))),
           ),
           Expanded(
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleMedium,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(AppRadius.r8),
+              onTap: _pickDay,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sp8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.calendar_today_outlined,
+                      size: 16,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: AppSpacing.sp8),
+                    Flexible(
+                      child: Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
+          if (!isToday)
+            IconButton(
+              icon: const Icon(Icons.today_outlined),
+              tooltip: l10n.calendar_today,
+              onPressed: () => setState(() => _day = DateTime.now().dateOnly),
+            ),
           IconButton(
             icon: const Icon(Icons.chevron_right),
             tooltip: l10n.calendar_dayRouteNextDay,
@@ -234,10 +276,30 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     );
   }
 
+  Future<void> _pickEmployee(
+    List<MapEntry<String, String>> assignees,
+  ) async {
+    final picked = await showAdaptiveActionSheet<String>(
+      context,
+      title: context.l10n.calendar_dayRouteEmployeeLabel,
+      actions: [
+        for (final e in assignees)
+          AdaptiveSheetAction(value: e.key, label: e.value),
+      ],
+    );
+    if (picked != null && mounted) {
+      setState(() => _selectedEmployeeId = picked);
+    }
+  }
+
   Widget _employeePicker(
     List<MapEntry<String, String>> assignees,
     String value,
   ) {
+    final theme = Theme.of(context);
+    final currentName = assignees
+        .firstWhere((e) => e.key == value, orElse: () => assignees.first)
+        .value;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.sp16,
@@ -245,27 +307,30 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
         AppSpacing.sp16,
         AppSpacing.sp8,
       ),
-      child: DropdownButtonFormField<String>(
-        initialValue: value,
-        decoration: InputDecoration(
-          labelText: context.l10n.calendar_dayRouteEmployeeLabel,
-          border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sp16,
-            vertical: AppSpacing.sp12,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+        onTap: () => _pickEmployee(assignees),
+        child: InputDecorator(
+          decoration: InputDecoration(
+            labelText: context.l10n.calendar_dayRouteEmployeeLabel,
+            border: const OutlineInputBorder(),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sp16,
+              vertical: AppSpacing.sp12,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(currentName, overflow: TextOverflow.ellipsis),
+              ),
+              Icon(
+                Icons.arrow_drop_down,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
           ),
         ),
-        borderRadius: BorderRadius.circular(AppRadius.r12),
-        items: [
-          for (final e in assignees)
-            DropdownMenuItem(
-              value: e.key,
-              child: Text(e.value, overflow: TextOverflow.ellipsis),
-            ),
-        ],
-        onChanged: (id) {
-          if (id != null) setState(() => _selectedEmployeeId = id);
-        },
       ),
     );
   }

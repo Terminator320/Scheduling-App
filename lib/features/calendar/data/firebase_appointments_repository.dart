@@ -310,6 +310,25 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         .toList();
   }
 
+  @override
+  Future<List<AppointmentRecord>> fetchClientHistory({
+    required String clientId,
+    int limit = 50,
+  }) async {
+    if (clientId.isEmpty) return const [];
+    // Filter on clientId alone so the automatic single-field index serves it —
+    // no composite index (there is no orderBy). The most-recent-first sort is
+    // done in Dart over the bounded window instead.
+    final snapshot = await _appointments
+        .where('clientId', isEqualTo: clientId)
+        .limit(limit)
+        .get();
+    return snapshot.docs
+        .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
+        .toList()
+      ..sort((a, b) => b.startTime.compareTo(a.startTime));
+  }
+
   static const List<String> _historyStatuses = ['done', 'cancelled'];
 
   // How many of the most-recent history docs a search scans. Bounded so a

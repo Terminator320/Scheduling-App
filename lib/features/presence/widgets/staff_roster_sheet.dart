@@ -221,11 +221,18 @@ class StaffRosterRow extends ConsumerWidget {
       lng: point.lng,
       locale: lang == 'fr' ? 'fr' : 'en',
     );
-    final city = LiveMapAggregator.cityFromAddress(
-      ref.watch(reverseGeocodeProvider(geoKey)).value,
-    );
+    final geo = ref.watch(reverseGeocodeProvider(geoKey));
+    final city = LiveMapAggregator.cityFromAddress(geo.value);
 
-    final subtitle = _subtitle(context, city: city, stale: stale, bucket: bucket);
+    final subtitle = _subtitle(
+      context,
+      city: city,
+      // Only "No location" once the geocode has settled with no usable place;
+      // while it's still resolving the row shows "Locating…".
+      geocodeResolved: !geo.isLoading,
+      stale: stale,
+      bucket: bucket,
+    );
 
     return ListTile(
       onTap: onTap,
@@ -273,6 +280,7 @@ class StaffRosterRow extends ConsumerWidget {
   String _subtitle(
     BuildContext context, {
     required String? city,
+    required bool geocodeResolved,
     required bool stale,
     required FreshnessBucket bucket,
   }) {
@@ -282,10 +290,14 @@ class StaffRosterRow extends ConsumerWidget {
       FreshnessMinutesAgo(:final minutes) => l10n.liveMap_lastUpdatedMinutesAgo(
         minutes,
       ),
-      FreshnessHoursAgo(:final hours) => l10n.liveMap_lastUpdatedHoursAgo(hours),
+      FreshnessHoursAgo(:final hours) => l10n.liveMap_lastUpdatedHoursAgo(
+        hours,
+      ),
     };
     final freshness = stale ? l10n.liveMap_offlineLastSeen(ago) : ago;
-    final place = city ?? l10n.liveMap_locatingCity;
+    final place =
+        city ??
+        (geocodeResolved ? l10n.liveMap_noLocation : l10n.liveMap_locatingCity);
     return '$place · $freshness';
   }
 

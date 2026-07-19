@@ -86,7 +86,10 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sp16,
+                vertical: AppSpacing.sp8,
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [

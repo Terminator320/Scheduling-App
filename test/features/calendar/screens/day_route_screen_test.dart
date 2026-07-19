@@ -266,18 +266,31 @@ void main() {
       ),
     );
 
-    expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
-    // Jane has the job → listed; Bob has none that day → absent.
+    expect(find.text('Employee'), findsOneWidget);
+    // Jane has the job → shown as the picker's current selection.
     expect(find.text('Jane Doe'), findsWidgets);
     expect(find.text('Bob Smith'), findsNothing);
     // The selected assignee's job renders in the timeline.
     expect(find.text('Appt 1'), findsOneWidget);
   });
 
+  testWidgets('tapping the date label opens a date picker', (tester) async {
+    await _pump(
+      tester,
+      _wrap(
+        jobs: [_job(id: 1, hour: 9, status: 'pending', address: '1 A St')],
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.calendar_today_outlined));
+    await tester.pumpAndSettle();
+    expect(find.byType(DatePickerDialog), findsOneWidget);
+  });
+
   testWidgets('no admin picker when the day has no jobs', (tester) async {
     await _pump(tester, _adminScreen(dayJobs: const []));
 
-    expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+    expect(find.text('Employee'), findsNothing);
     expect(find.byType(AppEmptyState), findsOneWidget);
   });
 
@@ -289,7 +302,7 @@ void main() {
       ),
     );
 
-    expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+    expect(find.text('Employee'), findsNothing);
   });
 
   testWidgets('no overflow at 375x667 with 2x text scale', (tester) async {

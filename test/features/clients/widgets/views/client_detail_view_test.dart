@@ -5,6 +5,8 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/clients/application/appointment_history_providers.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -32,7 +34,15 @@ const _clientWithContacts = ClientRecord(
 
 Widget _wrap(ClientsRepository repo, ClientRecord client) {
   return ProviderScope(
-    overrides: [clientsRepositoryProvider.overrideWithValue(repo)],
+    overrides: [
+      clientsRepositoryProvider.overrideWithValue(repo),
+      // The detail view now renders the Job History section, which reads the
+      // real appointments repo; this test only exercises contacts, so serve it
+      // an empty history rather than hitting Firebase.
+      clientJobHistoryProvider.overrideWith(
+        (ref, clientId) async => <AppointmentRecord>[],
+      ),
+    ],
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
       toggleTheme: () {},

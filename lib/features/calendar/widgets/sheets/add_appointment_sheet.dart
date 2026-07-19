@@ -7,6 +7,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
+import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/utils/adaptive_pickers.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
@@ -109,6 +110,22 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     _notifier.selectEndTime(picked);
   }
 
+  // Quick-fill: seed the title from the picked job type, and — if a start time
+  // is already chosen — the end time from the template's typical duration.
+  // Title/materials stay fully editable afterwards; status is untouched.
+  void _applyTemplate(JobTemplate template) {
+    _controllers.title.text = jobTemplateLabel(context.l10n, template);
+    final start = ref.read(_provider).selectedStartTime;
+    if (start != null) {
+      final endMinutes = template.endMinutesOfDay(
+        start.hour * 60 + start.minute,
+      );
+      final end = TimeOfDay(hour: endMinutes ~/ 60, minute: endMinutes % 60);
+      _controllers.endTime.text = end.format(context);
+      _notifier.selectEndTime(end);
+    }
+  }
+
   Future<void> _pickImages() async {
     final picked = await pickAppointmentImages(context, ref);
     if (picked.isNotEmpty) _notifier.addImages(picked);
@@ -190,6 +207,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
           employeeLabel: context.l10n.calendar_assignEmployee,
           employeeRequired: true,
           materialsHint: context.l10n.calendar_typeTheMaterialsHere,
+          onApplyTemplate: _applyTemplate,
           onSearchClients: _onClientSearchChanged,
           onSelectClient: _notifier.selectClient,
           onClearClient: _notifier.clearClient,

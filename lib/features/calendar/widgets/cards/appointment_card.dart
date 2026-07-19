@@ -5,6 +5,7 @@ import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 class AppointmentCard extends StatelessWidget {
@@ -38,6 +39,15 @@ class AppointmentCard extends StatelessWidget {
         '${DateUtilsHelper.formatTime(appointment.endTime)}';
     final name = employeeName;
 
+    // One coherent screen-reader read for the whole card instead of the title,
+    // status, time, and name surfacing as disjoint fragments inside the button.
+    final semanticsLabel = [
+      appointment.title,
+      statusLabel(context.l10n, status),
+      timeLabel,
+      ?name,
+    ].join(', ');
+
     return TapScale(
       child: Card(
         margin: EdgeInsets.zero,
@@ -45,48 +55,50 @@ class AppointmentCard extends StatelessWidget {
         color: selected ? scheme.secondaryContainer : null,
         child: InkWell(
           onTap: onTap,
-          // InkWell already exposes button semantics and reads the visible
-          // title, status, and time; no explicit Semantics label needed.
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(width: 3, color: employeeColor),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.sp12,
-                      AppSpacing.sp12,
-                      AppSpacing.sp8,
-                      AppSpacing.sp12,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _TitleHeader(
-                          title: appointment.title,
-                          status: status,
-                          compact: compact,
-                        ),
-                        const SizedBox(height: AppSpacing.sp4),
-                        _TimeRow(timeLabel: timeLabel, compact: compact),
-                        if (name != null) ...[
-                          const SizedBox(height: AppSpacing.sp4),
-                          _EmployeeRow(
-                            name: name,
-                            color: employeeColor,
+          child: Semantics(
+            label: semanticsLabel,
+            excludeSemantics: true,
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(width: 3, color: employeeColor),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.sp12,
+                        AppSpacing.sp12,
+                        AppSpacing.sp8,
+                        AppSpacing.sp12,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _TitleHeader(
+                            title: appointment.title,
+                            status: status,
                             compact: compact,
                           ),
+                          const SizedBox(height: AppSpacing.sp4),
+                          _TimeRow(timeLabel: timeLabel, compact: compact),
+                          if (name != null) ...[
+                            const SizedBox(height: AppSpacing.sp4),
+                            _EmployeeRow(
+                              name: name,
+                              color: employeeColor,
+                              compact: compact,
+                            ),
+                          ],
+                          if (footer != null) ...[
+                            const SizedBox(height: AppSpacing.sp8),
+                            footer!,
+                          ],
                         ],
-                        if (footer != null) ...[
-                          const SizedBox(height: AppSpacing.sp8),
-                          footer!,
-                        ],
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -119,11 +131,32 @@ class _TitleHeader extends StatelessWidget {
     );
     final chip = StatusChip(status: status);
 
+    // Overdue jobs get a leading warning glyph so they pop when scanning a busy
+    // multi-plumber day list — the employee-color bar is identity, not status
+    // (the StatusChip still carries the textual "Overdue" state).
+    Widget titleContent = titleText;
+    if (status == AppointmentStatus.overdue) {
+      titleContent = Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2, right: AppSpacing.sp4),
+            child: Icon(
+              Icons.warning_amber_rounded,
+              size: 15,
+              color: theme.statusColors.warning,
+            ),
+          ),
+          Expanded(child: titleText),
+        ],
+      );
+    }
+
     if (compact) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          titleText,
+          titleContent,
           const SizedBox(height: AppSpacing.sp8),
           chip,
         ],
@@ -131,7 +164,7 @@ class _TitleHeader extends StatelessWidget {
     }
     return Row(
       children: [
-        Expanded(child: titleText),
+        Expanded(child: titleContent),
         const SizedBox(width: AppSpacing.sp8),
         chip,
       ],

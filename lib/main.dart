@@ -77,15 +77,18 @@ Future<void> main() async {
 
       final settingsFuture = SharedPrefsSettingsRepository().load();
 
+      // firebase_options reads dotenv, so it must load first; the locale
+      // date-symbol inits don't depend on Firebase, so overlap them with
+      // Firebase.initializeApp instead of gating it behind them.
+      await dotenv.load(fileName: 'dev/.env');
+
       await Future.wait([
+        Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        ),
         initializeDateFormatting('en_CA'),
         initializeDateFormatting('fr_CA'),
-        dotenv.load(fileName: 'dev/.env'),
       ]);
-
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
 
       // Pin the offline cache explicitly so an SDK default-flip can never
       // silently drop it. Must run before the first Firestore read (it does —
@@ -166,6 +169,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   late double _textScale;
   late AppLanguageController _languageController;
   bool _isHandlingAccountExit = false;
+  bool _controllerSyncsPrimed = false;
 
   @override
   void initState() {
@@ -422,12 +426,6 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     ) {
       unawaited(ref.read(pushRegistrationControllerProvider).sync());
     });
-    // Also sync against a value already present at registration: on relaunch
-    // while already authenticated, the employee doc can resolve before this
-    // listener is set up, and a plain listen would miss it (no prompt / no
-    // token registration). Harmless when the doc isn't ready yet — the gate
-    // returns early and the listener above catches the later emission.
-    unawaited(ref.read(pushRegistrationControllerProvider).sync());
   }
 
   void _listenForPresenceSync() {
@@ -440,6 +438,20 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     ) {
       unawaited(ref.read(presenceSyncControllerProvider).sync());
     });
+  }
+
+  /// One-shot sync against a value already present at registration: on relaunch
+  /// while already authenticated, the account doc can resolve before the
+  /// `ref.listen`s above are set up, and a plain listen would miss it (no
+  /// prompt / no token / no presence stream). Run exactly once after the first
+  /// build wires those listeners — NOT on every rebuild (a text-scale slider
+  /// drag re-runs `build`, and firing these fire-and-forget syncs per tick is
+  /// pure waste). Harmless when the doc isn't ready yet — each gate returns
+  /// early and the listeners catch the later emission.
+  void _primeControllerSyncsOnce() {
+    if (_controllerSyncsPrimed) return;
+    _controllerSyncsPrimed = true;
+    unawaited(ref.read(pushRegistrationControllerProvider).sync());
     unawaited(ref.read(presenceSyncControllerProvider).sync());
   }
 
@@ -547,6 +559,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _listenForPresenceSync();
     _listenForWidgetSync();
     _listenForUploadDrain();
+    _primeControllerSyncsOnce();
     return AppLanguageScope(
       controller: _languageController,
       child: ThemeNotifier(
