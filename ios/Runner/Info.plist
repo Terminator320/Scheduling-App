@@ -68,6 +68,8 @@
 	<string>This app accesses your photo library to attach images to appointments and profiles.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>This app saves appointment photos to your photo library when you choose to save them.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -373,7 +373,6 @@ extension View {
 
 // MARK: - Widget
 
-@main
 struct ScheduleWidget: Widget {
     let kind = "ScheduleWidget"
 
@@ -384,5 +383,19 @@ struct ScheduleWidget: Widget {
         .configurationDisplayName("Schedule")
         .description("Your next job and today's schedule.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+    }
+}
+
+// MARK: - Bundle
+
+// Hosting an ActivityConfiguration alongside the home-screen widget requires
+// @main on a WidgetBundle rather than on either widget.
+@main
+struct ScheduleWidgetBundle: WidgetBundle {
+    var body: some Widget {
+        ScheduleWidget()
+        if #available(iOS 17.2, *) {
+            JobLiveActivity()
+        }
     }
 }

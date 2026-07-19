@@ -93,6 +93,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // liveActivityCards records which appointment each tech's live "time to
+    // leave" card is showing (one doc per tech). Admin-SDK-only: the device
+    // cannot know this — a push-STARTED activity's id is minted by ActivityKit
+    // and its attributes are not readable back — so the server owns the
+    // association. A client able to write it could aim another tech's card at
+    // an arbitrary job, leaking a client name and address to a Lock Screen.
+    match /liveActivityCards/{employeeDocId} {
+      allow read, write: if false;
+    }
+
     // ── users ─────────────────────────────────────────────────────────────────
     // Read: admins see all; active employees see active peers (picker/display);
     // a registering user can find their own invited doc by email match.
@@ -177,6 +187,41 @@ service cloud.firestore {
               || request.resource.data.createdAt is timestamp)
           && (!('updatedAt' in request.resource.data.keys())
               || request.resource.data.updatedAt is timestamp);
+      }
+
+      // Live Activity tokens ("time to leave" Lock Screen card). Same
+      // self-only discipline as fcmTokens above, with a changed field
+      // allowlist and iOS-only platform (ActivityKit has no Android form).
+      // Doc id is the ActivityKit activity id, or the literal `pushToStart`
+      // for the device-wide push-to-start token. The APNs send path reads
+      // these across employees with the Admin SDK; clients never see another
+      // user's tokens.
+      match /liveActivityTokens/{activityId} {
+        allow read, delete: if isActiveUser() && myDocId() == userId;
+        allow create, update: if isActiveUser()
+          && myDocId() == userId
+          // No `appointmentId`: the device cannot know which appointment a
+          // push-started card belongs to (ActivityKit mints the id and the
+          // attributes aren't readable back), so that association lives in the
+          // server-owned liveActivityCards collection instead.
+          && request.resource.data.keys().hasOnly(
+              ['token', 'kind', 'employeeDocId', 'platform',
+               'locale', 'uid', 'createdAt', 'updatedAt', 'expiresAt'])
+          && request.resource.data.token is string
+          && request.resource.data.token.size() > 0
+          && request.resource.data.token.size() <= 500
+          && request.resource.data.kind in ['pushToStart', 'update']
+          && request.resource.data.locale in ['en', 'fr']
+          && request.resource.data.platform in ['ios']
+          && request.resource.data.uid == request.auth.uid
+          && (!('employeeDocId' in request.resource.data.keys())
+              || request.resource.data.employeeDocId == userId)
+          && (!('createdAt' in request.resource.data.keys())
+              || request.resource.data.createdAt is timestamp)
+          && (!('updatedAt' in request.resource.data.keys())
+              || request.resource.data.updatedAt is timestamp)
+          && (!('expiresAt' in request.resource.data.keys())
+              || request.resource.data.expiresAt is timestamp);
       }
 
       // Live-location presence (travel-time "leave now" reminders). Owner

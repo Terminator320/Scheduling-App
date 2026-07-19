@@ -5,7 +5,12 @@ That doc is the *what/why* (six phases, scope decisions, architecture). This is
 the *how* — files, order, tests, Mac steps — grounded in the code that already
 exists.
 
-**Status: plan written 2026-07-19 — not yet started.**
+**Status: Phase 1 Dart + Swift landed 2026-07-19 — Xcode target not yet created.**
+The Dart half (builder, service, provider, `main.dart` wiring, 15 unit tests) is
+in `lib/features/siri/`; the Swift half is authored in `ios/SiriIntents/` with a
+Mac runbook + device checklist at `ios/SiriIntents/README.md`. Remaining for
+Phase 1: the Xcode target, the 15.0 → 16.0 deployment-target bump, and the
+on-device verification pass. Phases 2–3 not started.
 **Reviewed 2026-07-19 against the code; corrections applied inline.** Phases 1–3
 are ready to execute. **Phase 4 is blocked** on two paper decisions flagged in
 its Mac steps (App Attest's bundle-ID binding; the not-yet-existing

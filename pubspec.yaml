@@ -85,6 +85,9 @@ dependencies:
   # Live background GPS presence (travel-time "leave now" reminders)
   geolocator: ^14.0.0
 
+  # iOS Live Activity "time to leave" card (ships Package.swift — SPM-safe)
+  live_activities: ^2.5.1
+
   # Admin live staff map (Google Maps; traffic overlay + satellite)
   google_maps_flutter: ^2.14.0
   # SPM-capable iOS implementation override (Maps SDK 9.x, iOS 15+) —

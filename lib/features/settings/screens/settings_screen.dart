@@ -25,6 +25,7 @@ import 'package:scheduling/features/auth/application/account_status_provider.dar
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/features/settings/application/app_info_provider.dart';
@@ -464,12 +465,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     if (_isSigningOut) return;
     setState(() => _isSigningOut = true);
     try {
-      // Best-effort: drop this device's push token and live location before
-      // the session ends.
+      // Best-effort: drop this device's push token, live location and Live
+      // Activity cards/tokens before the session ends.
       await ref
           .read(pushRegistrationControllerProvider)
           .unregisterCurrentDevice();
       await ref.read(presenceSyncControllerProvider).unregister();
+      await ref.read(liveActivityRegistrationControllerProvider).unregister();
       await ref.read(authServiceProvider).signOut();
     } catch (e, st) {
       // signOut clears local state and effectively never throws; if it does,
@@ -539,6 +541,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           .read(pushRegistrationControllerProvider)
           .unregisterCurrentDevice();
       await ref.read(presenceSyncControllerProvider).unregister();
+      await ref.read(liveActivityRegistrationControllerProvider).unregister();
       await _deletionService.deleteAccount();
     } on AuthFailure catch (e) {
       if (!mounted) return;
