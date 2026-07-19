@@ -39,6 +39,14 @@ maintained against the current code. Archived 2026-07-10.
   `lib/features/presence/`). Residual ops items (Routes API console enable +
   functions deploy + Mac Time-Sensitive entitlement) are tracked in CLAUDE.md,
   not here.
+- `2026-07-15-live-staff-map.md` — admin-only Find-My-style live staff map
+  (implemented + committed on `notification`, shipped in 1.32.0+51;
+  `lib/features/presence/screens/live_map_screen.dart`, `LiveMapAggregator`,
+  `placesReverseGeocode`; **functions + rules deployed to prod 2026-07-18**,
+  client Maps keys + Geocoding API provisioned). Residual items (verify Routes
+  API is enabled/restricted, on-device pass, App Store Location privacy
+  declaration) are tracked in CLAUDE.md and the iOS handoff, not here. The
+  plan's own header status line was stale (pre-deploy) at archive time.
 
 ## Superseded audit snapshots
 Point-in-time whole-repo audits; each run's findings were implemented at the

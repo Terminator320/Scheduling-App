@@ -24,33 +24,34 @@ void main() {
   });
 
   ProviderContainer buildContainer({required DateTime fixUpdatedAt}) {
-    final container = ProviderContainer(
-      overrides: [
-        allPresenceStreamProvider.overrideWith(
-          (ref) => Stream.value([
-            PresenceFix(
-              userDocId: 'u1',
-              lat: 1,
-              lng: 2,
-              updatedAt: fixUpdatedAt,
-            ),
-          ]),
-        ),
-        allUsersStreamProvider.overrideWith(
-          (ref) => Stream.value(const [
-            EmployeeRecord(id: 'u1', name: 'Alice', status: 'active'),
-          ]),
-        ),
-        liveMapClockProvider.overrideWith(
-          (ref) =>
-              () => now,
-        ),
-        liveMapTickProvider.overrideWith((ref) => tick.stream),
-      ],
-    );
-    // autoDispose family state must survive across reads (project rule).
-    container.listen(liveMapPointsProvider, (_, _) {});
-    container.listen(staleDocIdsProvider, (_, _) {});
+    final container =
+        ProviderContainer(
+            overrides: [
+              allPresenceStreamProvider.overrideWith(
+                (ref) => Stream.value([
+                  PresenceFix(
+                    userDocId: 'u1',
+                    lat: 1,
+                    lng: 2,
+                    updatedAt: fixUpdatedAt,
+                  ),
+                ]),
+              ),
+              allUsersStreamProvider.overrideWith(
+                (ref) => Stream.value(const [
+                  EmployeeRecord(id: 'u1', name: 'Alice', status: 'active'),
+                ]),
+              ),
+              liveMapClockProvider.overrideWith(
+                (ref) =>
+                    () => now,
+              ),
+              liveMapTickProvider.overrideWith((ref) => tick.stream),
+            ],
+          )
+          // autoDispose family state must survive across reads (project rule).
+          ..listen(liveMapPointsProvider, (_, _) {})
+          ..listen(staleDocIdsProvider, (_, _) {});
     return container;
   }
 

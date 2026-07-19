@@ -103,7 +103,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     // The hub wraps each tab in TickerMode(enabled: tab == current); it also
     // goes false while an opaque route covers the hub — pausing then too is
     // desired. Defaults true outside the shell (standalone / tests) → visible.
-    final visible = TickerMode.of(context);
+    final visible = TickerMode.valuesOf(context).enabled;
 
     // Paused (tab hidden): render the kept-alive map with the last-known
     // markers and DON'T watch the data providers, so autoDispose tears down

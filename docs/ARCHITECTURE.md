@@ -58,9 +58,9 @@ lib/
     ├── dashboard/                   Admin dashboard — pure stat reducers (DashboardAggregator) over one 8-week appointments range → hero/workload/trends/attention sections + fl_chart WeeklyBarChart
     ├── employees/                   Employee roster — colours, roles, disable/enable
     ├── home_widget/                 iOS home-screen schedule widget — WidgetSyncService writes a two-day payload (todayJobs + tomorrowJobs + on-device rolloverAt) into the App Group (home_widget); mirrors functions/widget_payload_utils.js; Android no-op
-    ├── maps/                        Google Places address autocomplete and map launcher (callables admin-gated); route_url_builder (multi-stop Google Maps directions URL, 9-waypoint cap)
+    ├── maps/                        Google Places address autocomplete, reverse-geocode (staff-map coords → address), and map launcher (callables admin-gated); route_url_builder (multi-stop Google Maps directions URL, 9-waypoint cap)
     ├── notifications/               FCM push client — PushRegistrationController (token upsert for active employees/admins, resync-coalesced), FcmTokenRepository, push_notification_service, notificationAuthStatusProvider (Settings recovery row); core/notifications/fcm_background_handler rewrites the widget from a push while the app is closed
-    ├── presence/                    Live-location tracking for travel-time reminders — PresenceSyncController owns a background geolocator stream (250 m / 2-min throttle + 10-min heartbeat) for active employees/admins, PresenceRepository writes users/{docId}/presence/location (self-only); OS permission is the only switch
+    ├── presence/                    Live-location tracking + admin live staff map — PresenceSyncController owns a background geolocator stream (250 m / 2-min throttle + 10-min heartbeat) for active employees/admins, PresenceRepository writes users/{docId}/presence/location (self-only); OS permission is the only switch. Admin-only live_map_screen joins collectionGroup('presence') to watchAllUsers() via LiveMapAggregator (pure reducers, presenceStaleAfter == PRESENCE_STALE_MINUTES) → google_maps_flutter markers
     ├── onboarding/                  First-launch intro carousel (OnboardingGate = app home) + onboardingSeen gate
     ├── settings/                    Theme, text scale, language, app version, biometric app-lock toggle
     ├── splash/                      Auth resolution on cold start (screen + routing logic)
@@ -529,10 +529,12 @@ users/{docId}/fcmTokens/{token}   FCM push tokens, one doc per device (doc id =
   createdAt, updatedAt server timestamps
 
 users/{docId}/presence/location   single live-location doc (id always
-                       'location') for travel-time reminders. Self-only per
-                       firestore.rules — peers/admins read nothing client-side;
-                       the reminder sweep reads it via the Admin SDK.
-                       recursiveDelete()d with the parent doc; deleted on sign-out
+                       'location') for travel-time reminders + the admin live
+                       staff map. Writes are self-only; reads are self OR admin
+                       (collection-group rule match /{path=**}/presence/{id} if
+                       isAdmin) — peers still read nothing. The reminder sweep
+                       reads it via the Admin SDK. Purged with the parent doc and
+                       when status leaves 'active' (bridge.js); deleted on sign-out
   lat, lng: number     -90..90 / -180..180 (rules-enforced)
   uid: string          must equal the caller's auth uid
   updatedAt            server timestamp; rules force == request.time so a client
@@ -649,7 +651,7 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (856 test cases as of 2026-07-13). `flutter analyze` is
+Run: `flutter test` (897 test cases as of 2026-07-18). `flutter analyze` is
 clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.

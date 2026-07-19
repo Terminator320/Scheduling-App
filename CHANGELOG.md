@@ -10,8 +10,15 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
-## [1.32.0+51] - 2026-07-13
+## [1.32.0+51] - 2026-07-18
 ### Added
+- **See where your staff are on a live map.** Admins get a new Staff map that
+  plots every team member sharing their location, each pin coloured to the
+  employee and stamped with how long ago it updated ("Just now", "5 min ago").
+  Tap a pin to see who it is, their nearest street address, and a one-tap
+  handoff to open that spot in Maps. Anyone whose location has gone stale is
+  shown as offline with a last-seen time. Toggle live traffic or a satellite
+  view, and recenter the map on the whole team with one button.
 - **"Time to leave" reminders that account for real drive time.** Instead of a
   fixed 30-minute heads-up, you now get a departure alert timed to when you
   actually need to leave for your next job — calculated from live traffic
@@ -25,17 +32,23 @@ code; it increments by one on every store upload regardless of the semver part.
   Field staff (and admins assigned to jobs) are asked once for location
   permission; with it granted, the app keeps your last position current even
   while it's in the background so the leave-now timing stays accurate. Your
-  location is visible only to the reminder system — never to coworkers — and is
-  dropped the moment you sign out. Granting only "while using the app," or
-  denying location entirely, still works: reminders just fall back to timing
-  from your previous job's address or the fixed 30-minute heads-up.
-### Added
+  location is visible only to the reminder system and to admins on the staff
+  map — never to coworkers — and is dropped the moment you sign out. Granting
+  only "while using the app," or denying location entirely, still works:
+  reminders just fall back to timing from your previous job's address or the
+  fixed 30-minute heads-up.
 - **Drive a whole day's jobs as one route.** Open a day's schedule to see every
   stop numbered in start-time order, then hand the full run off to Google Maps
   as a multi-stop driving route with one tap. Admins can switch between the
   employees who have jobs that day; each person sees their own route.
+- **Save a job photo to your camera roll or share it.** The full-screen photo
+  viewer now has Save and Share buttons, working for both photos you just took
+  and ones already stored on the job.
 
 ### Changed
+- **Cancelled visits can be edited again.** A cancelled appointment is no longer
+  locked read-only — an admin can fix its details or re-activate it from the
+  status picker, instead of having to recreate it.
 - **The app now handles going offline gracefully.** Photos you attach to a
   visit no longer vanish if you lose signal mid-upload — they're kept and
   uploaded automatically the moment you reconnect or next sign in. Saving an
@@ -43,6 +56,9 @@ code; it increments by one on every store upload regardless of the semver part.
   leaving the Save button spinning.
 
 ### Fixed
+- **Notices no longer hide under the notch.** In landscape, the banner that
+  slides in from the top now shifts toward the open side of the screen so it
+  stays clear of the camera notch.
 - **Text no longer overflows at large text sizes.** The calendar's month bar
   and the employee and status chips stay tidy when you crank up the system
   font size.

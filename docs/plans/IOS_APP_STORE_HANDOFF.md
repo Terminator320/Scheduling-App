@@ -4,6 +4,10 @@ Written 2026-07-08 · branch `moblie` · v1.25.1+44 · launch scope: **App Store
 (status re-verified against the committed Xcode project on 2026-07-11, branch
 `notification`, v1.29.0+48 — the iOS project tasks in steps 3 and 9 are already
 done in-repo; the remaining `[ ]` items are console/hardware/App-Store-Connect).
+(Re-verified again 2026-07-18 at **v1.32.0+51**: the live staff map + travel-time
+backend is now deployed to prod and the Google Maps/Geocoding client keys are
+provisioned — the only NEW open items are the live-map **device pass** in step 5
+and the **precise-location privacy declaration** in step 7.)
 (Android stays a dev-only target on the Windows box — see
 `docs/audits/CODEBASE_AUDIT.md` for the full readiness audit; its Play items are
 parked as N/A).
@@ -141,11 +145,17 @@ Open `ios/Runner.xcworkspace`.
   capture, photo-library picker, contacts save-flow, biometric app-lock
   (Face ID — usage description already declared), map launching, phone/email
   launchers.
-- [ ] **Admin live staff map renders** — `AppDelegate` parses
-  `IOS_MAPS_API_KEY` from the bundled `dev/.env` at launch and calls
+- [ ] **Admin live staff map renders + resolves addresses** — `AppDelegate`
+  parses `IOS_MAPS_API_KEY` from the bundled `dev/.env` at launch and calls
   `GMSServices.provideAPIKey(...)`. If the key is missing/empty the map is
   blank and the console logs "IOS_MAPS_API_KEY missing — live map will be
-  blank" (never a crash).
+  blank" (never a crash). Backend is live (2026-07-18): `placesReverseGeocode`
+  deployed, and the Maps SDK iOS + Geocoding APIs are enabled/restricted on
+  `GOOGLE_MAP_API_KEY`, so tapping a staff pin should return a street address.
+  Verify: grant location, confirm your own pin plus other staff appear with a
+  fresh timestamp and a resolved address. (Also confirm **Routes API** is
+  enabled/restricted — without it the travel-time leave-now reminders silently
+  fall back to the fixed 30-min timing, no error.)
 - [x] Both locales: flip the device to French and spot-check (EN/FR parity is
   clean in code — this is a rendering sanity pass).
 
@@ -168,8 +178,14 @@ Open `ios/Runner.xcworkspace`.
   export-compliance prompt at upload). Declare in the questionnaire: account
   email + name/phone (users), customer contact data (clients in Firestore:
   name/phone/address/email), photos (appointment images), crash data
-  (Crashlytics). Data is linked to identity (account-based); **no tracking**
-  (matches `NSPrivacyTracking = false`).
+  (Crashlytics), and — **new in 1.32** — **Precise Location**. Background
+  location is collected from active staff (and assigned admins) to time the
+  "leave now" reminders and drive the admin live staff map; declare it under
+  **App Functionality** (NOT tracking/advertising), **linked to identity**
+  (it's keyed to the user's account doc). This keeps the questionnaire matching
+  `NSPrivacyTracking = false` and the `UIBackgroundModes: location` +
+  `NSLocation…UsageDescription` keys already in `Info.plist`. Everything else is
+  linked to identity (account-based); **no tracking**.
 - [x] **Privacy policy authored + hosted (live 2026-07-11)** —
   `docs/legal/privacy-policy.html`, published at
   `https://gvogas.github.io/es-pro-legal/`; the app links it from
