@@ -23,6 +23,14 @@ const {
   toIdList,
   TIMED_RECIPIENT_ROLES,
 } = require("./notification_utils");
+const {
+  startLiveActivity,
+  updateLiveActivity,
+} = require("./live_activity_dispatch");
+const {
+  listCardsDueForOnSite,
+  clearCardMarker,
+} = require("./live_activity_registry");
 
 const MINUTE_MS = 60 * 1000;
 
@@ -380,6 +388,7 @@ async function runTravelAwareReminderSweep(deps) {
   }));
 
   let reminded = 0;
+  let started = 0;
   const cache = new Map();
   for (const c of candidates) {
     const startMs = toMillis(c.startTime);
@@ -425,7 +434,11 @@ async function runTravelAwareReminderSweep(deps) {
           travelMinutes: travelSeconds == null ?
               null : Math.ceil(travelSeconds / 60),
         };
-        reminded += await deliverRecipientOnce(deps, {
+        // Captured in a local rather than `+=`-ed directly: the Live Activity
+        // start below hangs off THIS call's delivery, so it inherits the
+        // ledger's exactly-once claim. Starting before the claim would
+        // double-fire a card on a claim collision.
+        const delivered = await deliverRecipientOnce(deps, {
           collection: "appointmentReminders",
           ledgerId,
           appointmentId: String(c.id),
@@ -437,6 +450,22 @@ async function runTravelAwareReminderSweep(deps) {
           roles: TIMED_RECIPIENT_ROLES,
           cache,
         });
+        reminded += delivered;
+        if (kind === "leaveNow" && delivered > 0) {
+          // Best-effort and never awaited for its outcome's sake: a Live
+          // Activity failure must not change `reminded` or abort the sweep.
+          // No card just leaves the plain leaveNow push, unchanged.
+          started += await startLiveActivity(deps, {
+            appointmentId: String(c.id),
+            employeeDocId,
+            ctx: {
+              ...ctx,
+              leaveAt: new Date(
+                  startMs - computeLeadMinutes(travelSeconds) * MINUTE_MS),
+            },
+            nowDate,
+          });
+        }
       } catch (err) {
         // One failing pair must not stop the sweep.
         if (logger) {
@@ -445,7 +474,63 @@ async function runTravelAwareReminderSweep(deps) {
       }
     }
   }
-  return {reminded};
+  const flipped = await runOnSiteFlipPass(deps);
+  return {reminded, liveActivitiesStarted: started, liveActivitiesFlipped:
+    flipped};
+}
+
+/**
+ * Backstop that flips live cards from `travel` to `onSite`. The phase is
+ * clock-derived on both sides, but a card already on a Lock Screen won't
+ * re-render itself — so one update is pushed per card whose job has started.
+ * Rides the existing 5-minute sweep; no new scheduler.
+ *
+ * Driven off the card markers, NOT a query over appointments: the markers are
+ * the only record of which techs actually have a card, so this reads one tiny
+ * collection instead of every job that started in the last few minutes, and
+ * `setCardPhase` inside [updateLiveActivity] makes each card flip exactly once.
+ * Best-effort — every failure is swallowed so the reminder sweep is unaffected.
+ * @param {!Object} deps `{db, now, logger, apnsAuth}`.
+ * @return {!Promise<number>} Cards updated.
+ */
+async function runOnSiteFlipPass(deps) {
+  const {db, now, logger} = deps;
+  const nowDate = now || new Date();
+  const markers = await listCardsDueForOnSite(deps);
+  let flipped = 0;
+  for (const marker of markers) {
+    try {
+      const snap = await db
+          .collection("appointments").doc(marker.appointmentId).get();
+      const record = snap && snap.exists ? (snap.data() || {}) : null;
+      // A deleted job (or one already terminal) has no card left to flip; drop
+      // the marker so it can't be retried every sweep until its TTL.
+      if (!record ||
+          TERMINAL.has(String(record.status || "").toLowerCase())) {
+        await clearCardMarker(deps, {employeeDocId: marker.employeeDocId});
+        continue;
+      }
+      flipped += await updateLiveActivity(deps, {
+        appointmentId: String(marker.appointmentId),
+        employeeDocId: marker.employeeDocId,
+        ctx: {
+          clientName: record.clientName,
+          address: _address(record),
+          startTime: record.startTime,
+          leaveAt: null,
+          travelMinutes: null,
+        },
+        nowDate,
+      });
+    } catch (err) {
+      // One failing card must not stop the pass.
+      if (logger) {
+        logger.warn("liveActivity: on-site flip failed",
+            {employeeDocId: marker.employeeDocId, err});
+      }
+    }
+  }
+  return flipped;
 }
 
 module.exports = {
@@ -464,4 +549,5 @@ module.exports = {
   computeTravelSeconds,
   travelReminderLedgerId,
   runTravelAwareReminderSweep,
+  runOnSiteFlipPass,
 };

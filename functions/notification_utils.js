@@ -20,6 +20,10 @@ const {
   torontoDayStartMs,
   WIDGET_LOOKAHEAD_DAYS,
 } = require("./widget_payload_utils");
+const {
+  updateLiveActivity,
+  endLiveActivity,
+} = require("./live_activity_dispatch");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -772,6 +776,27 @@ async function handleAppointmentWrite(id, before, after, deps) {
               buildWidgetPayload(records, now, locale)),
         }),
     );
+    // Live Activity lifecycle rides the same events: a reschedule refreshes a
+    // card that's already on the Lock Screen, a cancel/unassign clears it.
+    // `assigned` starts NO card — a card is started only by the travel-aware
+    // "leave now" sweep, which is what the card is about. Best-effort: these
+    // never throw and never affect `sent`.
+    const liveCtx = {
+      clientName: ctx.clientName,
+      address: ctx.address,
+      startTime: ctx.startTime,
+      leaveAt: null,
+      travelMinutes: null,
+    };
+    if (kind === "rescheduled") {
+      await updateLiveActivity(deps, {
+        appointmentId: String(id), employeeDocId, ctx: liveCtx, nowDate: now,
+      });
+    } else if (kind === "cancelled" || kind === "removed") {
+      await endLiveActivity(deps, {
+        appointmentId: String(id), employeeDocId, ctx: liveCtx, nowDate: now,
+      });
+    }
   }
   return {events: events.length, sent};
 }

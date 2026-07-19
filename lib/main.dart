@@ -40,12 +40,15 @@ import 'package:scheduling/features/calendar/data/appointment_image_upload_servi
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart';
+import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/onboarding/screens/onboarding_gate.dart';
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/features/settings/application/settings_providers.dart';
 import 'package:scheduling/features/settings/data/shared_prefs_settings_repository.dart';
 import 'package:scheduling/features/settings/domain/models/app_settings.dart';
+import 'package:scheduling/features/siri/application/schedule_snapshot_provider.dart';
+import 'package:scheduling/features/siri/application/schedule_snapshot_service.dart';
 import 'package:scheduling/firebase_options.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
@@ -359,6 +362,8 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _settingsRepository.save(language: code);
     // Re-upsert the token so its `locale` field follows the app language.
     unawaited(ref.read(pushRegistrationControllerProvider).sync());
+    // Same for the Live Activity tokens — `locale` drives the card's text.
+    unawaited(ref.read(liveActivityRegistrationControllerProvider).sync());
     // The iOS home widget localizes its chrome/status labels from the payload's
     // `locale`; recompute the payload so the widget follows the app language
     // instead of waiting for the next appointment-stream emission.
@@ -384,6 +389,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
           .read(pushRegistrationControllerProvider)
           .unregisterCurrentDevice();
       await ref.read(presenceSyncControllerProvider).unregister();
+      await ref.read(liveActivityRegistrationControllerProvider).unregister();
       await ref.read(authServiceProvider).signOut();
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -440,6 +446,19 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     });
   }
 
+  void _listenForLiveActivitySync() {
+    // Registers this device's Live Activity APNs tokens (push-to-start plus
+    // one per live card) so the server can put the "time to leave" card on a
+    // closed, locked phone. iOS 17.2+ only; every other device registers
+    // nothing and just gets the plain `leaveNow` push.
+    ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
+      prev,
+      next,
+    ) {
+      unawaited(ref.read(liveActivityRegistrationControllerProvider).sync());
+    });
+  }
+
   /// One-shot sync against a value already present at registration: on relaunch
   /// while already authenticated, the account doc can resolve before the
   /// `ref.listen`s above are set up, and a plain listen would miss it (no
@@ -453,6 +472,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _controllerSyncsPrimed = true;
     unawaited(ref.read(pushRegistrationControllerProvider).sync());
     unawaited(ref.read(presenceSyncControllerProvider).sync());
+    unawaited(ref.read(liveActivityRegistrationControllerProvider).sync());
   }
 
   void _listenForWidgetSync() {
@@ -469,6 +489,23 @@ class _PaulAppState extends ConsumerState<PaulApp> {
         unawaited(service.clear());
       } else {
         unawaited(service.sync(payload));
+      }
+    });
+  }
+
+  void _listenForSnapshotSync() {
+    // iOS Siri App Intents extension only — same App Group, separate key.
+    if (!Platform.isIOS) return;
+    ref.listen<AsyncValue<Map<String, dynamic>?>>(scheduleSnapshotProvider, (
+      prev,
+      next,
+    ) {
+      final payload = next.value;
+      final service = ref.read(scheduleSnapshotServiceProvider);
+      if (payload == null) {
+        unawaited(service.clearSnapshot());
+      } else {
+        unawaited(service.writeSnapshot(payload));
       }
     });
   }
@@ -557,7 +594,9 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _listenForDeletedAccount();
     _listenForPushRegistration();
     _listenForPresenceSync();
+    _listenForLiveActivitySync();
     _listenForWidgetSync();
+    _listenForSnapshotSync();
     _listenForUploadDrain();
     _primeControllerSyncsOnce();
     return AppLanguageScope(

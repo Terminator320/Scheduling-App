@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart' show TimeOfDay;
@@ -23,6 +24,7 @@ import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 // Re-export so existing importers of this controller keep resolving the save
@@ -292,6 +294,12 @@ class EventDetailsController extends Notifier<EventDetailsState>
     final logger = ref.read(loggerProvider);
     try {
       await repo.updateAppointmentStatus(id: id, status: status);
+      // Terminal status — clear this device's Live Activity card now instead
+      // of waiting for the server's end push. Best-effort and non-throwing:
+      // it must never change whether the status write succeeded.
+      unawaited(
+        ref.read(liveActivityRegistrationControllerProvider).endLocalCards(),
+      );
       if (ref.mounted) state = state.copyWith(isSaving: false);
       return null;
     } catch (e, st) {

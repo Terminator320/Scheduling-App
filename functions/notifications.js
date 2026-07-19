@@ -21,7 +21,16 @@ const {
   runOverduePromptSweep,
 } = require("./notification_utils");
 const {runTravelAwareReminderSweep} = require("./travel_utils");
-const {GOOGLE_MAP_API_KEY} = require("./params");
+const {
+  pruneExpiredActivityTokens,
+  pruneExpiredCardMarkers,
+} = require("./live_activity_registry");
+const {
+  GOOGLE_MAP_API_KEY,
+  APNS_AUTH_KEY,
+  APNS_KEY_ID,
+  APNS_TEAM_ID,
+} = require("./params");
 
 /**
  * Real injected deps for the orchestration functions.
@@ -33,13 +42,40 @@ function liveDeps() {
     messaging: getMessaging(),
     now: new Date(),
     logger,
+    apnsAuth: apnsAuth(),
   };
 }
+
+/**
+ * APNs provider credentials for the Live Activity path, or null when the
+ * secrets aren't bound to this function — in which case every Live Activity
+ * verb no-ops and only the plain push is sent. Read lazily: `.value()` throws
+ * outside a secret-bound invocation.
+ * @return {?{authKey: string, keyId: string, teamId: string}}
+ */
+function apnsAuth() {
+  try {
+    const authKey = APNS_AUTH_KEY.value();
+    const keyId = APNS_KEY_ID.value();
+    const teamId = APNS_TEAM_ID.value();
+    if (!authKey || !keyId || !teamId) return null;
+    return {authKey, keyId: keyId.trim(), teamId: teamId.trim()};
+  } catch (err) {
+    return null;
+  }
+}
+
+// Secrets every Live-Activity-capable function must bind.
+const APNS_SECRETS = [APNS_AUTH_KEY, APNS_KEY_ID, APNS_TEAM_ID];
 
 // Assignment / reschedule / cancel / removal alerts. No `retry: true` — a
 // duplicate push is worse than a rare missed one.
 const notifyAppointmentChanges = onDocumentWritten(
-    "appointments/{appointmentId}",
+    {
+      document: "appointments/{appointmentId}",
+      // Bound for the Live Activity update/end hooks in handleAppointmentWrite.
+      secrets: APNS_SECRETS,
+    },
     async (event) => {
       const before = event.data?.before?.exists ?
         event.data.before.data() : null;
@@ -68,7 +104,7 @@ const sendUpcomingJobReminders = onSchedule(
       schedule: "every 5 minutes",
       timeZone: "America/Toronto",
       maxInstances: 1,
-      secrets: [GOOGLE_MAP_API_KEY],
+      secrets: [GOOGLE_MAP_API_KEY, ...APNS_SECRETS],
       // Serial pairs, each with up to one Routes round-trip.
       timeoutSeconds: 120,
     },
@@ -97,7 +133,24 @@ const sendDailyJobDigest = onSchedule(
       maxInstances: 1,
     },
     async () => {
-      await runDailyDigest(liveDeps());
+      const deps = liveDeps();
+      await runDailyDigest(deps);
+      // Rides the digest rather than adding a scheduler: a card the server
+      // never got to end would otherwise leak its token row and card marker
+      // indefinitely. Both TTLs are measured in days, so daily is ample.
+      // Isolated — a failed prune must not fail the digest that already sent.
+      try {
+        const tokens = await pruneExpiredActivityTokens(deps);
+        const cards = await pruneExpiredCardMarkers(deps);
+        if (tokens.pruned > 0 || cards.pruned > 0) {
+          logger.info("liveActivity: TTL prune", {
+            tokens: tokens.pruned,
+            cards: cards.pruned,
+          });
+        }
+      } catch (err) {
+        logger.warn("liveActivity: TTL prune failed", {err});
+      }
     },
 );
 
