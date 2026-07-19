@@ -37,7 +37,7 @@ Crashlytics / Cloud Messaging)**. There are **no advertising or analytics SDKs**
 | Appointment photos | Firebase Storage `appointments/*/images/*` (JPEG/PNG, validated) | Yes |
 | **Precise background location** of active staff + assigned admins | `users/{docId}/presence/location` (`geolocator` background stream) | Yes |
 | FCM push token + per-device locale | `users/{docId}/fcmTokens/{token}` | Yes |
-| Crash + performance diagnostics | Firebase Crashlytics | Yes |
+| Crash diagnostics | Firebase Crashlytics | Yes |
 
 **Contacts is NOT a collected data type.** `flutter_contacts`
 (`contact_export_launcher.dart`) only **writes** a client the admin already has
@@ -74,16 +74,16 @@ sits under a signed-in user's account.
 | **User ID** (Identifiers) | Yes | Yes | No | App Functionality | Firebase auth UID / users-doc id |
 | **Device ID** (Identifiers) | Yes | Yes | No | App Functionality | FCM push token (per-device, for job notifications) |
 | **Crash Data** (Diagnostics) | Yes | No | No | App Functionality | Firebase Crashlytics |
-| **Performance Data** (Diagnostics) | Yes | No | No | App Functionality | Firebase Crashlytics performance/nonfatal reporting |
 
 Notes for the reviewer-facing questionnaire wording:
 - Precise Location is the one type most likely to draw a follow-up. It is
   **App Functionality**, **not** tracking or advertising. It is background
   location (the app has `UIBackgroundModes: location`). Justification lives in
   §5 App Review notes.
-- Diagnostics (Crash + Performance) are declared **not linked to identity** —
-  the app does not call Crashlytics `setUserId` with PII; crash reports are not
-  tied to a customer's account in the console.
+- Crash Data (Diagnostics) is declared **not linked to identity** — the app
+  does not call Crashlytics `setUserId` with PII; crash reports are not tied to
+  a customer's account in the console. (No Performance Data is declared — the
+  app ships no Firebase Performance Monitoring SDK.)
 - If ASC asks whether any collected data is **required** vs optional: account
   and client data are required to use the app; location is optional (the app
   degrades gracefully when a user denies or grants only "while using").
@@ -93,12 +93,14 @@ Notes for the reviewer-facing questionnaire wording:
 ## 2. iOS Privacy Manifest (`PrivacyInfo.xcprivacy`)
 
 The repo already tracks two manifests. The main app's
-`ios/Runner/PrivacyInfo.xcprivacy` currently has an **empty**
-`NSPrivacyCollectedDataTypes` array. Replace it with the version below so the
-manifest matches the nutrition labels in §1. The required-reason API entries
-(UserDefaults `CA92.1` for `shared_preferences`, File Timestamp `C617.1` for
-`path_provider` / `flutter_cache_manager` file access, System Boot Time `35F9.1`)
-are already correct — keep them.
+`ios/Runner/PrivacyInfo.xcprivacy` has **already been updated** to the version
+below (verified 2026-07-19) — its `NSPrivacyCollectedDataTypes` array is fully
+populated and matches the nutrition labels in §1, so **no code change is
+required**. The block below is the authoritative reference; diff it against the
+on-disk file if you need to confirm. The required-reason API entries (UserDefaults
+`CA92.1` for `shared_preferences`, File Timestamp `C617.1` for `path_provider` /
+`flutter_cache_manager` file access, System Boot Time `35F9.1`) are present and
+correct — keep them.
 
 ### `ios/Runner/PrivacyInfo.xcprivacy` (complete file)
 
@@ -243,19 +245,6 @@ are already correct — keep them.
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
-		<!-- Diagnostics: Performance Data -->
-		<dict>
-			<key>NSPrivacyCollectedDataType</key>
-			<string>NSPrivacyCollectedDataTypePerformanceData</string>
-			<key>NSPrivacyCollectedDataTypeLinked</key>
-			<false/>
-			<key>NSPrivacyCollectedDataTypeTracking</key>
-			<false/>
-			<key>NSPrivacyCollectedDataTypePurposes</key>
-			<array>
-				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
-			</array>
-		</dict>
 	</array>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
@@ -316,7 +305,7 @@ ES Pro
 Schedule plumbing jobs & crew
 ```
 
-**Promotional Text** (≤170) — editable any time without a new build
+**Promotional Text** (≤170) — 158 chars; editable any time without a new build
 ```
 Book a job, send it to the right plumber, and the whole crew sees the change on their phone. Photos, client history, and traffic-timed reminders come with it.
 ```
@@ -391,14 +380,14 @@ https://gvogas.github.io/es-pro-legal/
 ES Pro
 ```
 
-**Sous-titre** (≤30) — 28 chars
+**Sous-titre** (≤30) — 29 chars
 ```
 Planifiez chantiers et équipe
 ```
 
-**Texte promotionnel** (≤170)
+**Texte promotionnel** (≤170) — 169 chars (the earlier "et rappels" wording was 171, over the cap)
 ```
-Créez un rendez-vous, envoyez-le au bon plombier, et toute l'équipe voit le changement sur son téléphone. Photos, historique client et rappels selon la circulation inclus.
+Créez un rendez-vous, envoyez-le au bon plombier, et toute l'équipe voit le changement sur son téléphone. Photos, historique client, rappels selon la circulation inclus.
 ```
 
 **Mots-clés** (≤100, séparés par des virgules, sans espaces) — vérifier le compte
@@ -569,9 +558,10 @@ These are the steps only the owner can do, and that are **not** already covered
 as build steps in `IOS_APP_STORE_HANDOFF.md`. (Build/archive/App Attest/upload
 live in that runbook; this is the ASC content side.)
 
-**In Xcode (one code change from this doc):**
-- [ ] Replace `ios/Runner/PrivacyInfo.xcprivacy` with the §2 version (fills in
-      `NSPrivacyCollectedDataTypes`). Commit it. Widget manifest unchanged.
+**In Xcode:**
+- [x] `ios/Runner/PrivacyInfo.xcprivacy` **already matches** the §2 version
+      (`NSPrivacyCollectedDataTypes` populated, verified 2026-07-19). No change
+      needed — just confirm it's committed. Widget manifest unchanged.
 
 **In App Store Connect — app record + metadata:**
 - [ ] Confirm the app record: **ES Pro**, `net.vogas.scheduling`, Business /
@@ -584,7 +574,7 @@ live in that runbook; this is the ASC content side.)
       page showing george@vogas.net.
 
 **In ASC — App Privacy (§1):**
-- [ ] Declare all 11 data types with Linked/Tracking/Purpose exactly as the
+- [ ] Declare all 10 data types with Linked/Tracking/Purpose exactly as the
       table. Tracking = No everywhere. Precise Location = App Functionality.
 - [ ] Confirm the labels match the §2 manifest (Apple cross-checks them).
 
@@ -612,9 +602,12 @@ live in that runbook; this is the ASC content side.)
 
 ## Assumptions the owner must verify
 
-1. **Character counts** on name/subtitle/keywords/description are my counts.
-   Re-check in the ASC field before saving; ASC hard-rejects over-limit values.
-   The FR keyword string in particular should be counted.
+1. **Character counts** were re-verified 2026-07-19 with `wc -m`: App Name 6,
+   EN subtitle 29, EN promo 158, EN keywords 99, FR subtitle 29, FR promo 169
+   (fixed down from an over-cap 171), FR keywords 95 — all within Apple's caps.
+   Long Description/What's-New fields (4000-cap) were not machine-counted; they
+   are well under. Still worth a glance in-field, since ASC hard-rejects
+   over-limit values.
 2. **Support URL** currently points at the privacy-policy host as a placeholder.
    ASC wants a reachable support page; a page listing george@vogas.net is
    ideal. Decide before submitting.

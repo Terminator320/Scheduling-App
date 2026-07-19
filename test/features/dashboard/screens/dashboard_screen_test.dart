@@ -70,7 +70,7 @@ Widget _wrap({
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         theme: lightTheme(),
-        home: const DashboardScreen(),
+        home: const DashboardScreen(isAdmin: true, employeeId: 'admin1'),
       ),
     ),
   );

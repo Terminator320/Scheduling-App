@@ -10,14 +10,15 @@ import 'package:scheduling/shared/widgets/primitives/name_initials.dart';
 
 /// Renders staff map-pin bitmaps for `google_maps_flutter` markers (markers are
 /// bitmaps, not widgets). Draws an avatar-colored balloon with the person's
-/// initials, a surface ring, and a pointer tip; dimmed with a grey ring at
-/// ~50% alpha when stale, and wrapped in a primary halo when selected.
+/// initials, a surface ring, and a pointer tip, and wraps it in a primary halo
+/// when selected. (Freshness is surfaced as text in the info card / roster, not
+/// by dimming the pin.)
 ///
 /// Theme colors are passed IN so the renderer stays pure and testable — it
 /// never reads a `BuildContext`. Results are cached per
-/// (initials, colorValue, stale, selected, ring/staleRing/halo, dpr): the same
-/// key returns the identical `Future<BitmapDescriptor>`. A failed render is
-/// evicted so the next resolve retries instead of caching the error.
+/// (initials, colorValue, selected, ring/halo, dpr): the same key returns the
+/// identical `Future<BitmapDescriptor>`. A failed render is evicted so the next
+/// resolve retries instead of caching the error.
 class StaffMarkerIconRenderer {
   StaffMarkerIconRenderer();
 
@@ -26,17 +27,15 @@ class StaffMarkerIconRenderer {
   Future<BitmapDescriptor> resolve({
     required String name,
     required Color color,
-    required bool stale,
     required bool selected,
     required Color ringColor,
-    required Color staleRingColor,
     required Color haloColor,
     required double devicePixelRatio,
   }) {
     final initials = nameInitials(name);
     final key =
-        '$initials|${color.toARGB32()}|$stale|$selected|'
-        '${ringColor.toARGB32()}|${staleRingColor.toARGB32()}|'
+        '$initials|${color.toARGB32()}|$selected|'
+        '${ringColor.toARGB32()}|'
         '${haloColor.toARGB32()}|${devicePixelRatio.toStringAsFixed(2)}';
     final cached = _cache[key];
     if (cached != null) return cached;
@@ -44,10 +43,8 @@ class StaffMarkerIconRenderer {
     final future = _buildDescriptor(
       name: name,
       color: color,
-      stale: stale,
       selected: selected,
       ringColor: ringColor,
-      staleRingColor: staleRingColor,
       haloColor: haloColor,
       devicePixelRatio: devicePixelRatio,
     );
@@ -68,20 +65,16 @@ class StaffMarkerIconRenderer {
   Future<BitmapDescriptor> _buildDescriptor({
     required String name,
     required Color color,
-    required bool stale,
     required bool selected,
     required Color ringColor,
-    required Color staleRingColor,
     required Color haloColor,
     required double devicePixelRatio,
   }) async {
     final bytes = await renderBytes(
       name: name,
       color: color,
-      stale: stale,
       selected: selected,
       ringColor: ringColor,
-      staleRingColor: staleRingColor,
       haloColor: haloColor,
       devicePixelRatio: devicePixelRatio,
     );
@@ -100,15 +93,12 @@ class StaffMarkerIconRenderer {
   static Future<Uint8List> renderBytes({
     required String name,
     required Color color,
-    required bool stale,
     required bool selected,
     required Color ringColor,
-    required Color staleRingColor,
     required Color haloColor,
     required double devicePixelRatio,
   }) async {
     final initials = nameInitials(name);
-    final ring = stale ? staleRingColor : ringColor;
     const width = _radius * 2 + _pad * 2;
     // Pad only on the top/sides: the canvas ends exactly at the pointer tip so
     // the marker's default (0.5, 1) anchor lands the tip on the coordinate.
@@ -117,14 +107,6 @@ class StaffMarkerIconRenderer {
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder)..scale(devicePixelRatio);
-
-    // A single translucent layer dims the whole pin when stale.
-    if (stale) {
-      canvas.saveLayer(
-        const Rect.fromLTWH(0, 0, width, height),
-        Paint()..color = Colors.white.withValues(alpha: 0.5),
-      );
-    }
 
     if (selected) {
       canvas.drawCircle(
@@ -154,7 +136,7 @@ class StaffMarkerIconRenderer {
         center,
         _radius,
         Paint()
-          ..color = ring
+          ..color = ringColor
           ..style = PaintingStyle.stroke
           ..strokeWidth = _ringWidth,
       );
@@ -174,8 +156,6 @@ class StaffMarkerIconRenderer {
       canvas,
       center - Offset(painter.width / 2, painter.height / 2),
     );
-
-    if (stale) canvas.restore();
 
     final image = await recorder.endRecording().toImage(
       (width * devicePixelRatio).round(),
