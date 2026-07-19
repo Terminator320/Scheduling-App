@@ -258,7 +258,16 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             label: context.l10n.dashboard_title,
             onTap: () {
               Navigator.pop(context);
-              Navigator.pushNamed(context, AppRoutes.dashboard);
+              Navigator.pushNamed(
+                context,
+                AppRoutes.dashboard,
+                arguments: DashboardArgs(
+                  isAdmin: widget.isAdmin,
+                  employeeId: widget.employeeId,
+                  userName: widget.userName,
+                  email: widget.email,
+                ),
+              );
             },
           ),
         ),

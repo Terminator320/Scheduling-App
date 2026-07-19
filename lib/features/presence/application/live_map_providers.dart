@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/features/employees/application/employees_providers.dart';
@@ -54,38 +53,3 @@ final liveMapPointsProvider =
         ),
       );
     });
-
-/// Container-scoped holder for the set-equality memo below — a `Provider` so
-/// each `ProviderContainer` (each test) gets its own cache.
-final _staleIdsMemoProvider = Provider.autoDispose((ref) => _StaleIdsMemo());
-
-class _StaleIdsMemo {
-  Set<String>? value;
-}
-
-/// The user doc-ids whose latest fix is currently stale (> 25 min).
-///
-/// Set-equality notification mechanism (chosen to be BOTH correct in
-/// riverpod 3.3.1 AND testable): a `Provider`'s `updateShouldNotify` is
-/// `previous != next`, so returning the IDENTICAL previous `Set` instance when
-/// membership is unchanged (`setEquals`) makes downstream watchers skip their
-/// rebuild. This is the same content-equality idiom the employee lookup maps
-/// use (`employees_providers.dart`) — no wrapper class needed. A 30 s tick that
-/// flips nobody recomputes here but returns the same instance, so the marker
-/// assembly is never notified; only the freshness labels (which watch the tick
-/// directly) re-render.
-final staleDocIdsProvider = Provider.autoDispose<Set<String>>((ref) {
-  ref.watch(liveMapTickProvider); // drives the 30 s recompute
-  final now = ref.watch(liveMapClockProvider)();
-  final points =
-      ref.watch(liveMapPointsProvider).value ?? const <StaffMapPoint>[];
-  final memo = ref.watch(_staleIdsMemoProvider);
-  final next = <String>{
-    for (final point in points)
-      if (LiveMapAggregator.isStale(point.updatedAt, now)) point.userDocId,
-  };
-  final previous = memo.value;
-  if (previous != null && setEquals(previous, next)) return previous;
-  memo.value = next;
-  return next;
-});

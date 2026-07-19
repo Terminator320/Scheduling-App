@@ -18,7 +18,6 @@ class EventList extends StatelessWidget {
     this.isAdmin = true,
     this.isLoading = false,
     this.onAppointmentTap,
-    this.onSchedule,
     this.selectedAppointmentId,
   });
   final ValueNotifier<List<AppointmentRecord>> events;
@@ -27,11 +26,6 @@ class EventList extends StatelessWidget {
   final bool isAdmin;
   final bool isLoading;
   final void Function(AppointmentRecord appointment)? onAppointmentTap;
-
-  /// Admin-only "schedule for the selected day" action wired into the empty
-  /// state so the most common landing (an empty day) has a one-tap booking
-  /// affordance instead of making the admin hunt for the FAB.
-  final VoidCallback? onSchedule;
   final String? selectedAppointmentId;
 
   Widget _buildSkeleton() {
@@ -66,14 +60,11 @@ class EventList extends StatelessWidget {
                     icon: Icons.event_outlined,
                     title: context.l10n.common_noAppointmentsFound,
                     // Only admins have the "+" FAB, so don't tell employees
-                    // to tap a button that isn't there.
+                    // to tap a button that isn't there. The empty state itself
+                    // no longer carries a booking button — admins use the FAB.
                     body: isAdmin
                         ? context.l10n.common_tapToScheduleAnAppointment
                         : context.l10n.calendar_noAppointmentsForDay,
-                    actionLabel: isAdmin && onSchedule != null
-                        ? context.l10n.calendar_newAppointment
-                        : null,
-                    onAction: isAdmin ? onSchedule : null,
                   );
                 }
 

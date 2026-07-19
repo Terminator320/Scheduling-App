@@ -37,9 +37,17 @@ class AppRoutes {
         );
 
       case dashboard:
+        final args = settings.arguments as DashboardArgs?;
         return AppPageRoute(
           settings: settings,
-          builder: (_) => const DashboardScreen(),
+          // Admin-only screen, so default isAdmin to true if pushed without
+          // args (e.g. a deep link); the settings drawer always passes them.
+          builder: (_) => DashboardScreen(
+            isAdmin: args?.isAdmin ?? true,
+            employeeId: args?.employeeId ?? '',
+            userName: args?.userName,
+            email: args?.email,
+          ),
         );
 
       case dayRoute:
@@ -208,6 +216,19 @@ class DayRouteArgs {
   const DayRouteArgs({required this.isAdmin, required this.employeeId});
   final bool isAdmin;
   final String employeeId;
+}
+
+class DashboardArgs {
+  const DashboardArgs({
+    required this.isAdmin,
+    required this.employeeId,
+    this.userName,
+    this.email,
+  });
+  final bool isAdmin;
+  final String employeeId;
+  final String? userName;
+  final String? email;
 }
 
 class SettingsArgs {

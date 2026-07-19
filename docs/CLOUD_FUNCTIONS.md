@@ -69,7 +69,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `waveUpsertCustomer` | trigger | `onDocumentWritten clients/{id}` | `wave/callables.js` | any `clients` doc write | — | `retry: true` |
 | `validateUploadedImage` | trigger | `onObjectFinalized` (Storage) | `maintenance.js` | `appointments/*/images/*` upload | — | region `us-east1` |
 | `notifyAppointmentChanges` | trigger | `onDocumentWritten appointments/{id}` | `notifications.js` | any appointment write | — | no `retry` (dupe push worse than missed) |
-| `purgeExpiredHistory` | scheduled | `every day 03:00` (Toronto) | `maintenance.js` | nightly | — | `maxInstances: 1` · 540s |
+| `purgeExpiredHistory` | scheduled | `0 3 1 1,4,7,10 *` — quarterly, 1st of Jan/Apr/Jul/Oct 03:00 (Toronto) | `maintenance.js` | quarterly | — | `maxInstances: 1` · 3600s |
 | `waveSyncWorker` | scheduled | `every 5 minutes` | `wave/callables.js` | timer | `WAVE_FULL_ACCESS_TOKEN` | `maxInstances: 1` · 540s |
 | `waveScheduledImport` | scheduled | `every 24 hours` | `wave/callables.js` | timer | `WAVE_FULL_ACCESS_TOKEN` | `maxInstances: 1` · 300s |
 | `sendUpcomingJobReminders` | scheduled | `every 5 minutes` (Toronto) | `notifications.js` + `travel_utils.js` | timer | `GOOGLE_MAP_API_KEY` | `maxInstances: 1` · `timeoutSeconds: 120` · ledger · Routes API |
@@ -156,11 +156,14 @@ Storage rule trusts client `contentType`, so this closes that gap. Deployed to
 ## Maintenance (scheduled)
 
 ### `purgeExpiredHistory` — `maintenance.js`
-Nightly at 03:00 America/Toronto. Deletes `done`/`cancelled` appointments whose
-`startTime` is older than 2 years, **and** their Storage images. Images are
-deleted before the Firestore doc so a Storage failure keeps the doc for the next
-night's retry rather than orphaning PII bytes. Non-terminal appointments are
-never touched. 540s timeout; leftovers carry to the next run.
+Quarterly on the 1st of Jan/Apr/Jul/Oct at 03:00 America/Toronto
+(`0 3 1 1,4,7,10 *`). Deletes `done`/`cancelled` appointments whose `startTime`
+is older than 2 years, **and** their Storage images. Images are deleted before
+the Firestore doc so a Storage failure keeps the doc for the next run's retry
+rather than orphaning PII bytes. Non-terminal appointments are never touched.
+3600s (gen2 max) timeout so a quarter of newly-expired history clears in one run;
+any leftovers (a timeout, or a full page whose image deletes all fail) carry to
+the next run — ~3 months away at this cadence.
 
 ## Push notifications (FCM)
 

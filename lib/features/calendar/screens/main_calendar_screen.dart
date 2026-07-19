@@ -108,7 +108,15 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     );
   }
 
-  bool get _showTodayButton => !isSameDay(_focusedDay, DateTime.now());
+  // Show the "jump to today" FAB whenever the visible month isn't the current
+  // one. Keyed on year+month, NOT `isSameDay(_focusedDay, today)`: a month swipe
+  // reports the 1st of the month as `focusedDay` (table_calendar's page base
+  // day), so a day-equality check kept the FAB visible after swiping back to
+  // this month even though today is right there.
+  bool get _showTodayButton {
+    final now = DateTime.now();
+    return _focusedDay.year != now.year || _focusedDay.month != now.month;
+  }
 
   void _goToToday() {
     final now = DateTime.now();
@@ -399,12 +407,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       colorMap: colorMap,
       isLoading: isLoading,
       isAdmin: widget.isAdmin,
-      onSchedule: widget.isAdmin
-          ? () => showAddEventPopup(
-              context,
-              initialDate: _selectedDay ?? _focusedDay,
-            )
-          : null,
     );
 
     if (_splitCalendar) {

@@ -145,11 +145,10 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     if (pointsAsync.hasValue) _lastPoints = pointsAsync.value!;
     final points = pointsAsync.value ?? _lastPoints;
 
-    final staleIds = ref.watch(staleDocIdsProvider);
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final selected = _effectiveSelected(points);
 
-    _scheduleMarkerAssembly(context, points, staleIds, selected, dpr);
+    _scheduleMarkerAssembly(context, points, selected, dpr);
     _maybeFitCamera(points);
 
     final hasShownMap = _markers.isNotEmpty || _lastPoints.isNotEmpty;
@@ -210,21 +209,17 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
   void _scheduleMarkerAssembly(
     BuildContext context,
     List<StaffMapPoint> points,
-    Set<String> staleIds,
     String? selected,
     double dpr,
   ) {
     final scheme = Theme.of(context).colorScheme;
     final ringColor = scheme.surface;
-    final staleRingColor = scheme.outline;
     final haloColor = scheme.primary;
     final signature = _signatureOf(
       points,
-      staleIds,
       selected,
       dpr,
       ringColor,
-      staleRingColor,
       haloColor,
     );
     if (signature == _lastSignature) return;
@@ -233,11 +228,9 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     unawaited(
       _assembleMarkers(
         points,
-        staleIds,
         selected,
         dpr,
         ringColor,
-        staleRingColor,
         haloColor,
         signature,
         token,
@@ -247,11 +240,9 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
 
   String _signatureOf(
     List<StaffMapPoint> points,
-    Set<String> staleIds,
     String? selected,
     double dpr,
     Color ringColor,
-    Color staleRingColor,
     Color haloColor,
   ) {
     final buffer = StringBuffer()
@@ -260,8 +251,6 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
       ..write(selected ?? '')
       ..write('|')
       ..write(ringColor.toARGB32())
-      ..write(',')
-      ..write(staleRingColor.toARGB32())
       ..write(',')
       ..write(haloColor.toARGB32());
     for (final p in points) {
@@ -275,20 +264,16 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
         ..write(',')
         ..write(p.color.toARGB32())
         ..write(',')
-        ..write(p.name)
-        ..write(',')
-        ..write(staleIds.contains(p.userDocId));
+        ..write(p.name);
     }
     return buffer.toString();
   }
 
   Future<void> _assembleMarkers(
     List<StaffMapPoint> points,
-    Set<String> staleIds,
     String? selected,
     double dpr,
     Color ringColor,
-    Color staleRingColor,
     Color haloColor,
     String signature,
     int token,
@@ -302,10 +287,8 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
           (point) => _renderer.resolve(
             name: point.name,
             color: point.color,
-            stale: staleIds.contains(point.userDocId),
             selected: point.userDocId == selected,
             ringColor: ringColor,
-            staleRingColor: staleRingColor,
             haloColor: haloColor,
             devicePixelRatio: dpr,
           ),

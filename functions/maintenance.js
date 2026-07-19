@@ -73,7 +73,7 @@ const PURGE_BATCH_SIZE = 200;
  * Best-effort deletion of every Storage object under an appointment's image
  * prefix (`appointments/{id}/images/`). Returns false (and logs) on failure.
  * Images are deleted BEFORE the Firestore doc: a doc whose image prefix
- * failed to clear is kept so the next nightly run retries it — deleting the
+ * failed to clear is kept so the next quarterly run retries it — deleting the
  * doc first would orphan the PII bytes forever (nothing would ever point at
  * them again).
  * @param {string} appointmentId Firestore doc id of the purged appointment.
@@ -95,14 +95,19 @@ async function deleteAppointmentImages(appointmentId) {
 
 const purgeExpiredHistory = onSchedule(
     {
-
-      schedule: "every day 03:00",
+      // Quarterly — 03:00 Toronto on the 1st of Jan/Apr/Jul/Oct (unix-cron:
+      // min hour dom mon dow). History only grows past the 2-year cutoff
+      // slowly, so a quarterly sweep is plenty, and it keeps the "leftovers
+      // carry to the next run" window down to ~3 months (vs a full year) if a
+      // run ever leaves work behind.
+      schedule: "0 3 1 1,4,7,10 *",
       timeZone: "America/Toronto",
       maxInstances: 1,
-      // Image deletion is a Storage round-trip per appointment; a large
-      // backlog would blow the 60s default. 540s gives the nightly run room
-      // to finish (leftovers simply carry to the next night).
-      timeoutSeconds: 540,
+      // Image deletion is a Storage round-trip per appointment, and a quarterly
+      // run clears a quarter of newly-expired history at once. 3600s (the gen2
+      // max) gives that backlog room to finish in a single run rather than
+      // stranding leftovers until next quarter.
+      timeoutSeconds: 3600,
     },
     async () => {
       const db = getFirestore();
@@ -149,7 +154,7 @@ const purgeExpiredHistory = onSchedule(
         purged += deletable;
 
         // No page progress (every image delete failed) — bail out rather
-        // than refetching the same stuck docs forever; the next nightly run
+        // than refetching the same stuck docs forever; the next quarterly run
         // retries them.
         if (deletable === 0) break;
         if (snap.size < PURGE_BATCH_SIZE) break;
