@@ -1,12 +1,36 @@
 # SiriIntents — Mac setup runbook (Phase 1)
 
-The Swift here is authored on the Windows box and compiled only on the Mac.
 Design: [`docs/plans/2026-07-10-siri-app-intents-design.md`](../../docs/plans/2026-07-10-siri-app-intents-design.md).
 Plan: [`docs/plans/2026-07-19-siri-app-intents-implementation.md`](../../docs/plans/2026-07-19-siri-app-intents-implementation.md).
+
+## Xcode target — CREATED 2026-07-19
+
+The `SiriIntents` App Intents extension target now exists in
+`Runner.xcodeproj` (created via the `xcodeproj` Ruby gem, not the Xcode GUI)
+and the whole app builds clean (`flutter build ios --debug --no-codesign`),
+with `SiriIntents.appex` embedded in `Runner.app/PlugIns/`:
+
+- Product type: app extension, `NSExtensionPointIdentifier =
+  com.apple.appintents-extension`; bundle id `net.vogas.scheduling.SiriIntents`.
+- `INFOPLIST_FILE = SiriIntents/Info.plist`, `CODE_SIGN_ENTITLEMENTS =
+  SiriIntentsExtension.entitlements` (shares App Group
+  `group.net.vogas.scheduling`), `DEVELOPMENT_TEAM = H5XWLU87AX`.
+- The six `.swift` files here are explicit source references on the target (not
+  a synchronized group), so **a new `.swift` added to this folder must be added
+  to the target manually** (re-run the gem script or tick it in Xcode).
+- **Deployment target is iOS 18.0, not 16.0** — the whole app moved to an 18.0
+  floor (owner decision 2026-07-19; the Live Activity Directions button's
+  returnable `OpenURLIntent` is iOS 18+). App Intents' iOS-16 floor is
+  satisfied comfortably. The step-3 "bump 15 → 16" instruction below is
+  superseded.
+
+Remaining: on-device Siri phrase verification (the checklist further down).
 
 The Dart half is done and on-device-ready: the app writes the snapshot into the
 App Group under the key `schedule_snapshot` whenever the schedule changes, and
 wipes it on sign-out. Nothing below touches Dart.
+
+## Original manual-setup steps (kept for reference — the gem did items 1–3)
 
 ## Steps
 

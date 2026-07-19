@@ -1,12 +1,21 @@
-// JobActivityAttributes — shared ActivityKit model for the "time to leave"
-// Live Activity card (Lock Screen + Dynamic Island). See JobLiveActivity.swift
-// for the views and DirectionsIntent.swift for the Directions button.
+// LiveActivitiesAppAttributes — shared ActivityKit model for the "time to
+// leave" Live Activity card (Lock Screen + Dynamic Island). See
+// JobLiveActivity.swift for the views and DirectionsIntent.swift for the
+// Directions button.
 //
 // HAND-MIRRORED with functions/live_activity_utils.js `buildContentState` and
 // functions/live_activity_dispatch.js `buildAttributes` — change one, change
 // both. The struct NAME is itself a wire contract: the server sends it as the
-// push envelope's `attributes-type` (`ATTRIBUTES_TYPE`), so renaming this type
-// makes every push-to-start fail silently.
+// push envelope's `attributes-type` (`ATTRIBUTES_TYPE`).
+//
+// The name MUST stay exactly `LiveActivitiesAppAttributes`. The `live_activities`
+// Flutter plugin (linked into Runner) registers the push-to-start and
+// per-activity update-token streams against `Activity<LiveActivitiesAppAttributes>`
+// — a type of that exact name. The device token the server pushes to only
+// resolves when the name agrees in three places: here, the server's
+// `ATTRIBUTES_TYPE`, and this widget's `ActivityConfiguration(for:)`. Rename any
+// one of them and every push-to-start fails silently (degrades to the plain
+// `leaveNow` push, no card, no error).
 //
 // Every display string is built server-side in EN/FR (from the same table
 // shape as the notification bodies, keyed off the per-token `locale`) and
@@ -14,20 +23,16 @@
 // fork translations into a second system outside the ARB files, invisible to
 // `untranslated.json`.
 //
-// IMPORTANT: this type must be in Target Membership for BOTH the Runner app
-// target (which observes `pushToStartTokenUpdates` / `activityUpdates` to
-// register tokens — see `lib/features/live_activity/`) and the ScheduleWidget
-// extension target (which renders the ActivityConfiguration). New files under
-// ios/ScheduleWidget/ are picked up automatically by the
-// PBXFileSystemSynchronizedRootGroup, but that auto-sync wires a file into the
-// EXTENSION target only — adding this one file to Runner as well is a manual
-// "Target Membership" checkbox in Xcode's File Inspector. See
-// LIVE_ACTIVITY_README.md.
+// Target membership: ONLY the ScheduleWidget extension needs this file (it
+// renders the ActivityConfiguration). Token observation is done by the plugin
+// against its own `LiveActivitiesAppAttributes` inside Runner, so this file does
+// NOT belong in the Runner target. New files under ios/ScheduleWidget/ are
+// picked up automatically by the PBXFileSystemSynchronizedRootGroup into the
+// extension target — no manual membership step. See LIVE_ACTIVITY_README.md.
 //
 // This file is compiled only on macOS/Xcode. The `ActivityAttributes`
-// conformance is `@available(iOS 16.1, *)` so the file still compiles at the
-// project's iOS 15.0 deployment target; the widget and every registration path
-// are gated to 17.2+ (not 17.0 — `pushToStartTokenUpdates` is 17.2+, and
+// conformance is `@available(iOS 16.1, *)`; the widget and every registration
+// path are gated to 17.2+ (not 17.0 — `pushToStartTokenUpdates` is 17.2+, and
 // push-to-start is the only way this card starts).
 
 import ActivityKit
@@ -50,7 +55,7 @@ private func parseActivityInstant(_ raw: String?) -> Date? {
         ?? activityIsoNoMillis.date(from: raw)
 }
 
-struct JobActivityAttributes: Codable, Hashable {
+struct LiveActivitiesAppAttributes: Codable, Hashable {
 
     /// The mutable half — replaced wholesale by every APNs update push.
     /// Decodes `buildContentState`'s output key for key.
@@ -202,4 +207,4 @@ struct JobActivityAttributes: Codable, Hashable {
 }
 
 @available(iOS 16.1, *)
-extension JobActivityAttributes: ActivityAttributes {}
+extension LiveActivitiesAppAttributes: ActivityAttributes {}

@@ -18,15 +18,30 @@ that auto-sync wires them into the *widget extension* target only.
 
 | File | Runner | ScheduleWidgetExtension |
 |---|---|---|
-| `JobActivityAttributes.swift` | **YES — tick manually** | yes (automatic) |
+| `LiveActivitiesAppAttributes.swift` | no | yes (automatic) |
 | `JobLiveActivity.swift` | no | yes (automatic) |
 | `DirectionsIntent.swift` | no | yes (automatic) |
 | `ScheduleWidget.swift` (edited) | no | yes (already) |
 
-`JobActivityAttributes.swift` is the only file needing the manual **File
-Inspector → Target Membership → Runner** checkbox. The app target needs it to
-observe `pushToStartTokenUpdates` / `activityUpdates`; without it the card
-never starts and there is no error.
+**Nothing here needs the Runner target** — every file is widget-extension only,
+picked up automatically by the synchronized group. (An earlier draft ticked
+`JobActivityAttributes.swift` into Runner "to observe `pushToStartTokenUpdates`";
+that was wrong for this project — token observation is done by the
+`live_activities` plugin inside Runner against its own
+`LiveActivitiesAppAttributes`, not by app-native code. The attributes type was
+renamed `JobActivityAttributes` → **`LiveActivitiesAppAttributes`** so the
+plugin's push-to-start/update tokens actually match the server push; see the
+"Attributes type name" note below.)
+
+### Attributes type name — load-bearing
+
+The ActivityAttributes struct MUST be named exactly `LiveActivitiesAppAttributes`.
+The `live_activities` plugin registers `Activity<LiveActivitiesAppAttributes>`
+push-to-start + update-token streams by that exact name, and the server sends
+the same string as the push envelope's `attributes-type`
+(`ATTRIBUTES_TYPE` in `functions/live_activity_utils.js`). All three — the
+struct, the widget's `ActivityConfiguration(for:)`, and the server constant —
+must agree, or the card silently never starts.
 
 ## Edits already made in this repo
 
@@ -37,18 +52,34 @@ never starts and there is no error.
   styling is untouched.
 - `ios/Runner/Info.plist`: `NSSupportsLiveActivities` = `true`.
 
-## Still to do in Xcode
+## Xcode integration — DONE 2026-07-19
 
-1. Tick Runner target membership on `JobActivityAttributes.swift` (above).
-2. Confirm both targets still build at the **iOS 15.0** deployment target — no
-   bump is needed or wanted. Every Live Activity path is
-   `@available(iOS 17.2, *)` (17.2, not 17.0: `pushToStartTokenUpdates` is
-   17.2+, and push-to-start is the only start path).
-3. Optional: add a `BrandMark` image set to
+The `.xcodeproj` was wired up (via the `xcodeproj` Ruby gem) and the whole app
+built clean end-to-end (`flutter build ios --debug --no-codesign`), with both
+`ScheduleWidgetExtension.appex` and `SiriIntents.appex` embedded in `Runner.app`.
+
+1. ✅ Attributes type renamed `JobActivityAttributes` →
+   `LiveActivitiesAppAttributes` (widget struct + server `ATTRIBUTES_TYPE`) so
+   the `live_activities` plugin's push-to-start/update tokens match the server
+   push. The file is widget-extension only — **not** a Runner-target member (an
+   earlier draft added it to Runner; removed, since the plugin owns token
+   observation).
+2. ⚠️ **Deployment target went to iOS 18.0, not 15.0.** The earlier "no bump"
+   plan was superseded: the Live Activity Directions button returns an
+   `OpenURLIntent`, whose returnable form is **iOS 18+**, and the Siri App
+   Intents extension needs iOS 16 — so the whole app moved to an 18.0 floor
+   (owner decision 2026-07-19). Every Live Activity path is still
+   `@available(iOS 17.2, *)`-gated internally.
+3. ✅ One name-collision fix applied during the build: the global
+   `accentColor(for:now:)` helper was shadowed by SwiftUI's deprecated
+   `View.accentColor` inside the card body — renamed to `phaseAccent(for:now:)`.
+
+## Still to do in Xcode (optional / owner)
+1. Optional: add a `BrandMark` image set to
    `ScheduleWidget/Assets.xcassets` (the ES mark, template rendering). The
    minimal Dynamic Island uses it tinted amber and falls back to the SF Symbol
    `wrench.and.screwdriver.fill` when the asset is absent, so this is cosmetic.
-4. Push Notifications capability is already on Runner (FCM). Live Activity
+2. Push Notifications capability is already on Runner (FCM). Live Activity
    pushes reuse it — no new entitlement. Time Sensitive Notifications stays as
    wired for the `leaveNow` push.
 
