@@ -18,19 +18,19 @@
 		414A1BF06BCD113C7E29F997 /* TodayScheduleIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00033CA630A054078E3E5BCC /* TodayScheduleIntent.swift */; };
 		5F9FF158DA8277B4A676C52A /* ScheduleSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ECD0A6DE641D05902F08E54 /* ScheduleSnapshot.swift */; };
 		6C5EDB5335614BFB6DDF8574 /* NextAppointmentIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59F5C87B042DB2E0418F5F02 /* NextAppointmentIntent.swift */; };
-		DA57DA1E5C4EDF0000000B01 /* DayScheduleIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57DA1E5C4EDF0000000D01 /* DayScheduleIntent.swift */; };
-		DA57DA1E5C4EDF0000000B02 /* TomorrowScheduleIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57DA1E5C4EDF0000000D02 /* TomorrowScheduleIntent.swift */; };
-		DA57DA1E5C4EDF0000000B03 /* NthAppointmentIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57DA1E5C4EDF0000000D03 /* NthAppointmentIntent.swift */; };
-		6E53CC8E222762622166B8B6 /* SiriIntents.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4FA6D6A972DB7784BD239D75 /* SiriIntents.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		BB4A3C8F1D353ABC0083082F /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BB4A3C8E1D353ABC0083082F /* PrivacyInfo.xcprivacy */; };
+		C7632D212FF0F8669A405582 /* SiriIntents.appex in Embed ExtensionKit Extensions */ = {isa = PBXBuildFile; fileRef = 4FA6D6A972DB7784BD239D75 /* SiriIntents.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C96255C3E7B15468BEDA40BE /* ESProShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = B68B901D894CE9FE351D9D60 /* ESProShortcuts.swift */; };
 		CE1A5A119F21774B8A53B6E6 /* SiriStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B3C4064AE19F11DBF0ABD0 /* SiriStrings.swift */; };
 		D9C4679D00D13B2280D28348 /* AppointmentCountIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35DDB15D85502485A5567909 /* AppointmentCountIntent.swift */; };
+		DA57DA1E5C4EDF0000000B01 /* DayScheduleIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57DA1E5C4EDF0000000D01 /* DayScheduleIntent.swift */; };
+		DA57DA1E5C4EDF0000000B02 /* TomorrowScheduleIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57DA1E5C4EDF0000000D02 /* TomorrowScheduleIntent.swift */; };
+		DA57DA1E5C4EDF0000000B03 /* NthAppointmentIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57DA1E5C4EDF0000000D03 /* NthAppointmentIntent.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -65,7 +65,6 @@
 			dstSubfolderSpec = 13;
 			files = (
 				25006DE73002A7A600204FFE /* ScheduleWidgetExtension.appex in Embed Foundation Extensions */,
-				6E53CC8E222762622166B8B6 /* SiriIntents.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -78,6 +77,17 @@
 			files = (
 			);
 			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A664D47BC0DAB5638ABB347A /* Embed ExtensionKit Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(EXTENSIONS_FOLDER_PATH)";
+			dstSubfolderSpec = 16;
+			files = (
+				C7632D212FF0F8669A405582 /* SiriIntents.appex in Embed ExtensionKit Extensions */,
+			);
+			name = "Embed ExtensionKit Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -99,9 +109,6 @@
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
 		4FA6D6A972DB7784BD239D75 /* SiriIntents.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SiriIntents.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		59F5C87B042DB2E0418F5F02 /* NextAppointmentIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NextAppointmentIntent.swift; sourceTree = "<group>"; };
-		DA57DA1E5C4EDF0000000D01 /* DayScheduleIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DayScheduleIntent.swift; sourceTree = "<group>"; };
-		DA57DA1E5C4EDF0000000D02 /* TomorrowScheduleIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TomorrowScheduleIntent.swift; sourceTree = "<group>"; };
-		DA57DA1E5C4EDF0000000D03 /* NthAppointmentIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NthAppointmentIntent.swift; sourceTree = "<group>"; };
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		78E0A7A72DC9AD7400C4905E /* FlutterGeneratedPluginSwiftPackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = FlutterGeneratedPluginSwiftPackage; path = Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage; sourceTree = "<group>"; };
@@ -116,11 +123,14 @@
 		9D48DC829E96DEF5E51D596A /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		B68B901D894CE9FE351D9D60 /* ESProShortcuts.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ESProShortcuts.swift; sourceTree = "<group>"; };
 		BB4A3C8E1D353ABC0083082F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		DA57DA1E5C4EDF0000000D01 /* DayScheduleIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DayScheduleIntent.swift; sourceTree = "<group>"; };
+		DA57DA1E5C4EDF0000000D02 /* TomorrowScheduleIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TomorrowScheduleIntent.swift; sourceTree = "<group>"; };
+		DA57DA1E5C4EDF0000000D03 /* NthAppointmentIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NthAppointmentIntent.swift; sourceTree = "<group>"; };
 		E1B3C4064AE19F11DBF0ABD0 /* SiriStrings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SiriStrings.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		25006DEC3002A7A600204FFE /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		25006DEC3002A7A600204FFE /* Exceptions for "ScheduleWidget" folder in "ScheduleWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -130,7 +140,18 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		25006DD73002A7A500204FFE /* ScheduleWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (25006DEC3002A7A600204FFE /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = ScheduleWidget; sourceTree = "<group>"; };
+		25006DD73002A7A500204FFE /* ScheduleWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				25006DEC3002A7A600204FFE /* Exceptions for "ScheduleWidget" folder in "ScheduleWidgetExtension" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = ScheduleWidget;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -322,7 +343,7 @@
 			name = SiriIntents;
 			productName = SiriIntents;
 			productReference = 4FA6D6A972DB7784BD239D75 /* SiriIntents.appex */;
-			productType = "com.apple.product-type.app-extension";
+			productType = "com.apple.product-type.extensionkit-extension";
 		};
 		97C146ED1CF9000F007C117D /* Runner */ = {
 			isa = PBXNativeTarget;
@@ -334,6 +355,7 @@
 				97C146EC1CF9000F007C117D /* Resources */,
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
 				25006DE83002A7A600204FFE /* Embed Foundation Extensions */,
+				A664D47BC0DAB5638ABB347A /* Embed ExtensionKit Extensions */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
 				25AC82A02FFEB09B00DD3CDD /* Crashlytics dSYM upload */,
 			);
@@ -389,7 +411,7 @@
 			);
 			mainGroup = 97C146E51CF9000F007C117D;
 			packageReferences = (
-				781AD8BC2B33823900A9FFBB /* XCLocalSwiftPackageReference "Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage" */,
+				781AD8BC2B33823900A9FFBB /* XCLocalSwiftPackageReference "FlutterGeneratedPluginSwiftPackage" */,
 			);
 			productRefGroup = 97C146EF1CF9000F007C117D /* Products */;
 			projectDirPath = "";
@@ -1151,7 +1173,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		781AD8BC2B33823900A9FFBB /* XCLocalSwiftPackageReference "Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage" */ = {
+		781AD8BC2B33823900A9FFBB /* XCLocalSwiftPackageReference "FlutterGeneratedPluginSwiftPackage" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage;
 		};
