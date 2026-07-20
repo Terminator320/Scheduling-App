@@ -53,6 +53,14 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "employeeIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "endTime", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeIds", "arrayConfig": "CONTAINS" },
         { "fieldPath": "startTime", "order": "ASCENDING" }
       ]
     },

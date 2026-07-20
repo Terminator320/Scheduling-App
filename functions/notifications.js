@@ -105,8 +105,11 @@ const notifyAppointmentChanges = onDocumentWritten(
 
 // Travel-aware "time to leave" reminders (was: fixed 30-minute reminders).
 // Runs every 5 minutes; the `(status, startTime)` composite index covers the
-// candidate query and `(employeeIds CONTAINS, endTime ASC, startTime ASC)`
-// covers the per-employee origin-context query — no new index. Drive time
+// candidate query and `(employeeIds CONTAINS, endTime ASC)` covers the
+// per-employee origin-context query (which orders by endTime only, so the
+// implicit sort key is `(employeeIds, endTime, __name__)` — a `(employeeIds,
+// endTime, startTime)` index does NOT serve it, the startTime breaks the
+// prefix). Drive time
 // comes from Routes API computeRoutes (TRAFFIC_AWARE); every failure path
 // degrades to the original fixed 30-min reminder. The per-recipient ledger
 // makes each (occurrence, employee) fire exactly once, and a missed run
