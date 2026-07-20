@@ -64,9 +64,72 @@ const PREV_APPOINTMENT_LOOKBACK_HOURS = 4;
 // previous jobs and current/imminent ones — which is exactly what matters.
 const CONTEXT_QUERY_MAX = 50;
 
+// Longest bookable visit (the app caps appointments under 24h). An intervening
+// job may START before the candidate yet END long after the travel window, so
+// the context query's upper bound has to clear the whole window plus one
+// maximum-length visit or a double-booked long job drops out of decideOrigin.
+const MAX_BOOKING_MS = 24 * 60 * MINUTE_MS;
+
 // Sweep candidate window: MAX_LEAD_MINUTES ahead, so the longest computable
 // lead is already in range when it becomes due.
 const TRAVEL_WINDOW_MS = MAX_LEAD_MINUTES * MINUTE_MS;
+
+// Routes is a metered API and the sweep runs every 5 min, so a job sitting in
+// the 90-min window is otherwise re-priced ~18 times to fire once. A recent
+// estimate lets a pair that is provably far from due skip the call.
+//
+// The estimate may only ever DEFER a call, never trigger a send: a pair is
+// skipped solely when even its cached drive time leaves it outside the due
+// instant by SKIP_MARGIN_MS, and the actual fire/no-fire decision is always
+// made against a fresh Routes response. Traffic would have to worsen by more
+// than the margin within the TTL to matter, and the fallback lead absorbs that.
+const ESTIMATE_TTL_MS = 10 * MINUTE_MS;
+const SKIP_MARGIN_MS = 15 * MINUTE_MS;
+const _estimateCache = new Map();
+
+/**
+ * Drops every expired entry. Read-triggered eviction alone can't reclaim a
+ * pair that stopped being swept (it fired, or its job was deleted), so the
+ * sweep prunes the whole map once per run to bound the warm instance.
+ * @param {!Map} cache
+ * @param {number} nowMs
+ * @return {void}
+ */
+function pruneEstimates(cache, nowMs) {
+  for (const [key, hit] of cache) {
+    if (nowMs - hit.atMs > ESTIMATE_TTL_MS) cache.delete(key);
+  }
+}
+
+/**
+ * Cached drive-time estimate for a (candidate, employee) pair, or null when
+ * absent/stale. Expired entries are dropped on read so the map self-prunes.
+ * @param {!Map} cache
+ * @param {string} key
+ * @param {number} nowMs
+ * @return {?number} seconds, or null.
+ */
+function readEstimate(cache, key, nowMs) {
+  const hit = cache.get(key);
+  if (!hit) return null;
+  if (nowMs - hit.atMs > ESTIMATE_TTL_MS) {
+    cache.delete(key);
+    return null;
+  }
+  return hit.seconds;
+}
+
+/**
+ * True when a cached estimate proves the pair cannot be due yet, so the Routes
+ * call can be skipped this sweep. Conservative by SKIP_MARGIN_MS.
+ * @param {{seconds: ?number, startTimeMillis: number, nowMillis: number}} args
+ * @return {boolean}
+ */
+function canDeferRoutes({seconds, startTimeMillis, nowMillis}) {
+  if (seconds == null) return false;
+  const leadMs = computeLeadMinutes(seconds) * MINUTE_MS;
+  return nowMillis < startTimeMillis - leadMs - SKIP_MARGIN_MS;
+}
 
 // Statuses that still expect the visit to happen. `confirmed` is the retired
 // legacy alias (treated as pending; new writes rejected since 2026-07-09),
@@ -272,16 +335,13 @@ async function computeTravelSeconds({fetchImpl, apiKey, origin,
     return null;
   }
   if (!response.ok) {
-    let preview = "";
-    try {
-      preview = (await response.text()).slice(0, 200);
-    } catch (err) {
-      preview = "<unreadable>";
-    }
+    // Status only. The request body carries staff GPS coordinates or a
+    // client's street address, and Google's INVALID_ARGUMENT responses echo
+    // the offending field back — same reason placesReverseGeocode sets
+    // logResponsePreview: false.
     if (logger) {
       logger.warn("travel: routes upstream non-200", {
         status: response.status,
-        body: preview,
       });
     }
     return null;
@@ -313,6 +373,105 @@ function travelReminderLedgerId(appointmentId, startTimeMillis,
 }
 
 /**
+ * Resolves ONE (candidate, assignee) pair: ledger short-circuit -> decideOrigin
+ * -> Routes (deferred when a recent estimate proves it isn't due) -> due-check
+ * -> claim/send/release -> optional Live Activity start.
+ *
+ * The Live Activity start hangs off `deliverRecipientOnce`'s return value so it
+ * inherits that ledger's exactly-once claim — starting before the claim would
+ * double-fire a card on a collision. Every failure path degrades to the fixed
+ * 30-minute `reminder` kind; nothing here may introduce a new way to fail.
+ * @param {!Object} deps
+ * @param {!Object} args
+ * @return {!Promise<{reminded: number, started: number}>}
+ */
+async function resolveReminderForAssignee(deps, args) {
+  const {db, fetchImpl, apiKey, logger} = deps;
+  const {candidate: c, employeeDocId, startMs, nowDate, nowMs,
+    presence, employeeAppointments, estimates, cache} = args;
+  const none = {reminded: 0, started: 0};
+
+  const ledgerId = travelReminderLedgerId(
+      String(c.id), startMs, employeeDocId);
+  // Cheap pre-check before any Routes spend; the atomic create() inside
+  // deliverRecipientOnce remains the real exactly-once guard.
+  const existing = await db
+      .collection("appointmentReminders").doc(ledgerId).get();
+  if (existing && existing.exists) return none;
+
+  const origin = decideOrigin({
+    presence,
+    employeeAppointments,
+    candidate: c,
+    now: nowDate,
+  });
+  const destinationAddress = _address(c);
+  let travelSeconds = null;
+  if (origin && destinationAddress !== "") {
+    // A recent estimate that leaves this pair well short of its leave
+    // instant defers the (billable) Routes call to a later sweep.
+    const key = `${c.id}|${employeeDocId}`;
+    const cached = readEstimate(estimates, key, nowMs);
+    if (canDeferRoutes({
+      seconds: cached, startTimeMillis: startMs, nowMillis: nowMs,
+    })) {
+      return none;
+    }
+    travelSeconds = await computeTravelSeconds({
+      fetchImpl,
+      apiKey,
+      origin,
+      destinationAddress,
+      now: nowDate,
+      logger,
+    });
+    if (travelSeconds != null) {
+      estimates.set(key, {seconds: travelSeconds, atMs: nowMs});
+    }
+  }
+  const leadMinutes = computeLeadMinutes(travelSeconds);
+  if (!isDue({startTimeMillis: startMs, leadMinutes, nowMillis: nowMs})) {
+    return none;
+  }
+  const kind = travelSeconds == null ? "reminder" : "leaveNow";
+  const ctx = {
+    clientName: c.clientName,
+    startTime: c.startTime,
+    address: c.address,
+    travelMinutes: travelSeconds == null ?
+        null : Math.ceil(travelSeconds / 60),
+  };
+  const delivered = await deliverRecipientOnce(deps, {
+    collection: "appointmentReminders",
+    ledgerId,
+    appointmentId: String(c.id),
+    employeeDocId,
+    kind,
+    buildMsg: (locale) => buildNotificationMessage(kind, ctx, locale),
+    nowDate,
+    label: "reminder",
+    roles: TIMED_RECIPIENT_ROLES,
+    cache,
+  });
+  let started = 0;
+  if (kind === "leaveNow" && delivered > 0) {
+    // Best-effort: a Live Activity failure must not change `reminded` or
+    // abort the sweep. No card just leaves the plain leaveNow push, unchanged.
+    started = await startLiveActivity(deps, {
+      appointmentId: String(c.id),
+      employeeDocId,
+      ctx: {
+        ...ctx,
+        leaveAt: new Date(
+            startMs - computeLeadMinutes(travelSeconds) * MINUTE_MS),
+      },
+      nowDate,
+    });
+  }
+  return {reminded: delivered, started};
+}
+
+/**
  * The travel-aware reminder sweep: one sweep, one notification per
  * (appointment, employee), replacing the fixed 30-min runReminderSweep.
  * Per pair: ledger short-circuit -> decideOrigin -> Routes ->
@@ -323,7 +482,8 @@ function travelReminderLedgerId(appointmentId, startTimeMillis,
  * @return {!Promise<{reminded: number}>}
  */
 async function runTravelAwareReminderSweep(deps) {
-  const {db, fetchImpl, apiKey, now, logger} = deps;
+  // fetchImpl/apiKey are consumed by resolveReminderForAssignee off `deps`.
+  const {db, now, logger} = deps;
   const nowDate = now || new Date();
   const nowMs = nowMillis(nowDate);
   const windowEnd = new Date(nowMs + TRAVEL_WINDOW_MS);
@@ -338,7 +498,16 @@ async function runTravelAwareReminderSweep(deps) {
           (doc) => ({id: doc.id, ...(doc.data() || {})})),
       nowDate,
   );
-  if (candidates.length === 0) return {reminded: 0};
+  // The flip pass must run even with no upcoming candidates: a job stops
+  // being a candidate the moment it starts, so the sweep right after a tech
+  // begins their only job would otherwise never flip that card to `onSite`.
+  if (candidates.length === 0) {
+    return {
+      reminded: 0,
+      liveActivitiesStarted: 0,
+      liveActivitiesFlipped: await runOnSiteFlipPass(deps),
+    };
+  }
 
   // Per-sweep batching: presence docs in one getAll, and ONE context query
   // per distinct employee, reused across all of that employee's candidates.
@@ -366,12 +535,20 @@ async function runTravelAwareReminderSweep(deps) {
   const contextByEmployee = new Map();
   const lookbackStart = new Date(
       nowMs - PREV_APPOINTMENT_LOOKBACK_HOURS * 60 * MINUTE_MS);
+  const contextEnd = new Date(nowMs + TRAVEL_WINDOW_MS + MAX_BOOKING_MS);
   await Promise.all(employeeIds.map(async (employeeDocId) => {
     try {
+      // Upper-bounded on the same field: decideOrigin only ever consumes a
+      // just-ended job or one intervening before the candidate's start, so
+      // without this the query matches EVERY future appointment for the
+      // employee and a pre-booked series silently saturates CONTEXT_QUERY_MAX.
+      // The bound clears the window by MAX_BOOKING_MS — an intervening job
+      // can start inside the window and still run for another full day.
       const ctxSnap = await db
           .collection("appointments")
           .where("employeeIds", "array-contains", employeeDocId)
           .where("endTime", ">", lookbackStart)
+          .where("endTime", "<=", contextEnd)
           .orderBy("endTime")
           .limit(CONTEXT_QUERY_MAX)
           .get();
@@ -390,82 +567,27 @@ async function runTravelAwareReminderSweep(deps) {
   let reminded = 0;
   let started = 0;
   const cache = new Map();
+  // Warm-instance memo; injectable so tests get a clean map per run.
+  const estimates = deps.estimateCache || _estimateCache;
+  pruneEstimates(estimates, nowMs);
   for (const c of candidates) {
     const startMs = toMillis(c.startTime);
     if (startMs == null) continue;
-    const destinationAddress = _address(c);
     for (const employeeDocId of toIdList(c.employeeIds)) {
       try {
-        const ledgerId = travelReminderLedgerId(
-            String(c.id), startMs, employeeDocId);
-        // Cheap pre-check before any Routes spend; the atomic create() inside
-        // deliverRecipientOnce remains the real exactly-once guard.
-        const existing = await db
-            .collection("appointmentReminders").doc(ledgerId).get();
-        if (existing && existing.exists) continue;
-
-        const origin = decideOrigin({
+        const outcome = await resolveReminderForAssignee(deps, {
+          candidate: c,
+          employeeDocId,
+          startMs,
+          nowDate,
+          nowMs,
           presence: presenceByEmployee.get(employeeDocId) || null,
           employeeAppointments: contextByEmployee.get(employeeDocId) || [],
-          candidate: c,
-          now: nowDate,
-        });
-        let travelSeconds = null;
-        if (origin && destinationAddress !== "") {
-          travelSeconds = await computeTravelSeconds({
-            fetchImpl,
-            apiKey,
-            origin,
-            destinationAddress,
-            now: nowDate,
-            logger,
-          });
-        }
-        const leadMinutes = computeLeadMinutes(travelSeconds);
-        if (!isDue({startTimeMillis: startMs, leadMinutes,
-          nowMillis: nowMs})) {
-          continue;
-        }
-        const kind = travelSeconds == null ? "reminder" : "leaveNow";
-        const ctx = {
-          clientName: c.clientName,
-          startTime: c.startTime,
-          address: c.address,
-          travelMinutes: travelSeconds == null ?
-              null : Math.ceil(travelSeconds / 60),
-        };
-        // Captured in a local rather than `+=`-ed directly: the Live Activity
-        // start below hangs off THIS call's delivery, so it inherits the
-        // ledger's exactly-once claim. Starting before the claim would
-        // double-fire a card on a claim collision.
-        const delivered = await deliverRecipientOnce(deps, {
-          collection: "appointmentReminders",
-          ledgerId,
-          appointmentId: String(c.id),
-          employeeDocId,
-          kind,
-          buildMsg: (locale) => buildNotificationMessage(kind, ctx, locale),
-          nowDate,
-          label: "reminder",
-          roles: TIMED_RECIPIENT_ROLES,
+          estimates,
           cache,
         });
-        reminded += delivered;
-        if (kind === "leaveNow" && delivered > 0) {
-          // Best-effort and never awaited for its outcome's sake: a Live
-          // Activity failure must not change `reminded` or abort the sweep.
-          // No card just leaves the plain leaveNow push, unchanged.
-          started += await startLiveActivity(deps, {
-            appointmentId: String(c.id),
-            employeeDocId,
-            ctx: {
-              ...ctx,
-              leaveAt: new Date(
-                  startMs - computeLeadMinutes(travelSeconds) * MINUTE_MS),
-            },
-            nowDate,
-          });
-        }
+        reminded += outcome.reminded;
+        started += outcome.started;
       } catch (err) {
         // One failing pair must not stop the sweep.
         if (logger) {
@@ -544,6 +666,7 @@ module.exports = {
   selectTravelCandidates,
   computeLeadMinutes,
   isDue,
+  canDeferRoutes,
   buildRoutesRequestBody,
   parseRoutesDurationSeconds,
   computeTravelSeconds,

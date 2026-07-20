@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -18,8 +19,9 @@ final currentUserDocProvider = StreamProvider<Map<String, dynamic>>((ref) {
   final firebaseReady = ref
       .watch(firebaseReadyProvider.future)
       .catchError((Object _) {});
-  return Stream.fromFuture(firebaseReady)
-      .asyncExpand((_) => repository.watchUserDoc(uid));
+  return Stream.fromFuture(
+    firebaseReady,
+  ).asyncExpand((_) => repository.watchUserDoc(uid));
 });
 
 final accountDisabledProvider = Provider<AsyncValue<bool>>((ref) {
@@ -115,6 +117,7 @@ Future<bool> confirmColdStartDeletion({
   required AsyncValue<Map<String, dynamic>>? previous,
   required AsyncValue<Map<String, dynamic>> docState,
   required Future<EmployeeRecord?> Function(String uid) loadWarmCache,
+  AppLogger? logger,
 }) async {
   if (!isColdStartDeletionCandidate(
     isSignedIn: isSignedIn,
@@ -126,7 +129,10 @@ Future<bool> confirmColdStartDeletion({
   }
   try {
     return await loadWarmCache(resolvedUid!) != null;
-  } catch (_) {
+  } catch (e, st) {
+    // Fails safe, but silently: a broken keystore read would disable the
+    // deleted-account kick-out with no signal at all.
+    (logger ?? AppLogger()).warn('ACCOUNT-EXIT warm cache read failed', e, st);
     return false;
   }
 }

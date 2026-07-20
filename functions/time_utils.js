@@ -20,9 +20,18 @@ const BUSINESS_TIME_ZONE = "America/Toronto";
  */
 function toMillis(value) {
   if (value == null) return null;
-  if (typeof value.toMillis === "function") return value.toMillis();
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === "number") return value;
+  if (typeof value.toMillis === "function") {
+    const ms = value.toMillis();
+    return typeof ms === "number" && Number.isFinite(ms) ? ms : null;
+  }
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+  // Finite-checked so NaN/Infinity degrade to "" like every other bad input
+  // here, instead of throwing RangeError out of Intl/new Date() and taking
+  // down a notification build in a best-effort consumer.
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
   return null;
 }
 

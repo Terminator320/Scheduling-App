@@ -27,6 +27,9 @@
  * @module live_activity_registry
  */
 
+// live_activity_utils only requires time_utils, so this closes no cycle.
+const {PHASE_TRAVEL} = require("./live_activity_utils");
+
 const KIND_PUSH_TO_START = "pushToStart";
 const KIND_UPDATE = "update";
 
@@ -46,6 +49,13 @@ const PRUNE_MAX = 400;
 // How long a registered token stays valid without a refresh. The client
 // re-upserts on every account-doc emission, so a row older than this belongs
 // to an activity the server never got to end (design doc, "Still open").
+//
+// NOTE: this is NOT the expiry that ships. The device stamps `expiresAt`
+// itself (liveActivityTokenExpiry in live_activity_token.dart: 30 d for
+// pushToStart, 1 d for update) and _pruneExpired reaps by that stored field —
+// so this constant, and activityTokenExpiry below, are currently unused by any
+// write path. Wiring activityTokenExpiry in as-is would silently cut the
+// push-to-start TTL from 30 d to 3 d; reconcile the two sides first.
 const TOKEN_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 
 /**
@@ -247,12 +257,17 @@ async function listCardsDueForOnSite(deps, args) {
   const {db, now, logger} = deps;
   const nowDate = now || new Date();
   try {
+    // `phase` is filtered in the QUERY, not after: markers are Admin-SDK-only
+    // and always carry one of the two phases, so this is exact — and filtering
+    // post-limit let a batch of already-flipped cards consume the whole cap
+    // and starve the cards actually due for a flip.
     const snap = await db
         .collection(CARDS_COLLECTION)
+        .where("phase", "==", PHASE_TRAVEL)
         .where("startTime", "<=", nowDate)
         .limit((args && args.limit) || PRUNE_MAX)
         .get();
-    return _rows(snap).filter((row) => row.phase !== "onSite");
+    return _rows(snap);
   } catch (err) {
     if (logger) logger.warn("liveActivity: on-site query failed", {err});
     return [];

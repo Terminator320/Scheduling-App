@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/errors/failure.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
@@ -122,7 +123,11 @@ class _AddressAutocompleteFieldState
         _suggestions = results;
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (e, st) {
+      // Logged before the mounted guard: AppLogger is context-free and a
+      // quota / App Check / assertAdmin rejection must reach Crashlytics even
+      // if the field is gone by the time the failure lands.
+      ref.read(loggerProvider).warn('ADDR-AUTO autocomplete failed', e, st);
       if (!mounted || requestId != _requestId) return;
       setState(() {
         _suggestions = [];
@@ -164,7 +169,10 @@ class _AddressAutocompleteFieldState
       );
       setState(() => _isLoading = false);
       widget.onAddressSelected?.call(widget.controller.text);
-    } catch (e) {
+    } catch (e, st) {
+      ref
+          .read(loggerProvider)
+          .warn('ADDR-DETAILS getPlaceDetails failed', e, st);
       if (!mounted) return;
       setState(() {
         _isLoading = false;

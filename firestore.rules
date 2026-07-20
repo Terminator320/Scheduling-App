@@ -43,8 +43,12 @@ service cloud.firestore {
       return userByUid().data.docId;
     }
 
+    // Assignment alone is NOT enough: the usersByUid bridge doc is retained
+    // for `disabled` users (functions/bridge.js) and deactivation does not
+    // revoke the Firebase Auth credential, so a status gate is required here
+    // or a terminated employee keeps reading their assigned jobs forever.
     function isAssignedEmployee(appointmentData) {
-      return userByUidExists()
+      return isActiveUser()
         && myDocId() in appointmentData.employeeIds;
     }
 
@@ -220,8 +224,14 @@ service cloud.firestore {
               || request.resource.data.createdAt is timestamp)
           && (!('updatedAt' in request.resource.data.keys())
               || request.resource.data.updatedAt is timestamp)
+          // Bounded so a client can't write a far-future expiry that keeps its
+          // APNs token row alive past pruneExpiredActivityTokens' reach. The
+          // ceiling sits just above liveActivityPushToStartTtl (30 d, the
+          // longest value the app legitimately writes) — raise both together.
           && (!('expiresAt' in request.resource.data.keys())
-              || request.resource.data.expiresAt is timestamp);
+              || (request.resource.data.expiresAt is timestamp
+                  && request.resource.data.expiresAt
+                     < request.time + duration.value(31, 'd')));
       }
 
       // Live-location presence (travel-time "leave now" reminders). Owner

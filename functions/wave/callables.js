@@ -111,7 +111,11 @@ function selectBusiness(businesses, wantName) {
     // "acme co" / "  Acme Co  " both reach the same business. Id match above
     // stays exact (ids are opaque tokens).
     const want = wantName.trim().toLowerCase();
-    const match = list.find((b) => b && b.name.trim().toLowerCase() === want);
+    // `b.name` is guarded too: a business with no name would otherwise throw a
+    // raw TypeError that classifyWaveError turns into a misleading generic
+    // Wave failure instead of the intended wave/business-not-found.
+    const match = list.find((b) => b && typeof b.name === "string" &&
+        b.name.trim().toLowerCase() === want);
     if (!match) throw new HttpsError("not-found", "wave/business-not-found");
     return match;
   }
@@ -129,8 +133,8 @@ const waveBootstrap = onCall(
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
       }
-      assertPayloadShape(req.data, new Set());
       await assertAdmin(req.auth.uid);
+      assertPayloadShape(req.data, new Set());
 
       const db = getFirestore();
       const ref = db.collection("wave").doc("connection");
@@ -207,8 +211,8 @@ const waveGetConnection = onCall(
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
       }
-      assertPayloadShape(req.data, new Set());
       await assertAdmin(req.auth.uid);
+      assertPayloadShape(req.data, new Set());
 
       const snap = await getFirestore()
           .collection("wave").doc("connection").get();
@@ -239,8 +243,8 @@ const waveSetImportSchedule = onCall(
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
       }
-      assertPayloadShape(req.data, new Set(["schedule"]));
       await assertAdmin(req.auth.uid);
+      assertPayloadShape(req.data, new Set(["schedule"]));
 
       const schedule = req.data && req.data.schedule;
       if (typeof schedule !== "string" || !IMPORT_SCHEDULE_SET.has(schedule)) {
@@ -271,8 +275,8 @@ const waveImportCustomers = onCall(
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
       }
-      assertPayloadShape(req.data, new Set());
       await assertAdmin(req.auth.uid);
+      assertPayloadShape(req.data, new Set());
       await enforceDurableRateLimit(
           "wave-import",
           req.auth.uid,

@@ -175,6 +175,85 @@ class AppointmentFormFields extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ..._templatesSection(context, l10n),
+        ..._whoSection(context, l10n),
+        ..._scheduleSection(context, l10n),
+        ..._detailsSection(context, l10n),
+      ],
+    );
+  }
+
+  /// Quick-fill job-template chips — add flow only.
+  List<Widget> _templatesSection(BuildContext context, AppLocalizations l10n) {
+    // --- Quick-fill job templates (add flow only) ---
+    if (onApplyTemplate == null) return const [];
+    return [
+      formLabel(context, l10n.calendar_jobTemplatesLabel, optional: true),
+      const SizedBox(height: AppSpacing.sp4),
+      Wrap(
+        spacing: AppSpacing.sp8,
+        runSpacing: AppSpacing.sp8,
+        children: [
+          for (final template in JobTemplate.values)
+            ActionChip(
+              label: Text(jobTemplateLabel(l10n, template)),
+              onPressed: () => onApplyTemplate!(template),
+            ),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.sp16),
+    ];
+  }
+
+  /// Service title, client picker and employee picker.
+  List<Widget> _whoSection(BuildContext context, AppLocalizations l10n) => [
+    // --- Service title ---
+    SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.calendar_serviceTitle,
+        hint: l10n.calendar_eGPlumbingRepair,
+        controller: controllers.title,
+        required: true,
+        textCapitalization: TextCapitalization.sentences,
+        textInputAction: TextInputAction.next,
+        maxLength: TextLimits.appointmentTitle,
+        errorText: _err(context, 'title'),
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    // --- Client ---
+    formLabel(context, l10n.calendar_client, required: true),
+    SheetFocusScroll(
+      child: ClientSearchField(
+        controller: controllers.clientSearch,
+        selectedClient: selectedClient,
+        results: clientResults,
+        isSearching: isSearchingClient,
+        onChanged: onSearchClients,
+        onSelect: _selectClient,
+        onClear: _clearClient,
+        errorText: _err(context, 'client'),
+        onAddNew: onRequestAddClient == null ? null : _addNewClient,
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    // --- Employees ---
+    formLabel(context, employeeLabel, required: employeeRequired),
+    const SizedBox(height: AppSpacing.sp4),
+    EmployeePicker(
+      allEmployees: allEmployees,
+      selectedEmployees: selectedEmployees,
+      onToggle: onToggleEmployee,
+      errorText: _err(context, 'employees'),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+  ];
+
+  /// Date, start/end time, status (edit flow only) and repeat.
+  List<Widget> _scheduleSection(BuildContext context, AppLocalizations l10n) {
     final showStatus = editingStatus != null && onStatusChanged != null;
     final isNarrowPhone = context.isNarrowWidth;
 
@@ -201,154 +280,98 @@ class AppointmentFormFields extends StatelessWidget {
       ),
     );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // --- Quick-fill job templates (add flow only) ---
-        if (onApplyTemplate != null) ...[
-          formLabel(context, l10n.calendar_jobTemplatesLabel, optional: true),
-          const SizedBox(height: AppSpacing.sp4),
-          Wrap(
-            spacing: AppSpacing.sp8,
-            runSpacing: AppSpacing.sp8,
-            children: [
-              for (final template in JobTemplate.values)
-                ActionChip(
-                  label: Text(jobTemplateLabel(l10n, template)),
-                  onPressed: () => onApplyTemplate!(template),
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sp16),
-        ],
-        // --- Service title ---
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.calendar_serviceTitle,
-            hint: l10n.calendar_eGPlumbingRepair,
-            controller: controllers.title,
-            required: true,
-            textCapitalization: TextCapitalization.sentences,
-            textInputAction: TextInputAction.next,
-            maxLength: TextLimits.appointmentTitle,
-            errorText: _err(context, 'title'),
-          ),
+    return [
+      // --- Date ---
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: l10n.calendar_date,
+          hint: l10n.calendar_selectDate,
+          controller: controllers.date,
+          required: true,
+          readOnly: true,
+          suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+          errorText: _err(context, 'date'),
+          onTap: onPickDate,
         ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Client ---
-        formLabel(context, l10n.calendar_client, required: true),
-        SheetFocusScroll(
-          child: ClientSearchField(
-            controller: controllers.clientSearch,
-            selectedClient: selectedClient,
-            results: clientResults,
-            isSearching: isSearchingClient,
-            onChanged: onSearchClients,
-            onSelect: _selectClient,
-            onClear: _clearClient,
-            errorText: _err(context, 'client'),
-            onAddNew: onRequestAddClient == null ? null : _addNewClient,
-          ),
+      ),
+      const SizedBox(height: AppSpacing.sp16),
+      // --- Start / end time ---
+      if (isNarrowPhone)
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            startTimeField,
+            const SizedBox(height: AppSpacing.sp16),
+            endTimeField,
+          ],
+        )
+      else
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: startTimeField),
+            const SizedBox(width: AppSpacing.sp12),
+            Expanded(child: endTimeField),
+          ],
         ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Employees ---
-        formLabel(context, employeeLabel, required: employeeRequired),
+      const SizedBox(height: AppSpacing.sp16),
+      // --- Status (edit flow only) ---
+      if (showStatus) ...[
+        formLabel(context, l10n.calendar_appointmentStatus),
         const SizedBox(height: AppSpacing.sp4),
-        EmployeePicker(
-          allEmployees: allEmployees,
-          selectedEmployees: selectedEmployees,
-          onToggle: onToggleEmployee,
-          errorText: _err(context, 'employees'),
+        AppointmentStatusPicker(
+          currentStatus: editingStatus!,
+          onChanged: onStatusChanged!,
         ),
         const SizedBox(height: AppSpacing.sp16),
-        // --- Date ---
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.calendar_date,
-            hint: l10n.calendar_selectDate,
-            controller: controllers.date,
-            required: true,
-            readOnly: true,
-            suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
-            errorText: _err(context, 'date'),
-            onTap: onPickDate,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Start / end time ---
-        if (isNarrowPhone)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              startTimeField,
-              const SizedBox(height: AppSpacing.sp16),
-              endTimeField,
-            ],
-          )
-        else
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: startTimeField),
-              const SizedBox(width: AppSpacing.sp12),
-              Expanded(child: endTimeField),
-            ],
-          ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Status (edit flow only) ---
-        if (showStatus) ...[
-          formLabel(context, l10n.calendar_appointmentStatus),
-          const SizedBox(height: AppSpacing.sp4),
-          AppointmentStatusPicker(
-            currentStatus: editingStatus!,
-            onChanged: onStatusChanged!,
-          ),
-          const SizedBox(height: AppSpacing.sp16),
-        ],
-        // --- Repeat ---
-        formLabel(context, l10n.calendar_repeat, optional: true),
-        RepeatIntervalPicker(current: repeat, onChanged: onSelectRepeat),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Address ---
-        AppointmentAddressField(
-          selectedClient: selectedClient,
-          useCustomAddress: useCustomAddress,
-          addressController: controllers.address,
-          onSwitchToCustom: _switchToCustomAddress,
-          onUseClientAddress: _useClientAddress,
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Notes ---
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.calendar_notes,
-            hint: l10n.calendar_typeTheNoteHere,
-            controller: controllers.notes,
-            optional: true,
-            textCapitalization: TextCapitalization.sentences,
-            maxLines: 2,
-            maxLength: TextLimits.appointmentNotes,
-            showCounter: true,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Materials ---
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.calendar_materialsNeeded,
-            hint: materialsHint,
-            controller: controllers.materials,
-            optional: true,
-            textCapitalization: TextCapitalization.sentences,
-            maxLines: 2,
-            maxLength: TextLimits.appointmentMaterials,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Photos ---
-        formLabel(context, l10n.calendar_pictures, optional: true),
-        photosSection,
       ],
-    );
+      // --- Repeat ---
+      formLabel(context, l10n.calendar_repeat, optional: true),
+      RepeatIntervalPicker(current: repeat, onChanged: onSelectRepeat),
+      const SizedBox(height: AppSpacing.sp16),
+    ];
   }
+
+  /// Address, notes, materials and the host-supplied photos slot.
+  List<Widget> _detailsSection(BuildContext context, AppLocalizations l10n) => [
+    // --- Address ---
+    AppointmentAddressField(
+      selectedClient: selectedClient,
+      useCustomAddress: useCustomAddress,
+      addressController: controllers.address,
+      onSwitchToCustom: _switchToCustomAddress,
+      onUseClientAddress: _useClientAddress,
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    // --- Notes ---
+    SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.calendar_notes,
+        hint: l10n.calendar_typeTheNoteHere,
+        controller: controllers.notes,
+        optional: true,
+        textCapitalization: TextCapitalization.sentences,
+        maxLines: 2,
+        maxLength: TextLimits.appointmentNotes,
+        showCounter: true,
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    // --- Materials ---
+    SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.calendar_materialsNeeded,
+        hint: materialsHint,
+        controller: controllers.materials,
+        optional: true,
+        textCapitalization: TextCapitalization.sentences,
+        maxLines: 2,
+        maxLength: TextLimits.appointmentMaterials,
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    // --- Photos ---
+    formLabel(context, l10n.calendar_pictures, optional: true),
+    photosSection,
+  ];
 }

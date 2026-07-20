@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// One queued photo batch for an appointment (staged file paths on disk).
@@ -42,8 +43,12 @@ class PendingUpload {
 /// Durable queue of photo batches that failed (or have yet) to upload.
 /// JSON list under one SharedPreferences key; corrupt data resets to empty.
 class PendingUploadStore {
+  PendingUploadStore({AppLogger? logger}) : _logger = logger ?? AppLogger();
+
   static const _key = 'pending_photo_uploads';
   static const _maxAge = Duration(days: 7);
+
+  final AppLogger _logger;
 
   Future<List<PendingUpload>> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -51,12 +56,18 @@ class PendingUploadStore {
     if (raw == null || raw.isEmpty) return const [];
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! List) return const [];
+      if (decoded is! List) {
+        _logger.warn('IMG-UPLOAD pending queue was not a JSON list; reset');
+        return const [];
+      }
       return decoded
           .map(PendingUpload.fromJson)
           .whereType<PendingUpload>()
           .toList();
-    } on FormatException {
+    } on FormatException catch (e, st) {
+      // Silent data loss otherwise: resetting the queue drops photo batches a
+      // technician believes are still waiting to upload.
+      _logger.warn('IMG-UPLOAD pending queue decode failed; reset', e, st);
       return const [];
     }
   }

@@ -126,32 +126,23 @@ async function discardBody(response) {
 // ---------------------------------------------------------------------------
 
 /**
- * Posts a GraphQL request to the Wave public API and returns `body.data`.
+ * Runs the POST-with-retry loop and returns the first 2xx response.
  *
- * @param {string} query GraphQL query or mutation document string.
- * @param {!Object=} variables GraphQL variables (all argument values go here
- *   — never string-interpolate values into `query`).
- * @param {Object=} options Dependency-injection bag. Accepts: token (string),
- *   fetchImpl (function), sleepFn (function), maxRetries (number). Defaults
- *   use getWaveToken(), global.fetch, a setTimeout-based delay, and 3 retries.
- * @return {!Promise<*>} The `data` field of a successful GraphQL response.
+ * Retry policy: 429 (honoring a clamped `Retry-After`), 5xx and fetch
+ * rejections are retried up to `maxRetries` times; 401/403 and any other
+ * non-2xx status throw immediately. Every non-2xx path drains the body first
+ * so sockets are not pinned across the loop.
+ *
+ * @param {string} requestBody Serialized GraphQL request body.
+ * @param {!Object} requestHeaders Request headers including Authorization.
+ * @param {!Function} fetchImpl Fetch implementation.
+ * @param {!Function} sleepFn Injected delay function.
+ * @param {number} maxRetries Maximum retries after the first attempt.
+ * @return {!Promise<*>} The 2xx fetch Response.
  * @throws {WaveApiError}
  */
-async function graphql(query, variables = {}, options = {}) {
-  const {getWaveToken} = require("./auth");
-  const token = options.token !== undefined ? options.token : getWaveToken();
-  const fetchImpl = options.fetchImpl || global.fetch;
-  const maxRetries = options.maxRetries !== undefined ?
-    options.maxRetries : DEFAULT_MAX_RETRIES;
-  const sleepFn = options.sleepFn || ((ms) =>
-    new Promise((resolve) => setTimeout(resolve, ms)));
-
-  const requestBody = JSON.stringify({query, variables});
-  const requestHeaders = {
-    "Authorization": `Bearer ${token}`,
-    "Content-Type": "application/json",
-  };
-
+async function postWithRetry(
+    requestBody, requestHeaders, fetchImpl, sleepFn, maxRetries) {
   let attempt = 0;
   // `attempt` counts total tries; we allow up to maxRetries retries after the
   // first attempt, so the loop runs at most maxRetries + 1 times.
@@ -243,41 +234,87 @@ async function graphql(query, variables = {}, options = {}) {
       );
     }
 
-    // HTTP 2xx — parse JSON and check for GraphQL-layer errors.
-    let body;
-    try {
-      body = await response.json();
-    } catch (err) {
-      throw new WaveApiError(
-          "network",
-          `Wave API returned non-JSON 2xx response: ${err.message}`,
-          err,
-      );
-    }
-
-    // Fix #3: guard against null or non-object bodies (e.g. null, array)
-    // before property access to avoid a raw TypeError.
-    if (body === null || Array.isArray(body) || typeof body !== "object") {
-      throw new WaveApiError(
-          "unknown",
-          "Wave API returned a 2xx response with an unexpected body shape.",
-          body,
-      );
-    }
-
-    if (Array.isArray(body.errors) && body.errors.length > 0) {
-      const messages = body.errors
-          .map((e) => (typeof e.message === "string" ? e.message : String(e)))
-          .join("; ");
-      throw new WaveApiError(
-          "graphql",
-          `Wave GraphQL errors: ${messages}`,
-          body.errors,
-      );
-    }
-
-    return body.data;
+    return response;
   }
+}
+
+/**
+ * Parses a 2xx Wave response body and returns its `data` field.
+ *
+ * Throws `network` for a non-JSON body, `unknown` for a null/array/non-object
+ * body, and `graphql` when the body carries a non-empty top-level `errors`
+ * array (Wave reports resolver failures on an HTTP 200).
+ *
+ * @param {*} response A 2xx fetch Response.
+ * @return {!Promise<*>} The `data` field of the GraphQL response.
+ * @throws {WaveApiError}
+ */
+async function parseGraphqlResponse(response) {
+  let body;
+  try {
+    body = await response.json();
+  } catch (err) {
+    throw new WaveApiError(
+        "network",
+        `Wave API returned non-JSON 2xx response: ${err.message}`,
+        err,
+    );
+  }
+
+  // Fix #3: guard against null or non-object bodies (e.g. null, array)
+  // before property access to avoid a raw TypeError.
+  if (body === null || Array.isArray(body) || typeof body !== "object") {
+    throw new WaveApiError(
+        "unknown",
+        "Wave API returned a 2xx response with an unexpected body shape.",
+        body,
+    );
+  }
+
+  if (Array.isArray(body.errors) && body.errors.length > 0) {
+    const messages = body.errors
+        .map((e) => (typeof e.message === "string" ? e.message : String(e)))
+        .join("; ");
+    throw new WaveApiError(
+        "graphql",
+        `Wave GraphQL errors: ${messages}`,
+        body.errors,
+    );
+  }
+
+  return body.data;
+}
+
+/**
+ * Posts a GraphQL request to the Wave public API and returns `body.data`.
+ *
+ * @param {string} query GraphQL query or mutation document string.
+ * @param {!Object=} variables GraphQL variables (all argument values go here
+ *   — never string-interpolate values into `query`).
+ * @param {Object=} options Dependency-injection bag. Accepts: token (string),
+ *   fetchImpl (function), sleepFn (function), maxRetries (number). Defaults
+ *   use getWaveToken(), global.fetch, a setTimeout-based delay, and 3 retries.
+ * @return {!Promise<*>} The `data` field of a successful GraphQL response.
+ * @throws {WaveApiError}
+ */
+async function graphql(query, variables = {}, options = {}) {
+  const {getWaveToken} = require("./auth");
+  const token = options.token !== undefined ? options.token : getWaveToken();
+  const fetchImpl = options.fetchImpl || global.fetch;
+  const maxRetries = options.maxRetries !== undefined ?
+    options.maxRetries : DEFAULT_MAX_RETRIES;
+  const sleepFn = options.sleepFn || ((ms) =>
+    new Promise((resolve) => setTimeout(resolve, ms)));
+
+  const requestBody = JSON.stringify({query, variables});
+  const requestHeaders = {
+    "Authorization": `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+
+  const response = await postWithRetry(
+      requestBody, requestHeaders, fetchImpl, sleepFn, maxRetries);
+  return parseGraphqlResponse(response);
 }
 
 // ---------------------------------------------------------------------------

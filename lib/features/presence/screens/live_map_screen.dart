@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
@@ -16,6 +15,7 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/presence/application/live_map_providers.dart';
 import 'package:scheduling/features/presence/domain/live_map_aggregator.dart';
+import 'package:scheduling/features/presence/widgets/live_map_overlays.dart';
 import 'package:scheduling/features/presence/widgets/staff_info_card.dart';
 import 'package:scheduling/features/presence/widgets/staff_marker_icon.dart';
 import 'package:scheduling/features/presence/widgets/staff_roster_sheet.dart';
@@ -156,7 +156,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
       return CenteredErrorText(message: context.l10n.error_introLoadLiveMap);
     }
     if (pointsAsync.isLoading && !hasShownMap) {
-      return const _LiveMapLoadingBody();
+      return const LiveMapLoadingBody();
     }
 
     final selectedPoint = selected == null
@@ -413,7 +413,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
           top: AppSpacing.sp12,
           right: AppSpacing.sp12,
           child: SafeArea(
-            child: _MapToggles(
+            child: MapToggles(
               traffic: _traffic,
               satellite: _satellite,
               onTrafficToggle: () => setState(() => _traffic = !_traffic),
@@ -445,7 +445,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
             ),
           ),
         ),
-        if (!paused && points.isEmpty) const _EmptyMapCard(),
+        if (!paused && points.isEmpty) const EmptyMapCard(),
         if (!paused)
           Positioned(
             left: 0,
@@ -483,109 +483,4 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
       Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
     },
   );
-}
-
-/// Stacked traffic + satellite toggles, top-right of the map. Each renders a
-/// filled background when active (shape, not just color, signals state) and
-/// carries an l10n tooltip / semantics label.
-class _MapToggles extends StatelessWidget {
-  const _MapToggles({
-    required this.traffic,
-    required this.satellite,
-    required this.onTrafficToggle,
-    required this.onSatelliteToggle,
-  });
-
-  final bool traffic;
-  final bool satellite;
-  final VoidCallback onTrafficToggle;
-  final VoidCallback onSatelliteToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sp4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _ToggleButton(
-              icon: Icons.traffic_outlined,
-              active: traffic,
-              tooltip: context.l10n.liveMap_trafficToggle,
-              onTap: onTrafficToggle,
-            ),
-            const SizedBox(height: AppSpacing.sp4),
-            _ToggleButton(
-              icon: Icons.layers_outlined,
-              active: satellite,
-              tooltip: context.l10n.liveMap_satelliteToggle,
-              onTap: onSatelliteToggle,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ToggleButton extends StatelessWidget {
-  const _ToggleButton({
-    required this.icon,
-    required this.active,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final bool active;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: tooltip,
-      button: true,
-      toggled: active,
-      child: active
-          ? IconButton.filled(
-              icon: Icon(icon),
-              tooltip: tooltip,
-              onPressed: onTap,
-            )
-          : IconButton(icon: Icon(icon), tooltip: tooltip, onPressed: onTap),
-    );
-  }
-}
-
-class _EmptyMapCard extends StatelessWidget {
-  const _EmptyMapCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Card(
-        color: theme.colorScheme.surface.withValues(alpha: 0.9),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sp16),
-          child: Text(
-            context.l10n.liveMap_emptyState,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LiveMapLoadingBody extends StatelessWidget {
-  const _LiveMapLoadingBody();
-
-  @override
-  Widget build(BuildContext context) =>
-      const Center(child: AdaptiveProgressIndicator(size: 32));
 }

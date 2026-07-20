@@ -1,12 +1,17 @@
 # Siri App Intents — "How many appointments do I have today?"
 
 **Status: design approved 2026-07-10; scope expanded 2026-07-19 to fold in the
-former out-of-scope surfaces — implementation plan not yet written.**
+former out-of-scope surfaces. Implementation plan written and Phase 1 built —
+see [`2026-07-19-siri-app-intents-implementation.md`](./2026-07-19-siri-app-intents-implementation.md)
+for current state. Phases 2–6 remain open, which is why this doc is still
+active rather than archived.**
 
 Let users ask Siri about their schedule — and act on it — instead of opening the
 app. Approved decisions: both roles (role-aware answers), iOS deployment target
-bumped 15.0 → 16.0, App Group snapshot as the *read* data source ("snapshot now,
-live later"), snapshot written via the `home_widget` package.
+bumped 15.0 → 16.0 (**superseded — the app went to 18.0 on 2026-07-19**; the
+Live Activity Directions button's returnable `OpenURLIntent` is iOS 18+), App
+Group snapshot as the *read* data source ("snapshot now, live later"), snapshot
+written via the `home_widget` package.
 
 The work is **phased** — each phase ships independently and every later phase is
 additive over the snapshot/extension foundation laid in Phase 1:
@@ -91,9 +96,12 @@ Siri WRITE action (Phase 4) / LIVE read (Phase 5)
 ```
 
 - **App Intents framework (iOS 16+)**, not legacy SiriKit — phrases work out
-  of the box with no user setup. Deployment target bumps to **16.0** (iOS 16
-  runs on iPhone 8/2017 and later, ~97% of devices; app hasn't shipped, no
-  stranded users). App Attest's ≥14 floor stays satisfied.
+  of the box with no user setup. This called for a bump to **16.0**; what
+  actually shipped is an **18.0** floor, because the Live Activity Directions
+  button's returnable `OpenURLIntent` (built the same day) is iOS 18+ and the
+  whole app moved together. 16.0 is therefore subsumed, the Swift types stay
+  `@available(iOS 16.0, *)`, and App Attest's ≥14 floor is still satisfied.
+  iOS 15–17 users are dropped — a taken product decision.
 - **Dedicated App Intents extension target**, not intents in the app binary:
   in-app intents make iOS cold-boot the whole Flutter+Firebase app in the
   background per query (multi-second answers); the extension answers in
@@ -159,50 +167,86 @@ Written by Flutter via `home_widget` (`HomeWidget.setAppGroupId(...)` +
 - Each appointment carries its **doc id** (`id`, added for Phase 4) so a write
   action can target the exact Firestore document the user named by voice; unused
   by the read intents.
-- Statuses pass through `AppointmentStatus.fromRaw(...).raw` (legacy
-  `confirmed` docs normalize to the allowlist).
+- Statuses pass through `AppointmentStatus.fromRaw(...)`, then a guard maps the
+  display-only `overdue` to `pending` **before** taking `.raw` (reading
+  `AppointmentStatus.overdue.raw` throws by design, so the bare `.raw` this doc
+  originally specified would fail the whole build on one odd doc). Legacy
+  `confirmed` docs normalize to the allowlist. *(As-built correction.)*
 - Size cap: 30 appointments per day (defensive; Siri reads at most a day).
 - `version` lets the Swift side reject snapshots from a future schema instead
   of mis-decoding.
+- **Only these fields.** The App Group stays readable while the device is
+  locked, so the payload deliberately omits notes, phone, pictures, and
+  materials — everything here is at-rest PII at a weaker protection class than
+  the rest of the app's data. Don't widen it without re-reading the Privacy §.
 
-**Refresh triggers (Flutter side):** after successful sign-in routing, on
-appointments-stream emissions (debounced via the existing `Debouncer`
-pattern), and on app-lifecycle resume. **Sign-out wipes the snapshot** —
-client names/addresses must not outlive the session in the shared container
-(same discipline as FCM-token deletion in the push plan). Account
-deletion/kick-out paths wipe it too (they route through sign-out).
+**Refresh triggers (Flutter side) — as built:** the snapshot is
+**provider-driven, not event-driven**. `scheduleSnapshotProvider` recomputes
+whenever the underlying appointments stream emits, and `ScheduleSnapshotService`
+dedups on a `generatedAt`-insensitive signature so an unchanged schedule never
+rewrites the container. It also watches `currentDayProvider`, which
+self-invalidates at midnight — without that, an app left running overnight kept
+publishing yesterday's buckets and Siri answered "no appointments today" while
+jobs existed (2026-07-19 audit, bug B2).
+
+*(This supersedes the original plan of "sign-in routing + debounced stream
+emissions + app-lifecycle resume". There is no `Debouncer` on this path — the
+signature dedup does that job — and no lifecycle-resume hook.)*
+
+**Sign-out wipes the snapshot**, but **implicitly**: signed-out/inactive makes
+`activeUserIdentityProvider` resolve null → the snapshot provider emits
+`data(null)` → the listener calls `clearSnapshot()`. There is **no explicit
+clear on the sign-out path** and none should be added — same contract as the
+widget. Account deletion/kick-out wipe it the same way.
 
 ## Components
 
 ### Dart (all buildable + testable on this Windows box)
 
+*(All three shipped 2026-07-19 — see the implementation plan's Phase 1 for the
+as-built detail. Descriptions below corrected to match the code.)*
+
 - **Pure snapshot builder** — `buildScheduleSnapshot({appointments, role, now})`:
-  day bucketing, cancelled exclusion, status normalization, per-day cap,
-  `generatedAt` stamp. Pure function, plain `test()` coverage.
-- **Writer service** — thin wrapper over `home_widget` with an injected
-  interface so tests mock it (services are plain classes, optional injected
-  deps, per convention). Exposes `writeSnapshot(...)` and `clearSnapshot()`.
-- **Riverpod wiring** — a provider that watches the signed-in user's
-  role + appointments stream and writes the debounced snapshot; activated
-  from `main.dart` alongside the existing listeners. `clearSnapshot()` is
-  called on the sign-out path (best-effort, try/catch + `logger.warn`;
-  sign-out must never be blocked).
-- `pubspec.yaml`: add `home_widget`. (`flutter pub get` needs sandbox
-  disabled on this box — plugin-symlink issue.)
+  day bucketing, cancelled exclusion, id-less records dropped, status
+  normalization, per-day cap, `generatedAt` stamp. Pure function, plain `test()`
+  coverage (12 tests).
+- **Writer service** — thin wrapper over `home_widget` exposing
+  `writeSnapshot(...)` and `clearSnapshot()`, with signature-based dedup and a
+  `Platform.isIOS` gate. It takes an optional injected `AppLogger` but calls
+  `home_widget` **statically** — the "injected interface so tests mock it" idea
+  here was dropped to match `WidgetSyncService`. Consequence: write/clear are
+  device-only, and only the pure dedup signature is unit-tested (3 tests).
+- **Riverpod wiring** — `scheduleSnapshotProvider` watches the signed-in user's
+  identity (via `activeUserIdentityProvider`, **not** a hand-rolled role/status
+  guard) plus the appointments stream, and emits the payload or `data(null)`.
+  The listener lives in `AppSyncListeners` (`lib/core/app/`), not inline in
+  `main.dart` — it was extracted there so the wiring is testable without
+  building a `MaterialApp`. Clearing is implicit via `data(null)`; there is no
+  sign-out-path clear.
+- `pubspec.yaml`: no change needed — `home_widget` was already a dependency for
+  the home-screen widget.
 
 ### Swift (authored here in `ios/SiriIntents/`, compiled only on the Mac)
 
-**Phase 1 (read foundation):**
+**Phase 1 (read foundation) — ✅ all authored + target built 2026-07-19:**
 
 - `ScheduleSnapshot.swift` — Codable structs + App Group `UserDefaults`
-  loader; rejects missing/undecodable/wrong-version data. Now decodes the `id`
-  field (needed by Phase 4).
+  loader; rejects missing/undecodable/wrong-version data. Decodes `id`
+  (non-optional, needed by Phase 4) and exposes `deepLink`.
 - `AppointmentCountIntent.swift`, `TodayScheduleIntent.swift`,
-  `NextAppointmentIntent.swift` — each returns a spoken
-  `IntentDialog`; formatting via device-locale `DateFormatter`.
-- `ESProShortcuts.swift` — `AppShortcutsProvider` with EN + FR phrase lists.
-- Localized response strings (EN + FR string catalogs; response language
-  follows the device's Siri language).
+  `NextAppointmentIntent.swift` — each returns a spoken `IntentDialog`;
+  formatting via device-locale `DateFormatter`. All three set
+  `openAppWhenRun = false` + `authenticationPolicy = .alwaysAllowed` so reads
+  answer from the lock screen; **Phase-4 write intents must not copy that**.
+- `ESProShortcuts.swift` — `AppShortcutsProvider`, 14 phrases across EN + FR.
+- `SiriStrings.swift` — all spoken text, EN + FR. **Shipped as one plain-Swift
+  file rather than the string catalogs this doc originally specified**, so both
+  localizations sit side by side and review together. Response language follows
+  `Locale.current`, matching `ScheduleWidget.swift`.
+- `Info.plist` — `NSExtensionPointIdentifier = com.apple.appintents-extension`.
+- Target `SiriIntents` (`net.vogas.scheduling.SiriIntents`) created + embedded
+  in Runner, sharing the App Group via `SiriIntentsExtension.entitlements`.
+  Firebase deliberately **not** linked — Phases 1–3 stay Firebase-free.
 
 **Phase 2 (date queries):**
 
@@ -246,7 +290,7 @@ deletion/kick-out paths wipe it too (they route through sign-out).
   companion; Action-button assignment. Each is independent and can ship à la
   carte.
 
-### Mac runbook (new doc, `docs/plans/` — same pattern as `IOS_APP_STORE_HANDOFF.md`)
+### Mac runbook (new doc, `docs/plans/` — same pattern as `APP_STORE_SUBMISSION.md`)
 
 Phases 1–3 (read):
 

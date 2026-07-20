@@ -20,7 +20,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/core/adaptive/app_scroll_behavior.dart';
-import 'package:scheduling/core/connectivity/connectivity_providers.dart';
+import 'package:scheduling/core/app/app_sync_listeners.dart';
 import 'package:scheduling/core/connectivity/offline_banner.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
@@ -36,7 +36,6 @@ import 'package:scheduling/features/auth/application/account_status_provider.dar
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
-import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart';
@@ -47,8 +46,6 @@ import 'package:scheduling/features/presence/application/presence_sync_controlle
 import 'package:scheduling/features/settings/application/settings_providers.dart';
 import 'package:scheduling/features/settings/data/shared_prefs_settings_repository.dart';
 import 'package:scheduling/features/settings/domain/models/app_settings.dart';
-import 'package:scheduling/features/siri/application/schedule_snapshot_provider.dart';
-import 'package:scheduling/features/siri/application/schedule_snapshot_service.dart';
 import 'package:scheduling/firebase_options.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
@@ -422,43 +419,6 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     });
   }
 
-  void _listenForPushRegistration() {
-    // Registers this device's FCM token when an active employee's or admin's
-    // account doc resolves (admins get time-based nudges for jobs they're
-    // assigned to); a no-op for signed-out users.
-    ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
-      prev,
-      next,
-    ) {
-      unawaited(ref.read(pushRegistrationControllerProvider).sync());
-    });
-  }
-
-  void _listenForPresenceSync() {
-    // Starts/stops the background location stream that feeds the travel-time
-    // "leave now" reminders — active employees and admins (both receive the
-    // timed pushes). Same emission-driven shape as push registration above.
-    ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
-      prev,
-      next,
-    ) {
-      unawaited(ref.read(presenceSyncControllerProvider).sync());
-    });
-  }
-
-  void _listenForLiveActivitySync() {
-    // Registers this device's Live Activity APNs tokens (push-to-start plus
-    // one per live card) so the server can put the "time to leave" card on a
-    // closed, locked phone. iOS 17.2+ only; every other device registers
-    // nothing and just gets the plain `leaveNow` push.
-    ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
-      prev,
-      next,
-    ) {
-      unawaited(ref.read(liveActivityRegistrationControllerProvider).sync());
-    });
-  }
-
   /// One-shot sync against a value already present at registration: on relaunch
   /// while already authenticated, the account doc can resolve before the
   /// `ref.listen`s above are set up, and a plain listen would miss it (no
@@ -473,65 +433,6 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     unawaited(ref.read(pushRegistrationControllerProvider).sync());
     unawaited(ref.read(presenceSyncControllerProvider).sync());
     unawaited(ref.read(liveActivityRegistrationControllerProvider).sync());
-  }
-
-  void _listenForWidgetSync() {
-    // iOS home-screen widget only. On Android (dev harness) this never wires,
-    // so the employee-appointments listener it would open is never opened.
-    if (!Platform.isIOS) return;
-    ref.listen<AsyncValue<Map<String, dynamic>?>>(widgetPayloadProvider, (
-      prev,
-      next,
-    ) {
-      final payload = next.value;
-      final service = ref.read(widgetSyncServiceProvider);
-      if (payload == null) {
-        unawaited(service.clear());
-      } else {
-        unawaited(service.sync(payload));
-      }
-    });
-  }
-
-  void _listenForSnapshotSync() {
-    // iOS Siri App Intents extension only — same App Group, separate key.
-    if (!Platform.isIOS) return;
-    ref.listen<AsyncValue<Map<String, dynamic>?>>(scheduleSnapshotProvider, (
-      prev,
-      next,
-    ) {
-      final payload = next.value;
-      final service = ref.read(scheduleSnapshotServiceProvider);
-      if (payload == null) {
-        unawaited(service.clearSnapshot());
-      } else {
-        unawaited(service.writeSnapshot(payload));
-      }
-    });
-  }
-
-  void _listenForUploadDrain() {
-    // Reconnect: retry queued photo batches once per offline→online flip.
-    ref
-      ..listen<bool>(isOfflineProvider, (previous, next) {
-        final isSignedIn =
-            ref.read(currentUserDocProvider).value?.isNotEmpty ?? false;
-        if (previous == true && !next && isSignedIn) {
-          unawaited(ref.read(appointmentImageUploadProvider).drainPending());
-        }
-      })
-      // Startup / sign-in: one drain when the account doc first arrives
-      // (Storage rules need an authed user; a signed-out drain re-queues).
-      ..listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
-        previous,
-        next,
-      ) {
-        final wasEmpty = previous?.value?.isEmpty ?? true;
-        final hasDoc = next.value?.isNotEmpty ?? false;
-        if (wasEmpty && hasDoc) {
-          unawaited(ref.read(appointmentImageUploadProvider).drainPending());
-        }
-      });
   }
 
   void _listenForRoleRevocation() {
@@ -576,6 +477,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
           previous: prev,
           docState: next,
           loadWarmCache: ref.read(authCacheProvider).loadIfMatch,
+          logger: ref.read(loggerProvider),
         ).then((deleted) {
           if (deleted && mounted) {
             _handleAccountDisabled(
@@ -592,12 +494,11 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _listenForAccountDisabled();
     _listenForRoleRevocation();
     _listenForDeletedAccount();
-    _listenForPushRegistration();
-    _listenForPresenceSync();
-    _listenForLiveActivitySync();
-    _listenForWidgetSync();
-    _listenForSnapshotSync();
-    _listenForUploadDrain();
+    // Device registration, the two off-screen schedule mirrors, and the photo
+    // drain — registered in the same order as before. The account-lifecycle
+    // listeners above stay here: they drive sign-out through shared state and
+    // their relative order is load-bearing.
+    AppSyncListeners(ref).registerAll();
     _primeControllerSyncsOnce();
     return AppLanguageScope(
       controller: _languageController,

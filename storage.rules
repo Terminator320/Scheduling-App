@@ -30,9 +30,13 @@ service firebase.storage {
       let appt = firestore.get(
         /databases/(default)/documents/appointments/$(appointmentId)
       );
+      // `status == 'active'` mirrors isAdmin() above and is load-bearing: the
+      // bridge doc survives deactivation, so without it a disabled employee
+      // keeps reading job photos for every appointment they were assigned.
       return isSignedIn()
         && bridge != null
         && appt != null
+        && bridge.data.status == 'active'
         && bridge.data.docId in appt.data.employeeIds;
     }
 
