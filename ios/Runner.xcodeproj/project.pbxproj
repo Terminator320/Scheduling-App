@@ -23,6 +23,7 @@
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
+		9EC9798F023C8DA694109759 /* SiriIntentsExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD98B59A07DBABDD271F184D /* SiriIntentsExtension.swift */; };
 		BB4A3C8F1D353ABC0083082F /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BB4A3C8E1D353ABC0083082F /* PrivacyInfo.xcprivacy */; };
 		C7632D212FF0F8669A405582 /* SiriIntents.appex in Embed ExtensionKit Extensions */ = {isa = PBXBuildFile; fileRef = 4FA6D6A972DB7784BD239D75 /* SiriIntents.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C96255C3E7B15468BEDA40BE /* ESProShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = B68B901D894CE9FE351D9D60 /* ESProShortcuts.swift */; };
@@ -126,6 +127,7 @@
 		DA57DA1E5C4EDF0000000D01 /* DayScheduleIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DayScheduleIntent.swift; sourceTree = "<group>"; };
 		DA57DA1E5C4EDF0000000D02 /* TomorrowScheduleIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TomorrowScheduleIntent.swift; sourceTree = "<group>"; };
 		DA57DA1E5C4EDF0000000D03 /* NthAppointmentIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NthAppointmentIntent.swift; sourceTree = "<group>"; };
+		DD98B59A07DBABDD271F184D /* SiriIntentsExtension.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SiriIntentsExtension.swift; sourceTree = "<group>"; };
 		E1B3C4064AE19F11DBF0ABD0 /* SiriStrings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SiriStrings.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -220,6 +222,7 @@
 				00033CA630A054078E3E5BCC /* TodayScheduleIntent.swift */,
 				DA57DA1E5C4EDF0000000D02 /* TomorrowScheduleIntent.swift */,
 				DA57DA1E5C4EDF0000000D03 /* NthAppointmentIntent.swift */,
+				DD98B59A07DBABDD271F184D /* SiriIntentsExtension.swift */,
 			);
 			path = SiriIntents;
 			sourceTree = "<group>";
@@ -558,6 +561,7 @@
 				414A1BF06BCD113C7E29F997 /* TodayScheduleIntent.swift in Sources */,
 				DA57DA1E5C4EDF0000000B02 /* TomorrowScheduleIntent.swift in Sources */,
 				DA57DA1E5C4EDF0000000B03 /* NthAppointmentIntent.swift in Sources */,
+				9EC9798F023C8DA694109759 /* SiriIntentsExtension.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
