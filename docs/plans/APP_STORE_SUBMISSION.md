@@ -187,19 +187,40 @@ Open `ios/Runner.xcworkspace`.
 - [x] **APNs Auth Key** created; `.p8` uploaded to Cloud Messaging for the iOS
   app (2026-07-11). Key ID / Team ID noted.
 - [x] Keep the debug-token registrations for the Simulator/dev devices.
-- [x] **Firestore TTL policies** on the `expiresAt` field of both ledger
-  collections — `appointmentReminders` and `appointmentOverduePrompts`
-  (2026-07-11). Ledger docs self-delete ~7 days after creation.
+- [x] **Firestore TTL policies** — **VERIFIED IN CONSOLE 2026-07-20.** Exactly
+  two policies exist, both `Serving`: `appointmentReminders` and
+  `appointmentOverduePrompts`, each on `expiresAt` with a 7-day expiration
+  offset. Ledger docs self-delete ~7 days after creation.
   **[was contradictory]** `docs/CLOUD_FUNCTIONS.md` and CLAUDE.md both listed
-  this as still outstanding; the runbook recorded it done 2026-07-11, and the
-  2026-07-19 indexes deploy reported exactly **2 field overrides** present in
-  the project but absent from `firestore.indexes.json` — which is what a TTL
-  policy looks like to `firebase deploy`. Treated as DONE; the other two docs
-  have been corrected.
-- [ ] **Optional: TTL on the four other `expiresAt` collections** —
-  `liveActivityCards` (12h), `liveActivityTokens` (≤31d), `rateLimits` (window
-  length), `signupCodes` (14d). All four are also swept in-code, so this is
-  housekeeping, not a blocker.
+  this as still outstanding; the runbook recorded it done 2026-07-11. The
+  console now settles it — and confirms the 2026-07-19 indexes deploy's "2 field
+  overrides" message was reporting exactly these two policies.
+- [x] **TTL on the other `expiresAt` collections — added 2026-07-20.**
+  `liveActivityTokens`, `rateLimits`, and `signupCodes` now have policies on
+  `expiresAt`. All are also swept in-code, so this is storage housekeeping.
+- [ ] **`liveActivityCards` TTL — can't be created yet.** Firestore only offers
+  collection groups that already contain documents, and no card marker has ever
+  been written (the feature has never run on a device). **Add it after the first
+  on-device Live Activity test** creates the collection: field `expiresAt`,
+  offset `0`.
+  > **Offset must be `0` on every TTL policy in this project.** The code bakes
+  > the full lifetime into `expiresAt` itself (`LEDGER_TTL_MS` 7d,
+  > `INVITE_CODE_TTL_MS` 14d, `CARD_TTL_MS` 12h, the limiter's window), so
+  > `expiresAt` *is* the deletion instant. A non-zero offset adds to it and
+  > silently doubles retention. All five policies were normalized to `0` on
+  > 2026-07-20 — `signupCodes` (was 14d on top of 14d → ~28) and both ledgers,
+  > `appointmentReminders` / `appointmentOverduePrompts` (were 7d on top of 7d
+  > → ~14). Retention now matches what the code and the privacy policy state.
+  >
+  > **An offset is immutable once set** — changing one means delete → wait for
+  > the policy to fully disappear from the list → recreate. Recreating too soon
+  > fails with `400: Cannot modify TTL offset`.
+  >
+  > Shortening the ledgers is safe and cannot cause duplicate pushes: a ledger
+  > only guards an *eligible* job, and eligibility ends far sooner than 7 days
+  > (the reminder sweep needs `startTime > now`, the overdue sweep looks back
+  > 48h). Expect a one-time burst of deletions as docs older than the new
+  > threshold become eligible.
   > ⚠️ **Never run `firebase deploy --only firestore:indexes --force`** on this
   > project. TTL policies are stored as *field overrides*; `--force` deletes any
   > override not declared in `firestore.indexes.json`, which would silently
@@ -226,9 +247,12 @@ Open `ios/Runner.xcworkspace`.
   `GMSServices.provideAPIKey(...)`; a missing key means a blank map plus a
   console line, never a crash. Backend is live. Grant location, confirm your own
   pin plus other staff appear with a fresh timestamp and a resolved address.
-- [ ] **Confirm the Routes API is enabled + added to the `GOOGLE_MAP_API_KEY`
-  restriction.** Without it the travel-time leave-now reminders silently fall
-  back to fixed 30-minute timing — no error, just worse behavior.
+- [x] **Routes API — VERIFIED IN CONSOLE 2026-07-20.** The API is enabled on the
+  project, and the server-side Maps key's API restriction lists all four it
+  needs: Geocoding API, Places API, Places API (New), **Routes API**. So the
+  travel-time leave-now reminders are not silently falling back to fixed 30-min
+  timing. (Cloud Functions logs corroborate: zero `travel:` warnings in 8 days,
+  and any misconfiguration would log a 403 on every attempt.)
 - [ ] **Notification tap deep-link** — tapping a push opens the specific
   appointment's detail sheet (not just the calendar root).
   **[was contradictory]** the old runbook listed deep-linking as a known
@@ -244,8 +268,10 @@ Open `ios/Runner.xcworkspace`.
   scheduled, confirm the "time to leave" card appears on the Lock Screen and in
   the Dynamic Island, the Directions button opens Maps, it flips to "On site" at
   the start time, and it clears when the job is marked complete. Confirm the
-  Settings → **Live job card** toggle ends a showing card. Requires the two
-  composite indexes to be `READY` (deployed 2026-07-19).
+  Settings → **Live job card** toggle ends a showing card. The two composite
+  indexes it needs were **verified `READY` 2026-07-20** — while they were still
+  building the sweep logged `liveActivity: on-site query failed`; that stopped
+  once they finished, so the server side is ready for this test.
 - [ ] **Siri phrases** (Phase 1) — "what's on my schedule today", "what's my
   next appointment", and the job-count phrase, per
   `ios/SiriIntents/README.md`.
