@@ -7,11 +7,25 @@ Plan: [`docs/plans/2026-07-19-siri-app-intents-implementation.md`](../../docs/pl
 
 The `SiriIntents` App Intents extension target now exists in
 `Runner.xcodeproj` (created via the `xcodeproj` Ruby gem, not the Xcode GUI)
-and the whole app builds clean (`flutter build ios --debug --no-codesign`),
-with `SiriIntents.appex` embedded in `Runner.app/PlugIns/`:
+and the whole app builds clean (`flutter build ipa`),
+with `SiriIntents.appex` embedded in `Runner.app/Extensions/`:
 
-- Product type: app extension, `NSExtensionPointIdentifier =
-  com.apple.appintents-extension`; bundle id `net.vogas.scheduling.SiriIntents`.
+- ⚠️ **This is an ExtensionKit extension, NOT an old-style NSExtension**
+  (corrected 2026-07-20 after App Store validation rejected the NSExtension
+  form with a 409). An App Intents extension point
+  (`com.apple.appintents-extension`) MUST be built as ExtensionKit:
+  - `Info.plist` uses `EXAppExtensionAttributes` → `EXExtensionPointIdentifier`
+    (NOT `NSExtension` → `NSExtensionPointIdentifier`).
+  - Target product type `com.apple.product-type.extensionkit-extension`
+    (NOT `…app-extension`).
+  - Embedded into `Runner.app/**Extensions/**` (NOT `PlugIns/`) via a Runner
+    "Embed ExtensionKit Extensions" copy phase (`dstSubfolderSpec 16`,
+    `dstPath $(EXTENSIONS_FOLDER_PATH)`), which must sit **before** the
+    "Thin Binary" / "Crashlytics dSYM upload" script phases — placing it after
+    them triggers a "Cycle inside Runner" archive error. (The `ScheduleWidget`
+    WidgetKit extension stays an NSExtension in `PlugIns/` — that's correct for
+    WidgetKit; only App Intents is ExtensionKit.)
+  - bundle id `net.vogas.scheduling.SiriIntents`.
 - `INFOPLIST_FILE = SiriIntents/Info.plist`, `CODE_SIGN_ENTITLEMENTS =
   SiriIntentsExtension.entitlements` (shares App Group
   `group.net.vogas.scheduling`), `DEVELOPMENT_TEAM = H5XWLU87AX`.
