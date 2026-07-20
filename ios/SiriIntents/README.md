@@ -15,9 +15,12 @@ with `SiriIntents.appex` embedded in `Runner.app/PlugIns/`:
 - `INFOPLIST_FILE = SiriIntents/Info.plist`, `CODE_SIGN_ENTITLEMENTS =
   SiriIntentsExtension.entitlements` (shares App Group
   `group.net.vogas.scheduling`), `DEVELOPMENT_TEAM = H5XWLU87AX`.
-- The six `.swift` files here are explicit source references on the target (not
+- The `.swift` files here are explicit source references on the target (not
   a synchronized group), so **a new `.swift` added to this folder must be added
-  to the target manually** (re-run the gem script or tick it in Xcode).
+  to the target manually** (edit `Runner.xcodeproj/project.pbxproj` in all four
+  sections — PBXBuildFile, PBXFileReference, the group, and the target's Sources
+  phase — or tick it in Xcode). The Phase-2 files `TomorrowScheduleIntent.swift`
+  and `DayScheduleIntent.swift` were added this way (2026-07-19).
 - **Deployment target is iOS 18.0, not 16.0** — the whole app moved to an 18.0
   floor (owner decision 2026-07-19; the Live Activity Directions button's
   returnable `OpenURLIntent` is iOS 18+). App Intents' iOS-16 floor is
@@ -58,9 +61,25 @@ wipes it on sign-out. Nothing below touches Dart.
 
 Run the app once while signed in (that writes the snapshot), then ask Siri:
 
-- [ ] EN + FR × all 3 phrases ("how many appointments today", "what's my
+- [ ] EN + FR × the Phase-1 phrases ("how many appointments today", "what's my
       schedule today", "what's my next appointment") — see `ESProShortcuts.swift`
       for the exact phrase list.
+- [ ] **Phase 2 — "tomorrow"** ("what's my schedule tomorrow" / "quel est mon
+      horaire demain"): reads tomorrow's bucket; empty tomorrow answers "…no
+      appointments tomorrow", not "today".
+- [ ] **Phase 2 — arbitrary day** ("read my schedule for a day"): Siri asks
+      "For what day?"; answering "Friday"/"vendredi"/"July 25" reads that
+      bucket. A day >7 out or in the past answers "I only have your schedule for
+      the next 7 days." **A `Date` parameter can't sit inside a spoken phrase**
+      (Siri only allows AppEnum/AppEntity there), which is why this one prompts
+      instead of matching the day in one utterance — confirm the prompt→answer
+      flow works in both languages.
+- [ ] **Phase 3 — specific appointment** ("read a specific appointment" / "lis
+      un rendez-vous précis"): Siri asks "Which appointment? Say its number";
+      answering "3" reads the third of today (ordinal wording in FR too). Asking
+      for a number past the end answers "you only have N appointments today"; an
+      empty day answers "no appointments today". Same `Int`-can't-sit-in-a-phrase
+      reason as Phase 2 — confirm the prompt→answer flow in both languages.
 - [ ] **Employee vs. admin** — an employee hears only their assigned visits; an
       admin hears the whole business ("the team has…").
 - [ ] **Empty day** — no jobs today answers "no appointments today", not silence.

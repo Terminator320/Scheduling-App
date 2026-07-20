@@ -214,4 +214,64 @@ describe("sendLiveActivityPush", () => {
     });
     expect(sent.host).toBeNull();
   });
+  test("retries sandbox when production returns BadDeviceToken", async () => {
+    // A dev-signed build registers a sandbox token the production host rejects
+    // with BadDeviceToken; the sandbox retry is what lights the card up.
+    const hosts = [];
+    const impl = {
+      connect(host) {
+        hosts.push(host);
+        const isProd = host === "https://api.push.apple.com";
+        return {
+          on() {},
+          close() {},
+          request() {
+            const req = new EventEmitter();
+            req.close = () => {};
+            req.end = () => setImmediate(() => {
+              if (isProd) {
+                req.emit("response", {":status": 400});
+                req.emit("data", JSON.stringify({reason: "BadDeviceToken"}));
+              } else {
+                req.emit("response", {":status": 200});
+              }
+              req.emit("end");
+            });
+            return req;
+          },
+        };
+      },
+    };
+    const result = await sendLiveActivityPush({
+      token: "SANDBOXTOKEN",
+      payload: {aps: {event: "start"}},
+      auth: AUTH,
+      now: new Date("2026-07-20T12:00:00.000Z"),
+      signer,
+      http2Impl: impl,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe(200);
+    expect(hosts).toEqual([
+      "https://api.push.apple.com",
+      "https://api.sandbox.push.apple.com",
+    ]);
+  });
+  test("does not retry sandbox on a non-BadDeviceToken failure", async () => {
+    // 410/Unregistered is a genuinely dead token, not an env mismatch — one
+    // dial only, and the row is still flagged gone for pruning.
+    const {result, sent} = await send({
+      status: 410, body: JSON.stringify({reason: "Unregistered"}),
+    });
+    expect(sent.host).toBe("https://api.push.apple.com");
+    expect(result.gone).toBe(true);
+  });
+  test("honours an explicit host override without dual-try", async () => {
+    const {result, sent} = await send({
+      status: 400, body: JSON.stringify({reason: "BadDeviceToken"}),
+    }, {host: "https://api.sandbox.push.apple.com"});
+    // With host pinned, a BadDeviceToken is returned as-is (no prod attempt).
+    expect(sent.host).toBe("https://api.sandbox.push.apple.com");
+    expect(result.gone).toBe(true);
+  });
 });

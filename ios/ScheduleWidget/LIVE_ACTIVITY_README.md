@@ -86,8 +86,37 @@ built clean end-to-end (`flutter build ios --debug --no-codesign`), with both
 ## APNs key (owner, once) — DONE 2026-07-19
 
 All three secrets exist and are ENABLED in Secret Manager; the steps below are
-kept for the next key rotation. What still remains is `firebase deploy --only
-functions` and the on-device pass.
+kept for the next key rotation.
+
+## Status — DEPLOYED + card start VERIFIED on device 2026-07-20
+
+The functions **and `firestore:indexes`** are deployed to prod, and the Lock
+Screen card was verified starting end-to-end on real hardware (base iPhone 14,
+iOS 26.5). Two things had to be fixed first — both are the kind of thing that
+turns into a silent "push arrives, no card":
+
+1. **The composite indexes were never deployed.** The first deploys ran
+   `firebase deploy --only functions` and skipped `firestore:indexes`, so the
+   registry queries failed `FAILED_PRECONDITION`, the best-effort catch
+   swallowed it, and no card started. **Always deploy `firestore:indexes` with
+   the functions.**
+2. **Dev-signed build ⇒ SANDBOX APNs.** A `flutter run` build carries an
+   `aps-environment: development` profile, so its push-to-start token is a
+   **sandbox** token. The direct APNs client was production-only, so the
+   production host returned `BadDeviceToken`, the token row was pruned as
+   "gone," and no card appeared — while the plain `leaveNow` push still arrived
+   (FCM auto-routes APNs environments; the direct client does not). Fixed by
+   `sendLiveActivityPush` now trying production, then **retrying the sandbox
+   host on `BadDeviceToken`** (`functions/apns_client.js`). So a dev build CAN
+   now show the card; a TestFlight/App Store build hits production on the first
+   try and never retries.
+
+**Still unverified:** the Dynamic Island presentation (the base iPhone 14 has no
+Dynamic Island — that's Pro-only hardware; verify on an iPhone 14 Pro / 15 /
+16 line), and the remaining runbook rows below (Directions, Complete,
+amber→red→green transitions, end-on-completion).
+
+## Original deploy note (kept for reference)
 
 
 Live Activity pushes cannot go through FCM — they need

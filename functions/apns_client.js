@@ -26,9 +26,19 @@
 const crypto = require("node:crypto");
 const http2 = require("node:http2");
 
-// Production APNs. There is no sandbox path here: Live Activities are only
-// verified on real hardware running a Release/TestFlight build.
+// Production APNs, tried first. A production-signed build (TestFlight / App
+// Store) registers a token this host accepts.
 const APNS_HOST = "https://api.push.apple.com";
+
+// Sandbox APNs, tried ONLY as a fallback when production returns
+// `BadDeviceToken`. A development-signed build (`flutter run`, dev provisioning
+// profile → `aps-environment: development`) registers a SANDBOX push token that
+// the production host rejects with exactly that reason. Retrying sandbox lets
+// the same code path light up a card on a dev build without a second config,
+// and it never risks a duplicate: the retry only runs when the production push
+// did NOT deliver. A production token that succeeds on the first host is never
+// re-sent.
+const APNS_SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 
 const BUNDLE_ID = "net.vogas.scheduling";
 
@@ -237,51 +247,75 @@ function _request(client, headers, body, timeoutMs) {
 async function sendLiveActivityPush(opts) {
   const {token, payload, auth, collapseId, expiration, logger} = opts || {};
   const impl = (opts && opts.http2Impl) || http2;
-  const host = (opts && opts.host) || APNS_HOST;
   const timeoutMs = (opts && opts.timeoutMs) || REQUEST_TIMEOUT_MS;
   if (!token || !payload || !auth || !auth.authKey) {
     return {ok: false, status: 0, reason: "missing-credentials", gone: false};
   }
-  let client = null;
+
+  let jwt;
   try {
-    const jwt = providerToken({
+    jwt = providerToken({
       authKey: auth.authKey,
       keyId: auth.keyId,
       teamId: auth.teamId,
       now: opts.now,
       signer: opts.signer,
     });
-    const headers = {
-      ":method": "POST",
-      ":path": `/3/device/${token}`,
-      "authorization": `bearer ${jwt}`,
-      "apns-push-type": opts.pushType || "liveactivity",
-      "apns-topic": opts.topic || LIVE_ACTIVITY_TOPIC,
-      "apns-priority": String(opts.priority || 10),
-    };
-    if (expiration != null) headers["apns-expiration"] = String(expiration);
-    if (collapseId) headers["apns-collapse-id"] = String(collapseId);
-    client = impl.connect(host);
-    if (typeof client.on === "function") {
-      // A session-level error would otherwise surface as an unhandled event.
-      client.on("error", () => {});
-    }
-    return await _request(
-        client, headers, JSON.stringify(payload), timeoutMs);
   } catch (err) {
     if (logger) logger.warn("apns: live activity push failed", {err});
     return {ok: false, status: 0, reason: String(err), gone: false};
-  } finally {
-    try {
-      if (client && typeof client.close === "function") client.close();
-    } catch (err) {
-      // Nothing useful to do about a failed session teardown.
-    }
   }
+
+  const headers = {
+    ":method": "POST",
+    ":path": `/3/device/${token}`,
+    "authorization": `bearer ${jwt}`,
+    "apns-push-type": opts.pushType || "liveactivity",
+    "apns-topic": opts.topic || LIVE_ACTIVITY_TOPIC,
+    "apns-priority": String(opts.priority || 10),
+  };
+  if (expiration != null) headers["apns-expiration"] = String(expiration);
+  if (collapseId) headers["apns-collapse-id"] = String(collapseId);
+  const body = JSON.stringify(payload);
+
+  // One request against a single host. Never throws.
+  const sendTo = async (host) => {
+    let client = null;
+    try {
+      client = impl.connect(host);
+      if (typeof client.on === "function") {
+        // A session-level error would otherwise surface as unhandled.
+        client.on("error", () => {});
+      }
+      return await _request(client, headers, body, timeoutMs);
+    } catch (err) {
+      if (logger) logger.warn("apns: live activity push failed", {err, host});
+      return {ok: false, status: 0, reason: String(err), gone: false};
+    } finally {
+      try {
+        if (client && typeof client.close === "function") client.close();
+      } catch (err) {
+        // Nothing useful to do about a failed session teardown.
+      }
+    }
+  };
+
+  // An explicit host override (tests) is honoured verbatim — no dual-try.
+  if (opts && opts.host) return sendTo(opts.host);
+
+  // Production first. `BadDeviceToken` is the specific signature of a sandbox
+  // token hitting the production host, so retry sandbox before the caller
+  // prunes the row. Any other outcome (success, 410/Unregistered, transient
+  // 5xx, topic error) is returned as-is — only the environment mismatch is
+  // worth a second request.
+  const prod = await sendTo(APNS_HOST);
+  if (prod.ok || prod.reason !== "BadDeviceToken") return prod;
+  return sendTo(APNS_SANDBOX_HOST);
 }
 
 module.exports = {
   APNS_HOST,
+  APNS_SANDBOX_HOST,
   BUNDLE_ID,
   LIVE_ACTIVITY_TOPIC,
   PROVIDER_TOKEN_TTL_MS,
