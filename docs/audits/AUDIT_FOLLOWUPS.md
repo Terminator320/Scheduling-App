@@ -149,8 +149,8 @@ harness).
 > `createEmployeeInvite` callable issues a per-invite code; `redeemSignupCode`
 > validates it server-side and activates the account immediately (no email
 > verification). `resolveMyInvite` was deleted, so the deploy blocker is gone.
-> See `docs/plans/INVITED_SIGNUP_REDESIGN.md` (design) and
-> `docs/plans/INVITED_SIGNUP_REDESIGN_PLAN.md` (implementation). The original sketch is
+> See `docs/archive/INVITED_SIGNUP_REDESIGN.md` (design) and
+> `docs/archive/INVITED_SIGNUP_REDESIGN_PLAN.md` (implementation). The original sketch is
 > kept below for history.
 
 **Problem (DEPLOY BLOCKER).** The audit security fix made `resolveMyInvite`

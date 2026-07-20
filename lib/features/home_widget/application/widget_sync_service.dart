@@ -7,6 +7,7 @@ import 'package:home_widget/home_widget.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/app_language.dart';
+import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
@@ -24,7 +25,10 @@ const _payloadKey = 'schedulePayload';
 Map<String, dynamic> _job(AppointmentRecord a) => {
   // Carried so a widget tap can deep-link straight to this appointment's
   // detail sheet (the Swift widget builds `esproschedule://appointment?id=…`).
-  'id': a.id,
+  // `?? ''` mirrors serializeWidgetJob's coercion: `id` is the one nullable
+  // field here, and the Swift `Job` decodes every field as a non-optional
+  // String — one null drops the WHOLE payload and blanks the widget.
+  'id': a.id ?? '',
   // Emit an absolute UTC instant (…Z). startTime is a *local* DateTime
   // (Firestore Timestamp.toDate()), so a bare toIso8601String() has no zone
   // designator — which the widget's ISO8601DateFormatter cannot parse. The
@@ -104,7 +108,7 @@ Map<String, dynamic> buildWidgetPayload(
   String iso(DateTime d) => d.toUtc().toIso8601String();
   return {
     'locale': locale,
-    'generatedAt': now.toIso8601String(),
+    'generatedAt': iso(now),
     'todayDate': iso(startOfToday),
     'tomorrowDate': iso(startOfTomorrow),
     'rolloverAt': rolloverAt == null ? null : iso(rolloverAt),
@@ -216,10 +220,13 @@ final widgetPayloadProvider =
           null,
         );
       }
-      final now = DateTime.now();
+      // Rebuilds when the calendar day rolls over — `rolloverAt` only covers
+      // the case where today's jobs are all finished, so without this an app
+      // left running overnight keeps showing yesterday as "today".
+      final today = ref.watch(currentDayProvider);
       final range = AppointmentDateRange(
-        start: now.dateOnly,
-        end: DateTime(now.year, now.month, now.day + 3),
+        start: today,
+        end: DateTime(today.year, today.month, today.day + 3),
       );
       final appts = ref.watch(
         myAppointmentsProvider((employeeId: empId, range: range)),

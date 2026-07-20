@@ -10,6 +10,36 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.34.1+55] - 2026-07-19
+### Changed
+- **Removing a team member now cuts off access immediately.** Setting someone
+  to disabled signs them out of every device, blocks them from signing back in,
+  and stops all notifications and live cards for them. Previously a removed
+  technician could still see the jobs they had been assigned — including client
+  names, phone numbers, addresses, notes, and job photos. Re-enabling them
+  restores access as before.
+### Fixed
+- **The live job card now actually appears.** A missing database index meant
+  every Lock Screen card silently failed to start, update, or clear, falling
+  back to the plain "time to leave" notification.
+- **The live card switches to "On site" and clears itself reliably.** On a quiet
+  day with nobody else scheduled, the card used to sit on "On the way" for the
+  whole visit and linger after the job was done.
+- **Turning the live job card off always works.** Switching it off in Settings
+  now removes this device from live cards even if no card had appeared yet in
+  that session — before, the server could keep starting cards on a phone that
+  had opted out.
+- **Completing one job no longer clears another job's live card.** Marking a
+  visit complete used to dismiss the card for whatever job you were actually
+  driving to.
+- **Siri and the home-screen widget roll over at midnight.** Leaving the app
+  open overnight made Siri answer "no appointments today" and the widget show
+  the previous day's jobs until the app was reopened.
+- **Re-enabling Live Activities in iOS Settings takes effect right away.** The
+  "Live job card" row no longer stays hidden until you relaunch the app.
+- **A busy schedule no longer swallows a notification.** An oversized widget
+  refresh attached to a push could make the whole notification fail to send.
+
 ## [1.34.0+54] - 2026-07-19
 ### Added
 - **Ask Siri about your day.** On iPhone you can now ask Siri "what's my next

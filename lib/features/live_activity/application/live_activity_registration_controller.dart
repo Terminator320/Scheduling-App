@@ -175,8 +175,7 @@ class LiveActivityRegistrationController {
     if (uid == null) return;
     if (!await _ensurePlugin()) return;
 
-    final match = await _ref.read(employeesRepositoryProvider).findUserByUid(uid);
-    final docId = match?.id;
+    final docId = await _resolveUserDocId();
     if (docId == null) {
       _logger.warn('LIVE-ACT no users doc for uid; skip token upsert');
       return;
@@ -334,16 +333,24 @@ class LiveActivityRegistrationController {
   /// card (no client's name left on a signed-out Lock Screen) and delete this
   /// device's token rows. Never throws — sign-out must not be blocked.
   Future<void> unregister() async {
-    final pushToStart = _pushToStartToken;
     try {
       // Ends the cards and drops every per-activity row; only the device-wide
       // push-to-start row (which survives a completed job) is left to clear.
       await endLocalCards();
-      final docId = _docId;
-      if (docId != null && pushToStart != null) {
+      // Resolved rather than read from `_docId`: a Settings opt-out can land
+      // before the token stream has emitted, and a cold start with the
+      // preference already off returns from _syncGuarded before `_docId` is
+      // ever set — in both cases the row exists on the server and must go.
+      final docId = _docId ?? await _resolveUserDocId();
+      if (docId != null) {
+        // By kind, not by id: the push-to-start doc id IS the token, which
+        // this session may never have seen.
         await _ref
             .read(liveActivityTokenRepositoryProvider)
-            .deleteToken(userDocId: docId, docId: pushToStart);
+            .deleteTokensOfKind(
+              userDocId: docId,
+              kind: LiveActivityTokenKind.pushToStart,
+            );
       }
     } catch (e, st) {
       _logger.warn('LIVE-ACT unregister failed', e, st);
@@ -354,6 +361,22 @@ class LiveActivityRegistrationController {
       _locale = null;
       _pushToStartToken = null;
       _activityTokens.clear();
+    }
+  }
+
+  /// The users-doc id for the signed-in uid, or null when signed out or the
+  /// lookup fails. Never throws — [unregister] must not block sign-out.
+  Future<String?> _resolveUserDocId() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return null;
+    try {
+      final match = await _ref
+          .read(employeesRepositoryProvider)
+          .findUserByUid(uid);
+      return match?.id;
+    } catch (e, st) {
+      _logger.warn('LIVE-ACT resolve users doc failed', e, st);
+      return null;
     }
   }
 

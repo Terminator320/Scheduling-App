@@ -24,7 +24,6 @@ import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
-import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 // Re-export so existing importers of this controller keep resolving the save
@@ -294,12 +293,11 @@ class EventDetailsController extends Notifier<EventDetailsState>
     final logger = ref.read(loggerProvider);
     try {
       await repo.updateAppointmentStatus(id: id, status: status);
-      // Terminal status — clear this device's Live Activity card now instead
-      // of waiting for the server's end push. Best-effort and non-throwing:
-      // it must never change whether the status write succeeded.
-      unawaited(
-        ref.read(liveActivityRegistrationControllerProvider).endLocalCards(),
-      );
+      // The card is ended SERVER-side by the appointment-write trigger, which
+      // resolves it through the liveActivityCards marker. Deliberately not
+      // ended here: this device can't tell which appointment a push-started
+      // card belongs to, so ending locally would kill the card for the job the
+      // tech is currently driving to when they mark the previous one done.
       if (ref.mounted) state = state.copyWith(isSaving: false);
       return null;
     } catch (e, st) {
@@ -383,32 +381,8 @@ class EventDetailsController extends Notifier<EventDetailsState>
         ? null
         : ref.read(appointmentImageUploadProvider);
 
-    // Let the employee enrichment settle so assignee resolution runs against
-    // a warm active-employee read. Almost always already done.
-    await _seedFuture;
-    if (!ref.mounted) return const EventDetailsInvalid();
-
-    final clientForValidation =
-        state.selectedClient ??
-        (!state.clientCleared && appointment.clientId.trim().isNotEmpty
-            ? state.client ?? placeholderClient(appointment)
-            : null);
-
-    final errors = AppointmentFormValidator.validate(
-      AppointmentFormInput(
-        title: title,
-        date: state.selectedDate,
-        startTime: state.selectedStartTime,
-        endTime: state.selectedEndTime,
-        client: clientForValidation,
-        selectedEmployees: state.selectedEmployees,
-      ),
-    );
-    state = state.copyWith(errors: errors);
-    if (errors.isNotEmpty) {
-      state = state.copyWith(isSaving: false);
-      return const EventDetailsInvalid();
-    }
+    final invalid = await _settleAndValidate(appointment, title: title);
+    if (invalid != null) return invalid;
 
     final id = appointment.id;
     if (id == null) {
@@ -457,25 +431,13 @@ class EventDetailsController extends Notifier<EventDetailsState>
         applyToSeries: applyToSeries,
       );
 
-      // Photos the user removed in this edit come off the doc as an
-      // arrayRemove — issued ONLY when something was actually removed, never
-      // as a whole-array rewrite — so a background upload racing this save
-      // keeps its appended photos (the repo's record updates skip `pictures`
-      // for the same reason).
-      if (removedImages.isNotEmpty) {
-        await repo.removeAppointmentPictures(id, removedImages);
-      }
-
-      // The doc now stores state.repeat — make it the new baseline.
-      if (ref.mounted) state = state.copyWith(savedRepeat: state.repeat);
-
-      // Clean up images dropped in this edit only after the doc (which no
-      // longer references them) has committed.
-      await _deleteOrphanedImages(removedImages, tag: 'APPT-SAVE');
-
-      if (newImages.isNotEmpty) {
-        uploader?.uploadInBackground(appointmentId: id, newImages: newImages);
-      }
+      await _applyPhotoChanges(
+        id: id,
+        repo: repo,
+        uploader: uploader,
+        removedImages: removedImages,
+        newImages: newImages,
+      );
 
       if (ref.mounted) state = state.copyWith(isSaving: false);
       return saved;
@@ -484,6 +446,75 @@ class EventDetailsController extends Notifier<EventDetailsState>
       if (ref.mounted) state = state.copyWith(isSaving: false);
       return EventDetailsFailed(e);
     }
+  }
+
+  /// Applies this edit's photo changes after the record write has committed.
+  /// Ordering is load-bearing: the doc must stop referencing a photo before
+  /// its bytes are deleted, and uploads are dispatched last so a failure there
+  /// can't roll back a committed save.
+  Future<void> _applyPhotoChanges({
+    required String id,
+    required AppointmentsRepository repo,
+    required AppointmentImageUploadService? uploader,
+    required List<AppointmentImage> removedImages,
+    required List<File> newImages,
+  }) async {
+    // Photos the user removed in this edit come off the doc as an
+    // arrayRemove — issued ONLY when something was actually removed, never
+    // as a whole-array rewrite — so a background upload racing this save
+    // keeps its appended photos (the repo's record updates skip `pictures`
+    // for the same reason).
+    if (removedImages.isNotEmpty) {
+      await repo.removeAppointmentPictures(id, removedImages);
+    }
+
+    // The doc now stores state.repeat — make it the new baseline.
+    if (ref.mounted) state = state.copyWith(savedRepeat: state.repeat);
+
+    // Clean up images dropped in this edit only after the doc (which no
+    // longer references them) has committed.
+    await _deleteOrphanedImages(removedImages, tag: 'APPT-SAVE');
+
+    if (newImages.isNotEmpty) {
+      uploader?.uploadInBackground(appointmentId: id, newImages: newImages);
+    }
+  }
+
+  /// Settles the employee-enrichment seed, then validates the form. Returns a
+  /// stop-outcome (and clears `isSaving`) when the save must not proceed, or
+  /// null when it may. Called only after `isSaving` is already held, so the
+  /// awaits here are inside the reentrancy guard.
+  Future<EventDetailsSaveOutcome?> _settleAndValidate(
+    AppointmentRecord appointment, {
+    required String title,
+  }) async {
+    // Let the employee enrichment settle so assignee resolution runs against
+    // a warm active-employee read. Almost always already done.
+    await _seedFuture;
+    if (!ref.mounted) return const EventDetailsInvalid();
+
+    final clientForValidation =
+        state.selectedClient ??
+        (!state.clientCleared && appointment.clientId.trim().isNotEmpty
+            ? state.client ?? placeholderClient(appointment)
+            : null);
+
+    final errors = AppointmentFormValidator.validate(
+      AppointmentFormInput(
+        title: title,
+        date: state.selectedDate,
+        startTime: state.selectedStartTime,
+        endTime: state.selectedEndTime,
+        client: clientForValidation,
+        selectedEmployees: state.selectedEmployees,
+      ),
+    );
+    state = state.copyWith(errors: errors);
+    if (errors.isNotEmpty) {
+      state = state.copyWith(isSaving: false);
+      return const EventDetailsInvalid();
+    }
+    return null;
   }
 
   // Builds the edited AppointmentRecord from the form fields + resolved

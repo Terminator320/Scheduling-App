@@ -5,12 +5,17 @@ That doc is the *what/why* (six phases, scope decisions, architecture). This is
 the *how* — files, order, tests, Mac steps — grounded in the code that already
 exists.
 
-**Status: Phase 1 Dart + Swift landed 2026-07-19 — Xcode target not yet created.**
+**Status: Phase 1 COMPLETE except on-device verification (2026-07-19).**
 The Dart half (builder, service, provider, `main.dart` wiring, 15 unit tests) is
-in `lib/features/siri/`; the Swift half is authored in `ios/SiriIntents/` with a
-Mac runbook + device checklist at `ios/SiriIntents/README.md`. Remaining for
-Phase 1: the Xcode target, the 15.0 → 16.0 deployment-target bump, and the
-on-device verification pass. Phases 2–3 not started.
+in `lib/features/siri/`; the Swift half is in `ios/SiriIntents/` with a Mac
+runbook + device checklist at `ios/SiriIntents/README.md`. The `SiriIntents`
+App Intents extension target **was created and embedded in Runner 2026-07-19**
+and builds clean (bundle id `net.vogas.scheduling.SiriIntents`, entitlements
+`SiriIntentsExtension.entitlements` sharing the App Group). The deployment
+target went to **iOS 18.0**, not the 16.0 this plan originally called for — the
+Live Activity Directions button's returnable `OpenURLIntent` forced the whole
+app to an 18.0 floor. Remaining for Phase 1: the on-device Siri phrase pass.
+Phases 2–3 not started.
 **Reviewed 2026-07-19 against the code; corrections applied inline.** Phases 1–3
 are ready to execute. **Phase 4 is blocked** on two paper decisions flagged in
 its Mac steps (App Attest's bundle-ID binding; the not-yet-existing
@@ -28,7 +33,9 @@ isn't — the iOS home-screen widget already established every foundation piece:
 | Pure payload builder pattern | `buildWidgetPayload(...)` (same file) | Copy the shape for `buildScheduleSnapshot(...)` |
 | Sync service w/ dedup + iOS-gate | `WidgetSyncService` (`_signatureOf` dedup, `_lastState`, `clear()`) | Copy for `ScheduleSnapshotService` |
 | Employee-id + payload providers | `widgetEmployeeIdProvider`, `widgetPayloadProvider` | Copy/parametrize for the snapshot |
-| `main.dart` emission-driven wiring | `_listenForWidgetSync()` ([main.dart:458](../../lib/main.dart#L458)) | Copy for `_listenForSnapshotSync()` |
+| Emission-driven wiring | `_widgetSync()` in [`app_sync_listeners.dart`](../../lib/core/app/app_sync_listeners.dart) | `_snapshotSync()` sits beside it (both moved out of `main.dart` 2026-07-19) |
+| Off-screen-mirror identity | `activeUserIdentityProvider` | Same provider — one active+role gate for both mirrors |
+| Midnight rollover | `currentDayProvider` | Same provider — neither mirror may use a bare `DateTime.now()` |
 | Deep-link scheme | `esproschedule://appointment?id=…` | Siri result tap reuses it |
 
 So **Phase 1 is ~90% "clone the widget path with a wider date window and a
@@ -45,97 +52,141 @@ Divergences from the widget payload to design in deliberately:
 
 ---
 
-## Phase 1 — read, today/next (the foundation)
+## Phase 1 — read, today/next (the foundation) — ✅ BUILT
 
-### Dart (buildable + testable on this box)
+Everything below is **as-built** (2026-07-19), not a plan. Where the shipped
+code diverges from what this doc originally specified, the divergence is called
+out — those are the parts worth knowing before touching it.
 
-New feature dir `lib/features/siri/` (feature-first per convention):
+### Dart — landed in `lib/features/siri/`
 
-1. **`domain/schedule_snapshot.dart`** — plain data + pure builder.
-   - `buildScheduleSnapshot({required List<AppointmentRecord> appointments,
-     required String role, required DateTime now})` → `Map<String, dynamic>`.
-   - Day-buckets `now.dateOnly … +7d` (device-local, mirror `.dateOnly` usage
-     from the widget builder), **excludes cancelled**, normalizes status via
-     `AppointmentStatus.fromRaw(a.status).raw`, per-day cap 30, stamps
-     `version: 1` + `generatedAt` + `role`, carries `id` per appointment.
-   - **Drop records with a null `id`.** `AppointmentRecord.id` is `String?`
-     ([appointment_record.dart:14](../../lib/features/calendar/domain/models/appointment_record.dart#L14))
-     and the widget's `_job()` serializes it straight through, so an id-less job
-     can reach the payload as `"id": null`. Phase 4 resolves every write target
-     by snapshot `id`, so an id-less entry is unactionable — filter it at build
-     time and keep `id` **non-optional** in the Swift `Codable`.
-   - Pure → plain `test()`, no Firebase. This is the bulk of the testable work.
-2. **`application/schedule_snapshot_service.dart`** — clone `WidgetSyncService`:
-   - Same App Group id constant (import `widgetAppGroupId`, don't redefine),
-     **new** `_snapshotKey = 'schedule_snapshot'`, `_signatureOf` dedup minus
-     `generatedAt`, `_lastState`, iOS-gate, `writeSnapshot(payload)` +
-     `clearSnapshot()`, `warn` on failure. Provider
-     `scheduleSnapshotServiceProvider`.
-3. **`application/schedule_snapshot_provider.dart`** — clone
-   `widgetPayloadProvider`, but role-aware:
-   - Resolve `role` + active-status from `currentUserDocProvider` (reuse the
-     guard shape in `widgetEmployeeIdProvider`).
-   - Employee → `myAppointmentsProvider((employeeId, range: today..+7d))`.
-     Admin → `appointmentsInRangeProvider(range)` (business-wide `watchInRange`;
-     the widget only used the employee-scoped one). Signed-out/inactive →
-     `data(null)` (clear).
-4. **`main.dart`** — add `_listenForSnapshotSync()` mirroring
-   `_listenForWidgetSync()` ([main.dart:458](../../lib/main.dart#L458)); call it
-   from the same block that calls `_listenForWidgetSync()` (~line 560).
-   (Snapshot writes happen on iOS only — same `Platform.isIOS` gate.)
-   - **Clearing is implicit — do NOT add an explicit sign-out clear.** There is
-     no widget clear on the sign-out path to sit alongside: the sign-out sites
-     ([settings_screen.dart:463](../../lib/features/settings/screens/settings_screen.dart#L463),
-     [main.dart:378](../../lib/main.dart#L378)) only unregister push + presence.
-     The widget clears because sign-out makes `widgetEmployeeIdProvider` resolve
-     null → `widgetPayloadProvider` emits `data(null)` → the listener calls
-     `clear()` ([main.dart:469](../../lib/main.dart#L469)). Mirror that
-     null-for-clear contract in `scheduleSnapshotProvider` and the snapshot wipes
-     itself for free.
+1. **`domain/schedule_snapshot.dart`** (98 lines) — pure builder.
+   `buildScheduleSnapshot({appointments, role, now})` → `Map<String, dynamic>`.
+   Day-buckets `now.dateOnly … +7d` (device-local), **excludes cancelled**,
+   per-day cap 30 (`scheduleSnapshotPerDayCap`), stamps
+   `version: scheduleSnapshotVersion` + `generatedAt` + `role`, carries `id`.
+   Records with a null/empty `id` are dropped — Phase-4 write actions resolve
+   their target by `id`, so an id-less entry is unactionable, and `id` is
+   **non-optional** in the Swift `Codable`.
+   - ⚠️ **Divergence — status normalization needed a special case.** This plan
+     said "normalize via `AppointmentStatus.fromRaw(a.status).raw`". That alone
+     would **throw**: reading `AppointmentStatus.overdue.raw` throws on purpose
+     (CLAUDE.md — it's a display-only state that must never be written), so a
+     doc somehow storing `overdue` would fail the entire snapshot build rather
+     than one record. The shipped `_storedStatus` maps `overdue → pending`
+     first, then takes `.raw`. Keep that guard if you touch the builder.
+2. **`application/schedule_snapshot_service.dart`** (83 lines) — imports
+   `widgetAppGroupId` (not redefined), writes under the **public** const
+   `scheduleSnapshotKey = 'schedule_snapshot'`, `_signatureOf` dedup minus
+   `generatedAt`, `_lastState` with a distinct `_clearedState` sentinel so a
+   repeat clear is also deduped, `Platform.isIOS` gate, `warn` on failure.
+   Provider `scheduleSnapshotServiceProvider` injects `loggerProvider`.
+   - **Divergence:** this plan (and the design doc) called for "an injected
+     interface so tests mock it". The shipped service takes only an optional
+     `AppLogger`; `home_widget` is called statically, exactly as
+     `WidgetSyncService` does. Consequence: the write/clear paths are
+     device-only, and just the two pure statics are unit-tested — which is the
+     established pattern, not a shortfall.
+3. **`application/schedule_snapshot_provider.dart`** (47 lines) — role-aware,
+   `Provider.autoDispose`. Employee → `myAppointmentsProvider`, admin →
+   `appointmentsInRangeProvider`. Signed-out/inactive → `data(null)` (clear).
+   Two divergences, both deliberate and both load-bearing:
+   - ⚠️ **Identity comes from `activeUserIdentityProvider`**, not
+     `currentUserDocProvider` / a copy of `widgetEmployeeIdProvider`'s guard.
+     Both off-screen mirrors (this and the home-screen widget) now resolve *who
+     they're for* through that one provider — active-status gate,
+     employee-or-admin, `retryAsync(findUserByUid)` for the post-sign-in token
+     lag. It returns `(role, docId)`, and its null is what wipes both mirrors on
+     sign-out. Route any new mirror through it rather than re-deriving.
+   - ⚠️ **The provider watches `currentDayProvider`** (`core/utils/`) for its
+     day bucketing instead of a bare `DateTime.now()`. The appointments stream
+     only re-emits on a write, so an app left resident overnight otherwise kept
+     publishing yesterday's buckets and **Siri answered "no appointments today"
+     while jobs existed**. This was found and fixed by the 2026-07-19 audit
+     (bug B2); don't reintroduce a bare `now` here.
+4. **Wiring** — `_snapshotSync()` in
+   [`lib/core/app/app_sync_listeners.dart`](../../lib/core/app/app_sync_listeners.dart),
+   registered by `AppSyncListeners.registerAll()`.
+   - **Divergence:** this plan said "add `_listenForSnapshotSync()` to
+     `main.dart`". It landed there first, then moved: the ~10 `ref.listen`
+     wire-ups were extracted out of `main.dart` into `AppSyncListeners` so they
+     could be unit-tested without building a `MaterialApp`. The
+     account-lifecycle listeners stayed in `main.dart` (their registration order
+     is load-bearing). Old `main.dart:458/469/378` line references in earlier
+     drafts of this doc are dead.
+   - **Clearing is implicit — do NOT add an explicit sign-out clear.**
+     `scheduleSnapshotProvider` emits `data(null)`, the listener calls
+     `clearSnapshot()`. Same contract as the widget.
 
 **No pubspec change** (`home_widget` already present). No new App Group.
 
-### Swift (author here in `ios/SiriIntents/`, compile on Mac)
+### Swift — landed in `ios/SiriIntents/`
 
-Per the design doc Components list: `ScheduleSnapshot.swift` (Codable + App
-Group `UserDefaults` loader, rejects missing/undecodable/wrong-version, decodes
-`id`), `AppointmentCountIntent.swift`, `TodayScheduleIntent.swift`,
-`NextAppointmentIntent.swift`, `ESProShortcuts.swift`
-(`AppShortcutsProvider`, EN+FR phrases), EN/FR string catalogs.
+| File | Lines | What |
+|---|---|---|
+| `ScheduleSnapshot.swift` | 99 | `Codable` + App Group `UserDefaults` loader; rejects missing/undecodable/wrong-`version`; `day(on:)`, `today`, `nextAppointment(after:)`, `dayKey` mirroring the Dart `_dayKey`; `deepLink` → `esproschedule://appointment?id=…` |
+| `AppointmentCountIntent.swift` | 30 | "how many appointments today" |
+| `TodayScheduleIntent.swift` | 35 | reads today's list, time + client per line |
+| `NextAppointmentIntent.swift` | 32 | earliest upcoming not-done visit across the **whole 7-day window**, so an empty rest-of-today still answers with tomorrow's first job |
+| `ESProShortcuts.swift` | 50 | `AppShortcutsProvider`, 14 phrases across EN + FR |
+| `SiriStrings.swift` | 132 | all spoken text, EN + FR |
+| `Info.plist` | 11 | `NSExtensionPointIdentifier = com.apple.appintents-extension` |
+| `README.md` | 86 | Mac runbook + device checklist |
 
-### Mac steps (Phase 1)
+- **Divergence:** the plan called for "EN/FR string catalogs". Shipped as one
+  plain-Swift `SiriStrings.swift` instead, so both localizations sit side by
+  side and review as one file. Response language follows `Locale.current`,
+  matching how `ScheduleWidget.swift` picks its labels.
+- All three intents set `openAppWhenRun = false` and
+  `authenticationPolicy = .alwaysAllowed` — reads answer from the lock screen
+  without unlocking, which is the hands-free point. **Phase-4 write intents must
+  NOT copy that policy.**
+- Types are gated `@available(iOS 16.0, *)` even though the app floor is now
+  18.0. Harmless and left alone: the gate is what the App Intents API requires,
+  and keeping it means the files don't need touching if the floor ever moves.
 
-The App Group already exists on Runner + `ScheduleWidget`. Remaining:
-1. Add **App Intents extension** target `SiriIntents` (iOS 16.0); add it to the
-   existing App Group `group.net.vogas.scheduling`.
-2. Bump `IPHONEOS_DEPLOYMENT_TARGET` 15.0 → **16.0** — across **all 6 build
-   configurations** in `ios/Runner.xcodeproj/project.pbxproj` (lines 512, 569,
-   615, 658, 779, 832), i.e. Runner *and* the `ScheduleWidget` extension, not
-   Runner alone. Verify App Attest still passes (design doc: iOS 16 keeps the
-   ≥14 App Attest floor). **This drops iOS 15 users** — a product decision, not
-   just a build setting. Update the CLAUDE.md "Deployment target is **iOS
-   15.0**" note when this lands.
-3. Pull in the authored Swift files; wire the SPM `firebase-ios-sdk` **only if**
-   later phases need it (Phase 1 extension is Firebase-free).
+### Mac steps (Phase 1) — done 2026-07-19
 
-### Phase 1 tests
-- `buildScheduleSnapshot`: role matrix (admin all vs employee `employeeIds`
-  filter), 7-day bucketing + device-local boundaries, cancelled exclusion,
-  legacy `confirmed`→allowlist normalization, per-day cap 30, empty input,
-  `version`/`generatedAt`/`id` presence, **null-`id` records dropped**.
-- `ScheduleSnapshotService.signatureForTesting` — dedup ignores `generatedAt`;
-  a changed schedule changes the signature. **Pure statics only.** `home_widget`
-  is a method-channel plugin, so the write / `clearSnapshot` / iOS-gate paths
-  are *not* unit-testable here (CLAUDE.md's device-only rule) — mirror the
-  existing pattern, which tests exactly these two pure surfaces:
-  `test/features/home_widget/widget_payload_test.dart` +
-  `widget_signature_test.dart`.
-- Device (Mac): EN+FR phrase recognition × 3 intents; normal/empty/stale/
-  signed-out/locked states; snapshot write + clear actually land in the App
-  Group (the part the harness can't cover).
+1. ✅ **App Intents extension target `SiriIntents` created and embedded in
+   Runner** — bundle id `net.vogas.scheduling.SiriIntents`, entitlements
+   `SiriIntentsExtension.entitlements` sharing the App Group
+   `group.net.vogas.scheduling`. Builds clean.
+2. ✅ **Deployment target bumped — but to 18.0, not 16.0.** This plan called for
+   15.0 → 16.0 across all 6 build configurations. What actually happened: the
+   Live Activity Directions button's returnable `OpenURLIntent` is **iOS 18+**,
+   so the whole app moved to an **18.0** floor in the same session, which
+   subsumes Siri's 16.0 requirement. iOS 15–17 users are dropped — a product
+   decision, taken. App Attest's ≥14 floor is still satisfied. (The pbxproj line
+   numbers this plan used — 512, 569, 615, 658, 779, 832 — are stale; the file
+   has changed since.) CLAUDE.md's deployment-target note is updated.
+3. ✅ Swift files pulled in. `firebase-ios-sdk` deliberately **not** linked into
+   the extension — Phase 1 is Firebase-free.
+
+### Phase 1 tests — 15, all passing
+
+- `test/features/siri/schedule_snapshot_test.dart` — **12 tests** over the pure
+  builder: role matrix, 7-day bucketing + device-local boundaries, cancelled
+  exclusion, legacy `confirmed`→allowlist normalization, per-day cap 30, empty
+  input, `version`/`generatedAt`/`id` presence, null-`id` records dropped.
+- `test/features/siri/schedule_snapshot_signature_test.dart` — **3 tests** on
+  `signatureForTesting`: dedup ignores `generatedAt`; a changed schedule changes
+  the signature.
+- `test/features/auth/application/active_user_identity_provider_test.dart` —
+  added by the 2026-07-19 audit (finding T4). It covers the identity provider
+  both mirrors now depend on: the active+role gate returning null, and
+  `retryAsync` surviving the post-sign-in `permission-denied` lag. A regression
+  there silently wipes both the widget and this snapshot.
+- **Not unit-testable** (CLAUDE.md device-only rule): the write / `clearSnapshot`
+  / iOS-gate paths — `home_widget` is a method-channel plugin.
+
+### Phase 1 remaining: on-device verification
+
+The only thing left. Per `ios/SiriIntents/README.md`: EN + FR phrase
+recognition × 3 intents; normal / empty / stale / signed-out / locked states;
+snapshot write + clear actually landing in the App Group.
 
 **Phase 1 exit:** three read intents answer from the snapshot on a device;
-sign-out wipes it.
+sign-out wipes it. *(Code complete; awaiting the device pass.)*
 
 ---
 
@@ -255,25 +306,32 @@ button. Each is its own small increment; none blocks the others.
   `AppLocalizations.supportedLocales`); response language follows the device's
   Siri language. Add ARB keys only if any string surfaces in-app (the Swift
   string catalogs are separate from `gen_l10n`).
-- **Snapshot data-protection class (decide in Phase 1, not later):** Siri answers
-  while the device is locked, so the App Group payload must remain readable when
-  locked — which puts client names, addresses, and phones at a weaker protection
-  class than the rest of the app's data. The widget already accepts this for 2
-  days of one employee's jobs; the snapshot widens it to **7 days and, for
-  admins, the whole business**. That's a deliberate widening of at-rest PII
-  exposure — record it in the design doc's Privacy §, and consider trimming the
-  snapshot to the fields the intents actually speak (client name + time + status)
-  rather than copying the full job shape.
+- **Snapshot data-protection class — ✅ decided and applied in Phase 1.** Siri
+  answers while the device is locked, so the App Group payload stays readable
+  when locked, putting everything in it at a weaker protection class than the
+  rest of the app's data. The widget already accepts this for 2 days of one
+  employee's jobs; the snapshot widens it to **7 days and, for admins, the whole
+  business**. The mitigation this section asked for **was taken**: the payload
+  carries only the fields the intents actually speak — `id`, start/end millis,
+  client name, address, status. **Never** notes, phone, pictures, or materials.
+  The builder's doc comment records why; keep it that way when adding a field.
 - **Privacy review gate:** Phase 4 is where the extension stops being
   Firebase-free — flag for security-review/App-Review as a conscious change, not
-  drift (design doc, Privacy §).
-- **CLAUDE.md updates when phases land:** deployment target 15→16 (Phase 1);
-  a new "Siri App Intents" invariant note describing the snapshot key + the
-  Firebase-in-extension boundary (Phase 4).
+  drift (design doc, Privacy §). Note the snapshot itself adds **no new App
+  Privacy data type** — everything in it is already declared (Name, Physical
+  Address, Other User Content); see `docs/plans/APP_STORE_SUBMISSION.md` Part 8.
+- **CLAUDE.md updates when phases land:** ✅ deployment target (Phase 1 — landed
+  as 18.0, see Mac steps) and the Siri App Intents invariant note (snapshot key,
+  `activeUserIdentityProvider` routing, `currentDayProvider` rollover, the
+  hand-mirrored Dart↔Swift pair, the id-drop rule) are both in CLAUDE.md today.
+  Still to add when Phase 4 lands: the Firebase-in-extension boundary.
 
 ## Suggested sequencing
 
-Phases **1–2 first** — highest value-per-effort, almost entirely a clone of the
-widget path plus a wider window, and testable on this box. Then **3**. Treat
-**4** as a standalone reviewed milestone (the Firebase-in-extension inflection).
-**5–6** are opportunistic follow-ups. Android stays out (design doc).
+Phase **1 is built** — only its device pass remains. **Phase 2 next**: it is
+pure-additive Swift over a snapshot that already carries all 7 days, so it needs
+no Dart and no schema change, making it the highest value-per-effort increment
+left. Then **3**. Treat **4** as a standalone reviewed milestone (the
+Firebase-in-extension inflection, and still blocked on the two paper decisions
+in its Mac steps). **5–6** are opportunistic follow-ups. Android stays out
+(design doc).

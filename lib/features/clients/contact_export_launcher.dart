@@ -57,7 +57,12 @@ Future<void> saveClientToPhoneContacts(
         await linkStore.link(client.id, createdId);
       }
     }
-  } catch (_) {
+  } catch (e, st) {
+    // Matches updateLinkedPhoneContact below — a contacts-plugin failure has
+    // to reach Crashlytics, not just the notice overlay.
+    ref
+        .read(loggerProvider)
+        .warn('CLI-CONTACT-SAVE saveClientToPhoneContacts failed', e, st);
     if (context.mounted) {
       notices.error(context.l10n.error_couldNotOpenContacts);
     }

@@ -93,7 +93,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     // stored server-side. Without the re-sync, "enabled in Settings" would
     // still deliver no pushes.
     if (state == AppLifecycleState.resumed && mounted) {
-      ref.invalidate(notificationAuthStatusProvider);
+      ref
+        ..invalidate(notificationAuthStatusProvider)
+        // Same reasoning for Live Activities: `areActivitiesEnabled()` is a
+        // user-mutable iOS Settings value, and the probe is cached for the
+        // process lifetime — without this the row stays "unsupported" until
+        // the app is relaunched.
+        ..invalidate(liveActivitySupportedProvider);
       unawaited(ref.read(pushRegistrationControllerProvider).sync());
     }
   }

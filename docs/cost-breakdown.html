@@ -529,7 +529,7 @@
             <td class="idx">12</td>
             <td class="fn">syncUsersByUid</td>
             <td><span class="trig">users write</span></td>
-            <td>Invite created / account activated</td>
+            <td>Invite created / account activated / deactivated (also revokes Auth access and purges token rows)</td>
             <td class="num">40</td>
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
@@ -791,8 +791,11 @@
       <b>admin-only</b> (server-side <code>assertAdmin</code>), so only a trusted
       admin session can drive that spend. The Routes API is called server-side by
       the leave-now sweep (never from the app) and is ledger-capped to fire once
-      per job, so its spend scales only with job volume &mdash; the single alert
-      backstops both.
+      per job, so its spend scales only with job volume. The sweep also memoizes
+      each drive-time estimate for ~10 minutes, so a job waiting out its 90-minute
+      window is priced a couple of times rather than on all ~18 sweeps &mdash; a
+      cached estimate can only defer a call, never trigger a send. The single
+      alert backstops both APIs.
     </p>
   </div>
 

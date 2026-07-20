@@ -1,6 +1,22 @@
 {
   "indexes": [
     {
+      "collectionGroup": "liveActivityTokens",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "kind", "order": "ASCENDING" },
+        { "fieldPath": "employeeDocId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "liveActivityCards",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "phase", "order": "ASCENDING" },
+        { "fieldPath": "startTime", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "users",
       "queryScope": "COLLECTION",
       "fields": [

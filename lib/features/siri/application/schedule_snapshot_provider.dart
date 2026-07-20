@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -18,8 +18,9 @@ final scheduleSnapshotProvider =
       if (identity == null) {
         return const AsyncValue<Map<String, dynamic>?>.data(null);
       }
-      final now = DateTime.now();
-      final startOfToday = now.dateOnly;
+      // Rebuilds this snapshot when the calendar day rolls over, so an app
+      // left running overnight can't keep publishing yesterday's day buckets.
+      final startOfToday = ref.watch(currentDayProvider);
       final range = AppointmentDateRange(
         start: startOfToday,
         end: DateTime(

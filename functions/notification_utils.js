@@ -50,6 +50,10 @@ const OVERDUE_QUERY_WINDOW_MS = 2 * OVERDUE_LOOKBACK_MS;
 // the remainder).
 const OVERDUE_SWEEP_MAX = 500;
 
+// FCM's hard cap on a message's data map is 4 KB; this leaves headroom for the
+// other data keys (kind, appointment id, deep link) alongside the payload.
+const WIDGET_PAYLOAD_MAX_BYTES = 3000;
+
 // Ledger docs are useless once their occurrence ages out of eligibility;
 // expiresAt + a Firestore TTL policy on both ledger collections keeps them
 // from accumulating forever.
@@ -542,7 +546,18 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
   const messages = tokenDocs.map((doc) => {
     const locale = (doc.data() || {}).locale === "fr" ? "fr" : "en";
     const {title, body} = buildMsg(locale);
-    const msgData = augmentData ? {...data, ...augmentData(locale)} : data;
+    let msgData = augmentData ? {...data, ...augmentData(locale)} : data;
+    // FCM rejects a message whose data map exceeds 4 KB, which would lose the
+    // VISIBLE notification too — not just the widget refresh. A busy two-day
+    // window is the only realistic way to get there, so the payload is dropped
+    // rather than risking the push; the widget then refreshes on the next app
+    // run, exactly as it did before it rode along on pushes. Copied first —
+    // msgData aliases the caller's `data` when there is no augmentData.
+    if (typeof msgData.widgetPayload === "string" &&
+        msgData.widgetPayload.length > WIDGET_PAYLOAD_MAX_BYTES) {
+      msgData = {...msgData};
+      delete msgData.widgetPayload;
+    }
     const aps = {sound: "default"};
     // A change push that carries a fresh widget payload also wakes the app in
     // the background (iOS) so the background handler can rewrite the
@@ -671,6 +686,46 @@ async function fetchEmployeeWidgetWindow(db, employeeDocId, now, logger) {
 }
 
 /**
+ * Ends any live card for a job that just became `done`. Best-effort and
+ * non-throwing, like every other Live Activity path: `endLiveActivity`
+ * resolves through the server-owned card marker, so it only ends a card that
+ * actually belongs to this appointment. A cancel is already handled by the
+ * change-event loop, so only the completion transition is covered here.
+ * @param {string} id appointment doc id.
+ * @param {?Object} before
+ * @param {?Object} after
+ * @param {!Object} deps
+ * @param {!Date} now
+ * @return {!Promise<void>}
+ */
+async function endCardOnCompletion(id, before, after, deps, now) {
+  const wasDone = String((before || {}).status || "").toLowerCase() === "done";
+  const isDone = String((after || {}).status || "").toLowerCase() === "done";
+  if (wasDone || !isDone) return;
+  for (const employeeDocId of toIdList(after.employeeIds)) {
+    try {
+      await endLiveActivity(deps, {
+        appointmentId: String(id),
+        employeeDocId,
+        ctx: {
+          clientName: after.clientName,
+          address: after.address,
+          startTime: after.startTime,
+          leaveAt: null,
+          travelMinutes: null,
+        },
+        nowDate: now,
+      });
+    } catch (err) {
+      if (deps.logger) {
+        deps.logger.warn("liveActivity: end-on-complete failed",
+            {id, employeeDocId, err});
+      }
+    }
+  }
+}
+
+/**
  * Orchestrates an appointment write: diff -> per-employee localized send. Each
  * change push also carries a fresh, locale-correct `widgetPayload` (+ APNs
  * content-available) so the employee's iOS home-screen widget updates even with
@@ -683,6 +738,13 @@ async function fetchEmployeeWidgetWindow(db, employeeDocId, now, logger) {
  */
 async function handleAppointmentWrite(id, before, after, deps) {
   const now = deps.now || new Date();
+  // Completion ends the card here, server-side, because only the server knows
+  // which appointment a push-started card belongs to (the liveActivityCards
+  // marker). The device can't disambiguate, so it must not end cards itself:
+  // a tech marking the job they just left as done would otherwise kill the
+  // card for the job they're currently driving to. Runs before the diff since
+  // a status->done transition produces no push event of its own.
+  await endCardOnCompletion(id, before, after, deps, now);
   const events = diffAppointmentForNotifications(before, after, now, id);
   if (events.length === 0) return {events: 0, sent: 0};
   let sent = 0;
@@ -699,7 +761,7 @@ async function handleAppointmentWrite(id, before, after, deps) {
       );
     }
     const records = windows.get(employeeDocId);
-    sent += await sendToEmployee(
+    const delivered = await sendToEmployee(
         deps,
         employeeDocId,
         data,
@@ -711,6 +773,7 @@ async function handleAppointmentWrite(id, before, after, deps) {
               buildWidgetPayload(records, now, locale)),
         }),
     );
+    sent += delivered;
     // Live Activity lifecycle rides the same events: a reschedule refreshes a
     // card that's already on the Lock Screen, a cancel/unassign clears it.
     // `assigned` starts NO card — a card is started only by the travel-aware
@@ -723,7 +786,11 @@ async function handleAppointmentWrite(id, before, after, deps) {
       leaveAt: null,
       travelMinutes: null,
     };
-    if (kind === "rescheduled") {
+    // A refresh must not resurrect a card for a deactivated account (the
+    // ending paths below stay unconditional — clearing a stale card is always
+    // right). `delivered > 0` proves THIS recipient passed sendToEmployee's
+    // active-and-allowed-role filter without re-reading the user doc.
+    if (kind === "rescheduled" && delivered > 0) {
       await updateLiveActivity(deps, {
         appointmentId: String(id), employeeDocId, ctx: liveCtx, nowDate: now,
       });

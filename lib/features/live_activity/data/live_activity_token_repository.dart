@@ -66,6 +66,28 @@ class LiveActivityTokenRepository {
     }
   }
 
+  /// Deletes every row of [kind] for this user, without needing the token
+  /// value. A push-to-start row's doc id IS its token, so an opt-out that
+  /// happens before the token stream has emitted (or on a cold start that
+  /// never registered) has no id to delete by — but it must still clear the
+  /// row, or the server keeps push-starting cards on an opted-out device.
+  Future<void> deleteTokensOfKind({
+    required String userDocId,
+    required LiveActivityTokenKind kind,
+  }) async {
+    try {
+      final snap = await _firestore
+          .collection('users')
+          .doc(userDocId)
+          .collection('liveActivityTokens')
+          .where('kind', isEqualTo: kind.raw)
+          .get();
+      await Future.wait(snap.docs.map((doc) => doc.reference.delete()));
+    } catch (e, st) {
+      _logger.warn('LIVE-ACT deleteTokensOfKind failed', e, st);
+    }
+  }
+
   Future<void> deleteToken({
     required String userDocId,
     required String docId,

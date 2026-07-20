@@ -119,6 +119,7 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
       ],
     );
     if (choice == null || choice == current) return;
+    if (!mounted) return;
     if (_blockedOffline()) return;
 
     setState(() => _scheduleBusy = true);

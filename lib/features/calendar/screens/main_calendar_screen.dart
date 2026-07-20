@@ -139,6 +139,14 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   // Memoization key for _dayIndex: the appointments list last indexed.
   List<AppointmentRecord>? _indexedAppointments;
 
+  /// Rebuilds [_dayIndex] only when [source] is a different list instance than
+  /// the one last indexed — the index is otherwise recomputed every rebuild.
+  void _refreshDayIndex(List<AppointmentRecord> source) {
+    if (identical(source, _indexedAppointments)) return;
+    _indexedAppointments = source;
+    _dayIndex = _buildDayIndex(source);
+  }
+
   Map<DateTime, List<AppointmentRecord>> _buildDayIndex(
     List<AppointmentRecord> source,
   ) {
@@ -216,10 +224,22 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     if (picked != null) _setFocusedDay(picked);
   }
 
-  /// Watches the appointment/employee providers, wires the async-change and
-  /// role-upgrade listeners, refreshes the day-index / selected-day / locale
-  /// caches, and returns just the values [build]'s widget tree renders — so
-  /// `build` stays a plain tree with the imperative wiring lifted out here.
+  /// The appointments stream this screen renders: business-wide for an admin,
+  /// only the signed-in employee's otherwise. Shared by the watch in
+  /// [_prepareBuild] and the listen in [build] so both hit the same instance.
+  StreamProvider<List<AppointmentRecord>> get _appointmentsProvider =>
+      widget.isAdmin
+      ? appointmentsInRangeProvider(_appointmentRange)
+      : myAppointmentsProvider((
+          employeeId: widget.employeeId,
+          range: _appointmentRange,
+        ));
+
+  /// Watches the appointment/employee providers, refreshes the day-index /
+  /// selected-day / locale caches, and returns just the values [build]'s widget
+  /// tree renders — so `build` stays a plain tree. The `ref.listen`
+  /// registrations stay at the call site in [build] where their side effects
+  /// are visible.
   ({
     String userName,
     Map<String, Color> colorMap,
@@ -229,47 +249,17 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     String jobLabel,
   })
   _prepareBuild(BuildContext context) {
-    final myAppointmentsKey = (
-      employeeId: widget.employeeId,
-      range: _appointmentRange,
-    );
-    final appointmentsAsync = widget.isAdmin
-        ? ref.watch(appointmentsInRangeProvider(_appointmentRange))
-        : ref.watch(myAppointmentsProvider(myAppointmentsKey));
+    final appointmentsAsync = ref.watch(_appointmentsProvider);
     final userName = ref.watch(currentUserNameProvider);
-
-    if (widget.isAdmin) {
-      ref.listen(
-        appointmentsInRangeProvider(_appointmentRange),
-        _onAppointmentsAsyncChange,
-      );
-    } else {
-      ref.listen(
-        myAppointmentsProvider(myAppointmentsKey),
-        _onAppointmentsAsyncChange,
-      );
-    }
-
-    if (!widget.isAdmin) {
-      ref.listen<AsyncValue<String>>(
-        userRoleProvider,
-        (_, next) => _upgradeIfAdmin(next.value),
-      );
-      _upgradeIfAdmin(ref.read(userRoleProvider).value);
-    }
-
     final colorMap = ref.watch(employeeColorMapProvider);
     final nameMap = ref.watch(employeeNameMapProvider);
 
-    // Error logging/surfacing is owned by the onAsyncChange listener above —
+    // Error logging/surfacing is owned by the onAsyncChange listener in build —
     // a `.when` error branch here would re-log on every rebuild.
     final visibleAppointments =
         appointmentsAsync.value ?? const <AppointmentRecord>[];
 
-    if (!identical(visibleAppointments, _indexedAppointments)) {
-      _indexedAppointments = visibleAppointments;
-      _dayIndex = _buildDayIndex(visibleAppointments);
-    }
+    _refreshDayIndex(visibleAppointments);
 
     final selectedDay = _selectedDay ?? _focusedDay;
     final selectedEvents = _getEventsForDay(selectedDay);
@@ -294,6 +284,16 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+
+    ref.listen(_appointmentsProvider, _onAppointmentsAsyncChange);
+    if (!widget.isAdmin) {
+      ref.listen<AsyncValue<String>>(
+        userRoleProvider,
+        (_, next) => _upgradeIfAdmin(next.value),
+      );
+      _upgradeIfAdmin(ref.read(userRoleProvider).value);
+    }
+
     final data = _prepareBuild(context);
 
     return Scaffold(
@@ -301,27 +301,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       appBar: AppTopBar(
         title: context.l10n.common_calendar,
         compact: context.isLandscape,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.alt_route_rounded, color: scheme.onPrimary),
-            tooltip: context.l10n.calendar_dayRouteTitle,
-            onPressed: () => Navigator.pushNamed(
-              context,
-              AppRoutes.dayRoute,
-              arguments: DayRouteArgs(
-                isAdmin: widget.isAdmin,
-                employeeId: widget.employeeId,
-              ),
-            ),
-          ),
-          // In landscape / on tablets the nav rail replaces the drawer.
-          if (!context.isSplitLayout)
-            IconButton(
-              icon: Icon(Icons.menu, color: scheme.onPrimary),
-              tooltip: context.l10n.calendar_openMenuTooltip,
-              onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-            ),
-        ],
+        actions: _appBarActions(context, scheme),
         bottom: PreferredSize(
           // Scale with the user's text size so the month bar's single line of
           // label text doesn't clip at large accessibility scales (1.4x+).
@@ -337,19 +317,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           ),
         ),
       ),
-      floatingActionButton: widget.isAdmin
-          ? FloatingActionButton(
-              heroTag: 'addFab',
-              tooltip: context.l10n.calendar_newAppointment,
-              onPressed: () async {
-                await showAddEventPopup(
-                  context,
-                  initialDate: _selectedDay ?? _focusedDay,
-                );
-              },
-              child: const Icon(Icons.add),
-            )
-          : null,
+      floatingActionButton: _addAppointmentFab(context),
       endDrawer: SettingsDrawer.endDrawerFor(
         context,
         isAdmin: widget.isAdmin,
@@ -381,6 +349,43 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           ),
         ),
       ),
+    );
+  }
+
+  List<Widget> _appBarActions(BuildContext context, ColorScheme scheme) => [
+    IconButton(
+      icon: Icon(Icons.alt_route_rounded, color: scheme.onPrimary),
+      tooltip: context.l10n.calendar_dayRouteTitle,
+      onPressed: () => Navigator.pushNamed(
+        context,
+        AppRoutes.dayRoute,
+        arguments: DayRouteArgs(
+          isAdmin: widget.isAdmin,
+          employeeId: widget.employeeId,
+        ),
+      ),
+    ),
+    // In landscape / on tablets the nav rail replaces the drawer.
+    if (!context.isSplitLayout)
+      IconButton(
+        icon: Icon(Icons.menu, color: scheme.onPrimary),
+        tooltip: context.l10n.calendar_openMenuTooltip,
+        onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+      ),
+  ];
+
+  Widget? _addAppointmentFab(BuildContext context) {
+    if (!widget.isAdmin) return null;
+    return FloatingActionButton(
+      heroTag: 'addFab',
+      tooltip: context.l10n.calendar_newAppointment,
+      onPressed: () async {
+        await showAddEventPopup(
+          context,
+          initialDate: _selectedDay ?? _focusedDay,
+        );
+      },
+      child: const Icon(Icons.add),
     );
   }
 

@@ -417,84 +417,48 @@ async function enqueueCustomerUpsert(clientId, deps = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// drainQueue
+// drainQueue phases
 // ---------------------------------------------------------------------------
 
 /**
- * Claims and dispatches pending `waveSyncQueue` jobs.
- *
- * Runs a reclaim pass first: jobs that are `inflight` with a `claimedAt`
- * older than `leaseMs` are treated as lost dispatches (function died between
- * claim and outcome write) and are put back through the retry/dead-letter path
- * with `attempts` incremented, so a crash-looping job eventually dead-letters.
- *
- * Query: `status == 'queued' AND nextAttemptAt <= now`, ordered by
- * `nextAttemptAt ASC`, limited to `batchLimit`.
- *
- * Each job is claimed transactionally (re-read; skip if not still `queued`;
- * set `inflight` + stamp `claimedAt`) before dispatch so two concurrent
- * workers can't race on the same job.
- *
- * @param {Object=} deps Injectable dependencies:
- *   - `db` {!Object} Firestore instance (default `getFirestore()`).
- *   - `graphql` {!Function} Wave GraphQL client.
- *   - `businessId` {string} Connected Wave business id.
- *   - `upsertCustomer` {!Function} Override for testing (default: the real
- *     `upsertCustomer` from customers.js).
- *   - `now` {!Function} Returns the current Firestore Timestamp or a plain
- *     Date/number for `nextAttemptAt <= now` comparison.
- *   - `backoffFn` {!Function} `(attempts:number) => number` ms; default:
- *     exponential with jitter, base 60s, cap 1h.
- *   - `maxAttempts` {number} Max retries before dead-lettering (default 5).
- *   - `batchLimit` {number} Max jobs per call (default 30; keep
- *     `schedule_frequency × batchLimit < Wave 60/min` limit).
- *   - `leaseMs` {number} Inflight lease duration in ms (default 600000 / 10
- *     min). Jobs still inflight after this long are reclaimed. Must exceed
- *     the function's maximum runtime to avoid reclaiming live jobs.
- *   - `deadlineMs` {number} Absolute wall-clock epoch-ms budget: no NEW job
- *     is claimed once `wallClock()` passes it (in-flight work finishes and
- *     its outcome is still committed). Defaults to Infinity (no budget).
- *     The scheduler passes ~70% of its timeout so the run always ends with
- *     clean outcome writes instead of being killed mid-dispatch.
- *   - `wallClock` {!Function} Returns the current epoch ms (default
- *     `Date.now`); injectable for deadline tests.
- *   - `logger` {!Object} Logging facade with `.error(msg, meta)` etc.
- *     Defaults to `firebase-functions/logger`. Never use `console`.
- * @return {!Promise<{processed:number, done:number, retried:number,
- *   dead:number, skipped:number, reclaimed:number}>} Summary of the drain run.
+ * @typedef {{
+ *   db: !Object,
+ *   logger: !Object,
+ *   backoffFn: !Function,
+ *   maxAttempts: number,
+ *   batchLimit: number,
+ *   leaseMs: number,
+ *   deadlineMs: number,
+ *   pastDeadline: !Function,
+ *   nowValue: *,
+ *   nowMs: number,
+ *   nowFn: (!Function|undefined),
+ *   dispatchUpsert: !Function,
+ *   graphql: (!Function|undefined),
+ *   businessId: (string|undefined),
+ *   summary: !Object
+ * }} DrainContext
  */
-async function drainQueue(deps = {}) {
-  const db = deps.db || adminFirestore().getFirestore();
-  // eslint-disable-next-line global-require
-  const logger = deps.logger || require("firebase-functions/logger");
-  const backoffFn = deps.backoffFn || defaultBackoffMs;
-  const maxAttempts =
-    typeof deps.maxAttempts === "number" ? deps.maxAttempts :
-    DEFAULT_MAX_ATTEMPTS;
-  const batchLimit =
-    typeof deps.batchLimit === "number" ? deps.batchLimit :
-    DEFAULT_BATCH_LIMIT;
-  const leaseMs =
-    typeof deps.leaseMs === "number" ? deps.leaseMs : DEFAULT_LEASE_MS;
-  const deadlineMs =
-    typeof deps.deadlineMs === "number" ? deps.deadlineMs : Infinity;
-  const wallClock = deps.wallClock || Date.now;
-  const dispatchUpsert = deps.upsertCustomer || upsertCustomer;
-  const nowValue = deps.now ? deps.now() : new Date();
-  const nowMs = +nowValue;
 
-  // True once the wall-clock budget is exhausted (logged once).
-  const pastDeadline = () => wallClock() > deadlineMs;
+/**
+ * Reclaim pass — fixes jobs stuck `inflight` because the function instance died
+ * between the claim and the outcome write. Each stale job is re-read and
+ * rewritten inside ONE transaction (there is no Wave call to span), so a
+ * concurrent reclaim or a client re-enqueue in the same window is detected on
+ * the transactional re-read and left untouched instead of being clobbered.
+ *
+ * NOTE: requires a composite index `(status ASC, claimedAt ASC)` on
+ * `waveSyncQueue` — add to firestore.indexes.json before deploying.
+ *
+ * @param {!DrainContext} ctx Shared drain state; `ctx.summary` is mutated.
+ * @return {!Promise<void>}
+ */
+async function reclaimStaleJobs(ctx) {
+  const {
+    db, logger, backoffFn, maxAttempts, batchLimit, leaseMs, deadlineMs,
+    pastDeadline, nowMs, summary,
+  } = ctx;
 
-  const summary = {
-    processed: 0, done: 0, retried: 0, dead: 0, skipped: 0, reclaimed: 0,
-  };
-
-  // ---------------------------------------------------------------------------
-  // Reclaim pass — fix jobs stuck inflight due to a crashed function instance.
-  // NOTE: requires a composite index `(status ASC, claimedAt ASC)` on
-  // `waveSyncQueue` — add to firestore.indexes.json before deploying.
-  // ---------------------------------------------------------------------------
   const leaseThreshold = new Date(nowMs - leaseMs);
   const staleSnap = await db.collection(QUEUE_COLLECTION)
       .where("status", "==", "inflight")
@@ -593,12 +557,26 @@ async function drainQueue(deps = {}) {
     }
     summary.reclaimed += 1;
   }
+}
 
-  // ---------------------------------------------------------------------------
-  // Main drain — claim and dispatch queued jobs.
-  // NOTE: `waveSyncQueue` needs a composite index `(status ASC,
-  // nextAttemptAt ASC)` — add to firestore.indexes.json before deploying.
-  // ---------------------------------------------------------------------------
+/**
+ * Main drain — claims and dispatches queued jobs. Each job is claimed
+ * transactionally (re-read; skip if not still `queued`; set `inflight` + stamp
+ * `claimedAt`) before dispatch, and every outcome is written through
+ * `commitOutcome` so a concurrent re-enqueue is never clobbered.
+ *
+ * NOTE: `waveSyncQueue` needs a composite index `(status ASC,
+ * nextAttemptAt ASC)` — add to firestore.indexes.json before deploying.
+ *
+ * @param {!DrainContext} ctx Shared drain state; `ctx.summary` is mutated.
+ * @return {!Promise<void>}
+ */
+async function dispatchQueuedJobs(ctx) {
+  const {
+    db, logger, backoffFn, maxAttempts, batchLimit, deadlineMs, pastDeadline,
+    nowValue, nowMs, nowFn, dispatchUpsert, summary,
+  } = ctx;
+
   const snap = await db.collection(QUEUE_COLLECTION)
       .where("status", "==", "queued")
       .where("nextAttemptAt", "<=", nowValue)
@@ -627,7 +605,7 @@ async function drainQueue(deps = {}) {
     // The claim stamp is the ACTUAL claim time (not the drain-start clock):
     // with a stale stamp, a long drain could make a job look lease-expired
     // to a concurrent reclaim pass while it is still being dispatched.
-    const claimStamp = deps.now ? deps.now() : new Date();
+    const claimStamp = nowFn ? nowFn() : new Date();
     let claimed = false;
     try {
       await db.runTransaction(async (tx) => {
@@ -667,8 +645,8 @@ async function drainQueue(deps = {}) {
         const clientId = clientIdFromRefPath(jobData.refPath);
         await dispatchUpsert(clientId, {
           db,
-          graphql: deps.graphql,
-          businessId: deps.businessId,
+          graphql: ctx.graphql,
+          businessId: ctx.businessId,
           // Lets the upsert run its crash-retry duplicate check (search Wave
           // before creating) when a previous attempt may have half-finished.
           priorAttempts:
@@ -756,6 +734,90 @@ async function drainQueue(deps = {}) {
       }
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// drainQueue
+// ---------------------------------------------------------------------------
+
+/**
+ * Claims and dispatches pending `waveSyncQueue` jobs.
+ *
+ * Runs a reclaim pass first: jobs that are `inflight` with a `claimedAt`
+ * older than `leaseMs` are treated as lost dispatches (function died between
+ * claim and outcome write) and are put back through the retry/dead-letter path
+ * with `attempts` incremented, so a crash-looping job eventually dead-letters.
+ *
+ * Query: `status == 'queued' AND nextAttemptAt <= now`, ordered by
+ * `nextAttemptAt ASC`, limited to `batchLimit`.
+ *
+ * Each job is claimed transactionally (re-read; skip if not still `queued`;
+ * set `inflight` + stamp `claimedAt`) before dispatch so two concurrent
+ * workers can't race on the same job.
+ *
+ * @param {Object=} deps Injectable dependencies:
+ *   - `db` {!Object} Firestore instance (default `getFirestore()`).
+ *   - `graphql` {!Function} Wave GraphQL client.
+ *   - `businessId` {string} Connected Wave business id.
+ *   - `upsertCustomer` {!Function} Override for testing (default: the real
+ *     `upsertCustomer` from customers.js).
+ *   - `now` {!Function} Returns the current Firestore Timestamp or a plain
+ *     Date/number for `nextAttemptAt <= now` comparison.
+ *   - `backoffFn` {!Function} `(attempts:number) => number` ms; default:
+ *     exponential with jitter, base 60s, cap 1h.
+ *   - `maxAttempts` {number} Max retries before dead-lettering (default 5).
+ *   - `batchLimit` {number} Max jobs per call (default 30; keep
+ *     `schedule_frequency × batchLimit < Wave 60/min` limit).
+ *   - `leaseMs` {number} Inflight lease duration in ms (default 600000 / 10
+ *     min). Jobs still inflight after this long are reclaimed. Must exceed
+ *     the function's maximum runtime to avoid reclaiming live jobs.
+ *   - `deadlineMs` {number} Absolute wall-clock epoch-ms budget: no NEW job
+ *     is claimed once `wallClock()` passes it (in-flight work finishes and
+ *     its outcome is still committed). Defaults to Infinity (no budget).
+ *     The scheduler passes ~70% of its timeout so the run always ends with
+ *     clean outcome writes instead of being killed mid-dispatch.
+ *   - `wallClock` {!Function} Returns the current epoch ms (default
+ *     `Date.now`); injectable for deadline tests.
+ *   - `logger` {!Object} Logging facade with `.error(msg, meta)` etc.
+ *     Defaults to `firebase-functions/logger`. Never use `console`.
+ * @return {!Promise<{processed:number, done:number, retried:number,
+ *   dead:number, skipped:number, reclaimed:number}>} Summary of the drain run.
+ */
+async function drainQueue(deps = {}) {
+  const db = deps.db || adminFirestore().getFirestore();
+  // eslint-disable-next-line global-require
+  const logger = deps.logger || require("firebase-functions/logger");
+  const backoffFn = deps.backoffFn || defaultBackoffMs;
+  const maxAttempts =
+    typeof deps.maxAttempts === "number" ? deps.maxAttempts :
+    DEFAULT_MAX_ATTEMPTS;
+  const batchLimit =
+    typeof deps.batchLimit === "number" ? deps.batchLimit :
+    DEFAULT_BATCH_LIMIT;
+  const leaseMs =
+    typeof deps.leaseMs === "number" ? deps.leaseMs : DEFAULT_LEASE_MS;
+  const deadlineMs =
+    typeof deps.deadlineMs === "number" ? deps.deadlineMs : Infinity;
+  const wallClock = deps.wallClock || Date.now;
+  const dispatchUpsert = deps.upsertCustomer || upsertCustomer;
+  const nowValue = deps.now ? deps.now() : new Date();
+  const nowMs = +nowValue;
+
+  // True once the wall-clock budget is exhausted (logged once).
+  const pastDeadline = () => wallClock() > deadlineMs;
+
+  const summary = {
+    processed: 0, done: 0, retried: 0, dead: 0, skipped: 0, reclaimed: 0,
+  };
+
+  const ctx = {
+    db, logger, backoffFn, maxAttempts, batchLimit, leaseMs, deadlineMs,
+    pastDeadline, nowValue, nowMs, nowFn: deps.now, dispatchUpsert,
+    graphql: deps.graphql, businessId: deps.businessId, summary,
+  };
+
+  await reclaimStaleJobs(ctx);
+  await dispatchQueuedJobs(ctx);
 
   return summary;
 }
