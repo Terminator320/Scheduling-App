@@ -15,9 +15,12 @@ and builds clean (bundle id `net.vogas.scheduling.SiriIntents`, entitlements
 target went to **iOS 18.0**, not the 16.0 this plan originally called for — the
 Live Activity Directions button's returnable `OpenURLIntent` forced the whole
 app to an 18.0 floor. Remaining for Phase 1: the on-device Siri phrase pass.
-Phases 2–3 not started.
+**Phases 2 and 3 are now also code-complete** (2026-07-19) — all Swift-only:
+Phase 2 `TomorrowScheduleIntent` + `DayScheduleIntent`, Phase 3
+`NthAppointmentIntent`. All six intents build clean and pass the App Intents
+metadata compiler; all three phases await the same on-device Siri pass.
 **Reviewed 2026-07-19 against the code; corrections applied inline.** Phases 1–3
-are ready to execute. **Phase 4 is blocked** on two paper decisions flagged in
+are built; Phase 4 is the next unbuilt milestone. **Phase 4 is blocked** on two paper decisions flagged in
 its Mac steps (App Attest's bundle-ID binding; the not-yet-existing
 `keychain-access-groups` entitlement).
 
@@ -190,29 +193,85 @@ sign-out wipes it. *(Code complete; awaiting the device pass.)*
 
 ---
 
-## Phase 2 — date queries (pure additive)
+## Phase 2 — date queries (pure additive) — ✅ BUILT (device pass pending)
 
-No snapshot schema change — the 7-day window already carries every day.
+No snapshot schema change — the 7-day window already carries every day. **No
+Dart change** landed: the builder already emits all 8 buckets, so this was
+Swift-only, as predicted.
 
-- **Dart:** extend `buildScheduleSnapshot` tests only if a helper is added to
-  resolve a relative-day label → bucket; the data is unchanged. (Most Phase-2
-  work is Swift.)
-- **Swift:** `DayScheduleIntent.swift` with a resolved date `@Parameter`; map to
-  a `days[]` bucket; out-of-window → "I only have your schedule for the next 7
-  days." Add "…tomorrow / on {day}…" phrases (EN+FR) to `ESProShortcuts.swift`.
-- **Tests:** arbitrary-date bucket resolution incl. out-of-window; device phrase
-  recognition for the new shapes.
+As-built (2026-07-19):
+- **`TomorrowScheduleIntent.swift`** — deterministic, no parameter. Mirrors
+  `TodayScheduleIntent` against `now + 1 day`. Bilingual single-utterance
+  phrases ("what's my schedule tomorrow" / "…demain"). "Tomorrow" is the most
+  common relative-day query, so it gets its own intent rather than sharing the
+  parameterized one — zero App Intents ambiguity, guaranteed to match.
+- **`DayScheduleIntent.swift`** — arbitrary day via a `Date` `@Parameter`.
+  - ⚠️ **Divergence — the date can't live in the phrase.** This plan said "add
+    …on {day}… phrases". App Shortcut phrases only accept **AppEnum/AppEntity**
+    parameters (Siri needs a finite value set to match an utterance) — a `Date`
+    parameter interpolated into a phrase does **not** work. Getting single-
+    utterance "what's my schedule Friday" would need an `AppEnum` of days **plus
+    a localized string catalog** for FR matching, which fights this extension's
+    plain-Swift/`Locale.current` bilingual pattern and can't be verified off-
+    device. So the phrase carries no date ("read my schedule for a day") and
+    Siri resolves the `Date` through its own **locale-aware prompt** ("For what
+    day?" → "Friday"/"vendredi"/"July 25"). Fully supported, bilingual, no
+    catalog. Tradeoff: a two-turn interaction for non-tomorrow days.
+  - Maps the resolved date to a `days[]` bucket by local calendar day;
+    out-of-window (past or >7 days out → no bucket) answers "I only have your
+    schedule for the next 7 days."
+- **`SiriStrings.swift`** — added `relativeDay` (today/tomorrow/weekday phrasing),
+  `whichDayPrompt`, `outOfWindow`, `emptyDayFor(date:)`, `scheduleIntroFor(date:)`,
+  all EN + FR.
+- **`ESProShortcuts.swift`** — two new `AppShortcut` blocks (5 phrases each,
+  EN + FR).
+- **Xcode:** both `.swift` files added to the `SiriIntents` target in
+  `project.pbxproj` (all four sections); `plutil -lint` clean.
 
-**Exit:** "what's my schedule Friday / tomorrow?" reads the right day.
+- **Tests:** no new Dart tests — the snapshot data and its 12+3 Phase-1 tests
+  are unchanged, and the Swift intents are device-only (no Swift test harness,
+  same as the Phase-1 intents). Verification is the on-device pass in
+  `ios/SiriIntents/README.md`.
+
+**Exit:** "what's my schedule tomorrow?" reads tomorrow in one utterance;
+"read my schedule for a day" → Siri prompts → reads any in-window day.
+*(Code complete; awaiting the device pass.)*
 
 ---
 
-## Phase 3 — multi-turn
+## Phase 3 — multi-turn — ✅ BUILT (device pass pending)
 
-Swift-only; no data change.
-- Return continuation results from the read intents so "and tomorrow?" / "read
-  me the third one" stay in-session (App Intents conversation flow).
-- **Tests (device):** follow-up stays in-session across the read + date intents.
+Swift-only; no data change. Code-complete 2026-07-19.
+
+- ⚠️ **Divergence — App Intents has no free-form conversation session.** This
+  plan (and the design doc) imagined "and tomorrow?" / "read me the third one"
+  as continuation results that keep a Siri session open across separate
+  invocations. App Intents doesn't offer that — there's no SiriKit-style
+  `INInteraction` session; the one in-session multi-turn primitive is
+  **parameter follow-up** (Siri asks for a missing `@Parameter`, the caller
+  answers, all in one exchange). "And tomorrow?" is already served by Phase 2's
+  `TomorrowScheduleIntent` as its own utterance, so Phase 3 delivers the
+  buildable half: the "read me the third one" follow-up.
+- **`NthAppointmentIntent.swift`** — reads one visit from **today's** list by
+  1-based position. The position is an `Int` `@Parameter`; like `Date`, an `Int`
+  can't be interpolated into a spoken phrase (AppEnum/AppEntity only), so the
+  phrase ("read a specific appointment") triggers the intent and Siri asks
+  "Which appointment? Say its number" — the prompt→answer→read exchange **is**
+  the multi-turn beat. Out-of-range / empty-day answers degrade cleanly.
+- **`SiriStrings.swift`** — `whichPositionPrompt`, `nth(position:)` (ordinal
+  words 1-10 EN+FR, "number N"/"numéro N" beyond), `nthOutOfRange(count:)`, all
+  role-scoped (you / the team).
+- **`ESProShortcuts.swift`** — one new `AppShortcut` (5 phrases, EN+FR); six
+  intents total now.
+- **Xcode:** added to the `SiriIntents` target in `project.pbxproj` (all four
+  sections); `flutter build ios` clean, App Intents metadata compiler accepted
+  all six intents.
+- **Tests (device):** "read a specific appointment" → Siri prompts → "3" reads
+  the third of today; out-of-range and empty-day paths; EN + FR. No Dart/Swift
+  unit tests (device-only intents, same as Phases 1-2).
+
+**Exit:** "read a specific appointment" → Siri asks which → reads that visit,
+in-session, both languages. *(Code complete; awaiting the device pass.)*
 
 ---
 
@@ -328,10 +387,9 @@ button. Each is its own small increment; none blocks the others.
 
 ## Suggested sequencing
 
-Phase **1 is built** — only its device pass remains. **Phase 2 next**: it is
-pure-additive Swift over a snapshot that already carries all 7 days, so it needs
-no Dart and no schema change, making it the highest value-per-effort increment
-left. Then **3**. Treat **4** as a standalone reviewed milestone (the
+Phases **1, 2, and 3 are built** — only their (shared) on-device Siri pass
+remains. **Phase 4 is the next unbuilt milestone** — treat it as a standalone
+reviewed increment (the
 Firebase-in-extension inflection, and still blocked on the two paper decisions
 in its Mac steps). **5–6** are opportunistic follow-ups. Android stays out
 (design doc).
