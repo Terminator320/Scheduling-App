@@ -281,6 +281,20 @@ in-session, both languages. *(Code complete; awaiting the device pass.)*
 extension** — a real security-surface + App-Review change (design doc:
 Architecture + Privacy). Ship it as its own reviewed increment.
 
+> **Architecture chosen 2026-07-20: direct writes from the extension** (full
+> hands-free). The two paper blockers are now **resolved on paper**, and a
+> third — an App-Check-vs-Auth tension this section missed — was surfaced. The
+> complete resolution + Mac runbook + reference Swift live in
+> [`2026-07-20-siri-phase4-write-actions.md`](./2026-07-20-siri-phase4-write-actions.md).
+> **TL;DR of the newly-found catch:** App Attest forces the extension onto its
+> **own** Firebase app (bundle-id-bound App Check), but Firebase Auth's
+> keychain sharing only auto-restores the user on the **same** Firebase app —
+> so the extension needs a **custom-token handoff** (a new `mintSiriExtensionToken`
+> callable + keychain-stored short-TTL token), unless a 30-min on-device App
+> Check test proves a same-app config works (unlikely). Nothing is landed in the
+> repo yet — the entitlement/SPM/2nd-app pieces would break the green build until
+> the console/portal work is done in the same session.
+
 ### Dart
 - **No Dart work for credential sharing.** An earlier draft had the Dart auth
   service writing the Firebase credential into a shared Keychain Access Group —
