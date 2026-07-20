@@ -39,13 +39,15 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   `firestore.rules`. The one-time Firestore **TTL policy** on `expiresAt` for
   the `appointmentReminders` / `appointmentOverduePrompts` ledgers was
   **enabled in the console 2026-07-11** — this list previously said it was still
-  outstanding, which was wrong; the iOS handoff recorded it done, and the
-  2026-07-19 indexes deploy reported exactly 2 field overrides present in the
-  project but absent from `firestore.indexes.json`, which is what a TTL policy
-  looks like to `firebase deploy`. Still outstanding: on-device push
-  verification. (TTL on the other four `expiresAt` collections —
-  `liveActivityCards`, `liveActivityTokens`, `rateLimits`, `signupCodes` — is
-  optional housekeeping; all four are also swept in-code.) The iOS-native
+  outstanding, which was wrong. Still outstanding: on-device push verification.
+  TTL was extended to `liveActivityTokens`, `rateLimits`, and `signupCodes` on
+  2026-07-20, and every policy's **expiration offset normalized to `0`** — the
+  code writes `expiresAt` as the absolute deletion instant, so a non-zero offset
+  adds to it and silently doubles retention (the ledgers had been running at
+  ~14 days, not 7). `liveActivityCards` has no policy yet: Firestore only offers
+  collection groups that already hold documents, and no card marker exists until
+  the feature runs on a device. Every one of these is also swept in-code, so TTL
+  is storage housekeeping, not correctness. The iOS-native
   APNs key + Push/App-Groups entitlements were wired on the Mac 2026-07-11 (see
   `docs/archive/2026-07-08-push-notifications.md`).
 - **Deployed 2026-07-18 (1.33.0):** the travel-aware `sendUpcomingJobReminders`
