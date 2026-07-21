@@ -48,7 +48,13 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
       // Record it rather than failing silently, and don't engage the lock —
       // locking on an unreadable flag risks bricking a user who never enabled
       // biometrics behind a prompt they can't satisfy.
-      ref.read(loggerProvider).warn('APPLOCK read flag failed', e, st);
+      // A locked iOS Keychain (background launch, pre-first-unlock) is
+      // environmental, not a defect — log without a Crashlytics error record.
+      if (isKeychainLockedError(e)) {
+        ref.read(loggerProvider).warn('APPLOCK read skipped: keychain locked');
+      } else {
+        ref.read(loggerProvider).warn('APPLOCK read flag failed', e, st);
+      }
       return;
     }
     if (!enabled || !mounted) return;

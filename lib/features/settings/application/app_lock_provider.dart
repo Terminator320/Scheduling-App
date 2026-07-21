@@ -21,7 +21,13 @@ class AppLockController extends Notifier<bool> {
       // Encrypted-storage reads can throw on Android (keystore/cipher failure).
       // This Future is fired unawaited from build(), so an uncaught throw would
       // become an unhandled async error — log it and leave the lock disabled.
-      ref.read(loggerProvider).warn('APPLOCK read flag failed', e, st);
+      // A locked iOS Keychain (background launch, pre-first-unlock) is
+      // environmental, not a defect — log without a Crashlytics error record.
+      if (isKeychainLockedError(e)) {
+        ref.read(loggerProvider).warn('APPLOCK read skipped: keychain locked');
+      } else {
+        ref.read(loggerProvider).warn('APPLOCK read flag failed', e, st);
+      }
     }
   }
 

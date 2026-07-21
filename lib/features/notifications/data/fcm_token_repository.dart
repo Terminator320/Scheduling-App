@@ -28,11 +28,16 @@ class FcmTokenRepository {
   /// so a token refresh (which re-upserts) preserves the original registration
   /// time instead of overwriting it; every write refreshes `updatedAt`.
   ///
-  /// The existence check and the write run in a single transaction so two
-  /// near-simultaneous upserts of the same token can't both observe "absent"
-  /// and race on `createdAt`. (A read is inherent to a conditional
-  /// `createdAt` — Firestore has no field-level create-only write — so the
-  /// transaction makes that read-modify-write atomic rather than removing it.)
+  /// Deliberately a plain get-then-set, NOT a transaction: the sign-in fan-out
+  /// runs this concurrently with the Live Activity token upserts, and
+  /// concurrent client transactions hit an unsynchronized-dictionary race in
+  /// the cloud_firestore iOS plugin (EXC_BAD_ACCESS in
+  /// FLTTransactionStreamHandler, seen fatal in Crashlytics; unfixed upstream
+  /// as of 6.7.0). The worst the get/set race can do is re-stamp `createdAt`
+  /// milliseconds later on a same-token double-upsert — cosmetic, and worth
+  /// trading for a crash-free registration path. Same shape in
+  /// `LiveActivityTokenRepository.upsertToken`; don't reintroduce
+  /// `runTransaction` in either.
   Future<void> upsertToken({
     required String userDocId,
     required String token,
@@ -42,17 +47,15 @@ class FcmTokenRepository {
   }) async {
     try {
       final ref = _tokenDoc(userDocId, token);
-      await _firestore.runTransaction<void>((txn) async {
-        final snap = await txn.get(ref);
-        final data = <String, dynamic>{
-          'platform': platform,
-          'locale': locale,
-          'uid': uid,
-          'updatedAt': FieldValue.serverTimestamp(),
-          if (!snap.exists) 'createdAt': FieldValue.serverTimestamp(),
-        };
-        txn.set(ref, data, SetOptions(merge: true));
-      });
+      final snap = await ref.get();
+      final data = <String, dynamic>{
+        'platform': platform,
+        'locale': locale,
+        'uid': uid,
+        'updatedAt': FieldValue.serverTimestamp(),
+        if (!snap.exists) 'createdAt': FieldValue.serverTimestamp(),
+      };
+      await ref.set(data, SetOptions(merge: true));
     } catch (e, st) {
       _logger.warn('FCM upsertToken failed', e, st);
     }

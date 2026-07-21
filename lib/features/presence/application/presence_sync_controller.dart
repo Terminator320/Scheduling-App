@@ -186,8 +186,15 @@ class PresenceSyncController {
           onError: (Object e, StackTrace st) {
             // A revoked permission / disabled service kills the stream. Stop
             // cleanly; the next sync() (app resume, account emission) re-runs
-            // the whole gate and restarts when allowed again.
-            _logger.warn('PRESENCE stream error', e, st);
+            // the whole gate and restarts when allowed again. Permission loss
+            // is an expected user choice, not a defect — log it without a
+            // Crashlytics error record (it was showing up as a recurring
+            // non-fatal: kCLErrorDomain error 1).
+            if (_isExpectedLocationLoss(e)) {
+              _logger.warn('PRESENCE stream stopped: location access lost');
+            } else {
+              _logger.warn('PRESENCE stream error', e, st);
+            }
             _stop();
           },
         );
@@ -225,23 +232,30 @@ class PresenceSyncController {
   /// write fails (swallowed inside the repo), the clock is rolled back to its
   /// prior value so the next fix/heartbeat isn't suppressed by a write that
   /// never actually landed — otherwise a dropped write could leave the presence
-  /// doc unrefreshed toward the 25-min server staleness window.
+  /// doc unrefreshed toward the 25-min server staleness window. A DENIED write
+  /// additionally stops tracking: the rules gate presence on an active
+  /// account, so a denial means this account may no longer write presence and
+  /// retrying every heartbeat only spams denied writes (the next sync() —
+  /// app resume, account emission — re-runs the gate and restarts if the
+  /// denial was the transient post-sign-in token lag).
   void _uploadThrottled(Position position, DateTime attemptedAt) {
     final previous = _lastUploadAt;
     _lastUploadAt = attemptedAt;
     unawaited(
-      _upload(position).then((ok) {
-        if (!ok && _lastUploadAt == attemptedAt) {
-          _lastUploadAt = previous;
-        }
+      _upload(position).then((result) {
+        if (result == PresenceWriteResult.ok) return;
+        if (_lastUploadAt == attemptedAt) _lastUploadAt = previous;
+        if (result == PresenceWriteResult.denied) _stop();
       }),
     );
   }
 
-  Future<bool> _upload(Position position) {
+  Future<PresenceWriteResult> _upload(Position position) {
     final docId = _docId;
     final uid = _trackedUid;
-    if (docId == null || uid == null) return Future.value(false);
+    if (docId == null || uid == null) {
+      return Future.value(PresenceWriteResult.failed);
+    }
     return _ref
         .read(presenceRepositoryProvider)
         .upsertLocation(
@@ -251,6 +265,17 @@ class PresenceSyncController {
           lng: position.longitude,
         );
   }
+
+  /// Expected, user-driven ways the position stream dies: the OS permission
+  /// was revoked or Location Services switched off. geolocator surfaces the
+  /// iOS kCLErrorDenied stream error as a [PositionUpdateException] wrapping
+  /// "kCLErrorDomain error 1", not as [PermissionDeniedException] — match
+  /// both, plus the service toggle.
+  static bool _isExpectedLocationLoss(Object e) =>
+      e is PermissionDeniedException ||
+      e is LocationServiceDisabledException ||
+      (e is PositionUpdateException &&
+          (e.message ?? '').contains('kCLErrorDomain error 1'));
 
   /// Device capability, not UI look — `defaultTargetPlatform`, not
   /// `context.isCupertino` (no BuildContext here; same rationale as

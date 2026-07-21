@@ -49,14 +49,14 @@ void main() {
 
   test('upsertLocation writes exactly the rule-allowed field set', () async {
     final repo = PresenceRepository(firestore: firestore);
-    final ok = await repo.upsertLocation(
+    final result = await repo.upsertLocation(
       userDocId: 'u1',
       uid: 'uid1',
       lat: 45.5,
       lng: -73.6,
     );
 
-    expect(ok, isTrue);
+    expect(result, PresenceWriteResult.ok);
     final captured = setData.single;
     expect(captured.keys.toSet(), {'lat', 'lng', 'uid', 'updatedAt'});
     expect(captured['lat'], 45.5);
@@ -66,16 +66,32 @@ void main() {
     expect(captured['updatedAt'], isA<FieldValue>());
   });
 
-  test('upsertLocation swallows a write failure and reports false', () async {
+  test('upsertLocation swallows a write failure and reports failed', () async {
     when(() => locationDoc.set(any())).thenThrow(Exception('offline'));
     final repo = PresenceRepository(firestore: firestore);
-    final ok = await repo.upsertLocation(
+    final result = await repo.upsertLocation(
       userDocId: 'u1',
       uid: 'uid1',
       lat: 1,
       lng: 2,
     );
-    expect(ok, isFalse);
+    expect(result, PresenceWriteResult.failed);
+  });
+
+  test('upsertLocation reports a rules rejection as denied', () async {
+    when(() => locationDoc.set(any())).thenThrow(
+      FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied'),
+    );
+    final repo = PresenceRepository(firestore: firestore);
+    final result = await repo.upsertLocation(
+      userDocId: 'u1',
+      uid: 'uid1',
+      lat: 1,
+      lng: 2,
+    );
+    // The controller stops tracking on denied — a deactivated account's
+    // background stream must not retry a denied write every heartbeat.
+    expect(result, PresenceWriteResult.denied);
   });
 
   test('deleteLocation deletes the location doc', () async {
