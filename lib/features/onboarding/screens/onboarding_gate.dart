@@ -35,7 +35,15 @@ class _OnboardingGateState extends ConsumerState<OnboardingGate> {
       // Encrypted-storage reads can throw on Android (keystore/cipher failure
       // after an OS upgrade or backup-restore). Fail safe to "not seen" so the
       // gate shows onboarding instead of hanging on the brand-color surface.
-      ref.read(loggerProvider).warn('ONBOARD-GATE read flag failed', e, st);
+      // A locked iOS Keychain (background launch, pre-first-unlock) is
+      // environmental, not a defect — log without a Crashlytics error record.
+      if (isKeychainLockedError(e)) {
+        ref
+            .read(loggerProvider)
+            .warn('ONBOARD-GATE read skipped: keychain locked');
+      } else {
+        ref.read(loggerProvider).warn('ONBOARD-GATE read flag failed', e, st);
+      }
     }
     if (mounted) setState(() => _seen = seen);
   }

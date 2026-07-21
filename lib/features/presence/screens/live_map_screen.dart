@@ -345,7 +345,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
   /// them — the roster row → map bridge.
   void _focusOn(StaffMapPoint point) {
     _selectMarker(point.userDocId);
-    _mapController?.animateCamera(
+    _animateCamera(
       CameraUpdate.newLatLngZoom(LatLng(point.lat, point.lng), 15),
     );
   }
@@ -357,10 +357,9 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
   }
 
   void _applyFit(List<StaffMapPoint> points) {
-    final controller = _mapController;
-    if (controller == null || points.isEmpty) return;
+    if (_mapController == null || points.isEmpty) return;
     if (points.length == 1) {
-      controller.animateCamera(
+      _animateCamera(
         CameraUpdate.newLatLngZoom(
           LatLng(points.first.lat, points.first.lng),
           14,
@@ -368,9 +367,24 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
       );
       return;
     }
-    controller.animateCamera(
-      CameraUpdate.newLatLngBounds(_boundsOf(points), 48),
-    );
+    _animateCamera(CameraUpdate.newLatLngBounds(_boundsOf(points), 48));
+  }
+
+  /// The retained [_mapController] can outlive its platform view: the shell
+  /// swap (portrait <-> landscape) recreates the GoogleMap subtree, and a data
+  /// emission can land between the old view's disposal and the new
+  /// `onMapCreated`. animateCamera then throws "used after ... disposed"
+  /// (seen fatal in Crashlytics). Drop the stale controller and re-arm the
+  /// initial fit so the recreated map fits itself on arrival.
+  void _animateCamera(CameraUpdate update) {
+    final controller = _mapController;
+    if (controller == null) return;
+    try {
+      controller.animateCamera(update);
+    } on StateError {
+      _mapController = null;
+      _didInitialFit = false;
+    }
   }
 
   LatLngBounds _boundsOf(List<StaffMapPoint> points) {

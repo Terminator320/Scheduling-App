@@ -4,6 +4,12 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/presence/domain/models/presence_fix.dart';
 
+/// Outcome of a presence write, so the sync controller can tell a transient
+/// failure (roll the throttle back, retry on the next fix) from a rules
+/// denial (the account is no longer allowed to write presence — stop the
+/// stream instead of spamming a denied write every heartbeat).
+enum PresenceWriteResult { ok, failed, denied }
+
 /// Reads/writes the single `users/{docId}/presence/location` doc that feeds
 /// the server's travel-time "leave now" reminders. Injected Firestore (never
 /// `FirebaseFirestore.instance` from UI); logs and swallows failures so a
@@ -28,10 +34,13 @@ class PresenceRepository {
   /// `updatedAt` MUST be a server timestamp (the rule enforces
   /// `updatedAt == request.time` so freshness can't be spoofed).
   ///
-  /// Returns `true` on a successful write, `false` when the write failed (still
-  /// logged and swallowed so a presence write never breaks a flow) — the caller
-  /// uses this to avoid advancing its throttle clock on a failed write.
-  Future<bool> upsertLocation({
+  /// Never throws (logged and swallowed so a presence write never breaks a
+  /// flow) — the caller uses the result to avoid advancing its throttle clock
+  /// on a failed write, and to stop tracking on [PresenceWriteResult.denied]
+  /// (the rules gate presence on an active account, so a deactivated user's
+  /// background stream would otherwise log a denied write every heartbeat
+  /// until the app is killed — the 11-event Crashlytics spam of 1.32.0).
+  Future<PresenceWriteResult> upsertLocation({
     required String userDocId,
     required String uid,
     required double lat,
@@ -44,10 +53,15 @@ class PresenceRepository {
         'uid': uid,
         'updatedAt': FieldValue.serverTimestamp(),
       });
-      return true;
+      return PresenceWriteResult.ok;
+    } on FirebaseException catch (e, st) {
+      _logger.warn('PRESENCE upsertLocation failed', e, st);
+      return e.code == 'permission-denied'
+          ? PresenceWriteResult.denied
+          : PresenceWriteResult.failed;
     } catch (e, st) {
       _logger.warn('PRESENCE upsertLocation failed', e, st);
-      return false;
+      return PresenceWriteResult.failed;
     }
   }
 

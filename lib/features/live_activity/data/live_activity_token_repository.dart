@@ -28,10 +28,14 @@ class LiveActivityTokenRepository {
 
   /// Upserts a Live Activity token. `createdAt` is stamped only on first
   /// create so an iOS token rotation (which re-upserts) preserves the original
-  /// registration time; every write refreshes `updatedAt`. The existence check
-  /// and the write share one transaction so two near-simultaneous upserts
-  /// can't both observe "absent" and race on `createdAt` (same shape as
-  /// `FcmTokenRepository.upsertToken`).
+  /// registration time; every write refreshes `updatedAt`.
+  ///
+  /// Deliberately a plain get-then-set, NOT a transaction — the sign-in
+  /// fan-out runs the push-to-start and update-token upserts concurrently
+  /// with `FcmTokenRepository.upsertToken`, and concurrent client
+  /// transactions crash the cloud_firestore iOS plugin (see the note there;
+  /// don't reintroduce `runTransaction` in either repo). A double-upsert can
+  /// only re-stamp `createdAt` — cosmetic.
   ///
   /// `platform` is always `ios` — Live Activities do not exist elsewhere, and
   /// the security rule pins the field to that value.
@@ -46,21 +50,19 @@ class LiveActivityTokenRepository {
   }) async {
     try {
       final ref = _tokenDoc(userDocId, docId);
-      await _firestore.runTransaction<void>((txn) async {
-        final snap = await txn.get(ref);
-        final data = <String, dynamic>{
-          'token': token,
-          'kind': kind.raw,
-          'employeeDocId': userDocId,
-          'platform': 'ios',
-          'locale': locale,
-          'uid': uid,
-          'expiresAt': Timestamp.fromDate(expiresAt),
-          'updatedAt': FieldValue.serverTimestamp(),
-          if (!snap.exists) 'createdAt': FieldValue.serverTimestamp(),
-        };
-        txn.set(ref, data, SetOptions(merge: true));
-      });
+      final snap = await ref.get();
+      final data = <String, dynamic>{
+        'token': token,
+        'kind': kind.raw,
+        'employeeDocId': userDocId,
+        'platform': 'ios',
+        'locale': locale,
+        'uid': uid,
+        'expiresAt': Timestamp.fromDate(expiresAt),
+        'updatedAt': FieldValue.serverTimestamp(),
+        if (!snap.exists) 'createdAt': FieldValue.serverTimestamp(),
+      };
+      await ref.set(data, SetOptions(merge: true));
     } catch (e, st) {
       _logger.warn('LIVE-ACT upsertToken failed', e, st);
     }
