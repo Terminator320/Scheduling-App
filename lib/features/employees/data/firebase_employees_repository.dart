@@ -6,6 +6,11 @@ import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
+/// Shared bound on every `users` stream, so a runaway users collection can't
+/// push an unbounded snapshot to every client. One constant so the three
+/// streams below can't silently drift apart.
+const _userStreamLimit = 500;
+
 class FirebaseEmployeesRepository implements EmployeesRepository {
   FirebaseEmployeesRepository(
     FirebaseFirestore firestore, {
@@ -21,7 +26,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     return retryStream(
       () => _users
           .orderBy('name')
-          .limit(500)
+          .limit(_userStreamLimit)
           .snapshots()
           .map(
             (snapshot) => snapshot.docs
@@ -38,6 +43,12 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       () => _users
           .where('role', whereIn: ['employee', 'admin'])
           .where('status', isEqualTo: 'active')
+          // NOTE: deliberately NO orderBy here — watchAllUsers' orderBy('name')
+          // makes Firestore exclude docs missing `name`, which would drop an
+          // unnamed active employee out of the picker (and unassigning staff
+          // changes who can see a visit). That asymmetry is also why this
+          // stream is not derived from allUsersStreamProvider.
+          .limit(_userStreamLimit)
           .snapshots()
           .map(
             (snapshot) => snapshot.docs
@@ -53,9 +64,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     return retryStream(
       () => _users
           .where('status', isEqualTo: 'active')
-          // Bounded like watchAllUsers so a runaway users collection can't
-          // stream an unbounded snapshot to every client.
-          .limit(500)
+          .limit(_userStreamLimit)
           .snapshots()
           .map(
             (snapshot) => snapshot.docs

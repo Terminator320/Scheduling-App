@@ -99,7 +99,13 @@ void main() {
           ],
           supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
-            body: EventDetailsView(appointment: _appointment, onClose: onClose),
+            // Explicit: showActions defaults CLOSED, and these cases exercise
+            // the admin-only Edit affordance.
+            body: EventDetailsView(
+              appointment: _appointment,
+              showActions: true,
+              onClose: onClose,
+            ),
           ),
         ),
       ),

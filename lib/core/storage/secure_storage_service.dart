@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 
 /// Centralized keys for [SecureStorageService] so callers never pass raw
 /// strings around. One namespace = one place to audit what we persist.
@@ -60,7 +61,7 @@ bool isKeychainLockedError(Object e) =>
 /// Injectable for tests; mirror the optional-dep pattern used by the other
 /// services so a fake storage can be supplied without touching a singleton.
 class SecureStorageService {
-  SecureStorageService({FlutterSecureStorage? storage})
+  SecureStorageService({FlutterSecureStorage? storage, AppLogger? logger})
     : _storage =
           storage ??
           const FlutterSecureStorage(
@@ -68,6 +69,7 @@ class SecureStorageService {
               accessibility: KeychainAccessibility.first_unlock_this_device,
             ),
           ),
+      _logger = logger ?? AppLogger(),
       // Injected storage (tests) skips the platform migration.
       _needsMigration =
           storage == null && defaultTargetPlatform == TargetPlatform.iOS;
@@ -90,6 +92,7 @@ class SecureStorageService {
   );
 
   final FlutterSecureStorage _storage;
+  final AppLogger _logger;
   final bool _needsMigration;
   Future<void>? _migration;
 
@@ -121,8 +124,17 @@ class SecureStorageService {
         await _storage.delete(key: backupKey);
       }
       await _storage.write(key: _migratedMarker, value: 'true');
-    } catch (_) {
+    } catch (e, st) {
       // Locked keychain or transient failure — retry on the next launch.
+      // Logged (not swallowed): a migration that fails EVERY launch would
+      // otherwise be invisible, leaving items stranded on the old
+      // accessibility class with no Crashlytics signal. A pre-first-unlock
+      // -25308 is environmental, so it is logged without an error record.
+      if (isKeychainLockedError(e)) {
+        _logger.warn('APPLOCK keychain migration deferred (device locked)');
+      } else {
+        _logger.warn('APPLOCK keychain migration failed', e, st);
+      }
       _migration = null;
     }
   }

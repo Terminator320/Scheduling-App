@@ -10,6 +10,43 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.35.0+58] - 2026-07-21
+### Added
+- **The live job card counts down to the end of your visit.** Once the job's
+  start time arrives, the Lock Screen card switches to "On site" and shows a
+  live timer counting down to the scheduled end. If the visit runs long the
+  timer counts up instead, so an overrun is visible at a glance.
+### Changed
+- **You can mark a job complete after its day has passed.** "Mark as complete"
+  used to appear only on the day of the visit, so a job you forgot to close
+  before midnight — or the second day of a long visit — could not be completed
+  at all, even though the app kept sending "job finished?" reminders about it.
+  The button now appears on any visit that has started.
+- **One notification per change to a repeating job, not one per visit.**
+  Cancelling, rescheduling, or deleting "this and all future" occurrences of a
+  repeating job used to send a separate push for every occurrence — up to about
+  fifteen at once.
+### Fixed
+- **The live job card clears when a job is deleted, cancelled, or reassigned.**
+  It previously cleared only when the job was marked complete, so deleting or
+  cancelling a visit you had already started left its card stuck on the Lock
+  Screen with no way to dismiss it.
+- **Tomorrow's in-progress jobs appear in the 6 p.m. summary again.** A job
+  already marked in progress was silently left out of the daily digest.
+- **Technicians are no longer shown actions they can't use.** Opening a job
+  from the dashboard, the day route, or a notification could show Edit, Cancel,
+  and Delete to someone without permission; tapping them then failed.
+- **Tapping a phone number, address, email, or link can no longer crash the
+  app.** If no app was available to handle it, the failure now surfaces as a
+  message instead.
+- **Photos taken offline no longer upload twice or go missing.** A photo saved
+  while the upload queue was already running could be uploaded twice, and a
+  batch added at exactly the wrong moment could be dropped from the queue
+  entirely without any warning.
+- **Fewer silent failures when the phone is locked.** Notifications arriving on
+  a locked device could leave the app unable to read its saved settings, which
+  quietly skipped the biometric app lock for that session.
+
 ## [1.34.1+55] - 2026-07-19
 ### Changed
 - **Removing a team member now cuts off access immediately.** Setting someone

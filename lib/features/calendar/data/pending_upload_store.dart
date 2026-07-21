@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -50,6 +51,25 @@ class PendingUploadStore {
 
   final AppLogger _logger;
 
+  /// Tail of the mutation chain. Every read-modify-write below runs through
+  /// [_serialized], because the queue is ONE SharedPreferences key: `add`,
+  /// `remove` and `prune` each `load()` → mutate → `_save()` with real awaits
+  /// in between, so two overlapping mutations both read the same list and the
+  /// second `_save` erases the first's change. That lost a whole photo batch —
+  /// a save staging a new entry while a listener-driven drain removed a
+  /// finished one wrote `[E1, E2]` then `[]`, stranding E2's files on disk with
+  /// no queue entry and no failure notice. Serializing here (not at the call
+  /// site) covers every caller, including the requeue inside a drain.
+  Future<void> _mutations = Future<void>.value();
+
+  Future<T> _serialized<T>(Future<T> Function() action) {
+    final result = _mutations.then((_) => action());
+    // Swallow errors on the chain only — `result` still surfaces them to the
+    // caller. Without this a failed mutation would poison every later one.
+    _mutations = result.then((_) {}, onError: (_) {});
+    return result;
+  }
+
   Future<List<PendingUpload>> load() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);
@@ -80,25 +100,26 @@ class PendingUploadStore {
     );
   }
 
-  Future<void> add(PendingUpload entry) async {
+  Future<void> add(PendingUpload entry) => _serialized(() async {
     final entries = await load();
     await _save([...entries, entry]);
-  }
+  });
 
-  Future<void> remove(String id) async {
+  Future<void> remove(String id) => _serialized(() async {
     final entries = await load();
     await _save(entries.where((e) => e.id != id).toList());
-  }
+  });
 
   /// Drops entries older than [_maxAge]; returns them so the caller can
   /// delete their staged files.
-  Future<List<PendingUpload>> prune({required DateTime now}) async {
-    final entries = await load();
-    final cutoff = now.subtract(_maxAge).millisecondsSinceEpoch;
-    final pruned = entries.where((e) => e.enqueuedAtMs < cutoff).toList();
-    if (pruned.isNotEmpty) {
-      await _save(entries.where((e) => e.enqueuedAtMs >= cutoff).toList());
-    }
-    return pruned;
-  }
+  Future<List<PendingUpload>> prune({required DateTime now}) =>
+      _serialized(() async {
+        final entries = await load();
+        final cutoff = now.subtract(_maxAge).millisecondsSinceEpoch;
+        final pruned = entries.where((e) => e.enqueuedAtMs < cutoff).toList();
+        if (pruned.isNotEmpty) {
+          await _save(entries.where((e) => e.enqueuedAtMs >= cutoff).toList());
+        }
+        return pruned;
+      });
 }

@@ -104,7 +104,7 @@ class AppointmentSeriesEditor {
         // Canonicalize each sibling's own status (never propagate the edited
         // visit's) so a legacy value like the retired 'confirmed' isn't
         // re-written verbatim and rejected by the status allowlist rule.
-        status: AppointmentStatus.fromRaw(v.status).raw,
+        status: AppointmentStatus.storedRaw(v.status),
       );
     }).toList();
     await _repo.updateAppointments([updated, ...propagated]);

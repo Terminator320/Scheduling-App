@@ -16,12 +16,16 @@ class UpcomingTodaySection extends StatelessWidget {
     required this.ops,
     required this.colorMap,
     required this.nameMap,
+    required this.isAdmin,
     super.key,
   });
 
   final TodayOps ops;
   final Map<String, Color> colorMap;
   final Map<String, String> nameMap;
+
+  /// Gates the admin-only Edit/Cancel/Delete actions on the sheet a card opens.
+  final bool isAdmin;
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +52,11 @@ class UpcomingTodaySection extends StatelessWidget {
               employeeColor:
                   colorFromMap(ops.upcoming[i], colorMap) ?? scheme.outline,
               employeeName: resolveAssigneeNames(ops.upcoming[i], nameMap),
-              onTap: () => showEventDetails(context, ops.upcoming[i]),
+              onTap: () => showEventDetails(
+                context,
+                ops.upcoming[i],
+                showActions: isAdmin,
+              ),
             ),
           ],
       ],

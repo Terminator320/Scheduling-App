@@ -10,6 +10,7 @@ import 'package:scheduling/features/calendar/domain/models/appointment_image.dar
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:uuid/uuid.dart';
 
 class FirebaseAppointmentsRepository implements AppointmentsRepository {
   FirebaseAppointmentsRepository(
@@ -25,6 +26,19 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   /// Injectable time source so the search-cache TTL is testable.
   final DateTime Function() _clock;
+
+  /// One fresh id per WRITE operation, stamped on every appointment doc the
+  /// operation touches. The push trigger (`claimSeriesNotice` in
+  /// `functions/notification_utils.js`) uses it to collapse a repeat-series
+  /// batch into ONE notification per employee while keeping two separate
+  /// operations distinct — so cancelling Tuesday's visit and then Thursday's
+  /// visit of the same series each notify. Only WRITE paths stamp it; a delete
+  /// can't (no doc to write), so the server falls back to a short time window
+  /// for deletes. NOT part of `AppointmentRecord` — it's write metadata, never
+  /// read back or displayed. Never stamp it on the employee mark-done write
+  /// (`updateAppointmentStatus` with `done`): the rules gate that with
+  /// `affectedKeys().hasOnly(['status','updatedAt'])`.
+  String _newSeriesOpId() => const Uuid().v4();
 
   // Bounded LRU of recent history-search results. The repository is a
   // long-lived singleton (it outlives the autoDispose historySearchProvider),
@@ -124,9 +138,11 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }) async {
     // The surviving doc's pictures are excluded for the same stale-snapshot
     // reason as updateAppointment; the fresh copies are created with theirs.
+    final opId = _newSeriesOpId();
     final batch = _appointments.firestore.batch()
       ..update(_appointments.doc(updated.id), {
         ..._toFirestoreMap(updated, includePictures: false),
+        'seriesOpId': opId,
         'updatedAt': FieldValue.serverTimestamp(),
       });
     for (final id in deleteIds) {
@@ -135,6 +151,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     for (final copy in copies) {
       batch.set(_appointments.doc(copy.id), {
         ..._toFirestoreMap(copy),
+        'seriesOpId': opId,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -153,6 +170,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     // instead; only document creation writes the full array.
     await _appointments.doc(appointment.id).update({
       ..._toFirestoreMap(appointment, includePictures: false),
+      'seriesOpId': _newSeriesOpId(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
     _invalidateSearchCache();
@@ -169,6 +187,9 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     // (e.g. another admin removing a future visit) is skipped rather than
     // failing the whole apply-to-series save with NOT_FOUND and losing the
     // user's edit. Reads must precede writes inside the transaction.
+    // One op-id for the whole apply-to-all batch so its sibling triggers
+    // collapse to one push per employee (see _newSeriesOpId).
+    final opId = _newSeriesOpId();
     await _appointments.firestore.runTransaction((txn) async {
       final refs = [for (final r in records) _appointments.doc(r.id)];
       final snaps = await Future.wait([for (final ref in refs) txn.get(ref)]);
@@ -178,6 +199,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         // updateAppointment — each sibling keeps its own stored photos.
         txn.update(refs[i], {
           ..._toFirestoreMap(records[i], includePictures: false),
+          'seriesOpId': opId,
           'updatedAt': FieldValue.serverTimestamp(),
         });
       }
@@ -242,8 +264,16 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         'must be one of $_allowedStatuses',
       );
     }
+    // A cancel fires a "cancelled" push, so stamp a fresh op-id to keep two
+    // separate cancels of the same series from collapsing into one
+    // notification. The `done` path deliberately stays `{status, updatedAt}`
+    // only: it's the one status write an EMPLOYEE can make, and the rules gate
+    // it with `affectedKeys().hasOnly(['status','updatedAt'])` — a stray
+    // `seriesOpId` there would be rejected with permission-denied. Cancel is
+    // admin-only, whose update rule has no such key restriction.
     await _appointments.doc(id).update({
       'status': trimmed,
+      if (trimmed == 'cancelled') 'seriesOpId': _newSeriesOpId(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
     _invalidateSearchCache();

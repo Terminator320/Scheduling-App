@@ -410,6 +410,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
         employeeColor: empColor,
         showConnector: i < jobs.length - 1,
         navigateLabel: l10n.calendar_dayRouteNavigate,
+        isAdmin: widget.isAdmin,
       ),
     );
   }
@@ -422,6 +423,7 @@ class _StopTile extends StatelessWidget {
     required this.employeeColor,
     required this.showConnector,
     required this.navigateLabel,
+    required this.isAdmin,
   });
 
   final AppointmentRecord job;
@@ -429,6 +431,9 @@ class _StopTile extends StatelessWidget {
   final Color employeeColor;
   final bool showConnector;
   final String navigateLabel;
+
+  /// Gates the admin-only actions on the sheet this stop's card opens.
+  final bool isAdmin;
 
   @override
   Widget build(BuildContext context) {
@@ -457,7 +462,8 @@ class _StopTile extends StatelessWidget {
                 child: AppointmentCard(
                   appointment: job,
                   employeeColor: employeeColor,
-                  onTap: () => showEventDetails(context, job),
+                  onTap: () =>
+                      showEventDetails(context, job, showActions: isAdmin),
                   footer: (isOpen && hasAddress)
                       ? _NavigatePill(
                           label: navigateLabel,

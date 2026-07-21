@@ -311,7 +311,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
           );
       return;
     }
-    await showEventDetails(navContext, record);
+    await showEventDetails(navContext, record, showActions: shell.isAdmin);
   }
 
   /// Polls up to ~10s for the live hub. Background taps resolve on the first

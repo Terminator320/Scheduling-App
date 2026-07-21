@@ -17,6 +17,8 @@ const {
   handleAppointmentWrite,
   runDailyDigest,
   runOverduePromptSweep,
+  OPEN_STATUSES,
+  SERIES_CLAIM_WINDOW_MS,
 } = require("../notification_utils");
 
 // Noon Toronto (EDT -4) on Wed 2026-07-08.
@@ -335,6 +337,7 @@ function makeDb(config) {
   const ledgerCreates = [];
   const ledgerDeletes = [];
   const appointmentQueries = [];
+  const seriesClaims = new Map(config.seriesClaims || []);
   const existing = new Set(config.ledgerExisting || []);
   const db = {
     collection(name) {
@@ -407,10 +410,35 @@ function makeDb(config) {
           },
         };
       }
+      if (name === "appointmentSeriesNotices") {
+        return {
+          doc(id) {
+            return {
+              create: async (data) => {
+                if (seriesClaims.has(id)) {
+                  const e = new Error("exists");
+                  e.code = 6;
+                  throw e;
+                }
+                seriesClaims.set(id, data);
+              },
+              get: async () => ({
+                get: (field) => (seriesClaims.get(id) || {})[field],
+              }),
+              set: async (data) => {
+                seriesClaims.set(id, data);
+              },
+            };
+          },
+        };
+      }
       return {doc: () => ({})};
     },
   };
-  return {db, deletedTokens, ledgerCreates, ledgerDeletes, appointmentQueries};
+  return {
+    db, deletedTokens, ledgerCreates, ledgerDeletes, appointmentQueries,
+    seriesClaims,
+  };
 }
 
 /**
@@ -433,6 +461,155 @@ function makeMessaging(resultFor) {
 }
 
 const silentLogger = {warn: () => {}, info: () => {}, error: () => {}};
+
+describe("handleAppointmentWrite repeat-series claim", () => {
+  // A "this and all future" delete/reschedule writes every affected occurrence
+  // in ONE client batch, so each sibling doc fires this trigger separately.
+  // Without the claim the tech got one push per sibling (~15 for a year of
+  // monthly visits) plus ~15x the Firestore reads.
+  const sibling = (id) => ({
+    id,
+    seriesId: "series-1",
+    employeeIds: ["e1"],
+    startTime: future(3 * HOUR),
+    status: "pending",
+  });
+
+  const runDelete = (db, messaging, id) => handleAppointmentWrite(
+      id,
+      sibling(id),
+      null,
+      {db, messaging, now: NOW, logger: silentLogger},
+  );
+
+  test("series cancel/delete notifies the employee only once", async () => {
+    const {db} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: [{id: "t-en", locale: "en"}]},
+    });
+    const messaging = makeMessaging();
+    const first = await runDelete(db, messaging, "occ-1");
+    const second = await runDelete(db, messaging, "occ-2");
+    const third = await runDelete(db, messaging, "occ-3");
+
+    expect(first.sent).toBe(1);
+    expect(second.sent).toBe(0);
+    expect(third.sent).toBe(0);
+    expect(messaging.sent).toHaveLength(1);
+  });
+
+  test("a non-series appointment is never suppressed", async () => {
+    const {db} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: [{id: "t-en", locale: "en"}]},
+    });
+    const messaging = makeMessaging();
+    const one = {
+      employeeIds: ["e1"], startTime: future(3 * HOUR), status: "pending",
+    };
+    const a = await handleAppointmentWrite(
+        "solo-1", one, null, {db, messaging, now: NOW, logger: silentLogger});
+    const b = await handleAppointmentWrite(
+        "solo-2", one, null, {db, messaging, now: NOW, logger: silentLogger});
+    expect(a.sent).toBe(1);
+    expect(b.sent).toBe(1);
+  });
+
+  test("a later separate operation on the same series notifies again",
+      async () => {
+        const stale = new Date(
+            NOW.getTime() - SERIES_CLAIM_WINDOW_MS - 1000);
+        const {db} = makeDb({
+          users: {e1: {role: "employee", status: "active"}},
+          tokens: {e1: [{id: "t-en", locale: "en"}]},
+          seriesClaims: [["series-1_cancelled_e1", {createdAt: stale}]],
+        });
+        const messaging = makeMessaging();
+        const res = await runDelete(db, messaging, "occ-9");
+        // The existing claim predates the batch window, so it is taken over
+        // rather than suppressing a genuinely new operation.
+        expect(res.sent).toBe(1);
+      });
+
+  test("fails OPEN: a claim-store error still delivers the push", async () => {
+    const {db} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: [{id: "t-en", locale: "en"}]},
+    });
+    const broken = {
+      ...db,
+      collection: (name) => name === "appointmentSeriesNotices" ?
+        {doc: () => ({create: async () => {
+          throw new Error("firestore down");
+        }})} :
+        db.collection(name),
+    };
+    const messaging = makeMessaging();
+    const res = await runDelete(broken, messaging, "occ-1");
+    // Degrading to today's behavior (one push per sibling) beats silently
+    // dropping a cancellation for a tech already driving to the job.
+    expect(res.sent).toBe(1);
+  });
+
+  // Op-id path: a WRITE (after present) carries a fresh seriesOpId that every
+  // sibling of one batch shares and no other operation reuses, so the claim is
+  // keyed on it with NO time window.
+  const cancelUpdate = (db, messaging, id, opId) => {
+    const before = {
+      seriesId: "series-1", employeeIds: ["e1"],
+      startTime: future(3 * HOUR), status: "pending",
+    };
+    const after = {...before, status: "cancelled", seriesOpId: opId};
+    return handleAppointmentWrite(
+        id, before, after, {db, messaging, now: NOW, logger: silentLogger});
+  };
+
+  test("one op-id collapses its whole batch to a single push", async () => {
+    const {db} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: [{id: "t-en", locale: "en"}]},
+    });
+    const messaging = makeMessaging();
+    const first = await cancelUpdate(db, messaging, "occ-1", "op-A");
+    const second = await cancelUpdate(db, messaging, "occ-2", "op-A");
+    const third = await cancelUpdate(db, messaging, "occ-3", "op-A");
+    expect(first.sent).toBe(1);
+    expect(second.sent).toBe(0);
+    expect(third.sent).toBe(0);
+    expect(messaging.sent).toHaveLength(1);
+  });
+
+  test("two separate operations each notify, even back-to-back", async () => {
+    // The reported bug: cancelling Tuesday's visit and then Thursday's visit of
+    // the same series within any window used to suppress the second. Distinct
+    // op-ids make them independent regardless of timing.
+    const {db} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: [{id: "t-en", locale: "en"}]},
+    });
+    const messaging = makeMessaging();
+    const tuesday = await cancelUpdate(db, messaging, "tue", "op-A");
+    const thursday = await cancelUpdate(db, messaging, "thu", "op-B");
+    expect(tuesday.sent).toBe(1);
+    expect(thursday.sent).toBe(1);
+    expect(messaging.sent).toHaveLength(2);
+  });
+
+  test("op-id path suppresses without a stale-takeover read", async () => {
+    // A duplicate op-id claim is definitive (same batch), so the collision is
+    // answered by create() alone — no get()/set() round-trip.
+    const {db, seriesClaims} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: [{id: "t-en", locale: "en"}]},
+      seriesClaims: [["op_op-A_cancelled_e1", {createdAt: NOW}]],
+    });
+    const messaging = makeMessaging();
+    const res = await cancelUpdate(db, messaging, "occ-1", "op-A");
+    expect(res.sent).toBe(0);
+    // The claim doc is untouched (not overwritten by a takeover set()).
+    expect(seriesClaims.get("op_op-A_cancelled_e1").createdAt).toBe(NOW);
+  });
+});
 
 describe("handleAppointmentWrite", () => {
   test("sends one message per live token of an active employee", async () => {
@@ -721,5 +898,31 @@ describe("runDailyDigest", () => {
     );
     expect(res.digests).toBe(2);
     expect(messaging.sent).toHaveLength(2);
+  });
+
+  test("queries every open status, including in_progress", async () => {
+    // Regression: the digest hardcoded ["pending", "confirmed"], so a job
+    // stored `in_progress` for tomorrow silently dropped out of the 18:00
+    // digest — while its own pure filter (groupTomorrowsJobsByEmployee)
+    // excludes only `cancelled`, i.e. it expects to receive every open status.
+    // The query and the filter disagreed, so the unit tests below were
+    // exercising records production never delivered.
+    const {db, appointmentQueries} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: [{id: "t1", locale: "en"}]},
+      appointments: [
+        {id: "j1", status: "in_progress", employeeIds: ["e1"],
+          startTime: new Date("2026-07-09T13:00:00Z")},
+      ],
+    });
+    const messaging = makeMessaging();
+    const res = await runDailyDigest(
+        {db, messaging, now: NOW, logger: silentLogger},
+    );
+
+    const statusQuery = appointmentQueries.find((q) => q.field === "status");
+    expect(statusQuery.value).toEqual(expect.arrayContaining(["in_progress"]));
+    expect(statusQuery.value).toEqual(OPEN_STATUSES);
+    expect(res.digests).toBe(1);
   });
 });

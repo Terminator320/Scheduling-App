@@ -84,9 +84,9 @@ class EventDetailsController extends Notifier<EventDetailsState>
       // Normalize the stored raw status so a legacy value (e.g. the retired
       // 'confirmed') is edited back as a valid one — an unchanged status is
       // re-written verbatim on save and the rules reject anything off the
-      // allowlist. fromRaw maps unknown/legacy → pending; valid values
-      // round-trip.
-      editingStatus: AppointmentStatus.fromRaw(appointment.status).raw,
+      // allowlist. storedRaw maps unknown/legacy/overdue → pending; valid
+      // values round-trip.
+      editingStatus: AppointmentStatus.storedRaw(appointment.status),
       repeat: appointment.repeat,
       savedRepeat: appointment.repeat,
       // Seeded synchronously from the record so a picker toggle can never race
@@ -268,26 +268,32 @@ class EventDetailsController extends Notifier<EventDetailsState>
     );
   }
 
-  /// Returns null on success, the caught error otherwise (the widget layer
-  /// composes it into an APPT-STATUS notice).
-  Future<Object?> markAsDone(AppointmentRecord appointment) async {
+  /// Writes `status: 'done'`. The widget layer switches on the outcome and
+  /// composes a failure into an APPT-STATUS notice.
+  Future<EventDetailsActionOutcome> markAsDone(AppointmentRecord appointment) {
     return _setStatusOnRepo(appointment, 'done');
   }
 
-  /// Returns null on success, the caught error otherwise.
-  Future<Object?> cancelAppointment(AppointmentRecord appointment) async {
+  Future<EventDetailsActionOutcome> cancelAppointment(
+    AppointmentRecord appointment,
+  ) {
     return _setStatusOnRepo(appointment, 'cancelled');
   }
 
-  Future<Object?> _setStatusOnRepo(
+  Future<EventDetailsActionOutcome> _setStatusOnRepo(
     AppointmentRecord appointment,
     String status,
   ) async {
     final id = appointment.id;
-    if (id == null) return StateError('appointment has no id');
+    if (id == null) {
+      return EventDetailsActionFailed(StateError('appointment has no id'));
+    }
     // Reject a concurrent status write (fast double-tap before the buttons
-    // rebuild disabled) — consistent with save()'s reentrancy guard.
-    if (state.isSaving) return null;
+    // rebuild disabled) — consistent with save()'s reentrancy guard. `isSaving`
+    // is shared with save(), deleteAppointment() and setSaving(), so this path
+    // is reachable from a detail pane that stays mounted behind a confirmation
+    // dialog.
+    if (state.isSaving) return const EventDetailsActionBusy();
     state = state.copyWith(isSaving: true);
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
@@ -299,11 +305,11 @@ class EventDetailsController extends Notifier<EventDetailsState>
       // card belongs to, so ending locally would kill the card for the job the
       // tech is currently driving to when they mark the previous one done.
       if (ref.mounted) state = state.copyWith(isSaving: false);
-      return null;
+      return const EventDetailsActionOk();
     } catch (e, st) {
       logger.warn('APPT-STATUS updateAppointmentStatus($status) failed', e, st);
       if (ref.mounted) state = state.copyWith(isSaving: false);
-      return e;
+      return EventDetailsActionFailed(e);
     }
   }
 

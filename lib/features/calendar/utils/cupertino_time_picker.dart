@@ -87,8 +87,8 @@ Future<T?> _showCupertinoWheelSheet<T>(
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
+                  horizontal: AppSpacing.sp16,
+                  vertical: AppSpacing.sp8,
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,

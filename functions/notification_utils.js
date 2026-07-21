@@ -59,11 +59,39 @@ const WIDGET_PAYLOAD_MAX_BYTES = 3000;
 // from accumulating forever.
 const LEDGER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+/**
+ * The body every claim-ledger doc in this file is written with. `expiresAt` is
+ * the ABSOLUTE deletion instant (the lifetime is baked in here), so the
+ * Firestore TTL policy on these collections must use expiration offset 0 or
+ * retention silently multiplies. One helper so the three write sites cannot
+ * disagree about that.
+ *
+ * @param {!Date} nowDate Sweep/trigger time.
+ * @return {{createdAt: !Date, expiresAt: !Date}}
+ */
+function ledgerBody(nowDate) {
+  return {
+    createdAt: nowDate,
+    expiresAt: new Date(nowMillis(nowDate) + LEDGER_TTL_MS),
+  };
+}
+
 // Statuses that leave a job still open once its endTime passes — the app then
 // shows it as `overdue` (AppointmentRecord.displayStatus). Deliberately an
 // allowlist so terminal statuses (`done`/`cancelled` and the legacy
 // `completed` alias of `done`) stay excluded.
 const OPEN_LIKE = new Set(["pending", "in_progress", "confirmed"]);
+
+// The same allowlist as an array, for `where("status", "in", ...)` queries.
+// Single-sourced deliberately: the digest sweep used to hardcode
+// ["pending", "confirmed"], which silently dropped every `in_progress` job from
+// the 18:00 digest even though the pure filter it feeds
+// (groupTomorrowsJobsByEmployee) excludes only `cancelled` — so the query and
+// the filter disagreed about their contract and the unit tests exercised
+// records production never delivered. The travel sweep is the ONE intentional
+// exception (see PENDING_LIKE in travel_utils.js): it excludes `in_progress`
+// because the visit has already started, so there is nothing to leave for.
+const OPEN_STATUSES = [...OPEN_LIKE];
 
 // Dedupe priority when one employee accrues multiple events for one write.
 const KIND_PRIORITY = {
@@ -777,9 +805,30 @@ async function handleAppointmentWrite(id, before, after, deps) {
   const events = diffAppointmentForNotifications(before, after, now, id);
   if (events.length === 0) return {events: 0, sent: 0};
   let sent = 0;
+  // A repeat series is rewritten as one batch of up to ~15 sibling docs, each
+  // firing this trigger. Without a claim, deleting or rescheduling ONE
+  // repeating job sent the tech ~15 pushes and cost ~15x the reads. The create
+  // path is already deduped by the anchor rule inside the differ; this covers
+  // delete/cancel/reschedule/unassign, where the anchor doc is often not in
+  // the batch at all.
+  const seriesId = String(((after || before) || {}).seriesId || "");
+  // A fresh op-id is only trustworthy on a WRITE: `after.seriesOpId` was minted
+  // by THIS operation. A delete (after === null) has no fresh id — its
+  // `before.seriesOpId` is stale (the doc's last-write id, shared by every
+  // future delete of the series), so it must NOT be used as a per-op key; the
+  // empty string routes the delete to claimSeriesNotice's seriesId+window
+  // fallback instead.
+  const freshOpId = after ? String(after.seriesOpId || "") : "";
   // One window read per distinct employee across this write's events.
   const windows = new Map();
   for (const {employeeDocId, kind} of events) {
+    if (seriesId !== "") {
+      const mine = await claimSeriesNotice(deps, {
+        seriesId, seriesOpId: freshOpId, kind, employeeDocId, nowDate: now,
+      });
+      // Claimed by a sibling in this same batch — it sends for the series.
+      if (!mine) continue;
+    }
     const ctx = _contextFor(kind, before, after);
     const data = {appointmentId: String(id), kind};
     if (!windows.has(employeeDocId)) {
@@ -855,10 +904,7 @@ async function _deliverRecipientOnce(deps, opts) {
   const ledgerRef = db.collection(collection).doc(ledgerId);
   try {
     // create() fails if the doc exists -> fires at most once per recipient.
-    await ledgerRef.create({
-      createdAt: nowDate,
-      expiresAt: new Date(nowMillis(nowDate) + LEDGER_TTL_MS),
-    });
+    await ledgerRef.create(ledgerBody(nowDate));
   } catch (err) {
     if (isAlreadyExists(err)) return 0;
     if (logger) {
@@ -895,6 +941,108 @@ async function _deliverRecipientOnce(deps, opts) {
 }
 
 /**
+ * DELETE-fallback window (see [claimSeriesNotice]). A repeat-series edit writes
+ * every affected occurrence in ONE client batch, so the sibling triggers all
+ * fire within seconds; this only needs to cover trigger scheduling jitter and a
+ * retry. Only the fallback path uses it — the precise op-id path needs no
+ * window. Kept SHORT so a genuinely separate later delete of the same series
+ * still notifies. Keep this in seconds, not minutes.
+ */
+const SERIES_CLAIM_WINDOW_MS = 45 * 1000;
+
+const SERIES_CLAIM_COLLECTION = "appointmentSeriesNotices";
+
+/**
+ * Claims the right to notify [employeeDocId] about [kind] for one repeat-series
+ * operation, so a batch that rewrites N occurrences sends ONE push instead of
+ * N. `diffAppointmentForNotifications` dedupes a series on CREATE via the
+ * anchor rule (`id === seriesId`), but that can't cover delete/cancel/
+ * reschedule — those batches often start partway through a series, so the
+ * anchor doc is frequently absent and an anchor-only rule would suppress EVERY
+ * notification. Hence this claim ledger, first writer wins.
+ *
+ * TWO KEYING MODES:
+ *  - **freshOpId present** (the precise path): every doc a client WRITES in one
+ *    batch carries the same fresh `seriesOpId` (`_newSeriesOpId` in
+ *    `firebase_appointments_repository.dart`), and no other operation ever
+ *    reuses it. So `create()` failing with ALREADY_EXISTS means "a sibling of
+ *    THIS batch already claimed" — a definitive answer that needs NO time
+ *    window. Two separate user actions get different op-ids and both notify,
+ *    even back-to-back. This is what an apply-to-all edit and a single-
+ *    occurrence cancel take.
+ *  - **freshOpId absent** (the fallback): a DELETE has no `after`, so the
+ *    trigger only sees `before.seriesOpId`, which was minted at the doc's LAST
+ *    write and is shared by every future delete of the series — useless as a
+ *    per-operation key. Deletes therefore fall back to (seriesId, kind,
+ *    employee) + this short window + stale-takeover: collapse one delete batch,
+ *    while a later separate delete still notifies once the window lapses.
+ *
+ * FAILS OPEN everywhere: any error (and, in the fallback, a claim with no
+ * readable `createdAt`) returns true (send). The claim only DE-DUPLICATES on
+ * top of existing behavior — failing open degrades to one-push-per-sibling,
+ * whereas failing closed could drop a cancellation for a tech already driving.
+ *
+ * @param {!Object} deps `{db, logger}`.
+ * @param {{seriesId: string, seriesOpId: string, kind: string,
+ *   employeeDocId: string, nowDate: !Date}} opts `seriesOpId` is `""` for a
+ *   delete (fallback path).
+ * @return {!Promise<boolean>} True when this invocation should send.
+ */
+async function claimSeriesNotice(deps, opts) {
+  const {db, logger} = deps;
+  const {seriesId, seriesOpId, kind, employeeDocId, nowDate} = opts;
+  const nowMs = nowMillis(nowDate);
+  let ref;
+  try {
+    // Build the ref INSIDE the try: `.doc()` throws SYNCHRONOUSLY on an id
+    // containing "/", and nothing constrains seriesId's contents; escaping
+    // here would kill every push for this write instead of degrading. A fresh
+    // op-id is a uuid (slash-free), so its id is always safe — but the shared
+    // try covers the fallback's raw seriesId too.
+    const docId = seriesOpId !== "" ?
+      `op_${seriesOpId}_${kind}_${employeeDocId}` :
+      `${seriesId}_${kind}_${employeeDocId}`;
+    ref = db.collection(SERIES_CLAIM_COLLECTION).doc(docId);
+    await ref.create(ledgerBody(nowDate));
+    return true;
+  } catch (err) {
+    if (!isAlreadyExists(err)) {
+      if (logger) {
+        logger.warn("series claim failed; sending anyway",
+            {seriesId, kind, err});
+      }
+      return true;
+    }
+    // A claim already exists. With a fresh op-id that is DEFINITIVE (only a
+    // sibling of this same batch could have written it) — suppress, no window.
+    if (seriesOpId !== "") return false;
+  }
+  // Fallback path (delete): a claim exists. Take it over if it predates the
+  // window, so a later separate delete of the same series still notifies. Two
+  // siblings racing a stale takeover would both send — a duplicate, never a
+  // miss.
+  try {
+    const snap = await ref.get();
+    const createdMs = toMillis(snap.get("createdAt"));
+    // A null createdMs means the doc vanished between the ALREADY_EXISTS and
+    // this read (TTL sweep / manual delete) or carries no usable timestamp —
+    // the opposite of a live claim, so take it over and SEND. Treating it as a
+    // live claim would fail closed in a function documented to fail open.
+    if (createdMs != null && nowMs - createdMs < SERIES_CLAIM_WINDOW_MS) {
+      return false;
+    }
+    await ref.set(ledgerBody(nowDate));
+    return true;
+  } catch (err) {
+    if (logger) {
+      logger.warn("series claim refresh failed; sending anyway",
+          {seriesId, kind, err});
+    }
+    return true;
+  }
+}
+
+/**
  * Orchestrates the overdue "job finished?" sweep. Queries by startTime (the
  * existing `(status, startTime)` index; endTime would need a new one) over
  * the last OVERDUE_QUERY_WINDOW_MS — wide enough that the longest bookable
@@ -918,7 +1066,7 @@ async function runOverduePromptSweep(deps) {
   // already-aged-out jobs. Uses the existing `(status, startTime DESC)` index.
   const snap = await db
       .collection("appointments")
-      .where("status", "in", ["pending", "in_progress", "confirmed"])
+      .where("status", "in", OPEN_STATUSES)
       .where("startTime", ">=", windowStart)
       .where("startTime", "<=", nowDate)
       .orderBy("startTime", "desc")
@@ -972,7 +1120,7 @@ async function runDailyDigest(deps) {
   const {start, end} = tomorrowWindowToronto(nowDate);
   const snap = await db
       .collection("appointments")
-      .where("status", "in", ["pending", "confirmed"])
+      .where("status", "in", OPEN_STATUSES)
       .where("startTime", ">=", start)
       .where("startTime", "<", end)
       .get();
@@ -1009,6 +1157,9 @@ async function runDailyDigest(deps) {
 }
 
 module.exports = {
+  OPEN_STATUSES,
+  SERIES_CLAIM_WINDOW_MS,
+  claimSeriesNotice,
   OVERDUE_LOOKBACK_MS,
   CHANGE_RECIPIENT_ROLES,
   TIMED_RECIPIENT_ROLES,

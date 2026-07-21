@@ -32,7 +32,7 @@ void main() {
           data: const MediaQueryData(textScaler: TextScaler.linear(2)),
           child: _wrap(
             DetailsActionBar(
-              isToday: true,
+              hasStarted: true,
               isDone: false,
               isCancelled: false,
               isSaving: false,
@@ -52,7 +52,7 @@ void main() {
     await tester.pumpWidget(
       _wrap(
         DetailsActionBar(
-          isToday: true,
+          hasStarted: true,
           isDone: true,
           isCancelled: false,
           isSaving: false,

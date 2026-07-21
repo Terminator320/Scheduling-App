@@ -99,7 +99,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         email: widget.email,
       ),
       body: switch (stats) {
-        AsyncData(:final value) => _StatsList(stats: value),
+        AsyncData(:final value) => _StatsList(
+          stats: value,
+          isAdmin: widget.isAdmin,
+        ),
         AsyncError() => CenteredErrorText(
           message: context.l10n.error_introLoadDashboard,
         ),
@@ -110,9 +113,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 }
 
 class _StatsList extends ConsumerWidget {
-  const _StatsList({required this.stats});
+  const _StatsList({required this.stats, required this.isAdmin});
 
   final DashboardStats stats;
+
+  /// Gates the admin-only actions on the appointment sheets these cards open.
+  final bool isAdmin;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -134,6 +140,7 @@ class _StatsList extends ConsumerWidget {
                 ops: stats.todayOps,
                 colorMap: colorMap,
                 nameMap: nameMap,
+                isAdmin: isAdmin,
               ),
               const SizedBox(height: AppSpacing.sp24),
               EmployeeWorkloadSection(workload: stats.workload),
@@ -147,6 +154,7 @@ class _StatsList extends ConsumerWidget {
                 flags: stats.flags,
                 colorMap: colorMap,
                 nameMap: nameMap,
+                isAdmin: isAdmin,
               ),
               const SizedBox(height: AppSpacing.sp16),
             ],

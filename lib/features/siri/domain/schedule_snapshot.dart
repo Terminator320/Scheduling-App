@@ -26,19 +26,8 @@ Map<String, dynamic> _appointment(AppointmentRecord a) => {
   'endMillis': a.endTime.millisecondsSinceEpoch,
   'clientName': a.clientName,
   'address': a.address,
-  'status': _storedStatus(a.status),
+  'status': AppointmentStatus.storedRaw(a.status),
 };
-
-/// Normalizes a stored status onto the rules allowlist (legacy `confirmed`
-/// docs land on `pending`). A doc storing the display-only `overdue` would make
-/// `AppointmentStatus.raw` throw, so it degrades to `pending` here rather than
-/// failing the whole snapshot build.
-String _storedStatus(String raw) {
-  final status = AppointmentStatus.fromRaw(raw);
-  return status == AppointmentStatus.overdue
-      ? AppointmentStatus.pending.raw
-      : status.raw;
-}
 
 String _dayKey(DateTime day) =>
     '${day.year.toString().padLeft(4, '0')}-'

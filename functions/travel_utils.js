@@ -137,6 +137,13 @@ function canDeferRoutes({seconds, startTimeMillis, nowMillis}) {
 // kept so pre-retirement docs still earn reminders.
 const PENDING_LIKE = new Set(["pending", "confirmed"]);
 
+// The same allowlist as an array, for the candidate query's `where("status",
+// "in", ...)`. Intentionally NARROWER than notification_utils' OPEN_STATUSES:
+// `in_progress` is excluded because the visit has already started, so there is
+// no "time to leave" left to remind about (see selectTravelCandidates). Keep
+// the two in sync only in the sense of staying deliberately different.
+const PENDING_STATUSES = [...PENDING_LIKE];
+
 // A job in one of these no longer occupies the employee (intervening prong).
 // Legacy `completed` is the retired alias of `done`.
 const TERMINAL = new Set(["done", "completed", "cancelled"]);
@@ -491,7 +498,7 @@ async function runTravelAwareReminderSweep(deps) {
   const windowEnd = new Date(nowMs + TRAVEL_WINDOW_MS);
   const snap = await db
       .collection("appointments")
-      .where("status", "in", ["pending", "confirmed"])
+      .where("status", "in", PENDING_STATUSES)
       .where("startTime", ">", nowDate)
       .where("startTime", "<=", windowEnd)
       .get();

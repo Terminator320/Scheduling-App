@@ -13,7 +13,11 @@ class AppointmentTile extends StatelessWidget {
     required this.appointment,
     required this.employeeColorMap,
     super.key,
-    this.showActions = true,
+    // Defaults CLOSED. `showEventDetails` makes this required for the same
+    // reason: a default of `true` silently hands a non-admin surface the
+    // admin-only Edit/Cancel/Delete affordances, which the rules then reject
+    // with an opaque permission-denied. Opt in explicitly.
+    this.showActions = false,
     this.onOpen,
     this.alwaysShowChip = false,
     this.dimWhenCancelled = false,

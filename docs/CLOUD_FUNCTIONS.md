@@ -2,7 +2,7 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-07-19 by auditing the source against the app's call sites and
+refreshed 2026-07-21 by auditing the source against the app's call sites and
 the live deployment (the iOS Live Activity stack added behind
 `notifyAppointmentChanges` / `sendUpcomingJobReminders` — APNs secrets, direct
 HTTP/2 client; `purgeExpiredHistory`'s timeout corrected to the 1800s scheduled
@@ -41,7 +41,10 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   **enabled in the console 2026-07-11** — this list previously said it was still
   outstanding, which was wrong. Still outstanding: on-device push verification.
   TTL was extended to `liveActivityTokens`, `rateLimits`, and `signupCodes` on
-  2026-07-20, and every policy's **expiration offset normalized to `0`** — the
+  2026-07-20, and a `fieldOverride` for the new `appointmentSeriesNotices` claim
+  ledger was added to `firestore.indexes.json` on 2026-07-21 (that ledger has no
+  in-code reaper, so the TTL is its only cleanup). Every policy's **expiration
+  offset normalized to `0`** — the
   code writes `expiresAt` as the absolute deletion instant, so a non-zero offset
   adds to it and silently doubles retention (the ledgers had been running at
   ~14 days, not 7). `liveActivityCards` has no policy yet: Firestore only offers
@@ -103,8 +106,8 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 ### `deleteAccount` — `account.js`
 Self-service account deletion (Apple 5.1.1(v) / Google Play account-deletion
 policy). Deletes the caller's `users/{docId}` doc via `recursiveDelete` (the
-doc **plus all its subcollections** — `fcmTokens` today, `presence` when the
-travel-time plan lands) and their Firebase Auth user; the `syncUsersByUid`
+doc **plus all its subcollections** — today that is `fcmTokens`, `presence`,
+and `liveActivityTokens`) and their Firebase Auth user; the `syncUsersByUid`
 trigger then clears the `usersByUid` bridge. Deliberately
 does **not** touch shared business data (appointments, clients, images).
 Requires a fresh re-auth: rejects `stale-auth` if the ID token's `auth_time` is
@@ -163,8 +166,7 @@ coordinates to 5 decimal places before the upstream call so GPS jitter can't
 multiply request volume. Calls the classic Geocoding API (not Places v1, which
 has no reverse-geocode mode) with `GOOGLE_MAP_API_KEY`, and returns only the
 top result's `formatted_address` (or `null` on `ZERO_RESULTS`) — never logs
-coordinates or resolved addresses. **Not yet deployed** — see Deployment
-status.
+coordinates or resolved addresses. **Deployed to prod 2026-07-18.**
 
 ## Images
 
@@ -208,7 +210,17 @@ APNs `sound` so delivery isn't doze-deferred/silent. **Deployed 2026-07-11**
 unassignment pushes. Diffs before/after (`diffAppointmentForNotifications`):
 one event per employee, priority `cancelled > removed > rescheduled >
 assigned`; past appointments skipped. Deliberately **no `retry: true`** — a
-duplicate push is worse than a rare missed one. Also updates/ends any live
+duplicate push is worse than a rare missed one. **A repeat series collapses to
+ONE push per (employee, kind)** via the Admin-SDK-only
+`appointmentSeriesNotices` claim ledger (`claimSeriesNotice`): a "this and all
+future" edit writes ~15 sibling docs in one batch, each firing this trigger, so
+without the claim the tech got ~15 pushes. It **fails OPEN**. WRITES key the
+claim on a fresh client-stamped **`seriesOpId`** (`_newSeriesOpId` in the
+repository — one uuid per write op, shared by that batch, reused by nobody), so
+a collision is definitive and needs no time window and two separate actions
+both notify. DELETES have no fresh id (`before.seriesOpId` is stale), so they
+fall back to `(seriesId, kind, employee)` + `SERIES_CLAIM_WINDOW_MS` (45 s) +
+stale-takeover. Also updates/ends any live
 "time to leave" card for the changed job, so it binds `APNS_SECRETS` and gets
 `liveActivityDeps()`; the two Firestore-only sweeps below take `liveDeps()`
 instead, because reading a secret param a function didn't bind logs a warning
@@ -238,9 +250,11 @@ error — deploy `firestore:indexes` alongside the functions. The travel→on-si
 flip (`runOnSiteFlipPass`) runs on **every** sweep, not only when travel
 candidates exist: a tech whose job has already started is by definition no
 longer a candidate, and this pass is also what clears markers for
-deleted/terminal jobs. Completion ends the card server-side from the appointment
-write trigger (`endCardOnCompletion`) — the client never ends cards off its own
-status write, since `endAllActivities()` is device-wide.
+deleted/terminal jobs. EVERY terminal transition — done, cancelled, deleted,
+and unassigned — ends the card server-side from the appointment write trigger
+(`endCardOnTerminal`, generalized from the done-only `endCardOnCompletion` on
+2026-07-21) — the client never ends cards off its own status write, since
+`endAllActivities()` is device-wide.
 
 ### `sendUpcomingJobReminders` — `notifications.js` (+ `travel_utils.js`)
 Every 5 min (Toronto). **Travel-aware "time to leave" sweep**
@@ -280,7 +294,11 @@ policy.
 ### `sendDailyJobDigest` — `notifications.js`
 Daily 18:00 Toronto. Groups tomorrow's (Toronto-midnight-bounded) jobs by
 employee; one summary push per employee with ≥1 job. No ledger (runs once
-daily; a rare crash-retry duplicate is accepted).
+daily; a rare crash-retry duplicate is accepted). Queries `status in
+OPEN_STATUSES` (`pending`/`in_progress`/legacy `confirmed`, single-sourced from
+`OPEN_LIKE`) — it previously hardcoded `["pending", "confirmed"]`, silently
+dropping every `in_progress` job from the digest even though the pure grouping
+filter excludes only `cancelled`; the query and filter now agree.
 
 ### `sendOverdueJobPrompts` — `notifications.js`
 Every 15 min (Toronto). The "job finished?" nudge: pushes assignees of a job

@@ -36,6 +36,31 @@ class EventDetailsFailed extends EventDetailsSaveOutcome {
   final Object error;
 }
 
+/// Result of the status setters (`markAsDone` / `cancelAppointment`). Sealed so
+/// a call site must handle [EventDetailsActionBusy] explicitly: these used to
+/// return `Object?` where null meant success, so a write skipped by the
+/// reentrancy guard was indistinguishable from one that committed and the sheet
+/// reported "marked as complete" without having written anything.
+sealed class EventDetailsActionOutcome {
+  const EventDetailsActionOutcome();
+}
+
+/// The status write committed.
+class EventDetailsActionOk extends EventDetailsActionOutcome {
+  const EventDetailsActionOk();
+}
+
+/// Skipped because another action already held the busy flag — nothing was
+/// written, so the caller reports neither success nor an error.
+class EventDetailsActionBusy extends EventDetailsActionOutcome {
+  const EventDetailsActionBusy();
+}
+
+class EventDetailsActionFailed extends EventDetailsActionOutcome {
+  const EventDetailsActionFailed(this.error);
+  final Object error;
+}
+
 /// Family key for `eventDetailsControllerProvider`: carries the record the
 /// sheet opened with, but keys provider identity by the appointment id alone,
 /// so provider lookups don't deep-compare the whole freezed record on every

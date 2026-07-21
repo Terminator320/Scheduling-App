@@ -101,7 +101,7 @@ class DetailsViewBody extends ConsumerWidget {
           onRetry: notifier.enterEditing,
         ),
         DetailsActionBar(
-          isToday: data.isToday,
+          hasStarted: data.hasStarted,
           isDone: data.isDone,
           isCancelled: data.isCancelled,
           isSaving: isSaving,
@@ -118,16 +118,14 @@ class DetailsViewBody extends ConsumerWidget {
     WidgetRef ref,
     EventDetailsController notifier,
   ) async {
-    final error = await notifier.markAsDone(appointment);
+    final outcome = await notifier.markAsDone(appointment);
     if (!context.mounted) return;
-    if (error != null) {
-      _notifyStatusError(context, ref, error);
-      return;
-    }
-    ref
-        .read(noticeServiceProvider)
-        .success(context.l10n.common_appointmentMarkedAsDone);
-    onClose();
+    _onStatusOutcome(
+      context,
+      ref,
+      outcome,
+      successMessage: context.l10n.common_appointmentMarkedAsDone,
+    );
   }
 
   Future<void> _onCancel(
@@ -142,29 +140,43 @@ class DetailsViewBody extends ConsumerWidget {
       confirmLabel: context.l10n.calendar_cancelAppointment,
     );
     if (!confirmed || !context.mounted) return;
-    final error = await notifier.cancelAppointment(appointment);
+    final outcome = await notifier.cancelAppointment(appointment);
     if (!context.mounted) return;
-    if (error != null) {
-      _notifyStatusError(context, ref, error);
-      return;
-    }
-    ref
-        .read(noticeServiceProvider)
-        .success(context.l10n.common_appointmentCancelled);
-    onClose();
+    _onStatusOutcome(
+      context,
+      ref,
+      outcome,
+      successMessage: context.l10n.common_appointmentCancelled,
+    );
   }
 
-  void _notifyStatusError(BuildContext context, WidgetRef ref, Object error) {
-    ref
-        .read(noticeServiceProvider)
-        .error(
-          composeErrorNotice(
-            context,
-            intro: context.l10n.error_introUpdateAppointmentStatus,
-            tag: 'APPT-STATUS',
-            error: error,
-          ),
-        );
+  /// Surfaces a status write's result. [EventDetailsActionBusy] is silent on
+  /// purpose — the guard skipped the write, so there is neither a success to
+  /// announce nor an error to report, and the sheet stays open.
+  void _onStatusOutcome(
+    BuildContext context,
+    WidgetRef ref,
+    EventDetailsActionOutcome outcome, {
+    required String successMessage,
+  }) {
+    switch (outcome) {
+      case EventDetailsActionBusy():
+        return;
+      case EventDetailsActionFailed(:final error):
+        ref
+            .read(noticeServiceProvider)
+            .error(
+              composeErrorNotice(
+                context,
+                intro: context.l10n.error_introUpdateAppointmentStatus,
+                tag: 'APPT-STATUS',
+                error: error,
+              ),
+            );
+      case EventDetailsActionOk():
+        ref.read(noticeServiceProvider).success(successMessage);
+        onClose();
+    }
   }
 }
 
@@ -176,7 +188,7 @@ class _DetailsViewData {
     required this.displayStatus,
     required this.isCancelled,
     required this.isDone,
-    required this.isToday,
+    required this.hasStarted,
     required this.clientName,
     required this.phone,
     required this.displayAddress,
@@ -206,7 +218,14 @@ class _DetailsViewData {
       displayStatus: displayStatus,
       isCancelled: status.isCancelled,
       isDone: status.isDone,
-      isToday: DateUtils.isSameDay(appointment.startTime, now),
+      // Gates the employee-facing "Mark as complete" button. Keyed on the visit
+      // having STARTED, not on it being today: an employee who forgets to tap
+      // Complete before midnight (or is on day 2+ of a multi-day visit) has no
+      // other status surface — the edit-form picker is admin-only — and the
+      // server keeps pushing them an overdue "job finished?" nudge they could
+      // not act on. The rules already allow an assignee to write only
+      // `status:'done'`, with no date restriction.
+      hasStarted: !appointment.startTime.isAfter(now),
       clientName: client?.displayName ?? appointment.clientName,
       phone: phone,
       displayAddress: appointment.address.isNotEmpty
@@ -221,7 +240,7 @@ class _DetailsViewData {
   final AppointmentStatus displayStatus;
   final bool isCancelled;
   final bool isDone;
-  final bool isToday;
+  final bool hasStarted;
   final String clientName;
   final String phone;
   final String displayAddress;

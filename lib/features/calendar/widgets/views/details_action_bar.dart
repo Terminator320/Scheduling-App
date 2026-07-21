@@ -8,7 +8,7 @@ import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
 
 class DetailsActionBar extends StatelessWidget {
   const DetailsActionBar({
-    required this.isToday,
+    required this.hasStarted,
     required this.isDone,
     required this.isCancelled,
     required this.isSaving,
@@ -18,7 +18,7 @@ class DetailsActionBar extends StatelessWidget {
     this.showCancel = true,
   });
 
-  final bool isToday;
+  final bool hasStarted;
   final bool isDone;
   final bool isCancelled;
   final bool isSaving;
@@ -35,7 +35,7 @@ class DetailsActionBar extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: AppSpacing.sp24),
-        if (isToday && !isDone && !isCancelled)
+        if (hasStarted && !isDone && !isCancelled)
           FilledButton(
             style: FilledButton.styleFrom(
               minimumSize: const Size(double.infinity, 48),
@@ -74,7 +74,7 @@ class DetailsActionBar extends StatelessWidget {
           ),
         ],
         if (showCancel && !isCancelled && !isDone) ...[
-          if (isToday) const SizedBox(height: AppSpacing.sp8),
+          if (hasStarted) const SizedBox(height: AppSpacing.sp8),
           OutlinedButton(
             style: destructiveOutlinedButtonStyle(
               context,

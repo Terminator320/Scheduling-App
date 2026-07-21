@@ -219,7 +219,8 @@ const propagateClientEdits = onDocumentUpdated(
 
 module.exports = {
   propagateClientEdits,
-  // Exported for unit tests.
+  // Exported so the orchestrator can be driven with injected {db, logger, now}.
+  // Coverage today is on the pure helpers below only.
   propagateClientChange,
   relevantClientChange,
   buildAppointmentPatch,

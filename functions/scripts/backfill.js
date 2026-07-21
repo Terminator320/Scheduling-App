@@ -22,6 +22,15 @@ const { getFirestore } = require("firebase-admin/firestore");
 const VALID_ROLES = new Set(["admin", "employee"]);
 const VALID_BRIDGE_STATUS = new Set(["active", "disabled"]);
 
+// NOTE: this is a deliberate standalone copy, NOT the shared helper. The
+// authoritative runtime version is `shouldHaveBridge` in ../bridge.js, which
+// gates on uid + status only and validates `role` later, inside `bridgeBody`.
+// This one folds the role check in up front so a one-off backfill skips
+// malformed docs outright instead of writing a bridge entry with a bogus role.
+// The two are intentionally not shared: re-pointing this at the export would
+// change what this script backfills. Keep bridge.js authoritative for runtime
+// behavior — if its gating changes, re-read this before running the script
+// again.
 function shouldHaveBridge(data) {
   if (!data) return false;
   if (typeof data.uid !== "string" || data.uid === "") return false;

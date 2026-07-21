@@ -72,4 +72,28 @@ void main() {
     );
     verifyNever(() => doc.update(any()));
   });
+
+  test('cancel stamps a fresh seriesOpId', () async {
+    final repo = FirebaseAppointmentsRepository(firestore);
+    await repo.updateAppointmentStatus(id: 'a1', status: 'cancelled');
+    final payload = (verify(() => doc.update(captureAny())).captured.single
+            as Map)
+        .cast<String, dynamic>();
+    expect(payload['status'], 'cancelled');
+    expect(payload['seriesOpId'], isA<String>());
+    expect(payload['seriesOpId'] as String, isNotEmpty);
+  });
+
+  test('mark-done writes only status + updatedAt (employee hasOnly rule)',
+      () async {
+    // The employee mark-done rule is affectedKeys().hasOnly(['status',
+    // 'updatedAt']); a seriesOpId here would be rejected with permission-denied.
+    final repo = FirebaseAppointmentsRepository(firestore);
+    await repo.updateAppointmentStatus(id: 'a1', status: 'done');
+    final payload = (verify(() => doc.update(captureAny())).captured.single
+            as Map)
+        .cast<String, dynamic>();
+    expect(payload.keys, unorderedEquals(['status', 'updatedAt']));
+    expect(payload.containsKey('seriesOpId'), isFalse);
+  });
 }

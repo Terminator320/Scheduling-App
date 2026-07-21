@@ -247,9 +247,9 @@ class _AppointmentHistoryViewState
         Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sp8),
           child: AppointmentTile(
+            // showActions defaults CLOSED — this history surface is read-only.
             appointment: app,
             employeeColorMap: colorMap,
-            showActions: false,
             alwaysShowChip: true,
             dimWhenCancelled: true,
           ),

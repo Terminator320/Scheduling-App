@@ -240,9 +240,9 @@ void main() {
   });
 
   group('markAsDone / cancelAppointment', () {
-    test('markAsDone writes status="done" and returns null', () async {
-      final error = await readNotifier().markAsDone(_appointment);
-      expect(error, isNull);
+    test('markAsDone writes status="done" and reports Ok', () async {
+      final outcome = await readNotifier().markAsDone(_appointment);
+      expect(outcome, isA<EventDetailsActionOk>());
       verify(
         () => appointments.updateAppointmentStatus(
           id: _appointment.id!,
@@ -252,10 +252,10 @@ void main() {
     });
 
     test(
-      'cancelAppointment writes status="cancelled" and returns null',
+      'cancelAppointment writes status="cancelled" and reports Ok',
       () async {
-        final error = await readNotifier().cancelAppointment(_appointment);
-        expect(error, isNull);
+        final outcome = await readNotifier().cancelAppointment(_appointment);
+        expect(outcome, isA<EventDetailsActionOk>());
         verify(
           () => appointments.updateAppointmentStatus(
             id: _appointment.id!,
@@ -266,7 +266,8 @@ void main() {
     );
 
     test(
-      'markAsDone returns the error and resets isSaving when repo throws',
+      'markAsDone reports Failed with the error and resets isSaving '
+      'when repo throws',
       () async {
         final failure = Exception('boom');
         when(
@@ -275,11 +276,24 @@ void main() {
             status: any(named: 'status'),
           ),
         ).thenThrow(failure);
-        final error = await readNotifier().markAsDone(_appointment);
-        expect(error, same(failure));
+        final outcome = await readNotifier().markAsDone(_appointment);
+        expect(outcome, isA<EventDetailsActionFailed>());
+        expect((outcome as EventDetailsActionFailed).error, same(failure));
         expect(readState().isSaving, isFalse);
       },
     );
+
+    test('a status write skipped by the busy guard reports Busy', () async {
+      final notifier = readNotifier()..setSaving(busy: true);
+      final outcome = await notifier.markAsDone(_appointment);
+      expect(outcome, isA<EventDetailsActionBusy>());
+      verifyNever(
+        () => appointments.updateAppointmentStatus(
+          id: any(named: 'id'),
+          status: any(named: 'status'),
+        ),
+      );
+    });
   });
 
   group('save', () {
