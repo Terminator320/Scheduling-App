@@ -4,6 +4,7 @@ const {
   WaveValidationError,
   upsertCustomer,
   importCustomers,
+  sanitizeInputErrors,
 } = require("../wave/customers");
 const {WaveApiError} = require("../wave/client");
 const {mappedFieldsHash} = require("../wave/mappers");
@@ -780,5 +781,47 @@ describe("importCustomers", () => {
     const graphql = graphqlSeq(listPage(1, 1, 0, []));
     await importCustomers({db, graphql, now});
     expect(graphql.mock.calls[0][1].id).toBe("biz-xyz");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sanitizeInputErrors
+// ---------------------------------------------------------------------------
+// This is exported specifically for these tests (the export previously carried
+// an "exported for unit tests" comment with no test behind it). Its security
+// contract is that Wave's raw `message` text NEVER reaches our UI or logs —
+// only messages mapped from a known `code`.
+describe("sanitizeInputErrors", () => {
+  test("maps a known code to its safe message", () => {
+    expect(sanitizeInputErrors([{code: "INVALID_EMAIL"}]))
+        .toBe("The customer email address is not valid.");
+  });
+
+  test("never echoes Wave's raw message text", () => {
+    const raw = "secret-internal-detail-from-wave";
+    const out = sanitizeInputErrors([{code: "INVALID_EMAIL", message: raw}]);
+    expect(out).not.toContain(raw);
+  });
+
+  test("falls back to the generic message for an unknown code", () => {
+    expect(sanitizeInputErrors([{code: "SOMETHING_NEW"}]))
+        .toBe("Wave rejected the customer data.");
+  });
+
+  test("joins distinct codes and de-duplicates repeats", () => {
+    const out = sanitizeInputErrors([
+      {code: "TOO_LONG"},
+      {code: "INVALID_PHONE"},
+      {code: "TOO_LONG"},
+    ]);
+    expect(out).toBe(
+        "A customer field is too long for Wave. " +
+        "The customer phone number is not valid.");
+  });
+
+  test("tolerates non-array and malformed entries", () => {
+    expect(sanitizeInputErrors(null)).toBe("Wave rejected the customer data.");
+    expect(sanitizeInputErrors([null, {}, {code: 7}]))
+        .toBe("Wave rejected the customer data.");
   });
 });

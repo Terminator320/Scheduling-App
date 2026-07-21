@@ -50,7 +50,7 @@ class QuickActionButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.r12),
         child: Container(
           padding: const EdgeInsets.symmetric(
-            vertical: 12,
+            vertical: AppSpacing.sp12,
             horizontal: AppSpacing.sp8,
           ),
           decoration: BoxDecoration(

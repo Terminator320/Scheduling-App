@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
-import 'package:scheduling/core/logging/app_logger.dart';
-import 'package:scheduling/core/notices/notice_service.dart';
+import 'package:scheduling/core/launchers/external_uri_launcher.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 /// Bottom-sheet chooser for composing an email — system default mail app,
 /// Gmail, or Outlook — mirroring `AddressMapLauncher`'s map-app picker.
@@ -115,20 +113,13 @@ class EmailComposeLauncher {
     }
 
     if (chosen == null || !context.mounted) return;
-    try {
-      final opened = await launchUrl(
-        chosen,
-        mode: LaunchMode.externalApplication,
-      );
-      if (!opened && context.mounted) {
-        ref.read(noticeServiceProvider).error(errorMessage);
-      }
-    } catch (e, st) {
-      ref.read(loggerProvider).warn('LAUNCH-EMAIL launchUrl failed', e, st);
-      if (context.mounted) {
-        ref.read(noticeServiceProvider).error(errorMessage);
-      }
-    }
+    await launchExternalUri(
+      context,
+      ref,
+      chosen,
+      tag: 'LAUNCH-EMAIL',
+      errorMessage: errorMessage,
+    );
   }
 }
 

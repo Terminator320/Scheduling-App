@@ -680,6 +680,7 @@ module.exports = {
   WaveValidationError,
   upsertCustomer,
   importCustomers,
-  // Exported for unit tests of the sanitizer / fallback predicates.
+  // Exported for the sanitizer unit tests in __tests__/wave_customers.test.js,
+  // which pin the contract that Wave's raw `message` text never reaches us.
   sanitizeInputErrors,
 };

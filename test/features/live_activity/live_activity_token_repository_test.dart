@@ -181,8 +181,8 @@ void main() {
         () async {
       final refA = _MockDoc();
       final refB = _MockDoc();
-      when(() => refA.delete()).thenAnswer((_) async {});
-      when(() => refB.delete()).thenAnswer((_) async {});
+      when(refA.delete).thenAnswer((_) async {});
+      when(refB.delete).thenAnswer((_) async {});
       final docA = matchedDoc(refA);
       final docB = matchedDoc(refB);
       when(() => querySnap.docs).thenReturn([docA, docB]);
@@ -194,8 +194,8 @@ void main() {
       );
 
       verify(() => tokensCol.where('kind', isEqualTo: 'pushToStart')).called(1);
-      verify(() => refA.delete()).called(1);
-      verify(() => refB.delete()).called(1);
+      verify(refA.delete).called(1);
+      verify(refB.delete).called(1);
     });
 
     test('no matched docs deletes nothing and does not throw', () async {
@@ -224,7 +224,7 @@ void main() {
 
     test('swallows a per-doc delete failure and never throws', () async {
       final ref = _MockDoc();
-      when(() => ref.delete()).thenThrow(Exception('denied'));
+      when(ref.delete).thenThrow(Exception('denied'));
       final doc = matchedDoc(ref);
       when(() => querySnap.docs).thenReturn([doc]);
       final repo = LiveActivityTokenRepository(firestore: firestore);

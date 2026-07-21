@@ -90,7 +90,7 @@ abstract class AppointmentRecord with _$AppointmentRecord {
   }
 
   static List<String> _parseStringList(dynamic value) {
-    if (value is List) return List<String>.from(value);
+    if (value is List) return value.whereType<String>().toList();
     if (value is String && value.isNotEmpty) return [value];
     return const [];
   }

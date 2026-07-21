@@ -18,12 +18,16 @@ class AttentionFlagsSection extends StatelessWidget {
     required this.flags,
     required this.colorMap,
     required this.nameMap,
+    required this.isAdmin,
     super.key,
   });
 
   final AttentionFlags flags;
   final Map<String, Color> colorMap;
   final Map<String, String> nameMap;
+
+  /// Gates the admin-only Edit/Cancel/Delete actions on the sheet a card opens.
+  final bool isAdmin;
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +63,7 @@ class AttentionFlagsSection extends StatelessWidget {
               appointments: flags.pendingSoon,
               colorMap: colorMap,
               nameMap: nameMap,
+              isAdmin: isAdmin,
             ),
           if (flags.pendingSoon.isNotEmpty && flags.overdueOpen.isNotEmpty)
             const SizedBox(height: AppSpacing.sp16),
@@ -68,6 +73,7 @@ class AttentionFlagsSection extends StatelessWidget {
               appointments: flags.overdueOpen,
               colorMap: colorMap,
               nameMap: nameMap,
+              isAdmin: isAdmin,
             ),
         ],
       ],
@@ -81,12 +87,16 @@ class _FlagGroup extends StatelessWidget {
     required this.appointments,
     required this.colorMap,
     required this.nameMap,
+    required this.isAdmin,
   });
 
   final String title;
   final List<AppointmentRecord> appointments;
   final Map<String, Color> colorMap;
   final Map<String, String> nameMap;
+
+  /// Gates the admin-only actions on the sheet a card opens.
+  final bool isAdmin;
 
   @override
   Widget build(BuildContext context) {
@@ -109,7 +119,11 @@ class _FlagGroup extends StatelessWidget {
             employeeColor:
                 colorFromMap(appointments[i], colorMap) ?? scheme.outline,
             employeeName: resolveAssigneeNames(appointments[i], nameMap),
-            onTap: () => showEventDetails(context, appointments[i]),
+            onTap: () => showEventDetails(
+              context,
+              appointments[i],
+              showActions: isAdmin,
+            ),
           ),
         ],
       ],

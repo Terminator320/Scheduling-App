@@ -20,10 +20,11 @@ lib/
 │   ├── constants/                   app_urls.dart — external URL constants (e.g. the Settings privacy-policy link)
 │   ├── errors/                      Base Failure class + error_cause.dart (sanitized cause classifier + tagged notice composer)
 │   ├── images/                      Image picker (native resize/compress at pick time) + Firebase Storage upload service
-│   ├── launchers/                   phone_call_launcher.dart (launchPhoneCall — shared tel: dialer) + web_url_launcher.dart (launchWebUrl — external https: opener for the Settings privacy-policy link) + route_map_launcher.dart (launchGoogleMapsRoute — opens a prebuilt multi-stop directions URI); parallel AddressMapLauncher / EmailComposeLauncher
+│   ├── launchers/                   external_uri_launcher.dart (launchExternalUri — the ONE launch+log+notice implementation; the others are thin wrappers over it) + phone_call_launcher.dart (launchPhoneCall — shared tel: dialer) + web_url_launcher.dart (launchWebUrl — external https: opener for the Settings privacy-policy link) + route_map_launcher.dart (launchGoogleMapsRoute — opens a prebuilt multi-stop directions URI); parallel AddressMapLauncher (keeps its own guard — it surfaces a sanctioned SnackBar, not a notice) / EmailComposeLauncher
 │   ├── layout/                      Responsive shell — AdaptiveShell (nav rail), MasterDetailScaffold, PrimaryScrollScope (per-pane PrimaryScrollController so simultaneously-alive primary scrollables don't share one — the app-wide Scrollbar needs one ScrollPosition per controller), breakpoints (context.isWide / isLandscape / isSplitLayout for the rail chrome; isTwoPane (shortestSide ≥ 600) for the list master-detail; isCompact / isNarrowWidth for small-phone & large-text row folding)
 │   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics)
 │   ├── notices/                     In-app toast system: AppNotice types, NoticeService (stream), NoticeListener (widget)
+│   ├── notifications/               fcm_background_handler.dart — the top-level @pragma('vm:entry-point') isolate that rewrites the iOS widget from a content-available push while the app is closed; must stay dependency-light (no Firebase/Riverpod in that isolate)
 │   ├── permissions/                 MediaPermissionService — camera permission gate (permission_handler); LocationPermissionService — location gate for presence tracking (geolocator; whileInUse/always both → granted)
 │   ├── providers/                   firebase_providers.dart — Riverpod providers for Auth/Firestore/Storage instances
 │   ├── security/                    BiometricAuthService (local_auth) + AppLock app-wide biometric gate
@@ -34,12 +35,12 @@ lib/
 │
 ├── shared/widgets/                  Reusable UI components used across ≥2 features, grouped by type
 │   ├── app_bars/                    app_top_bar (AppTopBar — the standard primary app bar every screen uses; slims in landscape)
-│   ├── primitives/                  app_avatar (contrast-aware initials circle), app_back_button (shared leading back arrow), busy_button_icon (spinner-or-icon slot for *.icon buttons), entity_form_header (avatar + name + optional status, for edit forms), fade_in_item, quick_action_button (QuickActionsRow + QuickActionButton — tinted Call/Email/Directions tiles), section_label (uppercase mini-header)
-│   ├── feedback/                    app_empty_state, error_snack_bar (errorSnackBar — shared error SnackBar for the sites that bypass NoticeService), skeleton_loader (shimmer), status_pill (shared rounded label + text-scale cap), status_chip (appointment lifecycle + AppointmentStatus.fromRaw, the canonical status mapper), user_status_chip (account UserStatus: active/invited/disabled + UserStatus.fromRaw)
+│   ├── primitives/                  app_avatar (contrast-aware initials circle), app_back_button (shared leading back arrow), busy_button_icon (spinner-or-icon slot for *.icon buttons), entity_form_header (avatar + name + optional status, for edit forms), fade_in_item, name_initials (shared initials derivation), quick_action_button (QuickActionsRow + QuickActionButton — tinted Call/Email/Directions tiles), section_label (uppercase mini-header)
+│   ├── feedback/                    app_empty_state, centered_error_text (CenteredErrorText — shared centered load-failure message), error_snack_bar (errorSnackBar — shared error SnackBar for the sites that bypass NoticeService), skeleton_loader (shimmer), status_pill (shared rounded label + text-scale cap), status_chip (appointment lifecycle + AppointmentStatus.fromRaw the canonical status mapper, and AppointmentStatus.storedRaw the canonical stored-status normalizer — overdue/legacy → pending), user_status_chip (account UserStatus: active/invited/disabled + UserStatus.fromRaw)
 │   ├── fields/                      address_autocomplete_field, labeled_text_field (built-in shake + animated error row), app_search_bar, clear_text_button (ClearTextButton — the one clear-"x" suffix), form_helpers
 │   ├── cards/                       list_item_tile (shared row layout behind client/employee tiles), info_card (InfoCard + InfoCardRow — bordered card of tappable rows with tinted icon chips)
 │   ├── dialogs/                     confirm_dialog (showConfirmDialog — shared Cancel/confirm, destructive variant)
-│   ├── sheets/                      sheet_widgets (DraggableSheetFrame, SheetHandle, DetailSheetListView — detail-view scroll shell; FormSheetScaffold — add/edit form-sheet chrome)
+│   ├── sheets/                      sheet_widgets (DraggableSheetFrame, SheetHandle, DetailSheetListView — detail-view scroll shell; FormSheetScaffold — add/edit form-sheet chrome), app_bottom_sheet (showAppBottomSheet — the shared modal-sheet opener)
 │   └── branding/                    brand_logo (BrandMark — the plumber-mascot app logo from assets/images/icon.png + the brandName const; pass decorative:true where a visible wordmark sits beside it)
 │
 ├── routes/
@@ -674,10 +675,11 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (967 test cases as of 2026-07-19; `functions` adds 568 jest
+Run: `flutter test` (1011 test cases as of 2026-07-21; `functions` adds 657 jest
 tests in `functions/__tests__/` — the parallel `functions/test/` directory was
-merged away). `flutter analyze` is
-clean — zero issues; see `analysis_options.yaml` for the lints intentionally disabled (below).
+merged away). `flutter analyze` reports **0 errors and 0 warnings**, plus 3
+info-level lints; see `analysis_options.yaml` for the lints intentionally
+disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.
 
@@ -685,8 +687,11 @@ Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delega
 
 ## Analysis & Linting
 
-Baseline is `very_good_analysis` (strict). `flutter analyze` reports **zero** issues — keep it
-that way. Six rules are intentionally disabled in `analysis_options.yaml`, each because it fights
+Baseline is `very_good_analysis` (strict). `flutter analyze` reports **0 errors and 0
+warnings** — keep it that way. Three info-level lints remain
+(`avoid_catching_errors` in `live_map_screen.dart`,
+`avoid_positional_boolean_parameters` in `wave_settings_section.dart`,
+`comment_references` in `app_bottom_sheet.dart`). Six rules are intentionally disabled in `analysis_options.yaml`, each because it fights
 a deliberate convention rather than catching a real problem:
 
 | Disabled / excluded | Why |

@@ -97,6 +97,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // appointmentSeriesNotices is the Admin-SDK-only claim ledger that collapses
+    // a repeat-series batch (up to ~15 sibling docs written at once, each firing
+    // the appointment trigger) into ONE push per employee per kind. Same posture
+    // as the two ledgers above: a client that could delete a claim doc could
+    // force the duplicate storm the ledger exists to prevent.
+    match /appointmentSeriesNotices/{id} {
+      allow read, write: if false;
+    }
+
     // liveActivityCards records which appointment each tech's live "time to
     // leave" card is showing (one doc per tech). Admin-SDK-only: the device
     // cannot know this — a push-STARTED activity's id is minted by ActivityKit
@@ -224,14 +233,22 @@ service cloud.firestore {
               || request.resource.data.createdAt is timestamp)
           && (!('updatedAt' in request.resource.data.keys())
               || request.resource.data.updatedAt is timestamp)
-          // Bounded so a client can't write a far-future expiry that keeps its
-          // APNs token row alive past pruneExpiredActivityTokens' reach. The
-          // ceiling sits just above liveActivityPushToStartTtl (30 d, the
-          // longest value the app legitimately writes) — raise both together.
-          && (!('expiresAt' in request.resource.data.keys())
-              || (request.resource.data.expiresAt is timestamp
-                  && request.resource.data.expiresAt
-                     < request.time + duration.value(31, 'd')));
+          // REQUIRED and bounded. Required because every reaper filters on this
+          // field — `pruneExpiredActivityTokens` runs
+          // `.where("expiresAt", "<=", now)` and the Firestore TTL policy keys
+          // on it too, and Firestore EXCLUDES documents that lack the field. An
+          // optional `expiresAt` therefore let a client mint rows that no sweep,
+          // TTL, or code path could ever delete, unbounded (the client also
+          // chooses the doc id), each one costing an extra direct APNs request
+          // on every leaveNow. Bounded so a client can't write a far-future
+          // expiry that outlives the sweep's reach; the ceiling sits just above
+          // liveActivityPushToStartTtl (30 d, the longest value the app
+          // legitimately writes) — raise both together. The client always sends
+          // it (LiveActivityTokenRepository takes a required DateTime), so
+          // requiring it breaks no real caller.
+          && request.resource.data.expiresAt is timestamp
+          && request.resource.data.expiresAt
+             < request.time + duration.value(31, 'd');
       }
 
       // Live-location presence (travel-time "leave now" reminders). Owner
@@ -324,6 +341,16 @@ service cloud.firestore {
         && (!('province' in data) || (data.province is string && data.province.size() <= 128))
         && (!('country' in data) || (data.country is string && data.country.size() <= 128))
         && (!('postalCode' in data) || (data.postalCode is string && data.postalCode.size() <= 32))
+        // KNOWN RESIDUAL GAP: rules can't iterate a list, so the element bodies
+        // (three unbounded strings each, per ClientContact.toMap) are NOT capped
+        // here — only the array length is. An admin write can therefore still
+        // land up to Firestore's 1 MB doc ceiling, which then fans out onto
+        // every future appointment via propagateClientEdits. Accepted: it is
+        // admin-only and bounded by that ceiling, and lowering this length cap
+        // would reject existing clients that already exceed the new value (the
+        // app enforces no contact-count limit of its own). Close it properly by
+        // adding a per-field TextLimits cap in the contacts editor, not by
+        // tightening this number.
         && (!('contacts' in data) || (data.contacts is list && data.contacts.size() <= 50))
         && (!('noFixedAddress' in data) || data.noFixedAddress is bool);
     }

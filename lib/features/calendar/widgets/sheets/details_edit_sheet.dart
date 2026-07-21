@@ -8,7 +8,8 @@ class EventDetailsSheet extends StatelessWidget {
   const EventDetailsSheet({
     required this.appointment,
     super.key,
-    this.showActions = true,
+    // Defaults CLOSED — see AppointmentTile.showActions.
+    this.showActions = false,
     this.initialEditing = false,
   });
 

@@ -310,11 +310,19 @@ class LiveActivityRegistrationController {
         .deleteToken(userDocId: docId, docId: activityId);
   }
 
-  /// Ends this device's live cards immediately — called when the user marks a
-  /// job done or cancels it in-app, so the Lock Screen clears without waiting
-  /// for the server's end push. At most one card is live at a time by design
-  /// (one "leave now" per tech), so ending all of them is the whole set.
-  /// Best-effort: never throws, and the server's end push remains the backstop.
+  /// Ends this device's live cards immediately. Called ONLY from [unregister]
+  /// (the Settings opt-out), where clearing every card is exactly the intent.
+  ///
+  /// **Do NOT wire this to a status write.** `endAllActivities()` is
+  /// device-wide, and this device cannot tell which appointment a
+  /// push-started card belongs to — ActivityKit mints the id and the
+  /// attributes aren't readable back. A tech marking the job they just left
+  /// as done would therefore kill the card for the job they are currently
+  /// driving to. Every terminal transition (done / cancelled / deleted /
+  /// unassigned) is ended SERVER-side by `endCardOnTerminal`, which resolves
+  /// the right card through the `liveActivityCards` marker.
+  ///
+  /// Best-effort: never throws.
   Future<void> endLocalCards() async {
     if (!Platform.isIOS || !_pluginReady) return;
     try {

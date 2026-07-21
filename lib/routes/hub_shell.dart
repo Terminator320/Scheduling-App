@@ -77,6 +77,11 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
   /// The tab currently shown.
   AdaptiveDestination get currentDestination => _current;
 
+  /// The live role, kept current by [select]. Read by the notification/widget
+  /// deep link so the appointment sheet opens with the right affordances —
+  /// an employee must not be shown admin-only Edit/Cancel/Delete controls.
+  bool get isAdmin => _isAdmin;
+
   @override
   void initState() {
     super.initState();

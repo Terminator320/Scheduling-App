@@ -130,6 +130,14 @@ const createEmployeeInvite = onCall(APP_CHECK, async (req) => {
   const email = requireString(req.data, "email", 254).toLowerCase();
   const phone = optionalString(req.data, "phone", 40);
   const colorValue = requireString(req.data, "colorValue", 40);
+  // Mirror the rules' colorValue guard (firestore.rules isValidUserData). This
+  // callable writes the users doc with the Admin SDK, which bypasses rules, so
+  // without this check it is the one path that can seed a value the rules were
+  // written to reject — a malformed one silently degrades the client to the
+  // default blue.
+  if (!/^-?[0-9]+$/.test(colorValue)) {
+    throw new HttpsError("invalid-argument", "invalid-colorValue");
+  }
   await enforceDurableRateLimit(
       "createEmployeeInvite", req.auth.uid, INVITE_RATE_MAX,
       INVITE_RATE_WINDOW_MS);

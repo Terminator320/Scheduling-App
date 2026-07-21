@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -116,10 +117,18 @@ class AddressMapLauncher {
     }
 
     if (chosen == null || !context.mounted) return;
-    final opened = await launchUrl(
-      chosen,
-      mode: LaunchMode.externalApplication,
-    );
+    // Guarded like every sibling launcher: an unguarded `launchUrl` throw
+    // escaped to the zone handler as a FATAL instead of surfacing here. This
+    // one keeps its SnackBar (a sanctioned site) rather than routing through
+    // `launchExternalUri`, which pushes a notice. The warn fires before the
+    // mounted guard — `AppLogger` is context-free and the log must survive
+    // unmount.
+    var opened = false;
+    try {
+      opened = await launchUrl(chosen, mode: LaunchMode.externalApplication);
+    } catch (e, st) {
+      AppLogger().warn('LAUNCH-MAPS showMapChoices launchUrl failed', e, st);
+    }
     if (!opened && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         errorSnackBar(context, context.l10n.error_couldNotOpenMapApp),

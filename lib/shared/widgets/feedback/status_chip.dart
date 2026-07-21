@@ -29,6 +29,16 @@ enum AppointmentStatus {
   /// [overdue], which is display-only and never chosen by the user.
   static const appointmentValues = [pending, inProgress, done];
 
+  /// Normalizes a stored raw status onto the rules allowlist: legacy/unknown
+  /// values (e.g. the retired `confirmed`) land on `pending`, and a doc storing
+  /// the display-only `overdue` degrades to `pending` instead of throwing.
+  /// Use this — never `fromRaw(x).raw` — wherever a stored status is
+  /// re-serialized, since `overdue.raw` throws by design.
+  static String storedRaw(String raw) {
+    final status = fromRaw(raw);
+    return status == overdue ? pending.raw : status.raw;
+  }
+
   /// The stored raw string for this status. [overdue] is display-only and has
   /// no stored form — reading its [raw] throws so an accidental write path
   /// fails loudly at the source instead of emitting an off-allowlist value that

@@ -218,6 +218,13 @@ async function assertAdmin(uid) {
   }
 }
 
+// NOTE: guards stay inline per callable — do NOT fold auth -> assertAdmin ->
+// assertPayloadShape into a helper here. The callable suites mock `assertAdmin`
+// to pin each callable's guard ORDER (__tests__/places_admin_gate.test.js); a
+// helper defined in this module closes over the real one, so the mock stops
+// applying. When adding a callable, copy the order from an existing one along
+// with its guard tests.
+
 module.exports = {
   hasControlChar,
   assertPayloadShape,

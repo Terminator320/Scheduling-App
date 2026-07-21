@@ -37,6 +37,11 @@ class AppointmentImageUploadService {
 
   bool _draining = false;
 
+  /// Set when a drain is requested while one is already running (a save that
+  /// stages a new batch mid-drain). The in-flight pass re-runs instead of the
+  /// caller starting a second, concurrent one — see [drainPending].
+  bool _pendingDrain = false;
+
   static Future<Directory> _defaultStagingDir() async {
     final base = await getApplicationSupportDirectory();
     return Directory('${base.path}/pending_uploads').create(recursive: true);
@@ -66,7 +71,14 @@ class AppointmentImageUploadService {
         enqueuedAtMs: enqueuedAtMs,
       );
       await _store.add(entry);
-      await _attempt(entry);
+      // Upload through the same serialized drain the listeners use. Calling
+      // `_attempt(entry)` directly here raced them: a drain fired by the
+      // offline→online or account-doc listener in this window would load the
+      // just-added entry and upload it concurrently, and because
+      // `ImageStorageService` mints each file name from `DateTime.now()`, the
+      // two passes produce DIFFERENT storage paths that `arrayUnion` cannot
+      // dedupe — the same photo lands twice.
+      await drainPending();
     } catch (e, st) {
       _notifier.reportFailure(appointmentId, failedCount: images.length);
       _logger.warn('IMG-UPLOAD staging failed for $appointmentId', e, st);
@@ -178,23 +190,38 @@ class AppointmentImageUploadService {
     }
   }
 
-  /// Retries every queued batch. Reentrancy-guarded (a reconnect flap can fire
-  /// this twice) and prunes >7-day entries first, deleting their staged files.
+  /// The single serialized path for uploading queued batches — both the
+  /// listener-driven retries and [_stageAndRun] go through here. Prunes >7-day
+  /// entries first, deleting their staged files.
+  ///
+  /// Reentrancy-guarded: a request arriving mid-drain (a reconnect flap, or a
+  /// save staging a batch) sets [_pendingDrain] so the in-flight pass repeats
+  /// rather than running concurrently — coalescing instead of dropping, so a
+  /// batch staged during a drain still uploads without waiting for the next
+  /// reconnect.
   Future<void> drainPending() async {
-    if (_draining) return;
+    if (_draining) {
+      _pendingDrain = true;
+      return;
+    }
     _draining = true;
     try {
-      final expired = await _store.prune(now: DateTime.now());
-      for (final e in expired) {
-        for (final p in e.paths) {
-          await _deleteQuietly(File(p));
+      do {
+        _pendingDrain = false;
+        try {
+          final expired = await _store.prune(now: DateTime.now());
+          for (final e in expired) {
+            for (final p in e.paths) {
+              await _deleteQuietly(File(p));
+            }
+          }
+          for (final entry in await _store.load()) {
+            await _attempt(entry);
+          }
+        } catch (e, st) {
+          _logger.warn('IMG-UPLOAD drain failed', e, st);
         }
-      }
-      for (final entry in await _store.load()) {
-        await _attempt(entry);
-      }
-    } catch (e, st) {
-      _logger.warn('IMG-UPLOAD drain failed', e, st);
+      } while (_pendingDrain);
     } finally {
       _draining = false;
     }
