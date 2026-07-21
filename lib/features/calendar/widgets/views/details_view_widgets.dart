@@ -73,7 +73,7 @@ class DetailsEmployeePill extends StatelessWidget {
             color: employee.color,
             size: AvatarSize.sm,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpacing.sp8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

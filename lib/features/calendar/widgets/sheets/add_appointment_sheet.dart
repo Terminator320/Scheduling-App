@@ -79,7 +79,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
       firstDate: AppointmentDraftDefaults.datePickerFirstDate,
       lastDate: AppointmentDraftDefaults.datePickerLastDate,
     );
-    if (picked == null) return;
+    if (picked == null || !mounted) return;
     _controllers.date.text = DateUtilsHelper.formatDate(picked);
     _notifier.selectDate(picked);
   }

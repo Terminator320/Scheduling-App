@@ -267,60 +267,102 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
             onVerticalDragCancel: _zoomed ? null : _onDragCancel,
             child: pager,
           ),
-          SafeArea(
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.sp8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      tooltip: context.l10n.calendar_savePhoto,
-                      icon: const Icon(Icons.save_alt, color: foreground),
-                      onPressed: _busy ? null : _saveToPhotos,
-                    ),
-                    IconButton(
-                      key: _shareButtonKey,
-                      tooltip: context.l10n.common_share,
-                      icon: const Icon(Icons.ios_share, color: foreground),
-                      onPressed: _busy ? null : _share,
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          _ViewerOverlay(
+            busy: _busy,
+            currentIndex: _currentIndex,
+            imageCount: widget.images.length,
+            shareButtonKey: _shareButtonKey,
+            onSave: _saveToPhotos,
+            onShare: _share,
+            onClose: () => Navigator.of(context).pop(),
+            textTheme: theme.textTheme,
           ),
-          SafeArea(
-            child: Align(
-              alignment: Alignment.topRight,
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.sp8),
-                child: IconButton(
-                  tooltip: context.l10n.common_close,
-                  icon: const Icon(Icons.close, color: foreground),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ),
-            ),
-          ),
-          if (widget.images.length > 1)
-            SafeArea(
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.sp12),
-                  child: Text(
-                    '${_currentIndex + 1} / ${widget.images.length}',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: foreground,
-                    ),
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
+    );
+  }
+}
+
+/// The three fixed overlays drawn above the pager: save/share (top-left),
+/// close (top-right), and the page counter (top-center, multi-image only).
+class _ViewerOverlay extends StatelessWidget {
+  const _ViewerOverlay({
+    required this.busy,
+    required this.currentIndex,
+    required this.imageCount,
+    required this.shareButtonKey,
+    required this.onSave,
+    required this.onShare,
+    required this.onClose,
+    required this.textTheme,
+  });
+
+  final bool busy;
+  final int currentIndex;
+  final int imageCount;
+  final GlobalKey shareButtonKey;
+  final VoidCallback onSave;
+  final VoidCallback onShare;
+  final VoidCallback onClose;
+  final TextTheme textTheme;
+
+  static const Color _foreground = Colors.white;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        SafeArea(
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.sp8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: context.l10n.calendar_savePhoto,
+                    icon: const Icon(Icons.save_alt, color: _foreground),
+                    onPressed: busy ? null : onSave,
+                  ),
+                  IconButton(
+                    key: shareButtonKey,
+                    tooltip: context.l10n.common_share,
+                    icon: const Icon(Icons.ios_share, color: _foreground),
+                    onPressed: busy ? null : onShare,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        SafeArea(
+          child: Align(
+            alignment: Alignment.topRight,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.sp8),
+              child: IconButton(
+                tooltip: context.l10n.common_close,
+                icon: const Icon(Icons.close, color: _foreground),
+                onPressed: onClose,
+              ),
+            ),
+          ),
+        ),
+        if (imageCount > 1)
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sp12),
+                child: Text(
+                  '${currentIndex + 1} / $imageCount',
+                  style: textTheme.bodyMedium?.copyWith(color: _foreground),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

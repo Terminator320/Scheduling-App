@@ -61,6 +61,21 @@ const GONE_REASONS = new Set([
   "ExpiredToken",
 ]);
 
+// ActivityKit push tokens are hex strings; the registry rule only size-caps
+// the field, so validate the shape here before the token is interpolated into
+// the request `:path`. Defense-in-depth — Node rejects invalid path
+// characters anyway; this just fails cleaner and marks the row prunable.
+const TOKEN_SHAPE = /^[A-Za-z0-9]+$/;
+
+// Close a reused APNs session after this long without a request. One session
+// per host amortizes the TCP+TLS+HTTP/2 handshake across the several pushes a
+// single sweep can issue instead of paying it per push.
+const SESSION_IDLE_TIMEOUT_MS = 30 * 1000;
+
+// host -> {impl, session}. Sessions are dropped on transport error, close,
+// idle timeout, or an impl swap (tests inject their own http2Impl).
+const _sessions = new Map();
+
 // Cached provider JWT. Keyed by keyId+teamId so a rotated secret can't serve a
 // stale signature.
 let _cachedToken = null;
@@ -142,6 +157,61 @@ function providerToken(opts) {
  */
 function resetProviderTokenCache() {
   _cachedToken = null;
+}
+
+/**
+ * The cached-or-fresh HTTP/2 session for [host]. A cached session is reused
+ * only while it is alive and was created by the same impl.
+ * @param {!Object} impl The http2 implementation (injectable for tests).
+ * @param {string} host
+ * @return {!Object} A connected http2 session.
+ */
+function _sessionFor(impl, host) {
+  const cached = _sessions.get(host);
+  if (cached && cached.impl === impl &&
+      !cached.session.closed && !cached.session.destroyed) {
+    return cached.session;
+  }
+  if (cached) _dropSession(host);
+  const session = impl.connect(host);
+  if (typeof session.on === "function") {
+    // A session-level error would otherwise surface as unhandled.
+    session.on("error", () => _dropSession(host));
+    session.on("close", () => {
+      const entry = _sessions.get(host);
+      if (entry && entry.session === session) _sessions.delete(host);
+    });
+  }
+  if (typeof session.setTimeout === "function") {
+    session.setTimeout(SESSION_IDLE_TIMEOUT_MS, () => _dropSession(host));
+  }
+  _sessions.set(host, {impl, session});
+  return session;
+}
+
+/**
+ * Closes and forgets the cached session for [host], if any.
+ * @param {string} host
+ * @return {void}
+ */
+function _dropSession(host) {
+  const entry = _sessions.get(host);
+  _sessions.delete(host);
+  if (!entry) return;
+  try {
+    if (typeof entry.session.close === "function") entry.session.close();
+  } catch (err) {
+    // Nothing useful to do about a failed session teardown.
+  }
+}
+
+/**
+ * Closes every cached APNs session. For tests (isolation between cases) and
+ * usable on shutdown.
+ * @return {void}
+ */
+function resetSessionCache() {
+  for (const host of [..._sessions.keys()]) _dropSession(host);
 }
 
 /**
@@ -251,6 +321,10 @@ async function sendLiveActivityPush(opts) {
   if (!token || !payload || !auth || !auth.authKey) {
     return {ok: false, status: 0, reason: "missing-credentials", gone: false};
   }
+  // A token that fails the shape check can never deliver — prune its row.
+  if (!TOKEN_SHAPE.test(String(token))) {
+    return {ok: false, status: 0, reason: "malformed-token", gone: true};
+  }
 
   let jwt;
   try {
@@ -278,25 +352,20 @@ async function sendLiveActivityPush(opts) {
   if (collapseId) headers["apns-collapse-id"] = String(collapseId);
   const body = JSON.stringify(payload);
 
-  // One request against a single host. Never throws.
+  // One request against a single host, on a per-host session reused across
+  // pushes within this instance. Never throws. A transport-level failure
+  // (status 0: timeout, stream/session error) drops the cached session so the
+  // next push reconnects fresh; an HTTP-level outcome keeps it.
   const sendTo = async (host) => {
-    let client = null;
     try {
-      client = impl.connect(host);
-      if (typeof client.on === "function") {
-        // A session-level error would otherwise surface as unhandled.
-        client.on("error", () => {});
-      }
-      return await _request(client, headers, body, timeoutMs);
+      const client = _sessionFor(impl, host);
+      const result = await _request(client, headers, body, timeoutMs);
+      if (result.status === 0) _dropSession(host);
+      return result;
     } catch (err) {
       if (logger) logger.warn("apns: live activity push failed", {err, host});
+      _dropSession(host);
       return {ok: false, status: 0, reason: String(err), gone: false};
-    } finally {
-      try {
-        if (client && typeof client.close === "function") client.close();
-      } catch (err) {
-        // Nothing useful to do about a failed session teardown.
-      }
     }
   };
 
@@ -324,6 +393,7 @@ module.exports = {
   mintProviderToken,
   providerToken,
   resetProviderTokenCache,
+  resetSessionCache,
   isActivityGone,
   sendLiveActivityPush,
 };

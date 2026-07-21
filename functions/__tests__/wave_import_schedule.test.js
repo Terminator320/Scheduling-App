@@ -1,6 +1,6 @@
 "use strict";
 
-const {isImportDue, SCHEDULE_VALUES} = require("../import_schedule");
+const {isImportDue, SCHEDULE_VALUES} = require("../wave/import_schedule");
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = 1_000 * DAY; // arbitrary fixed "now" in ms

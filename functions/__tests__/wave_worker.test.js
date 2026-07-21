@@ -4,10 +4,10 @@ const {
   enqueueCustomerUpsert,
   drainQueue,
   shouldEnqueueClientWrite,
-} = require("../worker");
-const {WaveValidationError} = require("../customers");
-const {WaveApiError} = require("../client");
-const {mappedFieldsHash} = require("../mappers");
+} = require("../wave/worker");
+const {WaveValidationError} = require("../wave/customers");
+const {WaveApiError} = require("../wave/client");
+const {mappedFieldsHash} = require("../wave/mappers");
 
 // ---------------------------------------------------------------------------
 // Fakes / helpers

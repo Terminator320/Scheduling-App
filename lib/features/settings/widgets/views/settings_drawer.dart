@@ -128,7 +128,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
               size: AvatarSize.lg,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sp12),
           Text(
             displayName.isNotEmpty ? displayName : ' ',
             style: TextStyle(

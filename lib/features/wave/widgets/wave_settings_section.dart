@@ -5,6 +5,7 @@ import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/wave/application/wave_providers.dart';
@@ -56,57 +57,74 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
     return true;
   }
 
-  Future<void> _connect() async {
-    if (_blockedOffline()) return;
-    setState(() => _connectBusy = true);
+  /// Shared try/on-WaveFailure/finally-busy-reset shape for the three Wave
+  /// actions below. Logs under `WAVE-<tag>` before surfacing the notice, so a
+  /// swallowed failure still lands in Crashlytics per error-handling.md.
+  Future<void> _runWaveAction({
+    required String tag,
+    required void Function(bool busy) setBusy,
+    required Future<void> Function() action,
+  }) async {
+    setBusy(true);
     try {
-      // No business is chosen client-side — waveBootstrap resolves the target
-      // from its server-side WAVE_BUSINESS_NAME config, so the business name
-      // never ships in the app.
-      final conn = await ref.read(waveServiceProvider).bootstrap();
+      await action();
+    } on WaveFailure catch (e, st) {
       if (!mounted) return;
-      if (!conn.isConnected) {
-        // Server returned no business (e.g. misconfigured WAVE_BUSINESS_NAME) —
-        // don't flip the UI to a blank "connected" state.
-        ref
-            .read(noticeServiceProvider)
-            .error(context.l10n.wave_errorBusinessAmbiguous);
-        return;
-      }
-      setState(() => _connection = conn);
-      ref.invalidate(waveConnectionProvider);
-      ref
-          .read(noticeServiceProvider)
-          .success(context.l10n.wave_connectedSuccess(conn.businessName));
-    } on WaveFailure catch (e) {
-      if (!mounted) return;
+      ref.read(loggerProvider).warn('WAVE-$tag failed', e, st);
       ref.read(noticeServiceProvider).error(e.toLocalizedMessage(context));
     } finally {
-      if (mounted) setState(() => _connectBusy = false);
+      if (mounted) setBusy(false);
     }
+  }
+
+  Future<void> _connect() async {
+    if (_blockedOffline()) return;
+    await _runWaveAction(
+      tag: 'CONNECT',
+      setBusy: (v) => setState(() => _connectBusy = v),
+      action: () async {
+        // No business is chosen client-side — waveBootstrap resolves the
+        // target from its server-side WAVE_BUSINESS_NAME config, so the
+        // business name never ships in the app.
+        final conn = await ref.read(waveServiceProvider).bootstrap();
+        if (!mounted) return;
+        if (!conn.isConnected) {
+          // Server returned no business (e.g. misconfigured
+          // WAVE_BUSINESS_NAME) — don't flip the UI to a blank "connected"
+          // state.
+          ref
+              .read(noticeServiceProvider)
+              .error(context.l10n.wave_errorBusinessAmbiguous);
+          return;
+        }
+        setState(() => _connection = conn);
+        ref.invalidate(waveConnectionProvider);
+        ref
+            .read(noticeServiceProvider)
+            .success(context.l10n.wave_connectedSuccess(conn.businessName));
+      },
+    );
   }
 
   Future<void> _import() async {
     if (_blockedOffline()) return;
-    setState(() => _importBusy = true);
-    try {
-      final summary = await ref.read(waveServiceProvider).importCustomers();
-      if (!mounted) return;
-      ref
-          .read(noticeServiceProvider)
-          .success(
-            context.l10n.wave_importSuccess(
-              summary.imported,
-              summary.updated,
-              summary.skippedArchived,
-            ),
-          );
-    } on WaveFailure catch (e) {
-      if (!mounted) return;
-      ref.read(noticeServiceProvider).error(e.toLocalizedMessage(context));
-    } finally {
-      if (mounted) setState(() => _importBusy = false);
-    }
+    await _runWaveAction(
+      tag: 'IMPORT',
+      setBusy: (v) => setState(() => _importBusy = v),
+      action: () async {
+        final summary = await ref.read(waveServiceProvider).importCustomers();
+        if (!mounted) return;
+        ref
+            .read(noticeServiceProvider)
+            .success(
+              context.l10n.wave_importSuccess(
+                summary.imported,
+                summary.updated,
+                summary.skippedArchived,
+              ),
+            );
+      },
+    );
   }
 
   Future<void> _pickSchedule(WaveImportSchedule current) async {
@@ -122,31 +140,28 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
     if (!mounted) return;
     if (_blockedOffline()) return;
 
-    setState(() => _scheduleBusy = true);
-    try {
-      await ref.read(waveServiceProvider).setImportSchedule(choice);
-      if (!mounted) return;
-      // Reflect the new cadence locally; the connection provider is invalidated
-      // so a later Settings mount re-reads the persisted value.
-      final base = _connection ?? ref.read(waveConnectionProvider).value;
-      if (base != null) {
-        setState(() => _connection = base.copyWith(importSchedule: choice));
-      }
-      ref.invalidate(waveConnectionProvider);
-      ref
-          .read(noticeServiceProvider)
-          .success(context.l10n.wave_autoImportUpdated);
-    } on WaveFailure catch (e) {
-      if (!mounted) return;
-      ref.read(noticeServiceProvider).error(e.toLocalizedMessage(context));
-    } finally {
-      if (mounted) setState(() => _scheduleBusy = false);
-    }
+    await _runWaveAction(
+      tag: 'SCHEDULE',
+      setBusy: (v) => setState(() => _scheduleBusy = v),
+      action: () async {
+        await ref.read(waveServiceProvider).setImportSchedule(choice);
+        if (!mounted) return;
+        // Reflect the new cadence locally; the connection provider is
+        // invalidated so a later Settings mount re-reads the persisted value.
+        final base = _connection ?? ref.read(waveConnectionProvider).value;
+        if (base != null) {
+          setState(() => _connection = base.copyWith(importSchedule: choice));
+        }
+        ref.invalidate(waveConnectionProvider);
+        ref
+            .read(noticeServiceProvider)
+            .success(context.l10n.wave_autoImportUpdated);
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final connectionAsync = ref.watch(waveConnectionProvider);
     // A Connect done this session wins; otherwise fall back to the cached
     // persisted status.
@@ -168,60 +183,14 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (connected) ...[
-          Padding(
-            padding: const EdgeInsets.only(
-              left: AppSpacing.sp4,
-              bottom: AppSpacing.sp8,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.check_circle_outline_rounded,
-                  size: 14,
-                  color: Theme.of(context).statusColors.success,
-                ),
-                const SizedBox(width: AppSpacing.sp8),
-                Flexible(
-                  child: Text(
-                    connection.businessName,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.sync_rounded),
-            title: Text(context.l10n.wave_autoImportLabel),
-            trailing: _scheduleBusy
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: AdaptiveProgressIndicator(),
-                  )
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _scheduleLabel(context, connection.importSchedule),
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const Icon(Icons.chevron_right_rounded),
-                    ],
-                  ),
-            onTap: _connectBusy || _importBusy || _scheduleBusy
+        if (connected)
+          _ConnectedStatus(
+            connection: connection,
+            scheduleBusy: _scheduleBusy,
+            onTapSchedule: _connectBusy || _importBusy || _scheduleBusy
                 ? null
                 : () => _pickSchedule(connection.importSchedule),
           ),
-        ],
         // Connect is first-time setup only — once connected, the persisted
         // status row replaces it and only Import remains.
         if (!connected)
@@ -239,6 +208,80 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
             onPressed: !_connectBusy && !_importBusy ? _import : null,
             variant: AnimatedLoadingButtonVariant.outlined,
           ),
+      ],
+    );
+  }
+}
+
+/// The persisted-connection status row + auto-import schedule tile, shown
+/// once Wave is connected.
+class _ConnectedStatus extends StatelessWidget {
+  const _ConnectedStatus({
+    required this.connection,
+    required this.scheduleBusy,
+    required this.onTapSchedule,
+  });
+
+  final WaveConnection connection;
+  final bool scheduleBusy;
+  final VoidCallback? onTapSchedule;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(
+            left: AppSpacing.sp4,
+            bottom: AppSpacing.sp8,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.check_circle_outline_rounded,
+                size: 14,
+                color: Theme.of(context).statusColors.success,
+              ),
+              const SizedBox(width: AppSpacing.sp8),
+              Flexible(
+                child: Text(
+                  connection.businessName,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.sync_rounded),
+          title: Text(context.l10n.wave_autoImportLabel),
+          trailing: scheduleBusy
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: AdaptiveProgressIndicator(),
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _scheduleLabel(context, connection.importSchedule),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right_rounded),
+                  ],
+                ),
+          onTap: onTapSchedule,
+        ),
       ],
     );
   }

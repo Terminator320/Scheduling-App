@@ -127,7 +127,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
           )
         else ...[
           ClientDetailViewBody(client: _client),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.sp24),
           _ViewActions(
             isDeleting: isDeleting,
             onEdit: isDeleting ? null : () => setState(() => _isEditing = true),
@@ -156,7 +156,7 @@ class _ViewHeader extends StatelessWidget {
     return Column(
       children: [
         AppAvatar(name: client.displayName, size: AvatarSize.lg),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.sp12),
         Text(
           client.displayName,
           style: theme.textTheme.titleLarge?.copyWith(
@@ -225,7 +225,7 @@ class _ViewActions extends StatelessWidget {
     return Row(
       children: [
         Expanded(child: editButton),
-        const SizedBox(width: 12),
+        const SizedBox(width: AppSpacing.sp12),
         Expanded(child: deleteButton),
       ],
     );

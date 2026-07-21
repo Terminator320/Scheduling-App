@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
-import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/core/utils/sheet_focus.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
@@ -49,19 +47,7 @@ class _ListInformationState extends State<ListInformation> {
       return;
     }
 
-    await SheetFocus.settleBeforeSheet();
-    if (!mounted) return;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      sheetAnimationStyle: AppMotion.sheetStyle,
-      builder: (_) => ClientDetailSheet(client: client),
-    );
-
-    if (!mounted) return;
-    await SheetFocus.unfocusAfterSheet();
+    await showClientDetailSheet(context, client);
   }
 
   void _backToCalendar() => navigateToDestination(

@@ -20,6 +20,7 @@ import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
 import 'package:scheduling/shared/widgets/primitives/fade_in_item.dart';
+import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
 
 class AddEmployeePage extends ConsumerStatefulWidget {
   const AddEmployeePage({
@@ -57,11 +58,8 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         ref.read(employeesStreamProvider).asData?.value ?? const [];
     final usedColors = _usedColors(employees, excludeId: employee?.id);
 
-    final result = await showModalBottomSheet<Object?>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      sheetAnimationStyle: AppMotion.sheetStyle,
+    final result = await showAppBottomSheet<Object?>(
+      context,
       builder: (_) =>
           EmployeeFormSheet(employee: employee, usedColors: usedColors),
     );
@@ -96,11 +94,8 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
   }
 
   Future<void> _showEmployeeDetailsSheet(EmployeeRecord employee) async {
-    final result = await showModalBottomSheet<Object?>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      sheetAnimationStyle: AppMotion.sheetStyle,
+    final result = await showAppBottomSheet<Object?>(
+      context,
       builder: (_) => EmployeeDetailsSheet(
         employee: employee,
         isCurrentUserAdmin: widget.isAdmin,

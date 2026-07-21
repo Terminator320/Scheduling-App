@@ -19,7 +19,7 @@ class DeleteAccountWarningContent extends StatelessWidget {
       children: [
         Text(context.l10n.settings_deleteAccountConfirmBody),
         if (isAdmin) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sp12),
           Text(
             context.l10n.settings_deleteAccountAdminWarning,
             style: TextStyle(color: Theme.of(context).colorScheme.error),
@@ -65,7 +65,7 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(context.l10n.settings_confirmYourPasswordToDelete),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sp12),
           CupertinoTextField(
             controller: _controller,
             obscureText: _obscure,
@@ -118,7 +118,7 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(context.l10n.settings_confirmYourPasswordToDelete),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sp12),
           TextField(
             controller: _controller,
             obscureText: _obscure,

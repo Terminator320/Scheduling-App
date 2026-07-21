@@ -438,25 +438,10 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
         Positioned(
           bottom: AppSpacing.sp16,
           right: AppSpacing.sp16,
-          child: SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FloatingActionButton.small(
-                  heroTag: 'liveMapRosterFab',
-                  tooltip: context.l10n.liveMap_rosterButton,
-                  onPressed: paused ? null : _openRoster,
-                  child: const Icon(Icons.groups_outlined),
-                ),
-                const SizedBox(height: AppSpacing.sp12),
-                FloatingActionButton.small(
-                  heroTag: 'liveMapRecenterFab',
-                  tooltip: context.l10n.liveMap_recenter,
-                  onPressed: () => _applyFit(_lastPoints),
-                  child: const Icon(Icons.my_location),
-                ),
-              ],
-            ),
+          child: _MapFabColumn(
+            paused: paused,
+            onOpenRoster: _openRoster,
+            onRecenter: () => _applyFit(_lastPoints),
           ),
         ),
         if (!paused && points.isEmpty) const EmptyMapCard(),
@@ -497,4 +482,42 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
       Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
     },
   );
+}
+
+/// Bottom-right FAB stack: open the staff roster, and recenter the camera on
+/// the last-known points.
+class _MapFabColumn extends StatelessWidget {
+  const _MapFabColumn({
+    required this.paused,
+    required this.onOpenRoster,
+    required this.onRecenter,
+  });
+
+  final bool paused;
+  final VoidCallback onOpenRoster;
+  final VoidCallback onRecenter;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'liveMapRosterFab',
+            tooltip: context.l10n.liveMap_rosterButton,
+            onPressed: paused ? null : onOpenRoster,
+            child: const Icon(Icons.groups_outlined),
+          ),
+          const SizedBox(height: AppSpacing.sp12),
+          FloatingActionButton.small(
+            heroTag: 'liveMapRecenterFab',
+            tooltip: context.l10n.liveMap_recenter,
+            onPressed: onRecenter,
+            child: const Icon(Icons.my_location),
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -190,6 +190,7 @@ class _CustomColorButton extends StatelessWidget {
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: SweepGradient(
+                    // Deliberately theme-invariant decorative spectrum.
                     colors: [
                       Color(0xFFEF4444), // red
                       Color(0xFFF59E0B), // amber
