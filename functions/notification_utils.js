@@ -686,11 +686,16 @@ async function fetchEmployeeWidgetWindow(db, employeeDocId, now, logger) {
 }
 
 /**
- * Ends any live card for a job that just became `done`. Best-effort and
- * non-throwing, like every other Live Activity path: `endLiveActivity`
- * resolves through the server-owned card marker, so it only ends a card that
- * actually belongs to this appointment. A cancel is already handled by the
- * change-event loop, so only the completion transition is covered here.
+ * Ends any live card for a job that hit a terminal transition: became `done`
+ * or `cancelled`, was DELETED, or had an assignee removed. Deliberately
+ * UNCONDITIONAL on the job's start time — a live card exists precisely when
+ * the job is imminent or already started, which is exactly when the
+ * notification diff suppresses its events as "past" (`notPast`), so riding
+ * the diff left deleted/cancelled started jobs stuck on the Lock Screen.
+ * Best-effort and non-throwing, like every other Live Activity path:
+ * `endLiveActivity` resolves through the server-owned card marker, so it only
+ * ends a card that actually belongs to this appointment and is a safe no-op
+ * for every other target.
  * @param {string} id appointment doc id.
  * @param {?Object} before
  * @param {?Object} after
@@ -698,19 +703,41 @@ async function fetchEmployeeWidgetWindow(db, employeeDocId, now, logger) {
  * @param {!Date} now
  * @return {!Promise<void>}
  */
-async function endCardOnCompletion(id, before, after, deps, now) {
-  const wasDone = String((before || {}).status || "").toLowerCase() === "done";
-  const isDone = String((after || {}).status || "").toLowerCase() === "done";
-  if (wasDone || !isDone) return;
-  for (const employeeDocId of toIdList(after.employeeIds)) {
+async function endCardOnTerminal(id, before, after, deps, now) {
+  const statusOf = (d) => String((d || {}).status || "").toLowerCase();
+  const targets = new Set();
+  if (before && !after) {
+    // Deleted.
+    for (const e of toIdList(before.employeeIds)) targets.add(e);
+  } else if (before && after) {
+    const becameDone = statusOf(before) !== "done" &&
+        statusOf(after) === "done";
+    const becameCancelled = statusOf(before) !== "cancelled" &&
+        statusOf(after) === "cancelled";
+    if (becameDone || becameCancelled) {
+      // Union: a save can change status and assignees in one write.
+      for (const e of toIdList(before.employeeIds)) targets.add(e);
+      for (const e of toIdList(after.employeeIds)) targets.add(e);
+    } else {
+      // Unassigned mid-flight.
+      const kept = new Set(toIdList(after.employeeIds));
+      for (const e of toIdList(before.employeeIds)) {
+        if (!kept.has(e)) targets.add(e);
+      }
+    }
+  }
+  if (targets.size === 0) return;
+  const src = after || before || {};
+  for (const employeeDocId of targets) {
     try {
       await endLiveActivity(deps, {
         appointmentId: String(id),
         employeeDocId,
         ctx: {
-          clientName: after.clientName,
-          address: after.address,
-          startTime: after.startTime,
+          clientName: src.clientName,
+          address: src.address,
+          startTime: src.startTime,
+          endTime: src.endTime,
           leaveAt: null,
           travelMinutes: null,
         },
@@ -718,7 +745,7 @@ async function endCardOnCompletion(id, before, after, deps, now) {
       });
     } catch (err) {
       if (deps.logger) {
-        deps.logger.warn("liveActivity: end-on-complete failed",
+        deps.logger.warn("liveActivity: end-on-terminal failed",
             {id, employeeDocId, err});
       }
     }
@@ -738,13 +765,15 @@ async function endCardOnCompletion(id, before, after, deps, now) {
  */
 async function handleAppointmentWrite(id, before, after, deps) {
   const now = deps.now || new Date();
-  // Completion ends the card here, server-side, because only the server knows
+  // EVERY terminal transition (done, cancelled, deleted, unassigned) ends the
+  // card here, server-side and unconditionally, because only the server knows
   // which appointment a push-started card belongs to (the liveActivityCards
-  // marker). The device can't disambiguate, so it must not end cards itself:
-  // a tech marking the job they just left as done would otherwise kill the
-  // card for the job they're currently driving to. Runs before the diff since
-  // a status->done transition produces no push event of its own.
-  await endCardOnCompletion(id, before, after, deps, now);
+  // marker) — and because the notification diff below suppresses events for
+  // past-start jobs, which is exactly when a live card exists. The device
+  // can't disambiguate, so it must not end cards itself: a tech marking the
+  // job they just left as done would otherwise kill the card for the job
+  // they're currently driving to.
+  await endCardOnTerminal(id, before, after, deps, now);
   const events = diffAppointmentForNotifications(before, after, now, id);
   if (events.length === 0) return {events: 0, sent: 0};
   let sent = 0;
@@ -774,29 +803,29 @@ async function handleAppointmentWrite(id, before, after, deps) {
         }),
     );
     sent += delivered;
-    // Live Activity lifecycle rides the same events: a reschedule refreshes a
-    // card that's already on the Lock Screen, a cancel/unassign clears it.
+    // Live Activity lifecycle: a reschedule refreshes a card that's already
+    // on the Lock Screen. Card ENDS don't ride these events — the diff
+    // suppresses past-start jobs, so every terminal end (cancel, delete,
+    // unassign, done) is handled unconditionally by endCardOnTerminal above.
     // `assigned` starts NO card — a card is started only by the travel-aware
-    // "leave now" sweep, which is what the card is about. Best-effort: these
-    // never throw and never affect `sent`.
-    const liveCtx = {
-      clientName: ctx.clientName,
-      address: ctx.address,
-      startTime: ctx.startTime,
-      leaveAt: null,
-      travelMinutes: null,
-    };
-    // A refresh must not resurrect a card for a deactivated account (the
-    // ending paths below stay unconditional — clearing a stale card is always
-    // right). `delivered > 0` proves THIS recipient passed sendToEmployee's
-    // active-and-allowed-role filter without re-reading the user doc.
+    // "leave now" sweep, which is what the card is about. Best-effort: never
+    // throws and never affects `sent`. `delivered > 0` proves THIS recipient
+    // passed sendToEmployee's active-and-allowed-role filter without
+    // re-reading the user doc, so a refresh can't resurrect a card for a
+    // deactivated account.
     if (kind === "rescheduled" && delivered > 0) {
       await updateLiveActivity(deps, {
-        appointmentId: String(id), employeeDocId, ctx: liveCtx, nowDate: now,
-      });
-    } else if (kind === "cancelled" || kind === "removed") {
-      await endLiveActivity(deps, {
-        appointmentId: String(id), employeeDocId, ctx: liveCtx, nowDate: now,
+        appointmentId: String(id),
+        employeeDocId,
+        ctx: {
+          clientName: ctx.clientName,
+          address: ctx.address,
+          startTime: ctx.startTime,
+          endTime: ((after || before) || {}).endTime,
+          leaveAt: null,
+          travelMinutes: null,
+        },
+        nowDate: now,
       });
     }
   }

@@ -155,13 +155,27 @@ private struct LockScreenCard: View {
                 Spacer(minLength: 0)
                 StatusChip(label: state.statusLabel, tint: tint)
             }
+            // On site: count DOWN the remaining booked time to the scheduled
+            // end (a live system timer — it keeps ticking without pushes and
+            // is correct on wake). Once the visit overruns its end — or for a
+            // payload with no endTime — fall back to elapsed time counting up
+            // from the start, which honestly signals the overrun.
             if state.isOnSite, let start = state.startDate {
-                Text(timerInterval: start...Date.distantFuture,
-                     countsDown: false)
-                    .font(.title3).bold()
-                    .monospacedDigit()
-                    .foregroundColor(tint)
-                    .lineLimit(1)
+                if let end = state.endDate, now < end {
+                    Text(timerInterval: max(start, now)...end,
+                         countsDown: true)
+                        .font(.title3).bold()
+                        .monospacedDigit()
+                        .foregroundColor(tint)
+                        .lineLimit(1)
+                } else {
+                    Text(timerInterval: start...Date.distantFuture,
+                         countsDown: false)
+                        .font(.title3).bold()
+                        .monospacedDigit()
+                        .foregroundColor(tint)
+                        .lineLimit(1)
+                }
             } else if !state.timeLabel.isEmpty {
                 Text(state.timeLabel)
                     .font(.title3).bold()

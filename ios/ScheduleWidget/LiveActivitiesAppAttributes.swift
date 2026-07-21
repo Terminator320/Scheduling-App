@@ -70,6 +70,11 @@ struct LiveActivitiesAppAttributes: Codable, Hashable {
         /// only if the server could not read it.
         let startTime: String?
 
+        /// ISO-8601 UTC instant for the appointment's scheduled end. Feeds
+        /// the on-site remaining-time COUNTDOWN; null (older payloads, or an
+        /// unreadable record) falls back to the elapsed count-up.
+        let endTime: String?
+
         /// ISO-8601 UTC instant for the absolute "leave at" time, and the
         /// boundary for the amber → red lapsed state. Only the push that
         /// STARTS the card carries it; every later update (reschedule, the
@@ -92,6 +97,7 @@ struct LiveActivitiesAppAttributes: Codable, Hashable {
         let completeLabel: String
 
         var startDate: Date? { parseActivityInstant(startTime) }
+        var endDate: Date? { parseActivityInstant(endTime) }
         var leaveAtDate: Date? { parseActivityInstant(leaveAt) }
 
         var isOnSite: Bool { phase == "onSite" }
@@ -111,6 +117,7 @@ struct LiveActivitiesAppAttributes: Codable, Hashable {
                 try c.decodeIfPresent(String.self, forKey: .clientName) ?? ""
             address = try c.decodeIfPresent(String.self, forKey: .address) ?? ""
             startTime = try c.decodeIfPresent(String.self, forKey: .startTime)
+            endTime = try c.decodeIfPresent(String.self, forKey: .endTime)
             leaveAt = try c.decodeIfPresent(String.self, forKey: .leaveAt)
             travelMinutes =
                 try c.decodeIfPresent(Int.self, forKey: .travelMinutes)
@@ -133,6 +140,7 @@ struct LiveActivitiesAppAttributes: Codable, Hashable {
             clientName: String,
             address: String,
             startTime: String?,
+            endTime: String? = nil,
             leaveAt: String?,
             travelMinutes: Int?,
             phase: String,
@@ -145,6 +153,7 @@ struct LiveActivitiesAppAttributes: Codable, Hashable {
             self.clientName = clientName
             self.address = address
             self.startTime = startTime
+            self.endTime = endTime
             self.leaveAt = leaveAt
             self.travelMinutes = travelMinutes
             self.phase = phase

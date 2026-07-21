@@ -26,6 +26,7 @@ const {
 const {
   startLiveActivity,
   updateLiveActivity,
+  endLiveActivity,
 } = require("./live_activity_dispatch");
 const {
   listCardsDueForOnSite,
@@ -437,6 +438,7 @@ async function resolveReminderForAssignee(deps, args) {
   const ctx = {
     clientName: c.clientName,
     startTime: c.startTime,
+    endTime: c.endTime,
     address: c.address,
     travelMinutes: travelSeconds == null ?
         null : Math.ceil(travelSeconds / 60),
@@ -625,10 +627,27 @@ async function runOnSiteFlipPass(deps) {
       const snap = await db
           .collection("appointments").doc(marker.appointmentId).get();
       const record = snap && snap.exists ? (snap.data() || {}) : null;
-      // A deleted job (or one already terminal) has no card left to flip; drop
-      // the marker so it can't be retried every sweep until its TTL.
+      // A deleted or already-terminal job must END the on-device card, not
+      // just drop the marker: the Lock Screen card outlives the Firestore doc,
+      // and clearing the marker alone would strand it there for hours (the
+      // bug where a deleted event's card stayed on the phone). endLiveActivity
+      // also clears the marker, so this can't retry every sweep either. This
+      // is the backstop for the same end the appointment write trigger sends.
       if (!record ||
           TERMINAL.has(String(record.status || "").toLowerCase())) {
+        await endLiveActivity(deps, {
+          appointmentId: String(marker.appointmentId),
+          employeeDocId: marker.employeeDocId,
+          ctx: record ? {
+            clientName: record.clientName,
+            address: _address(record),
+            startTime: record.startTime,
+            endTime: record.endTime,
+            leaveAt: null,
+            travelMinutes: null,
+          } : {},
+          nowDate,
+        });
         await clearCardMarker(deps, {employeeDocId: marker.employeeDocId});
         continue;
       }
@@ -639,6 +658,7 @@ async function runOnSiteFlipPass(deps) {
           clientName: record.clientName,
           address: _address(record),
           startTime: record.startTime,
+          endTime: record.endTime,
           leaveAt: null,
           travelMinutes: null,
         },

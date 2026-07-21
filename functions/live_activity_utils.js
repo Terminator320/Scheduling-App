@@ -128,12 +128,15 @@ function phaseFor({startTime, now}) {
 /**
  * Builds the ActivityKit content state the Swift `ContentState` decodes. All
  * display text is localized here; the extension renders strings verbatim.
- * @param {{clientName: string, address: string, startTime: *, leaveAt: *,
- *   travelMinutes: ?number, phase: string, locale: (string|undefined)}} args
+ * `endTime` feeds the on-site remaining-time countdown (the card counts DOWN
+ * to the scheduled end, not up from the start).
+ * @param {{clientName: string, address: string, startTime: *, endTime: *,
+ *   leaveAt: *, travelMinutes: ?number, phase: string,
+ *   locale: (string|undefined)}} args
  * @return {!Object}
  */
-function buildContentState(
-    {clientName, address, startTime, leaveAt, travelMinutes, phase, locale}) {
+function buildContentState({clientName, address, startTime, endTime, leaveAt,
+  travelMinutes, phase, locale}) {
   const loc = locale === "fr" ? "fr" : "en";
   const t = liveActivityStrings(loc);
   const onSite = phase === PHASE_ON_SITE;
@@ -145,6 +148,7 @@ function buildContentState(
     clientName: (clientName || "").trim() || t.who({}),
     address: (address || "").trim(),
     startTime: toIsoUtc(startTime),
+    endTime: toIsoUtc(endTime),
     leaveAt: toIsoUtc(leaveAt),
     travelMinutes: minutes,
     phase: onSite ? PHASE_ON_SITE : PHASE_TRAVEL,

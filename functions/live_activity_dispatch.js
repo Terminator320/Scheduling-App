@@ -151,7 +151,7 @@ async function _sendToRow(deps, row, payload, label) {
  * per-token `locale` already stored, the same rule the notification bodies
  * follow.
  * @param {!Object} row
- * @param {!Object} ctx `{clientName, address, startTime, leaveAt,
+ * @param {!Object} ctx `{clientName, address, startTime, endTime, leaveAt,
  *   travelMinutes}`.
  * @param {*} nowDate
  * @return {!Object}
@@ -161,6 +161,7 @@ function _stateFor(row, ctx, nowDate) {
     clientName: ctx.clientName,
     address: ctx.address,
     startTime: ctx.startTime,
+    endTime: ctx.endTime,
     leaveAt: ctx.leaveAt,
     travelMinutes: ctx.travelMinutes,
     phase: phaseFor({startTime: ctx.startTime, now: nowDate}),
