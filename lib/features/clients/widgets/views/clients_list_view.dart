@@ -5,7 +5,6 @@ import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
-import 'package:scheduling/core/utils/sheet_focus.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
@@ -110,19 +109,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
       return;
     }
 
-    await SheetFocus.settleBeforeSheet();
-    if (!mounted) return;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      sheetAnimationStyle: AppMotion.sheetStyle,
-      builder: (_) => ClientDetailSheet(client: client),
-    );
-
-    if (!mounted) return;
-    await SheetFocus.unfocusAfterSheet();
+    await showClientDetailSheet(context, client);
   }
 
   Widget _clientTile(ClientRecord client, int index) => FadeInItem(

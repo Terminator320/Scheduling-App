@@ -176,7 +176,7 @@ class _FieldError extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(Icons.info_outline_rounded, size: 11, color: error),
-          const SizedBox(width: 4),
+          const SizedBox(width: AppSpacing.sp4),
           Expanded(
             child: Text(
               message,

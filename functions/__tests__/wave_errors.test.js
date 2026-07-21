@@ -1,8 +1,8 @@
 "use strict";
 
-const {classifyWaveError} = require("../errors");
-const {WaveApiError} = require("../client");
-const {WaveValidationError} = require("../customers");
+const {classifyWaveError} = require("../wave/errors");
+const {WaveApiError} = require("../wave/client");
+const {WaveValidationError} = require("../wave/customers");
 
 describe("classifyWaveError", () => {
   test("WaveApiError(auth) → failed-precondition / wave/token-invalid", () => {

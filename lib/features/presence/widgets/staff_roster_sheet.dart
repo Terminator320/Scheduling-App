@@ -8,6 +8,7 @@ import 'package:scheduling/features/presence/application/live_map_providers.dart
 import 'package:scheduling/features/presence/domain/live_map_aggregator.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
+import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
 
 /// Apple "Find My"-style bottom sheet: every staff member currently sharing a
 /// location, ordered nearest-first relative to the viewing admin, each row
@@ -20,11 +21,8 @@ Future<StaffMapPoint?> showStaffRosterSheet(
   BuildContext context, {
   required String? selfDocId,
 }) {
-  return showModalBottomSheet<StaffMapPoint>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    sheetAnimationStyle: AppMotion.sheetStyle,
+  return showAppBottomSheet<StaffMapPoint>(
+    context,
     builder: (_) => StaffRosterSheet(selfDocId: selfDocId),
   );
 }

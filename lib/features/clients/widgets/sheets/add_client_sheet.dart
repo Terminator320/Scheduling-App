@@ -14,6 +14,7 @@ import 'package:scheduling/features/clients/widgets/sections/additional_contacts
 import 'package:scheduling/features/clients/widgets/sections/client_personal_fields_section.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
 /// Opens the add-client sheet and resolves to the newly created client (with
@@ -31,11 +32,8 @@ Future<ClientRecord?> showAddClientSheet(
     await SheetFocus.settleBeforeSheet();
     if (!context.mounted) return null;
   }
-  final created = await showModalBottomSheet<ClientRecord>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    sheetAnimationStyle: AppMotion.sheetStyle,
+  final created = await showAppBottomSheet<ClientRecord>(
+    context,
     builder: (_) => AddClientSheet(initialName: initialName),
   );
   if (settleFocus && context.mounted) await SheetFocus.unfocusAfterSheet();

@@ -4,7 +4,7 @@ const {
   toWaveCustomerInput,
   mappedFieldsHash,
   fromWaveCustomer,
-} = require("../mappers");
+} = require("../wave/mappers");
 
 // ---------------------------------------------------------------------------
 // Helpers

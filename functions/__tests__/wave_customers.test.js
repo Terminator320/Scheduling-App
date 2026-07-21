@@ -4,9 +4,9 @@ const {
   WaveValidationError,
   upsertCustomer,
   importCustomers,
-} = require("../customers");
-const {WaveApiError} = require("../client");
-const {mappedFieldsHash} = require("../mappers");
+} = require("../wave/customers");
+const {WaveApiError} = require("../wave/client");
+const {mappedFieldsHash} = require("../wave/mappers");
 
 // ---------------------------------------------------------------------------
 // Fakes

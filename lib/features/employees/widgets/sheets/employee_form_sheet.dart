@@ -280,6 +280,25 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
     final toggleLabel = _isDisabled
         ? context.l10n.employees_reEnableAccount
         : context.l10n.employees_disableAccount;
+    final statusLabel = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          context.l10n.employees_accountStatus,
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          context.l10n.employees_accountStatusDescription,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -289,19 +308,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                context.l10n.employees_accountStatus,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                context.l10n.employees_accountStatusDescription,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
+              statusLabel,
               const SizedBox(height: AppSpacing.sp8),
               UserStatusChip(status: _status),
             ],
@@ -310,26 +317,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.l10n.employees_accountStatus,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      context.l10n.employees_accountStatusDescription,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              Expanded(child: statusLabel),
               const SizedBox(width: AppSpacing.sp8),
               UserStatusChip(status: _status),
             ],

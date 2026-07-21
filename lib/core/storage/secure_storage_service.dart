@@ -44,15 +44,18 @@ bool isKeychainLockedError(Object e) =>
 /// Thin typed wrapper over [FlutterSecureStorage] — Keychain on iOS,
 /// hardware-backed AES/GCM ciphers on Android (API 23+, the v10 default).
 ///
-/// iOS items are stored with `first_unlock` accessibility (readable while the
-/// device is locked, after the first unlock since boot) — the default
-/// `unlocked` class made every read fail with -25308 when a content-available
-/// push cold-started the app on a locked phone, which both spammed
-/// Crashlytics and left the biometric app-lock silently disengaged for that
-/// session. Items written before this change carry the old `unlocked` class,
-/// and the plugin's write path can't update in place across accessibility
-/// classes, so [_ensureMigrated] rewrites every known key once (delete —
-/// which ignores accessibility — then re-add) before any other operation.
+/// iOS items are stored with `first_unlock_this_device` accessibility:
+/// readable while the device is locked (after the first unlock since boot) —
+/// the default `unlocked` class made every read fail with -25308 when a
+/// content-available push cold-started the app on a locked phone, which both
+/// spammed Crashlytics and left the biometric app-lock silently disengaged
+/// for that session — and `..._this_device` keeps the cached identity out of
+/// device/iCloud backups (it never migrates to another device; the cache
+/// self-rebuilds on next sign-in after a restore). Items written before this
+/// change carry an older class, and the plugin's write path can't update in
+/// place across accessibility classes, so [_ensureMigrated] rewrites every
+/// known key once (delete — which ignores accessibility — then re-add)
+/// before any other operation.
 ///
 /// Injectable for tests; mirror the optional-dep pattern used by the other
 /// services so a fake storage can be supplied without touching a singleton.
@@ -62,20 +65,29 @@ class SecureStorageService {
           storage ??
           const FlutterSecureStorage(
             iOptions: IOSOptions(
-              accessibility: KeychainAccessibility.first_unlock,
+              accessibility: KeychainAccessibility.first_unlock_this_device,
             ),
           ),
       // Injected storage (tests) skips the platform migration.
       _needsMigration =
           storage == null && defaultTargetPlatform == TargetPlatform.iOS;
 
-  static const _migratedMarker = 'ios_first_unlock_migrated';
+  static const _migratedMarker = 'ios_keychain_accessibility_v2';
 
-  /// Default-options instance (accessibility `unlocked`) used ONLY by the
-  /// migration to find items written before the `first_unlock` switch —
-  /// whichever way the platform treats the query's accessibility attribute
-  /// (match filter or ignored), one of the two reads resolves the old item.
+  /// A per-key stash written before the delete-then-re-add below, so a crash
+  /// between the delete and the re-add can't lose the value — the next run
+  /// recovers it from this slot. Only ever written by [_storage].
+  static const _backupPrefix = 'mig_bak_';
+
+  /// Legacy-options instances used ONLY by the migration to find items
+  /// written under earlier accessibility classes (`unlocked` = the pre-1.35
+  /// default; `first_unlock` = the short-lived intermediate) — whichever way
+  /// the platform treats the query's accessibility attribute (match filter or
+  /// ignored), one of the reads resolves the old item.
   static const _legacy = FlutterSecureStorage();
+  static const _legacyFirstUnlock = FlutterSecureStorage(
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+  );
 
   final FlutterSecureStorage _storage;
   final bool _needsMigration;
@@ -92,13 +104,21 @@ class SecureStorageService {
     try {
       if (await _storage.read(key: _migratedMarker) == 'true') return;
       // Delete strips the accessibility attribute entirely, so
-      // delete-then-add converges every item onto first_unlock.
+      // delete-then-add converges every item onto first_unlock_this_device.
       for (final key in SecureStorageKeys.all) {
+        final backupKey = '$_backupPrefix$key';
         final value =
-            await _legacy.read(key: key) ?? await _storage.read(key: key);
+            await _legacy.read(key: key) ??
+            await _legacyFirstUnlock.read(key: key) ??
+            await _storage.read(key: key) ??
+            // A crash between the delete and the re-add below strands the
+            // value in the backup slot — recover it.
+            await _storage.read(key: backupKey);
         if (value == null) continue;
+        await _storage.write(key: backupKey, value: value);
         await _storage.delete(key: key);
         await _storage.write(key: key, value: value);
+        await _storage.delete(key: backupKey);
       }
       await _storage.write(key: _migratedMarker, value: 'true');
     } catch (_) {

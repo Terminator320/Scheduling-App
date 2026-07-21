@@ -221,7 +221,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
   Future<void> _pickMonth() async {
     final picked = await MonthYearPicker.show(context, _focusedDay);
-    if (picked != null) _setFocusedDay(picked);
+    if (picked != null && mounted) _setFocusedDay(picked);
   }
 
   /// The appointments stream this screen renders: business-wide for an admin,
@@ -338,8 +338,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
                 nameMap: data.nameMap,
               ),
               Positioned(
-                bottom: 16,
-                left: 16,
+                bottom: AppSpacing.sp16,
+                left: AppSpacing.sp16,
                 child: _TodayFab(
                   visible: _showTodayButton,
                   onPressed: _goToToday,

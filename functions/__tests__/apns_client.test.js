@@ -6,6 +6,7 @@ const {
   mintProviderToken,
   providerToken,
   resetProviderTokenCache,
+  resetSessionCache,
   isActivityGone,
   sendLiveActivityPush,
 } = require("../apns_client");
@@ -74,6 +75,7 @@ const send = (outcome, extra) => {
 
 beforeEach(() => {
   resetProviderTokenCache();
+  resetSessionCache();
   signCalls = 0;
 });
 
@@ -160,8 +162,40 @@ describe("sendLiveActivityPush", () => {
     const tagged = await send({status: 200}, {collapseId: "appt-1"});
     expect(tagged.sent.headers["apns-collapse-id"]).toBe("appt-1");
   });
-  test("closes the session after the request", async () => {
-    const {sent} = await send({status: 200});
+  test("reuses one session across pushes to the same host", async () => {
+    let connects = 0;
+    const {impl} = (() => {
+      const inner = fakeHttp2({status: 200});
+      const connect = inner.impl.connect.bind(inner.impl);
+      return {impl: {connect(host) {
+        connects += 1;
+        return connect(host);
+      }}};
+    })();
+    const push = () => sendLiveActivityPush({
+      token: "ACTIVITYTOKEN",
+      payload: {aps: {event: "start"}},
+      auth: AUTH,
+      now: new Date("2026-07-20T12:00:00.000Z"),
+      signer,
+      http2Impl: impl,
+    });
+    await push();
+    await push();
+    expect(connects).toBe(1);
+  });
+  test("drops the session on a transport error and reconnects", async () => {
+    // status 0 = timeout / stream error: the cached session may be wedged, so
+    // it is closed and the next push dials fresh.
+    const {impl, sent} = fakeHttp2({status: 0, error: new Error("reset")});
+    const push = () => sendLiveActivityPush({
+      token: "ACTIVITYTOKEN",
+      payload: {aps: {event: "start"}},
+      auth: AUTH,
+      signer,
+      http2Impl: impl,
+    });
+    await push();
     expect(sent.closed).toBe(true);
   });
   test("flags a 410 as gone so the caller prunes the row", async () => {
@@ -211,6 +245,23 @@ describe("sendLiveActivityPush", () => {
     });
     expect(result).toEqual({
       ok: false, status: 0, reason: "missing-credentials", gone: false,
+    });
+    expect(sent.host).toBeNull();
+  });
+  test("rejects a malformed token without dialing and prunes it", async () => {
+    // The registry rule only size-caps the token; anything outside the
+    // hex/alphanumeric shape ActivityKit mints can never deliver and must not
+    // reach the request :path.
+    const {impl, sent} = fakeHttp2({status: 200});
+    const result = await sendLiveActivityPush({
+      token: "../3/device/evil",
+      payload: {aps: {event: "start"}},
+      auth: AUTH,
+      signer,
+      http2Impl: impl,
+    });
+    expect(result).toEqual({
+      ok: false, status: 0, reason: "malformed-token", gone: true,
     });
     expect(sent.host).toBeNull();
   });

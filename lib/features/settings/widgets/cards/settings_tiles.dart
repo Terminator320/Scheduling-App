@@ -310,7 +310,68 @@ class SettingsProfileCard extends StatelessWidget {
       size: AvatarSize.lg,
     );
 
-    final identity = Column(
+    final identity = _ProfileIdentity(
+      name: name,
+      email: email,
+      role: role,
+      narrowOrLarge: narrowOrLarge,
+    );
+
+    return Container(
+      decoration: appCardDecoration(theme, radius: AppRadius.r16),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.r16),
+        child: ColoredBox(
+          color: scheme.surface,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _ProfileHeaderBanner(),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.sp16),
+                child: narrowOrLarge
+                    ? Column(
+                        children: [
+                          avatar,
+                          const SizedBox(height: AppSpacing.sp12),
+                          identity,
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          avatar,
+                          const SizedBox(width: AppSpacing.sp16),
+                          Expanded(child: identity),
+                        ],
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileIdentity extends StatelessWidget {
+  const _ProfileIdentity({
+    required this.name,
+    required this.email,
+    required this.role,
+    required this.narrowOrLarge,
+  });
+
+  final String name;
+  final String email;
+  final String? role;
+  final bool narrowOrLarge;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Column(
       crossAxisAlignment: narrowOrLarge
           ? CrossAxisAlignment.center
           : CrossAxisAlignment.start,
@@ -352,63 +413,35 @@ class SettingsProfileCard extends StatelessWidget {
         ),
       ],
     );
+  }
+}
 
+class _ProfileHeaderBanner extends StatelessWidget {
+  const _ProfileHeaderBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
-      decoration: appCardDecoration(theme, radius: AppRadius.r16),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.r16),
-        child: ColoredBox(
-          color: scheme.surface,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                height: 72,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      scheme.primary,
-                      scheme.primary.withValues(alpha: 0.8),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Align(
-                  alignment: Alignment.bottomRight,
-                  child: Padding(
-                    padding: const EdgeInsets.only(
-                      right: AppSpacing.sp24,
-                      bottom: AppSpacing.sp12,
-                    ),
-                    child: FaIcon(
-                      FontAwesomeIcons.droplet,
-                      size: 40,
-                      color: scheme.onPrimary.withValues(alpha: 0.12),
-                    ),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.sp16),
-                child: narrowOrLarge
-                    ? Column(
-                        children: [
-                          avatar,
-                          const SizedBox(height: AppSpacing.sp12),
-                          identity,
-                        ],
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          avatar,
-                          const SizedBox(width: AppSpacing.sp16),
-                          Expanded(child: identity),
-                        ],
-                      ),
-              ),
-            ],
+      height: 72,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [scheme.primary, scheme.primary.withValues(alpha: 0.8)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Align(
+        alignment: Alignment.bottomRight,
+        child: Padding(
+          padding: const EdgeInsets.only(
+            right: AppSpacing.sp24,
+            bottom: AppSpacing.sp12,
+          ),
+          child: FaIcon(
+            FontAwesomeIcons.droplet,
+            size: 40,
+            color: scheme.onPrimary.withValues(alpha: 0.12),
           ),
         ),
       ),

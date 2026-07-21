@@ -140,7 +140,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       firstDate: AppointmentDraftDefaults.datePickerFirstDate,
       lastDate: AppointmentDraftDefaults.datePickerLastDate,
     );
-    if (picked == null) return;
+    if (picked == null || !context.mounted) return;
     widget.controllers.date.text = DateUtilsHelper.formatDate(picked);
     notifier.selectDate(picked);
   }

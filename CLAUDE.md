@@ -179,15 +179,18 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   transactions (employee edit uniqueness re-check, series update) are isolated
   one-at-a-time admin actions — don't add new transaction call sites that can
   run concurrently with them or each other.
-- **Secure storage is iOS `first_unlock`** (`SecureStorageService`): the
-  default `unlocked` Keychain class made every read throw -25308 when a
+- **Secure storage is iOS `first_unlock_this_device`** (`SecureStorageService`):
+  the default `unlocked` Keychain class made every read throw -25308 when a
   content-available push cold-started the app on a locked phone — Crashlytics
-  noise AND the biometric app-lock silently not engaging that session. The
-  service lazily migrates old items (delete-then-rewrite, marker
-  `ios_first_unlock_migrated`) before any operation — keep `_ensureMigrated`
-  first in every public method, and add new keys to `SecureStorageKeys.all` or
-  they never migrate. `isKeychainLockedError` classifies residual -25308
-  (pre-first-unlock) as log-only at the three flag-read catch sites.
+  noise AND the biometric app-lock silently not engaging that session — and
+  `..._this_device` additionally keeps the cached identity out of
+  device/iCloud backups (cache self-rebuilds on next sign-in after a restore).
+  The service lazily migrates old items (backup-slot then delete-then-rewrite,
+  marker `ios_keychain_accessibility_v2`) before any operation — keep
+  `_ensureMigrated` first in every public method, and add new keys to
+  `SecureStorageKeys.all` or they never migrate. `isKeychainLockedError`
+  classifies residual -25308 (pre-first-unlock) as log-only at the three
+  flag-read catch sites.
 - **Role cache:** Never read `isAdmin`/role from SharedPreferences — always Firestore.
 - **Routing:** `AppRoutes.onGenerateRoute` is the single source of truth.
   Pass typed arg classes via `Navigator.pushNamed(..., arguments: ...)`.

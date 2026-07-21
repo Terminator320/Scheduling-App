@@ -1,7 +1,7 @@
 "use strict";
 
 const {WaveApiError, graphql, whoami, listBusinesses} =
-  require("../client");
+  require("../wave/client");
 
 // ---------------------------------------------------------------------------
 // Shared test helpers
