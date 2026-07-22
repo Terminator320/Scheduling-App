@@ -13,6 +13,10 @@ import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
+import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
+import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 import 'package:scheduling/features/presence/application/live_map_providers.dart';
 import 'package:scheduling/features/presence/domain/live_map_aggregator.dart';
 import 'package:scheduling/features/presence/widgets/live_map_overlays.dart';
@@ -88,6 +92,28 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
   int _assembleToken = 0;
   String? _lastSignature;
 
+  late final List<TourStepId> _tourSteps = tourStepsFor(
+    AdaptiveDestination.liveMap,
+    isAdmin: widget.isAdmin,
+  );
+  late final Map<TourStepId, GlobalKey> _tourKeys = {
+    for (final id in _tourSteps) id: GlobalKey(),
+  };
+
+  Widget _tourStep(
+    TourStepId id, {
+    required Widget child,
+    BorderRadius? targetBorderRadius,
+  }) => TourShowcase(
+    showcaseKey: _tourKeys[id]!,
+    tab: AdaptiveDestination.liveMap,
+    id: id,
+    index: _tourSteps.indexOf(id),
+    count: _tourSteps.length,
+    targetBorderRadius: targetBorderRadius,
+    child: child,
+  );
+
   @override
   void dispose() {
     _mapController?.dispose();
@@ -115,22 +141,27 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
         ? _liveBody(context)
         : _mapStack(context, _lastPoints, selectedPoint: null, paused: true);
 
-    return Scaffold(
-      appBar: AppTopBar(
-        title: context.l10n.liveMap_title,
-        compact: context.isLandscape,
-        onBack: _backToCalendar,
-      ),
-      endDrawer: SettingsDrawer.endDrawerFor(
-        context,
-        isAdmin: widget.isAdmin,
-        employeeId: widget.employeeId,
-      ),
-      body: AdaptiveShell(
-        currentDestination: AdaptiveDestination.liveMap,
-        isAdmin: widget.isAdmin,
-        employeeId: widget.employeeId,
-        child: body,
+    return FeatureTourHost(
+      tab: AdaptiveDestination.liveMap,
+      isAdmin: widget.isAdmin,
+      stepKeys: _tourKeys,
+      child: Scaffold(
+        appBar: AppTopBar(
+          title: context.l10n.liveMap_title,
+          compact: context.isLandscape,
+          onBack: _backToCalendar,
+        ),
+        endDrawer: SettingsDrawer.endDrawerFor(
+          context,
+          isAdmin: widget.isAdmin,
+          employeeId: widget.employeeId,
+        ),
+        body: AdaptiveShell(
+          currentDestination: AdaptiveDestination.liveMap,
+          isAdmin: widget.isAdmin,
+          employeeId: widget.employeeId,
+          child: body,
+        ),
       ),
     );
   }
@@ -442,6 +473,20 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
             paused: paused,
             onOpenRoster: _openRoster,
             onRecenter: () => _applyFit(_lastPoints),
+            rosterTourWrap: _tourSteps.contains(TourStepId.liveMapRoster)
+                ? (child) => _tourStep(
+                    TourStepId.liveMapRoster,
+                    targetBorderRadius: BorderRadius.circular(AppRadius.r16),
+                    child: child,
+                  )
+                : null,
+            recenterTourWrap: _tourSteps.contains(TourStepId.liveMapRecenter)
+                ? (child) => _tourStep(
+                    TourStepId.liveMapRecenter,
+                    targetBorderRadius: BorderRadius.circular(AppRadius.r16),
+                    child: child,
+                  )
+                : null,
           ),
         ),
         if (!paused && points.isEmpty) const EmptyMapCard(),
@@ -491,11 +536,15 @@ class _MapFabColumn extends StatelessWidget {
     required this.paused,
     required this.onOpenRoster,
     required this.onRecenter,
+    this.rosterTourWrap,
+    this.recenterTourWrap,
   });
 
   final bool paused;
   final VoidCallback onOpenRoster;
   final VoidCallback onRecenter;
+  final Widget Function(Widget child)? rosterTourWrap;
+  final Widget Function(Widget child)? recenterTourWrap;
 
   @override
   Widget build(BuildContext context) {
@@ -503,18 +552,22 @@ class _MapFabColumn extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          FloatingActionButton.small(
-            heroTag: 'liveMapRosterFab',
-            tooltip: context.l10n.liveMap_rosterButton,
-            onPressed: paused ? null : onOpenRoster,
-            child: const Icon(Icons.groups_outlined),
+          (rosterTourWrap ?? (w) => w)(
+            FloatingActionButton.small(
+              heroTag: 'liveMapRosterFab',
+              tooltip: context.l10n.liveMap_rosterButton,
+              onPressed: paused ? null : onOpenRoster,
+              child: const Icon(Icons.groups_outlined),
+            ),
           ),
           const SizedBox(height: AppSpacing.sp12),
-          FloatingActionButton.small(
-            heroTag: 'liveMapRecenterFab',
-            tooltip: context.l10n.liveMap_recenter,
-            onPressed: onRecenter,
-            child: const Icon(Icons.my_location),
+          (recenterTourWrap ?? (w) => w)(
+            FloatingActionButton.small(
+              heroTag: 'liveMapRecenterFab',
+              tooltip: context.l10n.liveMap_recenter,
+              onPressed: onRecenter,
+              child: const Icon(Icons.my_location),
+            ),
           ),
         ],
       ),
