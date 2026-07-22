@@ -39,6 +39,10 @@ Open the resolved package source (`%LOCALAPPDATA%\Pub\Cache\hosted\pub.dev\showc
 - `Showcase` constructor params used in Task 6: `scope`, `title`, `description`, `titleTextStyle`, `descTextStyle`, `tooltipBackgroundColor`, `tooltipBorderRadius`, `tooltipPadding`, `targetBorderRadius`, `targetPadding`, `overlayColor`, `overlayOpacity`, `disableMovingAnimation`, `disableScaleAnimation`, `tooltipActions`, `tooltipActionConfig`.
 - The action-button type enum: this plan writes `TooltipDefaultActionType.next/.skip`; older versions call it `TooltipActionButtonType`. Use whichever the installed version exports.
 - The custom action constructor: this plan writes `TooltipActionButton.custom(button: ...)`; if the parameter is named differently (e.g. `widget`), use that name everywhere Task 6 uses it.
+- **Lifecycle semantics** (Task 7 depends on these — check the manager source):
+  - `ShowcaseView.register(scope: x)` when `x` is already registered: replace, no-op, or throw? If it throws, `_ensureRegistered` in Task 7 must catch it.
+  - `ShowcaseView.getNamed(x)` for an unregistered `x`: throws or auto-creates? Task 7 wraps it in try/catch either way.
+  - `dismiss()` with no showcase running: confirm it's a safe no-op; Task 7 additionally guards every `dismiss()` behind its own `_tourRunning` flag, so this is defense-in-depth.
 
 - [ ] **Step 3: Analyze + commit**
 
@@ -986,8 +990,12 @@ import 'package:showcaseview/showcaseview.dart';
 ///
 /// Outside a [HubShellScope] (standalone route, widget tests) the tour never
 /// auto-starts. Hidden IndexedStack tabs never start: visibility is a build
-/// dependency via [HubShellScope.currentOf]. Losing visibility mid-tour
-/// dismisses the overlay (which marks the tab seen — same semantics as Skip).
+/// dependency via [HubShellScope.currentOf]. Losing visibility while a tour
+/// is RUNNING dismisses the overlay (which marks the tab seen — same
+/// semantics as Skip); [_tourRunning] gates both the dismiss and the
+/// mark-seen so a tour that never started can't be marked seen by a mere tab
+/// switch, and the dismiss is deferred post-frame (overlay teardown must not
+/// run during build).
 class FeatureTourHost extends ConsumerStatefulWidget {
   const FeatureTourHost({
     required this.tab,
@@ -1019,22 +1027,55 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
   bool _started = false;
   bool _wasVisible = false;
 
+  /// True from startShowCase until onFinish/onDismiss. Gates the
+  /// tab-switch dismiss AND the mark-seen: without it, dismissing a scope
+  /// whose tour never started could fire onDismiss and permanently mark an
+  /// unseen tour as seen.
+  bool _tourRunning = false;
+
   String get _scope => tourScopeName(widget.tab);
 
   @override
   void initState() {
     super.initState();
-    ShowcaseView.register(
-      scope: _scope,
-      onFinish: _markSeen,
-      onDismiss: (_) => _markSeen(),
-    );
+    _ensureRegistered();
+  }
+
+  /// Registers this tab's scope, tolerating an existing registration.
+  ///
+  /// Also called from [_start]: on a hub identity change (live admin
+  /// upgrade), the REPLACEMENT State's initState runs before the old
+  /// element's dispose finalizes — so the old dispose's unregister can kill
+  /// the registration this State just made. Re-ensuring at start time makes
+  /// that ordering harmless.
+  void _ensureRegistered() {
+    try {
+      ShowcaseView.register(
+        scope: _scope,
+        onFinish: _onTourEnd,
+        onDismiss: (_) => _onTourEnd(),
+      );
+    } catch (_) {
+      // Already registered with live callbacks — fine.
+    }
   }
 
   @override
   void dispose() {
-    ShowcaseView.getNamed(_scope).unregister();
+    try {
+      ShowcaseView.getNamed(_scope).unregister();
+    } catch (_) {
+      // Scope already gone (identity-change replacement) — fine.
+    }
     super.dispose();
+  }
+
+  /// Finish and dismiss both end the tour; only a tour that actually ran
+  /// marks the tab seen.
+  void _onTourEnd() {
+    if (!_tourRunning) return;
+    _tourRunning = false;
+    _markSeen();
   }
 
   void _markSeen() {
@@ -1045,11 +1086,19 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
   Widget build(BuildContext context) {
     final seen = ref.watch(tourSeenProvider);
     final visible = HubShellScope.currentOf(context) == widget.tab;
-    if (_wasVisible && !visible) {
-      // Tab switched away mid-tour: never leave the overlay over another tab.
-      // dismiss() no-ops when nothing is showing; when a tour WAS running its
-      // onDismiss marks this tab seen (switching away == skipping).
-      ShowcaseView.getNamed(_scope).dismiss();
+    if (_wasVisible && !visible && _tourRunning) {
+      // Tab switched away mid-tour: never leave the overlay over another
+      // tab. Post-frame — overlay teardown (and the provider write its
+      // onDismiss triggers) must not run during build. onDismiss then marks
+      // this tab seen (switching away == skipping).
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_tourRunning) return;
+        try {
+          ShowcaseView.getNamed(_scope).dismiss();
+        } catch (_) {
+          _tourRunning = false;
+        }
+      });
     }
     _wasVisible = visible;
     if (seen.contains(widget.tab)) {
@@ -1079,9 +1128,12 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
       ];
       if (keys.isEmpty) {
         // Nothing to point at (layout variant, role) — don't retry forever.
+        // Direct markSeen: _onTourEnd is only for tours that ran.
         _markSeen();
         return;
       }
+      _ensureRegistered();
+      _tourRunning = true;
       ShowcaseView.getNamed(_scope).startShowCase(keys);
     });
   }
@@ -1241,7 +1293,7 @@ git commit -m "Wire the calendar tab feature tour"
 - Modify: `lib/features/employees/screens/employees_screen.dart`
 - Modify: `lib/features/clients/screens/history_screen.dart`
 
-Each screen follows the identical pattern: add the same four imports as Task 8, add `_tourSteps`/`_tourKeys`/`_tourStep` fields (with the screen's own `AdaptiveDestination` and `isAdmin: widget.isAdmin`), wrap the `Scaffold` in `FeatureTourHost` (`ready` stays default `true` — every target is chrome), and wrap the targets. The `_tourStep` helper is three lines of indirection per screen — deliberate repetition (rule: three similar lines beat a helper shared across features).
+Each screen follows the identical pattern: add the same four imports as Task 8 **plus `package:scheduling/core/theme/design_tokens.dart` if the screen doesn't already import it** (the FAB wraps use `AppRadius`; `clients_screen.dart` and `history_screen.dart` currently don't import it — the calendar screen already does), add `_tourSteps`/`_tourKeys`/`_tourStep` fields (with the screen's own `AdaptiveDestination` and `isAdmin: widget.isAdmin`), wrap the `Scaffold` in `FeatureTourHost` (`ready` stays default `true` — every target is chrome), and wrap the targets. The `_tourStep` helper is three lines of indirection per screen — deliberate repetition (rule: three similar lines beat a helper shared across features).
 
 - [ ] **Step 1: Clients screen**
 
@@ -1540,4 +1592,13 @@ git commit -m "Document feature-tour invariants and correct design doc roles"
 
 - Spec coverage: per-tab role-aware tours (Tasks 2, 8–11), first-visit auto-start + data-settle + visibility gating (Task 7), skip-marks-seen (Task 7 onDismiss), Settings replay (Task 11), EN/FR l10n (Task 5), reduced-motion + theming (Task 6), pure/controller/widget tests (Tasks 2, 3, 7, 11), device verification (Task 12). Design-doc divergence (employee tabs) is corrected by Task 12 rather than silently ignored.
 - Type consistency: `tourStepsFor(tab, {required bool isAdmin})`, `tourScopeName(tab)`, `tourSeenProvider` / `TourSeenController.ready/markSeen/resetAll`, `TourShowcase(showcaseKey:, tab:, id:, index:, count:, targetBorderRadius:, child:)`, `TourShowcaseBar(..., bar:)`, `FeatureTourHost(tab:, isAdmin:, ready:, stepKeys:, child:)`, `HubShellScope.currentOf/readCurrentOf` — used with these exact names throughout.
-- Known API risk is isolated in Task 1 Step 2 (enum name `TooltipDefaultActionType` vs `TooltipActionButtonType`; custom-action param name) with explicit instructions to reconcile once against the resolved package version.
+- Known API risk is isolated in Task 1 Step 2 (enum name `TooltipDefaultActionType` vs `TooltipActionButtonType`; custom-action param name; register/getNamed/dismiss lifecycle semantics) with explicit instructions to reconcile once against the resolved package version.
+- Review pass 2 (2026-07-22) fixed three host defects before implementation:
+  (1) an unconditional tab-switch `dismiss()` could fire `onDismiss` for a
+  tour that never started and permanently mark it seen — now gated by
+  `_tourRunning`; (2) `dismiss()` ran during `build` (overlay teardown +
+  provider write mid-build) — now deferred post-frame; (3) on a hub identity
+  change the replacement State's `initState` runs before the old `dispose`
+  finalizes, so the old unregister could kill the new scope registration —
+  `_ensureRegistered()` re-registers at start time and both register/
+  unregister tolerate the other ordering.
