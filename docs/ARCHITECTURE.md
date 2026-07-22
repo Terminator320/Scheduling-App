@@ -30,7 +30,7 @@ lib/
 │   ├── security/                    BiometricAuthService (local_auth) + AppLock app-wide biometric gate
 │   ├── storage/                     SecureStorageService + SecureStorageKeys — encrypted local storage (flutter_secure_storage)
 │   ├── theme/                       Design tokens (AppColors, AppSpacing, AppRadius), button_styles (destructiveOutlinedButtonStyle), ThemeData, ThemeNotifier
-│   ├── utils/                       l10n_extensions.dart (context.l10n), date helpers, current_day_provider.dart (currentDayProvider — the local calendar day, self-invalidating at midnight; the off-screen schedule mirrors watch it so day buckets can't go stale overnight), language controller, sheet focus, retry.dart (retryAsync/retryStream — one post-sign-in permission-denied retry while the auth token propagates)
+│   ├── utils/                       l10n_extensions.dart (context.l10n), date helpers, current_day_provider.dart (currentDayProvider — the local calendar day, self-invalidating at midnight; the off-screen schedule mirrors watch it so day buckets can't go stale overnight), language controller, sheet focus, retry.dart (retryAsync/retryStream — one post-sign-in permission-denied retry while the auth token propagates), reentrant_sync.dart (ReentrantSync mixin — coalesce-not-drop guard shared by the push/presence/live-activity registration controllers' sync())
 │   └── validators/                  Auth input validators (email format, password rules)
 │
 ├── shared/widgets/                  Reusable UI components used across ≥2 features, grouped by type
@@ -675,7 +675,7 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (1011 test cases as of 2026-07-21; `functions` adds 657 jest
+Run: `flutter test` (1020 test cases as of 2026-07-21; `functions` adds 664 jest
 tests in `functions/__tests__/` — the parallel `functions/test/` directory was
 merged away). `flutter analyze` reports **0 errors and 0 warnings**, plus 3
 info-level lints; see `analysis_options.yaml` for the lints intentionally
