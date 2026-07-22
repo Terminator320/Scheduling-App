@@ -39,10 +39,10 @@ Open the resolved package source (`%LOCALAPPDATA%\Pub\Cache\hosted\pub.dev\showc
 - `Showcase` constructor params used in Task 6: `scope`, `title`, `description`, `titleTextStyle`, `descTextStyle`, `tooltipBackgroundColor`, `tooltipBorderRadius`, `tooltipPadding`, `targetBorderRadius`, `targetPadding`, `overlayColor`, `overlayOpacity`, `disableMovingAnimation`, `disableScaleAnimation`, `tooltipActions`, `tooltipActionConfig`.
 - The action-button type enum: this plan writes `TooltipDefaultActionType.next/.skip`; older versions call it `TooltipActionButtonType`. Use whichever the installed version exports.
 - The custom action constructor: this plan writes `TooltipActionButton.custom(button: ...)`; if the parameter is named differently (e.g. `widget`), use that name everywhere Task 6 uses it.
-- **Lifecycle semantics** (Task 7 depends on these — check the manager source):
-  - `ShowcaseView.register(scope: x)` when `x` is already registered: replace, no-op, or throw? If it throws, `_ensureRegistered` in Task 7 must catch it.
-  - `ShowcaseView.getNamed(x)` for an unregistered `x`: throws or auto-creates? Task 7 wraps it in try/catch either way.
-  - `dismiss()` with no showcase running: confirm it's a safe no-op; Task 7 additionally guards every `dismiss()` behind its own `_tourRunning` flag, so this is defense-in-depth.
+- **Lifecycle semantics — VERIFIED against showcaseview 5.1.0 (2026-07-22):**
+  - `ShowcaseView.register(scope: x)` on an already-registered `x` silently REPLACES it (drops the old scope's controller map — mounted Showcase widgets bound to the old instance go dead until rebuilt). Hence Task 7 registers only in initState (before this subtree's Showcase widgets mount) and never re-registers at start time.
+  - `ShowcaseView.getNamed(x)` on an unregistered `x` THROWS (plain `Exception`); it does not auto-create. Task 7 never unregisters, and wraps residual getNamed calls in try/catch.
+  - `dismiss()` never throws when idle, but it DOES fire `onDismiss` (with a null key) even when no showcase is running — Task 7's `_tourRunning` gate is what prevents a phantom dismissal from marking an unseen tour as seen.
 
 - [ ] **Step 3: Analyze + commit**
 
@@ -1038,34 +1038,31 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
   @override
   void initState() {
     super.initState();
-    _ensureRegistered();
-  }
-
-  /// Registers this tab's scope, tolerating an existing registration.
-  ///
-  /// Also called from [_start]: on a hub identity change (live admin
-  /// upgrade), the REPLACEMENT State's initState runs before the old
-  /// element's dispose finalizes — so the old dispose's unregister can kill
-  /// the registration this State just made. Re-ensuring at start time makes
-  /// that ordering harmless.
-  void _ensureRegistered() {
-    try {
-      ShowcaseView.register(
-        scope: _scope,
-        onFinish: _onTourEnd,
-        onDismiss: (_) => _onTourEnd(),
-      );
-    } catch (_) {
-      // Already registered with live callbacks — fine.
-    }
+    // register() REPLACES an existing scope of the same name (verified in
+    // showcaseview 5.1.0) — that makes this safe on a hub identity-change
+    // rebuild: the replacement State registers here, and this subtree's
+    // Showcase widgets mount afterwards, binding to THIS registration.
+    ShowcaseView.register(
+      scope: _scope,
+      onFinish: _onTourEnd,
+      onDismiss: (_) => _onTourEnd(),
+    );
   }
 
   @override
   void dispose() {
-    try {
-      ShowcaseView.getNamed(_scope).unregister();
-    } catch (_) {
-      // Scope already gone (identity-change replacement) — fine.
+    // Deliberately NO unregister: on an identity-change rebuild the new
+    // State's initState runs before this dispose finalizes, so unregistering
+    // here would tear down the registration the replacement just made (and
+    // getNamed on a torn-down scope throws). A stale registration is
+    // harmless — the next register replaces it. Just close a live overlay.
+    if (_tourRunning) {
+      _tourRunning = false; // suppress _onTourEnd: unfinished, not seen
+      try {
+        ShowcaseView.getNamed(_scope).dismiss();
+      } catch (_) {
+        // Scope already replaced/gone — nothing to close.
+      }
     }
     super.dispose();
   }
@@ -1132,9 +1129,14 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
         _markSeen();
         return;
       }
-      _ensureRegistered();
       _tourRunning = true;
-      ShowcaseView.getNamed(_scope).startShowCase(keys);
+      try {
+        ShowcaseView.getNamed(_scope).startShowCase(keys);
+      } catch (_) {
+        // getNamed throws if the scope vanished (shouldn't happen — nothing
+        // unregisters — but a dead tour must not crash the tab).
+        _tourRunning = false;
+      }
     });
   }
 }
@@ -1596,9 +1598,14 @@ git commit -m "Document feature-tour invariants and correct design doc roles"
 - Review pass 2 (2026-07-22) fixed three host defects before implementation:
   (1) an unconditional tab-switch `dismiss()` could fire `onDismiss` for a
   tour that never started and permanently mark it seen — now gated by
-  `_tourRunning`; (2) `dismiss()` ran during `build` (overlay teardown +
-  provider write mid-build) — now deferred post-frame; (3) on a hub identity
-  change the replacement State's `initState` runs before the old `dispose`
-  finalizes, so the old unregister could kill the new scope registration —
-  `_ensureRegistered()` re-registers at start time and both register/
-  unregister tolerate the other ordering.
+  `_tourRunning` (Task 1 verification later CONFIRMED dismiss() fires
+  onDismiss with a null key even when idle); (2) `dismiss()` ran during
+  `build` (overlay teardown + provider write mid-build) — now deferred
+  post-frame; (3) on a hub identity change the replacement State's
+  `initState` runs before the old `dispose` finalizes, so the old unregister
+  could kill the new scope registration. After Task 1's package verification
+  (register REPLACES an existing scope and drops its controller bindings;
+  getNamed THROWS on a missing scope), fix (3) became: register in initState
+  only (replace semantics + Showcase children mount after initState), NEVER
+  unregister, and dismiss-if-running in dispose with `_tourRunning` zeroed
+  first (sign-out mid-tour leaves the tour unseen, so it replays).
