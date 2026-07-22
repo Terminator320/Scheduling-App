@@ -75,6 +75,24 @@ rebuild of what the package does).
 
 Steps only ever anchor to real widgets; no free-floating "did you know" steps.
 
+## Visual design (chosen 2026-07-22)
+
+Mockups: https://claude.ai/code/artifact/db844a3f-4c21-42b3-90fb-0de536293638
+
+**Option A — anchored tooltip** was chosen as-is (no grafts from B/C):
+
+- Coach-mark bubble anchored to the highlighted widget with an arrow pointing
+  at it; scrim is a ~62 % navy overlay; the target widget stays fully lit with
+  a light outline.
+- Bubble: `surface` background, `AppRadius.r16`, title in `ink`
+  (bold, ~16 px), description in `subtle` (~13.5 px), footer row with
+  "n of N" counter (muted), a text "Skip" button, and a filled primary
+  pill "Next" button.
+- Implemented via showcaseview's custom-tooltip API so colors/radii come from
+  the theme (`ColorScheme` + `AppRadius`), not the package defaults.
+- Rejected: Option B (fixed bottom instruction card + progress dots) and
+  Option C (pulsing ring + one-line pill, tap-anywhere).
+
 ## Localization & accessibility
 
 - All step text via `gen_l10n`: new `tour_` key bucket, EN + FR in lockstep,
