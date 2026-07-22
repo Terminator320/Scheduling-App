@@ -18,6 +18,10 @@ import 'package:scheduling/features/calendar/widgets/fields/month_year_picker.da
 import 'package:scheduling/features/calendar/widgets/views/app_calendar_view.dart';
 import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
+import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
+import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
@@ -53,6 +57,14 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   bool _upgradingToAdmin = false;
   late DateFormat _monthLabelFormat;
   String _lastLocale = '';
+
+  late final List<TourStepId> _tourSteps = tourStepsFor(
+    AdaptiveDestination.calendar,
+    isAdmin: widget.isAdmin,
+  );
+  late final Map<TourStepId, GlobalKey> _tourKeys = {
+    for (final id in _tourSteps) id: GlobalKey(),
+  };
 
   /// The calendar uses the "Split" layout — month grid | day agenda, details via
   /// a sheet — whenever the nav rail is showing: landscape phones AND tablets.
@@ -224,6 +236,20 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     if (picked != null && mounted) _setFocusedDay(picked);
   }
 
+  Widget _tourStep(
+    TourStepId id, {
+    required Widget child,
+    BorderRadius? targetBorderRadius,
+  }) => TourShowcase(
+    showcaseKey: _tourKeys[id]!,
+    tab: AdaptiveDestination.calendar,
+    id: id,
+    index: _tourSteps.indexOf(id),
+    count: _tourSteps.length,
+    targetBorderRadius: targetBorderRadius,
+    child: child,
+  );
+
   /// The appointments stream this screen renders: business-wide for an admin,
   /// only the signed-in employee's otherwise. Shared by the watch in
   /// [_prepareBuild] and the listen in [build] so both hit the same instance.
@@ -296,56 +322,63 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
     final data = _prepareBuild(context);
 
-    return Scaffold(
-      key: _scaffoldKey,
-      appBar: AppTopBar(
-        title: context.l10n.common_calendar,
-        compact: context.isLandscape,
-        actions: _appBarActions(context, scheme),
-        bottom: PreferredSize(
-          // Scale with the user's text size so the month bar's single line of
-          // label text doesn't clip at large accessibility scales (1.4x+).
-          preferredSize: Size.fromHeight(
-            MediaQuery.textScalerOf(
-              context,
-            ).scale(context.isLandscape ? 22 : 28),
-          ),
-          child: _CalendarMonthBar(
-            monthLabel: data.monthLabel,
-            jobLabel: data.jobLabel,
-            onPickMonth: _pickMonth,
+    return FeatureTourHost(
+      tab: AdaptiveDestination.calendar,
+      isAdmin: widget.isAdmin,
+      ready: !data.isLoading,
+      stepKeys: _tourKeys,
+      child: Scaffold(
+        key: _scaffoldKey,
+        appBar: AppTopBar(
+          title: context.l10n.common_calendar,
+          compact: context.isLandscape,
+          actions: _appBarActions(context, scheme),
+          bottom: PreferredSize(
+            // Scale with the user's text size so the month bar's single line
+            // of label text doesn't clip at large accessibility scales
+            // (1.4x+).
+            preferredSize: Size.fromHeight(
+              MediaQuery.textScalerOf(
+                context,
+              ).scale(context.isLandscape ? 22 : 28),
+            ),
+            child: _CalendarMonthBar(
+              monthLabel: data.monthLabel,
+              jobLabel: data.jobLabel,
+              onPickMonth: _pickMonth,
+            ),
           ),
         ),
-      ),
-      floatingActionButton: _addAppointmentFab(context),
-      endDrawer: SettingsDrawer.endDrawerFor(
-        context,
-        isAdmin: widget.isAdmin,
-        employeeId: widget.employeeId,
-        userName: data.userName,
-      ),
-      body: AdaptiveShell(
-        currentDestination: AdaptiveDestination.calendar,
-        isAdmin: widget.isAdmin,
-        employeeId: widget.employeeId,
-        userName: data.userName,
-        child: SafeArea(
-          child: Stack(
-            children: [
-              _content(
-                isLoading: data.isLoading,
-                colorMap: data.colorMap,
-                nameMap: data.nameMap,
-              ),
-              Positioned(
-                bottom: AppSpacing.sp16,
-                left: AppSpacing.sp16,
-                child: _TodayFab(
-                  visible: _showTodayButton,
-                  onPressed: _goToToday,
+        floatingActionButton: _addAppointmentFab(context),
+        endDrawer: SettingsDrawer.endDrawerFor(
+          context,
+          isAdmin: widget.isAdmin,
+          employeeId: widget.employeeId,
+          userName: data.userName,
+        ),
+        body: AdaptiveShell(
+          currentDestination: AdaptiveDestination.calendar,
+          isAdmin: widget.isAdmin,
+          employeeId: widget.employeeId,
+          userName: data.userName,
+          child: SafeArea(
+            child: Stack(
+              children: [
+                _content(
+                  isLoading: data.isLoading,
+                  colorMap: data.colorMap,
+                  nameMap: data.nameMap,
                 ),
-              ),
-            ],
+                Positioned(
+                  bottom: AppSpacing.sp16,
+                  left: AppSpacing.sp16,
+                  child: _TodayFab(
+                    visible: _showTodayButton,
+                    onPressed: _goToToday,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -353,15 +386,19 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   }
 
   List<Widget> _appBarActions(BuildContext context, ColorScheme scheme) => [
-    IconButton(
-      icon: Icon(Icons.alt_route_rounded, color: scheme.onPrimary),
-      tooltip: context.l10n.calendar_dayRouteTitle,
-      onPressed: () => Navigator.pushNamed(
-        context,
-        AppRoutes.dayRoute,
-        arguments: DayRouteArgs(
-          isAdmin: widget.isAdmin,
-          employeeId: widget.employeeId,
+    _tourStep(
+      TourStepId.calendarDayRoute,
+      targetBorderRadius: BorderRadius.circular(AppRadius.rFull),
+      child: IconButton(
+        icon: Icon(Icons.alt_route_rounded, color: scheme.onPrimary),
+        tooltip: context.l10n.calendar_dayRouteTitle,
+        onPressed: () => Navigator.pushNamed(
+          context,
+          AppRoutes.dayRoute,
+          arguments: DayRouteArgs(
+            isAdmin: widget.isAdmin,
+            employeeId: widget.employeeId,
+          ),
         ),
       ),
     ),
@@ -376,29 +413,36 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
   Widget? _addAppointmentFab(BuildContext context) {
     if (!widget.isAdmin) return null;
-    return FloatingActionButton(
-      heroTag: 'addFab',
-      tooltip: context.l10n.calendar_newAppointment,
-      onPressed: () async {
-        await showAddEventPopup(
-          context,
-          initialDate: _selectedDay ?? _focusedDay,
-        );
-      },
-      child: const Icon(Icons.add),
+    return _tourStep(
+      TourStepId.calendarAddAppointment,
+      targetBorderRadius: BorderRadius.circular(AppRadius.r16),
+      child: FloatingActionButton(
+        heroTag: 'addFab',
+        tooltip: context.l10n.calendar_newAppointment,
+        onPressed: () async {
+          await showAddEventPopup(
+            context,
+            initialDate: _selectedDay ?? _focusedDay,
+          );
+        },
+        child: const Icon(Icons.add),
+      ),
     );
   }
 
-  AppCalendar _buildCalendar(Map<String, Color> colorMap, double rowHeight) =>
-      AppCalendar(
-        focusedDay: _focusedDay,
-        selectedDay: _selectedDay,
-        onDaySelected: _onDaySelected,
-        rowHeight: rowHeight,
-        eventLoader: _getEventsForDay,
-        onCalendarCreated: (_) {},
-        onPageChanged: _setFocusedDay,
-        employeeColorMap: colorMap,
+  Widget _buildCalendar(Map<String, Color> colorMap, double rowHeight) =>
+      _tourStep(
+        TourStepId.calendarGrid,
+        child: AppCalendar(
+          focusedDay: _focusedDay,
+          selectedDay: _selectedDay,
+          onDaySelected: _onDaySelected,
+          rowHeight: rowHeight,
+          eventLoader: _getEventsForDay,
+          onCalendarCreated: (_) {},
+          onPageChanged: _setFocusedDay,
+          employeeColorMap: colorMap,
+        ),
       );
 
   Widget _content({
@@ -406,12 +450,15 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     required Map<String, Color> colorMap,
     required Map<String, String> nameMap,
   }) {
-    final eventList = EventList(
-      events: _selectedEvents,
-      nameMap: nameMap,
-      colorMap: colorMap,
-      isLoading: isLoading,
-      isAdmin: widget.isAdmin,
+    final eventList = _tourStep(
+      TourStepId.calendarDayList,
+      child: EventList(
+        events: _selectedEvents,
+        nameMap: nameMap,
+        colorMap: colorMap,
+        isLoading: isLoading,
+        isAdmin: widget.isAdmin,
+      ),
     );
 
     if (_splitCalendar) {
