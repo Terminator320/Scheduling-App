@@ -10,6 +10,19 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.35.1+59] - 2026-07-21
+### Fixed
+- **Notifications for jobs with accented names or addresses are no longer
+  dropped.** A push for a job whose client name or address used French accents
+  (é, à, ç…) could be silently skipped because the extra bytes those letters
+  take were miscounted, pushing the notification over its size limit. Those
+  pushes now go through.
+- **The live job card updates to the new time when a job is rescheduled.**
+  After moving a job you were already driving to, its Lock Screen card could
+  keep showing the old time — flipping to "On site" too early or too late. The
+  card now follows the rescheduled time, including for a repeating job's
+  individual visits.
+
 ## [1.35.0+58] - 2026-07-21
 ### Added
 - **The live job card counts down to the end of your visit.** Once the job's
