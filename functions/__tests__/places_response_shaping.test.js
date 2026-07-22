@@ -1,0 +1,103 @@
+"use strict";
+
+/**
+ * Response-shaping tests for placesAutocomplete and placesGetDetails — the
+ * defensive `Array.isArray(...) ? ... : []` / string guards that keep a
+ * malformed upstream body from reaching the Flutter client. The onCall
+ * modules are lazily loaded (require-safe per the project convention);
+ * assertAdmin + enforceDurableRateLimit are mocked (they need live Firestore),
+ * while the real payload validators stay real. Reverse-geocode shaping is
+ * covered in places_reverse_geocode.test.js.
+ */
+jest.mock("../security", () => {
+  const actual = jest.requireActual("../security");
+  return {
+    ...actual,
+    assertAdmin: jest.fn().mockResolvedValue(undefined),
+    enforceDurableRateLimit: jest.fn().mockResolvedValue({
+      refund: jest.fn().mockResolvedValue(undefined),
+    }),
+  };
+});
+
+const {placesAutocomplete, placesGetDetails} = require("../places");
+
+const AUTH = {uid: "admin-uid"};
+
+/**
+ * A fetch-compatible OK response around a decoded JSON body.
+ * @param {object} body
+ * @return {{ok: boolean, status: number, json: function(): !Promise<object>}}
+ */
+function okResponse(body) {
+  return {ok: true, status: 200, json: async () => body};
+}
+
+const runAutocomplete = (data) =>
+  placesAutocomplete.run({data, auth: AUTH});
+const runDetails = (data) => placesGetDetails.run({data, auth: AUTH});
+
+describe("placesAutocomplete response shaping", () => {
+  test("passes through the upstream suggestions array", async () => {
+    const suggestions = [
+      {placePrediction: {placeId: "p1", text: {text: "14 Elm St"}}},
+    ];
+    global.fetch = jest.fn().mockResolvedValue(okResponse({suggestions}));
+
+    const result = await runAutocomplete({input: "14 Elm"});
+    expect(result).toEqual({suggestions});
+  });
+
+  test("coerces a missing suggestions field to an empty array", async () => {
+    global.fetch = jest.fn().mockResolvedValue(okResponse({}));
+
+    const result = await runAutocomplete({input: "nowhere"});
+    expect(result).toEqual({suggestions: []});
+  });
+
+  test("coerces a non-array suggestions field to an empty array", async () => {
+    global.fetch = jest.fn()
+        .mockResolvedValue(okResponse({suggestions: "unexpected"}));
+
+    const result = await runAutocomplete({input: "weird"});
+    expect(result).toEqual({suggestions: []});
+  });
+
+  test("rejects a missing input before any upstream call", async () => {
+    global.fetch = jest.fn();
+    await expect(runAutocomplete({})).rejects.toThrow();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("placesGetDetails response shaping", () => {
+  test("returns formattedAddress + addressComponents", async () => {
+    const body = {
+      formattedAddress: "14 Elm St, Montréal, QC",
+      addressComponents: [{longText: "14"}],
+    };
+    global.fetch = jest.fn().mockResolvedValue(okResponse(body));
+
+    const result = await runDetails({placeId: "ChIJ_abc123"});
+    expect(result).toEqual({
+      formattedAddress: "14 Elm St, Montréal, QC",
+      addressComponents: [{longText: "14"}],
+    });
+  });
+
+  test("defaults a missing/mistyped body to empty values", async () => {
+    global.fetch = jest.fn().mockResolvedValue(
+        okResponse({formattedAddress: 42, addressComponents: "nope"}),
+    );
+
+    const result = await runDetails({placeId: "ChIJ_abc123"});
+    expect(result).toEqual({formattedAddress: "", addressComponents: []});
+  });
+
+  test("rejects a placeId that fails the id pattern", async () => {
+    global.fetch = jest.fn();
+    await expect(runDetails({placeId: "bad id/../x"}))
+        .rejects.toThrow(/invalid-placeId/);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+});

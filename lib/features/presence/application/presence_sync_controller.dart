@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/permissions/location_permission_service.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
+import 'package:scheduling/core/utils/reentrant_sync.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart'
@@ -81,7 +82,7 @@ Duration? trailingFlushDelay({
 /// Driven by `main.dart` on every `currentUserDocProvider` emission (mirrors
 /// [PushRegistrationController]); "backgrounded app" depth — tracking survives
 /// backgrounding/screen-off but dies on force-quit until the next app open.
-class PresenceSyncController {
+class PresenceSyncController with ReentrantSync {
   PresenceSyncController(this._ref, {FirebaseAuth? auth})
     : _auth = auth ?? FirebaseAuth.instance;
 
@@ -92,8 +93,6 @@ class PresenceSyncController {
   Timer? _heartbeat;
   Timer? _trailingFlush;
   AppLifecycleListener? _lifecycle;
-  bool _busy = false;
-  bool _pendingResync = false;
   String? _trackedUid;
   String? _docId;
   Position? _lastPosition;
@@ -103,15 +102,11 @@ class PresenceSyncController {
 
   /// Idempotent. A no-op for admins / signed-out users (and it tears the
   /// stream down when the gate stops passing). Safe to call on every
-  /// account-doc emission and on app resume.
-  Future<void> sync() async {
-    // A concurrent call would otherwise be silently dropped; remember it and
-    // re-run once in the finally so the latest account state always wins.
-    if (_busy) {
-      _pendingResync = true;
-      return;
-    }
-    _busy = true;
+  /// account-doc emission and on app resume. Concurrent calls coalesce via
+  /// [ReentrantSync] so the latest account state always wins.
+  Future<void> sync() => runCoalesced(_syncGuarded);
+
+  Future<void> _syncGuarded() async {
     try {
       final signedIn = _auth.currentUser != null;
       final doc = _ref.read(currentUserDocProvider).value ?? const {};
@@ -155,12 +150,6 @@ class PresenceSyncController {
       // sync() is called via `unawaited` — never let a failure escape as an
       // uncaught async error; report non-fatal instead.
       _logger.warn('PRESENCE sync failed', e, st);
-    } finally {
-      _busy = false;
-      if (_pendingResync) {
-        _pendingResync = false;
-        unawaited(sync());
-      }
     }
   }
 

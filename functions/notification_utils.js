@@ -581,8 +581,13 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
     // rather than risking the push; the widget then refreshes on the next app
     // run, exactly as it did before it rode along on pushes. Copied first —
     // msgData aliases the caller's `data` when there is no augmentData.
+    // Measure UTF-8 BYTES, not string .length: this is a bilingual (FR) app, so
+    // accented client names/addresses (é, à, ç…) are 2 bytes but 1 code unit —
+    // a char count under-measures the payload and can let an oversized data map
+    // through, dropping the whole push.
     if (typeof msgData.widgetPayload === "string" &&
-        msgData.widgetPayload.length > WIDGET_PAYLOAD_MAX_BYTES) {
+        Buffer.byteLength(msgData.widgetPayload, "utf8") >
+          WIDGET_PAYLOAD_MAX_BYTES) {
       msgData = {...msgData};
       delete msgData.widgetPayload;
     }
@@ -822,14 +827,47 @@ async function handleAppointmentWrite(id, before, after, deps) {
   // One window read per distinct employee across this write's events.
   const windows = new Map();
   for (const {employeeDocId, kind} of events) {
+    const ctx = _contextFor(kind, before, after);
+    // Live Activity lifecycle: a reschedule refreshes a card that's already on
+    // the Lock Screen. Card ENDS don't ride these events — the diff suppresses
+    // past-start jobs, so every terminal end (cancel, delete, unassign, done)
+    // is handled unconditionally by endCardOnTerminal above. `assigned` starts
+    // NO card — a card is started only by the travel-aware "leave now" sweep.
+    //
+    // The refresh runs BEFORE the series claim gate, unlike the push: the card
+    // is per-OCCURRENCE, but the claim collapses an "all future" reschedule to
+    // one push per (employee, kind) and WHICH sibling wins is nondeterministic.
+    // Gating the refresh on the claim would leave the live card stale whenever
+    // the winning sibling isn't the occurrence the tech's card shows. Each
+    // sibling fires its own trigger, so attempting the refresh per occurrence
+    // updates exactly the right card; updateLiveActivity is a cheap no-op (one
+    // marker read, no push) for any occurrence that isn't the live card, and a
+    // deactivated employee has no tokens/marker so it can't resurrect a card
+    // (that's why the old `delivered > 0` guard is no longer needed here).
+    // Best-effort: never throws, never affects `sent`.
+    if (kind === "rescheduled") {
+      await updateLiveActivity(deps, {
+        appointmentId: String(id),
+        employeeDocId,
+        ctx: {
+          clientName: ctx.clientName,
+          address: ctx.address,
+          startTime: ctx.startTime,
+          endTime: ((after || before) || {}).endTime,
+          leaveAt: null,
+          travelMinutes: null,
+        },
+        nowDate: now,
+      });
+    }
     if (seriesId !== "") {
       const mine = await claimSeriesNotice(deps, {
         seriesId, seriesOpId: freshOpId, kind, employeeDocId, nowDate: now,
       });
-      // Claimed by a sibling in this same batch — it sends for the series.
+      // Claimed by a sibling in this same batch — it sends the push for the
+      // series (the card was already refreshed per-occurrence above).
       if (!mine) continue;
     }
-    const ctx = _contextFor(kind, before, after);
     const data = {appointmentId: String(id), kind};
     if (!windows.has(employeeDocId)) {
       windows.set(
@@ -852,31 +890,6 @@ async function handleAppointmentWrite(id, before, after, deps) {
         }),
     );
     sent += delivered;
-    // Live Activity lifecycle: a reschedule refreshes a card that's already
-    // on the Lock Screen. Card ENDS don't ride these events — the diff
-    // suppresses past-start jobs, so every terminal end (cancel, delete,
-    // unassign, done) is handled unconditionally by endCardOnTerminal above.
-    // `assigned` starts NO card — a card is started only by the travel-aware
-    // "leave now" sweep, which is what the card is about. Best-effort: never
-    // throws and never affects `sent`. `delivered > 0` proves THIS recipient
-    // passed sendToEmployee's active-and-allowed-role filter without
-    // re-reading the user doc, so a refresh can't resurrect a card for a
-    // deactivated account.
-    if (kind === "rescheduled" && delivered > 0) {
-      await updateLiveActivity(deps, {
-        appointmentId: String(id),
-        employeeDocId,
-        ctx: {
-          clientName: ctx.clientName,
-          address: ctx.address,
-          startTime: ctx.startTime,
-          endTime: ((after || before) || {}).endTime,
-          leaveAt: null,
-          travelMinutes: null,
-        },
-        nowDate: now,
-      });
-    }
   }
   return {events: events.length, sent};
 }

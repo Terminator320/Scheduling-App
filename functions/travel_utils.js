@@ -619,7 +619,7 @@ async function runTravelAwareReminderSweep(deps) {
  * Driven off the card markers, NOT a query over appointments: the markers are
  * the only record of which techs actually have a card, so this reads one tiny
  * collection instead of every job that started in the last few minutes, and
- * `setCardPhase` inside [updateLiveActivity] makes each card flip exactly once.
+ * `setCardStart` inside [updateLiveActivity] makes each card flip exactly once.
  * Best-effort — every failure is swallowed so the reminder sweep is unaffected.
  * @param {!Object} deps `{db, now, logger, apnsAuth}`.
  * @return {!Promise<number>} Cards updated.

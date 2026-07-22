@@ -9,6 +9,7 @@ import 'package:live_activities/models/activity_update.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/utils/app_language.dart';
+import 'package:scheduling/core/utils/reentrant_sync.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart'
@@ -65,7 +66,7 @@ bool shouldRegisterLiveActivity({
 /// who turned Live Activities off, or any failure here registers nothing and
 /// behaves exactly as today — the `leaveNow` push fires independently and is
 /// unchanged.
-class LiveActivityRegistrationController {
+class LiveActivityRegistrationController with ReentrantSync {
   LiveActivityRegistrationController(
     this._ref, {
     FirebaseAuth? auth,
@@ -88,8 +89,6 @@ class LiveActivityRegistrationController {
 
   StreamSubscription<String>? _pushToStartSub;
   StreamSubscription<ActivityUpdate>? _activitySub;
-  bool _busy = false;
-  bool _pendingResync = false;
   bool _pluginReady = false;
   String? _docId;
   String? _uid;
@@ -106,35 +105,25 @@ class LiveActivityRegistrationController {
 
   /// Idempotent. A no-op off iOS, for admins/employees who aren't active, and
   /// for devices that can't host a push-started card. Safe to call on every
-  /// account-doc emission and on language change (re-upserts the locale).
+  /// account-doc emission and on language change (re-upserts the locale). A
+  /// concurrent call (e.g. a language change landing mid-sync) coalesces via
+  /// [ReentrantSync] and re-runs once so the latest locale/doc always wins.
   Future<void> sync() async {
     if (!Platform.isIOS) return;
-    // A concurrent call (e.g. a language change landing mid-sync) would
-    // otherwise be silently dropped — remember it and re-run once in the
-    // finally so the latest locale/doc always wins.
-    if (_busy) {
-      _pendingResync = true;
-      return;
-    }
-    // Set BEFORE the first await below — the preference read is async, and an
-    // unguarded await here would let a second sync() slip past the check above.
-    _busy = true;
+    await runCoalesced(_runSync);
+  }
+
+  Future<void> _runSync() async {
     try {
       await _syncGuarded();
     } catch (e, st) {
       // sync() is called via `unawaited` — never let a failure escape as an
       // uncaught async error (that would be recorded as a fatal crash).
       _logger.warn('LIVE-ACT sync failed', e, st);
-    } finally {
-      _busy = false;
-      if (_pendingResync) {
-        _pendingResync = false;
-        unawaited(sync());
-      }
     }
   }
 
-  /// The body of [sync], run with `_busy` already held.
+  /// The body of [sync], run under the [ReentrantSync] guard.
   Future<void> _syncGuarded() async {
     // User opted out in Settings. The toggle itself calls [unregister] to end
     // the live card and drop the token rows; this only stops a later

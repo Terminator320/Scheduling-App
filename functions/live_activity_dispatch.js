@@ -25,7 +25,6 @@ const {
   buildEndPayload,
   liveActivityStrings,
   phaseFor,
-  PHASE_ON_SITE,
 } = require("./live_activity_utils");
 const {
   listPushToStartTokens,
@@ -33,7 +32,7 @@ const {
   deleteActivityToken,
   writeCardMarker,
   readCardMarker,
-  setCardPhase,
+  setCardStart,
   clearCardMarker,
 } = require("./live_activity_registry");
 const {sendLiveActivityPush} = require("./apns_client");
@@ -251,9 +250,14 @@ async function updateLiveActivity(deps, args) {
       });
       updated += await _sendToRow(deps, row, payload, "update");
     }
-    // Stamping the flip is what makes the on-site backstop fire exactly once.
-    if (updated > 0 && phase === PHASE_ON_SITE) {
-      await setCardPhase(deps, {employeeDocId, phase: PHASE_ON_SITE});
+    // Keep the marker's startTime authoritative on reschedule: the on-site
+    // backstop (`listCardsDueForOnSite`) keys the flip off `marker.startTime`,
+    // so a stale value flips the card at the OLD start. Writing the current
+    // `phase` here also stamps the on-site flip so the backstop fires exactly
+    // once.
+    if (updated > 0) {
+      await setCardStart(
+          deps, {employeeDocId, startTime: ctx.startTime, phase});
     }
     return updated;
   } catch (err) {

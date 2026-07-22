@@ -16,7 +16,7 @@ jest.mock("../live_activity_registry", () => ({
   deleteActivityToken: jest.fn(),
   writeCardMarker: jest.fn(),
   readCardMarker: jest.fn(),
-  setCardPhase: jest.fn(),
+  setCardStart: jest.fn(),
   clearCardMarker: jest.fn(),
 }));
 
@@ -27,7 +27,7 @@ const {
   deleteActivityToken,
   writeCardMarker,
   readCardMarker,
-  setCardPhase,
+  setCardStart,
   clearCardMarker,
 } = require("../live_activity_registry");
 const {
@@ -87,7 +87,7 @@ beforeEach(() => {
   listUpdateTokens.mockResolvedValue([]);
   deleteActivityToken.mockResolvedValue(true);
   writeCardMarker.mockResolvedValue(true);
-  setCardPhase.mockResolvedValue(true);
+  setCardStart.mockResolvedValue(true);
   clearCardMarker.mockResolvedValue(true);
   readCardMarker.mockResolvedValue({
     employeeDocId: "emp1", appointmentId: "appt1", phase: "travel",
@@ -216,6 +216,11 @@ describe("updateLiveActivity", () => {
     const {payload} = sendLiveActivityPush.mock.calls[0][0];
     expect(payload.aps.event).toBe("update");
     expect(payload.aps["attributes-type"]).toBeUndefined();
+    // A reschedule keeps the marker's startTime authoritative so the on-site
+    // backstop flips off the CURRENT start, not the stale one.
+    expect(setCardStart).toHaveBeenCalledWith(
+        expect.anything(),
+        {employeeDocId: "emp1", startTime: START, phase: "travel"});
   });
 
   test("flips to the on-site phase once startTime has passed", async () => {
@@ -231,8 +236,9 @@ describe("updateLiveActivity", () => {
     const {payload} = sendLiveActivityPush.mock.calls[0][0];
     expect(payload.aps["content-state"].phase).toBe("onSite");
     // Stamped so the backstop pass flips each card exactly once.
-    expect(setCardPhase).toHaveBeenCalledWith(
-        expect.anything(), {employeeDocId: "emp1", phase: "onSite"});
+    expect(setCardStart).toHaveBeenCalledWith(
+        expect.anything(),
+        {employeeDocId: "emp1", startTime: START, phase: "onSite"});
   });
 
   test("leaves another job's live card alone", async () => {
