@@ -13,6 +13,10 @@ import 'package:scheduling/features/employees/widgets/cards/employee_card.dart';
 import 'package:scheduling/features/employees/widgets/sheets/employee_details_sheet.dart';
 import 'package:scheduling/features/employees/widgets/sheets/employee_form_sheet.dart';
 import 'package:scheduling/features/employees/widgets/views/employee_details_view.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
+import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
+import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
@@ -39,6 +43,28 @@ class AddEmployeePage extends ConsumerStatefulWidget {
 class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
   final TextEditingController _searchController = TextEditingController();
   EmployeeRecord? _selectedEmployee;
+
+  late final List<TourStepId> _tourSteps = tourStepsFor(
+    AdaptiveDestination.employees,
+    isAdmin: widget.isAdmin,
+  );
+  late final Map<TourStepId, GlobalKey> _tourKeys = {
+    for (final id in _tourSteps) id: GlobalKey(),
+  };
+
+  Widget _tourStep(
+    TourStepId id, {
+    required Widget child,
+    BorderRadius? targetBorderRadius,
+  }) => TourShowcase(
+    showcaseKey: _tourKeys[id]!,
+    tab: AdaptiveDestination.employees,
+    id: id,
+    index: _tourSteps.indexOf(id),
+    count: _tourSteps.length,
+    targetBorderRadius: targetBorderRadius,
+    child: child,
+  );
 
   @override
   void dispose() {
@@ -124,11 +150,24 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
       ),
-      bottom: AppSearchBar(
-        textScaler: MediaQuery.textScalerOf(context),
-        controller: _searchController,
-        hintText: context.l10n.employees_searchEmployees,
-      ),
+      bottom: _tourSteps.contains(TourStepId.employeesSearch)
+          ? TourShowcaseBar(
+              showcaseKey: _tourKeys[TourStepId.employeesSearch]!,
+              tab: AdaptiveDestination.employees,
+              id: TourStepId.employeesSearch,
+              index: _tourSteps.indexOf(TourStepId.employeesSearch),
+              count: _tourSteps.length,
+              bar: AppSearchBar(
+                textScaler: MediaQuery.textScalerOf(context),
+                controller: _searchController,
+                hintText: context.l10n.employees_searchEmployees,
+              ),
+            )
+          : AppSearchBar(
+              textScaler: MediaQuery.textScalerOf(context),
+              controller: _searchController,
+              hintText: context.l10n.employees_searchEmployees,
+            ),
     );
   }
 
@@ -260,45 +299,55 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
           .warn('employeesStreamProvider error', next.error, next.stackTrace);
     });
     final selected = _liveSelectedEmployee();
-    return Scaffold(
-      appBar: _buildAppBar(),
-      endDrawer: SettingsDrawer.endDrawerFor(
-        context,
-        isAdmin: widget.isAdmin,
-        employeeId: widget.employeeId,
-      ),
-      floatingActionButton: widget.isAdmin
-          ? FloatingActionButton(
-              // Unique across the hub: the IndexedStack keeps every tab's
-              // Scaffold (and FAB) mounted at once, so a default/shared hero
-              // tag collides with another tab's FAB ("multiple heroes share
-              // the same tag").
-              heroTag: 'employeesAddFab',
-              onPressed: _openEmployeeSheet,
-              tooltip: context.l10n.employees_inviteEmployee,
-              child: const Icon(Icons.add),
-            )
-          : null,
-      // Only the master list listens to the search controller, so typing
-      // rebuilds just the list — not the (search-independent) detail pane.
-      body: AdaptiveShell(
-        currentDestination: AdaptiveDestination.employees,
-        isAdmin: widget.isAdmin,
-        employeeId: widget.employeeId,
-        child: MasterDetailScaffold(
-          master: ListenableBuilder(
-            listenable: _searchController,
-            builder: (context, _) => _buildMasterList(),
-          ),
-          detail: selected == null
-              ? null
-              : EmployeeDetailsView(
-                  key: ValueKey(selected.id),
-                  employee: selected,
-                  isCurrentUserAdmin: widget.isAdmin,
-                  onAction: (action) => _handleEmployeeAction(action, selected),
+    return FeatureTourHost(
+      tab: AdaptiveDestination.employees,
+      isAdmin: widget.isAdmin,
+      stepKeys: _tourKeys,
+      child: Scaffold(
+        appBar: _buildAppBar(),
+        endDrawer: SettingsDrawer.endDrawerFor(
+          context,
+          isAdmin: widget.isAdmin,
+          employeeId: widget.employeeId,
+        ),
+        floatingActionButton: widget.isAdmin
+            ? _tourStep(
+                TourStepId.employeesAdd,
+                targetBorderRadius: BorderRadius.circular(AppRadius.r16),
+                child: FloatingActionButton(
+                  // Unique across the hub: the IndexedStack keeps every tab's
+                  // Scaffold (and FAB) mounted at once, so a default/shared hero
+                  // tag collides with another tab's FAB ("multiple heroes share
+                  // the same tag").
+                  heroTag: 'employeesAddFab',
+                  onPressed: _openEmployeeSheet,
+                  tooltip: context.l10n.employees_inviteEmployee,
+                  child: const Icon(Icons.add),
                 ),
-          placeholder: _buildDetailPlaceholder(),
+              )
+            : null,
+        // Only the master list listens to the search controller, so typing
+        // rebuilds just the list — not the (search-independent) detail pane.
+        body: AdaptiveShell(
+          currentDestination: AdaptiveDestination.employees,
+          isAdmin: widget.isAdmin,
+          employeeId: widget.employeeId,
+          child: MasterDetailScaffold(
+            master: ListenableBuilder(
+              listenable: _searchController,
+              builder: (context, _) => _buildMasterList(),
+            ),
+            detail: selected == null
+                ? null
+                : EmployeeDetailsView(
+                    key: ValueKey(selected.id),
+                    employee: selected,
+                    isCurrentUserAdmin: widget.isAdmin,
+                    onAction: (action) =>
+                        _handleEmployeeAction(action, selected),
+                  ),
+            placeholder: _buildDetailPlaceholder(),
+          ),
         ),
       ),
     );
