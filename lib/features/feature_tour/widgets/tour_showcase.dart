@@ -62,9 +62,8 @@ class TourShowcase extends StatelessWidget {
       overlayOpacity: 0.62,
       disableMovingAnimation: noMotion,
       disableScaleAnimation: noMotion,
+      // Package defaults already give position: inside + spaceBetween.
       tooltipActionConfig: const TooltipActionConfig(
-        position: TooltipActionPosition.inside,
-        alignment: MainAxisAlignment.spaceBetween,
         actionGap: AppSpacing.sp8,
       ),
       tooltipActions: [
