@@ -32,7 +32,7 @@ const {
   pruneExpiredActivityTokens,
   writeCardMarker,
   readCardMarker,
-  setCardPhase,
+  setCardStart,
   clearCardMarker,
   listCardsDueForOnSite,
   pruneExpiredCardMarkers,
@@ -420,23 +420,28 @@ describe("card marker round-trip", () => {
         expect(marker.startTime).toBeNull();
       });
 
-  test("setCardPhase merges — it only flips the phase", async () => {
-    const {db} = fakeDb();
-    const deps = {db, now: NOW, logger: fakeLogger()};
-    await writeCardMarker(deps, {
-      employeeDocId: "emp-1",
-      appointmentId: "appt-9",
-      startTime: NOW,
-      phase: "travel",
-    });
+  test("setCardStart merges — refreshes startTime + phase, keeps the rest",
+      async () => {
+        const {db} = fakeDb();
+        const deps = {db, now: NOW, logger: fakeLogger()};
+        await writeCardMarker(deps, {
+          employeeDocId: "emp-1",
+          appointmentId: "appt-9",
+          startTime: NOW,
+          phase: "travel",
+        });
 
-    expect(await setCardPhase(deps, {employeeDocId: "emp-1", phase: "onSite"}))
-        .toBe(true);
+        const newStart = new Date("2026-07-19T15:00:00.000Z");
+        expect(await setCardStart(deps, {
+          employeeDocId: "emp-1", startTime: newStart, phase: "onSite",
+        })).toBe(true);
 
-    const marker = await readCardMarker(deps, {employeeDocId: "emp-1"});
-    expect(marker.phase).toBe("onSite");
-    expect(marker.appointmentId).toBe("appt-9");
-  });
+        const marker = await readCardMarker(deps, {employeeDocId: "emp-1"});
+        expect(marker.phase).toBe("onSite");
+        expect(marker.startTime).toEqual(newStart);
+        // appointmentId is preserved (merge, not an absolute overwrite).
+        expect(marker.appointmentId).toBe("appt-9");
+      });
 
   test("clearCardMarker deletes it; a later read is null", async () => {
     const {db} = fakeDb();
@@ -496,8 +501,9 @@ describe("card marker guards and failure posture", () => {
     const deps = {db, logger: fakeLogger()};
 
     expect(await readCardMarker(deps, {employeeDocId: ""})).toBeNull();
-    expect(await setCardPhase(deps, {employeeDocId: "", phase: "onSite"}))
-        .toBe(false);
+    expect(await setCardStart(deps, {
+      employeeDocId: "", startTime: NOW, phase: "onSite",
+    })).toBe(false);
     expect(await clearCardMarker(deps, {employeeDocId: ""})).toBe(false);
     expect(cardOps).toHaveLength(0);
   });
@@ -518,13 +524,13 @@ describe("card marker guards and failure posture", () => {
     expect(logger.warn.mock.calls[0][0]).toContain("card marker read failed");
   });
 
-  test("a failed phase write returns false and warns", async () => {
+  test("a failed start write returns false and warns", async () => {
     const {db} = fakeDb({cardWriteFails: true});
     const logger = fakeLogger();
-    expect(await setCardPhase({db, logger}, {
-      employeeDocId: "e", phase: "onSite",
+    expect(await setCardStart({db, logger}, {
+      employeeDocId: "e", startTime: NOW, phase: "onSite",
     })).toBe(false);
-    expect(logger.warn.mock.calls[0][0]).toContain("card phase write failed");
+    expect(logger.warn.mock.calls[0][0]).toContain("card start write failed");
   });
 
   test("a failed clear returns false and warns", async () => {

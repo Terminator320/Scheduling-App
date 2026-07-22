@@ -18,7 +18,7 @@ jest.mock("../live_activity_registry", () => ({
   listCardsDueForOnSite: jest.fn().mockResolvedValue([]),
   clearCardMarker: jest.fn().mockResolvedValue(undefined),
   writeCardMarker: jest.fn().mockResolvedValue(undefined),
-  setCardPhase: jest.fn().mockResolvedValue(undefined),
+  setCardStart: jest.fn().mockResolvedValue(undefined),
   listPushToStartTokens: jest.fn().mockResolvedValue([]),
   listUpdateTokens: jest.fn().mockResolvedValue([]),
   deleteActivityToken: jest.fn().mockResolvedValue(undefined),

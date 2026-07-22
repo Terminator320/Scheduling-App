@@ -10,6 +10,12 @@ import 'package:scheduling/features/presence/domain/models/presence_fix.dart';
 /// stream instead of spamming a denied write every heartbeat).
 enum PresenceWriteResult { ok, failed, denied }
 
+/// Upper bound on the admin live-map presence feed — one doc per active staff
+/// member, so this is far above any real roster, but it mirrors the users
+/// streams' `_userStreamLimit` posture so a rules/data anomaly can't stream an
+/// unbounded snapshot to the client.
+const _presenceStreamLimit = 500;
+
 /// Reads/writes the single `users/{docId}/presence/location` doc that feeds
 /// the server's travel-time "leave now" reminders. Injected Firestore (never
 /// `FirebaseFirestore.instance` from UI); logs and swallows failures so a
@@ -79,7 +85,11 @@ class PresenceRepository {
   /// Unlike the write paths above, stream errors PROPAGATE to the listener
   /// (the screen surfaces them) rather than being swallowed.
   Stream<List<PresenceFix>> watchAllPresence() => retryStream(
-    () => _firestore.collectionGroup('presence').snapshots().map(_toFixes),
+    () => _firestore
+        .collectionGroup('presence')
+        .limit(_presenceStreamLimit)
+        .snapshots()
+        .map(_toFixes),
     retryWhen: _isAuthPropagationDenied,
   );
 

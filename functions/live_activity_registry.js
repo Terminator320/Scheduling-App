@@ -206,21 +206,26 @@ async function readCardMarker(deps, {employeeDocId}) {
 }
 
 /**
- * Marks the employee's card as flipped to on-site so the backstop pass pushes
- * the flip exactly once. Never throws.
+ * Refreshes the marker's `startTime` (and phase) after a reschedule. The
+ * on-site backstop selects candidates with `.where("startTime", "<=", now)`, so
+ * a marker whose `startTime` isn't updated on reschedule flips at the OLD start
+ * — a job moved earlier stays "On the way" past the tech's real arrival, and a
+ * job moved later re-pushes a travel update every sweep until the old time.
+ * Merge (not the absolute `writeCardMarker`) so `appointmentId`/`startedAt`/
+ * `expiresAt` are preserved. Never throws.
  * @param {!Object} deps `{db, logger}`.
- * @param {{employeeDocId: string, phase: string}} args
+ * @param {{employeeDocId: string, startTime: *, phase: string}} args
  * @return {!Promise<boolean>}
  */
-async function setCardPhase(deps, {employeeDocId, phase}) {
+async function setCardStart(deps, {employeeDocId, startTime, phase}) {
   const {db, logger} = deps;
   if (!employeeDocId) return false;
   try {
     await db.collection(CARDS_COLLECTION).doc(employeeDocId)
-        .set({phase}, {merge: true});
+        .set({startTime: startTime || null, phase}, {merge: true});
     return true;
   } catch (err) {
-    if (logger) logger.warn("liveActivity: card phase write failed", {err});
+    if (logger) logger.warn("liveActivity: card start write failed", {err});
     return false;
   }
 }
@@ -376,7 +381,7 @@ module.exports = {
   pruneExpiredActivityTokens,
   writeCardMarker,
   readCardMarker,
-  setCardPhase,
+  setCardStart,
   clearCardMarker,
   listCardsDueForOnSite,
   pruneExpiredCardMarkers,

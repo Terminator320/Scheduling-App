@@ -16,6 +16,7 @@ import 'package:scheduling/features/calendar/application/event_details_outcome.d
 import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
+import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
@@ -333,25 +334,12 @@ class EventDetailsController extends Notifier<EventDetailsState>
     AppointmentRecord appointment,
   ) async {
     final activeEmployees = await _resolveActiveEmployees();
-    final activeIds = activeEmployees.map((e) => e.id).toSet();
-    final selectedIds = state.selectedEmployees.map((e) => e.id).toList();
-    final selectedNames = state.selectedEmployees.map((e) => e.name).toList();
-    final retainedIds = <String>[];
-    final retainedNames = <String>[];
-    for (var i = 0; i < appointment.employeeIds.length; i++) {
-      final origId = appointment.employeeIds[i];
-      if (!activeIds.contains(origId) && !selectedIds.contains(origId)) {
-        retainedIds.add(origId);
-        retainedNames.add(
-          i < appointment.employeeNames.length
-              ? appointment.employeeNames[i]
-              : '',
-        );
-      }
-    }
-    return (
-      ids: [...selectedIds, ...retainedIds],
-      names: [...selectedNames, ...retainedNames],
+    return mergeRetainedAssignees(
+      originalIds: appointment.employeeIds,
+      originalNames: appointment.employeeNames,
+      selectedIds: state.selectedEmployees.map((e) => e.id).toList(),
+      selectedNames: state.selectedEmployees.map((e) => e.name).toList(),
+      activeIds: activeEmployees.map((e) => e.id).toSet(),
     );
   }
 

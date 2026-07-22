@@ -49,6 +49,9 @@ void main() {
     firestore = _MockFirestore();
     query = _MockQuery();
     when(() => firestore.collectionGroup('presence')).thenReturn(query);
+    // The feed is bounded by `.limit(...)` (mirrors the users-stream cap); the
+    // mock chains it back to the same query so `.snapshots()` still resolves.
+    when(() => query.limit(any())).thenReturn(query);
   });
 
   void stubSnapshots(Stream<QuerySnapshot<Map<String, dynamic>>> stream) {

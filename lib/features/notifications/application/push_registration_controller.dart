@@ -9,6 +9,7 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notifications/push_notification_service.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/utils/app_language.dart';
+import 'package:scheduling/core/utils/reentrant_sync.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/notifications/data/fcm_token_repository.dart';
@@ -50,7 +51,7 @@ bool shouldRegisterPush({
 /// Registers this device's FCM token for the signed-in active employee and
 /// tears it down on sign-out. Driven by `main.dart` on every
 /// `currentUserDocProvider` emission and on app-language change.
-class PushRegistrationController {
+class PushRegistrationController with ReentrantSync {
   PushRegistrationController(this._ref, {FirebaseAuth? auth})
     : _auth = auth ?? FirebaseAuth.instance;
 
@@ -58,8 +59,6 @@ class PushRegistrationController {
   final FirebaseAuth _auth;
 
   StreamSubscription<String>? _refreshSub;
-  bool _busy = false;
-  bool _pendingResync = false;
   String? _registeredDocId;
   String? _registeredToken;
   String? _registeredUid;
@@ -71,16 +70,13 @@ class PushRegistrationController {
       AppLanguageController.instance.value == 'fr' ? 'fr' : 'en';
 
   /// Idempotent. A no-op for admins / signed-out users. Safe to call on every
-  /// account-doc emission and on language change (re-upserts the locale).
-  Future<void> sync() async {
-    // A concurrent call (e.g. a language change re-upserting `locale` while a
-    // prior sync is mid-flight) would otherwise be silently dropped, leaving a
-    // stale locale until the next account-doc emission. Remember it and re-run
-    // once in the finally so the latest locale/doc always wins.
-    if (_busy) {
-      _pendingResync = true;
-      return;
-    }
+  /// account-doc emission and on language change (re-upserts the locale). A
+  /// concurrent call (e.g. a language change re-upserting `locale` while a
+  /// prior sync is mid-flight) coalesces via [ReentrantSync] and re-runs once
+  /// so the latest locale/doc always wins.
+  Future<void> sync() => runCoalesced(_syncGuarded);
+
+  Future<void> _syncGuarded() async {
     final signedIn = _auth.currentUser != null;
     final doc = _ref.read(currentUserDocProvider).value ?? const {};
     final role = (doc['role'] ?? '').toString().trim();
@@ -105,7 +101,6 @@ class PushRegistrationController {
       return;
     }
 
-    _busy = true;
     try {
       await _ref.read(firebaseReadyProvider.future).catchError((Object _) {});
       final service = _ref.read(pushNotificationServiceProvider);
@@ -136,12 +131,6 @@ class PushRegistrationController {
       // (sync() is called via `unawaited`, so an escape would be logged as a
       // fatal crash). Report it to Crashlytics as a non-fatal instead.
       _logger.warn('PUSH sync failed', e, st);
-    } finally {
-      _busy = false;
-      if (_pendingResync) {
-        _pendingResync = false;
-        unawaited(sync());
-      }
     }
   }
 
