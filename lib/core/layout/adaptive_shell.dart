@@ -94,6 +94,17 @@ class HubShellScope extends InheritedWidget {
   static HubTabSelector? maybeOf(BuildContext context) =>
       context.getInheritedWidgetOfExactType<HubShellScope>()?.shell;
 
+  /// The currently visible hub tab, as a build dependency: callers rebuild
+  /// when the selection changes. Null outside a shell (standalone route,
+  /// tests). Used by FeatureTourHost to start/stop a tab's tour.
+  static AdaptiveDestination? currentOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<HubShellScope>()?.current;
+
+  /// One-shot read of the current tab (no rebuild dependency) — safe outside
+  /// build, e.g. in a post-frame callback.
+  static AdaptiveDestination? readCurrentOf(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<HubShellScope>()?.current;
+
   @override
   bool updateShouldNotify(HubShellScope oldWidget) =>
       current != oldWidget.current || shell != oldWidget.shell;
