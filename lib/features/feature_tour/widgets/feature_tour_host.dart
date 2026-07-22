@@ -18,7 +18,7 @@ import 'package:showcaseview/showcaseview.dart';
 /// auto-starts. Hidden IndexedStack tabs never start: visibility is a build
 /// dependency via [HubShellScope.currentOf]. Losing visibility while a tour
 /// is RUNNING dismisses the overlay (which marks the tab seen — same
-/// semantics as Skip); [_tourRunning] gates both the dismiss and the
+/// semantics as Skip); `_tourRunning` gates both the dismiss and the
 /// mark-seen so a tour that never started can't be marked seen by a mere tab
 /// switch (showcaseview's dismiss() fires onDismiss even when idle), and the
 /// dismiss is deferred post-frame (overlay teardown must not run during
@@ -42,7 +42,7 @@ class FeatureTourHost extends ConsumerStatefulWidget {
 
   /// The screen's stable per-step keys; ids missing from the tab's catalog
   /// are ignored, ids whose target isn't currently rendered are dropped at
-  /// start (see `isTargetRendered` in [_start]).
+  /// start (see `isTargetRendered` in `_start`).
   final Map<TourStepId, GlobalKey> stepKeys;
 
   final Widget child;
