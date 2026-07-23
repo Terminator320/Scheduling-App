@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
@@ -181,6 +182,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     final langCode = Localizations.localeOf(context).languageCode;
 
     return ListView(
+      // Inflate the whole (short) settings list up front: the feature tour's
+      // below-the-fold targets (notifications, replay row) must be built to
+      // register with showcaseview, or their steps are silently dropped.
+      // `cacheExtent` (double) is deprecated as of Flutter 3.41 in favor of
+      // this typed replacement — same effect, no analyzer warning.
+      scrollCacheExtent: const ScrollCacheExtent.pixels(4000),
       padding: const EdgeInsets.all(AppSpacing.sp16),
       children: [
         SettingsProfileCard(
@@ -535,6 +542,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       tab: AdaptiveDestination.settings,
       isAdmin: _isAdmin,
       stepKeys: _tourKeys,
+      autoScroll: true,
       child: Stack(
         children: [
           Scaffold(

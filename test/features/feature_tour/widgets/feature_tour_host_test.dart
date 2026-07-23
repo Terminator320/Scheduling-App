@@ -81,6 +81,7 @@ void main() {
       ),
     );
     await tester.pump(const Duration(seconds: 1));
+    expect(tester.takeException(), isNull);
     expect(find.text('Find a client'), findsNothing);
     expect(
       container.read(tourSeenProvider),
@@ -103,6 +104,7 @@ void main() {
       ),
     );
     await tester.pump(const Duration(seconds: 1));
+    expect(tester.takeException(), isNull);
     expect(
       container.read(tourSeenProvider),
       contains(AdaptiveDestination.clients),
@@ -149,6 +151,7 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 1));
     await tester.pump(const Duration(seconds: 1));
+    expect(tester.takeException(), isNull);
     expect(find.text('Find a client'), findsOneWidget);
     expect(find.text('1 of 2'), findsOneWidget);
   });
@@ -176,6 +179,7 @@ void main() {
       ),
     );
     await tester.pump(const Duration(seconds: 1));
+    expect(tester.takeException(), isNull);
     expect(find.text('Find a client'), findsNothing);
   });
 }
