@@ -320,7 +320,16 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   rendered via `isTargetRendered` — **never `GlobalKey.currentContext`: the
   5.x `Showcase` widget does NOT forward its key to the element tree, so
   currentContext is always null** (zero survivors → mark seen, never
-  crash/retry). Scopes are registered in initState and deliberately NEVER
+  crash/retry). **Data-dependent tabs MUST pass `FeatureTourHost(ready:)` false
+  while their body shows a loading/error placeholder** — the tour's targets
+  don't exist yet, so an ungated start finds zero survivors and permanently
+  marks the tab seen against an empty body (bit LiveMap: its FAB targets live in
+  the map stack, absent during the presence-data load). Calendar gates on
+  `!isLoading`; LiveMap gates on `_mapTargetsRendered` (the map stack, not the
+  placeholder, is showing). Settings instead FORCES its below-fold targets to
+  mount via `autoScroll: true` + an inflated `scrollCacheExtent` — a lazy list
+  won't build off-screen rows for `isTargetRendered` to find. Scopes are
+  registered in initState and deliberately NEVER
   unregistered (register() replaces; unregister in dispose would race the
   replacement State's initState on a hub identity change), and every
   dismiss/mark-seen is gated by `_tourRunning` because the package fires
