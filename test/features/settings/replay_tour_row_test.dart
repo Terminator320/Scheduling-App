@@ -1,0 +1,80 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+
+import 'package:scheduling/core/theme/theme_notifier.dart';
+import 'package:scheduling/features/settings/screens/settings_screen.dart';
+import 'package:scheduling/l10n/l10n.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+void main() {
+  PackageInfo.setMockInitialValues(
+    appName: 'Scheduling',
+    packageName: 'net.vogas.scheduling',
+    version: '1.0.3',
+    buildNumber: '4',
+    buildSignature: '',
+  );
+
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+
+  testWidgets('replay row clears the tour seen flags and notifies', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'tour_seen_tabs': ['calendar', 'settings'],
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: ThemeNotifier(
+          themeMode: ThemeMode.light,
+          toggleTheme: () {},
+          textScale: 1,
+          setTextScale: (_) {},
+          setLanguage: (_) {},
+          child: const MaterialApp(
+            localizationsDelegates: [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: SettingsScreen(
+              name: 'Test User',
+              email: 'test@example.com',
+              role: 'admin',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The master pane's ListView is the scrollable ancestor of an existing
+    // above-the-fold row ("Delete account") — `find.byType(Scrollable).first`
+    // is unreliable here since the split layout also renders a rail/other
+    // scrollable that doesn't contain the target.
+    final masterScrollable = find.ancestor(
+      of: find.text('Delete account'),
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.text('Replay app tour'),
+      200,
+      scrollable: masterScrollable,
+    );
+    // scrollUntilVisible's ensureVisible can land the row right at the
+    // viewport edge (not hit-testable) — nudge it fully into view.
+    await tester.drag(masterScrollable, const Offset(0, -80));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Replay app tour'));
+    await tester.pumpAndSettle();
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getStringList('tour_seen_tabs'), isEmpty);
+  });
+}

@@ -25,6 +25,11 @@ import 'package:scheduling/features/auth/application/account_status_provider.dar
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/feature_tour/application/tour_seen_store.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
+import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
+import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_preference.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
@@ -72,6 +77,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   _SettingsDetail? _selectedDetail;
   bool _isSigningOut = false;
   bool _isDeletingAccount = false;
+
+  late final List<TourStepId> _tourSteps = tourStepsFor(
+    AdaptiveDestination.settings,
+    isAdmin: widget.role == 'admin',
+  );
+  late final Map<TourStepId, GlobalKey> _tourKeys = {
+    for (final id in _tourSteps) id: GlobalKey(),
+  };
+
+  Widget _tourStep(TourStepId id, {required Widget child}) => TourShowcase(
+    showcaseKey: _tourKeys[id]!,
+    tab: AdaptiveDestination.settings,
+    id: id,
+    index: _tourSteps.indexOf(id),
+    count: _tourSteps.length,
+    child: child,
+  );
 
   @override
   void initState() {
@@ -170,7 +192,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         SettingsSectionHeader(
           label: context.l10n.settings_appearance.toUpperCase(),
         ),
-        _appearanceCard(scheme, notifier, langCode: langCode),
+        _tourStep(
+          TourStepId.settingsAppearance,
+          child: _appearanceCard(scheme, notifier, langCode: langCode),
+        ),
         const SizedBox(height: AppSpacing.sp24),
         SettingsSectionHeader(
           label: context.l10n.settings_account.toUpperCase(),
@@ -185,7 +210,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         SettingsSectionHeader(
           label: context.l10n.settings_notifications.toUpperCase(),
         ),
-        _notificationsCard(scheme),
+        _tourStep(
+          TourStepId.settingsNotifications,
+          child: _notificationsCard(scheme),
+        ),
         if (_isAdmin) ...[
           const SizedBox(height: AppSpacing.sp24),
           SettingsSectionHeader(
@@ -203,6 +231,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           label: context.l10n.settings_legal.toUpperCase(),
         ),
         _legalCard(scheme),
+        const SizedBox(height: AppSpacing.sp24),
+        SettingsSectionHeader(
+          label: context.l10n.settings_help.toUpperCase(),
+        ),
+        _helpCard(scheme),
         const SizedBox(height: AppSpacing.sp24),
         _buildVersionFooter(scheme),
         const SizedBox(height: AppSpacing.sp32),
@@ -438,6 +471,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
   }
 
+  Widget _helpCard(ColorScheme scheme) {
+    return SettingsSectionCard(
+      child: _tourStep(
+        TourStepId.settingsReplay,
+        child: SettingsTile(
+          iconBg: scheme.primaryContainer,
+          icon: Icons.tour_rounded,
+          iconColor: scheme.primary,
+          label: context.l10n.settings_replayTour,
+          isLast: true,
+          onTap: _onReplayTour,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onReplayTour() async {
+    await ref.read(tourSeenProvider.notifier).resetAll();
+    if (!mounted) return;
+    ref
+        .read(noticeServiceProvider)
+        .success(context.l10n.settings_replayTourDone);
+  }
+
   Widget _buildVersionFooter(ColorScheme scheme) {
     final info = ref.watch(appInfoProvider);
     return Center(
@@ -474,39 +531,44 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Scaffold(
-          appBar: AppTopBar(
-            title: context.l10n.common_settings,
-            compact: context.isLandscape,
-            onBack: () => navigateToDestination(
-              context,
-              AdaptiveDestination.calendar,
+    return FeatureTourHost(
+      tab: AdaptiveDestination.settings,
+      isAdmin: _isAdmin,
+      stepKeys: _tourKeys,
+      child: Stack(
+        children: [
+          Scaffold(
+            appBar: AppTopBar(
+              title: context.l10n.common_settings,
+              compact: context.isLandscape,
+              onBack: () => navigateToDestination(
+                context,
+                AdaptiveDestination.calendar,
+                isAdmin: _isAdmin,
+                employeeId: widget.employeeId,
+              ),
+            ),
+            body: AdaptiveShell(
+              currentDestination: AdaptiveDestination.settings,
               isAdmin: _isAdmin,
               employeeId: widget.employeeId,
+              userName: _displayName,
+              userEmail: _email,
+              child: MasterDetailScaffold(
+                master: _buildMaster(),
+                detail: _buildDetail(),
+                placeholder: _buildDetailPlaceholder(),
+              ),
             ),
           ),
-          body: AdaptiveShell(
-            currentDestination: AdaptiveDestination.settings,
-            isAdmin: _isAdmin,
-            employeeId: widget.employeeId,
-            userName: _displayName,
-            userEmail: _email,
-            child: MasterDetailScaffold(
-              master: _buildMaster(),
-              detail: _buildDetail(),
-              placeholder: _buildDetailPlaceholder(),
+          // Blocks the UI during the multi-second, irreversible account
+          // deletion so it can't be re-triggered and the user sees progress.
+          if (_isDeletingAccount)
+            _BlockingProgressOverlay(
+              label: context.l10n.settings_deletingAccount,
             ),
-          ),
-        ),
-        // Blocks the UI during the multi-second, irreversible account
-        // deletion so it can't be re-triggered and the user sees progress.
-        if (_isDeletingAccount)
-          _BlockingProgressOverlay(
-            label: context.l10n.settings_deletingAccount,
-          ),
-      ],
+        ],
+      ),
     );
   }
 
