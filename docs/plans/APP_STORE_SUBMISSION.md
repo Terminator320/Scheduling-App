@@ -775,6 +775,11 @@ crew currently is. It is App Functionality, not tracking or advertising, and is
 tied to the user's own account. Location can be denied or limited to "while
 using" and the app still works (it falls back to a fixed 30-minute reminder).
 
+Contacts: the app requests Contacts access only to save a client the admin
+already has into the device address book (a "save to contacts" action) and to
+keep that one created contact in sync. It never reads or uploads the device's
+address book.
+
 App Check uses Apple App Attest, which only produces valid tokens on real
 hardware. On the Simulator, network calls to our Cloud Functions may fail. Please
 test on a physical device (this is a TestFlight/store-signed build, so App Attest
@@ -786,6 +791,14 @@ removes the user's account and data server-side.
 Notifications and the home-screen widget: the app requests notification
 permission to alert staff when a job is assigned, moved, or cancelled, and for
 reminders. These are optional.
+
+Siri: the app exposes read-only Siri shortcuts (e.g. "what's on my schedule
+today", "what's my next appointment") that speak back the signed-in user's own
+appointments. No data leaves the device for these.
+
+Live Activity: a "time to leave" card may appear on the Lock Screen / Dynamic
+Island near a scheduled job, showing travel/on-site status. It is optional and
+can be turned off in Settings (Live job card).
 ```
 
 ---
