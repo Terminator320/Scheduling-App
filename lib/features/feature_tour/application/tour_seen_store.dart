@@ -51,6 +51,11 @@ class TourSeenController extends Notifier<Set<AdaptiveDestination>> {
     await _save();
   }
 
+  /// NOTE: mutations are state-then-save over one prefs key with no
+  /// serialization — safe only while writers can't overlap (one visible
+  /// tour at a time; replay can't be tapped through a running overlay).
+  /// A new concurrent writer must add a serialized mutation chain first
+  /// (see PendingUploadStore for the failure mode).
   Future<void> _save() async {
     try {
       final prefs = await SharedPreferences.getInstance();

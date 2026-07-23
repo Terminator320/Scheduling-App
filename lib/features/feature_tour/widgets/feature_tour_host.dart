@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/feature_tour/application/tour_seen_store.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
@@ -30,6 +31,7 @@ class FeatureTourHost extends ConsumerStatefulWidget {
     required this.stepKeys,
     required this.child,
     this.ready = true,
+    this.autoScroll = false,
     super.key,
   });
 
@@ -44,6 +46,11 @@ class FeatureTourHost extends ConsumerStatefulWidget {
   /// are ignored, ids whose target isn't currently rendered are dropped at
   /// start (see `isTargetRendered` in `_start`).
   final Map<TourStepId, GlobalKey> stepKeys;
+
+  /// Lets showcaseview auto-scroll each step's target into view. Init-only:
+  /// read once when the scope is registered in initState. Enable for tabs
+  /// whose targets live below the fold in a scrollable (Settings).
+  final bool autoScroll;
 
   final Widget child;
 
@@ -74,6 +81,7 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
       scope: _scope,
       onFinish: _onTourEnd,
       onDismiss: (_) => _onTourEnd(),
+      enableAutoScroll: widget.autoScroll,
     );
   }
 
@@ -88,8 +96,9 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
       _tourRunning = false; // suppress _onTourEnd: unfinished, not seen
       try {
         ShowcaseView.getNamed(_scope).dismiss();
-      } catch (_) {
+      } catch (e, st) {
         // Scope already replaced/gone — nothing to close.
+        ref.read(loggerProvider).warn('TOUR dispose dismiss failed', e, st);
       }
     }
     super.dispose();
@@ -120,8 +129,9 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
         if (!_tourRunning) return;
         try {
           ShowcaseView.getNamed(_scope).dismiss();
-        } catch (_) {
+        } catch (e, st) {
           _tourRunning = false;
+          ref.read(loggerProvider).warn('TOUR dismiss failed', e, st);
         }
       });
     }
@@ -166,10 +176,11 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
         }
         _tourRunning = true;
         showcaseView.startShowCase(keys);
-      } catch (_) {
+      } catch (e, st) {
         // getNamed throws if the scope vanished (shouldn't happen — nothing
         // unregisters — but a dead tour must not crash the tab).
         _tourRunning = false;
+        ref.read(loggerProvider).warn('TOUR start failed', e, st);
       }
     });
   }
