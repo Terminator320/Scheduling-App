@@ -59,18 +59,21 @@ stay mounted in the `IndexedStack`, so hidden tabs' targets pollute the scope
 and offstage auto-start is a real failure mode); hand-rolled overlay (needless
 rebuild of what the package does).
 
-## Draft step catalogs (finalize wording at implementation)
+## Step catalogs (as implemented)
 
-- **Calendar** — admin: add-appointment FAB, today FAB, an appointment card
-  (tap for details), view switching, nav (drawer/rail). Employee: your
-  assigned jobs, appointment card → details + Mark as complete, today FAB.
-- **Clients** — admin: search bar, add-client FAB, client card (details + job
-  history). Employee: search, view-only card.
-- **Employees** — admin: invite/add FAB, employee card, status chips.
-  Employee: colleague contact info.
-- **History** — search + how past visits are listed. (Both roles.)
-- **Live Map** — admin only: staff markers, roster sheet, day-route entry.
-- **Settings** — theme/text size, notifications row, app lock, and the
+**Role correction (found at implementation):** Clients, Employees, History,
+and Live Map are admin-only tabs — both the nav rail (`_destinationsFor` in
+`adaptive_shell.dart`) and the settings drawer gate them on `isAdmin`.
+Employees get tours only on Calendar and Settings; the employee catalogs for
+the other four tabs are empty (`tourStepsFor`).
+
+- **Calendar** — admin: month grid, day list, add-appointment FAB, day-route
+  icon (4 steps). Employee: same minus the FAB (3 steps).
+- **Clients** — admin only: search bar, add-client FAB.
+- **Employees** — admin only: search bar, invite FAB.
+- **History** — admin only: search bar.
+- **Live Map** — admin only: roster FAB, recenter FAB.
+- **Settings** — both roles: appearance card, notifications card, and the
   "Replay app tour" row itself.
 
 Steps only ever anchor to real widgets; no free-floating "did you know" steps.
