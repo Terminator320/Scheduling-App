@@ -1,9 +1,7 @@
 import 'package:intl/intl.dart';
 
 class DateUtilsHelper {
-  // DateFormat parses its locale's symbols on construction, so the formatters
-  // are cached per locale instead of rebuilt on every call — these run twice
-  // per appointment row inside list item builders.
+  // Cached per locale since DateFormat parses locale symbols on construction.
   static final Map<String, DateFormat> _timeFormats = {};
   static final Map<String, DateFormat> _dateFormats = {};
   static final Map<String, DateFormat> _dayHeaderFormats = {};
@@ -37,8 +35,6 @@ class DateUtilsHelper {
 }
 
 extension DateOnly on DateTime {
-  /// Midnight of this date in the same zone (drops time-of-day). Centralizes
-  /// the `DateTime(year, month, day)` day-floor so a caller can't forget to
-  /// zero a component.
+  /// Midnight of this date in the same zone, centralizing the day-floor.
   DateTime get dateOnly => DateTime(year, month, day);
 }

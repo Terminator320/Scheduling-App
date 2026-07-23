@@ -8,8 +8,7 @@ import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 
-/// App-wide [AccountDeletionService], wired through the shared providers so
-/// tests can override collaborators (or this provider itself).
+/// App-wide [AccountDeletionService], wired through providers for testability.
 final accountDeletionServiceProvider = Provider<AccountDeletionService>(
   (ref) => AccountDeletionService(
     firebaseAuth: ref.watch(firebaseAuthProvider),

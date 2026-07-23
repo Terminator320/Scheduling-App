@@ -20,9 +20,7 @@ import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-/// The eight text controllers an appointment form drives. Owned (and disposed)
-/// by the State that builds the form; shared by the add sheet and the edit
-/// body so the field set can't drift between them.
+/// The eight text controllers an appointment form drives (shared by add and edit to keep field sets in sync).
 class AppointmentFormControllers {
   const AppointmentFormControllers({
     required this.title,
@@ -57,15 +55,8 @@ class AppointmentFormControllers {
   }
 }
 
-/// The shared appointment form field stack (title, client, employees, date,
-/// time, status, repeat, address, notes, materials, photos), used by
-/// both the add-appointment sheet and the edit-details body. It renders the
-/// fields and owns the client/address controller-text wiring; the host wires
-/// the rest through callbacks and supplies its own header, photos slot, and
-/// action buttons (which differ between add and edit).
-///
-/// The status block renders only when [editingStatus]/[onStatusChanged] are
-/// provided (edit flow); the add flow omits it.
+/// The shared appointment form field stack used by add and edit flows.
+/// The status block renders only when [editingStatus]/[onStatusChanged] are provided (edit flow).
 class AppointmentFormFields extends StatelessWidget {
   const AppointmentFormFields({
     required this.controllers,
@@ -125,14 +116,10 @@ class AppointmentFormFields extends StatelessWidget {
   final String? editingStatus;
   final ValueChanged<String>? onStatusChanged;
 
-  /// Opens the add-client sheet (prefilled with the typed name) and resolves to
-  /// the created client, which is then auto-selected. Null hides the inline
-  /// "add new client" affordance in the client picker.
+  /// Opens the add-client sheet and auto-selects the created client (null hides the affordance).
   final Future<ClientRecord?> Function(String initialName)? onRequestAddClient;
 
-  /// Add flow only. When non-null, a row of one-tap job-template chips renders
-  /// above the title; picking one seeds the title (and a typical duration via
-  /// the host). Null hides the chips (edit flow).
+  /// Add flow only; one-tap job-template chips render above the title (null hides chips for edit flow).
   final ValueChanged<JobTemplate>? onApplyTemplate;
 
   String? _err(BuildContext context, String field) {
@@ -188,7 +175,6 @@ class AppointmentFormFields extends StatelessWidget {
 
   /// Quick-fill job-template chips — add flow only.
   List<Widget> _templatesSection(BuildContext context, AppLocalizations l10n) {
-    // --- Quick-fill job templates (add flow only) ---
     if (onApplyTemplate == null) return const [];
     return [
       formLabel(context, l10n.calendar_jobTemplatesLabel, optional: true),

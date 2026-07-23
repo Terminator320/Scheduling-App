@@ -33,39 +33,20 @@ final liveActivityRegistrationControllerProvider =
       LiveActivityRegistrationController.new,
     );
 
-/// Whether this device can host a push-started Live Activity at all. Drives
-/// whether the Settings row is shown — an Android or iOS 16 device gets no row
-/// rather than a dead control. See
-/// [LiveActivityRegistrationController.canHostCards].
+/// Whether this device can host a push-started Live Activity; drives Settings row visibility.
 final liveActivitySupportedProvider = FutureProvider<bool>(
   (ref) => ref.watch(liveActivityRegistrationControllerProvider).canHostCards(),
 );
 
-/// Pure gate: the Live Activity card is the lock-screen face of the travel-time
-/// "leave now" push, so its audience is exactly the push audience. Delegates to
-/// [shouldRegisterPush] so the two can't drift (the rule [PushRegistrationController]
-/// and `shouldTrackPresence` already follow); iOS-version and user-setting
-/// support is a separate, device-side gate inside the controller.
+/// Gate for Live Activity registration; delegates to [shouldRegisterPush] so the two can't drift.
 bool shouldRegisterLiveActivity({
   required String role,
   required String status,
   required bool signedIn,
 }) => shouldRegisterPush(role: role, status: status, signedIn: signedIn);
 
-/// Registers this device's Live Activity APNs tokens — the device-wide
-/// **push-to-start** token plus one **update** token per live card — into
-/// `users/{docId}/liveActivityTokens/{id}`, and tears them down on sign-out.
-/// Driven by `main.dart` on every `currentUserDocProvider` emission and on
-/// app-language change, mirroring [PushRegistrationController].
-///
-/// Deliberately NOT a copy of that controller's single `_registeredToken`
-/// field: an FCM token is one-per-device, but an update token is one per
-/// activity, so the live cards are tracked in a `Map<activityId, token>`.
-///
-/// Every path is iOS-gated and best-effort. A device below iOS 17.2, a user
-/// who turned Live Activities off, or any failure here registers nothing and
-/// behaves exactly as today — the `leaveNow` push fires independently and is
-/// unchanged.
+/// Registers device's Live Activity APNs tokens (device-wide push-to-start and per-activity update tokens) into `users/{docId}/liveActivityTokens/{id}`.
+/// iOS-gated and best-effort; all failures degrade to plain `leaveNow` push unchanged.
 class LiveActivityRegistrationController with ReentrantSync {
   LiveActivityRegistrationController(
     this._ref, {
@@ -78,10 +59,7 @@ class LiveActivityRegistrationController with ReentrantSync {
   final FirebaseAuth? _injectedAuth;
   final LiveActivities? _injectedPlugin;
 
-  // Resolved lazily, not in the constructor: this provider is read from the
-  // appointment status path (`endLocalCards`), which runs in unit tests with
-  // no Firebase app — a constructor-time `FirebaseAuth.instance` would throw
-  // there even though every real path is iOS-gated.
+  // Resolved lazily (not in constructor) since endLocalCards runs in unit tests without Firebase.
   FirebaseAuth get _auth => _injectedAuth ?? FirebaseAuth.instance;
   LiveActivities get _plugin =>
       _injectedPlugin ?? (_lazyPlugin ??= LiveActivities());
@@ -103,11 +81,7 @@ class LiveActivityRegistrationController with ReentrantSync {
   static String _currentLocale() =>
       AppLanguageController.instance.value == 'fr' ? 'fr' : 'en';
 
-  /// Idempotent. A no-op off iOS, for admins/employees who aren't active, and
-  /// for devices that can't host a push-started card. Safe to call on every
-  /// account-doc emission and on language change (re-upserts the locale). A
-  /// concurrent call (e.g. a language change landing mid-sync) coalesces via
-  /// [ReentrantSync] and re-runs once so the latest locale/doc always wins.
+  /// Idempotent and safe to call on every account-doc emission or language change; concurrent calls coalesce so latest state wins.
   Future<void> sync() async {
     if (!Platform.isIOS) return;
     await runCoalesced(_runSync);
@@ -117,20 +91,14 @@ class LiveActivityRegistrationController with ReentrantSync {
     try {
       await _syncGuarded();
     } catch (e, st) {
-      // sync() is called via `unawaited` — never let a failure escape as an
-      // uncaught async error (that would be recorded as a fatal crash).
+      // sync() is unawaited; don't let failures escape as uncaught async errors.
       _logger.warn('LIVE-ACT sync failed', e, st);
     }
   }
 
   /// The body of [sync], run under the [ReentrantSync] guard.
   Future<void> _syncGuarded() async {
-    // User opted out in Settings. The toggle itself calls [unregister] to end
-    // the live card and drop the token rows; this only stops a later
-    // account-doc emission from silently re-registering them. Awaiting `ready`
-    // is required, not defensive: the provider returns its optimistic `true`
-    // default until the stored value lands, so a cold-start sync would
-    // otherwise re-register a device whose user had turned the card off.
+    // Await ready before reading preference (cold-start defaults to true, would re-register opted-out device).
     await _ref.read(liveActivityEnabledProvider.notifier).ready;
     if (!_ref.read(liveActivityEnabledProvider)) {
       await _cancelStreams();
@@ -151,8 +119,7 @@ class LiveActivityRegistrationController with ReentrantSync {
 
     final uid = _auth.currentUser?.uid;
     final locale = _currentLocale();
-    // Fast path: already subscribed for this uid+locale. Token rotations flow
-    // through the live streams, so there's nothing to re-read or re-write.
+    // Fast path: already subscribed for this uid+locale; token rotations flow through streams.
     if (uid != null &&
         uid == _uid &&
         locale == _locale &&
@@ -178,12 +145,7 @@ class LiveActivityRegistrationController with ReentrantSync {
     _subscribeActivityUpdates();
   }
 
-  /// Whether this device can host a push-started card: iOS 17.2+
-  /// (`allowsPushStart`), ActivityKit available, and Live Activities not
-  /// switched off by the user in iOS Settings. Never throws — any plugin
-  /// failure answers false, matching the feature's degrade-to-plain-push
-  /// posture. Backs both the registration gate and the Settings row's
-  /// visibility, so the two can't drift.
+  /// Whether this device can host a push-started card (iOS 17.2+, ActivityKit available, user-enabled); never throws.
   Future<bool> canHostCards() async {
     if (!Platform.isIOS) return false;
     try {
@@ -299,19 +261,9 @@ class LiveActivityRegistrationController with ReentrantSync {
         .deleteToken(userDocId: docId, docId: activityId);
   }
 
-  /// Ends this device's live cards immediately. Called ONLY from [unregister]
-  /// (the Settings opt-out), where clearing every card is exactly the intent.
-  ///
-  /// **Do NOT wire this to a status write.** `endAllActivities()` is
-  /// device-wide, and this device cannot tell which appointment a
-  /// push-started card belongs to — ActivityKit mints the id and the
-  /// attributes aren't readable back. A tech marking the job they just left
-  /// as done would therefore kill the card for the job they are currently
-  /// driving to. Every terminal transition (done / cancelled / deleted /
-  /// unassigned) is ended SERVER-side by `endCardOnTerminal`, which resolves
-  /// the right card through the `liveActivityCards` marker.
-  ///
-  /// Best-effort: never throws.
+  /// Ends this device's live cards immediately (Settings opt-out only).
+  /// Do NOT wire to status write: endAllActivities() is device-wide and can't resolve per-appointment cards (ActivityKit id is not readable back).
+  /// Terminal transitions are ended server-side by endCardOnTerminal via the liveActivityCards marker.
   Future<void> endLocalCards() async {
     if (!Platform.isIOS || !_pluginReady) return;
     try {
@@ -331,17 +283,12 @@ class LiveActivityRegistrationController with ReentrantSync {
   /// device's token rows. Never throws — sign-out must not be blocked.
   Future<void> unregister() async {
     try {
-      // Ends the cards and drops every per-activity row; only the device-wide
-      // push-to-start row (which survives a completed job) is left to clear.
+      // Ends the cards and drops every per-activity row (push-to-start row left for clear).
       await endLocalCards();
-      // Resolved rather than read from `_docId`: a Settings opt-out can land
-      // before the token stream has emitted, and a cold start with the
-      // preference already off returns from _syncGuarded before `_docId` is
-      // ever set — in both cases the row exists on the server and must go.
+      // Resolve docId in case _docId was never set (opt-out before token stream emitted, or cold-start with preference off).
       final docId = _docId ?? await _resolveUserDocId();
       if (docId != null) {
-        // By kind, not by id: the push-to-start doc id IS the token, which
-        // this session may never have seen.
+        // By kind, not by id: push-to-start doc id IS the token (session may never have seen).
         await _ref
             .read(liveActivityTokenRepositoryProvider)
             .deleteTokensOfKind(

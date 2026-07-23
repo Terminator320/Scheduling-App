@@ -11,9 +11,7 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 
-/// App-wide [AuthService], wired through the shared providers so tests can
-/// override any collaborator (or this provider itself) instead of the
-/// widgets newing up their own instances.
+/// App-wide [AuthService], wired through providers for testability.
 final authServiceProvider = Provider<AuthService>(
   (ref) => AuthService(
     firebaseAuth: ref.watch(firebaseAuthProvider),
@@ -67,10 +65,7 @@ class AuthService {
     return _auth.sendPasswordResetEmail(email: email.trim().toLowerCase());
   }
 
-  /// Invited-employee signup. Registers (or adopts an existing account), then
-  /// redeems the admin-issued one-time code, which activates the account
-  /// server-side. On redemption failure the freshly-created Auth user is rolled
-  /// back so no orphan is left.
+  /// Invited-employee signup: register/adopt, redeem code, rollback Auth user if code redemption fails.
   Future<void> signUpWithCode({
     required String email,
     required String password,
@@ -126,14 +121,7 @@ class AuthService {
     return const AuthFailureUnknown();
   }
 
-  // Cleanup of the Auth user we just created. The global account guard signs
-  // out any signed-in user with no Firestore users doc (which is exactly this
-  // half-created user before redemption), so by the time we get here
-  // `currentUser` is often already null and a plain `user.delete()` throws
-  // `no-current-user`, leaving an orphan. We re-authenticate with the same
-  // credentials before deleting so the cleanup actually lands. If it still
-  // fails, sign out, log the orphan for Crashlytics, and throw a distinct
-  // failure so the UI tells the admin how to recover.
+  // Delete the freshly-created Auth user; the global account guard may have already signed it out (no doc yet), so reauth before delete to avoid orphaning.
   Future<void> _rollbackOrFailLoud(
     UserCredential credential, {
     required String email,
@@ -155,8 +143,7 @@ class AuthService {
     }
   }
 
-  // Deletes the just-created user, re-authenticating first when the session was
-  // already torn down (current user null) or the delete needs a recent login.
+  // Delete user, re-authenticating if the session was torn down or recent login is needed.
   Future<void> _deleteFreshlyCreatedUser({
     required String email,
     required String password,
@@ -187,10 +174,7 @@ class AuthService {
     try {
       await _auth.signOut();
     } finally {
-      // Best-effort: a keystore/cipher failure clearing the cache must not
-      // make signOut() itself throw once the Firebase session is gone (C12
-      // relies on signOut completing). A stale entry is uid-checked on the
-      // next launch, so it cannot leak across accounts.
+      // Best-effort cache clear: keystore failure must not fail signOut (checked uid on next launch).
       try {
         await _authCache.clear();
       } catch (e, st) {

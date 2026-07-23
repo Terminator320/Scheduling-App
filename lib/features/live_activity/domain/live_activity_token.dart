@@ -14,17 +14,11 @@ enum LiveActivityTokenKind {
   final String raw;
 }
 
-/// How long a token row stays useful before the server's TTL prune may drop
-/// it. A push-to-start token is device-scoped and re-upserted on every sync,
-/// so it gets a long window; an update token belongs to a card that lives
-/// hours at most, so a stale one is dead weight after a day.
+/// How long a token row stays useful before server-side TTL prune (30 days for push-to-start device tokens, 1 day for per-activity update tokens).
 const liveActivityPushToStartTtl = Duration(days: 30);
 const liveActivityUpdateTtl = Duration(days: 1);
 
-/// Doc id for a token row. A push-to-start token has no activity, so it keys
-/// on the token itself (the `fcmTokens` token-as-doc-id shape, naturally
-/// unique per device); an update token keys on its activity id so an iOS
-/// token rotation replaces that card's row instead of duplicating it.
+/// Doc id for a token row (push-to-start keys on token itself, update keys on activity id so token rotation replaces not duplicates).
 String liveActivityTokenDocId({
   required LiveActivityTokenKind kind,
   required String token,

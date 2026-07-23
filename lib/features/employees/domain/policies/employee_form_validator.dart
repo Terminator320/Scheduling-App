@@ -1,8 +1,6 @@
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Shared validation for the employee invite/edit form (mirrors
-/// `ClientFormValidator`). All field values must be pre-trimmed. Returns only
-/// the offending field keys, so an empty map means the form is valid.
+/// Validation for employee invite/edit form; returns only offending field keys (empty = valid).
 class EmployeeFormValidator {
   const EmployeeFormValidator._();
 

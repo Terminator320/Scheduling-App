@@ -49,8 +49,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     super.dispose();
   }
 
-  // Mirrors the add sheet: debounce so the comprehensive client search doesn't
-  // fire a Firestore read on every keystroke.
+  // Debounce so comprehensive client search doesn't fire a Firestore read on every keystroke.
   void _onClientSearchChanged(String query) {
     final notifier = ref.read(
       eventDetailsControllerProvider(

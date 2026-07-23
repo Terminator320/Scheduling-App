@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 
-/// One series of weekly values; the chart draws 1–2 of these as grouped bars.
+/// One series of weekly values.
 class WeeklyBarSeries {
   const WeeklyBarSeries({
     required this.values,
@@ -17,8 +17,7 @@ class WeeklyBarSeries {
   final String label;
 }
 
-/// The one fl_chart wrapper on the dashboard: 8 weekly buckets, 1–2 grouped
-/// series, no touch interaction, text legend when two series are shown.
+/// Dashboard chart: 8 weekly buckets, 1–2 series, no touch, legend when two series.
 class WeeklyBarChart extends StatelessWidget {
   const WeeklyBarChart({
     required this.weekStarts,
@@ -93,7 +92,7 @@ class WeeklyBarChart extends StatelessWidget {
                         reservedSize: 28,
                         getTitlesWidget: (value, meta) {
                           final index = value.toInt();
-                          // Every other week label, or the axis gets crowded.
+                          // Show every other week to avoid crowding.
                           if (index < 0 ||
                               index >= weekStarts.length ||
                               index.isOdd) {

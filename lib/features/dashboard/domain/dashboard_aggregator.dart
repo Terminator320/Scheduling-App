@@ -4,13 +4,7 @@ import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-/// Pure reducers over the one dashboard appointments range. Every function
-/// takes `now` explicitly so the whole feature tests with a fixed clock.
-///
-/// Accepted limitations (see docs/plans/2026-07-08-admin-dashboard.md):
-/// overdue flags look back only as far as the 8-week range start, and "today"
-/// is fixed at provider build (autoDispose refreshes on reopen, not across
-/// midnight while the screen stays open).
+/// Pure reducers over dashboard appointments range; keyed on `now` for testability.
 class DashboardAggregator {
   DashboardAggregator._();
 
@@ -22,9 +16,7 @@ class DashboardAggregator {
   static DateTime mondayOf(DateTime day) =>
       DateTime(day.year, day.month, day.day - (day.weekday - DateTime.monday));
 
-  /// The single midnight-aligned query range every section reduces off:
-  /// 8 ISO weeks back through at least next Monday; the `+3 days` arm keeps
-  /// the 48 h pending window covered when `now` is a Sunday.
+  /// Query range: 8 ISO weeks back through next Monday, +3 days for pending window.
   static AppointmentDateRange rangeAround(DateTime now) {
     final monday = mondayOf(now);
     final start = DateTime(
@@ -40,15 +32,7 @@ class DashboardAggregator {
     );
   }
 
-  /// Testable stand-in for [AppointmentRecord.displayStatus] (the model getter
-  /// reads DateTime.now()): terminal statuses pass through; a non-terminal
-  /// visit reads `overdue` once its end has passed, else `in_progress` once its
-  /// start has passed, else its raw status. Mirror of the model getter — keep
-  /// the two in sync.
-  ///
-  /// NOTE: [computeTodayOps] keys its counts via [statusCountKey], NOT
-  /// `AppointmentStatus.raw`, precisely because this can now return 'overdue'
-  /// and `AppointmentStatus.overdue.raw` THROWS (overdue is display-only).
+  /// Mirror of displayStatus; use statusCountKey to avoid overdue.raw throwing.
   static String displayStatusAt(AppointmentRecord appointment, DateTime now) {
     if (_isTerminal(appointment)) return appointment.status;
     if (now.isAfter(appointment.endTime)) return 'overdue';
@@ -56,11 +40,7 @@ class DashboardAggregator {
     return appointment.status;
   }
 
-  /// Stable string key for a display status in [TodayOps.statusCounts].
-  /// [AppointmentStatus.overdue] has no stored `raw` (reading it throws), so it
-  /// keys on the literal 'overdue'; every other status keys on its stored raw.
-  /// Both the reducer and the hero legend go through this — never `.raw`
-  /// directly, or an overdue count crashes.
+  /// Stable key for statusCounts; 'overdue' has no stored raw, keys on literal 'overdue'.
   static String statusCountKey(AppointmentStatus status) =>
       status == AppointmentStatus.overdue ? 'overdue' : status.raw;
 
@@ -89,8 +69,8 @@ class DashboardAggregator {
     );
   }
 
-  /// Jobs per employee today / this ISO week, cancelled excluded; a
-  /// multi-assignee visit counts once per assignee. [employees] is the
+  /// Jobs per employee today / this ISO week (cancelled excluded, a
+  /// multi-assignee visit counts once per assignee); [employees] is the
   /// active-only list from `employeesStreamProvider`.
   static List<EmployeeWorkload> computeWorkload(
     List<AppointmentRecord> appointments,
@@ -169,8 +149,8 @@ class DashboardAggregator {
     ];
   }
 
-  /// Busiest weekday over the whole window, cancelled excluded; ties resolve
-  /// to the earliest weekday (Monday first). Null when nothing counts.
+  /// Busiest weekday over the window (cancelled excluded); ties resolve to
+  /// the earliest weekday, null when nothing counts.
   static BusiestWeekday? computeBusiestWeekday(
     List<AppointmentRecord> appointments,
     DateTime now,

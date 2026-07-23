@@ -11,20 +11,7 @@ import 'package:scheduling/features/employees/screens/employees_screen.dart';
 import 'package:scheduling/features/presence/screens/live_map_screen.dart';
 import 'package:scheduling/features/settings/screens/settings_screen.dart';
 
-/// The persistent post-login shell (U1/P4). Hosts the six hub destinations
-/// (calendar, clients, employees, history, live map, settings) in a single
-/// route with an [IndexedStack], so switching tabs swaps an index instead of
-/// replacing
-/// routes: screens are built lazily on first visit and then kept alive (no
-/// listener churn, page-1 refetch or skeleton flash), and the navigator
-/// stack keeps a stable root that deep pushes (detail screens, sheets) stack
-/// on top of.
-///
-/// A root [PopScope] maps Android system back (including predictive back) to
-/// the same contract as the visible back chevron ([navigateToDestination]
-/// resolves this shell through [HubShellScope]): back on a non-calendar tab
-/// returns to the calendar tab; back on the calendar tab lets the pop
-/// through (app exit).
+/// Post-login shell: six tab destinations in IndexedStack kept alive; Android back → calendar unless already on it.
 class HubShell extends StatefulWidget {
   const HubShell({
     required this.isAdmin,
@@ -39,22 +26,17 @@ class HubShell extends StatefulWidget {
   final bool isAdmin;
   final String employeeId;
 
-  /// The tab shown first — the calendar for the post-login entry, or another
-  /// destination when a named hub route is deep-opened with no live shell.
+  /// Initial tab (calendar on login, or another destination if deep-linked).
   final AdaptiveDestination initialDestination;
 
-  /// Initial identity shown on the settings tab (sticky; see
-  /// [HubTabSelector.select]).
+  /// Initial identity shown on settings tab (sticky).
   final String userName;
   final String userEmail;
 
-  /// Test seam: replaces the real hub screens (which need Firebase) with
-  /// lightweight stubs.
+  /// Test seam: replace real screens with stubs.
   final Widget Function(AdaptiveDestination destination)? screenBuilder;
 
-  /// The most recently mounted shell, if any. Lets route-level code
-  /// (`AppRoutes`) redirect a named hub-route push into a tab switch on the
-  /// live shell instead of stacking a second standalone hub screen.
+  /// Most recent live shell; redirects hub-route pushes into tab switches.
   static HubShellState? get liveState => HubShellState._live;
 
   @override
@@ -70,16 +52,13 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
   late String _userEmail = widget.userEmail;
   late AdaptiveDestination _current = widget.initialDestination;
 
-  /// Destinations visited so far: each is built lazily on first visit, then
-  /// kept alive by the [IndexedStack].
+  /// Destinations built so far (lazy-built, kept alive by IndexedStack).
   late final Set<AdaptiveDestination> _built = {widget.initialDestination};
 
   /// The tab currently shown.
   AdaptiveDestination get currentDestination => _current;
 
-  /// The live role, kept current by [select]. Read by the notification/widget
-  /// deep link so the appointment sheet opens with the right affordances —
-  /// an employee must not be shown admin-only Edit/Cancel/Delete controls.
+  /// Live role; used by deep links to gate admin-only edit/cancel/delete controls.
   bool get isAdmin => _isAdmin;
 
   @override
@@ -113,9 +92,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
     });
   }
 
-  /// Surfaces the calendar tab, preserving the current identity. Used by the
-  /// notification deep-link so a tapped appointment's detail sheet opens over
-  /// the calendar rather than whatever tab was last visited.
+  /// Switch to calendar, preserving identity for deep-linked appointment sheets.
   void showCalendar() {
     select(
       AdaptiveDestination.calendar,
@@ -126,8 +103,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
 
   void _handlePop(bool didPop, Object? result) {
     if (didPop) return;
-    // System back on a non-calendar tab mirrors the top bar's back chevron:
-    // return to the calendar tab instead of exiting the app.
+    // System back on non-calendar tab → calendar (like the app bar).
     select(
       AdaptiveDestination.calendar,
       isAdmin: _isAdmin,
@@ -135,10 +111,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
     );
   }
 
-  // iOS-style left-edge back-swipe for the non-calendar tabs. The tabs live in
-  // an IndexedStack (no pushed route), so they'd otherwise lack the native
-  // edge-swipe the pushed dashboard gets — a left-to-right edge swipe here
-  // returns to the calendar tab, matching the top-bar chevron and system back.
+  // iOS left-edge swipe for non-calendar tabs (no pushed route in IndexedStack).
   static const double _kBackSwipeEdge = 24;
   static const double _kBackSwipeMinVelocity = 250;
   bool _backSwipeArmed = false;
@@ -146,8 +119,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
 
   Widget _withBackSwipe(Widget child) {
     return GestureDetector(
-      // Translucent so the tab's own scrollables still receive vertical drags;
-      // only horizontal drags land here.
+      // Translucent to pass vertical drags to tab scrollables.
       behavior: HitTestBehavior.translucent,
       onHorizontalDragStart: (details) {
         _backSwipeArmed = details.globalPosition.dx <= _kBackSwipeEdge;
@@ -161,7 +133,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
         _backSwipeArmed = false;
         final width = MediaQuery.of(context).size.width;
         final velocity = details.primaryVelocity ?? 0;
-        // A rightward fling, or a drag past a third of the width, goes back.
+        // Rightward fling or drag > 1/3 width → back.
         if (velocity > _kBackSwipeMinVelocity || _backSwipeDx > width * 0.35) {
           showCalendar();
         }
@@ -184,38 +156,21 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
           children: [
             for (final destination in AdaptiveDestination.values)
               if (_built.contains(destination))
-                // Mute animations on hidden tabs; IndexedStack keeps their
-                // state but they should not burn frames while invisible.
+                // Mute animations on hidden tabs; pin viewInsets to prevent rebuild churn.
                 TickerMode(
                   enabled: destination == _current,
-                  // A hidden tab can never own the focused field, so pin its
-                  // viewInsets: otherwise every kept-alive Scaffold rebuilds
-                  // per frame of the keyboard animation.
                   child: _TabViewInsets(
                     active: destination == _current,
-                    // Every tab stays mounted in this one IndexedStack under a
-                    // single route, which offers just one
-                    // PrimaryScrollController. Give each tab its own so their
-                    // (always-attached) primary ListViews don't all pile onto
-                    // the shared one — a Scrollbar requires its controller to
-                    // hold a single ScrollPosition.
+                    // Each tab needs its own PrimaryScrollController.
                     child: PrimaryScrollScope(
-                      // IndexedStack keeps the outgoing tab offstage instantly
-                      // (no cross-fade of the old page); the newly-shown tab
-                      // gently fades in via AnimatedOpacity so the switch reads
-                      // as a smooth transition rather than a hard cut. An
-                      // offstage tab holds opacity 0, so re-showing it animates
-                      // 0 -> 1. Reduced-motion collapses it to an instant swap.
+                      // Fade in new tabs; instant swap with reduced motion.
                       child: AnimatedOpacity(
                         opacity: destination == _current ? 1 : 0,
                         duration: MediaQuery.disableAnimationsOf(context)
                             ? Duration.zero
                             : AppMotion.tabSwitch,
                         curve: Curves.easeInOut,
-                        // iOS-only edge back-swipe. The calendar tab owns its
-                        // own horizontal week-swipe, so only the other tabs get
-                        // it, and only on iOS (context.isCupertino is the single
-                        // platform seam) so Android keeps its plain tabs.
+                        // iOS edge-swipe for non-calendar tabs (calendar owns week-swipe).
                         child:
                             destination == AdaptiveDestination.calendar ||
                                 !context.isCupertino
@@ -233,16 +188,12 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
     );
   }
 
-  /// Built-screen cache: reusing the identical widget instance across shell
-  /// `setState`s lets unchanged (especially hidden) tabs short-circuit their
-  /// rebuild. Invalidated when the identity args change, which mirrors when
-  /// [_screenFor] would produce different widgets.
+  /// Cache screens to skip rebuild on unchanged tabs; clear when identity changes.
   final Map<AdaptiveDestination, Widget> _screenCache = {};
   ({bool isAdmin, String employeeId, String userName, String userEmail})?
   _screenCacheIdentity;
 
-  /// Drops the cache once per build when the identity args change (records
-  /// compare structurally), so `_cachedScreenFor` stays a plain lookup.
+  /// Clear cache when identity args change (structural compare).
   void _refreshScreenCache() {
     final identity = (
       isAdmin: _isAdmin,
@@ -262,9 +213,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
   Widget _screenFor(AdaptiveDestination destination) {
     final builder = widget.screenBuilder;
     if (builder != null) return builder(destination);
-    // Key on the identity args so an in-place change (live admin upgrade)
-    // rebuilds the screen from scratch — matching the old route-replacement
-    // semantics — while plain tab switches keep the screen's state alive.
+    // Key on identity so in-place changes (e.g. admin upgrade) rebuild the screen.
     final key = ValueKey('hub-${destination.name}-$_isAdmin-$_employeeId');
     return switch (destination) {
       AdaptiveDestination.calendar => MainCalendar(
@@ -303,13 +252,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
   }
 }
 
-/// Pins a hidden tab's `viewInsets` to zero so the keyboard open/close
-/// animation (per-frame `viewInsets` changes) never dirties it — only the
-/// visible tab can own the focused field, so only it needs to resize.
-///
-/// Always present in every tab's subtree (parameterized by [active] rather
-/// than conditionally inserted) so toggling a tab never changes the element
-/// tree shape, which would drop the kept-alive screen state.
+/// Pin hidden tab viewInsets to zero to prevent rebuild churn; always present.
 class _TabViewInsets extends StatelessWidget {
   const _TabViewInsets({required this.active, required this.child});
 
@@ -326,17 +269,7 @@ class _TabViewInsets extends StatelessWidget {
   }
 }
 
-/// Redirects a named hub-route push into a tab switch on the live [HubShell].
-///
-/// The settings drawer still navigates by pushing named hub routes
-/// (`Navigator.pushNamed`). With a shell already live, stacking a second
-/// standalone hub screen on top of it would fork navigation state, so
-/// `AppRoutes` returns this transparent, zero-duration route instead: on the
-/// first frame after the push it switches the live shell's tab and removes
-/// itself, leaving the stack exactly as it was. If the shell somehow died in
-/// the meantime (it can't for a plain push — the shell stays beneath this
-/// route — but be defensive), it replaces itself with a fresh shell so the
-/// navigator can never end up empty.
+/// Redirect named hub-route pushes into tab switches on the live HubShell.
 class HubTabRedirectRoute extends PageRouteBuilder<void> {
   HubTabRedirectRoute({
     required RouteSettings settings,

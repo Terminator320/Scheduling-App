@@ -1,9 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-/// A single staff member's last-known location fix, read from
-/// `users/{userDocId}/presence/location` via the `presence` collection group.
-/// `updatedAt` is null while a latency-compensated own-write's
-/// `serverTimestamp()` is still pending — callers treat a null as fresh.
+/// A single staff member's last-known location fix; updatedAt is null (treated as fresh) pending own-write's serverTimestamp().
 @immutable
 class PresenceFix {
   const PresenceFix({

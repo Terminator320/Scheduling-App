@@ -46,13 +46,9 @@ abstract class ClientRecord with _$ClientRecord {
     @Default('') String email,
     @Default(<ClientContact>[]) List<ClientContact> contacts,
     @Default(false) bool noFixedAddress,
-    // Server timestamp written by the repository / Wave import; read-only in
-    // the app (dashboard new-clients trend). NEVER emitted by toMap.
+    // Server timestamp (read-only, for dashboard trends); never emitted in toMap.
     DateTime? createdAt,
-    // Wave projection (read-only): written exclusively by Cloud Functions via
-    // the Admin SDK. The app reads them for a sync indicator and MUST NOT emit
-    // them in toMap — firestore.rules rejects any client write that touches
-    // `waveCustomerId` or `wave`.
+    // Wave projection (read-only, function-owned); omitted from toMap per firestore.rules.
     @Default(null) String? waveCustomerId,
     @Default('') String waveSyncState,
     @Default(null) String? waveSyncError,
@@ -62,9 +58,7 @@ abstract class ClientRecord with _$ClientRecord {
   factory ClientRecord.fromMap(String id, Map<String, dynamic> data) {
     final rawContacts = (data['contacts'] as List?) ?? const [];
     final wave = (data['wave'] as Map?)?.cast<String, dynamic>();
-    // Back-compat: pre-Wave-reshape docs stored a business-type client as
-    // `businessName` with an empty `name`. Fall back so those docs keep a
-    // display name and stay editable/searchable until a backfill runs.
+    // Back-compat fallback for legacy `businessName` (keeps unnamed business docs visible/searchable).
     final rawName = (data['name'] ?? '').toString();
     final name = rawName.trim().isNotEmpty
         ? rawName
@@ -95,9 +89,7 @@ abstract class ClientRecord with _$ClientRecord {
     );
   }
 
-  /// Only the user-owned fields. Deliberately omits `waveCustomerId` and the
-  /// `wave` sub-map: those are function-owned, and the `clients` update rule
-  /// rejects any write that adds/changes them (`updateClient` uses `.update`).
+  /// User-owned fields; omits `waveCustomerId`/`wave` (function-owned, rejected by update rule).
   Map<String, dynamic> toMap() => {
     'name': name.trim(),
     'firstName': firstName.trim(),

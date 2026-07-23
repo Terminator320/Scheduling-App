@@ -72,14 +72,7 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     'seriesId': seriesId,
   };
 
-  /// Time-derived status for display only — NEVER written to Firestore (the
-  /// rules allowlist is pending/in_progress/done/cancelled). Terminal stored
-  /// states win; otherwise a visit reads `in_progress` while it's happening and
-  /// `overdue` once its end time has passed without being marked done.
-  /// Server mirror: `selectOverdueCandidates` / `OPEN_LIKE` in
-  /// functions/notification_utils.js drive the overdue push prompt from the
-  /// same rule — keep them in sync when changing this logic (a status unknown
-  /// to that allowlist shows Overdue here but is never swept server-side).
+  /// Time-derived display status (never stored); keep in sync with functions/notification_utils.js.
   String get displayStatus {
     final s = status.toLowerCase();
     if (s == 'done' || s == 'completed' || s == 'cancelled') return status;

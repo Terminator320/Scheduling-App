@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 
-/// Centered, padded muted body text for a screen-level load-failure state
-/// (dashboard, live map). Shows [message] on a subdued `onSurfaceVariant`
-/// color so a failed section reads as an empty state rather than an alarm.
+/// Centered muted error text; reads as empty state, not alarm.
 class CenteredErrorText extends StatelessWidget {
   const CenteredErrorText({required this.message, super.key});
 

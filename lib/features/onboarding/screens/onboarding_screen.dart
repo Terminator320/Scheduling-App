@@ -7,8 +7,7 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/branding/brand_logo.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
-/// First-launch intro carousel. Swipeable slides with a page-dot indicator;
-/// "Get Started"/"Skip" hand control back to the caller via [onFinish].
+/// First-launch intro carousel: swipeable slides, page-dot indicator, "Get Started"/"Skip" via [onFinish].
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({required this.onFinish, super.key});
 
@@ -26,15 +25,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   void initState() {
     super.initState();
-    // Onboarding is the first visible screen on a fresh install, so it owns
-    // the handoff from the OS native splash.
+    // Onboarding owns the native splash handoff on fresh install.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       FlutterNativeSplash.remove();
-      // NOTE: remove() re-enables the first frame (allowFirstFrame) but only
-      // schedules a warm-up frame, which is a no-op once startup has consumed
-      // it. A static onboarding screen never dirties the tree again, so the
-      // first frame would never composite and Android would keep showing the
-      // launch splash. Force one frame so the splash actually hands off.
+      // NOTE: remove() schedules only a warm-up frame (no-op on static screen); force one to actually hand off.
       WidgetsBinding.instance.scheduleForcedFrame();
     });
   }

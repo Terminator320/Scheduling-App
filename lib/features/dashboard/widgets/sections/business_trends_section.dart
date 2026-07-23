@@ -8,8 +8,7 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
-/// One trends card: grouped done/cancelled chart, the new-clients sparkline
-/// with its 8-week total — then the busiest-weekday text row.
+/// Trends card: done/cancelled chart, new-clients sparkline, busiest-weekday row.
 class BusinessTrendsSection extends StatelessWidget {
   const BusinessTrendsSection({
     required this.buckets,
@@ -115,8 +114,8 @@ class BusinessTrendsSection extends StatelessWidget {
     );
   }
 
-  /// Localized full weekday name. 2024-01-01 is a Monday, so day N of that
-  /// month falls on ISO weekday N.
+  /// Localized full weekday name — 2024-01-01 is a Monday, so day N of that
+  /// month is ISO weekday N.
   String _weekdayName(BuildContext context, int weekday) {
     final locale = Localizations.localeOf(context).toString();
     return DateFormat('EEEE', locale).format(DateTime(2024, 1, weekday));

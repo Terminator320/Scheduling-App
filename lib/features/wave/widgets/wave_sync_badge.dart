@@ -3,12 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// A small chip that reflects a client's Wave sync state.
-///
-/// Pass [syncState] from the client's waveSyncState field
-/// ('synced', 'pending', 'error', or empty).
-/// When [syncState] is empty or unrecognised the widget renders nothing
-/// (omit-empty convention).
+/// Small chip reflecting Wave sync state; renders nothing when empty/unknown.
 class WaveSyncBadge extends StatelessWidget {
   const WaveSyncBadge({
     required this.syncState,
@@ -18,8 +13,7 @@ class WaveSyncBadge extends StatelessWidget {
 
   final String syncState;
 
-  /// The raw error string from the client's waveSyncError field.
-  /// Exposed as a Semantics label when the state is 'error'.
+  /// Raw error string from waveSyncError; exposed as Semantics label when error.
   final String? syncError;
 
   @override

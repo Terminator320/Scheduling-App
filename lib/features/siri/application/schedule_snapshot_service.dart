@@ -14,23 +14,14 @@ import 'package:scheduling/features/home_widget/application/widget_sync_service.
 /// Group, separate key and separate schema.
 const scheduleSnapshotKey = 'schedule_snapshot';
 
-/// Writes the Siri schedule snapshot into the App Group. iOS-only (no-op
-/// elsewhere); device-verified — `home_widget` is a platform-channel plugin, so
-/// only the pure dedup signature below is unit-tested (the payload builder is
-/// the other tested part).
-///
-/// Deliberately does NOT call `HomeWidget.updateWidget` — nothing renders this
-/// key; the extension reads it on demand when Siri asks.
+/// Writes the Siri schedule snapshot into the App Group (iOS-only); does not call `HomeWidget.updateWidget` since the extension reads this on demand.
 class ScheduleSnapshotService {
   ScheduleSnapshotService({AppLogger? logger})
     : _logger = logger ?? AppLogger();
 
   final AppLogger _logger;
 
-  /// Signature of the last successful write: `null` = nothing written yet,
-  /// [_clearedState] = the snapshot was wiped, otherwise the schedule-relevant
-  /// payload. The appointments stream re-emits far more often than the schedule
-  /// actually changes.
+  /// Signature of the last successful write for dedup (null = not written, [_clearedState] = wiped).
   static const _clearedState = '__cleared__';
   String? _lastState;
 

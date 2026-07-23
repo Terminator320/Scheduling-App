@@ -10,13 +10,7 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
 
-/// Apple "Find My"-style bottom sheet: every staff member currently sharing a
-/// location, ordered nearest-first relative to the viewing admin, each row
-/// showing their city and how far they are from the admin. Tapping a row pops
-/// the sheet with that [StaffMapPoint] so the map can recenter + select it.
-///
-/// Watches [liveMapPointsProvider] + the tick/clock directly, so the list
-/// stays live (new fixes, freshness, someone dropping off) while it's open.
+/// Apple "Find My"-style sheet showing all staff by proximity to the admin; watches providers directly so the list stays live with new fixes and freshness.
 Future<StaffMapPoint?> showStaffRosterSheet(
   BuildContext context, {
   required String? selfDocId,
@@ -30,8 +24,7 @@ Future<StaffMapPoint?> showStaffRosterSheet(
 class StaffRosterSheet extends ConsumerWidget {
   const StaffRosterSheet({required this.selfDocId, super.key});
 
-  /// The viewing admin's own users-doc id, so their row is labelled "You" and
-  /// distances are measured from their live position. Null → no self anchor.
+  /// The viewing admin's doc id (so their row shows "You" and distances are measured from their position); null = no self anchor.
   final String? selfDocId;
 
   @override
@@ -186,9 +179,7 @@ class _RosterEmpty extends StatelessWidget {
   }
 }
 
-/// One roster row: avatar, name (+ "You"), city · freshness, distance. Watches
-/// the reverse-geocode + tick/clock providers itself so the city fills in and
-/// freshness ticks without rebuilding the whole sheet.
+/// One roster row showing avatar, name, city, and freshness; watches providers directly for live updates.
 class StaffRosterRow extends ConsumerWidget {
   const StaffRosterRow({
     required this.point,

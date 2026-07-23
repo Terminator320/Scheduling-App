@@ -109,9 +109,7 @@ class _LoginState extends ConsumerState<Login> {
 
     switch (outcome) {
       case SignInSuccess(:final employee):
-        // Commit the autofill context so the OS password manager offers to
-        // save the credentials that just worked.
-        TextInput.finishAutofillContext();
+        TextInput.finishAutofillContext(); // Offer credentials to OS password manager.
         await _routeToCalendar(employee);
       case SignInInvalidCredentials():
         setState(() {
@@ -132,7 +130,7 @@ class _LoginState extends ConsumerState<Login> {
             AuthErrorContext.login,
           );
         });
-      // resumeAfterSignUp-only outcomes; signIn() never produces them.
+      // resumeAfterSignUp-only; signIn() never produces these.
       case SignInNoSession() || SignInProfilePending():
         break;
     }
@@ -174,9 +172,7 @@ class _LoginState extends ConsumerState<Login> {
     );
   }
 
-  // The create-account flow pops `created:true` once the account is live; the
-  // controller resolves the already-authenticated session so we can route
-  // straight into the app instead of asking the user to sign in again.
+  // Create-account returns with authenticated session; resolve and route to app.
   Future<void> _routeAfterSignUp() async {
     final outcome = await ref
         .read(signInControllerProvider.notifier)
@@ -192,7 +188,7 @@ class _LoginState extends ConsumerState<Login> {
       case SignInSuccess(:final employee):
         TextInput.finishAutofillContext();
         await _routeToCalendar(employee);
-      // signIn()-only outcomes; resumeAfterSignUp() never produces them.
+      // signIn()-only; resumeAfterSignUp() never produces these.
       case SignInInvalidCredentials() ||
           SignInNoProfile() ||
           SignInAccountDisabled() ||
@@ -286,9 +282,7 @@ class _LoginState extends ConsumerState<Login> {
   }
 }
 
-/// Bottom call-to-action on the sign-in screen: a muted prompt next to a
-/// primary "Create account" link. A [Wrap] so the two pieces flow to a second
-/// line at large text scale instead of overflowing the row.
+/// Bottom CTA on sign-in: muted prompt + "Create account" link, wrapped to flow at large text scale.
 class _CreateAccountPrompt extends StatelessWidget {
   const _CreateAccountPrompt({
     required this.enabled,

@@ -20,9 +20,7 @@ class EmployeePicker extends StatelessWidget {
   final bool selectable;
   final bool hasError;
 
-  /// When non-null, an error row is rendered below the chips (and the chip
-  /// borders are highlighted). Lets the picker own its validation message
-  /// instead of every call site hand-rolling the same Padding + Text.
+  /// When non-null, render an error row below the chips (borders highlighted).
   final String? errorText;
   final void Function(EmployeeRecord)? onToggle;
 

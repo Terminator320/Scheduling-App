@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
 
-/// Platform-adaptive date picker for the appointment forms: Cupertino date
-/// wheel on iOS/macOS, Material calendar dialog elsewhere.
+/// Platform-adaptive date picker: Cupertino wheel on iOS/macOS, Material calendar elsewhere.
 Future<DateTime?> showAdaptiveDatePicker(
   BuildContext context, {
   required DateTime initialDate,
@@ -26,8 +25,7 @@ Future<DateTime?> showAdaptiveDatePicker(
   );
 }
 
-/// Platform-adaptive time picker for the appointment forms: Cupertino time
-/// wheel on iOS/macOS, Material time picker elsewhere.
+/// Platform-adaptive time picker: Cupertino wheel on iOS/macOS, Material picker elsewhere.
 Future<TimeOfDay?> showAdaptiveTimePicker(
   BuildContext context, {
   TimeOfDay? initialTime,

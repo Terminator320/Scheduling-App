@@ -4,9 +4,7 @@ import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Stacked traffic + satellite toggles, top-right of the map. Each renders a
-/// filled background when active (shape, not just color, signals state) and
-/// carries an l10n tooltip / semantics label.
+/// Stacked traffic + satellite toggles; filled background when active signals state.
 class MapToggles extends StatelessWidget {
   const MapToggles({
     required this.traffic,

@@ -77,9 +77,7 @@ Future<void> main() async {
 
       final settingsFuture = SharedPrefsSettingsRepository().load();
 
-      // firebase_options reads dotenv, so it must load first; the locale
-      // date-symbol inits don't depend on Firebase, so overlap them with
-      // Firebase.initializeApp instead of gating it behind them.
+      // Load env before Firebase; locale inits run concurrently to avoid blocking.
       await dotenv.load(fileName: 'dev/.env');
 
       await Future.wait([
@@ -90,17 +88,12 @@ Future<void> main() async {
         initializeDateFormatting('fr_CA'),
       ]);
 
-      // Pin the offline cache explicitly so an SDK default-flip can never
-      // silently drop it. Must run before the first Firestore read (it does —
-      // SplashScreen reads later).
+      // Pin offline cache before first Firestore read (SplashScreen).
       FirebaseFirestore.instance.settings = const Settings(
         persistenceEnabled: true,
       );
 
-      // Wake-on-push widget refresh (iOS): a change push carries a fresh
-      // widgetPayload + content-available, so this fires in its own isolate
-      // with the app closed/backgrounded and rewrites the home-screen widget.
-      // Must be registered before runApp with a top-level handler.
+      // iOS widget refresh on background push — must register before runApp.
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
       Future<void> firebaseReady;
@@ -108,8 +101,7 @@ Future<void> main() async {
         await _wireFirebaseEmulator();
         firebaseReady = Future<void>.value();
       } else {
-        // Error handlers are plain assignments: wire them synchronously so
-        // nothing is missed while the activation futures are in flight.
+        // Wire error handlers synchronously before activation futures.
         final crashlytics = FirebaseCrashlytics.instance;
         FlutterError.onError = crashlytics.recordFlutterFatalError;
         PlatformDispatcher.instance.onError = (error, stack) {
@@ -117,9 +109,7 @@ Future<void> main() async {
           return true;
         };
 
-        // Deliberately not awaited. If activation fails before anything
-        // subscribes to firebaseReadyProvider, the zone handler below
-        // records it; subscribers observe the same error via the provider.
+        // Not awaited — failures observed via firebaseReadyProvider.
         firebaseReady = Future.wait([
           crashlytics.setCrashlyticsCollectionEnabled(!kDebugMode),
           FirebaseAppCheck.instance.activate(
@@ -182,15 +172,10 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _setupWidgetTapHandling();
   }
 
-  /// Home-widget taps (iOS only) deep-link to the tapped job's appointment.
-  /// The Swift widget links each row / the small-widget card to
-  /// `esproschedule://appointment?id=<id>`; home_widget surfaces that URI here.
+  /// iOS home-widget taps deep-link to appointment detail via URI scheme.
   void _setupWidgetTapHandling() {
     if (!Platform.isIOS) return;
-    // Register the App Group BEFORE any widget read — home_widget throws
-    // `AppGroupId not set` otherwise, and the launch-from-widget tap below is
-    // the first read on a cold start (the sync service that also sets it only
-    // runs after the first account emission).
+    // Register App Group before first widget read.
     unawaited(() async {
       try {
         await HomeWidget.setAppGroupId(widgetAppGroupId);
@@ -210,9 +195,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   Future<void> _handleWidgetTap(Uri? uri) async {
     if (uri == null) return;
     final appointmentId = uri.queryParameters['id']?.trim() ?? '';
-    // A failed deep-link open is a non-crash — swallow it here so the async
-    // handler can't leak an unhandled rejection into runZonedGuarded /
-    // PlatformDispatcher.onError, which would record it as a FATAL crash.
+    // Swallow errors to prevent leaking into zone handlers as FATAL crashes.
     try {
       await _openAppointmentDeepLink(appointmentId);
     } catch (e, st) {
@@ -220,11 +203,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     }
   }
 
-  /// Notification taps (terminated launch + background) open the tapped
-  /// appointment's detail sheet on the calendar hub. Every per-appointment
-  /// push carries `data.appointmentId` (assignment / reschedule / cancel /
-  /// removal / reminder / done-check); the daily digest carries none and just
-  /// lands on the calendar.
+  /// Notification taps open appointment detail on calendar hub.
   void _setupPushTapHandling() {
     final service = ref.read(pushNotificationServiceProvider);
     unawaited(
@@ -248,9 +227,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     if (message == null) return;
     final appointmentId =
         (message.data['appointmentId'] as String?)?.trim() ?? '';
-    // A failed deep-link open is a non-crash — swallow it here so the async
-    // handler can't leak an unhandled rejection into runZonedGuarded /
-    // PlatformDispatcher.onError, which would record it as a FATAL crash.
+    // Swallow errors to prevent leaking into zone handlers as FATAL crashes.
     try {
       await _openAppointmentDeepLink(appointmentId);
     } catch (e, st) {
@@ -258,21 +235,11 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     }
   }
 
-  /// Shared deep-link target for a notification or home-widget tap: brings the
-  /// live hub to the calendar tab, collapses any stacked routes, then opens the
-  /// appointment's detail sheet. An empty/missing id (digest, or a widget tap
-  /// with no appointment) just surfaces the calendar. A missing appointment
-  /// (deleted / no longer visible) surfaces an info notice instead.
+  /// Shared deep-link handler: show calendar and open appointment if valid.
   Future<void> _openAppointmentDeepLink(String appointmentId) async {
     if (FirebaseAuth.instance.currentUser == null) return;
 
-    // Fetch the appointment concurrently with the (cold-launch: multi-second)
-    // wait for the hub — the read doesn't depend on the hub being alive, so
-    // overlapping it hides the network round-trip behind the splash/routing
-    // wait. One retry survives the post-sign-in `permission-denied` race while
-    // the auth token propagates (a missing doc returns null, not an error, so
-    // it isn't retried). `.catchError` keeps this a non-throwing future so an
-    // early bail-out below can't leak an unhandled rejection.
+    // Fetch concurrently with hub startup; one retry survives auth-token race.
     final recordFuture = appointmentId.isEmpty
         ? Future<AppointmentRecord?>.value()
         : retryAsync<AppointmentRecord?>(
@@ -287,8 +254,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
             return null;
           });
 
-    // Terminated-launch taps fire before the post-login hub is built (splash
-    // routes into it), so wait briefly for it to come alive.
+    // Wait for hub on terminated-launch cold start.
     final shell = await _awaitLiveHub();
     if (shell == null || !mounted) return;
     shell.showCalendar();
@@ -298,8 +264,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
 
     final navContext = _navigatorKey.currentContext;
     if (navContext == null || !navContext.mounted) return;
-    // Collapse any detail/edit sheet or pushed route so the target opens over
-    // the calendar root.
+    // Collapse stacked routes to open appointment over calendar root.
     _navigatorKey.currentState?.popUntil((route) => route.isFirst);
 
     if (appointmentId.isEmpty) return;
@@ -314,9 +279,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     await showEventDetails(navContext, record, showActions: shell.isAdmin);
   }
 
-  /// Polls up to ~10s for the live hub. Background taps resolve on the first
-  /// tick (the hub is already up); a cold launch waits out splash + routing.
-  /// Returns null if the hub never appears (e.g. the user is stuck on login).
+  /// Poll up to ~10s for live hub; null if it never appears.
   Future<HubShellState?> _awaitLiveHub() async {
     for (var i = 0; i < 50; i++) {
       final shell = HubShell.liveState;
@@ -380,8 +343,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     var exitScheduled = false;
     try {
       final message = selectMessage(AppLocalizations.of(navContext));
-      // Best-effort device de-registration first — sign-out must not be blocked
-      // by it (the controller swallows its own failures).
+      // Best-effort de-registration first; doesn't block sign-out.
       await ref
           .read(pushRegistrationControllerProvider)
           .unregisterCurrentDevice();
@@ -401,10 +363,10 @@ class _PaulAppState extends ConsumerState<PaulApp> {
       });
       exitScheduled = true;
     } catch (e, st) {
-      // Sign-out failed (network/plugin) — the next signal retries.
+      // Sign-out failed — next signal retries.
       ref.read(loggerProvider).warn('ACCOUNT-EXIT sign-out failed', e, st);
     } finally {
-      // Reset on failure too, or every later disabled/deleted signal is muted.
+      // Reset on failure to allow retry on next signal.
       if (!exitScheduled) _isHandlingAccountExit = false;
     }
   }
@@ -419,14 +381,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     });
   }
 
-  /// One-shot sync against a value already present at registration: on relaunch
-  /// while already authenticated, the account doc can resolve before the
-  /// `ref.listen`s above are set up, and a plain listen would miss it (no
-  /// prompt / no token / no presence stream). Run exactly once after the first
-  /// build wires those listeners — NOT on every rebuild (a text-scale slider
-  /// drag re-runs `build`, and firing these fire-and-forget syncs per tick is
-  /// pure waste). Harmless when the doc isn't ready yet — each gate returns
-  /// early and the listeners catch the later emission.
+  /// Sync on first build with account doc already present; harmless if not ready.
   void _primeControllerSyncsOnce() {
     if (_controllerSyncsPrimed) return;
     _controllerSyncsPrimed = true;
@@ -439,11 +394,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     ref.listen<AsyncValue<String>>(userRoleProvider, (prev, next) {
       final prevRole = prev?.value;
       final nextRole = next.value;
-      // An empty new role means the doc went populated→empty — that's an
-      // account deletion, not a demotion. Let `_listenForDeletedAccount` own it
-      // (both funnel through the shared `_isHandlingAccountExit` flag, and this
-      // listener is registered first) so the user gets the "disabled" message,
-      // not "admin access revoked".
+      // Empty role is deletion, not demotion; let _listenForDeletedAccount own it.
       if (prevRole == 'admin' &&
           nextRole != null &&
           nextRole != '' &&
@@ -460,7 +411,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     ) {
       final isSignedIn = FirebaseAuth.instance.currentUser != null;
       final resolvedUid = ref.read(authUidProvider).value;
-      // Kick-out: populated→empty = runtime delete; cold start handled below.
+      // Kick-out on populated→empty; cold-start deletion handled below.
       if (isAccountDeletionSignal(
         isSignedIn: isSignedIn,
         resolvedUid: resolvedUid,
@@ -494,10 +445,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _listenForAccountDisabled();
     _listenForRoleRevocation();
     _listenForDeletedAccount();
-    // Device registration, the two off-screen schedule mirrors, and the photo
-    // drain — registered in the same order as before. The account-lifecycle
-    // listeners above stay here: they drive sign-out through shared state and
-    // their relative order is load-bearing.
+    // Register sync listeners; order is load-bearing for account-lifecycle control.
     AppSyncListeners(ref).registerAll();
     _primeControllerSyncsOnce();
     return AppLanguageScope(

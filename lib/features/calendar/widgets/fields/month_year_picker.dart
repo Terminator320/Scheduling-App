@@ -6,8 +6,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 class MonthYearPicker {
-  // Year wheel spans a sliding window relative to today so the range never
-  // needs a manual code bump: a few years back through several years ahead.
+  // Year wheel spans a sliding window relative to today (no manual bumps needed).
   static const int _pastYears = 5;
   static const int _futureYears = 15;
 
@@ -77,8 +76,7 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
     final bodyLarge = theme.textTheme.bodyLarge;
     final monthFormat = DateFormat.MMMM(locale);
 
-    // Sized past the bottom view padding + SafeArea so the wheels don't sit
-    // under the home indicator.
+    // Size past the bottom view padding so the wheels don't sit under the home indicator.
     return SizedBox(
       height: 300 + MediaQuery.viewPaddingOf(context).bottom,
       child: SafeArea(

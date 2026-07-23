@@ -41,7 +41,7 @@ class PendingUpload {
   }
 }
 
-/// Durable queue of photo batches that failed (or have yet) to upload.
+/// Durable queue of photo batches that failed (or have yet) to upload — a
 /// JSON list under one SharedPreferences key; corrupt data resets to empty.
 class PendingUploadStore {
   PendingUploadStore({AppLogger? logger}) : _logger = logger ?? AppLogger();
@@ -51,15 +51,7 @@ class PendingUploadStore {
 
   final AppLogger _logger;
 
-  /// Tail of the mutation chain. Every read-modify-write below runs through
-  /// [_serialized], because the queue is ONE SharedPreferences key: `add`,
-  /// `remove` and `prune` each `load()` → mutate → `_save()` with real awaits
-  /// in between, so two overlapping mutations both read the same list and the
-  /// second `_save` erases the first's change. That lost a whole photo batch —
-  /// a save staging a new entry while a listener-driven drain removed a
-  /// finished one wrote `[E1, E2]` then `[]`, stranding E2's files on disk with
-  /// no queue entry and no failure notice. Serializing here (not at the call
-  /// site) covers every caller, including the requeue inside a drain.
+  /// Serialization chain: all mutations via _serialized since the queue is ONE SharedPreferences key.
   Future<void> _mutations = Future<void>.value();
 
   Future<T> _serialized<T>(Future<T> Function() action) {
@@ -110,8 +102,7 @@ class PendingUploadStore {
     await _save(entries.where((e) => e.id != id).toList());
   });
 
-  /// Drops entries older than [_maxAge]; returns them so the caller can
-  /// delete their staged files.
+  /// Drops entries older than [_maxAge]; returns them for file cleanup.
   Future<List<PendingUpload>> prune({required DateTime now}) =>
       _serialized(() async {
         final entries = await load();

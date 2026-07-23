@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Shared [OutlinedButton] style for destructive actions (delete / cancel):
-/// an error-colored foreground and border. Pass [minimumSize] for the
-/// full-width variant used in action bars and edit forms.
+/// Shared [OutlinedButton] style for destructive actions with error-colored foreground and border.
 ButtonStyle destructiveOutlinedButtonStyle(
   BuildContext context, {
   Size? minimumSize,

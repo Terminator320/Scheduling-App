@@ -85,12 +85,11 @@ DateTime combineEndDateAndTime(
   final end = combineDateAndTime(date, endTime);
   if (startTime == null) return end;
   final start = combineDateAndTime(date, startTime);
-  // Bump to the next day only when the end is STRICTLY before the start
-  // (overnight). An end equal to the start stays same-day so the validator
-  // rejects it with endTimeMustBeAfterStart — bumping it would silently book
-  // a ~24h appointment. Wall-clock next-day construction (not
-  // end.add(Duration(days: 1))) so an overnight end landing on a DST
-  // transition day keeps its time-of-day.
+  // Bump to the next day only when the end is strictly before the start
+  // (overnight, via wall-clock construction rather than adding a Duration so
+  // a DST transition keeps the right time-of-day) — an end equal to the
+  // start stays same-day so the validator rejects it instead of silently
+  // booking a ~24h appointment.
   return end.isBefore(start)
       ? DateTime(
           date.year,
@@ -102,8 +101,7 @@ DateTime combineEndDateAndTime(
       : end;
 }
 
-/// Returns [errors] without [key], or the same map untouched when absent —
-/// used by the form controllers to clear a field's error as the user fixes it.
+/// Return [errors] without [key]; unchanged if absent (clears field error on fix).
 Map<String, AppointmentFormError> withoutKey(
   Map<String, AppointmentFormError> errors,
   String key,

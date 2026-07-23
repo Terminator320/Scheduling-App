@@ -14,8 +14,7 @@ class WaveService {
   final FirebaseFunctions _functions;
   final AppLogger _logger;
 
-  /// Connects to Wave. The target business is resolved server-side from the
-  /// `WAVE_BUSINESS_NAME` secret, so the client sends no selector.
+  /// Connect to Wave; business resolved server-side.
   Future<WaveConnection> bootstrap() async {
     final HttpsCallableResult<dynamic> result;
     try {
@@ -31,8 +30,7 @@ class WaveService {
     }
 
     try {
-      // NOTE: loose `as Map?` required — Android callables return
-      // Map<dynamic, dynamic>, not Map<String, dynamic>.
+      // NOTE: `as Map?` — Android callables return Map<dynamic, dynamic>.
       final data = (result.data as Map?)?.cast<String, dynamic>() ?? const {};
       return WaveConnection.fromMap(data);
     } catch (e, st) {
@@ -41,11 +39,7 @@ class WaveService {
     }
   }
 
-  /// Reads the persisted Wave connection, or null when not yet connected.
-  ///
-  /// Backs the persistent "Connected to X" status: the app can't read the
-  /// rules-locked `wave` collection directly, so it asks this admin-only
-  /// callable instead.
+  /// Read persisted Wave connection; backs "Connected to X" status display.
   Future<WaveConnection?> getConnection() async {
     final HttpsCallableResult<dynamic> result;
     try {
@@ -61,8 +55,7 @@ class WaveService {
     }
 
     try {
-      // NOTE: loose `as Map?` required — Android callables return
-      // Map<dynamic, dynamic>, not Map<String, dynamic>.
+      // NOTE: `as Map?` — Android callables return Map<dynamic, dynamic>.
       final data = (result.data as Map?)?.cast<String, dynamic>() ?? const {};
       if (data['connected'] != true) return null;
       return WaveConnection.fromMap(data);
@@ -87,8 +80,7 @@ class WaveService {
     }
 
     try {
-      // NOTE: loose `as Map?` required — Android callables return
-      // Map<dynamic, dynamic>, not Map<String, dynamic>.
+      // NOTE: `as Map?` — Android callables return Map<dynamic, dynamic>.
       final data = (result.data as Map?)?.cast<String, dynamic>() ?? const {};
       return WaveImportSummary.fromMap(data);
     } catch (e, st) {
@@ -101,8 +93,7 @@ class WaveService {
     }
   }
 
-  /// Sets the automatic-import cadence via the admin-only
-  /// `waveSetImportSchedule` callable.
+  /// Set automatic-import cadence.
   Future<void> setImportSchedule(WaveImportSchedule schedule) async {
     try {
       await _functions

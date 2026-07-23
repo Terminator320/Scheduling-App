@@ -31,15 +31,12 @@ final presenceSyncControllerProvider = Provider<PresenceSyncController>(
 /// handles granularity; this guards Firestore write volume on a highway.
 const minPresenceUploadGap = Duration(minutes: 2);
 
-/// Stationary re-upsert cadence. Keeps `updatedAt` fresh while tracking is
-/// alive so the server can read staleness as "tracking is dead" (its window
-/// is PRESENCE_STALE_MINUTES = 25 in functions/travel_utils.js — keep the two
-/// in sync: window comfortably above two missed heartbeats).
+/// Stationary re-upsert cadence, keeping `updatedAt` fresh; keep in sync with
+/// PRESENCE_STALE_MINUTES = 25 in functions/travel_utils.js (window
+/// comfortably above two missed heartbeats).
 const presenceHeartbeatEvery = Duration(minutes: 10);
 
-/// Pure gate: presence tracks exactly the timed-push audience — an admin
-/// assigned to a job gets the timed "leave now" push, so their leave time
-/// deserves the same live-GPS accuracy (decided 2026-07-13). Delegates to
+/// Pure gate: presence tracks exactly the timed-push audience; delegates to
 /// [shouldRegisterPush] so the "presence audience == push audience" invariant
 /// holds by construction and can't drift.
 bool shouldTrackPresence({
@@ -65,10 +62,7 @@ bool shouldHeartbeat({
     lastUploadAt != null &&
     now.difference(lastUploadAt) >= presenceHeartbeatEvery;
 
-/// Delay until a throttled fix would be allowed to write, or null when a
-/// write is already allowed now (mirrors [shouldWritePresenceFix]'s gate).
-/// Used to arm a trailing-flush timer so the last fix in a burst of movement
-/// still lands instead of being silently dropped by the throttle.
+/// Delay until a throttled fix is allowed, or null if allowed now (arms trailing-flush timer so last fix in burst lands).
 Duration? trailingFlushDelay({
   required DateTime? lastUploadAt,
   required DateTime now,
@@ -77,11 +71,7 @@ Duration? trailingFlushDelay({
   return minPresenceUploadGap - now.difference(lastUploadAt!);
 }
 
-/// Owns the background position stream that keeps
-/// `users/{docId}/presence/location` fresh for the travel-time reminders.
-/// Driven by `main.dart` on every `currentUserDocProvider` emission (mirrors
-/// [PushRegistrationController]); "backgrounded app" depth — tracking survives
-/// backgrounding/screen-off but dies on force-quit until the next app open.
+/// Owns the background position stream that keeps `users/{docId}/presence/location` fresh for travel-time reminders.
 class PresenceSyncController with ReentrantSync {
   PresenceSyncController(this._ref, {FirebaseAuth? auth})
     : _auth = auth ?? FirebaseAuth.instance;
@@ -100,10 +90,9 @@ class PresenceSyncController with ReentrantSync {
 
   AppLogger get _logger => _ref.read(loggerProvider);
 
-  /// Idempotent. A no-op for admins / signed-out users (and it tears the
-  /// stream down when the gate stops passing). Safe to call on every
-  /// account-doc emission and on app resume. Concurrent calls coalesce via
-  /// [ReentrantSync] so the latest account state always wins.
+  /// Idempotent no-op for admins/signed-out users (tears the stream down when
+  /// the gate stops passing); concurrent calls coalesce via [ReentrantSync] so
+  /// the latest account state always wins.
   Future<void> sync() => runCoalesced(_syncGuarded);
 
   Future<void> _syncGuarded() async {
@@ -120,8 +109,7 @@ class PresenceSyncController with ReentrantSync {
         _stop();
         return;
       }
-      // Resume restarts a stream killed by a mid-run permission flip and
-      // pushes the retry right after the user returns from system Settings.
+      // Restart stream if permission was flipped while running.
       _lifecycle ??= AppLifecycleListener(onResume: () => unawaited(sync()));
       final uid = _auth.currentUser?.uid;
       if (uid == null) return;
@@ -132,9 +120,8 @@ class PresenceSyncController with ReentrantSync {
       final permission = await _ref
           .read(locationPermissionServiceProvider)
           .ensureLocation();
-      // Silent no-op on any non-grant — the OS prompt appears once on first
-      // activation; never nag. The server's address-fallback chain covers an
-      // untracked user.
+      // Silent no-op on any non-grant (never nag) — the server's
+      // address-fallback chain covers an untracked user.
       if (permission != LocationPermissionResult.granted) return;
 
       final match = await _ref
@@ -147,8 +134,7 @@ class PresenceSyncController with ReentrantSync {
       }
       _start(docId: docId, uid: uid);
     } catch (e, st) {
-      // sync() is called via `unawaited` — never let a failure escape as an
-      // uncaught async error; report non-fatal instead.
+      // sync() is unawaited; don't let failures escape as uncaught async errors.
       _logger.warn('PRESENCE sync failed', e, st);
     }
   }
@@ -173,12 +159,7 @@ class PresenceSyncController with ReentrantSync {
             }
           },
           onError: (Object e, StackTrace st) {
-            // A revoked permission / disabled service kills the stream. Stop
-            // cleanly; the next sync() (app resume, account emission) re-runs
-            // the whole gate and restarts when allowed again. Permission loss
-            // is an expected user choice, not a defect — log it without a
-            // Crashlytics error record (it was showing up as a recurring
-            // non-fatal: kCLErrorDomain error 1).
+            // Expected permission loss logs without Crashlytics record.
             if (_isExpectedLocationLoss(e)) {
               _logger.warn('PRESENCE stream stopped: location access lost');
             } else {
@@ -217,16 +198,7 @@ class PresenceSyncController with ReentrantSync {
     });
   }
 
-  /// Advances the throttle clock to [attemptedAt] and fires the write. If the
-  /// write fails (swallowed inside the repo), the clock is rolled back to its
-  /// prior value so the next fix/heartbeat isn't suppressed by a write that
-  /// never actually landed — otherwise a dropped write could leave the presence
-  /// doc unrefreshed toward the 25-min server staleness window. A DENIED write
-  /// additionally stops tracking: the rules gate presence on an active
-  /// account, so a denial means this account may no longer write presence and
-  /// retrying every heartbeat only spams denied writes (the next sync() —
-  /// app resume, account emission — re-runs the gate and restarts if the
-  /// denial was the transient post-sign-in token lag).
+  /// Fires the write with throttle clock at [attemptedAt]; rolls back on failure so dropped write doesn't stall toward staleness window.
   void _uploadThrottled(Position position, DateTime attemptedAt) {
     final previous = _lastUploadAt;
     _lastUploadAt = attemptedAt;
@@ -255,11 +227,7 @@ class PresenceSyncController with ReentrantSync {
         );
   }
 
-  /// Expected, user-driven ways the position stream dies: the OS permission
-  /// was revoked or Location Services switched off. geolocator surfaces the
-  /// iOS kCLErrorDenied stream error as a [PositionUpdateException] wrapping
-  /// "kCLErrorDomain error 1", not as [PermissionDeniedException] — match
-  /// both, plus the service toggle.
+  /// Expected, user-driven ways the position stream dies (permission revoked or Location Services off).
   static bool _isExpectedLocationLoss(Object e) =>
       e is PermissionDeniedException ||
       e is LocationServiceDisabledException ||
@@ -308,9 +276,8 @@ class PresenceSyncController with ReentrantSync {
     _lastUploadAt = null;
   }
 
-  /// Best-effort teardown for sign-out / account deletion: stop the stream
-  /// and delete the presence doc (privacy — no stale coordinates after
-  /// leaving). Never throws — sign-out must not be blocked.
+  /// Best-effort teardown for sign-out / account deletion: stops the stream
+  /// and deletes the presence doc; never throws, since sign-out must not be blocked.
   Future<void> unregister() async {
     final docId = _docId;
     _stop();

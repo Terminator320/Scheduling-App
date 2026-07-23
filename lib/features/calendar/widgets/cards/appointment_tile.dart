@@ -13,10 +13,7 @@ class AppointmentTile extends StatelessWidget {
     required this.appointment,
     required this.employeeColorMap,
     super.key,
-    // Defaults CLOSED. `showEventDetails` makes this required for the same
-    // reason: a default of `true` silently hands a non-admin surface the
-    // admin-only Edit/Cancel/Delete affordances, which the rules then reject
-    // with an opaque permission-denied. Opt in explicitly.
+    // Defaults CLOSED; a `true` default would expose admin-only affordances to non-admins.
     this.showActions = false,
     this.onOpen,
     this.alwaysShowChip = false,
@@ -27,12 +24,10 @@ class AppointmentTile extends StatelessWidget {
   final Map<String, Color> employeeColorMap;
   final Future<void> Function()? onOpen;
 
-  /// Show the status chip even for the default (pending) state (the history
-  /// list wants every row chipped; the calendar hides the chip when pending).
+  /// Show the status chip even for default (pending) state (history list wants it; calendar hides it).
   final bool alwaysShowChip;
 
-  /// Strike through the title and dim the card when the appointment is
-  /// cancelled (history list treatment).
+  /// Strike through and dim the card when cancelled (history list treatment).
   final bool dimWhenCancelled;
 
   @override
@@ -46,7 +41,7 @@ class AppointmentTile extends StatelessWidget {
     final showChip = alwaysShowChip || status != AppointmentStatus.pending;
     final isCancelled = dimWhenCancelled && status.isCancelled;
 
-    // Show every assigned employee, dropping blanks so no stray ", " shows.
+    // Show every assigned employee; drop blanks to avoid stray ', '.
     final joinedNames = appointment.employeeNames
         .where((name) => name.isNotEmpty)
         .join(', ');

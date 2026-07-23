@@ -1,11 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:scheduling/features/clients/widgets/sections/additional_contacts_section.dart';
 
-/// Shared form-state plumbing for the add- and edit-client forms: the field
-/// [errors] map and the list of [additionalContacts], plus the mutators both
-/// forms had duplicated. Mix into the form's [State].
-///
-/// The owning State must call [disposeAdditionalContacts] from its `dispose`.
+/// Shared form-state plumbing for add/edit forms; call disposeAdditionalContacts from dispose.
 mixin ClientFormState<T extends StatefulWidget> on State<T> {
   /// Field key -> error message (null when valid). Drives the field errorText.
   final Map<String, String?> errors = {};
@@ -13,7 +9,7 @@ mixin ClientFormState<T extends StatefulWidget> on State<T> {
   /// Extra business contacts beyond the primary name/phone/email.
   final List<ContactFields> additionalContacts = [];
 
-  /// When true, the client has no stored address; it is set per appointment.
+  /// True if client has no stored address; set per appointment.
   bool noFixedAddress = false;
 
   /// Toggles [noFixedAddress]; clears any stale address error when enabling.
@@ -36,7 +32,7 @@ mixin ClientFormState<T extends StatefulWidget> on State<T> {
   void removeAdditionalContact(int index) {
     setState(() {
       additionalContacts.removeAt(index).dispose();
-      // Later rows shift down an index; the form rebuilds every contact_ key.
+      // Later rows shift index; form rebuilds all contact_ keys.
       errors
         ..remove('contact_${index}_name')
         ..remove('contact_${index}_phone')

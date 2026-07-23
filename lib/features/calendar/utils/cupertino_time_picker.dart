@@ -31,8 +31,7 @@ Future<TimeOfDay?> showCupertinoTimePicker(
   );
 }
 
-/// Cupertino date wheel in the same bottom-sheet chrome as the time picker —
-/// the iOS counterpart of Material's [showDatePicker].
+/// Cupertino date wheel in the same bottom-sheet chrome as the time picker.
 Future<DateTime?> showCupertinoDatePickerSheet(
   BuildContext context, {
   required DateTime initialDate,
@@ -63,9 +62,7 @@ Future<DateTime?> showCupertinoDatePickerSheet(
   );
 }
 
-/// Shared bottom-sheet chrome for the Cupertino wheels: Cancel/Done header
-/// above the wheel, sized past the bottom view padding so the wheel doesn't
-/// sit under the home indicator.
+/// Shared bottom-sheet chrome for the Cupertino wheels with Cancel/Done header.
 Future<T?> _showCupertinoWheelSheet<T>(
   BuildContext context, {
   required Widget Function(BuildContext) wheelBuilder,

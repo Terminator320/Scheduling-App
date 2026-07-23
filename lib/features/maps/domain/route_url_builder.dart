@@ -3,9 +3,7 @@ import 'package:scheduling/features/maps/domain/address_parser.dart';
 /// Google Maps caps directions URLs at 9 waypoints + 1 destination.
 const int maxRouteStops = 10;
 
-/// Builds a Google Maps directions URL through [addresses] in order, or null
-/// when no usable stop remains. Apple Maps has no multi-stop URL scheme —
-/// per-stop navigation covers those users.
+/// Build Google Maps directions URL; null if no addresses; Google-only (no Apple Maps multi-stop).
 Uri? buildGoogleMapsRouteUrl(List<String> addresses) {
   final stops = addresses
       .map((a) => a.trim())

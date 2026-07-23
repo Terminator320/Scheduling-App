@@ -3,18 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/storage/secure_storage_service.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
-/// App-wide [AuthCache], wired to the shared secure-storage service so tests
-/// can swap either layer independently.
+/// App-wide [AuthCache], wired to shared secure-storage for testability.
 final authCacheProvider = Provider<AuthCache>(
   (ref) => AuthCache(storage: ref.watch(secureStorageServiceProvider)),
 );
 
-/// Caches the signed-in employee's display identity (uid, doc id, name,
-/// avatar color) at rest. Backed by [SecureStorageService] so the cached
-/// identity is encrypted rather than sitting in plaintext SharedPreferences.
-///
-/// Role/`isAdmin` is deliberately never cached — that always comes from
-/// Firestore (see the role-cache invariant).
+/// Caches signed-in employee's display identity (encrypted storage, never role).
 class AuthCache {
   AuthCache({SecureStorageService? storage})
     : _storage = storage ?? SecureStorageService();

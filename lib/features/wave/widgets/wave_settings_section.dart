@@ -23,11 +23,9 @@ String _scheduleLabel(BuildContext context, WaveImportSchedule schedule) =>
       WaveImportSchedule.monthly => context.l10n.wave_autoImportMonthly,
     };
 
-/// Admin-only Wave integration controls shown inside the Settings screen.
-///
-/// Holds ephemeral state for the active [WaveConnection] and per-action busy
-/// flags. Both actions surface [WaveFailure] via notices; they never use
-/// ScaffoldMessenger.
+/// Admin-only Wave integration controls in Settings; holds ephemeral
+/// [WaveConnection] and busy-flag state, and surfaces [WaveFailure] via
+/// notices (never ScaffoldMessenger).
 class WaveSettingsSection extends ConsumerStatefulWidget {
   const WaveSettingsSection({super.key});
 
@@ -37,18 +35,15 @@ class WaveSettingsSection extends ConsumerStatefulWidget {
 }
 
 class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
-  // Connection done in the current session. The persisted server-side status is
-  // read separately via [waveConnectionProvider] (a cached callable, since the
-  // app can't read the firestore.rules-locked `wave` collection directly); this
-  // local value takes precedence right after a Connect.
+  // This-session Connect result; takes precedence over the persisted
+  // [waveConnectionProvider] status right after connecting.
   WaveConnection? _connection;
   bool _connectBusy = false;
   bool _importBusy = false;
   bool _scheduleBusy = false;
 
-  /// Fail-fast offline guard: the Wave callables would otherwise hang ~20 s.
-  /// Surfaces the same network message their catch would, and returns true so
-  /// the caller aborts before flipping its busy flag.
+  /// Fail-fast offline guard so the ~20s Wave callables don't hang; surfaces
+  /// the network notice and returns true so the caller aborts first.
   bool _blockedOffline() {
     if (!ref.read(isOfflineProvider)) return false;
     ref
@@ -57,9 +52,8 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
     return true;
   }
 
-  /// Shared try/on-WaveFailure/finally-busy-reset shape for the three Wave
-  /// actions below. Logs under `WAVE-<tag>` before surfacing the notice, so a
-  /// swallowed failure still lands in Crashlytics per error-handling.md.
+  /// Shared try/on-WaveFailure/finally-busy-reset shape for the three actions
+  /// below; logs under `WAVE-<tag>` before the notice so failures reach Crashlytics.
   Future<void> _runWaveAction({
     required String tag,
     required void Function({required bool busy}) setBusy,
@@ -83,15 +77,13 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
       tag: 'CONNECT',
       setBusy: ({required busy}) => setState(() => _connectBusy = busy),
       action: () async {
-        // No business is chosen client-side — waveBootstrap resolves the
-        // target from its server-side WAVE_BUSINESS_NAME config, so the
-        // business name never ships in the app.
+        // No business chosen client-side — waveBootstrap resolves it
+        // server-side, so the name never ships in the app.
         final conn = await ref.read(waveServiceProvider).bootstrap();
         if (!mounted) return;
         if (!conn.isConnected) {
-          // Server returned no business (e.g. misconfigured
-          // WAVE_BUSINESS_NAME) — don't flip the UI to a blank "connected"
-          // state.
+          // Server returned no business (misconfigured WAVE_BUSINESS_NAME) —
+          // don't show a blank "connected" state.
           ref
               .read(noticeServiceProvider)
               .error(context.l10n.wave_errorBusinessAmbiguous);
@@ -146,8 +138,8 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
       action: () async {
         await ref.read(waveServiceProvider).setImportSchedule(choice);
         if (!mounted) return;
-        // Reflect the new cadence locally; the connection provider is
-        // invalidated so a later Settings mount re-reads the persisted value.
+        // Reflect the new cadence locally; invalidate so a later mount
+        // re-reads the persisted value.
         final base = _connection ?? ref.read(waveConnectionProvider).value;
         if (base != null) {
           setState(() => _connection = base.copyWith(importSchedule: choice));
@@ -163,14 +155,12 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
   @override
   Widget build(BuildContext context) {
     final connectionAsync = ref.watch(waveConnectionProvider);
-    // A Connect done this session wins; otherwise fall back to the cached
-    // persisted status.
+    // A this-session Connect wins; otherwise fall back to the cached persisted status.
     final connection = _connection ?? connectionAsync.value;
     final connected = connection != null;
 
-    // Distinguish "still loading" and "read failed" from "not connected" so an
-    // already-connected admin doesn't see the Connect CTA flash, and a genuine
-    // failure offers a retry instead of masquerading as never-connected.
+    // Distinguish loading/error from not-connected so a connected admin
+    // doesn't see the Connect CTA flash and failures offer a retry.
     if (_connection == null && connectionAsync.isLoading) {
       return const _WaveStatusLoading();
     }
@@ -191,8 +181,7 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
                 ? null
                 : () => _pickSchedule(connection.importSchedule),
           ),
-        // Connect is first-time setup only — once connected, the persisted
-        // status row replaces it and only Import remains.
+        // Connect is first-time setup only — the status row replaces it once connected.
         if (!connected)
           AnimatedLoadingButton(
             label: context.l10n.wave_connectToWave,
@@ -200,8 +189,7 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
             onPressed: _connectBusy || _importBusy ? null : _connect,
           )
         else
-          // Import only makes sense once connected — a tap while disconnected
-          // is guaranteed to fail.
+          // Import only makes sense once connected — disconnected, a tap is guaranteed to fail.
           AnimatedLoadingButton(
             label: context.l10n.wave_importCustomers,
             isLoading: _importBusy,

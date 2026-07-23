@@ -42,9 +42,7 @@ class PhotoPickerSection extends StatelessWidget {
     ImageViewer.open(context, images: providers, initialIndex: tappedIndex);
   }
 
-  // Read-only display: a swipeable carousel with page dots. Returns an empty
-  // box when there are no real images (e.g. only upload failures), so the
-  // failure banner below stands alone.
+  // Read-only swipeable carousel; returns empty box when no real images so failure banner stands alone.
   Widget _readOnlyGallery() {
     final providers = buildImageProviders(
       urls: existingImages.map((i) => i.url).toList(),
@@ -126,14 +124,12 @@ class _EditablePhotoStrip extends StatelessWidget {
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
-          ...existingImages
-              .asMap()
-              .entries
-              .map((entry) => _existingThumb(context, entry, thumbCache)),
-          ...newImages
-              .asMap()
-              .entries
-              .map((entry) => _newThumb(context, entry, thumbCache)),
+          ...existingImages.asMap().entries.map(
+            (entry) => _existingThumb(context, entry, thumbCache),
+          ),
+          ...newImages.asMap().entries.map(
+            (entry) => _newThumb(context, entry, thumbCache),
+          ),
           ...List.generate(
             failedCount,
             (_) => const Padding(

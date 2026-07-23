@@ -3,10 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/live_activity/domain/live_activity_token.dart';
 
-/// Reads/writes the `users/{docId}/liveActivityTokens/{id}` APNs token docs
-/// the server uses to start, update and end Live Activity cards. Injected
-/// Firestore (never `FirebaseFirestore.instance` from UI); logs and swallows
-/// failures so a token write never breaks a flow.
+/// Reads/writes `users/{docId}/liveActivityTokens/{id}` APNs token docs for starting, updating, and ending cards; logs and swallows failures.
 class LiveActivityTokenRepository {
   LiveActivityTokenRepository({
     required FirebaseFirestore firestore,
@@ -26,19 +23,8 @@ class LiveActivityTokenRepository {
       .collection('liveActivityTokens')
       .doc(docId);
 
-  /// Upserts a Live Activity token. `createdAt` is stamped only on first
-  /// create so an iOS token rotation (which re-upserts) preserves the original
-  /// registration time; every write refreshes `updatedAt`.
-  ///
-  /// Deliberately a plain get-then-set, NOT a transaction — the sign-in
-  /// fan-out runs the push-to-start and update-token upserts concurrently
-  /// with `FcmTokenRepository.upsertToken`, and concurrent client
-  /// transactions crash the cloud_firestore iOS plugin (see the note there;
-  /// don't reintroduce `runTransaction` in either repo). A double-upsert can
-  /// only re-stamp `createdAt` — cosmetic.
-  ///
-  /// `platform` is always `ios` — Live Activities do not exist elsewhere, and
-  /// the security rule pins the field to that value.
+  /// Upserts a Live Activity token with createdAt only on first write (iOS token rotation preserves original time).
+  /// Plain get-then-set, NOT a transaction: concurrent transactions crash in cloud_firestore iOS plugin; cosmetic re-stamp of createdAt is acceptable.
   Future<void> upsertToken({
     required String userDocId,
     required String docId,
@@ -68,11 +54,7 @@ class LiveActivityTokenRepository {
     }
   }
 
-  /// Deletes every row of [kind] for this user, without needing the token
-  /// value. A push-to-start row's doc id IS its token, so an opt-out that
-  /// happens before the token stream has emitted (or on a cold start that
-  /// never registered) has no id to delete by — but it must still clear the
-  /// row, or the server keeps push-starting cards on an opted-out device.
+  /// Deletes every row of [kind] without needing the token value (push-to-start doc id IS the token, which opt-out may never have seen).
   Future<void> deleteTokensOfKind({
     required String userDocId,
     required LiveActivityTokenKind kind,

@@ -124,8 +124,7 @@ class _MaxLengthWarning extends StatelessWidget {
   }
 }
 
-// Fade + 4px slide entrance/exit for the error row (style A from the spec);
-// AnimatedSize lets fields below glide instead of jumping.
+// Fade + 4px slide entrance/exit for the error row; AnimatedSize lets fields below glide instead of jumping.
 class _AnimatedFieldError extends StatelessWidget {
   const _AnimatedFieldError({required this.message});
 

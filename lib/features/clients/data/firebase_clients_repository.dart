@@ -21,23 +21,15 @@ class FirebaseClientsRepository implements ClientsRepository {
   /// Injectable time source so the search-cache TTL is testable.
   final DateTime Function() _clock;
 
-  // Bounded LRU of recent search results. The repository is a long-lived
-  // singleton, so an unbounded map would grow one entry per distinct query for
-  // the whole session. Oldest entry is evicted past [_searchCacheMax].
+  // Bounded LRU cache (evicts oldest past _searchCacheMax) to prevent unbounded growth.
   static const int _searchCacheMax = 50;
 
-  /// How long a cached search result — and the scan window itself — may be
-  /// served before being re-read. Local writes patch the caches immediately;
-  /// this TTL is the safety net for writes made on other devices, so a doc
-  /// written elsewhere may take up to this long to show up in (or drop out
-  /// of) search. Mirrors FirebaseAppointmentsRepository.
+  /// Cache TTL for search results and scan window; local writes patch immediately, this is a safety net for remote writes.
   static const Duration _searchCacheTtl = Duration(minutes: 2);
 
   final Map<String, _CachedClientSearch> _searchCache = {};
 
-  // The raw name-ordered scan window shared by every search: one read of up
-  // to serverReadLimit docs serves all queries typed within the TTL, instead
-  // of each distinct query re-reading the whole window.
+  // Shared name-ordered scan window serving all queries within the TTL.
   _CachedClientScanWindow? _scanWindow;
 
   bool _isFresh(DateTime fetchedAt) =>
@@ -51,22 +43,14 @@ class FirebaseClientsRepository implements ClientsRepository {
     _searchCache[key] = _CachedClientSearch(results, _clock());
   }
 
-  // Selective invalidation for LOCAL writes: patch the one written doc into
-  // (or out of) the in-memory scan window instead of dropping it, so the next
-  // search recomputes from memory with ZERO Firestore reads — the old
-  // clear-all forced a full up-to-1000-doc re-read after every write. The
-  // derived per-query results are cleared (recomputing them from the patched
-  // window is cheap and runs off the UI thread), which also guarantees a
-  // just-deleted client can never be served from a stale entry. Remote writes
-  // can't reach this hook; the per-entry TTL covers those.
+  // Selective invalidation for LOCAL writes: patch written doc into/out of scan window for zero-read search recompute.
   void _applyLocalWrite(String id, Map<String, dynamic>? data) {
     final window = _scanWindow;
     if (window != null && _isFresh(window.fetchedAt)) {
       final docs = [
         for (final doc in window.docs)
           if (doc.id != id) doc,
-        // Position within the window doesn't matter: matching is per-doc and
-        // the final ordering comes from the relevance sort, not window order.
+        // Position in window irrelevant; matching is per-doc, final order from relevance sort.
         if (data != null) (id: id, data: data),
       ];
       _scanWindow = _CachedClientScanWindow(docs, window.fetchedAt);
@@ -76,12 +60,7 @@ class FirebaseClientsRepository implements ClientsRepository {
     _searchCache.clear();
   }
 
-  // Stored `name` of each page-boundary doc, keyed by doc id. The field-value
-  // cursor must use the exact value Firestore ordered by, and
-  // ClientRecord.name falls back to `businessName` for legacy docs whose
-  // stored name is empty — using that fallback as the cursor value would skip
-  // every doc sorted between '' and the business name. One small entry per
-  // page boundary, so growth is negligible.
+  // Page-boundary doc names keyed by id; cursor uses exact Firestore value (not fallback `businessName`) to avoid skipping docs.
   final Map<String, String> _pageBoundaryNames = {};
 
   @override
@@ -89,13 +68,7 @@ class FirebaseClientsRepository implements ClientsRepository {
     required int limit,
     ClientRecord? after,
   }) async {
-    // Alphabetical by name (ascending), with the doc id as an explicit
-    // tiebreaker so the cursor can be plain field values — no extra read (and
-    // serial round-trip) to refetch the boundary doc per page — without
-    // skipping or duplicating clients that share a name (Firestore cursors on
-    // equal values are otherwise ambiguous). Mirrors fetchHistoryPage. NOTE:
-    // like any Firestore orderBy this excludes docs missing `name`; every
-    // client write sets it, so that holds.
+    // Ordered alphabetically by name (with doc id as tiebreaker) to avoid skipping/duplicating clients with shared names.
     var query = _clients.orderBy('name').orderBy(FieldPath.documentId);
     if (after != null) {
       query = query.startAfter([
@@ -121,8 +94,7 @@ class FirebaseClientsRepository implements ClientsRepository {
 
   @override
   Future<List<ClientRecord>> fetchClientsCreatedSince(DateTime since) async {
-    // Defensive ceiling consistent with the other windowed reads: the
-    // dashboard range is small in practice, but never issue an unbounded query.
+    // Defensive ceiling for windowed reads to avoid unbounded queries.
     final snapshot = await _clients
         .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
         .orderBy('createdAt')
@@ -179,6 +151,7 @@ class FirebaseClientsRepository implements ClientsRepository {
 
     // Parsing + normalizing + scoring up to serverReadLimit docs is CPU work
     // (8 regex passes over 13 fields per doc) — run it off the UI thread.
+    // Parsing, normalizing, and scoring is CPU work; run off the UI thread.
     final results = await compute(
       matchClientDocs,
       ClientSearchScan(docs: window.docs, query: q),
@@ -187,18 +160,14 @@ class FirebaseClientsRepository implements ClientsRepository {
     return results;
   }
 
-  /// The raw name-ordered window of clients every search scans, served from
-  /// cache while fresh so successive queries share one read.
+  /// Raw name-ordered window of clients every search scans; served from cache so successive queries share one read.
   Future<_CachedClientScanWindow?> _clientScanWindow() async {
     final cached = _scanWindow;
     if (cached != null && _isFresh(cached.fetchedAt)) return cached;
 
     final QuerySnapshot<Map<String, dynamic>> snapshot;
     try {
-      // Order by `name` (like fetchClientsPage), NOT createdAt: Firestore
-      // excludes any doc missing the orderBy field, and legacy business-only
-      // docs may lack createdAt — ordering by createdAt made them unsearchable.
-      // `name` is set on every write, so this keeps all clients in scope.
+      // Order by `name` (not createdAt) to keep legacy business-only docs searchable; `name` is set on every write.
       snapshot = await _clients
           .orderBy('name')
           .limit(ClientSearchPolicy.serverReadLimit)
@@ -233,8 +202,7 @@ class FirebaseClientsRepository implements ClientsRepository {
   }
 }
 
-/// One raw doc of the client scan window — kept as plain id + data so the
-/// payload crosses the `compute` isolate boundary without Firestore handles.
+/// Raw doc without Firestore handles, safe to cross `compute` isolate boundary.
 typedef RawClientDoc = ({String id, Map<String, dynamic> data});
 
 /// `compute` payload for [matchClientDocs].
@@ -245,13 +213,7 @@ class ClientSearchScan {
   final String query;
 }
 
-/// Parses the scan window and returns the clients matching
-/// [ClientSearchScan.query] across all fields (name, business name, person
-/// name, phone/mobile, email, address, contacts), relevance-scored then
-/// alphabetical. Matching goes through [ClientSearchPolicy] — the single
-/// source of matching truth. Top-level so `compute` can run it in a
-/// background isolate; [ClientRecord]s are plain Dart objects, so
-/// constructing and returning them from the isolate is safe.
+/// Parses scan window and returns clients matching [ClientSearchScan.query] across all fields with relevance scoring.
 List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
   final normalizedQuery = ClientSearchPolicy.normalize(scan.query);
   final queryDigits = ClientSearchPolicy.digitsOnly(scan.query);
@@ -278,8 +240,7 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
     final searchableText = ClientSearchPolicy.normalize(
       [
         data['name'],
-        // Legacy business-only docs (pre-Wave reshape) keep their name under
-        // `businessName`; index it so those clients stay searchable.
+        // Legacy business-only docs keep name under `businessName`; index it for searchability.
         data['businessName'],
         data['firstName'],
         data['lastName'],

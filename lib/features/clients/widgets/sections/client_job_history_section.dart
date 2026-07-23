@@ -14,15 +14,8 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
-/// The "Job history" block on the admin-only client detail view: this client's
-/// appointments most-recent first, each tappable into the appointment detail
-/// sheet. Shows a friendly "No jobs yet" line rather than hiding when empty
-/// (this is the client's own detail, where the section is expected).
-// NOTE: A "Book again" affordance (seed the add-appointment sheet with this
-// client + a past job's title/materials/address) is deferred — AddEventSheet
-// only accepts an initialDate and seeding a client routes through the
-// initialDate-keyed addEventControllerProvider, so it can't be wired without
-// invasive changes to the create flow.
+/// Job history block on admin-only detail view; shows appointments most-recent first, tappable into detail sheet.
+// NOTE: "Book again" affordance deferred (would require invasive changes to create flow).
 class ClientJobHistorySection extends ConsumerWidget {
   const ClientJobHistorySection({required this.clientId, super.key});
 
@@ -51,8 +44,7 @@ class ClientJobHistorySection extends ConsumerWidget {
               SkeletonAppointmentRow(),
             ],
           ),
-          // A builder — compose the cause+tag notice without logging (the
-          // provider's read isn't a UI-layer catch site).
+          // Compose cause+tag notice without logging (provider read isn't UI-layer catch site).
           error: (e, _) => _EmptyLine(
             text: composeErrorNotice(
               context,

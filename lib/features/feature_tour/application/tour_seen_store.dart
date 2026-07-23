@@ -8,15 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// SharedPreferences key: names of hub tabs whose tour has been seen.
 const _keyTourSeenTabs = 'tour_seen_tabs';
 
-/// Which tabs' feature tours have already run on this device. Device-local by
-/// design (a returning user on a new phone gets the tour again); sign-out does
-/// NOT reset it — the Settings "Replay app tour" row is the only reset.
-///
-/// Mirrors the Live Activity preference controller: `build` returns an
-/// optimistic empty set before the disk read finishes, so anything that
-/// *acts* on the value (auto-starting a tour) MUST await [ready] first — the
-/// optimistic "nothing seen" default would otherwise replay seen tours on
-/// cold start.
+/// Tours seen on device; await ready before reading to avoid replaying on cold start.
 class TourSeenController extends Notifier<Set<AdaptiveDestination>> {
   late final Future<void> ready = _load();
 
@@ -35,8 +27,7 @@ class TourSeenController extends Notifier<Set<AdaptiveDestination>> {
           if (names.contains(tab.name)) tab,
       };
     } catch (e, st) {
-      // Fired unawaited from build(); default to "nothing seen" — the same
-      // state a fresh install has.
+      // Unawaited from build(); defaults to fresh install.
       ref.read(loggerProvider).warn('TOUR read seen flags failed', e, st);
     }
   }
@@ -51,11 +42,7 @@ class TourSeenController extends Notifier<Set<AdaptiveDestination>> {
     await _save();
   }
 
-  /// NOTE: mutations are state-then-save over one prefs key with no
-  /// serialization — safe only while writers can't overlap (one visible
-  /// tour at a time; replay can't be tapped through a running overlay).
-  /// A new concurrent writer must add a serialized mutation chain first
-  /// (see PendingUploadStore for the failure mode).
+  /// Unserialized save; safe only because writers can't overlap.
   Future<void> _save() async {
     try {
       final prefs = await SharedPreferences.getInstance();

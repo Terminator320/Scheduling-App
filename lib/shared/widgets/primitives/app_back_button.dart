@@ -2,12 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 
-/// The app's standard back arrow: an [IconButton] whose icon nudges left and
-/// springs back when pressed. Reused by `AppTopBar` and any screen that needs a
-/// leading back control, so the chrome and the tap feedback stay consistent.
-///
-/// The press animation collapses to instant when the platform requests reduced
-/// motion (`MediaQuery.disableAnimationsOf`).
+/// The app's standard back arrow (an [IconButton] that nudges left and springs back on press), reused by `AppTopBar` and any back-control screen for consistent feedback; the press animation collapses to instant under reduced motion.
 class AppBackButton extends StatefulWidget {
   const AppBackButton({required this.onTap, this.tooltip, super.key});
 

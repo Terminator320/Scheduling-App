@@ -6,10 +6,7 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Tap-friendly grid of the employee palette. Colors already used by another
-/// employee are hidden entirely, so everything shown is pickable: 48px-target
-/// swatches with ripple feedback, plus a trailing rainbow swatch that opens
-/// the custom picker (a tappable palette first; the wheel one tab away).
+/// Tap-friendly employee color grid: hides used colors, shows custom picker swatch.
 class EmployeeColorGrid extends ConsumerWidget {
   const EmployeeColorGrid({
     required this.selectedColor,
@@ -29,8 +26,7 @@ class EmployeeColorGrid extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Only offer colors no other employee has — the selected color always
-    // stays visible so the current choice can't vanish from its own form.
+    // Offer only unused colors (selected always stays visible).
     final available = [
       for (final color in AppColors.employeePalette)
         if (!usedColors.contains(color.toARGB32()) ||

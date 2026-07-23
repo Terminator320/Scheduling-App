@@ -6,11 +6,7 @@ import 'package:scheduling/features/clients/widgets/views/client_detail_view.dar
 import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-/// Opens the read-only [ClientDetailSheet] for [client], with the
-/// sheet-from-search settle/unfocus sequence around it — settle the keyboard
-/// before the sheet slides in, double-unfocus after it closes. Shared by the
-/// clients list and the master-detail single-pane tap path so both stay in
-/// lockstep.
+/// Opens read-only client detail sheet with settle/unfocus sequence; shared by list and master-detail.
 Future<void> showClientDetailSheet(
   BuildContext context,
   ClientRecord client,

@@ -2,9 +2,7 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-/// Schema version of the snapshot payload. The Swift App Intents extension
-/// rejects anything it doesn't know rather than mis-decoding it, so bump this
-/// only alongside the Swift `ScheduleSnapshot` decoder.
+/// Schema version; bump only alongside Swift `ScheduleSnapshot` decoder.
 const scheduleSnapshotVersion = 1;
 
 /// Days carried beyond today. Phase-2 date queries ("what's my schedule
@@ -15,11 +13,7 @@ const scheduleSnapshotLookaheadDays = 7;
 /// Defensive per-day cap — Siri reads at most one day out loud.
 const scheduleSnapshotPerDayCap = 30;
 
-/// Only the fields the Siri intents actually speak (plus `id`, which Phase-4
-/// write actions resolve their target by). Notes, phone, pictures and materials
-/// are deliberately left out: the App Group container stays readable while the
-/// device is locked, so every field here is at-rest PII at a weaker protection
-/// class than the rest of the app's data.
+/// Only fields the Siri intents speak (plus `id` for Phase-4 actions); excludes notes/phone/pictures since App Group is readable while locked.
 Map<String, dynamic> _appointment(AppointmentRecord a) => {
   'id': a.id,
   'startMillis': a.startTime.millisecondsSinceEpoch,
@@ -34,17 +28,8 @@ String _dayKey(DateTime day) =>
     '${day.month.toString().padLeft(2, '0')}-'
     '${day.day.toString().padLeft(2, '0')}';
 
-/// Serializes the schedule the Siri App Intents extension answers from into the
-/// JSON written to the App Group. Pure — unit-testable.
-///
-/// Carries one bucket per day from today through
-/// [scheduleSnapshotLookaheadDays] out, using **device-local** day boundaries
-/// (matching the widget payload builder). Cancelled visits are excluded, and
-/// records without a Firestore doc id are dropped — Phase-4 write actions
-/// resolve their target by `id`, so an id-less entry is unactionable.
-///
-/// [role] is carried through so the extension can word its answers ("your
-/// schedule" vs. the whole business's) without re-deriving the caller's role.
+/// Serializes the schedule the Siri App Intents extension answers from (pure, unit-testable).
+/// Carries one bucket per day (today through lookahead); excludes cancelled visits and id-less records (Phase-4 write actions resolve by id).
 Map<String, dynamic> buildScheduleSnapshot({
   required List<AppointmentRecord> appointments,
   required String role,

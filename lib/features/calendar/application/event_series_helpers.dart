@@ -3,12 +3,9 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart'
     show AppointmentStatus;
 
-/// Pure helpers for reasoning about an appointment series — extracted from
-/// `EventDetailsController` so the save/series/delete logic stays readable and
-/// these can be unit-tested without a Riverpod container.
+/// Pure helpers for reasoning about an appointment series, extracted for testability.
 
-/// Ids of the series visits after [after], skipping [excludeId] and any
-/// visit already done or cancelled (those stay as records).
+/// Ids of non-terminal series visits after [after], excluding [excludeId].
 List<String> futureSeriesIds(
   List<AppointmentRecord> series, {
   required String excludeId,
@@ -22,9 +19,7 @@ List<String> futureSeriesIds(
     a.id!,
 ];
 
-/// Series visits after [after], skipping [excludeId] and any visit already
-/// done or cancelled (those stay as records) — the targets an edit or delete
-/// propagates to.
+/// Non-terminal series visits after [after], excluding [excludeId], for propagation.
 List<AppointmentRecord> futureSeriesRecords(
   List<AppointmentRecord> series, {
   required String excludeId,

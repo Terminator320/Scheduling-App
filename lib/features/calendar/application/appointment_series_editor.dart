@@ -4,26 +4,20 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-/// Outcome of a series rewrite: the series-stamped record plus how many future
-/// occurrences were booked and how many old ones were removed.
+/// Outcome of a series rewrite: record, future bookings count, removed count.
 typedef SeriesRewriteResult = ({
   AppointmentRecord updated,
   int futureBookings,
   int removedBookings,
 });
 
-/// Repo-driven series mechanics for the appointment editor — the rewrite and
-/// apply-to-all-future operations, extracted from `EventDetailsController` so
-/// the controller keeps orchestration and these stay focused and testable.
+/// Repo-driven series mechanics: rewrite and apply-to-all-future operations.
 class AppointmentSeriesEditor {
   const AppointmentSeriesEditor(this._repo);
 
   final AppointmentsRepository _repo;
 
-  /// The repeat rule changed — rewrite the series like a real calendar: drop
-  /// the old future visits and book the new cadence in one atomic batch.
-  /// Done/cancelled visits are kept as records; copies start 'pending' without
-  /// sharing pictures. Returns the series-stamped record plus the counts.
+  /// Repeat changed: rewrite series, drop old future, book new cadence atomically.
   Future<SeriesRewriteResult> rewrite({
     required AppointmentRecord updated,
     required AppointmentRecord appointment,
@@ -64,11 +58,7 @@ class AppointmentSeriesEditor {
     );
   }
 
-  /// Apply-to-all: propagate the edited details and time-of-day to this visit
-  /// and every future non-terminal sibling, keeping each sibling's own calendar
-  /// date so the schedule isn't disturbed. Status stays per-visit (never
-  /// propagated) and each visit keeps its own pictures. Past and done/cancelled
-  /// visits are left untouched. Returns the number of siblings updated.
+  /// Apply-to-all: propagate edited details to this visit and future non-terminal siblings.
   Future<int> propagate({
     required AppointmentRecord updated,
     required AppointmentRecord appointment,
@@ -101,9 +91,7 @@ class AppointmentSeriesEditor {
           originalEnd: end,
           copyStart: copyStart,
         ),
-        // Canonicalize each sibling's own status (never propagate the edited
-        // visit's) so a legacy value like the retired 'confirmed' isn't
-        // re-written verbatim and rejected by the status allowlist rule.
+        // Canonicalize each sibling's status to avoid legacy value rejection.
         status: AppointmentStatus.storedRaw(v.status),
       );
     }).toList();

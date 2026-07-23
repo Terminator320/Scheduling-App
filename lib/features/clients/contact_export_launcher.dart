@@ -8,9 +8,7 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// The contact properties the client sync owns. Fetching exactly this set
-/// before `update` means only these are overwritten — everything else
-/// (photo, groups, account) is untouched by design of the 2.x API.
+/// Contact properties the client sync owns; updating only these preserves others (photo, groups, account).
 const Set<ContactProperty> _syncedProperties = {
   ContactProperty.name,
   ContactProperty.organization,
@@ -27,14 +25,7 @@ Future<bool> _requestContactsPermission() async {
       status == PermissionStatus.limited;
 }
 
-/// Saves [client] into the device's contacts.
-///
-/// With the Contacts permission granted, the contact is written directly and
-/// the resulting native id is linked to the client (via [ContactLinkStore]) so
-/// later edits can sync — see [updateLinkedPhoneContact]. If the user declines
-/// the permission, it falls back to the permission-free OS "new contact"
-/// screen (`showCreator`), which also links when the user saves (the id is
-/// null if they cancel).
+/// Saves client into device contacts or shows OS new-contact screen if permission denied.
 Future<void> saveClientToPhoneContacts(
   BuildContext context,
   WidgetRef ref,
@@ -58,8 +49,7 @@ Future<void> saveClientToPhoneContacts(
       }
     }
   } catch (e, st) {
-    // Matches updateLinkedPhoneContact below — a contacts-plugin failure has
-    // to reach Crashlytics, not just the notice overlay.
+    // Contacts-plugin failure must reach Crashlytics; matches updateLinkedPhoneContact below.
     ref
         .read(loggerProvider)
         .warn('CLI-CONTACT-SAVE saveClientToPhoneContacts failed', e, st);
@@ -69,21 +59,13 @@ Future<void> saveClientToPhoneContacts(
   }
 }
 
-/// Pushes [client]'s current details onto the phone-contact it was previously
-/// saved as, if any. Best-effort and silent: a missing link, declined
-/// permission, or a deleted contact are all no-ops, and any failure is logged
-/// but never surfaced — it must not block or fail the client save.
-///
-/// Overwrites only the synced fields (name, organization, phones, emails,
-/// addresses); unfetched properties (photo, groups, account) are preserved
-/// because `update` only writes the properties that were fetched.
+/// Syncs client details to phone contact (best-effort, silent); overwrites only synced fields.
 Future<void> updateLinkedPhoneContact({
   required ContactLinkStore linkStore,
   required AppLogger logger,
   required ClientRecord client,
 }) async {
-  // The whole sync is guarded: a missing link, declined permission, or any
-  // failure (incl. storage/plugin) must leave the client save untouched.
+  // Whole sync is guarded; any failure must leave client save untouched.
   try {
     final contactId = await linkStore.contactIdFor(client.id);
     if (contactId == null) return;
@@ -103,8 +85,7 @@ Future<void> updateLinkedPhoneContact({
     final mapped = clientToContact(client);
     await FlutterContacts.update(
       existing.copyWith(
-        // copyWith keeps the old value on null — pass an empty Name so a
-        // client without a person name clears the contact's, as before.
+        // copyWith keeps old value on null; pass empty Name to clear contact name for name-only client.
         name: mapped.name ?? const Name(),
         organizations: mapped.organizations,
         phones: mapped.phones,
@@ -117,15 +98,7 @@ Future<void> updateLinkedPhoneContact({
   }
 }
 
-/// Maps a [ClientRecord] to a flutter_contacts [Contact] for the native insert
-/// screen. Pure (no I/O) so it can be unit-tested directly.
-///
-/// The structured person name comes from `firstName`/`lastName`; `name` (the
-/// customer/display name) lands on the organization so the OS shows the contact
-/// by that name, and — when there is no first/last name — also seeds the
-/// contact's name (so a name-only client isn't a blank contact). `phone` and
-/// `mobile` map to two separate phone entries. Empty optional fields are left
-/// off so the native form shows blank rows rather than empty entries.
+/// Maps ClientRecord to flutter_contacts Contact; display name lands on organization; first/last name structured.
 Contact clientToContact(ClientRecord client) {
   final displayName = client.name.trim();
   final first = client.firstName.trim();
@@ -134,8 +107,7 @@ Contact clientToContact(ClientRecord client) {
   final mobile = client.mobile.trim();
   final email = client.email.trim();
 
-  // Prefer the structured first/last name; fall back to the display name so a
-  // name-only client still gets a contact name.
+  // Structured first/last name preferred; falls back to display name so name-only client gets contact name.
   final Name? name;
   if (first.isNotEmpty || last.isNotEmpty) {
     name = Name(first: first, last: last);

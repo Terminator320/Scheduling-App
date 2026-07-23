@@ -2,8 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 
-/// Result of `EventDetailsController.save`. The widget layer switches on this
-/// sealed family to compose the success/failure notice.
+/// Result of `EventDetailsController.save`; widget switches for success/failure notice.
 sealed class EventDetailsSaveOutcome {
   const EventDetailsSaveOutcome();
 }
@@ -36,11 +35,7 @@ class EventDetailsFailed extends EventDetailsSaveOutcome {
   final Object error;
 }
 
-/// Result of the status setters (`markAsDone` / `cancelAppointment`). Sealed so
-/// a call site must handle [EventDetailsActionBusy] explicitly: these used to
-/// return `Object?` where null meant success, so a write skipped by the
-/// reentrancy guard was indistinguishable from one that committed and the sheet
-/// reported "marked as complete" without having written anything.
+/// Result of status setters; sealed so call sites handle [EventDetailsActionBusy].
 sealed class EventDetailsActionOutcome {
   const EventDetailsActionOutcome();
 }
@@ -50,8 +45,7 @@ class EventDetailsActionOk extends EventDetailsActionOutcome {
   const EventDetailsActionOk();
 }
 
-/// Skipped because another action already held the busy flag — nothing was
-/// written, so the caller reports neither success nor an error.
+/// Skipped because another action held the busy flag; nothing written.
 class EventDetailsActionBusy extends EventDetailsActionOutcome {
   const EventDetailsActionBusy();
 }
@@ -61,10 +55,7 @@ class EventDetailsActionFailed extends EventDetailsActionOutcome {
   final Object error;
 }
 
-/// Family key for `eventDetailsControllerProvider`: carries the record the
-/// sheet opened with, but keys provider identity by the appointment id alone,
-/// so provider lookups don't deep-compare the whole freezed record on every
-/// rebuild and two snapshots of the same visit share one controller.
+/// Family key for `eventDetailsControllerProvider`; keys by id alone for identity stability.
 @immutable
 class EventDetailsKey {
   const EventDetailsKey(this.appointment);

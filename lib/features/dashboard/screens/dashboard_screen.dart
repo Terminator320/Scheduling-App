@@ -21,8 +21,7 @@ import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/centered_error_text.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 
-/// Admin-only at-a-glance view of the business. Reached only from admin
-/// surfaces (settings drawer / Settings screen) as a plain pushed route.
+/// Admin-only business overview; reached from settings drawer.
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({
     required this.isAdmin,
@@ -42,8 +41,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  // Held so the app bar's menu action can open the end drawer, exactly like the
-  // calendar and other hub screens.
+  // Key for end drawer; matches hub screens' pattern.
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
@@ -76,13 +74,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         title: context.l10n.dashboard_title,
         compact: context.isLandscape,
         onBack: () {
-          // Return to the calendar tab specifically (not whatever tab was
-          // showing when the dashboard was opened), then pop this route.
+          // Return to calendar tab, then pop.
           HubShell.liveState?.showCalendar();
           Navigator.pop(context);
         },
         actions: [
-          // In landscape / on tablets the nav rail replaces the drawer.
+          // No drawer in split layout (nav rail shown instead).
           if (!context.isSplitLayout)
             IconButton(
               icon: Icon(Icons.menu, color: scheme.onPrimary),

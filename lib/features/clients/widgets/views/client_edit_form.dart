@@ -15,11 +15,7 @@ import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/entity_form_header.dart';
 
-/// Editable form for a [ClientRecord]. Owns every text controller and the
-/// validate/persist flow; it is built only while the detail view is in edit
-/// mode, so a plain view never pays for these controllers. On a successful
-/// save it reports the updated record via [onSaved]; delete is delegated to
-/// the parent through [onDelete] (it is shared with view mode).
+/// Editable form for ClientRecord; owns controllers and validate/persist flow, reports saved record via onSaved.
 class ClientEditForm extends ConsumerStatefulWidget {
   const ClientEditForm({
     required this.client,
@@ -159,9 +155,8 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
     if (errors.values.any((e) => e != null)) return;
 
     // --- Build & persist ---
-    // Preserves the Wave projection fields (waveCustomerId / waveSyncState /
-    // waveSyncError) by copying the loaded record — they're never edited here
-    // and toMap drops them anyway.
+    // Preserves the Wave projection fields (waveCustomerId/waveSyncState/
+    // waveSyncError) by copying the loaded record; they're never edited here.
     final updated = widget.client.copyWith(
       name: name,
       firstName: firstName,

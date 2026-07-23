@@ -8,9 +8,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/settings/application/app_lock_provider.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// App-wide biometric gate. When the lock is enabled it covers the whole app
-/// with an opaque overlay on cold start and whenever the app returns from the
-/// background, requiring biometric/device-credential auth to dismiss.
+/// App-wide biometric gate; covers the app on cold start and background return.
 class AppLock extends ConsumerStatefulWidget {
   const AppLock({required this.child, super.key});
 
@@ -44,12 +42,7 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
           .read(secureStorageServiceProvider)
           .readFlag(SecureStorageKeys.biometricEnabled);
     } catch (e, st) {
-      // Encrypted-storage reads can throw on Android (keystore/cipher failure).
-      // Record it rather than failing silently, and don't engage the lock —
-      // locking on an unreadable flag risks bricking a user who never enabled
-      // biometrics behind a prompt they can't satisfy.
-      // A locked iOS Keychain (background launch, pre-first-unlock) is
-      // environmental, not a defect — log without a Crashlytics error record.
+      // Don't lock on unreadable flag (bricking risk); keychain-locked is environmental.
       if (isKeychainLockedError(e)) {
         ref.read(loggerProvider).warn('APPLOCK read skipped: keychain locked');
       } else {
@@ -65,9 +58,7 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!ref.read(appLockEnabledProvider)) return;
-    // Lock on `inactive` too, not just paused/hidden: the OS app-switcher
-    // snapshot is captured during the `inactive` transition, so covering only
-    // paused/hidden would leak the unprotected screen into the recents preview.
+    // Lock on `inactive` too; the OS app-switcher snapshot is captured during that state.
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {

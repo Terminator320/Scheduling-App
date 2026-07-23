@@ -4,22 +4,17 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/presence/domain/models/presence_fix.dart';
 
-/// Outcome of a presence write, so the sync controller can tell a transient
-/// failure (roll the throttle back, retry on the next fix) from a rules
-/// denial (the account is no longer allowed to write presence — stop the
-/// stream instead of spamming a denied write every heartbeat).
+/// Outcome of a presence write: ok/failed/denied (controller distinguishes transient failure from rules denial).
 enum PresenceWriteResult { ok, failed, denied }
 
-/// Upper bound on the admin live-map presence feed — one doc per active staff
-/// member, so this is far above any real roster, but it mirrors the users
+/// Upper bound on the admin live-map presence feed, mirroring the users
 /// streams' `_userStreamLimit` posture so a rules/data anomaly can't stream an
 /// unbounded snapshot to the client.
 const _presenceStreamLimit = 500;
 
 /// Reads/writes the single `users/{docId}/presence/location` doc that feeds
-/// the server's travel-time "leave now" reminders. Injected Firestore (never
-/// `FirebaseFirestore.instance` from UI); logs and swallows failures so a
-/// presence write never breaks a flow.
+/// the server's travel-time "leave now" reminders; logs and swallows failures
+/// so a presence write never breaks a flow.
 class PresenceRepository {
   PresenceRepository({required FirebaseFirestore firestore, AppLogger? logger})
     : _firestore = firestore,
@@ -35,17 +30,8 @@ class PresenceRepository {
           .collection('presence')
           .doc('location');
 
-  /// Upserts the device's last fix. The written fields stay within the four
-  /// the security rule allows (`hasOnly([lat, lng, uid, updatedAt])`), and
-  /// `updatedAt` MUST be a server timestamp (the rule enforces
-  /// `updatedAt == request.time` so freshness can't be spoofed).
-  ///
-  /// Never throws (logged and swallowed so a presence write never breaks a
-  /// flow) — the caller uses the result to avoid advancing its throttle clock
-  /// on a failed write, and to stop tracking on [PresenceWriteResult.denied]
-  /// (the rules gate presence on an active account, so a deactivated user's
-  /// background stream would otherwise log a denied write every heartbeat
-  /// until the app is killed — the 11-event Crashlytics spam of 1.32.0).
+  /// Upserts the device's last fix with server-timestamp `updatedAt` (freshness can't be spoofed).
+  /// Never throws; caller uses result to avoid advancing throttle clock on failure and stop tracking on denied.
   Future<PresenceWriteResult> upsertLocation({
     required String userDocId,
     required String uid,
@@ -81,9 +67,8 @@ class PresenceRepository {
     }
   }
 
-  /// Live feed of every staff member's last-known fix, for the admin map.
-  /// Unlike the write paths above, stream errors PROPAGATE to the listener
-  /// (the screen surfaces them) rather than being swallowed.
+  /// Live feed of every staff member's last-known fix, for the admin map;
+  /// unlike the write paths above, stream errors PROPAGATE to the listener.
   Stream<List<PresenceFix>> watchAllPresence() => retryStream(
     () => _firestore
         .collectionGroup('presence')
@@ -118,11 +103,6 @@ class PresenceRepository {
   }
 }
 
-// Twin of `_isAuthPropagationDenied` in
-// `lib/features/employees/data/firebase_employees_repository.dart` — keep in
-// sync. A freshly signed-in user's ID token can lag auth state, so the first
-// collection-group listen can come back permission-denied even though the
-// read is authorized. Re-subscribing after a short delay succeeds; a genuine
-// denial survives every retry and surfaces as before.
+// Retries permission-denied from auth-token propagation lag (twin in firebase_employees_repository.dart; keep in sync).
 bool _isAuthPropagationDenied(Object error) =>
     error is FirebaseException && error.code == 'permission-denied';

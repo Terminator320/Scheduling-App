@@ -4,8 +4,7 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-// City/province and postal-code/country grid shared by the add-client and
-// edit-client forms.
+// City/province and postal-code/country grid (shared by add/edit forms).
 class AddressGridFields extends StatelessWidget {
   const AddressGridFields({
     required this.cityController,

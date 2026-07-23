@@ -31,8 +31,7 @@ class ClientTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ListItemTile's InkWell already exposes button semantics and reads the
-    // visible name + phone; no explicit Semantics label needed.
+    // ListItemTile's InkWell exposes button semantics and reads visible name + phone; no explicit label needed.
     return ListItemTile(
       avatarName: client.displayName,
       title: client.displayName,

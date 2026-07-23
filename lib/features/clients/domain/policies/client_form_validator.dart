@@ -2,9 +2,7 @@ import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-// Shared validation for the add-client and edit-client forms. All field
-// values must be pre-trimmed; additional contacts keep their list index so
-// error keys (`contact_<i>_*`) line up with the form rows.
+// Shared validation for add/edit forms; values must be pre-trimmed; contact errors keyed with list index.
 class ClientFormValidator {
   const ClientFormValidator._();
 
@@ -21,9 +19,7 @@ class ClientFormValidator {
     bool noFixedAddress = false,
   }) {
     final errors = <String, String?>{
-      // `name` is the single required customer/display name. firstName,
-      // lastName, phone, mobile and email are all optional; a typed email
-      // must still be well-formed (phone/mobile carry no format check).
+      // `name` is only required field; email must be well-formed, phone/mobile have no format check.
       'name': name.isEmpty ? l10n.validation_nameIsRequired : null,
       'email': _validateEmail(l10n, email),
       'address': (!noFixedAddress && address.isEmpty)
@@ -33,7 +29,7 @@ class ClientFormValidator {
 
     for (var i = 0; i < additionalContacts.length; i++) {
       final contact = additionalContacts[i];
-      // An all-empty card is ignored but still consumes its index.
+      // All-empty contact is ignored but consumes its index.
       if (contact.name.isEmpty &&
           contact.phone.isEmpty &&
           contact.email.isEmpty) {

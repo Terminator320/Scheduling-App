@@ -17,10 +17,7 @@ class SettingsSectionCard extends StatelessWidget {
     final theme = Theme.of(context);
     return Container(
       decoration: appCardDecoration(theme, color: theme.colorScheme.surface),
-      // A transparent Material sits between the opaque card decoration and the
-      // child so a descendant ListTile paints its ink/background on a Material
-      // in front of the card fill (otherwise it paints on the Scaffold behind
-      // the decoration and Flutter asserts "ink splashes may be invisible").
+      // Transparent Material between card decoration and child so ListTile ink paints correctly.
       child: Material(
         type: MaterialType.transparency,
         child: Padding(

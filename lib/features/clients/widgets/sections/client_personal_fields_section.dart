@@ -6,12 +6,7 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-/// The shared name + contact field block used by both the add-client sheet and
-/// the client edit form, so field changes (capitalization, limits, autofill,
-/// keyboard action) land in one place instead of being kept in sync by hand.
-///
-/// Includes the spacing *between* fields; the host supplies the leading and
-/// trailing spacing around the block.
+/// Shared name + contact field block (add-client sheet and edit form); field behavior centralized here.
 class ClientPersonalFieldsSection extends StatelessWidget {
   const ClientPersonalFieldsSection({
     required this.nameController,

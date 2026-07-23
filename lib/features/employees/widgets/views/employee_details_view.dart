@@ -26,8 +26,7 @@ class EmployeeDetailsView extends ConsumerStatefulWidget {
   final EmployeeRecord employee;
   final bool isCurrentUserAdmin;
 
-  /// Receives the action name (`'edit'`, `'deleted'`, `'enabled'`,
-  /// `'disabled'`) so the host sheet/pane can react.
+  /// Receives action name ('edit', 'deleted', 'enabled', 'disabled') so host can react.
   final ValueChanged<String> onAction;
   final ScrollController? scrollController;
   final bool showHandle;

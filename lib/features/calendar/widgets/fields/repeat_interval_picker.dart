@@ -5,8 +5,7 @@ import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart'
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
-/// Localized label for a repeat interval — shared by the picker and the
-/// read-only details view.
+/// Localized label for a repeat interval (shared by picker and details view).
 String repeatIntervalLabel(AppLocalizations l, RepeatInterval interval) =>
     switch (interval) {
       RepeatInterval.none => l.calendar_repeatNone,

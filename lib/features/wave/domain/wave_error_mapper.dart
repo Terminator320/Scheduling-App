@@ -37,8 +37,7 @@ class WaveErrorMapper {
       return const WaveValidation(reason: 'notConnected');
     }
 
-    // Ambiguous = the token's account exposes several businesses and no picker
-    // exists yet; surface a truthful message instead of a pointless "try again".
+    // Ambiguous: multiple businesses on this token and no picker yet, so be truthful.
     if (msg == 'wave/business-ambiguous') {
       return const WaveValidation(reason: 'businessAmbiguous');
     }

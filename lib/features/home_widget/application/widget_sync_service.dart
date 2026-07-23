@@ -23,16 +23,9 @@ const _iosWidgetName = 'ScheduleWidget';
 const _payloadKey = 'schedulePayload';
 
 Map<String, dynamic> _job(AppointmentRecord a) => {
-  // Carried so a widget tap can deep-link straight to this appointment's
-  // detail sheet (the Swift widget builds `esproschedule://appointment?id=…`).
-  // `?? ''` mirrors serializeWidgetJob's coercion: `id` is the one nullable
-  // field here, and the Swift `Job` decodes every field as a non-optional
-  // String — one null drops the WHOLE payload and blanks the widget.
+  // Carried for deep-linking widget taps; `?? ''` prevents null from blanking the widget (Swift decodes as non-optional).
   'id': a.id ?? '',
-  // Emit an absolute UTC instant (…Z). startTime is a *local* DateTime
-  // (Firestore Timestamp.toDate()), so a bare toIso8601String() has no zone
-  // designator — which the widget's ISO8601DateFormatter cannot parse. The
-  // Swift side renders it back in the device's local time zone.
+  // Emit absolute UTC instant (…Z) — bare toIso8601String() lacks zone designator that widget formatter needs.
   'startTime': a.startTime.toUtc().toIso8601String(),
   'clientName': a.clientName,
   'title': a.title,
@@ -44,20 +37,8 @@ Map<String, dynamic> _job(AppointmentRecord a) => {
 /// today before it rolls forward to tomorrow's schedule.
 const widgetRolloverGrace = Duration(hours: 1);
 
-/// Serializes an employee's schedule into the JSON the iOS widget renders.
-/// Pure — unit-testable.
-///
-/// Carries **both** days plus a `rolloverAt` instant so the WidgetKit timeline
-/// can switch from today to tomorrow **on-device**, with no app run or push:
-/// - `todayJobs` — today's upcoming, not-yet-started, non-terminal visits.
-/// - `tomorrowJobs` — tomorrow's non-terminal visits.
-/// - `rolloverAt` — when the widget flips to tomorrow. Set **only once today
-///   has no incomplete jobs left** (all `done`/`cancelled`, or none): then it's
-///   the last job's `endTime` + [widgetRolloverGrace]; an empty/all-cancelled
-///   today flips immediately (`now`). While any today job is still open it's
-///   `null` and the widget stays on today (so a running-late job isn't skipped).
-/// - `todayDate`/`tomorrowDate` — start-of-day instants driving the widget's
-///   date header for whichever day it's showing.
+/// Serializes an employee's schedule into JSON the iOS widget renders (pure, unit-testable).
+/// Carries today+tomorrow jobs plus `rolloverAt` instant (set only when today's jobs are all done/cancelled) so WidgetKit timeline switches on-device without app run.
 Map<String, dynamic> buildWidgetPayload(
   List<AppointmentRecord> appointments,
   DateTime now, {
@@ -94,9 +75,7 @@ Map<String, dynamic> buildWidgetPayload(
   DateTime? rolloverAt;
   if (todayIncomplete.isEmpty) {
     final finished = todayAll.where((a) => !statusOf(a).isCancelled).toList();
-    // A stable already-past instant when there's nothing left to finish today
-    // (empty/all-cancelled) so the payload signature doesn't churn every tick;
-    // otherwise 1h after the last job's scheduled end.
+    // Use stable past instant if empty/all-cancelled (prevents churn), otherwise 1h after last job's end.
     rolloverAt = finished.isEmpty
         ? startOfToday
         : finished
@@ -117,14 +96,7 @@ Map<String, dynamic> buildWidgetPayload(
   };
 }
 
-/// Writes an already-encoded payload JSON into the App Group and reloads the
-/// widget. iOS-only (no-op elsewhere). Used by the FCM background handler
-/// (`fcm_background_handler.dart`), which runs in its own isolate with no
-/// Riverpod container / live streams — so it hands over the JSON the change
-/// push carried rather than rebuilding it. Single-sources the App Group id +
-/// payload key + widget name so the background path and [WidgetSyncService]
-/// can never drift. Never throws — the background isolate has nowhere to
-/// surface an error.
+/// Writes already-encoded payload JSON into the App Group and reloads the widget (iOS-only); used by FCM background handler since it has no Riverpod container.
 Future<void> writeWidgetPayloadJson(String payloadJson) async {
   if (!Platform.isIOS) return;
   if (payloadJson.isEmpty) return;
@@ -146,11 +118,7 @@ class WidgetSyncService {
 
   final AppLogger _logger;
 
-  /// Signature of the last successful write: `null` = nothing written yet,
-  /// [_clearedState] = the widget was cleared, otherwise the encoded
-  /// job-relevant payload. Lets `sync`/`clear` skip the App Group write +
-  /// WidgetKit reload when the visible jobs are unchanged — the appointments
-  /// stream re-emits far more often than the schedule actually changes.
+  /// Signature of the last successful write for dedup (null = not written, [_clearedState] = cleared).
   static const _clearedState = '__cleared__';
   String? _lastState;
 
@@ -198,18 +166,12 @@ final widgetSyncServiceProvider = Provider<WidgetSyncService>(
   (ref) => WidgetSyncService(logger: ref.watch(loggerProvider)),
 );
 
-/// The signed-in active user's users doc id (the key `appointments.employeeIds`
-/// holds), or null when signed-out / inactive. Both employees **and admins**
-/// qualify — admins can assign themselves to jobs, so they see their own
-/// schedule on the widget too (their appointment stream is still scoped to
-/// visits whose `employeeIds` contains this id).
+/// The signed-in user's doc id (null when signed-out); both employees and admins qualify since admins can assign themselves to jobs.
 final widgetEmployeeIdProvider = FutureProvider.autoDispose<String?>(
   (ref) async => (await ref.watch(activeUserIdentityProvider.future))?.docId,
 );
 
-/// The current widget payload for the signed-in employee, or `data(null)` when
-/// the widget should be cleared (admin / signed-out). Watches a today+lookahead
-/// range so "next job" survives an empty today.
+/// The current widget payload for the signed-in employee (null when widget should be cleared); watches today+lookahead range.
 final widgetPayloadProvider =
     Provider.autoDispose<AsyncValue<Map<String, dynamic>?>>((ref) {
       final empIdAsync = ref.watch(widgetEmployeeIdProvider);
@@ -220,9 +182,7 @@ final widgetPayloadProvider =
           null,
         );
       }
-      // Rebuilds when the calendar day rolls over — `rolloverAt` only covers
-      // the case where today's jobs are all finished, so without this an app
-      // left running overnight keeps showing yesterday as "today".
+      // Rebuild on day rollover so app doesn't keep showing yesterday's jobs.
       final today = ref.watch(currentDayProvider);
       final range = AppointmentDateRange(
         start: today,

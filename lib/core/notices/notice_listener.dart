@@ -170,16 +170,9 @@ class _TopNoticeState extends State<_TopNotice>
 
   @override
   Widget build(BuildContext context) {
-    // Respect the safe-area insets on all sides: in landscape the notch /
-    // camera cutout sits on the left or right (padding.left/right), so pad
-    // those too or the banner slides under it and the cutout covers its text.
-    // Both are 0 in portrait, so this is a no-op there.
+    // Pad left/right too so a landscape notch/camera cutout doesn't cover the text.
     final padding = MediaQuery.of(context).padding;
-    // Push the banner toward the side with more room — away from the notch /
-    // camera cutout, which in landscape sits on whichever side has the larger
-    // safe inset. When the notch is on the right, the banner slides left into
-    // the free space instead of sitting centered with an awkward gap. Symmetric
-    // insets (portrait, notchless tablets) stay centered.
+    // Push the banner toward the side with more safe-area room, away from the notch.
     final alignment = padding.left > padding.right
         ? Alignment.centerRight
         : padding.right > padding.left
@@ -193,19 +186,14 @@ class _TopNoticeState extends State<_TopNotice>
         position: _slide,
         child: FadeTransition(
           opacity: _fade,
-          // Cap the width so a landscape/tablet banner reads as a tidy card
-          // instead of stretching the full width; [alignment] pushes it clear
-          // of the notch toward the free side.
+          // Cap the width so a landscape/tablet banner reads as a tidy card, not full-width.
           child: Align(
             alignment: alignment,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 520),
               child: Semantics(
                 liveRegion: true,
-                // U5: swipe the banner up to dismiss. Dismissible animates the
-                // slide itself, so skip the reverse animation and remove the
-                // overlay entry directly; the auto-dismiss timer stays as-is
-                // (it no-ops once unmounted).
+                // U5: swipe up to dismiss; Dismissible handles animation, so remove entry directly.
                 child: Dismissible(
                   key: const ValueKey('app-notice-banner'),
                   direction: DismissDirection.up,
@@ -232,9 +220,7 @@ class _TopNoticeState extends State<_TopNotice>
                             ),
                           ),
                           const SizedBox(width: AppSpacing.sp4),
-                          // U5: a real IconButton — 48px minimum tap target plus
-                          // tooltip/semantics — instead of the old bare 18px
-                          // GestureDetector icon.
+                          // U5: a real IconButton (48px tap target + tooltip/semantics), not a bare GestureDetector icon.
                           IconButton(
                             onPressed: _dismiss,
                             tooltip: context.l10n.common_close,

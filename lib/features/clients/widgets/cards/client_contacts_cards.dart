@@ -8,13 +8,7 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/info_card.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
-/// Section of additional [contacts], each an [InfoCard] with tappable
-/// phone (call) and email (compose) rows. Shared by the client and appointment
-/// detail views; renders nothing when [contacts] is empty.
-///
-/// When [collapsible] is true the cards are hidden behind a tappable
-/// "Contacts (N)" header (appointment view, where the primary client is already
-/// shown above); otherwise every card renders expanded (client view).
+/// Additional contacts section (shared by client/appointment detail views); collapsible hides cards behind a header.
 class ClientContactsCards extends StatelessWidget {
   const ClientContactsCards({
     required this.contacts,

@@ -53,8 +53,7 @@ Widget formRemoveButton(BuildContext context, {required VoidCallback onTap}) {
     child: GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      // 32px tap target around the small visual chip (the bare chip was ~18px,
-      // below the Material minimum and easy to miss on a thumbnail corner).
+      // 32px tap target meets Material minimum.
       child: SizedBox(
         width: 32,
         height: 32,
