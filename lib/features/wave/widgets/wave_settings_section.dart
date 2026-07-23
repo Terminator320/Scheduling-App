@@ -62,10 +62,10 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
   /// swallowed failure still lands in Crashlytics per error-handling.md.
   Future<void> _runWaveAction({
     required String tag,
-    required void Function(bool busy) setBusy,
+    required void Function({required bool busy}) setBusy,
     required Future<void> Function() action,
   }) async {
-    setBusy(true);
+    setBusy(busy: true);
     try {
       await action();
     } on WaveFailure catch (e, st) {
@@ -73,7 +73,7 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
       ref.read(loggerProvider).warn('WAVE-$tag failed', e, st);
       ref.read(noticeServiceProvider).error(e.toLocalizedMessage(context));
     } finally {
-      if (mounted) setBusy(false);
+      if (mounted) setBusy(busy: false);
     }
   }
 
@@ -81,7 +81,7 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
     if (_blockedOffline()) return;
     await _runWaveAction(
       tag: 'CONNECT',
-      setBusy: (v) => setState(() => _connectBusy = v),
+      setBusy: ({required busy}) => setState(() => _connectBusy = busy),
       action: () async {
         // No business is chosen client-side — waveBootstrap resolves the
         // target from its server-side WAVE_BUSINESS_NAME config, so the
@@ -110,7 +110,7 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
     if (_blockedOffline()) return;
     await _runWaveAction(
       tag: 'IMPORT',
-      setBusy: (v) => setState(() => _importBusy = v),
+      setBusy: ({required busy}) => setState(() => _importBusy = busy),
       action: () async {
         final summary = await ref.read(waveServiceProvider).importCustomers();
         if (!mounted) return;
@@ -142,7 +142,7 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
 
     await _runWaveAction(
       tag: 'SCHEDULE',
-      setBusy: (v) => setState(() => _scheduleBusy = v),
+      setBusy: ({required busy}) => setState(() => _scheduleBusy = busy),
       action: () async {
         await ref.read(waveServiceProvider).setImportSchedule(choice);
         if (!mounted) return;

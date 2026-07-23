@@ -141,6 +141,11 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
   }
 
   PreferredSizeWidget _buildAppBar() {
+    final searchBar = AppSearchBar(
+      textScaler: MediaQuery.textScalerOf(context),
+      controller: _searchController,
+      hintText: context.l10n.employees_searchEmployees,
+    );
     return AppTopBar(
       title: context.l10n.common_employees,
       compact: context.isLandscape,
@@ -157,17 +162,9 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
               id: TourStepId.employeesSearch,
               index: _tourSteps.indexOf(TourStepId.employeesSearch),
               count: _tourSteps.length,
-              bar: AppSearchBar(
-                textScaler: MediaQuery.textScalerOf(context),
-                controller: _searchController,
-                hintText: context.l10n.employees_searchEmployees,
-              ),
+              bar: searchBar,
             )
-          : AppSearchBar(
-              textScaler: MediaQuery.textScalerOf(context),
-              controller: _searchController,
-              hintText: context.l10n.employees_searchEmployees,
-            ),
+          : searchBar,
     );
   }
 

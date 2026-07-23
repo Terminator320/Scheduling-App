@@ -91,6 +91,11 @@ class _ListInformationState extends State<ListInformation> {
 
   @override
   Widget build(BuildContext context) {
+    final searchBar = AppSearchBar(
+      textScaler: MediaQuery.textScalerOf(context),
+      controller: _searchController,
+      hintText: context.l10n.clients_searchByNameOrPhone,
+    );
     return FeatureTourHost(
       tab: AdaptiveDestination.clients,
       isAdmin: widget.isAdmin,
@@ -107,17 +112,9 @@ class _ListInformationState extends State<ListInformation> {
                   id: TourStepId.clientsSearch,
                   index: _tourSteps.indexOf(TourStepId.clientsSearch),
                   count: _tourSteps.length,
-                  bar: AppSearchBar(
-                    textScaler: MediaQuery.textScalerOf(context),
-                    controller: _searchController,
-                    hintText: context.l10n.clients_searchByNameOrPhone,
-                  ),
+                  bar: searchBar,
                 )
-              : AppSearchBar(
-                  textScaler: MediaQuery.textScalerOf(context),
-                  controller: _searchController,
-                  hintText: context.l10n.clients_searchByNameOrPhone,
-                ),
+              : searchBar,
         ),
         endDrawer: SettingsDrawer.endDrawerFor(
           context,

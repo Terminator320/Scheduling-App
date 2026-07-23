@@ -10,6 +10,16 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.36.0+60] - 2026-07-22
+### Added
+- **A guided tour now introduces each part of the app.** The first time you open
+  the calendar — and each other section — a short walkthrough points out the key
+  buttons and what they do, then gets out of your way. Admins and employees each
+  see a tour tailored to the sections they can use, and it only runs once per
+  section on this device.
+- **You can replay the app tour any time.** A new "Replay app tour" row in
+  Settings resets every walkthrough so you can see them again from the start.
+
 ## [1.35.1+59] - 2026-07-21
 ### Fixed
 - **Notifications for jobs with accented names or addresses are no longer

@@ -59,6 +59,7 @@ lib/
     ├── clients/                     Client management — CRUD, contacts, appointment history; client detail shows a Job history section (ClientJobHistorySection → fetchClientHistory, clientId-only single-field query sorted in Dart)
     ├── dashboard/                   Admin dashboard — pure stat reducers (DashboardAggregator) over one 8-week appointments range → hero/workload/trends/attention sections + fl_chart WeeklyBarChart
     ├── employees/                   Employee roster — colours, roles, disable/enable
+    ├── feature_tour/                In-app guided tours (showcaseview 5.x) — one FeatureTourHost per hub tab registers its own scope and auto-starts once per tab (device-local tourSeenProvider / SharedPreferences); tourStepsFor is the pure role-aware step catalog, screens wire per-step GlobalKeys and pass ready:false while their body is a loading placeholder; Settings "Replay app tour" row is the only reset
     ├── home_widget/                 iOS home-screen schedule widget — WidgetSyncService writes a two-day payload (todayJobs + tomorrowJobs + on-device rolloverAt) into the App Group (home_widget); mirrors functions/widget_payload_utils.js; Android no-op
     ├── live_activity/               iOS "time to leave" Lock Screen / Dynamic Island card — LiveActivityRegistrationController upserts the device push-to-start token + one update token per live card into users/{docId}/liveActivityTokens; canHostCards() is the single capability probe; liveActivityEnabledProvider is the device-local opt-out whose Settings toggle must also unregister(). Cards are push-STARTED by functions/live_activity_dispatch.js; Android no-op
     ├── maps/                        Google Places address autocomplete, reverse-geocode (staff-map coords → address), and map launcher (callables admin-gated); route_url_builder (multi-stop Google Maps directions URL, 9-waypoint cap)
@@ -675,10 +676,10 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (1020 test cases as of 2026-07-21; `functions` adds 664 jest
+Run: `flutter test` (1021 test cases as of 2026-07-22; `functions` adds 664 jest
 tests in `functions/__tests__/` — the parallel `functions/test/` directory was
-merged away). `flutter analyze` reports **0 errors and 0 warnings**, plus 3
-info-level lints; see `analysis_options.yaml` for the lints intentionally
+merged away). `flutter analyze` reports **0 errors, 0 warnings, and 0
+info-level lints**; see `analysis_options.yaml` for the lints intentionally
 disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.

@@ -92,6 +92,11 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
   int _assembleToken = 0;
   String? _lastSignature;
 
+  // True once the map body (which hosts the tour's FAB targets) is rendered,
+  // false while the loading/error placeholder is shown. Gates the tour so it
+  // isn't auto-marked-seen against a body that has no targets yet.
+  bool _mapTargetsRendered = false;
+
   late final List<TourStepId> _tourSteps = tourStepsFor(
     AdaptiveDestination.liveMap,
     isAdmin: widget.isAdmin,
@@ -137,13 +142,20 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     // Paused (tab hidden): render the kept-alive map with the last-known
     // markers and DON'T watch the data providers, so autoDispose tears down
     // the presence listener + ticker.
-    final body = visible
-        ? _liveBody(context)
-        : _mapStack(context, _lastPoints, selectedPoint: null, paused: true);
+    final Widget body;
+    if (visible) {
+      body = _liveBody(context);
+    } else {
+      // Paused branch renders the kept-alive map stack, so the FAB targets
+      // exist.
+      _mapTargetsRendered = true;
+      body = _mapStack(context, _lastPoints, selectedPoint: null, paused: true);
+    }
 
     return FeatureTourHost(
       tab: AdaptiveDestination.liveMap,
       isAdmin: widget.isAdmin,
+      ready: _mapTargetsRendered,
       stepKeys: _tourKeys,
       child: Scaffold(
         appBar: AppTopBar(
@@ -184,12 +196,15 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
 
     final hasShownMap = _markers.isNotEmpty || _lastPoints.isNotEmpty;
     if (pointsAsync.hasError && !hasShownMap) {
+      _mapTargetsRendered = false;
       return CenteredErrorText(message: context.l10n.error_introLoadLiveMap);
     }
     if (pointsAsync.isLoading && !hasShownMap) {
+      _mapTargetsRendered = false;
       return const LiveMapLoadingBody();
     }
 
+    _mapTargetsRendered = true;
     final selectedPoint = selected == null
         ? null
         : points.where((p) => p.userDocId == selected).firstOrNull;
@@ -412,6 +427,10 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     if (controller == null) return;
     try {
       controller.animateCamera(update);
+      // google_maps_flutter throws a bare StateError from a disposed
+      // controller; there is no public API to test for that first, so the
+      // catch is intentional.
+      // ignore: avoid_catching_errors
     } on StateError {
       _mapController = null;
       _didInitialFit = false;

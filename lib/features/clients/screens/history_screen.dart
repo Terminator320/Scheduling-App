@@ -56,6 +56,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final searchBar = AppSearchBar(
+      textScaler: MediaQuery.textScalerOf(context),
+      controller: _searchController,
+      hintText: context.l10n.clients_searchByClientOrEmployee,
+    );
     return FeatureTourHost(
       tab: AdaptiveDestination.history,
       isAdmin: widget.isAdmin,
@@ -72,17 +77,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   id: TourStepId.historySearch,
                   index: _tourSteps.indexOf(TourStepId.historySearch),
                   count: _tourSteps.length,
-                  bar: AppSearchBar(
-                    textScaler: MediaQuery.textScalerOf(context),
-                    controller: _searchController,
-                    hintText: context.l10n.clients_searchByClientOrEmployee,
-                  ),
+                  bar: searchBar,
                 )
-              : AppSearchBar(
-                  textScaler: MediaQuery.textScalerOf(context),
-                  controller: _searchController,
-                  hintText: context.l10n.clients_searchByClientOrEmployee,
-                ),
+              : searchBar,
         ),
         endDrawer: SettingsDrawer.endDrawerFor(
           context,
