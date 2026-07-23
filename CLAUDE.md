@@ -310,6 +310,27 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   two sheets → duplicate client. Mix it into any new inline-add host rather than
   re-copying the flag.
 
+- **Feature tours (`lib/features/feature_tour/`, showcaseview 5.x):** each hub
+  tab registers its OWN showcaseview scope (`tourScopeName`) — the hub
+  IndexedStack keeps every tab mounted, so a shared scope would mix hidden
+  tabs' targets into the visible tour. `FeatureTourHost` is the only start
+  path: it gates on `HubShellScope.currentOf` (hidden tabs never start),
+  awaits `tourSeenProvider.ready` before acting (the optimistic empty default
+  would replay seen tours on cold start), and drops steps whose target isn't
+  rendered via `isTargetRendered` — **never `GlobalKey.currentContext`: the
+  5.x `Showcase` widget does NOT forward its key to the element tree, so
+  currentContext is always null** (zero survivors → mark seen, never
+  crash/retry). Scopes are registered in initState and deliberately NEVER
+  unregistered (register() replaces; unregister in dispose would race the
+  replacement State's initState on a hub identity change), and every
+  dismiss/mark-seen is gated by `_tourRunning` because the package fires
+  onDismiss even when idle. Step catalogs are pure (`tourStepsFor`);
+  Clients/Employees/History/LiveMap are admin-only tabs, so their employee
+  catalogs are empty and their screens guard wraps on catalog membership.
+  Seen flags are device-local SharedPreferences ONLY (`tour_seen_tabs`);
+  sign-out does not reset them — the Settings "Replay app tour" row is the
+  only reset.
+
 ## Conventions
 
 - Feature-first: `lib/features/{auth,calendar,clients,employees,settings,splash}/`.
