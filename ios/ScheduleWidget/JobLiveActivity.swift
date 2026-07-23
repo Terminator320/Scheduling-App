@@ -147,7 +147,8 @@ private struct LockScreenCard: View {
     }
 
     private func header(tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let now = Date()
+        return VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(state.clientName)
                     .font(.headline)
