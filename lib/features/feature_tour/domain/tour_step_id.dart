@@ -1,5 +1,4 @@
-/// One highlighted widget in a tab's feature tour. Step text is resolved in
-/// the widget layer (`tourStepText`) so this stays pure and testable.
+/// Highlighted widget in tour; step text resolved separately.
 enum TourStepId {
   calendarGrid,
   calendarDayList,

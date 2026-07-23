@@ -37,9 +37,7 @@ class AppointmentImageUploadService {
 
   bool _draining = false;
 
-  /// Set when a drain is requested while one is already running (a save that
-  /// stages a new batch mid-drain). The in-flight pass re-runs instead of the
-  /// caller starting a second, concurrent one — see [drainPending].
+  /// Set when drain requested mid-drain; in-flight pass re-runs instead of concurrent start.
   bool _pendingDrain = false;
 
   static Future<Directory> _defaultStagingDir() async {
@@ -47,8 +45,7 @@ class AppointmentImageUploadService {
     return Directory('${base.path}/pending_uploads').create(recursive: true);
   }
 
-  /// Stages the picked files into durable storage, records them, then uploads
-  /// in the background. Signature unchanged — still fire-and-forget.
+  /// Stage, record, and upload in background (fire-and-forget).
   void uploadInBackground({
     required String appointmentId,
     required List<File> newImages,
@@ -71,13 +68,7 @@ class AppointmentImageUploadService {
         enqueuedAtMs: enqueuedAtMs,
       );
       await _store.add(entry);
-      // Upload through the same serialized drain the listeners use. Calling
-      // `_attempt(entry)` directly here raced them: a drain fired by the
-      // offline→online or account-doc listener in this window would load the
-      // just-added entry and upload it concurrently, and because
-      // `ImageStorageService` mints each file name from `DateTime.now()`, the
-      // two passes produce DIFFERENT storage paths that `arrayUnion` cannot
-      // dedupe — the same photo lands twice.
+      // Use serialized drain to avoid uploading the same batch twice with different paths.
       await drainPending();
     } catch (e, st) {
       _notifier.reportFailure(appointmentId, failedCount: images.length);
@@ -85,8 +76,7 @@ class AppointmentImageUploadService {
     }
   }
 
-  /// Moves a picker temp file into the staging dir. Falls back to copy+delete
-  /// when the temp file sits on another volume (rename crosses devices).
+  /// Move temp file to staging dir; fallback to copy+delete for cross-device.
   Future<File> _stage(
     File source,
     Directory dir,
@@ -106,9 +96,7 @@ class AppointmentImageUploadService {
     }
   }
 
-  /// Uploads one queued batch. Uploaded files are deleted; permanently rejected
-  /// files (bad magic bytes / too large) are dropped and counted; transient
-  /// failures keep only the unsent paths queued under the same entry age.
+  /// Upload queued batch; reject permanently, drop transient failures, re-queue unsent.
   Future<void> _attempt(PendingUpload entry) async {
     final files = entry.paths
         .map(File.new)
@@ -152,9 +140,7 @@ class AppointmentImageUploadService {
     }
 
     if (uploaded.isNotEmpty) {
-      // Append (arrayUnion) rather than rewriting the whole array: an edit saved
-      // while this upload was in flight, or a later retry of the batch's other
-      // half, must never clobber the already-uploaded pictures.
+      // Use arrayUnion so concurrent edits/retries never clobber existing pictures.
       await _appointments.appendAppointmentPictures(
         entry.appointmentId,
         uploaded,
@@ -162,8 +148,7 @@ class AppointmentImageUploadService {
     }
 
     if (transientFailure) {
-      // Re-queue only the unsent paths, preserving the entry age so a batch
-      // never retries past the 7-day pruning window.
+      // Re-queue unsent paths, preserving entry age for 7-day pruning.
       await _store.remove(entry.id);
       await _store.add(
         PendingUpload(
@@ -190,15 +175,7 @@ class AppointmentImageUploadService {
     }
   }
 
-  /// The single serialized path for uploading queued batches — both the
-  /// listener-driven retries and [_stageAndRun] go through here. Prunes >7-day
-  /// entries first, deleting their staged files.
-  ///
-  /// Reentrancy-guarded: a request arriving mid-drain (a reconnect flap, or a
-  /// save staging a batch) sets [_pendingDrain] so the in-flight pass repeats
-  /// rather than running concurrently — coalescing instead of dropping, so a
-  /// batch staged during a drain still uploads without waiting for the next
-  /// reconnect.
+  /// Serialized path for uploading queued batches; reentrancy-guarded via [_pendingDrain].
   Future<void> drainPending() async {
     if (_draining) {
       _pendingDrain = true;

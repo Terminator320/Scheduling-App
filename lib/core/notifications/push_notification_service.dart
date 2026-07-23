@@ -5,9 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
 
-/// Thin wrapper over [FirebaseMessaging] (mirrors `MediaPermissionService`):
-/// injected messaging + logger, every call guarded so a plugin failure never
-/// throws into a caller. Device-only — no unit tests (platform channels).
+/// Thin wrapper over [FirebaseMessaging] with every call guarded; device-only, no unit tests.
 class PushNotificationService {
   PushNotificationService({FirebaseMessaging? messaging, AppLogger? logger})
     : _injectedMessaging = messaging,
@@ -16,16 +14,11 @@ class PushNotificationService {
   final FirebaseMessaging? _injectedMessaging;
   final AppLogger _logger;
 
-  // Resolve `FirebaseMessaging.instance` lazily rather than in the constructor:
-  // the Settings notifications row reads this service at build time, and an
-  // eager `.instance` throws when Firebase isn't initialized (e.g. widget
-  // tests). Every use below already sits inside a guarded try, so a lazy throw
-  // degrades to the safe default instead of a crash.
+  // Resolved lazily; eager .instance throws when Firebase isn't initialized.
   FirebaseMessaging get _messaging =>
       _injectedMessaging ?? FirebaseMessaging.instance;
 
-  /// Prompts for the OS notification permission (also surfaces the Android 13+
-  /// POST_NOTIFICATIONS dialog). Returns true when granted (or provisional).
+  /// Prompts for OS notification permission; returns true when granted or provisional.
   Future<bool> requestPermission() async {
     try {
       final settings = await _messaging.requestPermission();
@@ -36,12 +29,7 @@ class PushNotificationService {
     }
   }
 
-  /// The OS-level authorization status WITHOUT prompting (unlike
-  /// [requestPermission], which shows the one-time system dialog). Used by the
-  /// Settings notifications row to render On/Off and decide whether tapping
-  /// should re-prompt or deep-link to system Settings. Defaults to
-  /// [AuthorizationStatus.notDetermined] on failure so the UI offers the
-  /// enable action rather than a misleading "On".
+  /// OS-level authorization status without prompting; defaults to notDetermined on failure.
   Future<AuthorizationStatus> authorizationStatus() async {
     try {
       final settings = await _messaging.getNotificationSettings();
@@ -52,17 +40,12 @@ class PushNotificationService {
     }
   }
 
-  /// True when notifications are authorized (or provisional) — the shared
-  /// predicate behind [requestPermission] and [authorizationStatus] so the
-  /// "granted" definition stays in one place.
+  /// True when notifications are authorized (or provisional).
   static bool isGranted(AuthorizationStatus status) =>
       status == AuthorizationStatus.authorized ||
       status == AuthorizationStatus.provisional;
 
-  /// Opens the OS Settings page for this app. On iOS the system notification
-  /// prompt only ever appears ONCE per install, so a user who dismissed or
-  /// denied it (or updated from a build that never asked) can only re-enable
-  /// notifications here — there is no way to re-show the dialog from code.
+  /// Opens the OS Settings page to re-enable notifications after the one-time prompt.
   Future<bool> openSystemSettings() async {
     try {
       return await openAppSettings();
@@ -72,8 +55,7 @@ class PushNotificationService {
     }
   }
 
-  /// iOS foreground banners: without this, a notification received while the
-  /// app is foregrounded shows nothing on iOS.
+  /// iOS foreground banners; without this, foreground notifications show nothing on iOS.
   Future<void> configureForegroundPresentation() async {
     try {
       await _messaging.setForegroundNotificationPresentationOptions(
@@ -86,9 +68,7 @@ class PushNotificationService {
     }
   }
 
-  /// The device FCM token, or null on failure. On iOS the APNS token must
-  /// resolve first (brief retry if it's momentarily null), else `getToken()`
-  /// returns null.
+  /// Device FCM token (null on failure); on iOS, retries briefly if APNS token is momentarily null.
   Future<String?> currentToken() async {
     try {
       if (Platform.isIOS) {

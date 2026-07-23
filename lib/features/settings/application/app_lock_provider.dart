@@ -2,9 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/storage/secure_storage_service.dart';
 
-/// Whether the biometric app-lock is enabled. Backed by the encrypted
-/// [SecureStorageService] flag; loaded once on first read and toggled from
-/// Settings.
+/// Whether biometric app-lock is enabled, backed by encrypted storage.
 class AppLockController extends Notifier<bool> {
   @override
   bool build() {
@@ -18,11 +16,7 @@ class AppLockController extends Notifier<bool> {
           .read(secureStorageServiceProvider)
           .readFlag(SecureStorageKeys.biometricEnabled);
     } catch (e, st) {
-      // Encrypted-storage reads can throw on Android (keystore/cipher failure).
-      // This Future is fired unawaited from build(), so an uncaught throw would
-      // become an unhandled async error — log it and leave the lock disabled.
-      // A locked iOS Keychain (background launch, pre-first-unlock) is
-      // environmental, not a defect — log without a Crashlytics error record.
+      // Encrypted-storage reads throw on Android keystore failure or iOS pre-first-unlock (environmental, not defect).
       if (isKeychainLockedError(e)) {
         ref.read(loggerProvider).warn('APPLOCK read skipped: keychain locked');
       } else {

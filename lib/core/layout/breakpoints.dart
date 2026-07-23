@@ -3,15 +3,10 @@ import 'package:flutter/widgets.dart';
 class Breakpoints {
   Breakpoints._();
 
-  /// Two-pane (master-detail + nav rail) threshold. Set at the Material 3
-  /// "expanded" width so phone-portrait and tablet-portrait stay single
-  /// column; only genuinely large screens (landscape, large tablets) split.
+  /// Two-pane threshold for master-detail + nav rail on genuinely large screens.
   static const double tablet = 840;
 
-  /// Tablet-class cutoff on the device's *shortest* side (Material's tablet
-  /// definition). Drives the master-detail two-pane: a phone's shortest side
-  /// stays below this in both orientations, so a landscape phone (too narrow
-  /// for a readable detail pane) uses the list + pushed sheet instead.
+  /// Tablet-class cutoff on shortest side; landscape phones stay narrow and use list + sheet instead of two-pane.
   static const double tabletShortestSide = 600;
 
   /// Extended (labelled) nav-rail threshold — only on large screens, so the
@@ -37,18 +32,10 @@ extension ResponsiveContext on BuildContext {
   bool get isLandscape =>
       MediaQuery.orientationOf(this) == Orientation.landscape;
 
-  /// Use the side nav rail + multi-pane treatment instead of the
-  /// hamburger-drawer / bottom-sheet phone layout: genuinely wide screens
-  /// (tablets, iPad) OR any device in landscape. Portrait phones stay
-  /// single-column — this never lowers the [Breakpoints.tablet] width gate,
-  /// it only adds the orientation path.
+  /// Use side nav rail + multi-pane on tablets or any landscape device; portrait phones stay single-column.
   bool get isSplitLayout => isWide || isLandscape;
 
-  /// Show the two-pane master-detail (list + detail side by side). Tablet-class
-  /// devices only — a landscape phone reports [isSplitLayout] (it gets the nav
-  /// rail) but is too narrow to render a readable detail pane beside the list,
-  /// so it falls back to the single list + a pushed detail sheet. Orientation-
-  /// independent (shortest side) so rotating a phone never swaps the pane in.
+  /// Show two-pane master-detail for tablet-class devices only; landscape phones fall back to single list + sheet despite isSplitLayout.
   bool get isTwoPane =>
       MediaQuery.sizeOf(this).shortestSide >= Breakpoints.tabletShortestSide;
 

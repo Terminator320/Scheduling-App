@@ -6,9 +6,7 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 
-/// Outcome of an employee save (invite or edit). The form only maps these to
-/// notices, field errors and navigation; the persistence flow lives in
-/// [EmployeeFormController].
+/// Outcome of an employee save (invite or edit), mapped by form to notices/errors/navigation.
 sealed class EmployeeSaveOutcome {
   const EmployeeSaveOutcome();
 }
@@ -63,8 +61,7 @@ class EmployeeDeleteFailed extends EmployeeDeleteOutcome {
   final Object error;
 }
 
-/// Busy flags for the employee form/detail surfaces — drive the Save spinner
-/// and the status/delete button spinners while a mutation is in flight.
+/// Busy flags for employee form/detail surfaces: drive Save and status/delete button spinners.
 @immutable
 class EmployeeFormActivity {
   const EmployeeFormActivity({

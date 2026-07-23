@@ -27,8 +27,7 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-// Re-export so existing importers of this controller keep resolving the save
-// outcome family and the provider family key from one place.
+// Re-export for single-source imports.
 export 'package:scheduling/features/calendar/application/event_details_outcome.dart';
 
 part 'event_details_controller.freezed.dart';
@@ -44,7 +43,7 @@ abstract class EventDetailsState
     required String editingStatus,
     @Default(false) bool isEditing,
     @Default(RepeatInterval.none) RepeatInterval repeat,
-    // Repeat currently stored on the doc — booking only fires on a change.
+    // Previous stored repeat; changed repeat triggers new bookings.
     @Default(RepeatInterval.none) RepeatInterval savedRepeat,
     @Default(<EmployeeRecord>[]) List<EmployeeRecord> selectedEmployees,
     @Default(<AppointmentImage>[]) List<AppointmentImage> existingImages,
@@ -56,8 +55,7 @@ abstract class EventDetailsState
     @Default(<ClientRecord>[]) List<ClientRecord> clientResults,
     @Default(false) bool isSearchingClient,
     @Default(false) bool useCustomAddress,
-    // True once the user explicitly removed the client — blocks the
-    // placeholder fallback in save() so clientRequired fires like the add flow.
+    // User explicitly removed client, blocks placeholder fallback.
     @Default(false) bool clientCleared,
     @Default(<String, AppointmentFormError>{})
     Map<String, AppointmentFormError> errors,
@@ -70,8 +68,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
 
   final AppointmentRecord appointment;
 
-  // Completes when the async employee enrichment has settled. save() awaits it
-  // so assignee resolution runs against a warm active-employee read.
+  // Settles when employee enrichment completes, so save() runs on warm data.
   Future<void>? _seedFuture;
 
   @override
@@ -82,25 +79,17 @@ class EventDetailsController extends Notifier<EventDetailsState>
       selectedDate: appointment.startTime,
       selectedStartTime: TimeOfDay.fromDateTime(appointment.startTime),
       selectedEndTime: TimeOfDay.fromDateTime(appointment.endTime),
-      // Normalize the stored raw status so a legacy value (e.g. the retired
-      // 'confirmed') is edited back as a valid one — an unchanged status is
-      // re-written verbatim on save and the rules reject anything off the
-      // allowlist. storedRaw maps unknown/legacy/overdue → pending; valid
-      // values round-trip.
+      // storedRaw normalizes legacy/unknown status so save won't fail rules validation.
       editingStatus: AppointmentStatus.storedRaw(appointment.status),
       repeat: appointment.repeat,
       savedRepeat: appointment.repeat,
-      // Seeded synchronously from the record so a picker toggle can never race
-      // the async employee load: the originals are selected from the first
-      // frame, and an early deselect is an explicit deselect — not a selection
-      // the seed silently re-adds or drops (visibility keys on employeeIds).
+      // Sync-seeded to prevent race with async load; visibility keys on employeeIds.
       selectedEmployees: _assigneesFromRecord(appointment),
       existingImages: List.of(appointment.pictures),
     );
   }
 
-  /// Placeholder [EmployeeRecord]s built from the ids/names stored on the
-  /// visit; [_enrichSelectedEmployees] swaps in the full records once loaded.
+  /// Placeholder employees from stored ids/names; swapped for full records on load.
   static List<EmployeeRecord> _assigneesFromRecord(AppointmentRecord a) => [
     for (var i = 0; i < a.employeeIds.length; i++)
       EmployeeRecord(
@@ -109,10 +98,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
       ),
   ];
 
-  /// Enriches the synchronously seeded placeholders with the full employee
-  /// records (color etc.) — display data only. Selection membership is never
-  /// changed here: the user may have toggled while the load was in flight, and
-  /// those toggles must win.
+  /// Enriches seeded placeholders with full records (display only); user toggles always win.
   Future<void> _enrichSelectedEmployees() async {
     if (state.selectedEmployees.isEmpty) return;
     final logger = ref.read(loggerProvider);
@@ -130,27 +116,14 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
   }
 
-  /// The active-staff set, resolved identically for seeding and assignee
-  /// resolution — keeping the two in lockstep is a correctness requirement.
-  /// Reads the repository directly rather than touching
-  /// [employeesStreamProvider]: initializing that auth-gated provider from a
-  /// microtask leaves a pending error element when no user is signed in, and
-  /// its first widget-side watch would then flush that error mid-build.
+  /// Active staff set resolved identically for seeding and assignee resolution.
   Future<List<EmployeeRecord>> _resolveActiveEmployees() =>
       ref.read(employeesRepositoryProvider).watchEmployees().first;
 
   Future<void> _loadClientIfNeeded(String clientId) async {
     final id = clientId.trim();
     if (id.isEmpty || state.client != null) return;
-    // The `clients` read rule is admin-only; for employees this read can never
-    // succeed (guaranteed permission-denied + a Crashlytics warn per detail
-    // open). The enrichment only feeds the admin-only edit body — the
-    // read-only view renders the denormalized fields — so skip it outright
-    // when the session role is known to be non-admin. Gate on `exists`:
-    // initializing the auth-gated user-doc stream from this microtask would
-    // park an error element when nobody is signed in (the hazard
-    // _resolveActiveEmployees documents); main.dart keeps it alive from
-    // startup, so in production the role is available here.
+    // Clients read rule is admin-only; skip load for employees to avoid permission-denied logs.
     if (ref.exists(currentUserDocProvider)) {
       final role = ref.read(userRoleProvider).value ?? '';
       if (role.isNotEmpty && role != 'admin') return;
@@ -159,19 +132,14 @@ class EventDetailsController extends Notifier<EventDetailsState>
     final clientsRepo = ref.read(clientsRepositoryProvider);
     try {
       final client = await clientsRepo.getClientById(id);
-      // Re-check after the await: the sheet may have been dismissed (touching
-      // a disposed notifier throws in Riverpod 3), and if the user picked (or
-      // cleared) a client while the load was in flight, selectClient already
-      // set state.client — don't clobber that selection with the
-      // appointment's original client.
+      // Re-check after await: user may have picked a client while loading.
       if (!ref.mounted) return;
       if (client == null || state.client != null) return;
       if (state.selectedClient == null && !state.clientCleared) {
         state = state.copyWith(
           client: client,
           selectedClient: client,
-          // No-fixed-address clients always open in custom mode; otherwise a
-          // stored address that differs from the client's is a custom one.
+          // No-fixed-address clients always use custom mode.
           useCustomAddress:
               client.noFixedAddress ||
               appointment.address.trim() != client.address.trim(),
@@ -289,22 +257,14 @@ class EventDetailsController extends Notifier<EventDetailsState>
     if (id == null) {
       return EventDetailsActionFailed(StateError('appointment has no id'));
     }
-    // Reject a concurrent status write (fast double-tap before the buttons
-    // rebuild disabled) — consistent with save()'s reentrancy guard. `isSaving`
-    // is shared with save(), deleteAppointment() and setSaving(), so this path
-    // is reachable from a detail pane that stays mounted behind a confirmation
-    // dialog.
+    // Reject double-tap on status write, consistent with save() reentrancy guard.
     if (state.isSaving) return const EventDetailsActionBusy();
     state = state.copyWith(isSaving: true);
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
     try {
       await repo.updateAppointmentStatus(id: id, status: status);
-      // The card is ended SERVER-side by the appointment-write trigger, which
-      // resolves it through the liveActivityCards marker. Deliberately not
-      // ended here: this device can't tell which appointment a push-started
-      // card belongs to, so ending locally would kill the card for the job the
-      // tech is currently driving to when they mark the previous one done.
+      // Card is ended server-side via liveActivityCards marker; don't end locally.
       if (ref.mounted) state = state.copyWith(isSaving: false);
       return const EventDetailsActionOk();
     } catch (e, st) {
@@ -314,22 +274,11 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
   }
 
-  /// Toggles the busy flag from the UI while a confirmation dialog is open, so
-  /// a second Save tap can't stack a duplicate prompt (the action buttons,
-  /// which watch [EventDetailsState.isSaving], disable too).
+  /// Toggles the busy flag while a confirmation dialog is open to prevent duplicate prompts.
   void setSaving({required bool busy}) =>
       state = state.copyWith(isSaving: busy);
 
-  /// Builds the final assignee id/name lists for a save: the picker's active
-  /// selection plus any original assignees that are neither selected nor in
-  /// the active-employee list. Those were never shown in the picker
-  /// (disabled/removed staff), so the user couldn't have deselected them —
-  /// dropping them would silently unassign and change who can see this visit
-  /// (visibility keys on `employeeIds`). With the synchronous seed in
-  /// [build], originals normally stay in the selection anyway; this retained
-  /// pass is the safety net. [_resolveActiveEmployees] resolves the active
-  /// set the same way enrichment does, or a deselected employee would be
-  /// mistaken for a never-shown one and re-added.
+  /// Builds final assignees: selected + unseen originals to prevent silent unassignment.
   Future<({List<String> ids, List<String> names})> _resolveAssignees(
     AppointmentRecord appointment,
   ) async {
@@ -351,26 +300,19 @@ class EventDetailsController extends Notifier<EventDetailsState>
     required String materialsNeeded,
     bool applyToSeries = false,
   }) async {
-    // Reentrancy guard: mark in-flight before the seed-settle await, so a
-    // second tap during a cold-cache seed read can't start a concurrent save
-    // (which would double-write a series rewrite). The Save button and its
-    // call-site guard both read state.isSaving.
+    // Reentrancy guard: mark in-flight before seed-settle await to prevent concurrent saves.
     if (state.isSaving) return const EventDetailsInvalid();
 
-    // Fail fast offline (before isSaving is set): an awaited Firestore write
-    // resolves only on server ack, so the Save button would otherwise spin until
-    // reconnect. The edit body maps this SocketException to the offline notice.
+    // Fail fast offline before setting flag, else Save spins waiting for server ack.
     if (ref.read(isOfflineProvider)) {
       return const EventDetailsFailed(SocketException('offline'));
     }
     state = state.copyWith(isSaving: true);
 
-    // Resolve dependencies before the first await: the sheet can be dismissed
-    // mid-save, and using the Ref of a disposed notifier throws in Riverpod 3.
+    // Resolve dependencies before first await to survive sheet dismissal (Riverpod 3).
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
-    // Resolved eagerly only when this save actually has photos to upload:
-    // constructing the upload service touches FirebaseStorage.instance.
+    // Resolve upload service only if there are photos (avoids FirebaseStorage init).
     final uploader = state.newImages.isEmpty
         ? null
         : ref.read(appointmentImageUploadProvider);
@@ -396,8 +338,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
       state.selectedStartTime,
     );
 
-    // Snapshot the photo work before the writes so it survives a mid-save
-    // sheet dismissal (state on a disposed notifier is unreadable).
+    // Snapshot photo state before writes to survive sheet dismissal.
     final removedImages = state.removedExistingImages;
     final newImages = state.newImages;
 
@@ -442,10 +383,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
   }
 
-  /// Applies this edit's photo changes after the record write has committed.
-  /// Ordering is load-bearing: the doc must stop referencing a photo before
-  /// its bytes are deleted, and uploads are dispatched last so a failure there
-  /// can't roll back a committed save.
+  /// Applies photo changes after record write (ordering is load-bearing).
   Future<void> _applyPhotoChanges({
     required String id,
     required AppointmentsRepository repo,
@@ -453,20 +391,15 @@ class EventDetailsController extends Notifier<EventDetailsState>
     required List<AppointmentImage> removedImages,
     required List<File> newImages,
   }) async {
-    // Photos the user removed in this edit come off the doc as an
-    // arrayRemove — issued ONLY when something was actually removed, never
-    // as a whole-array rewrite — so a background upload racing this save
-    // keeps its appended photos (the repo's record updates skip `pictures`
-    // for the same reason).
+    // Use arrayRemove only for removed photos to avoid clobbering concurrent uploads.
     if (removedImages.isNotEmpty) {
       await repo.removeAppointmentPictures(id, removedImages);
     }
 
-    // The doc now stores state.repeat — make it the new baseline.
+    // Update baseline for next edit.
     if (ref.mounted) state = state.copyWith(savedRepeat: state.repeat);
 
-    // Clean up images dropped in this edit only after the doc (which no
-    // longer references them) has committed.
+    // Clean up images only after the doc stops referencing them.
     await _deleteOrphanedImages(removedImages, tag: 'APPT-SAVE');
 
     if (newImages.isNotEmpty) {
@@ -474,16 +407,12 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
   }
 
-  /// Settles the employee-enrichment seed, then validates the form. Returns a
-  /// stop-outcome (and clears `isSaving`) when the save must not proceed, or
-  /// null when it may. Called only after `isSaving` is already held, so the
-  /// awaits here are inside the reentrancy guard.
+  /// Settles seed and validates form; returns stop-outcome or null to proceed.
   Future<EventDetailsSaveOutcome?> _settleAndValidate(
     AppointmentRecord appointment, {
     required String title,
   }) async {
-    // Let the employee enrichment settle so assignee resolution runs against
-    // a warm active-employee read. Almost always already done.
+    // Settle enrichment for warm active-employee read in assignee resolution.
     await _seedFuture;
     if (!ref.mounted) return const EventDetailsInvalid();
 
@@ -511,9 +440,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     return null;
   }
 
-  // Builds the edited AppointmentRecord from the form fields + resolved
-  // assignees; the client falls back to the appointment's stored values when the
-  // user didn't pick a new one.
+  // Build edited record from form fields + resolved assignees.
   AppointmentRecord _buildUpdatedRecord(
     AppointmentRecord appointment, {
     required String id,
@@ -539,9 +466,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
       employeeNames: assignees.names,
       notes: notes.trim(),
       materialsNeeded: materialsNeeded.trim(),
-      // For the returned outcome/UI only — record updates never write
-      // `pictures` (removals go through removeAppointmentPictures, additions
-      // through the background upload's append).
+      // Pictures included only for outcome/UI; updates use append/remove instead.
       pictures: state.existingImages,
       status: state.editingStatus,
       repeat: state.repeat,
@@ -549,11 +474,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     );
   }
 
-  // Persists the edit according to how the repeat changed: a full series rewrite
-  // when the interval itself changed, a propagate across the series when
-  // [applyToSeries] is set, otherwise a plain single-doc update. Returns the
-  // resulting [EventDetailsSaved] outcome (the possibly-rewritten record plus the
-  // one non-zero per-branch count for the result banner; the rest default to 0).
+  // Apply edit: series rewrite if repeat changed, propagate if applyToSeries, else update.
   Future<EventDetailsSaved> _applySeriesChange(
     AppointmentRecord appointment, {
     required AppointmentsRepository repo,
@@ -605,7 +526,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
       return StateError('Cannot delete an appointment without an id.');
     }
     state = state.copyWith(isSaving: true);
-    // Resolved before the first await — see save().
+    // Resolve before first await to survive sheet dismissal.
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
     try {
@@ -617,8 +538,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
           excludeId: id,
           after: appointment.startTime,
         );
-        // Only the visits actually being deleted contribute orphaned bytes —
-        // preserved past/terminal visits keep their pictures.
+        // Only deleted visits contribute orphaned bytes; preserved visits keep pictures.
         final futureIdSet = futureIds.toSet();
         for (final a in series) {
           if (a.id != null && futureIdSet.contains(a.id)) {
@@ -630,7 +550,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
         await repo.deleteAppointment(id);
       }
 
-      // Clean up images only after the docs that referenced them are gone.
+      // Delete orphaned images after docs are gone.
       await _deleteOrphanedImages(orphanedImages, tag: 'APPT-DEL');
 
       if (ref.mounted) state = state.copyWith(isSaving: false);
@@ -642,10 +562,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
   }
 
-  /// Best-effort Storage cleanup for [images] the doc no longer references.
-  /// A failure here only orphans bytes (harmless), so it's logged under [tag]
-  /// — never rethrown — and must not fail the surrounding save/delete. Skipped
-  /// when the notifier was disposed mid-operation (same harmless outcome).
+  /// Best-effort cleanup; orphaned bytes are harmless and logged only.
   Future<void> _deleteOrphanedImages(
     List<AppointmentImage> images, {
     required String tag,

@@ -21,12 +21,7 @@ Future<AppointmentRecord?> showAddEventPopup(
   );
 }
 
-/// Opens the appointment detail sheet.
-///
-/// [showActions] is REQUIRED, not defaulted: it gates the admin-only Edit /
-/// Cancel / Delete affordances, and a call site that silently defaulted to
-/// `true` showed employees three controls the rules reject with
-/// `permission-denied`. Pass the caller's resolved role.
+/// Opens the appointment detail sheet; [showActions] is REQUIRED (defaulting to true exposed admin-only controls to employees).
 Future<void> showEventDetails(
   BuildContext context,
   AppointmentRecord a, {

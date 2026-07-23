@@ -42,11 +42,7 @@ class DraggableSheetFrame extends StatelessWidget {
               ),
               boxShadow: AppShadow.sheet,
             ),
-            // A transparent Material sits between the decorated Container and
-            // the sheet content so descendant ListTiles paint their background
-            // and ink ripples here (above the Container's surface color) rather
-            // than on the modal Material below, where the Container would hide
-            // them.
+            // Transparent Material for ListTile backgrounds/ripples.
             child: Material(
               type: MaterialType.transparency,
               child: builder(sheetContext, scrollController),
@@ -111,10 +107,7 @@ class _SheetHandle extends StatelessWidget {
   }
 }
 
-/// Standard scrollable body for a detail view shown either in a bottom sheet
-/// (with a drag [showHandle]) or a master-detail pane. Centralises the detail
-/// padding and the keyboard-inset–aware bottom gap so every detail view stays
-/// consistent.
+/// Standard scrollable body for a detail view (bottom sheet with drag [showHandle], or master-detail pane) — centralises the padding and keyboard-inset-aware bottom gap.
 class DetailSheetListView extends StatelessWidget {
   const DetailSheetListView({
     required this.children,
@@ -155,11 +148,7 @@ class DetailSheetListView extends StatelessWidget {
   }
 }
 
-/// Standard chrome for an add/edit **form** shown in a bottom sheet: the
-/// [DraggableSheetFrame] container plus a scrollable body with the shared sheet
-/// padding, a drag [_SheetHandle], and a [headlineLarge] [title]. Put the
-/// divider and form fields in [children]. Mirrors [DetailSheetListView], which
-/// serves read-only detail views.
+/// Standard chrome for an add/edit form sheet ([DraggableSheetFrame] plus a scrollable body with a drag handle and [title] — put form fields in [children]); the write-side mirror of [DetailSheetListView].
 class FormSheetScaffold extends StatelessWidget {
   const FormSheetScaffold({
     required this.title,

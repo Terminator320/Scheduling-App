@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 class AppointmentDraftDefaults {
   const AppointmentDraftDefaults._();
 
-  /// Inclusive bounds for the appointment date picker, shared by the add and
-  /// edit flows so the two pickers can't drift apart.
+  /// Inclusive bounds for the appointment date picker (shared to keep add and edit flows in sync).
   static final DateTime datePickerFirstDate = DateTime(2020);
   static final DateTime datePickerLastDate = DateTime(2100);
 

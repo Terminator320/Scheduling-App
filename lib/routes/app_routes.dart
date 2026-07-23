@@ -40,8 +40,7 @@ class AppRoutes {
         final args = settings.arguments as DashboardArgs?;
         return AppPageRoute(
           settings: settings,
-          // Admin-only screen, so default isAdmin to true if pushed without
-          // args (e.g. a deep link); the settings drawer always passes them.
+          // Admin-only screen; default isAdmin to true if pushed without args.
           builder: (_) => DashboardScreen(
             isAdmin: args?.isAdmin ?? true,
             employeeId: args?.employeeId ?? '',
@@ -61,10 +60,7 @@ class AppRoutes {
         );
 
       case mainCalendar:
-        // The post-login entry: hosts the persistent hub shell (U1/P4).
-        // Always builds a fresh shell — this route is only ever the target
-        // of a pushReplacement (login, splash, drawer), so by the time it
-        // builds there is no live shell left to redirect into.
+        // Post-login entry: builds fresh shell (pushReplacement always).
         final args = settings.arguments! as MainCalendarArgs;
         return AppPageRoute(
           settings: settings,
@@ -127,11 +123,7 @@ class AppRoutes {
     }
   }
 
-  /// Route for a non-calendar hub destination. The settings drawer still
-  /// pushes these as named routes; when a [HubShell] is live that push is
-  /// redirected into a tab switch on it ([HubTabRedirectRoute]) so the shell
-  /// and its kept-alive screens stay the single navigation root. With no
-  /// live shell (deep entry), a fresh shell opens on the requested tab.
+  /// Non-calendar hub route: redirects to tab switch on live shell or opens fresh one.
   static Route<dynamic> _hubRoute(
     RouteSettings routeSettings,
     AdaptiveDestination destination, {
@@ -163,12 +155,7 @@ class AppRoutes {
   }
 }
 
-/// The app's standard page route: platform-default transitions (Cupertino
-/// slide with swipe-back on iOS, zoom/predictive-back on Android) that
-/// collapse to an instant cut when the platform requests reduced motion.
-///
-/// Replaces the old bare fade `PageRouteBuilder`, whose custom transition
-/// broke the iOS back-swipe gesture on pushed routes (U1).
+/// Standard page route with platform-default transitions and reduced-motion support.
 class AppPageRoute<T> extends MaterialPageRoute<T> {
   AppPageRoute({required super.builder, super.settings});
 

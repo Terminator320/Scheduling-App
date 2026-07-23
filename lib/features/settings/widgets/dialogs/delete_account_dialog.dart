@@ -5,7 +5,7 @@ import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-// Body for the delete-account confirm (shown via showConfirmDialog).
+/// Body content for the delete-account confirm dialog.
 class DeleteAccountWarningContent extends StatelessWidget {
   const DeleteAccountWarningContent({required this.isAdmin, super.key});
 
@@ -50,9 +50,7 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
 
   @override
   Widget build(BuildContext context) {
-    // The re-auth prompt opens right after the adaptive delete confirm
-    // (showConfirmDialog), so it must match that dialog's platform look —
-    // a Material AlertDialog straight after a Cupertino confirm is jarring.
+    // Re-auth prompt must match the prior delete-confirm dialog's platform look.
     if (context.isCupertino) return _buildCupertino(context);
     return _buildMaterial(context);
   }

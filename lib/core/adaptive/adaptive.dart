@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// iOS-only adaptive layer. [isCupertino] is the single source of truth for
-/// whether the UI should render its Cupertino (iOS/macOS) variant. Reads
-/// `Theme.of(context).platform` (not `defaultTargetPlatform`) so widget tests
-/// can force either look via `ThemeData(platform: ...)`. Mirrors the
-/// `context.isWide` extension convention in `core/layout/breakpoints.dart`.
+/// [isCupertino] is the single source of truth for Cupertino-vs-Material UI,
+/// reading `Theme.of(context).platform` (not `defaultTargetPlatform`) so
+/// widget tests can force either look via `ThemeData(platform: ...)`.
 extension AdaptivePlatform on BuildContext {
   bool get isCupertino {
     final platform = Theme.of(this).platform;

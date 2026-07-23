@@ -9,8 +9,7 @@ import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
-/// Today's upcoming visits, rendered with the shared [AppointmentCard] so they
-/// match the calendar list exactly.
+/// Today's upcoming visits using shared AppointmentCard.
 class UpcomingTodaySection extends StatelessWidget {
   const UpcomingTodaySection({
     required this.ops,

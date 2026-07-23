@@ -66,10 +66,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     for (final id in _tourSteps) id: GlobalKey(),
   };
 
-  /// The calendar uses the "Split" layout — month grid | day agenda, details via
-  /// a sheet — whenever the nav rail is showing: landscape phones AND tablets.
-  /// A portrait phone keeps the simple stacked column. There is no separate
-  /// tablet layout — tablets get the same Split as landscape.
+  /// Uses the "Split" layout (month grid | day agenda) when the nav rail shows.
   bool get _splitCalendar => context.isSplitLayout;
 
   @override
@@ -120,11 +117,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     );
   }
 
-  // Show the "jump to today" FAB whenever the visible month isn't the current
-  // one. Keyed on year+month, NOT `isSameDay(_focusedDay, today)`: a month swipe
-  // reports the 1st of the month as `focusedDay` (table_calendar's page base
-  // day), so a day-equality check kept the FAB visible after swiping back to
-  // this month even though today is right there.
+  // Show the "today" FAB when the visible month isn't current (key on year+month, not day).
   bool get _showTodayButton {
     final now = DateTime.now();
     return _focusedDay.year != now.year || _focusedDay.month != now.month;
@@ -189,8 +182,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     }
   }
 
-  // Error logging/surfacing for the appointments stream — fires only on the
-  // data→error transition. A `.when` error branch would re-log every rebuild.
+  // Error logging fires only on data→error transition (unlike .when which fires every rebuild).
   void _onAppointmentsAsyncChange(
     AsyncValue<List<AppointmentRecord>>? previous,
     AsyncValue<List<AppointmentRecord>> next,
@@ -215,8 +207,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         );
   }
 
-  // A non-admin whose role becomes 'admin' is routed to the admin calendar
-  // after the current frame (guarded so it fires once).
+  // Route non-admin upgraded to 'admin' to the admin calendar post-frame (guarded for single fire).
   void _upgradeIfAdmin(String? role) {
     if (role != 'admin' || !mounted || _upgradingToAdmin) return;
     _upgradingToAdmin = true;
@@ -250,9 +241,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     child: child,
   );
 
-  /// The appointments stream this screen renders: business-wide for an admin,
-  /// only the signed-in employee's otherwise. Shared by the watch in
-  /// [_prepareBuild] and the listen in [build] so both hit the same instance.
+  /// The appointments stream this screen renders (business-wide for admin, otherwise employee-only).
   StreamProvider<List<AppointmentRecord>> get _appointmentsProvider =>
       widget.isAdmin
       ? appointmentsInRangeProvider(_appointmentRange)
@@ -261,11 +250,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           range: _appointmentRange,
         ));
 
-  /// Watches the appointment/employee providers, refreshes the day-index /
-  /// selected-day / locale caches, and returns just the values [build]'s widget
-  /// tree renders — so `build` stays a plain tree. The `ref.listen`
-  /// registrations stay at the call site in [build] where their side effects
-  /// are visible.
+  /// Watch providers and refresh caches; return only values [build] renders.
   ({
     String userName,
     Map<String, Color> colorMap,
@@ -280,8 +265,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     final colorMap = ref.watch(employeeColorMapProvider);
     final nameMap = ref.watch(employeeNameMapProvider);
 
-    // Error logging/surfacing is owned by the onAsyncChange listener in build —
-    // a `.when` error branch here would re-log on every rebuild.
+    // Error logging is owned by the onAsyncChange listener in build.
     final visibleAppointments =
         appointmentsAsync.value ?? const <AppointmentRecord>[];
 
@@ -334,9 +318,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           compact: context.isLandscape,
           actions: _appBarActions(context, scheme),
           bottom: PreferredSize(
-            // Scale with the user's text size so the month bar's single line
-            // of label text doesn't clip at large accessibility scales
-            // (1.4x+).
+            // Scale month bar label to user text size to avoid clipping at large accessibility scales.
             preferredSize: Size.fromHeight(
               MediaQuery.textScalerOf(
                 context,
@@ -462,10 +444,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     );
 
     if (_splitCalendar) {
-      // Both panes scroll and are alive at once, so scope each under its own
-      // PrimaryScrollController — otherwise the calendar's SingleChildScrollView
-      // and the event list both attach to the tab's shared controller and the
-      // Scrollbar throws (it needs one ScrollPosition per controller).
+      // Scope each pane under its own PrimaryScrollController or they'll share the tab's controller.
       return Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -474,8 +453,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
             child: PrimaryScrollScope(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  // Size the month rows to the pane: compact in the short
-                  // landscape viewport, comfortable on a tall tablet.
+                  // Size month rows to pane height (compact on landscape phones, comfortable on tablets).
                   final rowHeight = ((constraints.maxHeight - 40) / 6).clamp(
                     40.0,
                     88.0,
@@ -499,14 +477,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Size the six week-rows off the *available* height, not the full
-        // screen. Sizing off MediaQuery.size overshoots whenever the body is
-        // shorter than the screen (keyboard open, split-screen, foldable,
-        // large text scale forcing a six-week grid): the fixed-height month
-        // grid would push past the body and overflow this column, starving
-        // the Expanded event list. Reserve the day-of-week header (36) out of
-        // the calendar's ~55% share, then clamp rows to a tappable band so the
-        // event list always keeps room. Mirrors the split-calendar path above.
+        // Size week-rows to body height, not full screen, to prevent overflow and event-list starvation.
         final rowHeight = ((constraints.maxHeight * 0.55 - 36) / 6).clamp(
           36.0,
           56.0,
@@ -524,8 +495,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   }
 }
 
-/// The app-bar bottom row: tappable month label (opens the month picker) and
-/// the selected day's appointment count.
+/// The app-bar bottom row: tappable month label and selected day's appointment count.
 class _CalendarMonthBar extends StatelessWidget {
   const _CalendarMonthBar({
     required this.monthLabel,
@@ -585,8 +555,7 @@ class _CalendarMonthBar extends StatelessWidget {
   }
 }
 
-/// The "jump to today" FAB — scales/fades out (and stops absorbing taps) when
-/// today is already in view. Wrap in a [Positioned] inside the body stack.
+/// The "jump to today" FAB — scales/fades when today is in view.
 class _TodayFab extends StatelessWidget {
   const _TodayFab({required this.visible, required this.onPressed});
 

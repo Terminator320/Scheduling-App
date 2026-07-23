@@ -1,9 +1,4 @@
-/// The automatic Wave-import cadence, stored on `wave/connection` and chosen in
-/// Settings. `fromRaw` pins the accepted wire strings explicitly (rather than
-/// trusting `.name`) so the cross-boundary contract — also validated in the
-/// `waveSetImportSchedule` function and switched on in `isImportDue` — can't be
-/// silently changed by an enum-constant rename. Any null/empty/unknown value
-/// falls to [off], the fail-safe default (never accidentally enables imports).
+/// Wave auto-import cadence; unknown values default to off.
 enum WaveImportSchedule {
   off,
   weekly,
@@ -15,7 +10,6 @@ enum WaveImportSchedule {
     _ => off,
   };
 
-  /// The stored/wire string. Safe as `.name` here because the enum names
-  /// already equal the accepted wire values.
+  /// Stored wire string.
   String get raw => name;
 }

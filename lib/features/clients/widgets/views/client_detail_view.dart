@@ -15,9 +15,7 @@ import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-/// Coordinator for the client detail screen: toggles between the read-only
-/// [ClientDetailViewBody] and the editable [ClientEditForm], and owns the
-/// delete flow (shared by both modes).
+/// Toggles between read-only view and editable form; owns delete flow (both modes).
 class ClientDetailView extends ConsumerStatefulWidget {
   const ClientDetailView({
     required this.client,
@@ -75,9 +73,8 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
     switch (outcome) {
       case ClientDeleted():
         notices.success(context.l10n.clients_clientDeletedSuccessfully);
-        // A scrollController means we're inside a bottom sheet; close it.
-        // Otherwise (split-layout detail pane) ask the host to clear the pane,
-        // which still renders the just-deleted client until told to.
+        // scrollController present = bottom sheet (close it); otherwise split-layout (ask host to clear pane).
+
         if (widget.scrollController != null) {
           Navigator.pop(context);
         } else {

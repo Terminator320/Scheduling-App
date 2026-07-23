@@ -4,10 +4,7 @@ import 'package:scheduling/features/calendar/application/appointments_providers.
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 
-/// Thin clients-feature facade over the calendar-owned appointment history:
-/// the history view pages and searches through these providers instead of
-/// reaching into the calendar feature's data layer directly (it keeps only
-/// the calendar *domain* import for the record type).
+/// Facade over calendar-owned appointment history; keeps only calendar domain import for record type.
 final historyPagerProvider = Provider<HistoryPager>(
   (ref) => HistoryPager(ref.watch(appointmentsRepositoryProvider)),
 );
@@ -26,26 +23,20 @@ class HistoryPager {
   }
 }
 
-/// Database-backed history search: finds terminal appointments across the
-/// whole history window, not just the pages loaded into the list. AutoDispose
-/// so each distinct query instance is freed once no longer watched.
+/// Database-backed history search across whole window; autoDispose frees each query instance when unwatched.
 final historySearchProvider = FutureProvider.autoDispose
     .family<List<AppointmentRecord>, String>((
       ref,
       query,
     ) async {
       final repo = ref.watch(appointmentsRepositoryProvider);
-      // Committed results must not outlive a local write: a deleted visit
-      // would stay listed (and tappable) until this provider was disposed.
+      // Invalidate on local write so deleted visits don't linger in cached results.
       final sub = repo.onLocalWrite.listen((_) => ref.invalidateSelf());
       ref.onDispose(sub.cancel);
       return repo.searchHistory(query);
     });
 
-/// This client's appointments (most-recent first) for the client detail
-/// "Job history" section. AutoDispose + family keyed by clientId so a closed
-/// detail view frees the read; re-fetches on any local appointment write so an
-/// edit made while the detail is open reflects immediately.
+/// Client appointments for Job history section; autoDispose keyed by clientId, re-fetches on local write.
 final clientJobHistoryProvider = FutureProvider.autoDispose
     .family<List<AppointmentRecord>, String>((ref, clientId) async {
       final repo = ref.watch(appointmentsRepositoryProvider);

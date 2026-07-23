@@ -25,8 +25,7 @@ class AppointmentCard extends StatelessWidget {
   final VoidCallback? onTap;
   final bool selected;
 
-  /// Optional widget rendered inside the padded column below the meta rows
-  /// (e.g. the day-route navigate pill). Existing call sites pass nothing.
+  /// Optional widget rendered below the meta rows (e.g., the day-route navigate pill).
   final Widget? footer;
 
   @override
@@ -39,8 +38,7 @@ class AppointmentCard extends StatelessWidget {
         '${DateUtilsHelper.formatTime(appointment.endTime)}';
     final name = employeeName;
 
-    // One coherent screen-reader read for the whole card instead of the title,
-    // status, time, and name surfacing as disjoint fragments inside the button.
+    // Create a coherent screen-reader label for the whole card.
     final semanticsLabel = [
       appointment.title,
       statusLabel(context.l10n, status),
@@ -121,8 +119,7 @@ class _TitleHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Plain Text (not AutoSizeText): this card lives under IntrinsicHeight,
-    // which can't measure an AutoSizeText's internal LayoutBuilder.
+    // Plain Text, not AutoSizeText (IntrinsicHeight can't measure its LayoutBuilder).
     final titleText = Text(
       title,
       maxLines: compact ? 3 : 2,
@@ -131,9 +128,7 @@ class _TitleHeader extends StatelessWidget {
     );
     final chip = StatusChip(status: status);
 
-    // Overdue jobs get a leading warning glyph so they pop when scanning a busy
-    // multi-plumber day list — the employee-color bar is identity, not status
-    // (the StatusChip still carries the textual "Overdue" state).
+    // Overdue jobs get a leading warning glyph (employee-color bar is identity, not status).
     Widget titleContent = titleText;
     if (status == AppointmentStatus.overdue) {
       titleContent = Row(

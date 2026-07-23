@@ -29,19 +29,13 @@ final pushRegistrationControllerProvider = Provider<PushRegistrationController>(
   PushRegistrationController.new,
 );
 
-/// The live OS notification-authorization status, read WITHOUT prompting.
-/// Backs the Settings notifications row. Invalidate it to re-read (e.g. after
-/// returning from system Settings, or after requesting the prompt).
-final notificationAuthStatusProvider = FutureProvider.autoDispose<
-  AuthorizationStatus
->((ref) => ref.watch(pushNotificationServiceProvider).authorizationStatus());
+/// The live OS notification-authorization status (read without prompting); invalidate to re-read after user changes permissions.
+final notificationAuthStatusProvider =
+    FutureProvider.autoDispose<AuthorizationStatus>(
+      (ref) => ref.watch(pushNotificationServiceProvider).authorizationStatus(),
+    );
 
-/// Pure gate (mirrors the `isAccountDeletionSignal` helper style): active
-/// employees AND admins register for push. Admins register so an admin who is
-/// assigned to a job still receives the time-based nudges (30-min reminder,
-/// overdue prompt, 6 PM digest); the server withholds change-driven pushes
-/// (assigned/rescheduled/cancelled) from admins (see notification_utils.js
-/// TIMED_RECIPIENT_ROLES vs CHANGE_RECIPIENT_ROLES).
+/// Gate for push registration: active employees and admins (admins register for timed nudges; server withholds change-driven pushes from them).
 bool shouldRegisterPush({
   required String role,
   required String status,
@@ -69,11 +63,7 @@ class PushRegistrationController with ReentrantSync {
   static String _currentLocale() =>
       AppLanguageController.instance.value == 'fr' ? 'fr' : 'en';
 
-  /// Idempotent. A no-op for admins / signed-out users. Safe to call on every
-  /// account-doc emission and on language change (re-upserts the locale). A
-  /// concurrent call (e.g. a language change re-upserting `locale` while a
-  /// prior sync is mid-flight) coalesces via [ReentrantSync] and re-runs once
-  /// so the latest locale/doc always wins.
+  /// Idempotent and safe to call on every account-doc emission or language change; concurrent calls coalesce so latest state wins.
   Future<void> sync() => runCoalesced(_syncGuarded);
 
   Future<void> _syncGuarded() async {
@@ -89,11 +79,7 @@ class PushRegistrationController with ReentrantSync {
 
     final uid = _auth.currentUser?.uid;
     final locale = _currentLocale();
-    // Fast path: already registered for this uid+locale with a live refresh
-    // subscription. Token rotations are handled by that subscription, so
-    // there's nothing to re-read or re-write — skip the findUserByUid query
-    // and the upsert transaction that would otherwise run on every
-    // account-doc emission.
+    // Fast path: already registered for this uid+locale with live refresh subscription; skip query and upsert.
     if (uid != null &&
         uid == _registeredUid &&
         locale == _registeredLocale &&
@@ -127,9 +113,7 @@ class PushRegistrationController with ReentrantSync {
       _registeredLocale = locale;
       _subscribeRefresh(docId, uid);
     } catch (e, st) {
-      // Never let a registration failure escape as an uncaught async error
-      // (sync() is called via `unawaited`, so an escape would be logged as a
-      // fatal crash). Report it to Crashlytics as a non-fatal instead.
+      // Don't let registration failure escape as uncaught async error (sync() is unawaited); log as non-fatal instead.
       _logger.warn('PUSH sync failed', e, st);
     }
   }

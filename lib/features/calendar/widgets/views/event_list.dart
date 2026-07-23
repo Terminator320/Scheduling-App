@@ -59,9 +59,7 @@ class EventList extends StatelessWidget {
                   return AppEmptyState(
                     icon: Icons.event_outlined,
                     title: context.l10n.common_noAppointmentsFound,
-                    // Only admins have the "+" FAB, so don't tell employees
-                    // to tap a button that isn't there. The empty state itself
-                    // no longer carries a booking button — admins use the FAB.
+                    // Only admins have the '+' FAB, so don't tell employees to tap a button that isn't there.
                     body: isAdmin
                         ? context.l10n.common_tapToScheduleAnAppointment
                         : context.l10n.calendar_noAppointmentsForDay,
@@ -74,9 +72,7 @@ class EventList extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final e = value[index];
                     final accent = colorFromMap(e, colorMap) ?? scheme.outline;
-                    // Show every assigned employee, not just the first —
-                    // dropping any id the name map can't resolve and any blank
-                    // name (so no stray ", " separators).
+                    // Show every assigned employee; drop unresolved ids and blank names.
                     final joinedNames = e.employeeIds
                         .map((id) => nameMap[id])
                         .whereType<String>()

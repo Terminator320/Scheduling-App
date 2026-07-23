@@ -5,19 +5,18 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/presence/domain/models/presence_fix.dart';
 
-/// Staleness window for a presence fix on the admin live map. Keep in sync
+/// Staleness window for a presence fix on the admin live map; keep in sync
 /// with PRESENCE_STALE_MINUTES in functions/travel_utils.js.
 const presenceStaleAfter = Duration(minutes: 25);
 
 /// Pure reducers joining raw presence fixes with the active staff roster for
-/// the admin live-location map. Every function takes `now` explicitly so the
+/// the admin live-location map; every function takes `now` explicitly so the
 /// whole feature tests with a fixed clock.
 class LiveMapAggregator {
   LiveMapAggregator._();
 
-  /// Joins [fixes] with [users] by users-doc id. A fix with no matching user,
-  /// or whose user isn't active (disabled/invited leftover doc), is dropped.
-  /// Result sorted by name.
+  /// Joins [fixes] with [users] by users-doc id, dropping any fix with no
+  /// matching or inactive user, and sorts the result by name.
   static List<StaffMapPoint> join({
     required List<PresenceFix> fixes,
     required List<EmployeeRecord> users,
@@ -60,8 +59,8 @@ class LiveMapAggregator {
     return FreshnessHoursAgo(elapsed.inHours);
   }
 
-  /// Great-circle distance in metres between two lat/lng pairs (haversine).
-  /// Pure math so the roster ordering tests without the geolocator plugin.
+  /// Great-circle distance in metres between two lat/lng pairs (haversine),
+  /// pure math so the roster ordering tests without the geolocator plugin.
   static double distanceMeters(
     double lat1,
     double lng1,
@@ -82,9 +81,9 @@ class LiveMapAggregator {
 
   static double _radians(double degrees) => degrees * math.pi / 180.0;
 
-  /// Orders roster rows nearest-first relative to [selfDocId]'s point; the
-  /// self row (if present) always leads. With no self point in [points]
-  /// (self untracked / no fix), the incoming name order is preserved.
+  /// Orders roster rows nearest-first relative to [selfDocId]'s point (self
+  /// row always leads); with no self point in [points], incoming name order
+  /// is preserved.
   static List<StaffMapPoint> sortedByProximity(
     List<StaffMapPoint> points, {
     required String? selfDocId,
@@ -118,9 +117,9 @@ class LiveMapAggregator {
   }
 
   /// Best-effort city/locality pulled from a Google-formatted address such as
-  /// `"123 Rue X, Montréal, QC H2X 1Y4, Canada"` → `"Montréal"`. Returns null
-  /// when nothing usable can be isolated (caller then hides the line). Tuned
-  /// for the Canadian `street, City, PROV Postal, Country` shape.
+  /// `"123 Rue X, Montréal, QC H2X 1Y4, Canada"` → `"Montréal"` (tuned for the
+  /// Canadian `street, City, PROV Postal, Country` shape); null when nothing
+  /// usable can be isolated.
   static String? cityFromAddress(String? formatted) {
     final raw = formatted?.trim() ?? '';
     if (raw.isEmpty) return null;
@@ -148,7 +147,7 @@ class LiveMapAggregator {
   }
 
   // "QC", "QC H2X 1Y4", "ON M5V 2T6" — a 2-letter province code, optionally
-  // trailed by a postal code. Not a false-positive risk for city names.
+  // trailed by a postal code (not a false-positive risk for city names).
   static final RegExp _provincePattern = RegExp(r'^[A-Z]{2}(\s|$)');
 
   static bool _looksLikeProvince(String s) => _provincePattern.hasMatch(s);

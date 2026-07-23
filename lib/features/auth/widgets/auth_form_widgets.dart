@@ -8,18 +8,9 @@ import 'package:scheduling/shared/widgets/branding/brand_logo.dart';
 import 'package:scheduling/shared/widgets/fields/clear_text_button.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
-/// Shared building blocks for the three auth screens (sign-in,
-/// create-account, forgot-password). They were previously duplicated as
-/// per-screen private widgets; consolidating them keeps the screens thin and
-/// the form styling consistent.
+/// Shared form components for all auth screens, consolidating duplicated per-screen widgets.
 
-/// The outer shell every auth screen shares: tap-to-dismiss keyboard, a
-/// surface-colored [Scaffold], and a scroll view with the standard auth
-/// padding. The form/success column goes in [child].
-///
-/// The [AutofillGroup] links the email + password fields into one OS autofill
-/// context so password managers can fill both and — once the screen commits
-/// via `TextInput.finishAutofillContext()` on success — offer to save them.
+/// Outer shell for auth forms: keyboard dismissal, standard padding, [AutofillGroup] for OS password managers.
 class AuthScaffold extends StatelessWidget {
   const AuthScaffold({required this.child, super.key});
 
@@ -29,9 +20,7 @@ class AuthScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    // One gentle entrance for the whole form (a single fade + small rise),
-    // rather than staggering every field in separately. Collapses to instant
-    // under the OS reduce-motion setting.
+    // Fade + rise entrance for the whole form; collapses to instant under reduce-motion.
     Widget content = AutofillGroup(child: child);
     if (!MediaQuery.disableAnimationsOf(context)) {
       content = content
@@ -56,9 +45,7 @@ class AuthScaffold extends StatelessWidget {
               horizontal: AppSpacing.sp24,
               vertical: AppSpacing.sp32,
             ),
-            // Cap the form width and center it so it reads as a tidy column on
-            // tablets / landscape instead of fields stretched edge to edge.
-            // Phones are narrower than the cap, so this is a no-op there.
+            // Cap width for tablets/landscape; no-op on phones narrower than 440.
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 440),
@@ -72,8 +59,7 @@ class AuthScaffold extends StatelessWidget {
   }
 }
 
-/// Cross-fades + slides between an auth screen's form and its success state.
-/// Used by create-account and forgot-password.
+/// Animates between form and success state via fade + slide.
 class AuthFormSwitcher extends StatelessWidget {
   const AuthFormSwitcher({required this.child, super.key});
 
@@ -100,9 +86,7 @@ class AuthFormSwitcher extends StatelessWidget {
   }
 }
 
-/// A centered headline + supporting line, the standard heading used under the
-/// brand mark on each auth form and success panel. Full-width so it centers
-/// across the form regardless of the parent column's cross-axis alignment.
+/// Centered headline + subtitle for auth forms, centered full-width below the brand mark.
 class AuthHeaderText extends StatelessWidget {
   const AuthHeaderText({
     required this.title,
@@ -139,9 +123,7 @@ class AuthHeaderText extends StatelessWidget {
   }
 }
 
-/// The centered brand header shared by the three auth screens: the mascot mark
-/// above a [AuthHeaderText]. Replaces the old left-aligned logo-badge +
-/// heading stack.
+/// Centered brand header for auth screens: mascot mark above headline + subtitle.
 class AuthBrandHeader extends StatelessWidget {
   const AuthBrandHeader({
     required this.title,
@@ -164,9 +146,7 @@ class AuthBrandHeader extends StatelessWidget {
   }
 }
 
-/// A 44×44 rounded square holding a centered [icon]. Defaults to the primary
-/// brand colors (the app mark); pass [background]/[foreground] for the
-/// tertiary success variant.
+/// 44×44 rounded square holding a centered icon, defaulting to primary brand colors.
 class AuthIconBadge extends StatelessWidget {
   const AuthIconBadge({
     required this.icon,
@@ -194,8 +174,7 @@ class AuthIconBadge extends StatelessWidget {
   }
 }
 
-/// The email input used by all three auth forms: a shake-on-error wrapper
-/// around an email-keyboard [TextField] with the shared input decoration.
+/// Email input with shake-on-error and clear button, used by all auth forms.
 class AuthEmailField extends StatelessWidget {
   const AuthEmailField({
     required this.controller,
@@ -215,8 +194,7 @@ class AuthEmailField extends StatelessWidget {
   final bool enabled;
   final String? errorText;
 
-  /// Drives the shake animation. Defaults to `errorText != null`; sign-in
-  /// passes it explicitly so the field can shake before the error text shows.
+  /// Drives shake animation; defaults to `errorText != null`.
   final bool? hasError;
   final String? hint;
   final TextInputAction textInputAction;
@@ -255,8 +233,7 @@ class AuthEmailField extends StatelessWidget {
   }
 }
 
-/// The obscurable password input used by the sign-in and create-account
-/// forms, with an animated show/hide toggle.
+/// Password input with animated show/hide toggle for sign-in and account creation.
 class AuthPasswordField extends StatelessWidget {
   const AuthPasswordField({
     required this.label,
@@ -336,9 +313,7 @@ class AuthPasswordField extends StatelessWidget {
   }
 }
 
-/// A text input for a one-time code (signup code), styled to match the other
-/// auth fields: shake-on-error, a key prefix icon, and the standard clear
-/// button suffix.
+/// One-time code input with shake-on-error and clear button.
 class AuthCodeField extends StatelessWidget {
   const AuthCodeField({
     required this.label,

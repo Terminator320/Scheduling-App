@@ -36,9 +36,7 @@ class ClientsListView extends ConsumerStatefulWidget {
 
 class _ClientsListViewState extends ConsumerState<ClientsListView> {
   static const int _pageSize = 50;
-  // Debounce before firing the comprehensive (up-to-1000-doc) server search so
-  // a per-keystroke read storm doesn't happen; the instant local-page filter
-  // covers the gap so typing still feels immediate.
+  // Debounce before server search to avoid per-keystroke read storm; local filter covers gap for immediate feel.
   final _searchDebounce = Debouncer(const Duration(milliseconds: 250));
   String _committedQuery = '';
 
@@ -76,8 +74,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     _scheduleSearch();
   }
 
-  // Restart the debounce on every query change. Clearing commits instantly so
-  // returning to the paged list has no lag.
+  // Debounce restarts on query change; clearing commits instantly for zero lag returning to paged list.
   void _scheduleSearch() {
     final next = widget.searchQuery.trim();
     if (next.isEmpty) {

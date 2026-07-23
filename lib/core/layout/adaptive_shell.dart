@@ -52,13 +52,7 @@ enum AdaptiveDestination {
   ),
 };
 
-/// Tab-switch contract implemented by the persistent hub shell
-/// (`HubShellState` in `lib/routes/hub_shell.dart`). Declared here so
-/// [navigateToDestination] (core) can drive the shell (routes) without a
-/// core → routes dependency.
-///
-/// `userName`/`userEmail` are sticky on the shell side: passing an empty
-/// value keeps the last known one, since most call sites don't know them.
+/// Tab-switch contract so core can drive navigation without core→routes dependency; userName/userEmail are sticky on the shell side.
 // One-method contract by design: an abstract class (vs a callback type)
 // keeps the InheritedWidget field debuggable and the signature named.
 // ignore: one_member_abstracts
@@ -75,7 +69,7 @@ abstract interface class HubTabSelector {
 }
 
 /// Lets shell descendants (the nav rail, hub back buttons) reach the
-/// enclosing hub shell to switch tabs. [current] is carried so dependents
+/// enclosing hub shell to switch tabs; [current] is carried so dependents
 /// rebuild when the selection changes.
 class HubShellScope extends InheritedWidget {
   const HubShellScope({
@@ -88,15 +82,13 @@ class HubShellScope extends InheritedWidget {
   final HubTabSelector shell;
   final AdaptiveDestination current;
 
-  /// The enclosing shell, or null when the widget is hosted outside one
-  /// (standalone route, tests). Does not create a rebuild dependency —
-  /// callers only use it for one-shot navigation.
+  /// The enclosing shell, or null when hosted outside one (standalone route,
+  /// tests); does not create a rebuild dependency — for one-shot navigation.
   static HubTabSelector? maybeOf(BuildContext context) =>
       context.getInheritedWidgetOfExactType<HubShellScope>()?.shell;
 
-  /// The currently visible hub tab, as a build dependency: callers rebuild
-  /// when the selection changes. Null outside a shell (standalone route,
-  /// tests). Used by FeatureTourHost to start/stop a tab's tour.
+  /// The currently visible hub tab as a build dependency (null outside a
+  /// shell); used by FeatureTourHost to start/stop a tab's tour.
   static AdaptiveDestination? currentOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<HubShellScope>()?.current;
 
@@ -110,14 +102,7 @@ class HubShellScope extends InheritedWidget {
       current != oldWidget.current || shell != oldWidget.shell;
 }
 
-/// Navigates to [destination] — the single nav action shared by the rail and
-/// every screen's back button, so they can't drift from [destinationRoute].
-///
-/// Inside the persistent hub shell (U1/P4) this is just a tab switch: the
-/// shell's IndexedStack swaps its index, the screens stay alive, and the
-/// navigator stack is untouched. Outside a shell (a hub screen hosted
-/// standalone, e.g. in widget tests) it falls back to the historical
-/// route-replacement behavior.
+/// Navigates to destination — the single nav action so rail and back buttons can't drift; inside the shell it's a tab switch, outside it's route replacement.
 void navigateToDestination(
   BuildContext context,
   AdaptiveDestination destination, {
@@ -185,15 +170,7 @@ class AdaptiveShell extends StatelessWidget {
 
     return Row(
       children: [
-        // NavigationRail lays its destinations out in a plain Column (no
-        // internal scroll view), so on a short viewport — a landscape phone —
-        // the icons+labels can be a couple pixels too tall and overflow. Make
-        // the rail scrollable: give it at least the viewport height (so its
-        // internal Expanded still works) but let it grow and scroll when the
-        // content doesn't fit. PrimaryScrollController.none keeps this scroll
-        // view off the ambient (hub-tab) controller, so it never shares a
-        // controller with the content list (which the app-wide Scrollbar
-        // rejects).
+        // NavigationRail can overflow on short viewports, so make it scrollable with its own PrimaryScrollController to avoid sharing with content.
         PrimaryScrollController.none(
           child: LayoutBuilder(
             builder: (context, constraints) => SingleChildScrollView(

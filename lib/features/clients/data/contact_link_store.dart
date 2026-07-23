@@ -1,20 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Device-local link between a client and the phone-contact it was saved as,
-/// so a later client edit can update that same contact.
-///
-/// The native contact id is local to this device, so the link only exists where
-/// the contact was saved — a reinstall or a second device starts with no links.
-/// Non-sensitive (just a contact id), so it lives in `SharedPreferences` rather
-/// than secure storage.
+/// Device-local link between client and phone-contact for later edits; non-sensitive SharedPreferences.
 class ContactLinkStore {
   const ContactLinkStore();
 
   static const _prefix = 'contact_link_';
 
-  /// The native contact id previously saved for [clientId], or null if this
-  /// client has never been saved to contacts on this device.
+  /// Native contact id for [clientId] if saved on this device, or null.
   Future<String?> contactIdFor(String clientId) async {
     final prefs = await SharedPreferences.getInstance();
     final id = prefs.getString('$_prefix$clientId');

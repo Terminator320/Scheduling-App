@@ -110,9 +110,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     _notifier.selectEndTime(picked);
   }
 
-  // Quick-fill: seed the title from the picked job type, and — if a start time
-  // is already chosen — the end time from the template's typical duration.
-  // Title/materials stay fully editable afterwards; status is untouched.
+  // Quick-fill: seeds title from the job type and end time from template duration (if start is chosen).
   void _applyTemplate(JobTemplate template) {
     _controllers.title.text = jobTemplateLabel(context.l10n, template);
     final start = ref.read(_provider).selectedStartTime;

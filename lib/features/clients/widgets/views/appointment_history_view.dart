@@ -17,10 +17,7 @@ import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
-/// Pre-normalized searchable projection of one loaded history row, built once
-/// per page load so per-keystroke filtering only normalizes the query.
-/// Employee names stay a list (not joined) so a query can't match across the
-/// boundary of two adjacent names.
+/// Pre-normalized searchable projection built once per page load for per-keystroke filtering.
 typedef _HistorySearchEntry = ({
   AppointmentRecord appointment,
   String clientText,
@@ -28,9 +25,7 @@ typedef _HistorySearchEntry = ({
   String phoneDigits,
 });
 
-/// Paginated (newest-first) history list. Pages load on scroll; year/employee
-/// chip filters and the search query operate over the already-loaded pages
-/// (same intentional client-side model as the clients list).
+/// Paginated history list (newest-first); filters and search operate over loaded pages (client-side model).
 class AppointmentHistoryView extends ConsumerStatefulWidget {
   const AppointmentHistoryView({required this.searchQuery, super.key});
 
@@ -44,8 +39,7 @@ class AppointmentHistoryView extends ConsumerStatefulWidget {
 class _AppointmentHistoryViewState
     extends ConsumerState<AppointmentHistoryView> {
   static const int _pageSize = 25;
-  // Debounce before firing the comprehensive history search (mirrors the
-  // clients list); the loaded-page filter covers the gap so typing feels instant.
+  // Debounce before history search (mirrors clients list); loaded-page filter covers gap for instant feel.
   final _searchDebounce = Debouncer(const Duration(milliseconds: 250));
 
   int? _year;
@@ -53,11 +47,7 @@ class _AppointmentHistoryViewState
 
   String _committedQuery = '';
 
-  // Memoized year/employee filter options and pre-normalized search index —
-  // recomputed only when a new page arrives (keyed on PagingState.pages
-  // identity), not on every rebuild from a search/filter setState (the index
-  // otherwise re-normalizes every loaded row per keystroke). Mirrors
-  // main_calendar_screen's _dayIndex memo.
+  // Memoized filter options and search index recomputed only on new page (not every filter setState).
   List<List<AppointmentRecord>>? _filterOptionsPages;
   List<int> _cachedYears = const [];
   List<HistoryEmployeeOption> _cachedEmployees = const [];
@@ -77,9 +67,7 @@ class _AppointmentHistoryViewState
   @override
   void initState() {
     super.initState();
-    // Load the first page up front so search/filter has data even when the
-    // view opens directly into a filtered state — the PagedListView that would
-    // otherwise trigger the initial fetch isn't mounted while filtering.
+    // Load first page upfront so search/filter has data when view opens directly into filtered state.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _pagingController.fetchNextPage();
     });

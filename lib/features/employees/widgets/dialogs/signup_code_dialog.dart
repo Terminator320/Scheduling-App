@@ -5,18 +5,14 @@ import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Shows a one-time signup code to the admin after creating an employee invite.
-/// The admin can copy the code and share it with the new employee. Renders a
-/// [CupertinoAlertDialog] on iOS/macOS and the Material [AlertDialog]
-/// elsewhere (mirrors `showConfirmDialog`).
+/// Shows one-time signup code after creating an invite, adaptive dialog for iOS/Material.
 Future<void> showSignupCodeDialog(
   BuildContext context, {
   required String name,
   required String code,
 }) {
   if (context.isCupertino) {
-    // showCupertinoDialog is non-dismissible by default, matching the
-    // barrierDismissible: false of the Material branch.
+    // showCupertinoDialog is non-dismissible by default, matching Material branch.
     return showCupertinoDialog<void>(
       context: context,
       builder: (ctx) => _SignupCodeDialog(name: name, code: code),
@@ -88,8 +84,7 @@ class _SignupCodeDialogState extends State<_SignupCodeDialog> {
     if (context.isCupertino) {
       return CupertinoAlertDialog(
         title: Text(context.l10n.employees_signupCodeTitle),
-        // Transparent Material so the selectable code text keeps its Material
-        // selection handles/toolbar inside the Cupertino dialog.
+        // Transparent Material so selectable text keeps Material toolbar inside Cupertino dialog.
         content: Material(
           type: MaterialType.transparency,
           child: Padding(

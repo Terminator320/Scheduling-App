@@ -5,10 +5,7 @@ import 'package:scheduling/features/presence/application/presence_sync_controlle
 import 'package:scheduling/features/presence/domain/live_map_aggregator.dart';
 import 'package:scheduling/features/presence/domain/models/presence_fix.dart';
 
-/// Live feed of every staff member's last-known fix (admin collection-group
-/// read). autoDispose so leaving the map tab — where the screen stops watching
-/// it — tears the Firestore listener down (see the pause-when-hidden gate in
-/// `live_map_screen.dart`).
+/// Live feed of every staff member's last-known fix (admin collection-group read).
 final allPresenceStreamProvider = StreamProvider.autoDispose<List<PresenceFix>>(
   (ref) => ref.watch(presenceRepositoryProvider).watchAllPresence(),
 );
@@ -19,16 +16,15 @@ final liveMapClockProvider = Provider<DateTime Function()>(
   (ref) => DateTime.now,
 );
 
-/// 30 s heartbeat that re-renders freshness labels and re-evaluates staleness
-/// while the map tab is visible. autoDispose — the screen un-watches it when
-/// the tab is hidden, so the ticker stops.
+/// 30 s heartbeat that re-renders freshness/staleness while the map tab is
+/// visible; autoDispose stops the ticker when the tab is hidden.
 final liveMapTickProvider = StreamProvider.autoDispose<int>(
   (ref) => Stream<int>.periodic(const Duration(seconds: 30), (i) => i),
 );
 
-/// Presence fixes joined with the active-staff roster into plotted points.
-/// Same reduction shape as `dashboardStatsProvider`: first error wins, any
-/// loading source keeps it loading.
+/// Presence fixes joined with the active-staff roster into plotted points;
+/// same reduction shape as `dashboardStatsProvider` (first error wins, any
+/// loading source keeps it loading).
 final liveMapPointsProvider =
     Provider.autoDispose<AsyncValue<List<StaffMapPoint>>>((ref) {
       final fixes = ref.watch(allPresenceStreamProvider);

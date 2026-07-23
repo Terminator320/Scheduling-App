@@ -15,8 +15,7 @@ abstract class AppointmentsRepository {
   /// All appointments belonging to one repeat series.
   Future<List<AppointmentRecord>> getSeries(String seriesId);
 
-  /// Atomically rewrites a repeat series: saves [updated], deletes the docs
-  /// in [deleteIds], and creates [copies] — all-or-nothing.
+  /// Atomically rewrite series: save, delete, create in one batch.
   Future<void> rewriteSeries({
     required AppointmentRecord updated,
     required List<String> deleteIds,
@@ -25,8 +24,7 @@ abstract class AppointmentsRepository {
 
   Future<void> updateAppointment(AppointmentRecord appointment);
 
-  /// Atomically updates every appointment in [appointments] (all-or-nothing).
-  /// Used to propagate an edit across this visit and its future series siblings.
+  /// Atomically update series to propagate edit across visit and future siblings.
   Future<void> updateAppointments(List<AppointmentRecord> appointments);
 
   /// Appends [pictures] to the appointment's stored pictures without
@@ -38,8 +36,7 @@ abstract class AppointmentsRepository {
     List<AppointmentImage> pictures,
   );
 
-  /// Removes exactly [pictures] from the appointment's stored pictures
-  /// (server-side array-remove), leaving concurrently appended photos intact.
+  /// Remove pictures via arrayRemove, leaving concurrent appends intact.
   Future<void> removeAppointmentPictures(
     String id,
     List<AppointmentImage> pictures,
@@ -57,32 +54,22 @@ abstract class AppointmentsRepository {
 
   Stream<List<AppointmentRecord>> watchInRange(AppointmentDateRange range);
 
-  /// One newest-first page of terminal (done/cancelled) appointments.
-  /// [after] is the last record of the previous page (cursor); null for the
-  /// first page.
+  /// One newest-first page of terminal appointments; [after] is cursor or null.
   Future<List<AppointmentRecord>> fetchHistoryPage({
     required int limit,
     AppointmentRecord? after,
   });
 
-  /// Searches terminal (done/cancelled) appointments across the database — not
-  /// just the pages already loaded into the list — by client name, client
-  /// phone, or employee name. Scans the most-recent window of history and
-  /// returns the matches newest-first.
+  /// Search terminal appointments by client/employee name or phone, newest-first.
   Future<List<AppointmentRecord>> searchHistory(String query);
 
-  /// This client's appointments (any status), most-recent first and bounded by
-  /// [limit], for the admin-only client detail "Job history" section. Filters
-  /// on `clientId` alone (automatic single-field index) and sorts by startTime
-  /// descending in Dart, so it needs no composite index.
+  /// Client's appointments (any status), newest-first, bounded by [limit].
   Future<List<AppointmentRecord>> fetchClientHistory({
     required String clientId,
     int limit,
   });
 
-  /// Fires after every local appointment write (add/update/delete/status/
-  /// pictures/series). Lets watched search providers invalidate committed
-  /// results instead of serving a just-deleted appointment until their TTL.
+  /// Fires after local writes so search providers invalidate stale results immediately.
   Stream<void> get onLocalWrite;
 
   Stream<List<AppointmentRecord>> watchForEmployeeInRange(

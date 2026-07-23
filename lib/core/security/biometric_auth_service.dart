@@ -2,10 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 
-/// Wraps `local_auth` for the biometric app-lock. All calls fail closed
-/// (return false) on any platform exception so the lock never crashes the app
-/// — but each failure is logged, or a permanently-broken `local_auth` channel
-/// (hardware lockout, keystore corruption, plugin regression) is undiagnosable.
+/// Wraps local_auth for biometric app-lock; all calls fail closed and log exceptions.
 class BiometricAuthService {
   BiometricAuthService({LocalAuthentication? auth, AppLogger? logger})
     : _auth = auth ?? LocalAuthentication(),
@@ -24,8 +21,7 @@ class BiometricAuthService {
     }
   }
 
-  /// Prompts for biometrics, falling back to the device passcode. Returns
-  /// true only on a successful authentication.
+  /// Prompts for biometrics with device passcode fallback; returns true only on success.
   Future<bool> authenticate(String reason) async {
     try {
       return await _auth.authenticate(

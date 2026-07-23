@@ -52,10 +52,7 @@ class _AddressAutocompleteFieldState
   String _lastTypedApt = '';
   String _lastFetched = '';
 
-  /// Monotonically increasing id of the newest autocomplete request. A slow
-  /// response whose id no longer matches is stale — the user has typed a newer
-  /// query (or picked a suggestion) since — and is discarded instead of
-  /// overwriting the newer suggestions.
+  /// Request id; stale responses are discarded.
   int _requestId = 0;
 
   static const _minQueryLength = 3;
@@ -101,10 +98,8 @@ class _AddressAutocompleteFieldState
   }
 
   Future<void> _fetch(String query) async {
-    // Skip a re-fetch of the exact query we last *successfully* fetched (e.g.
-    // trailing edits that trim back to the same text) — it would bill an
-    // identical call. Set on success only, so a failed query is retried when
-    // the user re-triggers the same text.
+    // Skip re-fetching the exact query last fetched successfully, to avoid
+    // billing an identical call (set on success only, so a failed one retries).
     if (query == _lastFetched) return;
     final requestId = ++_requestId;
     setState(() {
@@ -124,9 +119,7 @@ class _AddressAutocompleteFieldState
         _isLoading = false;
       });
     } catch (e, st) {
-      // Logged before the mounted guard: AppLogger is context-free and a
-      // quota / App Check / assertAdmin rejection must reach Crashlytics even
-      // if the field is gone by the time the failure lands.
+      // Logged before the mounted guard so it reaches Crashlytics even if the field is gone by then.
       ref.read(loggerProvider).warn('ADDR-AUTO autocomplete failed', e, st);
       if (!mounted || requestId != _requestId) return;
       setState(() {
@@ -142,8 +135,7 @@ class _AddressAutocompleteFieldState
   }
 
   Future<void> _selectSuggestion(AddressSuggestion s) async {
-    // Invalidate any pending debounce/in-flight autocomplete so a late
-    // response can't resurface the suggestion list after this pick.
+    // Invalidate any pending debounce/in-flight request so a late response can't resurface suggestions.
     _debounce.cancel();
     _requestId++;
     _suppressFetch = true;

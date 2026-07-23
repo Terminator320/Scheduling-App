@@ -6,9 +6,7 @@ import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
-/// Shared bound on every `users` stream, so a runaway users collection can't
-/// push an unbounded snapshot to every client. One constant so the three
-/// streams below can't silently drift apart.
+/// Shared bound on every `users` stream to prevent unbounded snapshots.
 const _userStreamLimit = 500;
 
 class FirebaseEmployeesRepository implements EmployeesRepository {
@@ -43,11 +41,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       () => _users
           .where('role', whereIn: ['employee', 'admin'])
           .where('status', isEqualTo: 'active')
-          // NOTE: deliberately NO orderBy here — watchAllUsers' orderBy('name')
-          // makes Firestore exclude docs missing `name`, which would drop an
-          // unnamed active employee out of the picker (and unassigning staff
-          // changes who can see a visit). That asymmetry is also why this
-          // stream is not derived from allUsersStreamProvider.
+          // NOTE: no orderBy (watchAllUsers' orderBy excludes docs without name, dropping unnamed active employees).
           .limit(_userStreamLimit)
           .snapshots()
           .map(
@@ -129,11 +123,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }) async {
     final normalizedEmail = email.trim().toLowerCase();
 
-    // Uniqueness pre-check. The Firestore client SDK cannot run queries inside
-    // a transaction, so this read-then-write is not atomic: another doc could
-    // claim [normalizedEmail] between this query and the commit below. That
-    // residual race is accepted client-side — the server-side invite flow
-    // (functions/createEmployeeInvite) is the authoritative uniqueness guard.
+    // Pre-check uniqueness (not atomic, but server-side invite flow is authoritative).
     final existing = await _users
         .where('email', isEqualTo: normalizedEmail)
         .get();

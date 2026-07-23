@@ -6,9 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Cancel/confirm dialog shared by the destructive flows; resolves true only
-/// on confirm. Pass [content] instead of [message] for a rich body. Renders a
-/// [CupertinoAlertDialog] on iOS and the Material [AlertDialog] on Android.
+/// Cancel/confirm dialog; Cupertino on iOS / Material on Android.
 Future<bool> showConfirmDialog(
   BuildContext context, {
   required String title,
@@ -27,8 +25,7 @@ Future<bool> showConfirmDialog(
         content: content ?? Text(message!),
         actions: [
           CupertinoDialogAction(
-            // Destructive: Cancel is the bold, safe default (iOS convention).
-            // Non-destructive: the confirm action is the default instead.
+            // iOS convention: destructive defaults to Cancel button.
             isDefaultAction: destructive,
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(ctx.l10n.common_cancel),
@@ -71,9 +68,7 @@ Future<bool> showConfirmDialog(
     );
   }
   final confirmed = result ?? false;
-  // Central haptic for every destructive confirmation — matches the buzz the
-  // color swatches and notices already give, without scattering
-  // HapticFeedback calls across features.
+  // Haptic feedback for destructive confirms.
   if (confirmed && destructive) unawaited(HapticFeedback.mediumImpact());
   return confirmed;
 }

@@ -13,9 +13,9 @@ import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
-/// Outcome of a sign-in attempt (or of resuming a session right after
-/// signup). The login screen only maps these to banner messages and
-/// navigation; the orchestration lives in [SignInController].
+/// Outcome of a sign-in attempt (or of resuming a session right after signup);
+/// the login screen only maps these to banner messages/navigation, and the
+/// orchestration lives in [SignInController].
 sealed class SignInOutcome {
   const SignInOutcome();
 }
@@ -31,14 +31,14 @@ class SignInInvalidCredentials extends SignInOutcome {
   const SignInInvalidCredentials();
 }
 
-/// Signed in, but no provisioned `users` doc exists for this uid. The session
-/// was signed out again before this outcome was returned.
+/// Signed in, but no provisioned `users` doc exists for this uid — the
+/// session was signed out again before this outcome was returned.
 class SignInNoProfile extends SignInOutcome {
   const SignInNoProfile();
 }
 
-/// The account's `users` doc is not active (disabled staff). The session was
-/// signed out again before this outcome was returned.
+/// The account's `users` doc is not active (disabled staff) — the session
+/// was signed out again before this outcome was returned.
 class SignInAccountDisabled extends SignInOutcome {
   const SignInAccountDisabled();
 }
@@ -48,8 +48,8 @@ class SignInNoSession extends SignInOutcome {
   const SignInNoSession();
 }
 
-/// Post-signup resume only: signed in, but the freshly activated `users` doc
-/// has not become readable yet — ask the user to sign in normally.
+/// Post-signup resume only: signed in but the freshly activated `users` doc
+/// isn't readable yet — ask the user to sign in normally.
 class SignInProfilePending extends SignInOutcome {
   const SignInProfilePending();
 }
@@ -77,23 +77,19 @@ class SignInState {
 }
 
 /// Orchestrates the sign-in flow shared by the login form and the
-/// return-from-signup path: auth call, uid-keyed profile lookup (with the
-/// auth-propagation retry), active check, and the best-effort cache writes.
-/// Returns a [SignInOutcome]; the screen owns form state and navigation.
+/// return-from-signup path (auth call, uid-keyed profile lookup with retry,
+/// active check, best-effort cache writes) and returns a [SignInOutcome];
+/// the screen owns form state and navigation.
 class SignInController extends Notifier<SignInState> {
   @override
   SignInState build() => const SignInState();
 
-  /// Full credential sign-in. On success [state] stays in-progress so the
-  /// button keeps its spinner while the screen navigates away; every other
-  /// outcome resets it so the form is usable again.
+  /// Full credential sign-in; on success stays in-progress, otherwise resets to enable form.
   Future<SignInOutcome> signIn({
     required String email,
     required String password,
   }) async {
-    // Resolve dependencies before the first await: the screen can be disposed
-    // mid-flight, and using the Ref of a disposed notifier throws in
-    // Riverpod 3.
+    // Resolve dependencies before first await (disposed notifier ref throws in Riverpod 3).
     final auth = ref.read(authServiceProvider);
     final employees = ref.read(employeesRepositoryProvider);
     final authCache = ref.read(authCacheProvider);
@@ -109,9 +105,7 @@ class SignInController extends Notifier<SignInState> {
         return const SignInInvalidCredentials();
       }
 
-      // A provisioned user has a uid-keyed users doc. Invited employees are
-      // activated server-side at signup (redeemSignupCode), so there is no
-      // client-side activation fallback here.
+      // Provisioned users have uid-keyed doc; invited employees activated server-side, no client fallback.
       final userDoc = await _retryOnAuthPropagation(
         () => employees.findUserByUid(user.uid),
       );
@@ -157,10 +151,9 @@ class SignInController extends Notifier<SignInState> {
     }
   }
 
-  /// The create-account flow signs the user in and activates their account
-  /// via the signup code. They're already authenticated and active, so
-  /// resolve their profile and let the screen route straight into the app
-  /// instead of asking them to sign in again.
+  /// The create-account flow signs the user in and activates their account via
+  /// the signup code, so resolve their profile and let the screen route
+  /// straight into the app instead of asking them to sign in again.
   Future<SignInOutcome> resumeAfterSignUp() async {
     final auth = ref.read(authServiceProvider);
     final employees = ref.read(employeesRepositoryProvider);

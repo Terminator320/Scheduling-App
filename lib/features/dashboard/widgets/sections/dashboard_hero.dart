@@ -7,21 +7,17 @@ import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-/// A non-zero status count with its bar/legend colour. Shared by [_StatusBar]
-/// and [_StatusLegend] so the two views can't drift out of sync.
+/// Non-zero status count with bar/legend color (shared by views).
 typedef _Segment = (AppointmentStatus status, Color color, int count);
 
-/// Hero summary band: today's total, the date, a proportional status bar
-/// with legend, and the unassigned warning pill.
+/// Hero summary: total, date, status bar, unassigned warning.
 class DashboardHero extends StatelessWidget {
   const DashboardHero({required this.ops, required this.now, super.key});
 
   final TodayOps ops;
   final DateTime now;
 
-  // On-primary data hues, deliberately theme-invariant: the hero ground is
-  // scheme.primary in BOTH themes (appBarTheme), and ColorScheme has no
-  // "data color on primary" role. The legend text carries the meaning.
+  // Theme-invariant on-primary hues; legend text carries meaning.
   static const Color _inProgressSegment = Color(0xFF00A6F4);
   static const Color _overdueSegment = Color(0xFFF54A00);
 
@@ -38,8 +34,7 @@ class DashboardHero extends StatelessWidget {
       (AppointmentStatus.done, statusColors.success),
       (AppointmentStatus.cancelled, scheme.error),
     ];
-    // Resolve each segment's count once (the bar and legend both need it), and
-    // keep only the non-zero ones so the two views can't drift out of sync.
+    // Resolve counts once; keep only non-zero so views stay in sync.
     final visible = <_Segment>[
       for (final (status, color) in segments)
         if ((ops.statusCounts[DashboardAggregator.statusCountKey(status)] ??
@@ -135,7 +130,10 @@ class _StatusBar extends StatelessWidget {
             : Row(
                 children: [
                   for (final (_, color, count) in visible)
-                    Expanded(flex: count, child: ColoredBox(color: color)),
+                    Expanded(
+                      flex: count,
+                      child: ColoredBox(color: color),
+                    ),
                 ],
               ),
       ),

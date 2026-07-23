@@ -5,10 +5,7 @@ import 'package:scheduling/core/storage/secure_storage_service.dart';
 import 'package:scheduling/features/onboarding/screens/onboarding_screen.dart';
 import 'package:scheduling/features/splash/screens/splash_screen.dart';
 
-/// App entry gate: shows the onboarding flow once on first launch, then hands
-/// off to the auth splash. The seen-flag lives in encrypted storage. While it
-/// loads, the OS native splash is still on screen, so a brand-colored surface
-/// behind it suffices.
+/// App entry gate: shows onboarding once on first launch, then auth splash; seen-flag in encrypted storage.
 class OnboardingGate extends ConsumerStatefulWidget {
   const OnboardingGate({super.key});
 
@@ -32,11 +29,7 @@ class _OnboardingGateState extends ConsumerState<OnboardingGate> {
           .read(secureStorageServiceProvider)
           .readFlag(SecureStorageKeys.onboardingSeen);
     } catch (e, st) {
-      // Encrypted-storage reads can throw on Android (keystore/cipher failure
-      // after an OS upgrade or backup-restore). Fail safe to "not seen" so the
-      // gate shows onboarding instead of hanging on the brand-color surface.
-      // A locked iOS Keychain (background launch, pre-first-unlock) is
-      // environmental, not a defect — log without a Crashlytics error record.
+      // Encrypted-storage reads throw on Android keystore failure or iOS pre-first-unlock (environmental, not defect); fail safe to "not seen".
       if (isKeychainLockedError(e)) {
         ref
             .read(loggerProvider)
@@ -54,9 +47,7 @@ class _OnboardingGateState extends ConsumerState<OnboardingGate> {
           .read(secureStorageServiceProvider)
           .writeFlag(SecureStorageKeys.onboardingSeen, value: true);
     } catch (e, st) {
-      // Mirror _load's fail-safe: a keystore/cipher failure writing the flag
-      // must not make "Done" a dead button. Proceed past onboarding for this
-      // session; worst case the flow shows once more on the next launch.
+      // Keystore failure must not disable "Done"; proceed this session (worst case, show again next launch).
       ref.read(loggerProvider).warn('ONBOARD-GATE write flag failed', e, st);
     }
     if (mounted) setState(() => _seen = true);

@@ -56,17 +56,14 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
   late final PageController _pageController;
   late int _currentIndex;
 
-  /// Shared by every page's [InteractiveViewer]; reset on page change. Drives
-  /// [_zoomed], which hands single-finger drags either to the zoom pan (when
-  /// zoomed in) or to the drag-down-to-dismiss gesture (at rest).
+  /// Shared by every page's [InteractiveViewer]; drives [_zoomed] to route drags to zoom or dismiss.
   final _transformController = TransformationController();
   bool _zoomed = false;
 
   /// Current vertical drag displacement of the image, in logical pixels.
   double _dragOffset = 0;
 
-  /// True while a save/share is resolving the file — disables both actions so a
-  /// double-tap can't launch two share sheets or two save calls.
+  /// True while save/share is resolving; disables actions to prevent double-launch.
   bool _busy = false;
 
   /// Anchors the iPad share-sheet popover to the share button's frame.
@@ -115,9 +112,9 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     setState(() => _dragOffset = 0);
   }
 
-  /// Resolves the on-screen image to an on-disk file. Local picks are already
-  /// files; network images resolve to their cached copy (downloading once if
-  /// the cache was evicted), which both share and save need a path for.
+  /// Resolves the on-screen image to an on-disk file that share/save need:
+  /// local picks already are files; network images resolve to their cached
+  /// copy, downloading once if evicted.
   Future<File?> _currentImageFile() async {
     final provider = widget.images[_currentIndex];
     if (provider is FileImage) return provider.file;
@@ -127,9 +124,9 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     return null;
   }
 
-  /// Runs [body] under the shared `_busy` guard, so a double-tap can't launch
-  /// two saves/shares. On throw it logs under [logTag] and shows [errorMessage];
-  /// [body] may also surface its own notices (e.g. a partial-success path).
+  /// Runs [body] under the shared `_busy` guard (so a double-tap can't launch
+  /// two saves/shares), logging under [logTag] and showing [errorMessage] on
+  /// throw.
   Future<void> _runExclusive(
     String logTag,
     String errorMessage,

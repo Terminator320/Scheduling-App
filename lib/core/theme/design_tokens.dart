@@ -119,21 +119,17 @@ class AppMotion {
     curve: Curves.easeOutCubic,
   );
 
-  /// Cross-fade duration when switching hub tabs (the persistent shell keeps
-  /// every tab alive, so it fades between them instead of pushing routes).
+  /// Cross-fade duration when switching hub tabs (persistent shell fades between mounted tabs).
   static const Duration tabSwitch = Duration(milliseconds: 220);
 }
 
-/// Black or white, whichever contrasts with [background] (e.g. initials on an
-/// employee color). Not a theme-brightness branch — the input is data-driven.
+/// Black or white, whichever contrasts with [background]; data-driven, not theme-brightness-based.
 Color contrastingForegroundFor(Color background) =>
     ThemeData.estimateBrightnessForColor(background) == Brightness.dark
     ? Colors.white
     : Colors.black;
 
-/// Surface-card decoration shared across the settings cards. The light/dark
-/// difference (drop shadow vs. outline border) is theme-driven via
-/// [AppCardStyle] — no brightness checks at the call site.
+/// Surface-card decoration shared across settings; light/dark treatment via [AppCardStyle].
 BoxDecoration appCardDecoration(
   ThemeData theme, {
   double radius = AppRadius.r12,
@@ -148,10 +144,7 @@ BoxDecoration appCardDecoration(
   );
 }
 
-/// Per-theme surface-card treatment: a soft drop shadow in light mode, swapped
-/// for an outline border in dark mode, plus the tint strength for icon chips.
-/// Registered on `ThemeData.extensions` so widgets read it via
-/// `theme.cardStyle` instead of branching on brightness.
+/// Per-theme surface-card treatment (shadow vs. border); registered on ThemeData.extensions for brightness-independent access.
 @immutable
 class AppCardStyle extends ThemeExtension<AppCardStyle> {
   const AppCardStyle({
@@ -163,8 +156,7 @@ class AppCardStyle extends ThemeExtension<AppCardStyle> {
   final List<BoxShadow>? shadow;
   final BoxBorder? border;
 
-  /// Background alpha applied to an icon's own color in tinted icon chips
-  /// (e.g. the drawer nav items).
+  /// Background alpha for tinted icon chips (e.g. drawer nav items).
   final double iconChipAlpha;
 
   static const light = AppCardStyle(

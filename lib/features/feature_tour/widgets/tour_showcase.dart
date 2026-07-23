@@ -7,10 +7,7 @@ import 'package:scheduling/features/feature_tour/widgets/tour_step_text.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:showcaseview/showcaseview.dart';
 
-/// One step of a tab's feature tour: wraps the highlighted widget in a themed
-/// [Showcase] (design: Option A anchored tooltip — see
-/// docs/plans/2026-07-22-feature-tour-design.md). [index]/[count] come from
-/// the tab's `tourStepsFor` catalog so the counter matches the tour order.
+/// One tour step: themed Showcase with index/count.
 class TourShowcase extends StatelessWidget {
   const TourShowcase({
     required this.showcaseKey,
@@ -29,8 +26,7 @@ class TourShowcase extends StatelessWidget {
   final int index;
   final int count;
 
-  /// Rounding of the lit target cutout; defaults to r12 (cards/tiles). FABs
-  /// pass r16 to match their shape.
+  /// Target cutout rounding; defaults to r12.
   final BorderRadius? targetBorderRadius;
   final Widget child;
 
@@ -102,8 +98,7 @@ class TourShowcase extends StatelessWidget {
 }
 
 /// [TourShowcase] adapter for `AppTopBar.bottom`, which requires a
-/// [PreferredSizeWidget] — a bare Showcase wrapper would break the app-bar
-/// layout contract.
+/// [PreferredSizeWidget] that a bare Showcase wrapper would break.
 class TourShowcaseBar extends StatelessWidget implements PreferredSizeWidget {
   const TourShowcaseBar({
     required this.showcaseKey,

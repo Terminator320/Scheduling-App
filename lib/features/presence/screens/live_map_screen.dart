@@ -50,8 +50,8 @@ class LiveMapConfig {
 }
 
 /// Admin-only live staff-location map: a colored avatar marker per active staff
-/// member, with per-person freshness and a tap-to-open info card. A hub tab
-/// between History and Settings; modeled on `HistoryScreen` for its chrome.
+/// member, with per-person freshness and a tap-to-open info card (hub tab
+/// between History and Settings; modeled on `HistoryScreen` for its chrome).
 class LiveMapScreen extends ConsumerStatefulWidget {
   const LiveMapScreen({
     required this.isAdmin,
@@ -236,9 +236,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
         );
   }
 
-  /// The stored selection, or null once that person has left the current
-  /// points (disabled mid-view / presence purged). Clears the stored id
-  /// post-frame so a stale card never renders over vanished data.
+  /// The stored selection, or null once that person has left current points; clears post-frame so stale card doesn't render over vanished data.
   String? _effectiveSelected(List<StaffMapPoint> points) {
     final id = _selectedDocId;
     if (id == null) return null;
@@ -325,9 +323,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     int token,
   ) async {
     try {
-      // Render every icon in parallel; the renderer caches per key so a
-      // superseded batch and repeated keys are near-free. One failure aborts
-      // the batch (Fix relies on resolve() evicting + rethrowing on error).
+      // Render every icon in parallel; renderer caches per key so superseded/repeated batches are near-free; one failure aborts.
       final icons = await Future.wait(
         points.map(
           (point) => _renderer.resolve(
@@ -416,12 +412,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     _animateCamera(CameraUpdate.newLatLngBounds(_boundsOf(points), 48));
   }
 
-  /// The retained [_mapController] can outlive its platform view: the shell
-  /// swap (portrait <-> landscape) recreates the GoogleMap subtree, and a data
-  /// emission can land between the old view's disposal and the new
-  /// `onMapCreated`. animateCamera then throws "used after ... disposed"
-  /// (seen fatal in Crashlytics). Drop the stale controller and re-arm the
-  /// initial fit so the recreated map fits itself on arrival.
+  /// Map controller can outlive its platform view (shell swap recreates GoogleMap subtree); animateCamera throws "used after disposed" on stale controller.
   void _animateCamera(CameraUpdate update) {
     final controller = _mapController;
     if (controller == null) return;

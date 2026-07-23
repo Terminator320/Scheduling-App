@@ -12,17 +12,7 @@ import 'package:scheduling/features/splash/application/splash_controller.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/branding/brand_logo.dart';
 
-/// Auth-gate splash. Visually matches the OS native splash
-/// (`flutter_native_splash`) so the handoff is seamless: same logo, same
-/// brand-color background. A linear progress indicator at the bottom
-/// signals work while the destination resolves.
-///
-/// Returning users take an optimistic fast path: if [AuthCache] holds an
-/// identity for the signed-in uid, we route straight to the calendar as a
-/// (least-privilege) employee without waiting on a Firestore read. The live
-/// role stream then upgrades real admins (`MainCalendar`), and the account
-/// listeners in `main.dart` sign out a disabled or deleted account — so the
-/// authoritative [splashDestinationProvider] only runs on a cache miss.
+/// Auth-gate splash: matches native splash visual handoff. Optimistic fast path uses AuthCache to route returning users instantly as employees; live role stream upgrades admins, account listeners handle disabled/deleted accounts.
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -38,23 +28,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // Register once — not in build(), which would schedule a new callback on
-    // every rebuild (ref.listen + the progress animation rebuild this widget).
+    // Register once (not in build to avoid repeated callbacks on rebuilds).
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _removeNativeSplashOnce(),
     );
     _decideRoute();
   }
 
-  /// Optimistic fast path. On a cache hit we route immediately (as employee);
-  /// on a miss we fall back to the authoritative [splashDestinationProvider].
+  /// Optimistic fast path: cache hit routes immediately (as employee), miss falls back to authoritative provider.
   Future<void> _decideRoute() async {
-    // FirebaseAuth restores the session synchronously (Firebase.initializeApp
-    // ran in main() before runApp), so read uid now and kick off the
-    // independent secure-storage auth-cache read up front — it overlaps App
-    // Check activation below instead of running in series after it. Errors are
-    // swallowed here so this fire-early future can't become unhandled if we
-    // return before awaiting it.
+    // Read uid (restored synchronously by Firebase.initializeApp) and fire cache read in parallel with App Check.
     final uid = ref.read(firebaseAuthProvider).currentUser?.uid;
     final cacheFuture = uid == null
         ? null
@@ -66,12 +49,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             return null;
           });
 
-    // P10: Crashlytics/App Check activation completes after runApp (main.dart
-    // defers it into firebaseReadyProvider). Every Firestore-reading surface
-    // is reached through this splash, so awaiting here before NAVIGATING
-    // guarantees no request races App Check token issuance. An activation
-    // failure is already recorded by the zone handler — log and proceed
-    // rather than wedge startup on it.
+    // Await App Check activation before navigating to prevent request races.
     try {
       await ref.read(firebaseReadyProvider.future);
     } catch (e, st) {
@@ -165,12 +143,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     );
   }
 
-  /// Mascot mark + the company wordmark in white. The mark stays static and
-  /// opaque so it lines up with the OS native splash (no fade-back-in pop at
-  /// handoff); only the wordmark — rendered as text, since the navy logo image
-  /// would be illegible on brand-blue — fades/rises in. Scroll-wrapped so it
-  /// can't overflow at large text scale on a short viewport, and the reveal
-  /// collapses to instant under reduce-motion.
+  /// Mascot mark (static, opaque for native splash alignment) + wordmark fading in, scroll-wrapped for text scale overflow.
   Widget _buildHero(ThemeData theme) {
     Widget wordmark = Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp24),

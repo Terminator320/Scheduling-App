@@ -1,8 +1,6 @@
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 
-/// Pre-normalized searchable projection of one client. Built once per data
-/// change (see the clients list's memoized index) so per-keystroke filtering
-/// only has to normalize the query — not every field of every loaded client.
+/// Pre-normalized searchable projection built once per data change for efficient per-keystroke filtering.
 typedef ClientSearchEntry = ({
   ClientRecord client,
   String text,
@@ -15,8 +13,7 @@ class ClientSearchPolicy {
   static const int serverReadLimit = 1000;
   static const int resultDisplayLimit = 25;
 
-  // Compiled once; normalize/digitsOnly run per row per keystroke in the
-  // client-side search paths.
+  // Compiled once; normalize/digitsOnly run per row per keystroke.
   static final _accentA = RegExp('[\u00E0\u00E1\u00E2\u00E3\u00E4\u00E5]');
   static final _accentE = RegExp('[\u00E8\u00E9\u00EA\u00EB]');
   static final _accentI = RegExp('[\u00EC\u00ED\u00EE\u00EF]');
@@ -26,9 +23,7 @@ class ClientSearchPolicy {
   static final _nonAlphanumeric = RegExp('[^a-z0-9]+');
   static final _nonDigit = RegExp(r'\D');
 
-  // Search starts from the first searchable character: any single letter or
-  // digit triggers it (normalize keeps a-z0-9). Blank or punctuation-only
-  // input is ignored so an empty/symbol-only query never scans the collection.
+  // Triggers on first letter/digit; blank/punctuation-only input ignored to avoid full collection scan.
   static bool shouldSearch(String query) => normalize(query).isNotEmpty;
 
   static String cacheKey(String query) => normalize(query);
@@ -48,11 +43,7 @@ class ClientSearchPolicy {
 
   static String digitsOnly(String value) => value.replaceAll(_nonDigit, '');
 
-  // Client-side fallback matcher used by the clients list for instant results
-  // while the comprehensive server-backed search loads. Matches the same fields
-  // the server search indexes, as far as a loaded ClientRecord exposes them
-  // (accent-folded text + digits-only phone). Single source of truth so the
-  // list view and its test can't drift.
+  // Client-side fallback matcher for instant results; single source of truth for these fields.
   static bool matchesClient(ClientRecord client, String query) {
     final q = normalize(query);
     final qDigits = digitsOnly(query);
@@ -60,9 +51,7 @@ class ClientSearchPolicy {
     return entryMatches(index(client), queryText: q, queryDigits: qDigits);
   }
 
-  /// Normalizes one client into a [ClientSearchEntry] — the expensive half of
-  /// [matchesClient], hoisted out so callers can run it once per data change
-  /// instead of once per client per keystroke.
+  /// Hoisted normalization of one client into [ClientSearchEntry], run once per data change instead of per keystroke.
   static ClientSearchEntry index(ClientRecord client) => (
     client: client,
     text: normalize(
@@ -88,9 +77,7 @@ class ClientSearchPolicy {
     ),
   );
 
-  /// The cheap half of [matchesClient]: both the entry and the query are
-  /// already normalized ([normalize]/[digitsOnly]), so this is just two
-  /// substring checks.
+  /// Cheap half of [matchesClient] using pre-normalized entry and query (two substring checks).
   static bool entryMatches(
     ClientSearchEntry entry, {
     required String queryText,

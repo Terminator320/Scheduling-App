@@ -15,9 +15,7 @@ import 'package:scheduling/shared/widgets/cards/info_card.dart';
 import 'package:scheduling/shared/widgets/primitives/quick_action_button.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
-/// Read-only display of a [ClientRecord]: a Call / Email / Directions
-/// quick-action row, a contact-info card (tappable phone / email / address)
-/// and an additional-contacts section when the client has extra contacts.
+/// Read-only display of ClientRecord with quick-action row, contact-info card, and additional-contacts section.
 class ClientDetailViewBody extends ConsumerWidget {
   const ClientDetailViewBody({required this.client, super.key});
 
@@ -29,12 +27,10 @@ class ClientDetailViewBody extends ConsumerWidget {
     final hasMobile = client.mobile.isNotEmpty;
     final hasEmail = client.email.isNotEmpty;
     final hasAddress = client.address.isNotEmpty;
-    // The person name (first/last) is shown once, as the header subtitle in
-    // ClientDetailView; it is deliberately not repeated as a contact row here.
+    // Person name shown once in header; deliberately not repeated as contact row here.
     final hasContactInfo = hasPhone || hasMobile || hasEmail || hasAddress;
 
-    // Handlers are built here (where `ref` lives) and passed down, so the row
-    // and button widgets stay presentational.
+    // Handlers built here (where `ref` lives) so widgets stay presentational.
     final onCall = hasPhone
         ? () => launchPhoneCall(context, ref, client.phone)
         : null;
@@ -54,11 +50,10 @@ class ClientDetailViewBody extends ConsumerWidget {
             address: client.address,
           )
         : null;
-    // Always offered — even a name-only client is worth saving to the phone.
+    // Always offered, even name-only clients are worth saving to the phone.
     void onSaveToContacts() => saveClientToPhoneContacts(context, ref, client);
 
-    // `contacts` holds only the extra contacts (the customer's own details
-    // live in the header and contact-info card).
+    // `contacts` holds only extra contacts; customer details live in header and contact-info card.
     final extraContacts = client.contacts;
 
     final hasSyncBadge = client.waveSyncState.isNotEmpty;

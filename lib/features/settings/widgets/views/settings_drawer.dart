@@ -24,10 +24,7 @@ class SettingsDrawer extends ConsumerStatefulWidget {
   final String? userName;
   final String? email;
 
-  /// What a screen should hand to its [Scaffold.endDrawer]: `null` when the nav
-  /// rail is showing (landscape / wide), otherwise a [SettingsDrawer]. Returning
-  /// `null` also strips the app bar's automatic end-drawer hamburger. Centralises
-  /// the check so screens don't each repeat it.
+  /// Helper for [Scaffold.endDrawer]: returns null when nav rail is showing, else [SettingsDrawer].
   static Widget? endDrawerFor(
     BuildContext context, {
     required bool isAdmin,

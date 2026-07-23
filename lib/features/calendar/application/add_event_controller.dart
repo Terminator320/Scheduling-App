@@ -153,8 +153,7 @@ class AddEventController extends Notifier<AddEventState>
     required String materialsNeeded,
     bool forceBusy = false,
   }) async {
-    // Reentrancy guard: a second tap while a submit (including the conflict
-    // check round-trip) is in flight must not create a duplicate appointment.
+    // Reentrancy guard: block double-tap during conflict check and submit.
     if (state.isSubmitting) return const AddEventInvalid();
     final errors = AppointmentFormValidator.validate(
       AppointmentFormInput(
@@ -169,9 +168,7 @@ class AddEventController extends Notifier<AddEventState>
     state = state.copyWith(errors: errors);
     if (errors.isNotEmpty) return const AddEventInvalid();
 
-    // Fail fast offline (before isSubmitting is set): an awaited Firestore write
-    // resolves only on server ack, so the Save button would otherwise spin until
-    // reconnect. The sheet maps this SocketException to the offline notice.
+    // Fail fast offline before setting flag, else Save spins waiting for server ack.
     if (ref.read(isOfflineProvider)) {
       return const AddEventFailed(SocketException('offline'));
     }
@@ -187,24 +184,20 @@ class AddEventController extends Notifier<AddEventState>
     );
 
     final repo = ref.read(appointmentsRepositoryProvider);
-    // Resolved before the awaits — see searchClients.
+    // Resolve before awaits so a disposed notifier doesn't crash (Riverpod 3).
     final logger = ref.read(loggerProvider);
     final uploader = ref.read(appointmentImageUploadProvider);
-    // Snapshot everything read after an await: state on a disposed notifier
-    // (sheet dismissed mid-submit) is unreadable.
+    // Snapshot state before awaits to survive sheet dismissal mid-submit.
     final images = state.selectedImages;
     final client = state.selectedClient!;
     final selectedEmployees = state.selectedEmployees;
     final repeat = state.repeat;
 
-    // Mark in-flight before the conflict-check round-trip so the Save button
-    // disables on the first tap and the guard above blocks a second tap.
+    // Set flag before conflict check so Save button disables immediately.
     state = state.copyWith(isSubmitting: true);
 
     try {
-      // Keep the conflict check inside the try: a throw here (offline /
-      // permission-denied) must reset isSubmitting, or Save stays stuck
-      // disabled and the reentrancy guard rejects every retry.
+      // Conflict check inside try so errors reset the in-flight flag.
       if (!forceBusy) {
         final busy = await repo.findBusyEmployees(
           candidates: selectedEmployees,
@@ -212,8 +205,7 @@ class AddEventController extends Notifier<AddEventState>
           end: end,
         );
         if (busy.isNotEmpty) {
-          // Hand off to the busy-confirm dialog — not an error — so clear the
-          // in-flight flag and let the user decide whether to force.
+          // Not an error; let user decide whether to force through conflicts.
           if (ref.mounted) state = state.copyWith(isSubmitting: false);
           return AddEventBusyEmployees(
             busyEmployees: busy,
@@ -241,8 +233,7 @@ class AddEventController extends Notifier<AddEventState>
         seriesId: repeat == RepeatInterval.none ? '' : docId,
       );
 
-      // Busy check covers only the first occurrence; repeats are months out.
-      // Photos stay on the first visit only.
+      // Conflict check covers only first occurrence; photos stay on first visit.
       final copies = [
         for (final copyStart in repeat.occurrenceStartsAfter(start))
           appointment.copyWith(

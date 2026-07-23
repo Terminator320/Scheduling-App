@@ -10,8 +10,7 @@ import 'package:scheduling/features/clients/contact_export_launcher.dart';
 import 'package:scheduling/features/clients/data/contact_link_store.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 
-/// Outcome of a client add/update. The forms only map these to notices and
-/// navigation; the persistence flow lives in [ClientFormController].
+/// Outcome of client add/update; mapped to notices/navigation by the forms.
 sealed class ClientSaveOutcome {
   const ClientSaveOutcome();
 }
@@ -40,8 +39,7 @@ class ClientDeleteFailed extends ClientDeleteOutcome {
   final Object error;
 }
 
-/// Busy flags for the client forms — drive the Save spinner / disabled
-/// Delete button while a mutation is in flight.
+/// Busy flags for the client forms driving Save spinner and Delete button state.
 @immutable
 class ClientFormActivity {
   const ClientFormActivity({this.isSaving = false, this.isDeleting = false});
@@ -66,28 +64,18 @@ class ClientFormActivity {
   int get hashCode => Object.hash(isSaving, isDeleting);
 }
 
-/// Client CRUD orchestration shared by the add sheet, the edit form and the
-/// detail view: repository write, [clientsRefreshProvider] bump (so the
-/// paginated list refreshes) and the best-effort phone-contact sync, with a
-/// typed outcome per operation. Validation stays in the widgets (via
-/// `ClientFormValidator`); they map outcomes to notices/navigation.
+/// CRUD orchestration shared by add/edit/detail views; repository write, list refresh, and best-effort phone-contact sync.
 class ClientFormController extends Notifier<ClientFormActivity> {
   @override
   ClientFormActivity build() => const ClientFormActivity();
 
-  /// Persists a new client. [state] always resets in `finally`: this provider
-  /// is shared with the detail pane, which keeps it alive in the split layout
-  /// after the add sheet pops — a lingering `isSaving` would brick the next
-  /// add/edit. The sheet pops in the same frame, so no double-tap window opens.
+  /// Persists new client; state resets in finally since this provider is shared with detail pane (split layout).
   Future<ClientSaveOutcome> addClient(ClientRecord client) async {
-    // Fail fast offline: an awaited Firestore write resolves only on server ack,
-    // so the Save button would otherwise spin until reconnect. The add sheet
-    // maps this SocketException to the offline notice (CLI-ADD).
+    // Fail fast offline; Firestore writes block until server ack, so button would spin until reconnect (CLI-ADD maps exception).
     if (ref.read(isOfflineProvider)) {
       return const ClientSaveFailed(SocketException('offline'));
     }
-    // Resolve dependencies before the first await: the sheet can be dismissed
-    // mid-save, and using the Ref of a disposed notifier throws in Riverpod 3.
+    // Resolve dependencies before first await (disposed notifier Ref throws in Riverpod 3).
     final repo = ref.read(clientsRepositoryProvider);
     final refresh = ref.read(clientsRefreshProvider.notifier);
     final logger = ref.read(loggerProvider);
@@ -104,15 +92,13 @@ class ClientFormController extends Notifier<ClientFormActivity> {
     }
   }
 
-  /// Persists an edit, then mirrors it onto the phone contact this client was
-  /// saved as (no-op unless it was saved on this device; best-effort — never
-  /// blocks or fails the save).
+  /// Persists edit and mirrors to phone contact (best-effort, never blocks/fails the save).
   Future<ClientSaveOutcome> updateClient(ClientRecord client) async {
-    // Fail fast offline — see addClient. The edit form maps this to CLI-SAVE.
+    // Fail fast offline (CLI-SAVE notice on edit form).
     if (ref.read(isOfflineProvider)) {
       return const ClientSaveFailed(SocketException('offline'));
     }
-    // Resolved before the first await — see addClient.
+    // Resolved before first await (see addClient).
     final repo = ref.read(clientsRepositoryProvider);
     final refresh = ref.read(clientsRefreshProvider.notifier);
     final logger = ref.read(loggerProvider);
@@ -135,10 +121,9 @@ class ClientFormController extends Notifier<ClientFormActivity> {
     }
   }
 
-  /// Deletes [clientId], drops its device-local phone-contact link
-  /// (best-effort, mirrors CLI-CONTACT-SYNC) and bumps the list refresh.
+  /// Deletes client, drops device-local phone-contact link (best-effort), and bumps list refresh.
   Future<ClientDeleteOutcome> deleteClient(String clientId) async {
-    // Resolved before the first await — see addClient.
+    // Resolved before first await.
     final repo = ref.read(clientsRepositoryProvider);
     final refresh = ref.read(clientsRefreshProvider.notifier);
     final logger = ref.read(loggerProvider);

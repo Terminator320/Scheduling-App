@@ -6,10 +6,7 @@ import 'package:scheduling/features/calendar/application/appointments_providers.
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/siri/domain/schedule_snapshot.dart';
 
-/// The current Siri schedule snapshot, or `data(null)` when it should be wiped
-/// (signed-out / inactive). Sign-out clears it for free through that null —
-/// there is no explicit clear on the sign-out path. Admins hear the whole
-/// business, employees only their own assigned visits.
+/// The current Siri schedule snapshot (null when signed out); admins see all appointments, employees only their own.
 final scheduleSnapshotProvider =
     Provider.autoDispose<AsyncValue<Map<String, dynamic>?>>((ref) {
       final identityAsync = ref.watch(activeUserIdentityProvider);

@@ -9,12 +9,7 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/permissions/media_permission_service.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Prompts for a capture source, enforces the camera permission, and returns
-/// the picked files (empty if cancelled or denied).
-///
-/// Gallery uses the OS photo picker (no permission). Camera is gated through
-/// [MediaPermissionService]; a denied grant surfaces a notice instead of
-/// silently doing nothing.
+/// Prompt for capture source and return picked files (gallery: OS picker, camera: gated by permission).
 Future<List<File>> pickAppointmentImages(
   BuildContext context,
   WidgetRef ref,

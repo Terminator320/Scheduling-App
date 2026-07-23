@@ -7,8 +7,7 @@ import 'package:scheduling/features/dashboard/domain/dashboard_aggregator.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 
-/// Injectable clock so tests pin "now". The derived range is midnight-aligned,
-/// so the appointments family key stays stable all day (no listener churn).
+/// Injectable clock for tests; midnight-aligned range prevents listener churn.
 final dashboardClockProvider = Provider<DateTime Function()>(
   (ref) => DateTime.now,
 );
@@ -17,8 +16,7 @@ final dashboardRangeProvider = Provider.autoDispose<AppointmentDateRange>(
   (ref) => DashboardAggregator.rangeAround(ref.watch(dashboardClockProvider)()),
 );
 
-/// createdAt of every client created inside the dashboard window (one-shot
-/// get; legacy docs without createdAt are excluded — accepted undercount).
+/// Client createdAt within dashboard window (legacy docs without createdAt excluded).
 final newClientDatesProvider = FutureProvider.autoDispose<List<DateTime>>((
   ref,
 ) async {
@@ -32,8 +30,7 @@ final newClientDatesProvider = FutureProvider.autoDispose<List<DateTime>>((
   ];
 });
 
-/// Combines the one appointments range stream, the active-employees stream,
-/// and the one-shot new-clients read into the full dashboard reduction.
+/// Combine appointments range, active employees, and new-clients into dashboard stats.
 final dashboardStatsProvider = Provider.autoDispose<AsyncValue<DashboardStats>>(
   (ref) {
     final range = ref.watch(dashboardRangeProvider);

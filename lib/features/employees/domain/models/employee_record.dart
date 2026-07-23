@@ -10,8 +10,7 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     @Default('') String name,
     @Default('') String email,
     @Default('') String phone,
-    // NOTE: legacy default (Material blue) for docs stored before the color
-    // palette existed — changing it recolors those employees; keep as-is.
+    // NOTE: legacy default (Material blue) for pre-palette docs; changing it recolors those employees.
     @Default(Color(0xFF2196F3)) Color color,
     @Default('employee') String role,
     @Default('') String status,

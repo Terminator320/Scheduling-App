@@ -6,9 +6,7 @@ import 'package:flutter/widgets.dart';
 
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Sanitized error categories safe to surface in UI text.
-/// Raw Firebase codes and stack traces must never reach the UI (security.md);
-/// full detail still goes to Crashlytics via the catch site's logger.warn.
+/// Sanitized error categories safe for UI without leaking Firebase codes or stack traces; full detail logs to Crashlytics.
 enum _ErrorCause { offline, permissionDenied, notFound, unknown }
 
 _ErrorCause _classifyError(Object error) {
@@ -28,8 +26,8 @@ _ErrorCause _classifyError(Object error) {
   return _ErrorCause.unknown;
 }
 
-/// "{intro} — {cause}. ({tag})". The tag must match the prefix of the
-/// catch site's logger.warn label so user reports map to Crashlytics lines.
+/// Composes "{intro} — {cause}. ({tag})"; the tag must match the catch
+/// site's logger.warn prefix so a user report maps to a Crashlytics line.
 String composeErrorNotice(
   BuildContext context, {
   required String intro,

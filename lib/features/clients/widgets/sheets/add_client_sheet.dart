@@ -17,12 +17,7 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-/// Opens the add-client sheet and resolves to the newly created client (with
-/// its Firestore id populated) once saved, or null if dismissed. [initialName]
-/// prefills the name field. Pass [settleFocus] when opening from a search field
-/// (the appointment client picker) to settle the keyboard before the sheet
-/// slides in and double-unfocus after it closes — the sheet-from-search idiom,
-/// mirroring `_openClient` in clients_list_view; FAB openers leave it false.
+/// Opens add-client sheet; resolves to created client (with Firestore id) or null if dismissed.
 Future<ClientRecord?> showAddClientSheet(
   BuildContext context, {
   String? initialName,
@@ -37,8 +32,7 @@ Future<ClientRecord?> showAddClientSheet(
     builder: (_) => AddClientSheet(initialName: initialName),
   );
   if (settleFocus && context.mounted) await SheetFocus.unfocusAfterSheet();
-  // Final guard: if the caller unmounted while the sheet (or unfocus delay) was
-  // open, don't hand a client back to a now-disposed form to select.
+  // Guard against unmounting while sheet open; don't hand client to disposed form.
   return context.mounted ? created : null;
 }
 

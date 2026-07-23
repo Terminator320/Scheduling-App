@@ -1,13 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Whether [mode] renders dark *right now*, resolving [ThemeMode.system]
-/// against the live OS [platformBrightness].
-///
-/// The default mode is `system`, so `mode == ThemeMode.dark` alone reports
-/// "light" on a dark phone — which parks the toggle switch in the wrong
-/// position and makes its first tap a no-op (it sets an explicit dark that
-/// looks identical). Resolving `system` here is what lets a single tap flip
-/// what's actually on screen.
+/// Whether [mode] renders dark now, resolving [ThemeMode.system] against platform brightness to fix the system-mode toggle.
 bool isDarkMode(ThemeMode mode, Brightness platformBrightness) =>
     switch (mode) {
       ThemeMode.dark => true,
@@ -15,9 +8,7 @@ bool isDarkMode(ThemeMode mode, Brightness platformBrightness) =>
       ThemeMode.system => platformBrightness == Brightness.dark,
     };
 
-/// The mode a light/dark toggle should move to from [current] — always the
-/// opposite of what's displayed now (per [isDarkMode]), so one tap changes the
-/// appearance even from the default `system` mode.
+/// The opposite of the current dark mode (per [isDarkMode]).
 ThemeMode toggledThemeMode(ThemeMode current, Brightness platformBrightness) =>
     isDarkMode(current, platformBrightness) ? ThemeMode.light : ThemeMode.dark;
 

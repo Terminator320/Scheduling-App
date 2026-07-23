@@ -8,17 +8,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/shared/widgets/primitives/name_initials.dart';
 
-/// Renders staff map-pin bitmaps for `google_maps_flutter` markers (markers are
-/// bitmaps, not widgets). Draws an avatar-colored balloon with the person's
-/// initials, a surface ring, and a pointer tip, and wraps it in a primary halo
-/// when selected. (Freshness is surfaced as text in the info card / roster, not
-/// by dimming the pin.)
-///
-/// Theme colors are passed IN so the renderer stays pure and testable — it
-/// never reads a `BuildContext`. Results are cached per
-/// (initials, colorValue, selected, ring/halo, dpr): the same key returns the
-/// identical `Future<BitmapDescriptor>`. A failed render is evicted so the next
-/// resolve retries instead of caching the error.
+/// Renders staff map-pin bitmaps (avatar-colored balloon with initials, ring, pointer, and halo when selected); cached per (initials, color, selected, ring/halo, dpr) and failed renders are evicted for retry.
 class StaffMarkerIconRenderer {
   StaffMarkerIconRenderer();
 
@@ -49,8 +39,7 @@ class StaffMarkerIconRenderer {
       devicePixelRatio: devicePixelRatio,
     );
     _cache[key] = future;
-    // Evict a failed render so the next resolve retries — but only if this
-    // exact future is still cached, so a later successful render isn't dropped.
+    // Evict a failed render so the next resolve retries, but only if this exact future is still cached.
     unawaited(
       future.then<void>(
         (_) {},

@@ -6,7 +6,7 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
-/// Jobs per active employee: avatar, name, week-share bar, counts.
+/// Jobs per active employee with week-share bar.
 class EmployeeWorkloadSection extends StatelessWidget {
   const EmployeeWorkloadSection({required this.workload, super.key});
 

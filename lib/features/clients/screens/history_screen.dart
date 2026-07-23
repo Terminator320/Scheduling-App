@@ -12,10 +12,7 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
 
-/// Appointment history screen: a searchable, filterable list of past
-/// (done/cancelled) appointments grouped by year and day. Owns only the
-/// chrome — search field, nav shell, drawer — and delegates the list and its
-/// year/employee filters to [AppointmentHistoryView].
+/// Appointment history screen (searchable, filterable list); owns chrome, delegates list to AppointmentHistoryView.
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({
     required this.isAdmin,

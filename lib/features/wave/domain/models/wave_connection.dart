@@ -24,8 +24,7 @@ class WaveConnection {
   final String businessName;
   final WaveImportSchedule importSchedule;
 
-  /// True only when a real business is linked. A bootstrap/get that resolves an
-  /// empty businessId is not a usable connection.
+  /// True only when a real business is linked.
   bool get isConnected => businessId.isNotEmpty;
 
   WaveConnection copyWith({WaveImportSchedule? importSchedule}) =>

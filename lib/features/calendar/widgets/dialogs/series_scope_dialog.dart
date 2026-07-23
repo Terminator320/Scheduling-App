@@ -8,13 +8,7 @@ import 'package:scheduling/l10n/l10n.dart';
 
 enum SeriesScopeChoice { thisOnly, thisAndFuture }
 
-/// Shared "this visit only / this and future visits" picker for a repeating
-/// appointment — used by both the edit and delete flows. [message] states the
-/// scope/consequence of the choice (the apply-to-all option touches every
-/// future visit, so the copy must say so). Returns null when cancelled.
-/// [destructive] styles the actions as a delete (error-filled primary with a
-/// delete glyph so the intent isn't carried by colour alone, destructive
-/// outline).
+/// Shared 'this only / this and future' picker for repeating appointments; [destructive] styles as delete.
 Future<SeriesScopeChoice?> showSeriesScopeDialog(
   BuildContext context, {
   required String title,

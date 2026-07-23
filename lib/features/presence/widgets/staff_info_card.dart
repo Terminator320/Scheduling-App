@@ -9,13 +9,7 @@ import 'package:scheduling/features/presence/domain/live_map_aggregator.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
-/// Bottom overlay shown when a staff marker is tapped: avatar, name, a
-/// freshness line (greyed "Offline — last seen …" once stale), and the street
-/// address the person is at (reverse-geocoded; hidden while unavailable) with
-/// an "Open in Maps" action.
-///
-/// Watches the 30 s tick + clock INSIDE this card so freshness recomputes here
-/// rather than rebuilding the whole map screen.
+/// Bottom overlay when staff marker is tapped: avatar, name, freshness line, and address with "Open in Maps" action; watches 30s tick for freshness refresh.
 class StaffInfoCard extends ConsumerWidget {
   const StaffInfoCard({
     required this.point,
@@ -35,9 +29,7 @@ class StaffInfoCard extends ConsumerWidget {
     final stale = LiveMapAggregator.isStale(point.updatedAt, now);
     final bucket = LiveMapAggregator.freshnessOf(point.updatedAt, now);
 
-    // Reactive locale: a language switch rebuilds this card (inherited
-    // Localizations), keying a fresh lookup instead of the other language's
-    // cached address. The server only speaks en/fr, so normalize anything else.
+    // Locale switch rebuilds this card with the right language (server only speaks en/fr).
     final lang = Localizations.localeOf(context).languageCode;
     final key = ReverseGeocodeQuery(
       lat: point.lat,

@@ -13,15 +13,7 @@ import 'package:scheduling/features/presence/application/presence_sync_controlle
 import 'package:scheduling/features/siri/application/schedule_snapshot_provider.dart';
 import 'package:scheduling/features/siri/application/schedule_snapshot_service.dart';
 
-/// The app's cross-cutting, fire-and-forget sync wiring: device registration
-/// (push, presence, Live Activity), the two off-screen schedule mirrors (iOS
-/// home-screen widget, Siri snapshot), and the offline photo-upload drain.
-///
-/// Extracted from `_PaulAppState` so this wiring can be exercised without
-/// building a `MaterialApp`. The account-lifecycle listeners (disabled /
-/// role-revoked / deleted) deliberately stay in `main.dart`: they drive a
-/// sign-out + navigation through shared state, and their registration ORDER
-/// relative to each other is load-bearing.
+/// Cross-cutting sync wiring (device registration, mirrors, photo drain) extracted for testability; account-lifecycle listeners stay in main.dart due to registration order.
 ///
 /// [registerAll] must be called from `build`, like any `ref.listen`.
 class AppSyncListeners {
@@ -52,9 +44,7 @@ class AppSyncListeners {
   }
 
   void _presenceSync() {
-    // Starts/stops the background location stream that feeds the travel-time
-    // "leave now" reminders — active employees and admins (both receive the
-    // timed pushes). Same emission-driven shape as push registration above.
+    // Starts/stops the background location stream feeding the travel-time "leave now" reminders, same emission-driven shape as push registration above.
     ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
       prev,
       next,
@@ -64,10 +54,7 @@ class AppSyncListeners {
   }
 
   void _liveActivitySync() {
-    // Registers this device's Live Activity APNs tokens (push-to-start plus
-    // one per live card) so the server can put the "time to leave" card on a
-    // closed, locked phone. iOS 17.2+ only; every other device registers
-    // nothing and just gets the plain `leaveNow` push.
+    // Registers this device's Live Activity APNs tokens so the server can put the "time to leave" card on a locked phone (iOS 17.2+ only; other devices just get the plain leaveNow push).
     ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
       prev,
       next,
@@ -77,8 +64,7 @@ class AppSyncListeners {
   }
 
   void _widgetSync() {
-    // iOS home-screen widget only. On Android (dev harness) this never wires,
-    // so the employee-appointments listener it would open is never opened.
+    // iOS home-screen widget only — never wires on Android, so the employee-appointments listener it would open is never opened.
     if (!Platform.isIOS) return;
     ref.listen<AsyncValue<Map<String, dynamic>?>>(widgetPayloadProvider, (
       prev,

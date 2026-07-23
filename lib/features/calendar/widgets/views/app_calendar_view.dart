@@ -92,17 +92,7 @@ class AppCalendar extends StatelessWidget {
             Theme.of(context).textTheme.titleMedium ?? const TextStyle(),
       ),
 
-      // Accessibility note: table_calendar wraps every day cell — default
-      // cells AND the todayBuilder/selectedBuilder output below — in its own
-      // `Semantics(label: '<weekday>, <full date>', excludeSemantics: true)`,
-      // and the cell's GestureDetector contributes the tap action. That
-      // built-in wrapper gives all cells a localized full-date label, but it
-      // also swallows any Semantics added inside these builders, so the
-      // selected/today state can't be exposed per cell from here. The
-      // appointment count IS announced: markerBuilder output sits beside the
-      // cell's semantics node in the cell Stack, so its label survives and
-      // merges into the cell's announcement, e.g.
-      // "Saturday, May 16, 2026 \n 2 appointments" (see markerBuilder below).
+      // table_calendar wraps day cells in Semantics that swallow inner Semantics; markerBuilder's count merges into the announcement.
       calendarBuilders: CalendarBuilders(
         todayBuilder: (context, day, focusedDay) {
           final scheme = Theme.of(context).colorScheme;
@@ -146,10 +136,8 @@ class AppCalendar extends StatelessWidget {
           final fallback = Theme.of(context).colorScheme.outline;
 
           // The dots are colour-only, so exclude them from semantics and
-          // announce the day's appointment count instead; the label merges
-          // into the cell's full-date node (see the note on calendarBuilders).
-          // `events` is already loaded for this cell, so the label stays O(1)
-          // per cell.
+          // announce the day's appointment count instead, merging into the
+          // cell's full-date node (see the note on calendarBuilders above).
           return Positioned(
             bottom: 2,
             child: Semantics(

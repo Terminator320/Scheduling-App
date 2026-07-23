@@ -48,9 +48,7 @@ class AddressMapLauncher {
 
     if (!context.mounted) return;
 
-    // iOS: native CupertinoActionSheet. Android: the existing Material sheet
-    // (drag handle + address header). Both resolve to the chosen URI, launched
-    // once below.
+    // iOS uses a native CupertinoActionSheet, Android the Material sheet; both resolve to one launched URI.
     final Uri? chosen;
     if (context.isCupertino) {
       chosen = await showAdaptiveActionSheet<Uri>(
@@ -117,12 +115,7 @@ class AddressMapLauncher {
     }
 
     if (chosen == null || !context.mounted) return;
-    // Guarded like every sibling launcher: an unguarded `launchUrl` throw
-    // escaped to the zone handler as a FATAL instead of surfacing here. This
-    // one keeps its SnackBar (a sanctioned site) rather than routing through
-    // `launchExternalUri`, which pushes a notice. The warn fires before the
-    // mounted guard — `AppLogger` is context-free and the log must survive
-    // unmount.
+    // Guard unguarded launchUrl throws (would become FATAL); log before mounted guard.
     var opened = false;
     try {
       opened = await launchUrl(chosen, mode: LaunchMode.externalApplication);

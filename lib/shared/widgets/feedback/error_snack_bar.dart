@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 
-/// The app's standard error [SnackBar]: an error-container background with a
-/// leading error icon and the [message], plus an optional trailing [action].
-///
-/// Used by the few feedback sites that must use a SnackBar instead of the
-/// notice overlay (account-disabled, photo-upload, map-launch) — see the
-/// notices rule for why those bypass `NoticeService`.
+/// Standard error SnackBar; used by sites bypassing the notice overlay.
 SnackBar errorSnackBar(
   BuildContext context,
   String message, {
