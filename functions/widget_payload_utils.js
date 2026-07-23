@@ -173,9 +173,7 @@ function buildWidgetPayload(records, now, locale) {
 
 module.exports = {
   WIDGET_LOOKAHEAD_DAYS,
-  ROLLOVER_GRACE_MS,
   isTerminalStatus,
-  isCancelledStatus,
   torontoDayStartMs,
   serializeWidgetJob,
   buildWidgetPayload,

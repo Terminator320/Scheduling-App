@@ -2,7 +2,7 @@
 
 Completed plans/specs and superseded audit snapshots — kept for history, not
 maintained against the current code. Started 2026-07-10; last updated
-2026-07-19.
+2026-07-22.
 
 **Do not treat these as accurate references.** For current state see
 `docs/ARCHITECTURE.md`, `docs/CLOUD_FUNCTIONS.md`, and the active plans in
@@ -59,11 +59,20 @@ maintained against the current code. Started 2026-07-10; last updated
   called the APNs secrets a deploy blocker; the secrets were created 2026-07-19
   and the deploy has happened. Residual item (on-device verification) is tracked
   in CLAUDE.md and `ios/ScheduleWidget/LIVE_ACTIVITY_README.md`, not here.
+- `2026-07-22-feature-tour-design.md` / `-implementation.md` — per-tab,
+  role-aware in-app feature tours (showcaseview 5.x; built + committed on
+  `notification`, "live tour of app"). `lib/features/feature_tour/`; CLAUDE.md
+  carries the full invariant. On-device verification is the one residual item.
+
+## Superseded session snapshots
+- `2026-07-20-session-handoff.md` — a point-in-time "resume here" snapshot; its
+  live next-action (the Siri Phase 4 write-actions runbook) lives in the active
+  `docs/plans/2026-07-20-siri-phase4-write-actions.md`. Kept for history only.
 
 ## Superseded audit snapshots
 Point-in-time whole-repo audits; each run's findings were implemented at the
 time. Superseded by later audits — the active one is
-`docs/audits/CODEBASE_AUDIT.md` (2026-07-19 deep pass).
+`docs/audits/CODEBASE_AUDIT.md` (2026-07-22 pass).
 - `CODEBASE_AUDIT_2026-06-26.md`
 - `CODEBASE_AUDIT_2026-07-01.md`
 - `CODEBASE_AUDIT_2026-07-04.md`

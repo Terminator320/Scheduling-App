@@ -39,8 +39,13 @@ A full-featured monthly calendar lets administrators plan, assign, and manage se
 ### Admin Dashboard
 A single overview screen gives administrators the day at a glance: today's visits broken down by status, how many are still unassigned, each employee's workload for today and the week, an eight-week trend of completed versus cancelled jobs and new clients, the busiest weekday, and an attention list flagging jobs starting soon or already running overdue.
 
+### Live Staff Map
+Administrators can see their field team on a live map — each employee who is sharing location appears as a colored pin, with a roster that orders staff by proximity and shows how recently each position was reported. Location is captured efficiently in the background on the employee's device and is only ever visible to administrators, giving dispatch a real-time picture of who is where without any manual check-ins.
+
 ### Push Notifications
 Field employees are kept in the loop automatically — they receive a push when they're assigned to, rescheduled on, or removed from a visit, a reminder shortly before a job is due to start, a nudge to close out a job once it runs past its end time, and an end-of-day summary of the next day's work. On iPhone, a home-screen widget shows an employee's remaining jobs for the day and their next upcoming visit.
+
+Reminders are **travel-aware**: rather than a fixed countdown, the system estimates live, traffic-aware drive time from where the employee is (or their previous job) to the next stop and sends a "time to leave" alert at the right moment to arrive on schedule. On a recent iPhone, this surfaces as a Lock Screen Live Activity card that counts down to the job — and if drive time can't be determined, it safely falls back to a standard fixed reminder.
 
 ### Client Records
 A searchable directory of clients, listed alphabetically by name — including customer name, optional first/last name, service address, billing contacts, phone, and mobile numbers. Records update in real time across all devices. The search engine matches customer name, first name, last name, phone, and mobile, handling accent characters and partial matches to keep lookups fast even with large client bases.
@@ -53,6 +58,15 @@ Administrators onboard employees through a controlled invite flow: an employee a
 
 ### Photo Documentation
 Employees can attach photos directly to any appointment from their device camera or photo library. Images are compressed automatically and uploaded to secure cloud storage in the background, keeping the app responsive while files transfer.
+
+### Route Planning
+Employees get a timeline view of their day's stops in order, and can hand the whole route off to Google Maps as a single multi-stop trip for turn-by-turn navigation between jobs — or open directions to any individual address. This turns a list of appointments into an efficient driving plan for the day.
+
+### Hands-Free with Siri
+On iPhone, employees and administrators can ask Siri about their schedule without opening the app — how many appointments they have, what's on today, their next visit, or the plan for a specific day. Answers are drawn from an on-device snapshot, so they work quickly and only ever expose the schedule details the question needs.
+
+### Guided Tours
+The first time a user opens each main screen, a short, role-aware walkthrough highlights the key actions available there. Tours only run once, respect what each role can actually do, and can be replayed at any time from Settings.
 
 ### Access Control
 Two distinct roles — **Admin** and **Employee** — enforce data boundaries at every layer of the application. Admins have full read/write access across all records. Employees operate within a scoped view limited to their own assigned work.
@@ -71,7 +85,10 @@ Users can switch between light and dark display modes, adjust text scaling for r
 | Data store | Cloud Firestore (real-time sync) |
 | File storage | Firebase Storage |
 | Application security | Firebase App Check |
+| Push & background delivery | Firebase Cloud Messaging + APNs (iOS Live Activities) |
 | Address lookup | Google Places API |
+| Mapping, live location & routing | Google Maps SDK, Google Routes API, device GPS |
+| Voice queries | Siri App Intents (iOS) |
 | Accounting sync | Wave Accounting (server-side) |
 | Offline support | Firestore local cache |
 
@@ -79,7 +96,7 @@ Users can switch between light and dark display modes, adjust text scaling for r
 
 ## Application Architecture
 
-The codebase follows a feature-first structure. Each domain area — authentication, calendar, clients, employees, and settings — is self-contained with its own screens, data models, business logic, and UI components. Shared utilities and design primitives are promoted to common layers only when used across multiple features.
+The codebase follows a feature-first structure. Each domain area — authentication, calendar, clients, employees, dashboard, notifications, live location, and settings among them — is self-contained with its own screens, data models, business logic, and UI components. Shared utilities and design primitives are promoted to common layers only when used across multiple features.
 
 All navigation is centralized through a single route handler, ensuring consistent screen construction and argument passing throughout the application. Data access is strictly mediated through per-feature service classes; no screen ever queries the database directly.
 

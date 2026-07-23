@@ -286,7 +286,7 @@ Free-text input length caps live in `lib/core/validators/text_limits.dart`. The 
 2. Form validators (`AppointmentFormValidator`) — defensive backup.
 3. Firestore rules (where applicable) — defense in depth.
 
-Status enums (`AppointmentStatus` written by `updateAppointmentStatus`) are allowlisted at both the repository (`{pending, in_progress, done, cancelled}`) and `firestore.rules`. Employees can only write `status='done'`. Edits that re-serialize a whole record normalize the stored status through `AppointmentStatus.fromRaw(status).raw` first (seed + series `propagate`) so a legacy `confirmed`/unknown value can't be re-written verbatim and rejected. `AppointmentStatus.overdue` is a **display-only** state — never stored, never in the picker (`appointmentValues`) or allowlist; `AppointmentRecord.displayStatus` derives it (and `in_progress`) from the clock, and reading `overdue.raw` throws so it can't leak into a write.
+Status enums (`AppointmentStatus` written by `updateAppointmentStatus`) are allowlisted at both the repository (`{pending, in_progress, done, cancelled}`) and `firestore.rules`. Employees can only write `status='done'`. Edits that re-serialize a whole record normalize the stored status through `AppointmentStatus.storedRaw(status)` first (seed + series `propagate`) so a legacy `confirmed`/unknown value can't be re-written verbatim and rejected. `AppointmentStatus.overdue` is a **display-only** state — never stored, never in the picker (`appointmentValues`) or allowlist; `AppointmentRecord.displayStatus` derives it (and `in_progress`) from the clock, and reading `overdue.raw` throws so it can't leak into a write.
 
 ### Theming
 
@@ -678,9 +678,9 @@ rejected.
 
 Run: `flutter test` (1021 test cases as of 2026-07-22; `functions` adds 664 jest
 tests in `functions/__tests__/` — the parallel `functions/test/` directory was
-merged away). `flutter analyze` reports **0 errors, 0 warnings, and 0
-info-level lints**; see `analysis_options.yaml` for the lints intentionally
-disabled (below).
+merged away). `flutter analyze` reports **0 errors and 0 warnings** (three
+intentional info-level lints remain — see Analysis & Linting below); see
+`analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.
 

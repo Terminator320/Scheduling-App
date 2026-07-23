@@ -1,6 +1,6 @@
 # First iOS Build on a Mac — Set-by-Set
 
-The config side of the iOS port is **done** (deployment target 15.0 in
+The config side of the iOS port is **done** (deployment target 18.0 in
 `project.pbxproj` and `AppFrameworkInfo.plist`, `Info.plist` +
 `PrivacyInfo.xcprivacy` in place, `main.dart` already using
 `DefaultFirebaseOptions.currentPlatform`). What's left is Mac-only: native
@@ -78,12 +78,16 @@ on first open while it fetches the packages.
    → **App Attest**. This adds the entitlement
    `com.apple.developer.devicecheck.appattest-environment`; set it to
    **`production`** for the Release configuration. The console provider must
-   match (see Phase G) or attestation is rejected. App Attest requires the iOS
-   15.0 target (≥ its 14+ requirement) and **fails on the Simulator** — verify on
-   real hardware.
+   match (see Phase G) or attestation is rejected. The app targets iOS 18.0
+   (well above App Attest's 14+ requirement); App Attest **fails on the
+   Simulator** — verify on real hardware.
 4. **Add the Crashlytics Run Script phase** (not present yet): Runner target →
    *Build Phases* → `+` → *New Run Script Phase*, placed **after** the Flutter
-   build phases.
+   build phases. NOTE: per CLAUDE.md the dSYM upload phase is wired on **all
+   three** code-bearing targets (Runner, ScheduleWidgetExtension, SiriIntents) —
+   the two extension phases pass `-gsp "${PROJECT_DIR}/GoogleService-Info.plist"`
+   and need `ENABLE_USER_SCRIPT_SANDBOXING = NO`. See `APP_STORE_SUBMISSION.md`
+   for the full three-target runbook.
    - **Script** (SPM checkout path, not `${PODS_ROOT}`):
      ```
      "${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run"
@@ -96,8 +100,10 @@ on first open while it fetches the packages.
 5. **dSYM build settings** (Runner target → *Build Settings*): *Debug
    Information Format* = `DWARF with dSYM File` for the Release
    configuration, so Crashlytics gets symbol files to upload.
-6. **Verify** the deployment target shows **iOS 15.0** (set in
-   `project.pbxproj` and `AppFrameworkInfo.plist`).
+6. **Verify** the deployment target shows **iOS 18.0** (set on all targets in
+   `project.pbxproj` and `AppFrameworkInfo.plist`; the Siri App Intents
+   extension needs 16 and the Live Activity `OpenURLIntent` needs 18, so the
+   whole app is on an 18.0 floor).
 
 ## Phase E — App Check debug token (Simulator / dev builds)
 
@@ -123,6 +129,13 @@ Walk the **device-only checklist** (none covered by the test harness):
 - **Save-to-contacts** (`NSContactsUsageDescription`)
 - Image upload pipeline (compress → upload) and image cleanup on delete
 - **App Attest** on a **real device** in a Release build (fails on Simulator)
+- **Admin live staff map** — needs `IOS_MAPS_API_KEY` in `dev/.env` (blank key →
+  the map renders blank; see `AppDelegate.swift`)
+- **Push notifications** — assignment/reminder/overdue pushes + tap deep-link
+- **Background GPS presence** (`geolocator`) — powers the "time to leave" reminder
+- **iOS Live Activities** — the "time to leave" Lock Screen card (iOS 17.2+;
+  Dynamic Island needs Pro hardware)
+- **Siri App Intents** — the read intents (count / today / next / a specific day)
 
 ## Phase G — Before TestFlight / App Store (not for dev builds)
 

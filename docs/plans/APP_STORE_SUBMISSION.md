@@ -1,6 +1,6 @@
 # App Store Submission — ES Pro
 
-`net.vogas.scheduling` · team **H5XWLU87AX** · v**1.34.1+55** · branch
+`net.vogas.scheduling` · team **H5XWLU87AX** · v**1.36.0+60** · branch
 `notification` · launch scope **App Store only** (iPhone + iPad).
 
 Single source of truth for shipping this app: the Mac build runbook, the

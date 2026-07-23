@@ -8,7 +8,7 @@
 
 **Tech Stack:** Flutter, showcaseview (v5-era `ShowcaseView.register(scope:)` API), Riverpod (manual style), SharedPreferences, gen_l10n (EN/FR).
 
-**Spec:** `docs/plans/2026-07-22-feature-tour-design.md` (Option A visual recorded there).
+**Spec:** `docs/archive/2026-07-22-feature-tour-design.md` (Option A visual recorded there; archived alongside this doc 2026-07-22).
 
 **Key codebase facts an implementer must know:**
 

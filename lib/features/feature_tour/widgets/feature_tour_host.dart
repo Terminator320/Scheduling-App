@@ -153,8 +153,13 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
     if (ref.read(tourSeenProvider).contains(widget.tab)) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      // Conditions may have changed across the await/frame boundary.
-      if (HubShellScope.readCurrentOf(context) != widget.tab) return;
+      // Conditions may have changed across the await/frame boundary. Reset
+      // _started so a later visible+ready build can retry — otherwise a fast
+      // tab-switch during this window wedges the tour off for the session.
+      if (HubShellScope.readCurrentOf(context) != widget.tab) {
+        _started = false;
+        return;
+      }
       final steps = tourStepsFor(widget.tab, isAdmin: widget.isAdmin);
       try {
         final showcaseView = ShowcaseView.getNamed(_scope);
