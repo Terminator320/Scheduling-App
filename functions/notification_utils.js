@@ -1173,8 +1173,6 @@ module.exports = {
   OPEN_STATUSES,
   SERIES_CLAIM_WINDOW_MS,
   claimSeriesNotice,
-  OVERDUE_LOOKBACK_MS,
-  CHANGE_RECIPIENT_ROLES,
   TIMED_RECIPIENT_ROLES,
   toMillis,
   nowMillis,

@@ -123,6 +123,11 @@ monthly spend.
 
 ## 3. Upgrade `flutter_contacts` 1.x → 2.x (device-verified)
 
+> **✅ DONE.** `pubspec.yaml` now pins `flutter_contacts: ^2.2.2` and the 2.x API
+> changes were reconciled in `contact_export_launcher.dart`. Step 2 (on-device
+> verification of the four contact flows) remains the one device-only check, as
+> with item 1. Original plan kept below for history.
+
 **Problem.** `flutter_contacts` is pinned at `^1.1.9+2`; 2.x is current. The
 plugin backs the save-to-contacts quick action and the client→phone-contact
 edit-sync (`contact_export_launcher.dart`), both of which are **device-only
