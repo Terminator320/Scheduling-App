@@ -1,12 +1,7 @@
 "use strict";
 
 /**
- * @fileoverview Pure field mapper between the app's Firestore client document
- * and Wave Accounting's customer GraphQL shapes.
- *
- * No Firebase, no network, no I/O — this module is fully synchronous and
- * deterministic so it can be unit-tested in isolation.
- *
+ * @fileoverview Pure, synchronous field mapper (no Firebase/network/I-O) between the app's Firestore client doc and Wave's customer GraphQL shapes, kept deterministic for isolated unit testing.
  * @module wave/mappers
  */
 
@@ -35,8 +30,7 @@ const COUNTRY_CODE_TO_NAME = {
 // ---------------------------------------------------------------------------
 
 /**
- * Returns the string only if it is non-empty after trimming, else undefined.
- * Used to omit optional Wave fields that are empty strings.
+ * Returns the string only if non-empty after trimming, else undefined — used to omit optional Wave fields that are empty strings.
  * @param {*} v Value to check.
  * @return {string|undefined}
  */
@@ -47,10 +41,7 @@ function presence(v) {
 }
 
 /**
- * Converts a stored province value to a Wave `provinceCode` (e.g. `CA-QC`).
- * - Already in `XX-YY` form → passed through unchanged.
- * - A plain 2-letter code → prefixed with `CA-`.
- * - Empty / falsy → returns undefined (field omitted).
+ * Converts a stored province value to a Wave `provinceCode` (e.g. `CA-QC`): passes through an already-coded value, prefixes a plain 2-letter code with `CA-`, and omits the field when empty.
  * @param {*} province Stored province field.
  * @return {string|undefined}
  */
@@ -66,10 +57,7 @@ function toProvinceCode(province) {
 }
 
 /**
- * Converts a stored country value to a Wave `countryCode` (ISO-2).
- * - Already a 2-letter ISO code → passed through unchanged.
- * - Known country name (case-insensitive) → mapped to ISO code.
- * - Unknown / empty → returns undefined (field omitted; never guesses).
+ * Converts a stored country value to a Wave `countryCode` (ISO-2), passing through an existing code, mapping a known country name, and omitting the field otherwise (never guesses).
  * @param {*} country Stored country field.
  * @return {string|undefined}
  */
@@ -96,11 +84,7 @@ function fromProvinceCode(code) {
 }
 
 /**
- * Converts a Wave country object (with code and optional name) to a stored
- * country display name.
- * - `country.name` is used directly when present.
- * - Falls back to a code→name lookup.
- * - Returns empty string when nothing is available.
+ * Converts a Wave country object to a stored display name, preferring `country.name`, falling back to a code→name lookup, else empty string.
  * @param {Object|null|undefined} country Wave country sub-object.
  * @return {string}
  */
@@ -117,21 +101,7 @@ function fromCountry(country) {
 // ---------------------------------------------------------------------------
 
 /**
- * Extracts the street line (Wave `addressLine1`) from the app's stored
- * `address` display string.
- *
- * App-saved clients store `address` as a full display address
- * ("[apt-]street, city, province postal, country") while Wave keeps
- * city/province/country/postalCode as separate structured fields. Rather than
- * blindly taking the first comma-segment (which destroys street lines that
- * legitimately contain commas, e.g. "100 Main St, Building A"), trailing
- * segments are stripped ONLY when they duplicate the doc's structured
- * locality fields (city / "province postal" / province / postalCode /
- * country, in any trailing order) and the remaining segments — commas and
- * all — form the street line. Docs with NO structured locality fields at all
- * (legacy full-display addresses) fall back to the historical first-segment
- * behaviour so city names never leak into addressLine1.
- *
+ * Extracts the street line (Wave `addressLine1`) from the app's full display `address` string by stripping only trailing segments that duplicate the doc's structured locality fields, rather than naively splitting on the first comma (which would break streets like "100 Main St, Building A"); legacy docs with no locality fields keep the old first-segment behavior.
  * @param {string} fullAddress Trimmed stored address display string.
  * @param {!Object} f The client document fields (for city/province/etc.).
  * @return {string} The street line.
@@ -167,20 +137,7 @@ function streetFromAddress(fullAddress, f) {
 }
 
 /**
- * Converts a Firestore client document's fields to a Wave customer input
- * object suitable for the Wave GraphQL `CustomerCreateInput` /
- * `CustomerPatchInput`. The caller is responsible for adding `businessId`
- * (and `id` for patch operations) — those are never included here.
- *
- * Empty optional strings are omitted rather than sent as `""`. `name` is
- * always included (it is required by Wave). The `address` sub-object is
- * always included with whatever address pieces are present; callers that do
- * not want a partial address object should check `clientFields.address`
- * before calling.
- *
- * Currency is intentionally omitted — Wave defaults to the business currency
- * and the app does not store a per-client currency override.
- *
+ * Converts a Firestore client doc's fields to a Wave customer input for `CustomerCreateInput`/`CustomerPatchInput` (caller adds `businessId`/`id`), omitting empty optional strings and currency (Wave defaults to the business currency) while always including `name` and an `address` sub-object.
  * @param {!Object} clientFields Firestore client document fields. Expected
  *   keys: name (required), firstName, lastName, email, phone, mobile,
  *   address, apt, city, province, country, postalCode.
@@ -189,17 +146,7 @@ function streetFromAddress(fullAddress, f) {
 function toWaveCustomerInput(clientFields) {
   const f = clientFields || {};
 
-  // addressLine1 holds ONLY the street line. The app stores `address` as a
-  // full display address ("[apt-]street, city, province postal, country")
-  // for its own map/display use, but Wave keeps city/province/country/
-  // postalCode as separate structured fields, so the whole string would
-  // duplicate them here. streetFromAddress strips the locality tail while
-  // preserving commas inside the street itself; for app-saved clients the
-  // street already carries the apt prefix, so only prepend `apt` for legacy
-  // docs that kept it separate, never doubling it. addressLine2 round-trips
-  // through the function-owned `addressLine2` doc field (written by the Wave
-  // import, never emitted by the Flutter client's toMap) so a Wave customer's
-  // second address line survives an app-side edit → patch cycle.
+  // addressLine1 holds only the street line (streetFromAddress strips the locality tail); only prepend `apt` for legacy docs where the street doesn't already carry it, and addressLine2 round-trips through its own doc field so it survives an edit → patch cycle.
   const apt = typeof f.apt === "string" ? f.apt.trim() : "";
   const fullAddress = typeof f.address === "string" ? f.address.trim() : "";
   const street = streetFromAddress(fullAddress, f);
@@ -239,17 +186,7 @@ function toWaveCustomerInput(clientFields) {
 }
 
 /**
- * Computes a stable SHA-256 hex hash over the Wave customer input fields
- * derived from the given client document. The hash is key-order-independent
- * (keys are sorted before serialization), so the same logical data always
- * produces the same hash regardless of property insertion order in JS.
- *
- * Identical client fields → identical hash.
- * Any change to a mapped field → different hash.
- * Fields not mapped to Wave (contacts, waveCustomerId, etc.) are excluded.
- *
- * Use this to detect whether a sync patch would be a no-op.
- *
+ * Computes a stable, key-order-independent SHA-256 hash over the Wave-mapped fields of a client document (unmapped fields like `waveCustomerId` excluded), used to detect whether a sync patch would be a no-op.
  * @param {!Object} clientFields Firestore client document fields.
  * @return {string} Lowercase hex SHA-256 digest.
  */
@@ -260,9 +197,7 @@ function mappedFieldsHash(clientFields) {
 }
 
 /**
- * Recursively serializes a value to a JSON string with object keys sorted
- * alphabetically so the result is independent of JS property-insertion order.
- * Arrays preserve their order (index order is semantically significant).
+ * Recursively serializes a value to a JSON string with object keys sorted alphabetically (array order is preserved) so the result is independent of JS property-insertion order.
  * @param {*} value Any JSON-serializable value.
  * @return {string}
  */
@@ -281,19 +216,7 @@ function stableStringify(value) {
 }
 
 /**
- * Converts a Wave customer query node to a Firestore client document field
- * patch. Only fields that Wave owns are returned; callers merge this patch
- * onto the existing client doc.
- *
- * Defensive against sparse/null sub-objects: a missing `address` or nested
- * `province`/`country` never throws.
- *
- * `apt` is always returned as `''`; Wave's `addressLine2` is preserved in the
- * dedicated `addressLine2` doc field (NOT joined into `address`) so the
- * round-trip is lossless: `toWaveCustomerInput` re-emits it as
- * `addressLine2` on patch, and the street line is never truncated at the
- * first comma of a joined string.
- *
+ * Converts a Wave customer query node to a Firestore client field patch (Wave-owned fields only, for the caller to merge), defensive against sparse/null sub-objects, with `apt` always `''` and `addressLine2` kept in its own field so the round-trip through `toWaveCustomerInput` stays lossless.
  * @param {!Object} node Wave customer GraphQL node. Expected shape:
  *   { id, name, firstName, lastName, email, phone, mobile, isArchived,
  *     address: { addressLine1, addressLine2, city,
@@ -305,9 +228,7 @@ function fromWaveCustomer(node) {
   const addr = (n.address && typeof n.address === "object") ?
     n.address : {};
 
-  // `address` carries ONLY the street line (addressLine1). addressLine2 is
-  // kept in its own field so a later write-back can re-emit it faithfully —
-  // joining the two with ", " would make the patch path truncate line2 away.
+  // `address` carries only the street line; addressLine2 stays in its own field since joining them with ", " would truncate line2 on a later patch.
   const line1 = typeof addr.addressLine1 === "string" ?
     addr.addressLine1.trim() : "";
   const line2 = typeof addr.addressLine2 === "string" ?
@@ -325,9 +246,7 @@ function fromWaveCustomer(node) {
   const firstName = typeof n.firstName === "string" ? n.firstName : "";
   const lastName = typeof n.lastName === "string" ? n.lastName : "";
   const email = typeof n.email === "string" ? n.email : "";
-  // Derive a non-empty display name: Wave's `name` when present, else the
-  // first/last name, else the email. The app lists clients ordered by `name`,
-  // so a blank name would float the doc to the top with no label.
+  // Derive a non-empty display name (Wave's `name`, else first/last, else email) since a blank name would float the doc to the top of the name-ordered client list.
   const rawName = typeof n.name === "string" ? n.name.trim() : "";
   const name = rawName ||
     [firstName.trim(), lastName.trim()].filter(Boolean).join(" ") ||

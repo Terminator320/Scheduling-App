@@ -1,7 +1,6 @@
-// Sweeps every auth screen at every supported text scale on a small-phone
-// viewport (375×667 — Pixel 4a / iPhone SE class) and asserts no
-// RenderFlex overflow exceptions fire. Catches "render problem at Extra
-// Large" regressions on the auth flow before they reach a device.
+// Sweeps every auth screen at every text scale on a 375×667 small-phone
+// viewport, catching RenderFlex overflow ("render problem at Extra Large")
+// before it reaches a device.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,9 +26,8 @@ class _MockRepo extends Mock implements EmployeesRepository {}
 // XL) plus Android system-level 2.0× to catch the worst case.
 const _scales = <double>[0.8, 1, 1.2, 1.4, 2];
 
-// Small-phone viewport. The smallest physical phone in common use is
-// ~375 logical width. Picking the smaller dimension exposes overflow
-// most reliably without being unrealistic.
+// Smallest physical phone in common use is ~375 logical width; picking
+// that dimension exposes overflow most reliably.
 const _viewport = Size(375, 667);
 
 Widget _scaled({

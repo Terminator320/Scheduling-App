@@ -45,8 +45,7 @@ bool shouldRegisterLiveActivity({
   required bool signedIn,
 }) => shouldRegisterPush(role: role, status: status, signedIn: signedIn);
 
-/// Registers device's Live Activity APNs tokens (device-wide push-to-start and per-activity update tokens) into `users/{docId}/liveActivityTokens/{id}`.
-/// iOS-gated and best-effort; all failures degrade to plain `leaveNow` push unchanged.
+/// Registers device's Live Activity APNs tokens into `users/{docId}/liveActivityTokens/{id}`; iOS-gated and best-effort — failures degrade to plain `leaveNow` push unchanged.
 class LiveActivityRegistrationController with ReentrantSync {
   LiveActivityRegistrationController(
     this._ref, {
@@ -261,9 +260,10 @@ class LiveActivityRegistrationController with ReentrantSync {
         .deleteToken(userDocId: docId, docId: activityId);
   }
 
-  /// Ends this device's live cards immediately (Settings opt-out only).
-  /// Do NOT wire to status write: endAllActivities() is device-wide and can't resolve per-appointment cards (ActivityKit id is not readable back).
-  /// Terminal transitions are ended server-side by endCardOnTerminal via the liveActivityCards marker.
+  /// Ends this device's live cards immediately (Settings opt-out only) —
+  /// never wire this to status writes, since `endAllActivities()` is
+  /// device-wide and can't target one appointment; terminal transitions are
+  /// ended server-side by `endCardOnTerminal` instead.
   Future<void> endLocalCards() async {
     if (!Platform.isIOS || !_pluginReady) return;
     try {
@@ -278,9 +278,9 @@ class LiveActivityRegistrationController with ReentrantSync {
     }
   }
 
-  /// Best-effort de-registration for sign-out / account deletion: end any live
-  /// card (no client's name left on a signed-out Lock Screen) and delete this
-  /// device's token rows. Never throws — sign-out must not be blocked.
+  /// Best-effort de-registration for sign-out / account deletion — ends any
+  /// live card and deletes this device's token rows; never throws, so
+  /// sign-out is never blocked.
   Future<void> unregister() async {
     try {
       // Ends the cards and drops every per-activity row (push-to-start row left for clear).
@@ -309,7 +309,7 @@ class LiveActivityRegistrationController with ReentrantSync {
   }
 
   /// The users-doc id for the signed-in uid, or null when signed out or the
-  /// lookup fails. Never throws — [unregister] must not block sign-out.
+  /// lookup fails; never throws, so [unregister] is never blocked.
   Future<String?> _resolveUserDocId() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return null;

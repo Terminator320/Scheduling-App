@@ -513,9 +513,8 @@ describe("listBusinesses()", () => {
         await listBusinesses(opts(fetch));
         const [, init] = fetch.mock.calls[0];
         const sent = JSON.parse(init.body);
-        // page and pageSize are literals in the query document (pagination
-        // constants), not user-supplied values — so they are acceptable inline.
-        // This test ensures no *variable* values are string-interpolated.
+        // page/pageSize are literal pagination constants, not user data —
+        // this only checks that *variable* values aren't interpolated.
         expect(Object.keys(sent.variables)).toHaveLength(0);
       });
 });

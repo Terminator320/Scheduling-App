@@ -44,7 +44,7 @@ class _AppBackButtonState extends State<AppBackButton> {
     final active = _pressed && !reduceMotion;
     final tooltip =
         widget.tooltip ?? MaterialLocalizations.of(context).backButtonTooltip;
-    // Pressed: quick ease in. Released: slower spring back.
+    // Quick ease-in while pressed, slower spring back on release.
     final duration = _pressed ? AppDuration.fast : AppDuration.normal;
     final curve = _pressed ? Curves.easeOut : Curves.elasticOut;
     return IconButton(

@@ -98,10 +98,8 @@ class EmployeeFormActivity {
 }
 
 /// Employee create/update/status/delete orchestration shared by the form
-/// sheet and the details view, with a typed outcome per operation. The
-/// employees list streams from Firestore, so no refresh bump is needed here
-/// (unlike the paginated clients list). Validation stays in the widgets via
-/// `EmployeeFormValidator`.
+/// sheet and the details view; the employees list streams from Firestore, so
+/// no refresh bump is needed here (unlike the paginated clients list).
 class EmployeeFormController extends Notifier<EmployeeFormActivity> {
   @override
   EmployeeFormActivity build() => const EmployeeFormActivity();
@@ -192,7 +190,7 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
     }
   }
 
-  /// Deletes the employee's users doc. On success [state] stays deleting so
+  /// Deletes the employee's users doc; on success [state] stays deleting so
   /// the details surface keeps its spinner while its host pops/clears it.
   Future<EmployeeDeleteOutcome> deleteEmployee(String docId) async {
     // Resolved before the first await — see _save.

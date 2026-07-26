@@ -7,8 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// SharedPreferences key for the user's Live Activity opt-out.
 const _keyLiveActivityEnabled = 'live_activity_enabled';
 
-/// Whether this device may host the "time to leave" Live Activity card (default on, device-local preference).
-/// Turning OFF requires `unregister()` to end the live card and delete token rows, since the server push-starts cards from registered tokens.
+/// Whether this device may host the "time to leave" Live Activity card (default on); turning OFF must call `unregister()` since the server push-starts cards from registered tokens.
 class LiveActivityPreferenceController extends Notifier<bool> {
   /// Resolves once disk read completes; callers that act on the preference must await this, or cold-start sees default and re-registers opted-out devices.
   late final Future<void> ready = _load();

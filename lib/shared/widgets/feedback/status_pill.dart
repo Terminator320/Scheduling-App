@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 
-/// The rounded label pill shared by `StatusChip` and `UserStatusChip`. Owns the
-/// container shape and the user-text-scale cap so the two chips don't duplicate
-/// it — each caller just supplies the resolved label and its background /
-/// foreground colors.
+/// Rounded label pill shared by `StatusChip` and `UserStatusChip` so they don't
+/// duplicate the container shape and text-scale cap.
 class StatusPill extends StatelessWidget {
   const StatusPill({
     required this.label,

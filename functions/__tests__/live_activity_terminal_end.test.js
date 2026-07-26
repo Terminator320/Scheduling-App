@@ -1,11 +1,7 @@
 /**
- * Regression tests for the terminal card-end paths: a deleted, cancelled,
- * completed, or unassigned job must END its Live Activity card even when the
- * job already started — the exact window the notification diff suppresses as
- * "past", which is how deleted events' cards used to survive on the Lock
- * Screen. Also covers the on-site flip pass ending (not just un-marking) a
- * card whose appointment is gone, and the endTime field feeding the on-site
- * countdown.
+ * Regression tests: a deleted/cancelled/completed/unassigned job must END its
+ * Live Activity card even after it started, and the on-site flip pass must
+ * end (not just un-mark) a card whose appointment is gone.
  */
 
 jest.mock("../live_activity_dispatch", () => ({

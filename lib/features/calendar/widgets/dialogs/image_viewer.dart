@@ -149,8 +149,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     'IMG-SAVE',
     context.l10n.calendar_couldNotSavePhoto,
     () async {
-      // iOS gates on add-only Photos access; saver_gallery would fail silently
-      // without it. Android (dev-only) handles its own permission natively.
+      // iOS gates on add-only Photos access (saver_gallery fails silently without it); Android (dev-only) handles its own permission natively.
       if (Platform.isIOS) {
         final perm = await ref
             .read(mediaPermissionServiceProvider)

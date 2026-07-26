@@ -1,9 +1,8 @@
 // SiriStrings — spoken response text in English and French.
 //
 // The response language follows the device's Siri language (`Locale.current`),
-// matching how ScheduleWidget.swift picks its labels. Kept as plain Swift
-// rather than a string catalog so the two localizations stay side by side and
-// reviewable in one place.
+// matching ScheduleWidget.swift; kept as plain Swift (not a string catalog)
+// so both localizations stay side by side and reviewable in one place.
 //
 // This file is compiled only on macOS/Xcode.
 
@@ -30,9 +29,9 @@ enum SiriStrings {
         return fmt.string(from: date)
     }
 
-    /// How to name a day in a spoken sentence: "today"/"tomorrow" read more
-    /// naturally than a full weekday, so prefer them; otherwise fall back to the
-    /// weekday-and-date form. Used by the Phase-2 day-schedule answers.
+    /// Prefers "today"/"tomorrow" over a full weekday for natural speech,
+    /// falling back to the weekday-and-date form; used by the Phase-2
+    /// day-schedule answers.
     static func relativeDay(_ date: Date) -> String {
         let cal = Calendar.current
         if cal.isDateInToday(date) {

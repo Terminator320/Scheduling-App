@@ -1,11 +1,11 @@
 /// Which APNs token a `users/{docId}/liveActivityTokens/{id}` row holds.
 enum LiveActivityTokenKind {
   /// Device-wide iOS 17.2+ push-to-start token — lets the server CREATE the
-  /// card on a closed, locked phone. One per device.
+  /// card on a closed, locked phone; one per device.
   pushToStart('pushToStart'),
 
-  /// Per-activity update token — lets the server update or end ONE live card.
-  /// One per activity, never one per device.
+  /// Per-activity update token — lets the server update or end ONE live card,
+  /// one per activity (never one per device).
   update('update');
 
   const LiveActivityTokenKind(this.raw);

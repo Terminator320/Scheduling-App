@@ -380,10 +380,8 @@ describe("travelReminderLedgerId", () => {
 // ----- sweep orchestration with mocks ---------------------------------------
 
 /**
- * Minimal Firestore mock for the travel sweep: candidate query vs
- * per-employee context query are told apart by their where() fields, presence
- * docs resolve through db.getAll, and the reminder ledger supports the
- * pre-check get + atomic create + release delete.
+ * Fakes Firestore for the travel sweep, telling queries apart by their
+ * where() field, with presence via getAll and a get/create/delete ledger.
  * @param {!Object} config users/tokens/appointments/context/presence/
  *   ledgerExisting/throwLedgerGetFor fixtures.
  * @return {!Object} `{db, ledgerCreates, ledgerDeletes}`.

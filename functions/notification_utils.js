@@ -2,15 +2,11 @@
 
 /**
  * @fileoverview Push-notification logic for employee job alerts, 30-minute
- * reminders, and the nightly digest. Pure helpers plus orchestration that
- * takes injected `{db, messaging, now, logger}` so jest can drive it with
- * mocks (no admin/scheduler requires here — mirrors client_propagation.js /
- * signup_code_utils.js).
+ * reminders, and the nightly digest; pure helpers plus orchestration take
+ * injected `{db, messaging, now, logger}` so jest can drive them with mocks.
  *
- * Note: the send helper (`sendToEmployee`) lives here rather than in
- * notifications.js so the orchestration is fully unit-testable with an
- * injected Firestore + Messaging; notifications.js only registers the
- * triggers and passes the real `getFirestore()` / `getMessaging()`.
+ * `sendToEmployee` lives here (not in notifications.js) so it's unit-testable
+ * with an injected Firestore + Messaging.
  *
  * @module notification_utils
  */
@@ -43,11 +39,8 @@ const OVERDUE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 // duration (the form caps a visit just under 24h): 48h total.
 const OVERDUE_QUERY_WINDOW_MS = 2 * OVERDUE_LOOKBACK_MS;
 
-// Safety valve on the serial sweep: bound the candidate set so one run can't
-// blow the function timeout under an unexpected backlog. Far above any real
-// small-business volume in a 48h window; if it's ever hit we log a warning
-// rather than silently truncate (the oldest jobs age out and later runs catch
-// the remainder).
+// Safety valve bounding the candidate set so one run can't blow the function
+// timeout; logs a warning instead of silently truncating if ever hit.
 const OVERDUE_SWEEP_MAX = 500;
 
 // FCM's hard cap on a message's data map is 4 KB; this leaves headroom for the
@@ -60,11 +53,9 @@ const WIDGET_PAYLOAD_MAX_BYTES = 3000;
 const LEDGER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * The body every claim-ledger doc in this file is written with. `expiresAt` is
- * the ABSOLUTE deletion instant (the lifetime is baked in here), so the
- * Firestore TTL policy on these collections must use expiration offset 0 or
- * retention silently multiplies. One helper so the three write sites cannot
- * disagree about that.
+ * The body every claim-ledger doc in this file is written with; `expiresAt` is
+ * the ABSOLUTE deletion instant, so the Firestore TTL policy on these
+ * collections must use expiration offset 0.
  *
  * @param {!Date} nowDate Sweep/trigger time.
  * @return {{createdAt: !Date, expiresAt: !Date}}
@@ -76,21 +67,15 @@ function ledgerBody(nowDate) {
   };
 }
 
-// Statuses that leave a job still open once its endTime passes — the app then
-// shows it as `overdue` (AppointmentRecord.displayStatus). Deliberately an
-// allowlist so terminal statuses (`done`/`cancelled` and the legacy
-// `completed` alias of `done`) stay excluded.
+// Statuses that leave a job open past endTime (shown as `overdue`);
+// deliberately an allowlist so terminal statuses (`done`/`cancelled`, legacy
+// `completed`) stay excluded.
 const OPEN_LIKE = new Set(["pending", "in_progress", "confirmed"]);
 
-// The same allowlist as an array, for `where("status", "in", ...)` queries.
-// Single-sourced deliberately: the digest sweep used to hardcode
-// ["pending", "confirmed"], which silently dropped every `in_progress` job from
-// the 18:00 digest even though the pure filter it feeds
-// (groupTomorrowsJobsByEmployee) excludes only `cancelled` — so the query and
-// the filter disagreed about their contract and the unit tests exercised
-// records production never delivered. The travel sweep is the ONE intentional
-// exception (see PENDING_LIKE in travel_utils.js): it excludes `in_progress`
-// because the visit has already started, so there is nothing to leave for.
+// The same allowlist as an array for `where("status", "in", ...)` queries,
+// single-sourced so it can't drift from the filter it feeds; the travel
+// sweep's PENDING_LIKE (travel_utils.js) is the one exception, excluding
+// `in_progress` since the visit has already started.
 const OPEN_STATUSES = [...OPEN_LIKE];
 
 // Dedupe priority when one employee accrues multiple events for one write.
@@ -101,11 +86,10 @@ const KIND_PRIORITY = {
   assigned: 1,
 };
 
-// Recipient roles per notification category (all must be status:'active').
-// Change-driven pushes (assigned/rescheduled/cancelled/removed) go to
-// EMPLOYEES ONLY — an admin usually makes those edits themselves, so a push
-// for their own change would be noise. Time-based pushes (reminder / overdue /
-// digest) also go to an assigned ADMIN, who still wants the schedule nudges.
+// Recipient roles per category (status:'active' only): change-driven pushes
+// (assigned/rescheduled/cancelled/removed) go to employees only since an
+// admin usually makes those edits themselves, while time-based pushes
+// (reminder/overdue/digest) also reach an assigned admin.
 const CHANGE_RECIPIENT_ROLES = new Set(["employee"]);
 const TIMED_RECIPIENT_ROLES = new Set(["employee", "admin"]);
 
@@ -177,10 +161,9 @@ function diffAppointmentForNotifications(before, after, now, id) {
   if (!before && after) {
     // Created.
     if (isCancelled(after) || !notPast(after.startTime)) return [];
-    // A repeating series pre-books many occurrences in one write. Only the
-    // anchor (id === seriesId) sends the assignment push, so the employee
-    // gets ONE "repeating job" notification instead of one per pre-booked
-    // copy. Non-repeating appointments have an empty seriesId and are never
+    // Only the anchor (id === seriesId) sends the assignment push, so a
+    // repeating series notifies once instead of once per pre-booked
+    // occurrence; non-repeating appointments (empty seriesId) are never
     // suppressed.
     const seriesId = String((after && after.seriesId) || "");
     if (seriesId !== "" && seriesId !== String(id)) return [];
@@ -254,9 +237,9 @@ function _timeOnly(locale, startTime) {
 }
 
 /**
- * Localized "every 6 months" / "aux 6 mois" recurrence phrase for a
- * RepeatInterval raw value (repeat_interval.dart); "" for none/unknown so a
- * one-off job reads as a plain assignment. Mirrors RepeatInterval.raw.
+ * Localized recurrence phrase ("every 6 months"/"aux 6 mois") for a
+ * RepeatInterval raw value, mirroring RepeatInterval.raw (repeat_interval.dart);
+ * "" for none/unknown so a one-off job reads as a plain assignment.
  * @param {string} raw
  * @param {string} locale 'en' | 'fr'.
  * @return {string}
@@ -420,14 +403,10 @@ function buildDigestMessage(jobs, locale) {
 }
 
 /**
- * Filters appointment records to those due for an overdue "job finished?"
- * prompt: still open (pending/in_progress/legacy confirmed — the OPEN_LIKE
- * allowlist, so `done`/`cancelled`/legacy `completed` never match) with an
- * endTime that passed within the last OVERDUE_LOOKBACK_MS. Server mirror of
- * the app's AppointmentRecord.displayStatus (appointment_record.dart) — keep
- * the two in sync; nothing is ever stored. Known divergence: a status unknown
- * to OPEN_LIKE renders Overdue in the app but is never swept (the query can't
- * enumerate unknown values). Pure — unit-testable.
+ * Filters appointment records to those overdue for a "job finished?" prompt:
+ * still open per OPEN_LIKE with an endTime within OVERDUE_LOOKBACK_MS,
+ * mirroring the app's AppointmentRecord.displayStatus (a status unknown to
+ * OPEN_LIKE is never swept). Pure — unit-testable.
  * @param {!Array<!Object>} records Appointment records ({id, status,
  *   endTime, ...}).
  * @param {(Date|number)} now
@@ -500,11 +479,9 @@ function overduePromptLedgerId(appointmentId, endTimeMillis, employeeDocId) {
 }
 
 /**
- * True for FCM error codes that mean the token itself is dead and its doc
- * should be deleted. Deliberately narrow: the generic
- * `messaging/invalid-argument` is NOT included — it can signal a malformed
- * message payload, not a bad token, and treating it as stale would delete
- * valid tokens on any payload bug. Pure — unit-testable.
+ * True for FCM error codes meaning the token is dead and should be deleted;
+ * deliberately excludes `messaging/invalid-argument`, which can signal a bad
+ * payload rather than a bad token. Pure — unit-testable.
  * @param {string} code
  * @return {boolean}
  */
@@ -532,21 +509,18 @@ function isAlreadyExists(err) {
  * @param {!Object} data Data payload (string values); `kind` etc.
  * @param {function(string): {title: string, body: string}} buildMsg Localized
  *   message builder keyed by 'en'|'fr'.
- * @param {!Set<string>=} roles Allowed recipient roles (default: employees
- *   only). Time-based sweeps pass [TIMED_RECIPIENT_ROLES] to also reach an
- *   assigned admin.
+ * @param {!Set<string>=} roles Allowed recipient roles (default employees
+ *   only; time-based sweeps pass [TIMED_RECIPIENT_ROLES] to also reach an
+ *   assigned admin).
  * @param {!Map<string, {user: ?Object, tokenDocs: !Array<!Object>}>=} cache
- *   Per-sweep read cache keyed by employee doc id. An employee assigned to
- *   several jobs in one sweep is otherwise re-read once per job; a sweep passes
- *   a fresh Map so each employee's user doc + token list is fetched at most
- *   once. Stale-token pruning still works (deletes are idempotent, and the
- *   ledger — not the token list — is what prevents a duplicate push).
+ *   Per-sweep read cache keyed by employee doc id, so an employee assigned to
+ *   several jobs in one sweep is fetched at most once (stale-token pruning
+ *   still works since deletes are idempotent and the ledger, not the token
+ *   list, prevents duplicate pushes).
  * @param {function(string): !Object=} augmentData Optional per-token extra data
- *   fields, keyed by the token's locale ('en'|'fr') — used to attach a
- *   locale-correct `widgetPayload` so the change push can rewrite the iOS
- *   home-screen widget from a background isolate. When the merged data carries
- *   a non-empty `widgetPayload`, the APNs payload also sets `content-available`
- *   so iOS wakes the app to apply it with the app closed.
+ *   keyed by locale ('en'|'fr'), used to attach a locale-correct
+ *   `widgetPayload` (a non-empty payload also sets APNs `content-available`
+ *   so iOS applies it with the app closed).
  * @return {!Promise<number>}
  */
 async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
@@ -565,8 +539,7 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
   }
   const {user, tokenDocs} = entry;
   if (!user) return 0;
-  // Recipients are filtered server-side to active accounts of an allowed role
-  // (change-driven: employees only; time-based: employees + assigned admins).
+  // Recipients are filtered server-side to active accounts of an allowed role.
   const allowed = roles || CHANGE_RECIPIENT_ROLES;
   if (!allowed.has(user.role) || user.status !== "active") return 0;
   if (tokenDocs.length === 0) return 0;
@@ -575,16 +548,10 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
     const locale = (doc.data() || {}).locale === "fr" ? "fr" : "en";
     const {title, body} = buildMsg(locale);
     let msgData = augmentData ? {...data, ...augmentData(locale)} : data;
-    // FCM rejects a message whose data map exceeds 4 KB, which would lose the
-    // VISIBLE notification too — not just the widget refresh. A busy two-day
-    // window is the only realistic way to get there, so the payload is dropped
-    // rather than risking the push; the widget then refreshes on the next app
-    // run, exactly as it did before it rode along on pushes. Copied first —
-    // msgData aliases the caller's `data` when there is no augmentData.
-    // Measure UTF-8 BYTES, not string .length: this is a bilingual (FR) app, so
-    // accented client names/addresses (é, à, ç…) are 2 bytes but 1 code unit —
-    // a char count under-measures the payload and can let an oversized data map
-    // through, dropping the whole push.
+    // Drops widgetPayload if it would push the 4 KB FCM data-map cap (losing
+    // the whole message), measuring UTF-8 bytes since accented text is 2
+    // bytes but 1 code unit; msgData is copied first since it may alias the
+    // caller's `data`.
     if (typeof msgData.widgetPayload === "string" &&
         Buffer.byteLength(msgData.widgetPayload, "utf8") >
           WIDGET_PAYLOAD_MAX_BYTES) {
@@ -592,18 +559,16 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
       delete msgData.widgetPayload;
     }
     const aps = {sound: "default"};
-    // A change push that carries a fresh widget payload also wakes the app in
-    // the background (iOS) so the background handler can rewrite the
-    // home-screen widget with the app closed. content-available needs the
-    // `remote-notification` UIBackgroundMode + the registered background
-    // handler; the visible alert still shows alongside it.
+    // A fresh widget payload also sets APNs content-available so iOS wakes
+    // the app in the background to rewrite the widget (needs the
+    // remote-notification UIBackgroundMode + registered background handler);
+    // the visible alert still shows alongside it.
     if (typeof msgData.widgetPayload === "string" && msgData.widgetPayload) {
       aps["content-available"] = 1;
     }
-    // A departure alert is useless buried in a Focus-mode summary. Needs the
-    // Time Sensitive Notifications entitlement on the Xcode side; until that
-    // lands iOS silently downgrades it to `active` (safe to ship
-    // server-first). Other kinds keep the default level.
+    // Time-sensitive so a departure alert isn't buried in a Focus-mode
+    // summary; needs the Xcode Time Sensitive Notifications entitlement, or
+    // iOS silently downgrades it to `active` (safe to ship server-first).
     if (msgData.kind === "leaveNow") {
       aps["interruption-level"] = "time-sensitive";
     }
@@ -619,11 +584,9 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
   });
 
   const resp = await messaging.sendEach(messages);
-  // Once sendEach resolves the pushes are already delivered. Nothing below may
-  // throw OUT of this function: the caller reads a 0 return as "nothing went
-  // out" and releases the idempotency claim, so a post-delivery throw here
-  // would re-send an already-delivered message on the next sweep. Bookkeeping
-  // (success count + stale-token pruning) is therefore fully self-contained.
+  // Nothing below may throw: the caller treats a 0 return as "nothing sent"
+  // and releases the idempotency claim, so a post-delivery throw here would
+  // cause a resend of an already-delivered message.
   try {
     const responses = (resp && resp.responses) || [];
     let sent = 0;
@@ -645,10 +608,9 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
     if (deletions.length > 0) await Promise.all(deletions);
     return sent;
   } catch (err) {
-    // Post-delivery bookkeeping failed. We can't recount reliably, but the
-    // batch DID go out — report the batch size so the caller keeps the claim
-    // rather than re-sending. Erring toward a possible missed stale-token
-    // cleanup (self-heals next send) over a duplicate push.
+    // Bookkeeping failed but the batch already went out, so report the batch
+    // size to keep the claim (erring toward a missed stale-token cleanup,
+    // which self-heals, over a duplicate push).
     if (logger) {
       logger.warn("fcm: post-send bookkeeping failed", {employeeDocId, err});
     }
@@ -688,10 +650,9 @@ function _contextFor(kind, before, after) {
 /**
  * Reads an employee's appointments in the widget lookahead window
  * ([today 00:00 Toronto, +WIDGET_LOOKAHEAD_DAYS days)) so the change push can
- * carry a freshly-rebuilt widget payload. Served by the existing
- * `(employeeIds CONTAINS, startTime ASC)` composite index. Never throws — a
- * failed read just yields an empty window so the notification still sends
- * (the widget then updates on the next app run, as before this feature).
+ * carry a fresh widget payload (served by the existing `(employeeIds
+ * CONTAINS, startTime ASC)` index); never throws, a failed read just yields
+ * an empty window so the notification still sends.
  * @param {!Object} db
  * @param {string} employeeDocId
  * @param {(Date|number)} now
@@ -719,16 +680,11 @@ async function fetchEmployeeWidgetWindow(db, employeeDocId, now, logger) {
 }
 
 /**
- * Ends any live card for a job that hit a terminal transition: became `done`
- * or `cancelled`, was DELETED, or had an assignee removed. Deliberately
- * UNCONDITIONAL on the job's start time — a live card exists precisely when
- * the job is imminent or already started, which is exactly when the
- * notification diff suppresses its events as "past" (`notPast`), so riding
- * the diff left deleted/cancelled started jobs stuck on the Lock Screen.
- * Best-effort and non-throwing, like every other Live Activity path:
- * `endLiveActivity` resolves through the server-owned card marker, so it only
- * ends a card that actually belongs to this appointment and is a safe no-op
- * for every other target.
+ * Ends any live card for a job that hit a terminal transition (done,
+ * cancelled, deleted, or unassigned), deliberately unconditional on start
+ * time since that's exactly when the notification diff suppresses events as
+ * past; best-effort and non-throwing, resolving through the server-owned
+ * card marker so it's a safe no-op for any other target.
  * @param {string} id appointment doc id.
  * @param {?Object} before
  * @param {?Object} after
@@ -786,10 +742,10 @@ async function endCardOnTerminal(id, before, after, deps, now) {
 }
 
 /**
- * Orchestrates an appointment write: diff -> per-employee localized send. Each
- * change push also carries a fresh, locale-correct `widgetPayload` (+ APNs
- * content-available) so the employee's iOS home-screen widget updates even with
- * the app closed. Injectable deps `{db, messaging, now, logger}`.
+ * Orchestrates an appointment write (diff → per-employee localized send);
+ * each change push also carries a fresh, locale-correct `widgetPayload`
+ * (+ APNs content-available) so the widget updates with the app closed.
+ * Injectable deps `{db, messaging, now, logger}`.
  * @param {string} id appointment doc id.
  * @param {?Object} before
  * @param {?Object} after
@@ -798,52 +754,36 @@ async function endCardOnTerminal(id, before, after, deps, now) {
  */
 async function handleAppointmentWrite(id, before, after, deps) {
   const now = deps.now || new Date();
-  // EVERY terminal transition (done, cancelled, deleted, unassigned) ends the
-  // card here, server-side and unconditionally, because only the server knows
-  // which appointment a push-started card belongs to (the liveActivityCards
-  // marker) — and because the notification diff below suppresses events for
-  // past-start jobs, which is exactly when a live card exists. The device
-  // can't disambiguate, so it must not end cards itself: a tech marking the
-  // job they just left as done would otherwise kill the card for the job
-  // they're currently driving to.
+  // Every terminal transition ends the card here, server-side and
+  // unconditionally — the device can't disambiguate which card belongs to
+  // which appointment, so a tech marking one job done wouldn't wrongly kill
+  // the card for a job they're still driving to.
   await endCardOnTerminal(id, before, after, deps, now);
   const events = diffAppointmentForNotifications(before, after, now, id);
   if (events.length === 0) return {events: 0, sent: 0};
   let sent = 0;
-  // A repeat series is rewritten as one batch of up to ~15 sibling docs, each
-  // firing this trigger. Without a claim, deleting or rescheduling ONE
-  // repeating job sent the tech ~15 pushes and cost ~15x the reads. The create
-  // path is already deduped by the anchor rule inside the differ; this covers
-  // delete/cancel/reschedule/unassign, where the anchor doc is often not in
-  // the batch at all.
+  // A repeat-series batch rewrites up to ~15 sibling docs, each firing this
+  // trigger, so without a claim one delete/reschedule sent ~15 pushes; this
+  // covers delete/cancel/reschedule/unassign since create is already deduped
+  // by the differ's anchor rule.
   const seriesId = String(((after || before) || {}).seriesId || "");
-  // A fresh op-id is only trustworthy on a WRITE: `after.seriesOpId` was minted
-  // by THIS operation. A delete (after === null) has no fresh id — its
-  // `before.seriesOpId` is stale (the doc's last-write id, shared by every
-  // future delete of the series), so it must NOT be used as a per-op key; the
-  // empty string routes the delete to claimSeriesNotice's seriesId+window
-  // fallback instead.
+  // A fresh op-id is only trustworthy on a write (after.seriesOpId was minted
+  // by this operation); a delete has none — before.seriesOpId is stale and
+  // shared by every future delete — so the empty string routes it to
+  // claimSeriesNotice's seriesId+window fallback instead.
   const freshOpId = after ? String(after.seriesOpId || "") : "";
   // One window read per distinct employee across this write's events.
   const windows = new Map();
   for (const {employeeDocId, kind} of events) {
     const ctx = _contextFor(kind, before, after);
-    // Live Activity lifecycle: a reschedule refreshes a card that's already on
-    // the Lock Screen. Card ENDS don't ride these events — the diff suppresses
-    // past-start jobs, so every terminal end (cancel, delete, unassign, done)
-    // is handled unconditionally by endCardOnTerminal above. `assigned` starts
-    // NO card — a card is started only by the travel-aware "leave now" sweep.
-    //
-    // The refresh runs BEFORE the series claim gate, unlike the push: the card
-    // is per-OCCURRENCE, but the claim collapses an "all future" reschedule to
-    // one push per (employee, kind) and WHICH sibling wins is nondeterministic.
-    // Gating the refresh on the claim would leave the live card stale whenever
-    // the winning sibling isn't the occurrence the tech's card shows. Each
-    // sibling fires its own trigger, so attempting the refresh per occurrence
-    // updates exactly the right card; updateLiveActivity is a cheap no-op (one
-    // marker read, no push) for any occurrence that isn't the live card, and a
-    // deactivated employee has no tokens/marker so it can't resurrect a card
-    // (that's why the old `delivered > 0` guard is no longer needed here).
+    // Reschedule refreshes an existing Lock Screen card; card ends are
+    // handled unconditionally by endCardOnTerminal above, and `assigned`
+    // starts no card (only the travel-aware "leave now" sweep does).
+    // Runs before the series claim gate (unlike the push) since the card is
+    // per-occurrence while the claim collapses a reschedule to one
+    // nondeterministic winner; updateLiveActivity is a cheap no-op for any
+    // occurrence that isn't the live card, so refreshing per-occurrence hits
+    // the right one regardless.
     // Best-effort: never throws, never affects `sent`.
     if (kind === "rescheduled") {
       await updateLiveActivity(deps, {
@@ -895,16 +835,11 @@ async function handleAppointmentWrite(id, before, after, deps) {
 }
 
 /**
- * Claim → send → release for ONE (occurrence, recipient) pair, keyed on a
- * per-recipient ledger doc. `create()` is the atomic exactly-once claim: a
- * recipient already delivered keeps its claim and is never re-sent, while a
- * claim that delivered zero pushes (no live token registered yet, or the send
- * threw) is released so a later sweep retries THAT recipient while the job is
- * still eligible — and a newly-added assignee simply earns its own claim on a
- * later sweep. Because the claim is per-recipient (not per-occurrence), one
- * assignee with a late-registering token no longer suppresses reminders for
- * the others (and no assignee is permanently missed). Concurrent sweeps are
- * safe: `create()` is atomic, so at most one wins the claim per recipient.
+ * Claim → send → release for one (occurrence, recipient) pair via a
+ * per-recipient ledger doc: `create()` atomically claims exactly once (safe
+ * under concurrent sweeps), releasing on zero delivered so a later sweep
+ * retries — and being per-recipient rather than per-occurrence means one
+ * slow-to-register assignee doesn't suppress reminders for the others.
  * Returns the number of pushes delivered to this recipient.
  * @param {!Object} deps `{db, messaging, now, logger}`.
  * @param {!Object} opts
@@ -954,46 +889,36 @@ async function _deliverRecipientOnce(deps, opts) {
 }
 
 /**
- * DELETE-fallback window (see [claimSeriesNotice]). A repeat-series edit writes
- * every affected occurrence in ONE client batch, so the sibling triggers all
- * fire within seconds; this only needs to cover trigger scheduling jitter and a
- * retry. Only the fallback path uses it — the precise op-id path needs no
- * window. Kept SHORT so a genuinely separate later delete of the same series
- * still notifies. Keep this in seconds, not minutes.
+ * DELETE-fallback window (see [claimSeriesNotice]): covers trigger-scheduling
+ * jitter and a retry since siblings in one batch fire within seconds; kept
+ * short (seconds, not minutes) so a genuinely separate later delete of the
+ * same series still notifies.
  */
 const SERIES_CLAIM_WINDOW_MS = 45 * 1000;
 
 const SERIES_CLAIM_COLLECTION = "appointmentSeriesNotices";
 
 /**
- * Claims the right to notify [employeeDocId] about [kind] for one repeat-series
- * operation, so a batch that rewrites N occurrences sends ONE push instead of
- * N. `diffAppointmentForNotifications` dedupes a series on CREATE via the
- * anchor rule (`id === seriesId`), but that can't cover delete/cancel/
- * reschedule — those batches often start partway through a series, so the
- * anchor doc is frequently absent and an anchor-only rule would suppress EVERY
- * notification. Hence this claim ledger, first writer wins.
+ * Claims the right to notify `employeeDocId` about `kind` for one
+ * repeat-series operation (first writer wins) so a batch rewriting N
+ * occurrences sends one push instead of N — needed because
+ * `diffAppointmentForNotifications`'s CREATE-only anchor dedupe can't cover
+ * delete/cancel/reschedule, where the anchor doc is often absent from the
+ * batch.
  *
  * TWO KEYING MODES:
- *  - **freshOpId present** (the precise path): every doc a client WRITES in one
- *    batch carries the same fresh `seriesOpId` (`_newSeriesOpId` in
- *    `firebase_appointments_repository.dart`), and no other operation ever
- *    reuses it. So `create()` failing with ALREADY_EXISTS means "a sibling of
- *    THIS batch already claimed" — a definitive answer that needs NO time
- *    window. Two separate user actions get different op-ids and both notify,
- *    even back-to-back. This is what an apply-to-all edit and a single-
- *    occurrence cancel take.
- *  - **freshOpId absent** (the fallback): a DELETE has no `after`, so the
- *    trigger only sees `before.seriesOpId`, which was minted at the doc's LAST
- *    write and is shared by every future delete of the series — useless as a
- *    per-operation key. Deletes therefore fall back to (seriesId, kind,
- *    employee) + this short window + stale-takeover: collapse one delete batch,
- *    while a later separate delete still notifies once the window lapses.
+ *  - **freshOpId present** (precise path): every doc written in one batch
+ *    shares a fresh `seriesOpId` (`_newSeriesOpId` in
+ *    `firebase_appointments_repository.dart`), so `create()` failing with
+ *    ALREADY_EXISTS definitively means a sibling of this batch already
+ *    claimed — no time window needed.
+ *  - **freshOpId absent** (fallback, deletes): a delete's `before.seriesOpId`
+ *    is stale and shared by every future delete, so it falls back to
+ *    (seriesId, kind, employee) plus a short window and stale-takeover.
  *
- * FAILS OPEN everywhere: any error (and, in the fallback, a claim with no
- * readable `createdAt`) returns true (send). The claim only DE-DUPLICATES on
- * top of existing behavior — failing open degrades to one-push-per-sibling,
- * whereas failing closed could drop a cancellation for a tech already driving.
+ * Fails open everywhere: any error (or an unreadable fallback claim) returns
+ * true (send), since failing open only risks an extra push while failing
+ * closed could drop a cancellation for a tech already driving.
  *
  * @param {!Object} deps `{db, logger}`.
  * @param {{seriesId: string, seriesOpId: string, kind: string,
@@ -1007,11 +932,10 @@ async function claimSeriesNotice(deps, opts) {
   const nowMs = nowMillis(nowDate);
   let ref;
   try {
-    // Build the ref INSIDE the try: `.doc()` throws SYNCHRONOUSLY on an id
-    // containing "/", and nothing constrains seriesId's contents; escaping
-    // here would kill every push for this write instead of degrading. A fresh
-    // op-id is a uuid (slash-free), so its id is always safe — but the shared
-    // try covers the fallback's raw seriesId too.
+    // Built inside the try since `.doc()` throws synchronously on an id
+    // containing "/" and seriesId's contents are unconstrained; a fresh
+    // op-id (uuid) is always slash-safe, but the shared try also covers the
+    // fallback's raw seriesId.
     const docId = seriesOpId !== "" ?
       `op_${seriesOpId}_${kind}_${employeeDocId}` :
       `${seriesId}_${kind}_${employeeDocId}`;
@@ -1026,21 +950,20 @@ async function claimSeriesNotice(deps, opts) {
       }
       return true;
     }
-    // A claim already exists. With a fresh op-id that is DEFINITIVE (only a
-    // sibling of this same batch could have written it) — suppress, no window.
+    // A claim already exists; with a fresh op-id that's definitive (only a
+    // sibling of this batch could have written it), so suppress with no
+    // window needed.
     if (seriesOpId !== "") return false;
   }
-  // Fallback path (delete): a claim exists. Take it over if it predates the
-  // window, so a later separate delete of the same series still notifies. Two
-  // siblings racing a stale takeover would both send — a duplicate, never a
-  // miss.
+  // Fallback path (delete): take over a claim older than the window so a
+  // later separate delete still notifies; a race on takeover risks a
+  // duplicate send, never a miss.
   try {
     const snap = await ref.get();
     const createdMs = toMillis(snap.get("createdAt"));
-    // A null createdMs means the doc vanished between the ALREADY_EXISTS and
-    // this read (TTL sweep / manual delete) or carries no usable timestamp —
-    // the opposite of a live claim, so take it over and SEND. Treating it as a
-    // live claim would fail closed in a function documented to fail open.
+    // A null createdMs means the doc vanished or carries no usable timestamp
+    // — the opposite of a live claim — so take it over and send (treating it
+    // as live would fail closed in a function that must fail open).
     if (createdMs != null && nowMs - createdMs < SERIES_CLAIM_WINDOW_MS) {
       return false;
     }

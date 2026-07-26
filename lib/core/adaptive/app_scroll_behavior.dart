@@ -2,9 +2,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 
-/// App-wide scroll behavior: a fading iOS-style [CupertinoScrollbar] on
-/// iOS/macOS, Material default elsewhere (Android unchanged). Set on
-/// `MaterialApp.scrollBehavior`.
+/// App-wide scroll behavior (set on `MaterialApp.scrollBehavior`): a fading
+/// iOS-style [CupertinoScrollbar] on iOS/macOS, Material default elsewhere
+/// (Android unchanged).
 class AppScrollBehavior extends MaterialScrollBehavior {
   const AppScrollBehavior();
 

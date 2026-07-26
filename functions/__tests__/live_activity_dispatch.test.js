@@ -1,10 +1,9 @@
 "use strict";
 
 /**
- * @fileoverview Dispatch layer: registry lookup -> payload -> APNs -> prune.
- * The APNs client and the registry are mocked so this exercises the
- * orchestration alone — the payload shapes are covered by
- * live_activity_utils.test.js and the wire format by apns_client.test.js.
+ * @fileoverview Exercises the dispatch orchestration alone (registry lookup
+ * -> payload -> APNs -> prune), with APNs and the registry mocked; payload
+ * shapes and wire format are covered elsewhere.
  */
 
 jest.mock("../apns_client", () => ({

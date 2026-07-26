@@ -149,9 +149,8 @@ class DetailsViewBody extends ConsumerWidget {
     );
   }
 
-  /// Surfaces a status write's result. [EventDetailsActionBusy] is silent on
-  /// purpose — the guard skipped the write, so there is neither a success to
-  /// announce nor an error to report, and the sheet stays open.
+  /// Surfaces a status write's result; [EventDetailsActionBusy] stays silent
+  /// since the guard skipped the write and the sheet stays open.
   void _onStatusOutcome(
     BuildContext context,
     WidgetRef ref,
@@ -179,8 +178,8 @@ class DetailsViewBody extends ConsumerWidget {
   }
 }
 
-/// Pure-data derivations for [DetailsViewBody], computed once per build.
-/// Context-free — the layout flag (`compactHeader`) and ref-dependent
+/// Pure-data derivations for [DetailsViewBody], computed once per build and
+/// context-free; the layout flag (`compactHeader`) and ref-dependent
 /// callbacks stay in `build`.
 class _DetailsViewData {
   const _DetailsViewData({
@@ -217,13 +216,9 @@ class _DetailsViewData {
       displayStatus: displayStatus,
       isCancelled: status.isCancelled,
       isDone: status.isDone,
-      // Gates the employee-facing "Mark as complete" button. Keyed on the visit
-      // having STARTED, not on it being today: an employee who forgets to tap
-      // Complete before midnight (or is on day 2+ of a multi-day visit) has no
-      // other status surface — the edit-form picker is admin-only — and the
-      // server keeps pushing them an overdue "job finished?" nudge they could
-      // not act on. The rules already allow an assignee to write only
-      // `status:'done'`, with no date restriction.
+      // Gates "Mark as complete" on the visit having STARTED, not on it being
+      // today, so employees on multi-day/overnight visits aren't stuck without
+      // a status surface — rules allow an assignee's `status:'done'` write with no date restriction.
       hasStarted: !appointment.startTime.isAfter(now),
       clientName: client?.displayName ?? appointment.clientName,
       phone: phone,
@@ -248,9 +243,9 @@ class _DetailsViewData {
   final List<ClientContact> extraContacts;
 }
 
-/// Quick-actions row + the client info card (name / phone / address). The
-/// call and directions callbacks are resolved in the parent's `build` where
-/// `ref` lives; a null callback hides its affordance.
+/// Quick-actions row + client info card (name/phone/address); call and
+/// directions callbacks are resolved in the parent's `build` where `ref`
+/// lives, and a null callback hides its affordance.
 class _ClientSection extends StatelessWidget {
   const _ClientSection({
     required this.clientName,

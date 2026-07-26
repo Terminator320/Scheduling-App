@@ -30,9 +30,8 @@ function snap(data) {
 }
 
 /**
- * Fake `clients/{id}` doc ref that records update() calls and serves a
- * (possibly mutating) snapshot. `freshData` (if set) is what the write-back
- * transaction re-reads; otherwise the same `data` is used.
+ * Fake `clients/{id}` doc ref that records update() calls and serves
+ * `freshData` (or `data` if unset) as the write-back re-read snapshot.
  * @param {Object|null} data Initial snapshot data.
  * @param {Object=} freshData Snapshot data for the write-back re-read.
  * @return {!Object}
@@ -612,8 +611,8 @@ function fakeBatch(log) {
 }
 
 /**
- * Fake Firestore for import: a clients collection whose .get() returns the
- * provided existing docs, and .doc() mints auto-id refs. Records batches.
+ * Fake Firestore for import: a clients collection whose .get() returns
+ * existing docs, .doc() mints auto-id refs, and batches are recorded.
  * @param {!Array<Object>} existingDocs Pre-existing client docs (with .data /
  *   .ref).
  * @param {Object=} opts Connection options (`businessId`).
@@ -787,10 +786,8 @@ describe("importCustomers", () => {
 // ---------------------------------------------------------------------------
 // sanitizeInputErrors
 // ---------------------------------------------------------------------------
-// This is exported specifically for these tests (the export previously carried
-// an "exported for unit tests" comment with no test behind it). Its security
-// contract is that Wave's raw `message` text NEVER reaches our UI or logs —
-// only messages mapped from a known `code`.
+// Security contract: Wave's raw `message` text must never reach our UI or
+// logs — only messages mapped from a known `code`.
 describe("sanitizeInputErrors", () => {
   test("maps a known code to its safe message", () => {
     expect(sanitizeInputErrors([{code: "INVALID_EMAIL"}]))

@@ -16,9 +16,8 @@ import UIKit
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
   }
 
-  /// Reads IOS_MAPS_API_KEY from the bundled dev/.env asset and activates
-  /// Google Maps. Never crashes — a missing/empty key just leaves the admin
-  /// live staff map blank.
+  /// Reads IOS_MAPS_API_KEY from dev/.env and activates Google Maps; never
+  /// crashes, a missing/empty key just leaves the live staff map blank.
   private func provideGoogleMapsAPIKey() {
     let assetKey = FlutterDartProject.lookupKey(forAsset: "dev/.env")
     guard let path = Bundle.main.path(forResource: assetKey, ofType: nil),

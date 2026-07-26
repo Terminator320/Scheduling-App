@@ -52,14 +52,9 @@ describe("toWaveCustomerInput", () => {
     expect(input).not.toHaveProperty("email");
   });
 
-  // See CLAUDE.md's ClientRecord legacy back-compat note: pre-Wave-reshape
-  // "business-only" client docs store the name under `businessName` with an
-  // empty `name`. `ClientRecord.fromMap` (Dart) falls back name<-businessName
-  // when READING such a doc, but this server-side mapper only ever reads
-  // `f.name` when building the Wave input — it does not replicate that
-  // fallback. For a legacy business-only doc this currently produces an
-  // empty `name`, which Wave requires. Documented here as observed behavior,
-  // not changed.
+  // Unlike ClientRecord.fromMap (Dart), this mapper doesn't fall back to
+  // businessName, so legacy business-only docs get an empty name here by
+  // design.
   test("legacy businessName-only doc: name stays empty (no fallback)", () => {
     const input = toWaveCustomerInput({
       name: "",

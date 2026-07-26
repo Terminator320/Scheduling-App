@@ -77,9 +77,8 @@ void main() {
     repo = _MockEmployeesRepo();
   });
 
-  // The calendar grid lays out at full phone width; the default 800×600
-  // test viewport overflows by a couple of pixels. Size up to match a real
-  // device so layout assertions don't trip on cosmetic overflow.
+  // The calendar grid lays out at full phone width — size up to a real device
+  // viewport so layout assertions don't trip on cosmetic overflow.
   Future<void> withPhoneViewport(WidgetTester tester) async {
     tester.view.physicalSize = const Size(412 * 3, 915 * 3);
     tester.view.devicePixelRatio = 3;
@@ -155,9 +154,8 @@ void main() {
     final countLabel = find.text('0 appointments');
     expect(countLabel, findsOneWidget);
 
-    // The space the AppBar reserves below its toolbar must fit the scaled
-    // month-bar text plus its 8px bottom padding, otherwise the labels get
-    // painted clipped. (Portrait toolbar height is kToolbarHeight.)
+    // Reserved AppBar space below the toolbar must fit the scaled month-bar
+    // text plus 8px padding, or labels get clipped (portrait toolbar height is kToolbarHeight).
     final appBarRect = tester.getRect(find.byType(AppBar));
     final reservedBottomSpace = appBarRect.height - kToolbarHeight;
     final textHeight = tester.getSize(countLabel).height;

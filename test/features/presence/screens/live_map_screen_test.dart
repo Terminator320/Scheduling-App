@@ -52,10 +52,7 @@ void main() {
     Widget child = const LiveMapScreen(isAdmin: true, employeeId: 'e1'),
   }) => ProviderScope(overrides: overrides, child: themed(child));
 
-  // Marker assembly encodes PNG bytes via dart:ui (`toImage`/`toByteData`),
-  // which is real async that the fake-async test clock won't advance — drive it
-  // under runAsync so the stream delivers, the icons encode, and the resulting
-  // `setState` lands.
+  // Marker icons encode via real dart:ui async that the fake test clock won't advance — drive under runAsync.
   Future<void> settleMap(WidgetTester tester) async {
     await tester.runAsync(() async {
       for (var i = 0; i < 6; i++) {

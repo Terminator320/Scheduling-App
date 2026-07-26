@@ -1,11 +1,9 @@
 "use strict";
 
 /**
- * Unit tests for the shared instant + business-time-zone primitives. The whole
- * reason this module exists is that a push, a Live Activity card, and the
- * widget payload must all render the SAME instant identically in
- * America/Toronto — so the DST boundaries (spring forward, fall back) are the
- * cases that actually matter here.
+ * Unit tests for the shared instant + business-time-zone primitives, focused
+ * on DST boundaries since a push, a Live Activity card, and the widget
+ * payload must all render the same instant identically in America/Toronto.
  */
 
 const {

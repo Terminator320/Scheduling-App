@@ -66,9 +66,8 @@ void main() {
       final sendInviteButton = find.text('Send Invite');
       await tester.ensureVisible(sendInviteButton);
       await tester.tap(sendInviteButton);
-      // Use pump with a fixed duration instead of pumpAndSettle: the dialog
-      // contains a SelectableText whose cursor animation never settles, so
-      // pumpAndSettle would time out.
+      // Fixed-duration pump instead of pumpAndSettle: the dialog's SelectableText
+      // cursor animation never settles.
       await tester.pump(); // process tap + start async operation
       await tester.pump(
         const Duration(milliseconds: 300),

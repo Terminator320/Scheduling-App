@@ -155,11 +155,9 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
   );
 
   // Pre-normalized search index over the loaded pages, memoized on the pages
-  // identity (PagingState.items rebuilds a fresh list each access, but the
-  // underlying pages list only changes when a page loads). Normalizing ~13
-  // fields per client runs once per data change; each keystroke then only
-  // normalizes the query. Mirrors _employeeSearchIndexProvider and the
-  // history view's _filterOptionsPages memo.
+  // identity so normalization reruns only when a page loads, not on every
+  // keystroke (mirrors _employeeSearchIndexProvider and the history view's
+  // _filterOptionsPages memo).
   List<List<ClientRecord>>? _searchIndexPages;
   List<ClientSearchEntry> _searchIndex = const [];
 
@@ -176,8 +174,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
   }
 
   // Instant fallback over the already-loaded pages while the comprehensive
-  // server search resolves. Matches the full field set via the shared policy
-  // (ClientSearchPolicy is the single source of matching truth).
+  // server search resolves, matching the full field set via the shared policy.
   List<ClientRecord> _localFilter(String query) {
     final q = ClientSearchPolicy.normalize(query);
     final qDigits = ClientSearchPolicy.digitsOnly(query);
@@ -193,10 +190,8 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     ];
   }
 
-  // Comprehensive search runs on the debounced (committed) query and finds
-  // clients across all fields and all pages. The instant local filter fills the
-  // gap until the debounce settles and the server result arrives, so results
-  // appear immediately and then expand to the full set.
+  // Comprehensive search runs on the debounced (committed) query across all
+  // fields and pages; the instant local filter fills the gap until it settles.
   Widget _buildSearchResults(String query) {
     final local = _localFilter(query);
 
@@ -212,9 +207,8 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
               ? _emptyState(query: query)
               : _resultsList(results),
           loading: () => local.isEmpty ? _skeleton() : _resultsList(local),
-          // A failed search must not look like "no such client": when the
-          // instant local fallback is also empty, show an error, not the
-          // empty state. Composes without logging (this is a builder).
+          // A failed search must not look like "no such client" — show an
+          // error when the instant local fallback is also empty, not the empty state.
           error: (e, _) =>
               local.isEmpty ? _searchError(e, query) : _resultsList(local),
         );

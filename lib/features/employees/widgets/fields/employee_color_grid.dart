@@ -69,8 +69,7 @@ class EmployeeColorGrid extends ConsumerWidget {
         l10n.employees_customColor,
         style: Theme.of(context).textTheme.titleMedium,
       ),
-      // Tap-a-swatch palette with shade rows — every interaction is a tap.
-      // No wheel (finger-dragging precision) and no hex-code field.
+      // Tap-a-swatch palette with shade rows only — no wheel (finger-dragging precision) and no hex-code field.
       pickersEnabled: const <ColorPickerType, bool>{
         ColorPickerType.primary: true,
         ColorPickerType.accent: false,

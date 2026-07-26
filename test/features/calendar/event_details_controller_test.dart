@@ -149,9 +149,8 @@ void main() {
       expect(state.selectedDate, _appointment.startTime);
       expect(state.selectedStartTime, const TimeOfDay(hour: 9, minute: 0));
       expect(state.selectedEndTime, const TimeOfDay(hour: 10, minute: 0));
-      // The fixture's unknown 'booked' status normalizes to 'pending' on seed
-      // (via AppointmentStatus.fromRaw) so an unchanged status is always
-      // re-written as an allowlisted value.
+      // The fixture's unknown 'booked' status normalizes to 'pending' via
+      // AppointmentStatus.fromRaw so it's always re-written as an allowlisted value.
       expect(state.editingStatus, 'pending');
       expect(state.isEditing, isFalse);
     });
@@ -165,8 +164,7 @@ void main() {
 
     test('skips the client load for a known non-admin session (the clients '
         'read rule is admin-only)', () async {
-      // Own mock: the setUp container already builds an (admin-path)
-      // controller against the shared one, which would pollute verifyNever.
+      // Own mock: the shared setUp container's admin-path controller would pollute verifyNever.
       final scopedClients = _MockClientsRepo();
       when(
         () => scopedClients.getClientById(any()),
@@ -389,9 +387,8 @@ void main() {
           eventDetailsControllerProvider(EventDetailsKey(fresh)).notifier,
         );
 
-        // Intentionally NO waitForSeed: save() must settle the seed itself.
-        // Without the guard, validation sees an empty selection and returns
-        // EventDetailsInvalid (employeesRequired) before any save happens.
+        // Intentionally omits waitForSeed — save() must settle the seed itself,
+        // or validation would see an empty selection and return employeesRequired.
         final outcome = await c.save(
           fresh,
           title: 'x',
@@ -673,9 +670,8 @@ void main() {
         expect(batch.every((a) => a.title == 'New title'), isTrue);
         expect(batch.every((a) => a.address == 'New address'), isTrue);
         expect(batch.every((a) => a.seriesId == 'series-1'), isTrue);
-        // Status stays per-visit — never propagated across the series — but is
-        // canonicalized: the retired 'confirmed' sibling normalizes to
-        // 'pending', while a valid 'in_progress' sibling round-trips unchanged.
+        // Status stays per-visit (never propagated) but is canonicalized:
+        // 'confirmed' normalizes to 'pending', 'in_progress' round-trips unchanged.
         expect(batch[1].status, 'pending');
         expect(batch[2].status, 'in_progress');
         // Each sibling keeps its own date but takes the new time of day.
@@ -724,9 +720,8 @@ void main() {
     });
 
     test('seeds the stored repeat and does not re-book it unchanged', () async {
-      // Distinct id: the controller family is keyed by appointment id, so
-      // reusing _appointment's id would return the instance the setUp
-      // pre-listened (seeded with repeat: none).
+      // Distinct id — the family is keyed by appointment id, so reusing
+      // _appointment's id would return setUp's already-seeded (repeat: none) instance.
       final repeating = _appointment.copyWith(
         id: 'repeat-seed-1',
         repeat: RepeatInterval.sixMonths,

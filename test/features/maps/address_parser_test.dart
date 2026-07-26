@@ -175,9 +175,8 @@ void main() {
   });
 
   group('AddressParser canonical ↔ display round-trip', () {
-    // Canonical is the source of truth in Firestore; display is what shows in
-    // the field after selection or load. A round-trip must be lossless so
-    // editing an existing record doesn't silently rewrite the stored string.
+    // Round-trip must be lossless, or editing an existing record silently
+    // rewrites the stored string.
     test('canonical → display → canonical is lossless', () {
       for (final stored in const [
         '5-1234 Main',
@@ -218,10 +217,8 @@ void main() {
   });
 
   group('AddressParser coordinate-fallback pass-through', () {
-    // A GPS-derived "lat,lng" string (the live-location map's fallback when
-    // reverse geocoding fails) has no apt indicator and must pass straight
-    // through every canonicalization helper unchanged, so the map-launch path
-    // that consumes it never mangles it.
+    // A GPS-derived "lat,lng" string (reverse-geocoding fallback) must pass
+    // through every canonicalization helper unchanged.
     const coordinate = '45.5017,-73.5673';
 
     test('splitApt does not treat it as an apt-prefixed address', () {

@@ -101,9 +101,8 @@ describe("toWaveCustomerInput", () => {
   });
 
   test("full display address → addressLine1 is the street line only", () => {
-    // The app stores `address` as a full display address; city/province/
-    // country/postalCode are sent as their own fields, so addressLine1 must
-    // NOT repeat them.
+    // addressLine1 must not repeat city/province/country/postalCode — those
+    // are sent as their own fields.
     const result = toWaveCustomerInput({
       name: "Test",
       address: "3450 Main St, Montreal, QC H3Z 2Y7, Canada",
@@ -120,8 +119,8 @@ describe("toWaveCustomerInput", () => {
   });
 
   test("full address with apt already in street → apt not doubled", () => {
-    // App-saved clients bake the apt into `address` (e.g. "12-3450 Main St,
-    // ...") AND keep it in `apt`; addressLine1 must keep a single apt prefix.
+    // Some app-saved clients have apt baked into both `address` and `apt` —
+    // addressLine1 must not double the prefix.
     const result = toWaveCustomerInput({
       name: "Test",
       address: "12-3450 Main St, Montreal, QC H3Z 2Y7, Canada",
@@ -601,9 +600,8 @@ describe("round-trip identity", () => {
           },
         };
         const imported = fromWaveCustomer(node);
-        // The import stamps lastSyncedHash = mappedFieldsHash(imported); the
-        // trigger's echo suppression relies on the re-read doc hashing to the
-        // same value.
+        // The trigger's echo suppression relies on the re-read doc hashing to
+        // the same lastSyncedHash.
         expect(mappedFieldsHash(imported)).toBe(mappedFieldsHash({
           ...imported,
         }));
@@ -619,15 +617,15 @@ describe("round-trip identity", () => {
       country: "Canada",
       postalCode: "H2X 1Y4",
     });
-    // Locality tail segments are stripped; the comma INSIDE the street line
-    // ("Building A") survives instead of being cut at the first comma.
+    // Locality tail segments are stripped, but a comma inside the street line
+    // itself ("Building A") is preserved.
     expect(result.address.addressLine1).toBe("100 Main St, Building A");
   });
 
   test("imported line1 containing a comma survives write-back untouched",
       () => {
-        // An imported Wave customer stores line1 verbatim in `address`; with
-        // no locality tail matching, nothing may be cut off.
+        // No locality tail matches, so an imported line1 must survive
+        // write-back untouched.
         const result = toWaveCustomerInput({
           name: "T",
           address: "100 Main St, Building A",
@@ -660,9 +658,8 @@ describe("round-trip identity", () => {
   });
 
   test("apt-prefixed address round-trips: apt merged into address", () => {
-    // When apt is present, toWaveCustomerInput merges it into addressLine1.
-    // On import the merged string becomes `address` and apt is always ''.
-    // This is the intended lossy-for-apt behaviour (Wave has no apt field).
+    // Merging apt into addressLine1 on export is intentionally lossy — import
+    // always returns apt as '' since Wave has no apt field.
     const client = {
       name: "Apt Client",
       address: "3450 Main St",

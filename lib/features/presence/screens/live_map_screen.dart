@@ -92,9 +92,9 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
   int _assembleToken = 0;
   String? _lastSignature;
 
-  // True once the map body (which hosts the tour's FAB targets) is rendered,
-  // false while the loading/error placeholder is shown. Gates the tour so it
-  // isn't auto-marked-seen against a body that has no targets yet.
+  // True once the map body (which hosts the tour's FAB targets) is rendered;
+  // gates the tour so it isn't auto-marked-seen against a body with no
+  // targets yet.
   bool _mapTargetsRendered = false;
 
   late final List<TourStepId> _tourSteps = tourStepsFor(
@@ -134,9 +134,8 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // The hub wraps each tab in TickerMode(enabled: tab == current); it also
-    // goes false while an opaque route covers the hub — pausing then too is
-    // desired. Defaults true outside the shell (standalone / tests) → visible.
+    // Mirrors the hub's TickerMode (false when tab hidden or an opaque route
+    // covers the hub); defaults true outside the shell (standalone / tests).
     final visible = TickerMode.valuesOf(context).enabled;
 
     // Paused (tab hidden): render the kept-alive map with the last-known

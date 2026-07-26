@@ -1,11 +1,9 @@
 "use strict";
 
 /**
- * Unit tests for the transactional core of createEmployeeInvite
- * (performCreateInvite). The onCall wrapper (auth/admin/rate-limit guards)
- * is not exercised here — only the race-sensitive transaction logic:
- * duplicate-email lookup, prior-code sweep, and writes must all happen
- * inside ONE transaction, reads before writes.
+ * Tests the race-sensitive transaction core of createEmployeeInvite
+ * (performCreateInvite) — duplicate-email lookup, prior-code sweep, and
+ * writes all in one transaction — not the onCall wrapper's guards.
  */
 
 const {performCreateInvite} = require("../invites");

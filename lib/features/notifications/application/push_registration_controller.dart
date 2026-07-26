@@ -43,7 +43,7 @@ bool shouldRegisterPush({
 }) => signedIn && status == 'active' && (role == 'employee' || role == 'admin');
 
 /// Registers this device's FCM token for the signed-in active employee and
-/// tears it down on sign-out. Driven by `main.dart` on every
+/// tears it down on sign-out; driven by `main.dart` on every
 /// `currentUserDocProvider` emission and on app-language change.
 class PushRegistrationController with ReentrantSync {
   PushRegistrationController(this._ref, {FirebaseAuth? auth})
@@ -145,8 +145,8 @@ class PushRegistrationController with ReentrantSync {
         );
   }
 
-  /// Best-effort de-registration for sign-out: delete the token doc and
-  /// invalidate the FCM token. Never throws — sign-out must not be blocked.
+  /// Best-effort de-registration for sign-out — deletes the token doc and
+  /// invalidates the FCM token; never throws, so sign-out is never blocked.
   Future<void> unregisterCurrentDevice() async {
     try {
       final docId = _registeredDocId;

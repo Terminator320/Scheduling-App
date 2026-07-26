@@ -127,9 +127,7 @@ class AuthFailureSignupCodeExpired extends AuthFailure {
       c.l10n.error_thatCodeHasExpiredAskYourAdmin;
 }
 
-// The code is valid but was issued for a different email than the one the user
-// signed up with — a common admin/employee typo. Distinct from "invalid code"
-// so the message points at the email, not the code.
+// Code is valid but issued for a different email; distinct from "invalid code" so the message points at the email.
 class AuthFailureSignupEmailMismatch extends AuthFailure {
   const AuthFailureSignupEmailMismatch();
   @override
@@ -151,10 +149,7 @@ class AuthFailureUnknown extends AuthFailure {
       c.l10n.error_somethingWentWrongPleaseTryAgain;
 }
 
-// Thrown when signUpWithCode created the Firebase Auth user but the rollback
-// delete failed after code redemption errored. The Auth account is now
-// orphaned: no matching Firestore users doc, blocks re-registration with the
-// same email. Tell the admin to delete the Auth user in console and re-invite.
+// Thrown when the rollback delete failed after code redemption errored, leaving an orphaned Auth user that blocks re-registration.
 class AuthFailureAccountCreationIncomplete extends AuthFailure {
   const AuthFailureAccountCreationIncomplete();
   @override

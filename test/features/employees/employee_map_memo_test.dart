@@ -6,10 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
-/// P9: any user-doc change re-emits the users stream with fresh record
-/// instances. The derived lookup maps must return the *identical* previous
-/// instance when their content is unchanged, so Provider skips notifying the
-/// whole calendar.
+/// P9: derived lookup maps must return the *identical* previous instance for
+/// content-equal emissions, so Provider skips notifying the whole calendar.
 void main() {
   test('map providers keep the same instance for content-equal emissions', () async {
     final controller = StreamController<List<EmployeeRecord>>();

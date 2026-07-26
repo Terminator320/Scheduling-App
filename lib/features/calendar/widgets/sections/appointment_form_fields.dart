@@ -55,8 +55,8 @@ class AppointmentFormControllers {
   }
 }
 
-/// The shared appointment form field stack used by add and edit flows.
-/// The status block renders only when [editingStatus]/[onStatusChanged] are provided (edit flow).
+/// Shared appointment form field stack for add and edit flows; the status
+/// block renders only when [editingStatus]/[onStatusChanged] are provided.
 class AppointmentFormFields extends StatelessWidget {
   const AppointmentFormFields({
     required this.controllers,
