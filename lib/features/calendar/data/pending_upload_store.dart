@@ -41,8 +41,9 @@ class PendingUpload {
   }
 }
 
-/// Durable queue of photo batches that failed (or have yet) to upload — a
-/// JSON list under one SharedPreferences key; corrupt data resets to empty.
+/// A durable queue of photo batches that failed to upload, or just haven't
+/// uploaded yet. It's stored as a JSON list under one SharedPreferences key,
+/// and if that data ever comes back corrupt, we just reset it to empty.
 class PendingUploadStore {
   PendingUploadStore({AppLogger? logger}) : _logger = logger ?? AppLogger();
 
@@ -51,13 +52,16 @@ class PendingUploadStore {
 
   final AppLogger _logger;
 
-  /// Serialization chain: all mutations via _serialized since the queue is ONE SharedPreferences key.
+  /// Every mutation goes through [_serialized], because the whole queue
+  /// lives under one SharedPreferences key and reads/writes need to run
+  /// one at a time to stay consistent.
   Future<void> _mutations = Future<void>.value();
 
   Future<T> _serialized<T>(Future<T> Function() action) {
     final result = _mutations.then((_) => action());
-    // Swallow errors on the chain only — `result` still surfaces them to the
-    // caller. Without this a failed mutation would poison every later one.
+    // We swallow the error only on the internal chain, so one failed
+    // mutation doesn't block every mutation after it. The caller still sees
+    // the real error through `result`.
     _mutations = result.then((_) {}, onError: (_) {});
     return result;
   }
@@ -77,8 +81,8 @@ class PendingUploadStore {
           .whereType<PendingUpload>()
           .toList();
     } on FormatException catch (e, st) {
-      // Silent data loss otherwise: resetting the queue drops photo batches a
-      // technician believes are still waiting to upload.
+      // Worth logging loudly here: resetting the queue silently drops photo
+      // batches that a technician thinks are still waiting to upload.
       _logger.warn('IMG-UPLOAD pending queue decode failed; reset', e, st);
       return const [];
     }
@@ -102,7 +106,8 @@ class PendingUploadStore {
     await _save(entries.where((e) => e.id != id).toList());
   });
 
-  /// Drops entries older than [_maxAge]; returns them for file cleanup.
+  /// Drops entries older than [_maxAge] and returns them so the caller can
+  /// clean up their files.
   Future<List<PendingUpload>> prune({required DateTime now}) =>
       _serialized(() async {
         final entries = await load();

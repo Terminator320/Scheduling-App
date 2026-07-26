@@ -2,18 +2,17 @@
 
 /**
  * @fileoverview Orchestrates the iOS "time to leave" Live Activity: registry
- * lookup -> payload build -> direct APNs send -> prune dead rows. The three
- * exported verbs are the ONLY surface the notification hooks call, so
- * `travel_utils.js` / `notification_utils.js` never touch APNs or the registry
- * directly.
+ * lookup, then payload build, then a direct APNs send, then pruning any dead
+ * rows. This is the only surface `travel_utils.js`/`notification_utils.js`
+ * call, so neither of them touches APNs or the registry directly.
  *
- * FCM cannot send `apns-push-type: liveactivity`, which is why this path talks
- * to APNs directly (see apns_client.js).
+ * Talks to APNs directly (see apns_client.js) because FCM cannot send
+ * `apns-push-type: liveactivity`.
  *
- * EVERY export here is best-effort and never throws: a Live Activity failure
- * must not change the outcome of the push that hosts it. No token, no APNs
- * credentials, iOS < 17.2, or Live Activities disabled all degrade silently to
- * the existing `leaveNow` push, which fires independently and is unchanged.
+ * Every export here is best-effort and never throws. No token, no APNs
+ * credentials, iOS < 17.2, or Live Activities turned off — any of those just
+ * make it degrade silently to the existing, independently-firing `leaveNow`
+ * push.
  *
  * @module live_activity_dispatch
  */
@@ -38,11 +37,10 @@ const {
 const {sendLiveActivityPush} = require("./apns_client");
 
 /**
- * The ActivityKit `attributes` a push-to-start carries — the immutable half of
- * the activity. Hand-mirrored with the `ActivityAttributes` struct in
- * `ios/ScheduleWidget/LiveActivitiesAppAttributes.swift`; change one, change
- * both. That struct name is fixed by the `live_activities` plugin — see the
- * note in the Swift file before renaming anything here.
+ * The ActivityKit `attributes` a push-to-start carries — kept in lockstep with
+ * the `ActivityAttributes` struct in
+ * `ios/ScheduleWidget/LiveActivitiesAppAttributes.swift` (plugin-fixed name;
+ * change one, change both).
  * @param {{appointmentId: string, employeeDocId: string,
  *   employeeColorValue: (number|undefined)}} args
  * @return {!Object}
@@ -58,8 +56,8 @@ function buildAttributes({appointmentId, employeeDocId, employeeColorValue}) {
 
 /**
  * The assignee's `colorValue`, which drives the card's colour rail (mirroring
- * `AppointmentCard`). A failed read yields 0 and the Swift side falls back to
- * the amber accent — never a reason to skip the card.
+ * `AppointmentCard`). A failed read just yields 0 — the Swift side's amber
+ * fallback is fine, so that's never a reason to skip the card.
  * @param {!Object} deps `{db, logger}`.
  * @param {string} employeeDocId
  * @return {!Promise<number>}
@@ -78,16 +76,11 @@ async function _employeeColorValue(deps, employeeDocId) {
 }
 
 /**
- * This employee's live update-token rows, but ONLY when the card marker
- * confirms the live card is showing `appointmentId`; `[]` otherwise.
- *
- * The marker is load-bearing, not a convenience. A push-STARTED activity's id
- * is minted by ActivityKit and `live_activities` exposes no way to read a
- * started activity's attributes back, so the device physically cannot stamp
- * `appointmentId` onto its own token row — the rows are only ever keyed by
- * employee. Resolving by employee alone would let a cancel on next week's job
- * end the card for the job the tech is currently driving to; resolving by a
- * row-level `appointmentId` that is never written would match nothing at all.
+ * This employee's live update-token rows, but only when the card marker
+ * confirms the live card is actually showing `appointmentId` (`[]`
+ * otherwise). That marker check is load-bearing: rows are keyed by employee
+ * only, and a push-started activity's id can never be stamped back onto its
+ * own row.
  * @param {!Object} deps
  * @param {{appointmentId: string, employeeDocId: string}} args
  * @return {!Promise<!Array<!Object>>}
@@ -102,8 +95,8 @@ async function _liveRowsFor(deps, {appointmentId, employeeDocId}) {
 
 /**
  * `{authKey, keyId, teamId}` for APNs, or null when the secrets aren't
- * configured — in which case every verb here no-ops. Read lazily so a module
- * load outside a secret-bound function can't throw.
+ * configured — every verb here just no-ops in that case. Read lazily so a
+ * module load outside a secret-bound function can't throw.
  * @param {!Object} deps
  * @return {?Object}
  */
@@ -114,7 +107,7 @@ function _authOf(deps) {
 }
 
 /**
- * Sends one payload to one registry row and prunes the row when APNs says the
+ * Sends one payload to one registry row, pruning it when APNs says the
  * activity is gone. Returns 1 on a delivered push, else 0.
  * @param {!Object} deps `{logger, apnsAuth}`.
  * @param {!Object} row A row from the registry.
@@ -146,7 +139,7 @@ async function _sendToRow(deps, row, payload, label) {
 }
 
 /**
- * Content state for a row's locale — card text is built server-side per the
+ * Content state for a row's locale. Card text is built server-side using the
  * per-token `locale` already stored, the same rule the notification bodies
  * follow.
  * @param {!Object} row
@@ -169,10 +162,9 @@ function _stateFor(row, ctx, nowDate) {
 }
 
 /**
- * Starts the Lock Screen card for ONE (job, assignee) pair via push-to-start.
- * Called from the travel-aware sweep immediately after the reminder's ledger
- * claim succeeded and delivered, so it inherits that claim's exactly-once
- * guarantee rather than adding a second one.
+ * Starts the Lock Screen card for one (job, assignee) pair via push-to-start,
+ * called right after the reminder's ledger claim succeeds so it inherits that
+ * claim's exactly-once guarantee rather than adding a second one.
  * @param {!Object} deps `{db, logger, apnsAuth}`.
  * @param {!Object} args `{appointmentId, employeeDocId, ctx, nowDate}`.
  * @return {!Promise<number>} Cards started.
@@ -227,9 +219,9 @@ async function startLiveActivity(deps, args) {
 }
 
 /**
- * Pushes a fresh content state to this employee's live card — the reschedule
- * hook and the on-site phase-flip backstop both land here. A no-op when the
- * employee has no card, or has one for a different appointment.
+ * Pushes a fresh content state to this employee's live card (the reschedule
+ * hook and the on-site phase-flip backstop both land here); a no-op when the
+ * employee has no card, or one for a different appointment.
  * @param {!Object} deps `{db, logger, apnsAuth}`.
  * @param {!Object} args `{appointmentId, employeeDocId, ctx, nowDate}`.
  * @return {!Promise<number>} Cards updated.
@@ -250,11 +242,9 @@ async function updateLiveActivity(deps, args) {
       });
       updated += await _sendToRow(deps, row, payload, "update");
     }
-    // Keep the marker's startTime authoritative on reschedule: the on-site
-    // backstop (`listCardsDueForOnSite`) keys the flip off `marker.startTime`,
-    // so a stale value flips the card at the OLD start. Writing the current
-    // `phase` here also stamps the on-site flip so the backstop fires exactly
-    // once.
+    // Keeps the marker's startTime/phase authoritative on reschedule.
+    // `listCardsDueForOnSite`'s flip is keyed off marker.startTime, so this
+    // is what makes it fire at the right time and exactly once.
     if (updated > 0) {
       await setCardStart(
           deps, {employeeDocId, startTime: ctx.startTime, phase});
@@ -269,9 +259,9 @@ async function updateLiveActivity(deps, args) {
 }
 
 /**
- * Ends this employee's live card and drops its registry rows + card marker —
- * the cancel/remove hook. `dismissal-date: now` clears it from the Lock Screen
- * immediately; without it ActivityKit lingers for up to four hours.
+ * Ends this employee's live card — the cancel/remove hook. Drops its
+ * registry rows and card marker, and sets `dismissal-date: now` so the card
+ * clears the Lock Screen immediately instead of lingering up to four hours.
  * @param {!Object} deps `{db, logger, apnsAuth}`.
  * @param {!Object} args `{appointmentId, employeeDocId, ctx, nowDate}`.
  * @return {!Promise<number>} Cards ended.

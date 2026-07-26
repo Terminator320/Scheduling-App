@@ -185,8 +185,8 @@ describe("sendLiveActivityPush", () => {
     expect(connects).toBe(1);
   });
   test("drops the session on a transport error and reconnects", async () => {
-    // status 0 = timeout / stream error: the cached session may be wedged, so
-    // it is closed and the next push dials fresh.
+    // status 0 means a timeout or stream error. The cached session might be
+    // wedged, so we close it and the next push dials a fresh one.
     const {impl, sent} = fakeHttp2({status: 0, error: new Error("reset")});
     const push = () => sendLiveActivityPush({
       token: "ACTIVITYTOKEN",
@@ -249,9 +249,9 @@ describe("sendLiveActivityPush", () => {
     expect(sent.host).toBeNull();
   });
   test("rejects a malformed token without dialing and prunes it", async () => {
-    // The registry rule only size-caps the token; anything outside the
-    // hex/alphanumeric shape ActivityKit mints can never deliver and must not
-    // reach the request :path.
+    // The registry rule only checks the token's size. Anything outside the
+    // hex/alphanumeric shape ActivityKit actually mints can never deliver, so
+    // it shouldn't even reach the request :path.
     const {impl, sent} = fakeHttp2({status: 200});
     const result = await sendLiveActivityPush({
       token: "../3/device/evil",
@@ -266,8 +266,9 @@ describe("sendLiveActivityPush", () => {
     expect(sent.host).toBeNull();
   });
   test("retries sandbox when production returns BadDeviceToken", async () => {
-    // A dev-signed build registers a sandbox token the production host rejects
-    // with BadDeviceToken; the sandbox retry is what lights the card up.
+    // A dev-signed build registers a sandbox token, and the production host
+    // rejects it with BadDeviceToken — the sandbox retry is what actually
+    // lights the card up.
     const hosts = [];
     const impl = {
       connect(host) {
@@ -309,8 +310,8 @@ describe("sendLiveActivityPush", () => {
     ]);
   });
   test("does not retry sandbox on a non-BadDeviceToken failure", async () => {
-    // 410/Unregistered is a genuinely dead token, not an env mismatch — one
-    // dial only, and the row is still flagged gone for pruning.
+    // 410/Unregistered means the token is genuinely dead, not an env mismatch,
+    // so we only dial once — and still flag the row gone for pruning.
     const {result, sent} = await send({
       status: 410, body: JSON.stringify({reason: "Unregistered"}),
     });

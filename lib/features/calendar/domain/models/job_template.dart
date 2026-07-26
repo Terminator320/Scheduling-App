@@ -1,6 +1,6 @@
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Quick-fill job templates for add form; display-only convenience, never stored.
+/// Quick-fill job templates for the add form. These are just a display-only convenience and are never stored.
 enum JobTemplate {
   leakDiagnostic(30),
   drainCleaning(60),
@@ -11,10 +11,10 @@ enum JobTemplate {
 
   const JobTemplate(this.defaultDurationMinutes);
 
-  /// Typical on-site duration, seeds end time if start time set.
+  /// Typical time this job takes on-site. Used to seed the end time once a start time is set.
   final int defaultDurationMinutes;
 
-  /// Seeded end time minutes-past-midnight, clamped same-day.
+  /// The seeded end time as minutes-past-midnight, clamped so it stays on the same day.
   int endMinutesOfDay(int startMinutesOfDay) =>
       (startMinutesOfDay + defaultDurationMinutes).clamp(0, 24 * 60 - 1);
 }

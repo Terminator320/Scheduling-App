@@ -24,16 +24,19 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   final CollectionReference<Map<String, dynamic>> _appointments;
   final AppLogger _logger;
 
-  /// Injectable time source for testable search-cache TTL.
+  /// Lets tests inject a fake clock so the search-cache TTL is testable.
   final DateTime Function() _clock;
 
-  /// Write metadata: fresh id per operation, collapsed to one push per employee.
+  /// Generates a fresh id for each write op, so all the notifications a
+  /// single write triggers collapse into one per employee.
   String _newSeriesOpId() => const Uuid().v4();
 
-  // Bounded LRU cache of search results; singleton repository enables reuse across autoDispose providers.
+  // A bounded LRU cache of search results. The repository is a singleton,
+  // so this cache gets reused across every autoDispose provider that reads it.
   static const int _searchCacheMax = 50;
 
-  /// TTL for cached results; local writes invalidate immediately, remote writes covered by TTL.
+  /// How long cached results stay valid. Local writes invalidate the cache
+  /// immediately regardless; this TTL is really just for remote writes.
   static const Duration _searchCacheTtl = Duration(minutes: 2);
 
   final Map<String, _CachedHistorySearch> _searchCache = {};
@@ -59,7 +62,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     _localWrites.add(null);
   }
 
-  // Broadcast stream for self-invalidation on local writes.
+  // Broadcasts whenever a local write happens, so the cache can invalidate itself.
   final StreamController<void> _localWrites = StreamController.broadcast();
 
   @override
@@ -112,7 +115,8 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     required List<String> deleteIds,
     required List<AppointmentRecord> copies,
   }) async {
-    // Exclude pictures from surviving doc to avoid stale-snapshot clobbering.
+    // We leave pictures out of the surviving doc's update here, since writing
+    // them from a stale snapshot could clobber a background upload.
     final opId = _newSeriesOpId();
     final batch = _appointments.firestore.batch()
       ..update(_appointments.doc(updated.id), {
@@ -138,7 +142,8 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   @override
   Future<void> updateAppointment(AppointmentRecord appointment) async {
     if (appointment.id == null) return;
-    // Never rewrite pictures to avoid clobbering concurrent background uploads.
+    // We never rewrite pictures here, since that could clobber a background
+    // upload that's happening at the same time.
     await _appointments.doc(appointment.id).update({
       ..._toFirestoreMap(appointment, includePictures: false),
       'seriesOpId': _newSeriesOpId(),
@@ -154,7 +159,9 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         if (a.id != null) a,
     ];
     if (records.isEmpty) return;
-    // Transaction handles concurrent sibling deletes gracefully; one op-id collapses notifications.
+    // Running this as a transaction means a sibling getting deleted
+    // concurrently is handled gracefully, and using one op-id for the whole
+    // batch collapses what would otherwise be several notifications into one.
     final opId = _newSeriesOpId();
     await _appointments.firestore.runTransaction((txn) async {
       final refs = [for (final r in records) _appointments.doc(r.id)];
@@ -224,7 +231,9 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         'must be one of $_allowedStatuses',
       );
     }
-    // Stamp op-id only on cancel to keep separate cancels distinct; done is employee-writable.
+    // Only stamp a new op-id when cancelling, so separate cancels stay
+    // distinct from each other. Marking something done is employee-writable
+    // and doesn't need one.
     await _appointments.doc(id).update({
       'status': trimmed,
       if (trimmed == 'cancelled') 'seriesOpId': _newSeriesOpId(),
@@ -271,7 +280,8 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     required int limit,
     AppointmentRecord? after,
   }) async {
-    // Newest-first, cursor-paged with doc-id tiebreaker for stable pagination.
+    // Sorted newest-first and cursor-paged, with a doc-id tiebreaker so
+    // pagination stays stable when multiple appointments share a startTime.
     var query = _appointments
         .where('status', whereIn: _historyStatuses)
         .orderBy('startTime', descending: true)
@@ -292,7 +302,8 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     int limit = 50,
   }) async {
     if (clientId.isEmpty) return const [];
-    // Filter on clientId alone (single-field index); sort newest-first in Dart.
+    // We only filter on clientId here (it just needs a single-field index)
+    // and sort newest-first ourselves in Dart.
     final snapshot = await _appointments
         .where('clientId', isEqualTo: clientId)
         .limit(limit)
@@ -305,7 +316,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   static const List<String> _historyStatuses = ['done', 'cancelled'];
 
-  // Bounded scan window for history search (mirrors clients search).
+  // A bounded scan window for history search, same approach as clients search.
   static const int _historySearchScanLimit = 1000;
 
   @override
@@ -324,7 +335,8 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     final window = await _historyScanWindow();
     if (window == null) return const [];
 
-    // Parsing + matching is CPU work; run off UI thread via compute.
+    // Parsing and matching the docs is real CPU work, so we push it off the
+    // UI thread with compute.
     final matches = await compute(
       matchHistoryDocs,
       HistorySearchScan(docs: window.docs, query: q),
@@ -333,14 +345,16 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     return matches;
   }
 
-  /// Newest-first window of terminal visits; cached and shared by successive queries.
+  /// A newest-first window of terminal visits. It's cached and shared across
+  /// successive queries instead of re-fetched each time.
   Future<_CachedHistoryScanWindow?> _historyScanWindow() async {
     final cached = _scanWindow;
     if (cached != null && _isFresh(cached.fetchedAt)) return cached;
 
     final QuerySnapshot<Map<String, dynamic>> snapshot;
     try {
-      // Same query shape as fetchHistoryPage; uses existing composite index.
+      // Same query shape as fetchHistoryPage, so it reuses the same
+      // composite index instead of needing its own.
       snapshot = await _appointments
           .where('status', whereIn: _historyStatuses)
           .orderBy('startTime', descending: true)
@@ -395,7 +409,8 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
     final ids = candidates.map((e) => e.id).toList();
 
-    // Batch queries by 30-ID limit and execute in parallel.
+    // Split the IDs into batches of 30 (arrayContainsAny's limit) and run
+    // the queries in parallel.
     final queries = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
     for (var i = 0; i < ids.length; i += 30) {
       final batch = ids.sublist(i, i + 30 < ids.length ? i + 30 : ids.length);
@@ -412,7 +427,8 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     for (final snapshot in await Future.wait(queries)) {
       for (final doc in snapshot.docs) {
         final data = doc.data();
-        // Filter terminal visits here, not in query (Firestore can't combine with arrayContainsAny).
+        // We filter out terminal visits here in Dart instead of in the query,
+        // since Firestore won't let us combine another filter with arrayContainsAny.
         final status = (data['status'] ?? '').toString().toLowerCase();
         if (_terminalStatuses.contains(status)) continue;
         final empIds = data['employeeIds'] as List<dynamic>? ?? const [];
@@ -423,7 +439,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     return candidates.where((e) => busyIds.contains(e.id)).toList();
   }
 
-  // Terminal statuses; 'completed' is legacy alias for 'done'.
+  // Terminal statuses. 'completed' is a legacy alias for 'done'.
   static const Set<String> _terminalStatuses = {
     'done',
     'completed',
@@ -459,7 +475,8 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }
 }
 
-/// Raw doc for isolate-safe compute payload (Firestore handles don't cross boundaries).
+/// A raw doc, safe to pass into an isolate — Firestore's own doc/snapshot
+/// objects can't cross that boundary, so we plug this in instead.
 typedef RawHistoryDoc = ({String id, Map<String, dynamic> data});
 
 /// `compute` payload for [matchHistoryDocs].
@@ -508,6 +525,7 @@ class _CachedHistoryScanWindow {
   final DateTime fetchedAt;
 }
 
-// Auth-propagation delay workaround: retry on permission-denied (same guard as login).
+// Auth can take a moment to propagate after sign-in, so we retry on
+// permission-denied here too — same guard used at login.
 bool _isAuthPropagationDenied(Object error) =>
     error is FirebaseException && error.code == 'permission-denied';

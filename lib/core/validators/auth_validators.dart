@@ -33,7 +33,8 @@ class AuthValidators {
     return null;
   }
 
-  /// Strict variant for create-account flow; sign-in uses looser [password] so existing credentials aren't blocked.
+  /// Strict variant for the create-account flow. Sign-in uses the looser
+  /// [password] check instead, so existing credentials aren't blocked.
   static String? newPassword(BuildContext context, String value) {
     if (value.trim().isEmpty) {
       return context.l10n.validation_pleaseEnterYourPassword;

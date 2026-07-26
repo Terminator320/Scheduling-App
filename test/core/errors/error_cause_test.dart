@@ -13,7 +13,7 @@ FirebaseException _fb(String code) =>
 void main() {
   final l10n = lookupAppLocalizations(const Locale('en'));
 
-  // Classification is exercised through the public composeErrorNotice — the
+  // We test classification through the public composeErrorNotice, since the
   // classifier itself is private to error_cause.dart.
   late String Function(Object error) noticeFor;
 

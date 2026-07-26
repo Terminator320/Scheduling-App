@@ -229,8 +229,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
               index: index,
               child: EmployeeCard(
                 employee: employee,
-                // Only highlight when the detail pane is actually shown
-                // (two-pane); a single-pane phone opens a sheet instead.
+                // Only highlight when the detail pane is actually shown (two-pane).
                 selected:
                     context.isTwoPane && _selectedEmployee?.id == employee.id,
                 onTap: () => _onEmployeeTap(employee),
@@ -242,18 +241,8 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     );
   }
 
-  /// The selected employee, reconciled against the live users stream by id.
-  ///
-  /// The detail pane stays mounted after an in-pane enable/disable/edit, so the
-  /// tapped snapshot must track the stream — otherwise re-enabling a disabled
-  /// employee keeps rendering the stale "disabled" status here while the master
-  /// list already shows them active.
-  ///
-  /// - Loading/error (no settled list): keep the last-known snapshot.
-  /// - Found in the settled list: use that live record.
-  /// - Absent from the settled list (deleted, possibly by another admin):
-  ///   return null so the pane clears instead of leaving a ghost whose
-  ///   Edit/Disable buttons would write to a doc that no longer exists.
+  /// Keeps the selected employee in sync with the live users stream, so an in-pane
+  /// enable/disable/edit doesn't leave the detail pane showing a stale status.
   EmployeeRecord? _liveSelectedEmployee() {
     final snapshot = _selectedEmployee;
     if (snapshot == null) return null;
@@ -287,8 +276,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
 
   @override
   Widget build(BuildContext context) {
-    // Log only on the data→error transition — a `.when` error branch would
-    // re-log on every rebuild while the stream stays errored.
+    // Only log on the data→error transition — otherwise this would re-log on every rebuild while the stream stays errored.
     ref.listen(employeesStreamProvider, (previous, next) {
       if (next is! AsyncError || previous is AsyncError) return;
       ref
@@ -312,10 +300,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
                 TourStepId.employeesAdd,
                 targetBorderRadius: BorderRadius.circular(AppRadius.r16),
                 child: FloatingActionButton(
-                  // Unique across the hub: the IndexedStack keeps every tab's
-                  // Scaffold (and FAB) mounted at once, so a default/shared hero
-                  // tag collides with another tab's FAB ("multiple heroes share
-                  // the same tag").
+                  // Needs to be unique across tabs, since IndexedStack keeps every tab's FAB mounted at the same time.
                   heroTag: 'employeesAddFab',
                   onPressed: _openEmployeeSheet,
                   tooltip: context.l10n.employees_inviteEmployee,
@@ -323,8 +308,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
                 ),
               )
             : null,
-        // Only the master list listens to the search controller, so typing
-        // rebuilds just the list — not the (search-independent) detail pane.
+        // Only the master list listens to the search controller, so typing rebuilds just the list.
         body: AdaptiveShell(
           currentDestination: AdaptiveDestination.employees,
           isAdmin: widget.isAdmin,

@@ -96,9 +96,7 @@ void main() {
     });
 
     test('returns SplashGoToLogin and signs out for an invited user', () async {
-      // C1: the gate must require status == 'active', not just block
-      // 'disabled'. Invited users have a Firestore doc but no completed
-      // sign-up flow — they must not enter the app.
+      // C1: gate requires status == 'active' — invited users must not enter the app.
       when(() => mockRepo.findUserByUid('uid1')).thenAnswer(
         (_) async => const UserUidMatch(
           id: 'doc1',
@@ -129,9 +127,7 @@ void main() {
     });
 
     test('returns SplashGoToLogin for a doc with empty status', () async {
-      // C1 edge case: malformed user doc (status defaulted to '') must also
-      // fail the gate. Without this, any future status value would slip
-      // through if it didn't exactly equal 'disabled'.
+      // C1 edge case: empty status must also fail the gate, not just exact-match 'disabled'.
       when(() => mockRepo.findUserByUid('uid1')).thenAnswer(
         (_) async => const UserUidMatch(
           id: 'doc1',
@@ -162,9 +158,7 @@ void main() {
     });
 
     test('rethrows when findUserByUid throws (transient errors)', () async {
-      // M8: transient Firestore failures (network, unavailable) must not
-      // silently sign the user out. The provider rethrows so the splash UI
-      // can surface an error and the user can retry.
+      // M8: transient Firestore failures must rethrow, not sign out, so the splash UI can surface an error and retry.
       when(
         () => mockRepo.findUserByUid('uid1'),
       ).thenThrow(Exception('network down'));

@@ -56,8 +56,8 @@ void main() {
     await tester.pumpWidget(_wrap(auth, initialEmail: 'not-an-email'));
     await tester.pumpAndSettle();
 
-    // Tap the Send button. textContaining('Send') will hit both the heading
-    // and the button — tap the last one (the FilledButton).
+    // textContaining('Send') matches both the heading and the button, so tap
+    // the last one (the FilledButton).
     await tester.tap(find.textContaining('Send').last);
     await tester.pumpAndSettle();
 

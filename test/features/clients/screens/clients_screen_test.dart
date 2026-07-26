@@ -154,9 +154,8 @@ void main() {
       // with no link present the phone-contact sync is a no-op.
       SharedPreferences.setMockInitialValues({});
 
-      // The list keeps serving the pre-edit record even after the save-driven
-      // refresh — the detail pane must still show the edit, proving it doesn't
-      // re-seed from the stale selected snapshot.
+      // The list still serves the pre-edit record after the save-driven refresh —
+      // the detail pane must keep showing the edit, not re-seed from the stale snapshot.
       when(
         () => repo.fetchClientsPage(
           after: any(named: 'after'),

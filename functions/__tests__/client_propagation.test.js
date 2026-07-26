@@ -1,10 +1,9 @@
 "use strict";
 
 /**
- * Unit tests for the pure core of the client -> future-appointments
- * propagation trigger (propagateClientEdits). Only the dependency-free helpers
- * are exercised — the Firestore fan-out (propagateClientChange) is
- * integration-heavy and is built entirely from these tested building blocks.
+ * Tests for the pure core of the client -> future-appointments propagation
+ * trigger, propagateClientEdits. The actual Firestore fan-out
+ * (propagateClientChange) is integration-heavy, so it isn't covered here.
  */
 
 const {
@@ -59,8 +58,8 @@ describe("relevantClientChange", () => {
   });
 
   test("does NOT propagate when the previous address was empty", () => {
-    // An empty stored appointment address means custom/none; matching "" would
-    // clobber those, so an empty-from change carries no address instruction.
+    // An empty stored appointment address means custom/none. Matching on ""
+    // would clobber those, so an empty-from change carries no instruction.
     expect(relevantClientChange({address: ""}, {address: "2 New Rd"}))
         .toBeNull();
   });

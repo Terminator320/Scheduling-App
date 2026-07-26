@@ -34,9 +34,7 @@ const {
 
 /**
  * Real injected deps for the orchestration functions. Carries NO APNs
- * credentials — a function that doesn't bind the secrets must not read them,
- * or firebase-functions logs a "No value found for secret parameter" warning
- * on every invocation.
+ * credentials — a function that doesn't bind the secrets must not read them.
  * @return {{db: !Object, messaging: !Object, now: !Date, logger: !Object}}
  */
 function liveDeps() {
@@ -49,9 +47,8 @@ function liveDeps() {
 }
 
 /**
- * [liveDeps] plus the APNs credentials. ONLY for the two functions that bind
- * [APNS_SECRETS] and actually push Live Activity cards — the digest's TTL
- * prune and the overdue sweep are Firestore-only and use [liveDeps].
+ * [liveDeps] plus the APNs credentials, for the two functions that bind
+ * [APNS_SECRETS] and actually push Live Activity cards.
  * @return {!Object}
  */
 function liveActivityDeps() {
@@ -60,9 +57,8 @@ function liveActivityDeps() {
 
 /**
  * APNs provider credentials for the Live Activity path, or null when the
- * secrets aren't bound to this function — in which case every Live Activity
- * verb no-ops and only the plain push is sent. Read lazily: `.value()` throws
- * outside a secret-bound invocation.
+ * secrets aren't bound — every Live Activity verb just no-ops in that case.
+ * Read lazily since `.value()` throws outside a secret-bound invocation.
  * @return {?{authKey: string, keyId: string, teamId: string}}
  */
 function apnsAuth() {
@@ -103,17 +99,10 @@ const notifyAppointmentChanges = onDocumentWritten(
     },
 );
 
-// Travel-aware "time to leave" reminders (was: fixed 30-minute reminders).
-// Runs every 5 minutes; the `(status, startTime)` composite index covers the
-// candidate query and `(employeeIds CONTAINS, endTime ASC)` covers the
-// per-employee origin-context query (which orders by endTime only, so the
-// implicit sort key is `(employeeIds, endTime, __name__)` — a `(employeeIds,
-// endTime, startTime)` index does NOT serve it, the startTime breaks the
-// prefix). Drive time
-// comes from Routes API computeRoutes (TRAFFIC_AWARE); every failure path
-// degrades to the original fixed 30-min reminder. The per-recipient ledger
-// makes each (occurrence, employee) fire exactly once, and a missed run
-// self-heals without double-sending.
+// Travel-aware "time to leave" reminders, every 5 minutes. Drive time comes
+// from the Routes API, and every failure path degrades to a fixed 30-min
+// reminder. A per-recipient ledger makes sure each occurrence fires exactly
+// once, and a missed run just self-heals on the next sweep.
 const sendUpcomingJobReminders = onSchedule(
     {
       schedule: "every 5 minutes",
@@ -131,16 +120,15 @@ const sendUpcomingJobReminders = onSchedule(
           apiKey: GOOGLE_MAP_API_KEY.value().trim(),
         });
       } catch (err) {
-        // Log rather than rethrow: a retried sweep would re-pay Routes for
-        // pairs already claimed; the next 5-min run self-heals anyway.
+        // Log rather than rethrow — the next 5-min run self-heals anyway.
         logger.error("sendUpcomingJobReminders failed", {err});
       }
     },
 );
 
-// Nightly digest at 18:00 America/Toronto: one push per employee with >=1 job
-// tomorrow. No ledger (runs once daily; a rare crash-retry duplicate is
-// accepted).
+// Nightly digest at 18:00 America/Toronto — one push per employee with >=1
+// job tomorrow. No ledger here; it only runs once daily, so we accept the
+// occasional rare duplicate.
 const sendDailyJobDigest = onSchedule(
     {
       schedule: "0 18 * * *",
@@ -150,10 +138,9 @@ const sendDailyJobDigest = onSchedule(
     async () => {
       const deps = liveDeps();
       await runDailyDigest(deps);
-      // Rides the digest rather than adding a scheduler: a card the server
-      // never got to end would otherwise leak its token row and card marker
-      // indefinitely. Both TTLs are measured in days, so daily is ample.
-      // Isolated — a failed prune must not fail the digest that already sent.
+      // Rides the digest rather than adding a whole new scheduler for it.
+      // Isolated in its own try so a failed prune can't fail the digest,
+      // which has already sent by this point.
       try {
         const tokens = await pruneExpiredActivityTokens(deps);
         const cards = await pruneExpiredCardMarkers(deps);
@@ -169,19 +156,16 @@ const sendDailyJobDigest = onSchedule(
     },
 );
 
-// Overdue "job finished?" prompts every 15 minutes: a job whose endTime
-// passed within the last 24h while still pending/in_progress earns one nudge
-// per occurrence (the endTime-keyed ledger re-arms on reschedule; a
-// zero-delivery claim is released for retry). Queries by startTime over the
-// last 48h — eligibility plus the <24h max booking — so the existing
-// `(status, startTime)` index covers it.
+// Overdue "job finished?" prompts, every 15 minutes. A job whose endTime
+// passed within the last 24h while still pending/in_progress earns one
+// nudge, tracked via an endTime-keyed ledger that re-arms on reschedule.
 const sendOverdueJobPrompts = onSchedule(
     {
       schedule: "every 15 minutes",
       timeZone: "America/Toronto",
       maxInstances: 1,
-      // The sweep processes candidates serially; give it well over the default
-      // 60s so a backlog can't leave the newest overdue jobs unprompted.
+      // Well over the default 60s so a backlog can't leave the newest
+      // overdue jobs unprompted.
       timeoutSeconds: 300,
     },
     async () => {

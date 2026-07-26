@@ -1,19 +1,19 @@
 "use strict";
 
 /**
- * @fileoverview Pure payload logic for the iOS "time to leave" Live Activity.
- * No Firebase, no network — jest loads this directly, the same way it loads
- * `widget_payload_utils.js` / `notification_utils.js`'s pure half.
+ * @fileoverview Pure payload logic for the iOS "time to leave" Live
+ * Activity. No Firebase, no network, so jest can load this directly (same
+ * as `widget_payload_utils.js`/`notification_utils.js`'s pure half).
  *
- * Card text is built HERE, server-side, in EN and FR from a `_STRINGS` table
- * shaped exactly like `notification_utils.js`'s `_MESSAGES` (locale key ->
- * builder functions, `who()` for the client fallback). The rejected
- * alternative was `NSLocalizedString` in Swift, which would fork translations
- * into a second system outside the ARB files.
+ * Card text is built here, server-side, in EN and FR from a `_STRINGS` table
+ * shaped like `notification_utils.js`'s `_MESSAGES`. We deliberately skip
+ * Swift-side `NSLocalizedString`, so translations can't fork outside the ARB
+ * files.
  *
- * The travel -> on-site flip is CLOCK-DERIVED ([phaseFor]), mirroring
- * `AppointmentRecord.displayStatus`. `in_progress` is never written by the
- * app, and this feature deliberately does not add a `markInProgress` path.
+ * The travel -> on-site flip is derived straight from the clock
+ * ([phaseFor]), mirroring `AppointmentRecord.displayStatus`. The app never
+ * writes `in_progress`, and this feature deliberately has no
+ * `markInProgress` path.
  *
  * @module live_activity_utils
  */
@@ -29,9 +29,9 @@ const PHASE_ON_SITE = "onSite";
 const {toMillis, formatTimeOfDay} = require("./time_utils");
 
 /**
- * Absolute UTC ISO-8601 for an instant, or null. The Swift decoder uses
- * `ISO8601DateFormatter`, which cannot parse a zone-less local string — the
- * same trap the widget payload already documents.
+ * Absolute UTC ISO-8601 for an instant, or null. The Swift decoder's
+ * `ISO8601DateFormatter` can't parse a zone-less local string — same trap
+ * the widget payload docs call out.
  * @param {*} value
  * @return {?string}
  */
@@ -51,8 +51,8 @@ function toEpochSeconds(value) {
 }
 
 /**
- * Toronto-local time-of-day string ("7:54"). Shares [formatTimeOfDay] with the
- * notification text so the card and the push read identically.
+ * Toronto-local time-of-day string ("7:54"), sharing [formatTimeOfDay] with
+ * the notification text so the card and push read identically.
  * @param {*} value
  * @param {string} locale 'en' | 'fr'.
  * @return {string}
@@ -100,8 +100,8 @@ const _STRINGS = {
 };
 
 /**
- * The EN or FR card-string table. Unknown/empty locales fall back to EN,
- * exactly like `buildNotificationMessage`.
+ * The EN or FR card-string table, falling back to EN for unknown/empty
+ * locales like `buildNotificationMessage`.
  * @param {string} locale 'en' | 'fr'.
  * @return {!Object}
  */
@@ -111,10 +111,9 @@ function liveActivityStrings(locale) {
 
 /**
  * The card's phase, derived from the clock alone: `travel` strictly before
- * `startTime`, `onSite` from `startTime` onward. Mirrors
- * `AppointmentRecord.displayStatus`, which flips to `in_progress` once now is
- * within [start, end]. An unreadable `startTime` stays in `travel` — the card
- * would rather under-promise than claim the tech is on site.
+ * `startTime`, `onSite` after, mirroring `AppointmentRecord.displayStatus`.
+ * An unreadable `startTime` stays `travel` — the card would rather
+ * under-promise than claim the tech is already on site.
  * @param {{startTime: *, now: *}} args
  * @return {string} PHASE_TRAVEL | PHASE_ON_SITE.
  */
@@ -126,10 +125,10 @@ function phaseFor({startTime, now}) {
 }
 
 /**
- * Builds the ActivityKit content state the Swift `ContentState` decodes. All
- * display text is localized here; the extension renders strings verbatim.
- * `endTime` feeds the on-site remaining-time countdown (the card counts DOWN
- * to the scheduled end, not up from the start).
+ * Builds the ActivityKit content state the Swift `ContentState` decodes,
+ * with all display text localized here (the extension just renders strings
+ * verbatim). `endTime` feeds the on-site countdown, which counts down to the
+ * scheduled end rather than up from the start.
  * @param {{clientName: string, address: string, startTime: *, endTime: *,
  *   leaveAt: *, travelMinutes: ?number, phase: string,
  *   locale: (string|undefined)}} args
@@ -162,8 +161,8 @@ function buildContentState({clientName, address, startTime, endTime, leaveAt,
 }
 
 /**
- * Shared `aps` skeleton. Optional date/alert fields are omitted rather than
- * sent null — APNs rejects a null `stale-date`.
+ * Shared `aps` skeleton, omitting optional date/alert fields rather than
+ * sending null since APNs rejects a null `stale-date`.
  * @param {string} event start|update|end.
  * @param {!Object} contentState
  * @param {{now: *, alert: (?Object|undefined), staleDate: *,
@@ -186,7 +185,7 @@ function _envelope(event, contentState, opts) {
 }
 
 /**
- * Push-to-start payload. `attributes-type` + `attributes` are required on a
+ * Push-to-start payload — `attributes-type`/`attributes` are required on
  * start and rejected on update/end.
  * @param {{contentState: !Object, attributes: !Object, now: *,
  *   alert: (?Object|undefined), staleDate: *,
@@ -216,8 +215,8 @@ function buildUpdatePayload({contentState, now, alert, staleDate}) {
 }
 
 /**
- * End payload. Without a `dismissal-date` the card lingers on the Lock Screen
- * for up to four hours, so the caller normally passes `now`.
+ * End payload — without a `dismissal-date` the card lingers on the Lock
+ * Screen up to four hours, so the caller normally passes `now`.
  * @param {{contentState: !Object, now: *, dismissalDate: *,
  *   alert: (?Object|undefined)}} args
  * @return {!Object}

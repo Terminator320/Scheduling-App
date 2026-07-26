@@ -63,7 +63,8 @@ void main() {
         selectedNames: ['N1', 'N2'],
         activeIds: {'new1', 'new2'},
       );
-      // Selection leads; the invisible original 'old' is appended.
+      // The selection comes first, then the invisible original 'old' gets
+      // appended after it.
       expect(result.ids, ['new1', 'new2', 'old']);
       expect(result.names, ['N1', 'N2', 'Olga']);
     });

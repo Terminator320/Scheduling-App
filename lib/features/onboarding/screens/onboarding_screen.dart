@@ -7,7 +7,8 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/branding/brand_logo.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
-/// First-launch intro carousel: swipeable slides, page-dot indicator, "Get Started"/"Skip" via [onFinish].
+/// First-launch intro carousel — swipeable slides with a page-dot indicator,
+/// and "Get Started"/"Skip" actions that both call [onFinish].
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({required this.onFinish, super.key});
 
@@ -28,7 +29,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     // Onboarding owns the native splash handoff on fresh install.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       FlutterNativeSplash.remove();
-      // NOTE: remove() schedules only a warm-up frame (no-op on static screen); force one to actually hand off.
+      // NOTE: remove() only schedules a warm-up frame, which is a no-op on a
+      // static screen — force one so the handoff actually happens.
       WidgetsBinding.instance.scheduleForcedFrame();
     });
   }

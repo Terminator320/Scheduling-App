@@ -37,7 +37,8 @@ class AppointmentImageUploadService {
 
   bool _draining = false;
 
-  /// Set when drain requested mid-drain; in-flight pass re-runs instead of concurrent start.
+  /// Set when a drain is requested while one is already running, so the
+  /// in-flight pass just loops again instead of two drains running at once.
   bool _pendingDrain = false;
 
   static Future<Directory> _defaultStagingDir() async {
@@ -45,7 +46,8 @@ class AppointmentImageUploadService {
     return Directory('${base.path}/pending_uploads').create(recursive: true);
   }
 
-  /// Stage, record, and upload in background (fire-and-forget).
+  /// Stages the files, records them, and kicks off the upload in the
+  /// background — this doesn't wait for any of that to finish.
   void uploadInBackground({
     required String appointmentId,
     required List<File> newImages,
@@ -68,7 +70,8 @@ class AppointmentImageUploadService {
         enqueuedAtMs: enqueuedAtMs,
       );
       await _store.add(entry);
-      // Use serialized drain to avoid uploading the same batch twice with different paths.
+      // Drain runs serialized so we don't end up uploading the same batch
+      // twice under two different sets of staged paths.
       await drainPending();
     } catch (e, st) {
       _notifier.reportFailure(appointmentId, failedCount: images.length);
@@ -76,7 +79,9 @@ class AppointmentImageUploadService {
     }
   }
 
-  /// Move temp file to staging dir; fallback to copy+delete for cross-device.
+  /// Moves the temp file into the staging dir. If that's a cross-device
+  /// move (rename fails), falls back to copying it over and deleting the
+  /// original.
   Future<File> _stage(
     File source,
     Directory dir,
@@ -96,7 +101,9 @@ class AppointmentImageUploadService {
     }
   }
 
-  /// Upload queued batch; reject permanently, drop transient failures, re-queue unsent.
+  /// Uploads one queued batch. Files that are permanently rejected are
+  /// dropped, files that hit a transient failure get re-queued, and
+  /// anything that uploads successfully is removed from the queue.
   Future<void> _attempt(PendingUpload entry) async {
     final files = entry.paths
         .map(File.new)
@@ -148,7 +155,9 @@ class AppointmentImageUploadService {
     }
 
     if (transientFailure) {
-      // Re-queue unsent paths, preserving entry age for 7-day pruning.
+      // Re-queue the paths that didn't make it, keeping the original
+      // enqueued time so the 7-day pruning still counts from when the
+      // batch first showed up.
       await _store.remove(entry.id);
       await _store.add(
         PendingUpload(
@@ -175,7 +184,9 @@ class AppointmentImageUploadService {
     }
   }
 
-  /// Serialized path for uploading queued batches; reentrancy-guarded via [_pendingDrain].
+  /// Uploads queued batches one drain at a time. If this gets called again
+  /// while a drain is already running, [_pendingDrain] makes it loop instead
+  /// of starting a second one concurrently.
   Future<void> drainPending() async {
     if (_draining) {
       _pendingDrain = true;

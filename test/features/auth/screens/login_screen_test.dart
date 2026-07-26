@@ -75,7 +75,7 @@ void main() {
     await tester.pumpWidget(_wrap(auth, repo));
     await tester.pumpAndSettle();
 
-    // Submit-on-empty path: validators trip and we never hit the network.
+    // With empty fields, validators trip and we never hit the network.
     final signInButton = find.widgetWithText(FilledButton, 'Sign in');
     if (signInButton.evaluate().isEmpty) {
       // Fallback if l10n delegates aren't registered — find any FilledButton.
@@ -113,7 +113,8 @@ void main() {
       when(() => repo.findUserByUid('u1')).thenAnswer((_) async {
         reads++;
         if (reads == 1) {
-          // First read after sign-in: token not yet propagated to Firestore.
+          // The first read right after sign-in fails because the auth token
+          // hasn't propagated to Firestore yet.
           throw FirebaseException(
             plugin: 'cloud_firestore',
             code: 'permission-denied',

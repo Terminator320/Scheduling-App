@@ -5,10 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
 
-/// L3: `AddEventController.addImages` must cap selected images at
-/// `maxImagesPerAppointment` (10) to bound RAM during the compression
-/// pipeline. The cap silently truncates the incoming list — there's no
-/// thrown error, just a refusal to grow past the cap.
+/// L3: `AddEventController.addImages` caps selected images at
+/// `maxImagesPerAppointment` (10) to bound RAM. It truncates the incoming
+/// list silently instead of throwing.
 void main() {
   late ProviderContainer container;
   final initialDate = DateTime(2026, 5, 15);

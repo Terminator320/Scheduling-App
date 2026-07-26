@@ -46,9 +46,10 @@ abstract class ClientRecord with _$ClientRecord {
     @Default('') String email,
     @Default(<ClientContact>[]) List<ClientContact> contacts,
     @Default(false) bool noFixedAddress,
-    // Server timestamp (read-only, for dashboard trends); never emitted in toMap.
+    // Read-only server timestamp used for dashboard trends — never emitted in toMap.
     DateTime? createdAt,
-    // Wave projection (read-only, function-owned); omitted from toMap per firestore.rules.
+    // Wave projection — read-only and function-owned, so it's omitted from toMap
+    // per firestore.rules.
     @Default(null) String? waveCustomerId,
     @Default('') String waveSyncState,
     @Default(null) String? waveSyncError,
@@ -58,7 +59,8 @@ abstract class ClientRecord with _$ClientRecord {
   factory ClientRecord.fromMap(String id, Map<String, dynamic> data) {
     final rawContacts = (data['contacts'] as List?) ?? const [];
     final wave = (data['wave'] as Map?)?.cast<String, dynamic>();
-    // Back-compat fallback for legacy `businessName` (keeps unnamed business docs visible/searchable).
+    // Back-compat fallback for legacy `businessName` — keeps unnamed business docs
+    // visible and searchable.
     final rawName = (data['name'] ?? '').toString();
     final name = rawName.trim().isNotEmpty
         ? rawName
@@ -89,7 +91,8 @@ abstract class ClientRecord with _$ClientRecord {
     );
   }
 
-  /// User-owned fields; omits `waveCustomerId`/`wave` (function-owned, rejected by update rule).
+  /// User-owned fields only. `waveCustomerId`/`wave` are function-owned and get rejected
+  /// by the update rule, so they're left out here.
   Map<String, dynamic> toMap() => {
     'name': name.trim(),
     'firstName': firstName.trim(),

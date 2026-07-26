@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 
-/// Standard error SnackBar; used by sites bypassing the notice overlay.
+/// Standard error SnackBar, for call sites that bypass the notice overlay.
 SnackBar errorSnackBar(
   BuildContext context,
   String message, {

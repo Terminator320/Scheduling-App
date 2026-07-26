@@ -86,7 +86,8 @@ void main() {
         final copies = (captured[2] as List).cast<AppointmentRecord>();
         expect(deleteIds, isEmpty);
         expect(copies, hasLength(5));
-        // Copies start fresh: pending, no shared pictures, same series id.
+        // Copies start fresh — they're pending, have no shared pictures, and keep
+        // the same series id.
         expect(
           copies.every((c) => c.status == 'pending' && c.pictures.isEmpty),
           isTrue,
@@ -188,7 +189,7 @@ void main() {
         expect(propagated.id, 'p2');
         expect(propagated.title, 'New Title');
         expect(propagated.notes, 'call ahead');
-        // Keeps its own calendar date, adopts the new time-of-day.
+        // It keeps its own calendar date but adopts the new time-of-day.
         expect(propagated.startTime, DateTime(2026, 3, 20, 11));
         // Status is per-visit and never propagated.
         expect(propagated.status, 'pending');

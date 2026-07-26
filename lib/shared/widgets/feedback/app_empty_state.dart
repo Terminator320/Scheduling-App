@@ -33,7 +33,7 @@ class AppEmptyState extends StatelessWidget {
         ),
       ),
       child: Center(
-        // Scroll in short panes; center otherwise.
+        // Scrollable for short panes, otherwise it just centers.
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.sp32),
           child: Column(

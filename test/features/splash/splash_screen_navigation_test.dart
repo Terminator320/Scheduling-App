@@ -37,10 +37,7 @@ void main() {
         ),
       );
 
-      // Bounded pumps: the splash's indeterminate progress bar never settles,
-      // so pumpAndSettle would hang if navigation fails to leave the splash.
-      // One extra frame: _decideRoute first awaits firebaseReadyProvider
-      // (P10) before resolving the destination.
+      // Bounded pumps: progress bar never settles (pumpAndSettle would hang); one extra frame lets _decideRoute await firebaseReadyProvider (P10) first.
       await tester.pump();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));

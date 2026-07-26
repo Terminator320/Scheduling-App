@@ -84,9 +84,8 @@ void main() {
       expect((outcome as ClientSaved).client, persisted);
       verify(() => repo.addClient(_client)).called(1);
       expect(refreshCount(), 1);
-      // Resets on success: in the split layout the detail pane keeps this
-      // shared provider alive after the sheet pops, so a lingering isSaving
-      // would disable the add/edit forms for the rest of the session.
+      // Resets on success — the detail pane keeps this shared provider alive
+      // after the sheet pops, so a lingering isSaving would disable add/edit forms all session.
       expect(activity().isSaving, isFalse);
     });
 

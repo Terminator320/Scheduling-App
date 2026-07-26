@@ -1,11 +1,8 @@
 /**
- * Regression tests for the terminal card-end paths: a deleted, cancelled,
- * completed, or unassigned job must END its Live Activity card even when the
- * job already started — the exact window the notification diff suppresses as
- * "past", which is how deleted events' cards used to survive on the Lock
- * Screen. Also covers the on-site flip pass ending (not just un-marking) a
- * card whose appointment is gone, and the endTime field feeding the on-site
- * countdown.
+ * Regression tests for a nasty edge case: a deleted, cancelled, completed, or
+ * unassigned job must still END its Live Activity card even after it's
+ * started. The on-site flip pass has to actually end a card whose
+ * appointment is gone, not just un-mark it.
  */
 
 jest.mock("../live_activity_dispatch", () => ({
@@ -36,8 +33,8 @@ const {handleAppointmentWrite} = require("../notification_utils");
 const {runOnSiteFlipPass} = require("../travel_utils");
 const {buildContentState, PHASE_ON_SITE} = require("../live_activity_utils");
 
-// The job STARTED an hour ago — the notification diff suppresses every event
-// for it, which is precisely the regression window.
+// The job STARTED an hour ago, so the notification diff suppresses every
+// event for it — that's exactly the regression window we're testing.
 const NOW = new Date("2026-07-21T15:00:00.000Z");
 const STARTED = new Date("2026-07-21T14:00:00.000Z");
 const ENDS = new Date("2026-07-21T16:00:00.000Z");

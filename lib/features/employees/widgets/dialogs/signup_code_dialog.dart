@@ -5,14 +5,16 @@ import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Shows one-time signup code after creating an invite, adaptive dialog for iOS/Material.
+/// Shows the one-time signup code after creating an invite — an adaptive
+/// dialog that picks Cupertino or Material to match the platform.
 Future<void> showSignupCodeDialog(
   BuildContext context, {
   required String name,
   required String code,
 }) {
   if (context.isCupertino) {
-    // showCupertinoDialog is non-dismissible by default, matching Material branch.
+    // showCupertinoDialog is non-dismissible by default, which matches what
+    // we do in the Material branch.
     return showCupertinoDialog<void>(
       context: context,
       builder: (ctx) => _SignupCodeDialog(name: name, code: code),
@@ -84,7 +86,8 @@ class _SignupCodeDialogState extends State<_SignupCodeDialog> {
     if (context.isCupertino) {
       return CupertinoAlertDialog(
         title: Text(context.l10n.employees_signupCodeTitle),
-        // Transparent Material so selectable text keeps Material toolbar inside Cupertino dialog.
+        // Wrap in a transparent Material widget so the selectable text still
+        // gets its Material toolbar inside the Cupertino dialog.
         content: Material(
           type: MaterialType.transparency,
           child: Padding(

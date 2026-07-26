@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Suffix-slot clear ("x") button; shows placeholder while empty.
+/// Suffix-slot clear ("x") button. Shows the placeholder while the field is empty.
 class ClearTextButton extends StatelessWidget {
   const ClearTextButton({
     required this.controller,

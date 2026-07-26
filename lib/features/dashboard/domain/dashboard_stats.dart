@@ -12,8 +12,7 @@ class TodayOps {
     required this.upcoming,
   });
 
-  /// Keyed by normalized display-status raw value
-  /// ('pending', 'in_progress', 'done', 'cancelled').
+  /// Keyed by normalized display-status raw value ('pending', 'in_progress', 'done', 'cancelled').
   final Map<String, int> statusCounts;
   final int unassignedCount;
   final List<AppointmentRecord> upcoming;

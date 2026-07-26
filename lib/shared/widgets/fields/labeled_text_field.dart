@@ -72,7 +72,8 @@ class LabeledTextField extends StatelessWidget {
             maxLines: maxLines,
             onSubmitted: onSubmitted,
             // With showCounter, TextField.maxLength enforces the cap and
-            // renders the live "x/y" counter; otherwise enforce silently.
+            // renders the live "x/y" counter. Otherwise it just enforces the
+            // cap silently.
             maxLength: showCounter ? maxLength : null,
             inputFormatters: maxLength == null || showCounter
                 ? null
@@ -83,8 +84,9 @@ class LabeledTextField extends StatelessWidget {
             decoration: formInputDecoration(context, hint ?? label).copyWith(
               errorText: errorText != null ? '' : null,
               errorStyle: const TextStyle(fontSize: 0, height: 0),
-              // Every editable field gets a clear "x" while it holds text;
-              // a custom suffix or a readOnly (picker) field keeps its own.
+              // Every editable field gets a clear "x" while it holds text. A
+              // custom suffix, or a readOnly (picker) field, keeps whatever
+              // it already has instead.
               suffixIcon:
                   suffixIcon ??
                   (readOnly
@@ -124,7 +126,8 @@ class _MaxLengthWarning extends StatelessWidget {
   }
 }
 
-// Fade + 4px slide entrance/exit for the error row; AnimatedSize lets fields below glide instead of jumping.
+// Fades and slides the error row in/out by 4px. AnimatedSize lets the fields
+// below glide into place instead of jumping.
 class _AnimatedFieldError extends StatelessWidget {
   const _AnimatedFieldError({required this.message});
 

@@ -5,15 +5,17 @@ import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 /// Schema version; bump only alongside Swift `ScheduleSnapshot` decoder.
 const scheduleSnapshotVersion = 1;
 
-/// Days carried beyond today. Phase-2 date queries ("what's my schedule
-/// Friday?") resolve against these buckets; anything further out is answered
+/// Days carried beyond today; Phase-2 date queries ("what's my schedule
+/// Friday?") resolve against these buckets, and anything further out gets
 /// "I only have your schedule for the next 7 days."
 const scheduleSnapshotLookaheadDays = 7;
 
 /// Defensive per-day cap — Siri reads at most one day out loud.
 const scheduleSnapshotPerDayCap = 30;
 
-/// Only fields the Siri intents speak (plus `id` for Phase-4 actions); excludes notes/phone/pictures since App Group is readable while locked.
+/// Only the fields the Siri intents speak, plus `id` for Phase-4 actions.
+/// Notes, phone, and pictures are excluded, since the App Group is readable
+/// even while the device is locked.
 Map<String, dynamic> _appointment(AppointmentRecord a) => {
   'id': a.id,
   'startMillis': a.startTime.millisecondsSinceEpoch,
@@ -28,8 +30,9 @@ String _dayKey(DateTime day) =>
     '${day.month.toString().padLeft(2, '0')}-'
     '${day.day.toString().padLeft(2, '0')}';
 
-/// Serializes the schedule the Siri App Intents extension answers from (pure, unit-testable).
-/// Carries one bucket per day (today through lookahead); excludes cancelled visits and id-less records (Phase-4 write actions resolve by id).
+/// Serializes the schedule the Siri App Intents extension answers from.
+/// Pure and unit-testable — carries one bucket per day, and excludes
+/// cancelled visits and id-less records, since Phase-4 write actions resolve by id.
 Map<String, dynamic> buildScheduleSnapshot({
   required List<AppointmentRecord> appointments,
   required String role,

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Backfills the usersByUid bridge collection from existing `users` docs.
-// Run once after deploying the syncUsersByUid trigger and before deploying
-// the stub-free rules. Idempotent and safe to re-run.
+// It's idempotent, so it's safe to re-run once after deploying the
+// syncUsersByUid trigger.
 //
 // Usage:
 //   For prod:
@@ -22,15 +22,9 @@ const { getFirestore } = require("firebase-admin/firestore");
 const VALID_ROLES = new Set(["admin", "employee"]);
 const VALID_BRIDGE_STATUS = new Set(["active", "disabled"]);
 
-// NOTE: this is a deliberate standalone copy, NOT the shared helper. The
-// authoritative runtime version is `shouldHaveBridge` in ../bridge.js, which
-// gates on uid + status only and validates `role` later, inside `bridgeBody`.
-// This one folds the role check in up front so a one-off backfill skips
-// malformed docs outright instead of writing a bridge entry with a bogus role.
-// The two are intentionally not shared: re-pointing this at the export would
-// change what this script backfills. Keep bridge.js authoritative for runtime
-// behavior — if its gating changes, re-read this before running the script
-// again.
+// This deliberately duplicates the shared ../bridge.js helper rather than
+// importing it, since folding the role check in up front lets us skip
+// malformed docs outright.
 function shouldHaveBridge(data) {
   if (!data) return false;
   if (typeof data.uid !== "string" || data.uid === "") return false;
@@ -40,7 +34,7 @@ function shouldHaveBridge(data) {
 }
 
 async function main() {
-  // When pointed at the emulator, applicationDefault() is unused; the SDK
+  // When pointed at the emulator, applicationDefault() is unused. The SDK
   // picks up FIRESTORE_EMULATOR_HOST automatically and ignores creds.
   if (process.env.FIRESTORE_EMULATOR_HOST) {
     initializeApp({ projectId: process.env.GCLOUD_PROJECT || "schedulingapp-88727" });
@@ -103,7 +97,7 @@ async function main() {
     stats.written += 1;
   }
 
-  // Orphan cleanup: any usersByUid doc whose uid doesn't appear above is stale.
+  // Any usersByUid doc whose uid didn't show up above is stale, so remove it.
   const bridgeSnap = await db.collection("usersByUid").get();
   for (const doc of bridgeSnap.docs) {
     if (!expectedUids.has(doc.id)) {

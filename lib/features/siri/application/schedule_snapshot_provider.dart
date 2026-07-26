@@ -6,7 +6,8 @@ import 'package:scheduling/features/calendar/application/appointments_providers.
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/siri/domain/schedule_snapshot.dart';
 
-/// The current Siri schedule snapshot (null when signed out); admins see all appointments, employees only their own.
+/// The current Siri schedule snapshot, or null when signed out. Admins see
+/// all appointments; employees only see their own.
 final scheduleSnapshotProvider =
     Provider.autoDispose<AsyncValue<Map<String, dynamic>?>>((ref) {
       final identityAsync = ref.watch(activeUserIdentityProvider);

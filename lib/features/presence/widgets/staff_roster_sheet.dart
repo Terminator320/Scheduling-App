@@ -10,7 +10,9 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
 
-/// Apple "Find My"-style sheet showing all staff by proximity to the admin; watches providers directly so the list stays live with new fixes and freshness.
+/// Apple "Find My"-style sheet showing all staff, ordered by proximity to
+/// the admin. Watches the providers directly so the list stays live as
+/// fixes and freshness update.
 Future<StaffMapPoint?> showStaffRosterSheet(
   BuildContext context, {
   required String? selfDocId,
@@ -24,7 +26,8 @@ Future<StaffMapPoint?> showStaffRosterSheet(
 class StaffRosterSheet extends ConsumerWidget {
   const StaffRosterSheet({required this.selfDocId, super.key});
 
-  /// The viewing admin's doc id (so their row shows "You" and distances are measured from their position); null = no self anchor.
+  /// The viewing admin's doc id — their row shows "You" and distances are
+  /// measured from their position. Null means there's no self anchor.
   final String? selfDocId;
 
   @override
@@ -179,7 +182,8 @@ class _RosterEmpty extends StatelessWidget {
   }
 }
 
-/// One roster row showing avatar, name, city, and freshness; watches providers directly for live updates.
+/// One roster row showing avatar, name, city, and freshness. Watches the
+/// providers directly to stay live.
 class StaffRosterRow extends ConsumerWidget {
   const StaffRosterRow({
     required this.point,

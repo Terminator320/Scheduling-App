@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 
-/// Leading slot for icon buttons; swaps to spinner while busy.
+/// Leading slot for icon buttons. Swaps to a spinner while busy.
 class BusyButtonIcon extends StatelessWidget {
   const BusyButtonIcon({
     required this.isBusy,
@@ -16,7 +16,7 @@ class BusyButtonIcon extends StatelessWidget {
   final IconData icon;
   final double iconSize;
 
-  /// Spinner size; defaults to iconSize when null.
+  /// Spinner size. Defaults to iconSize when null.
   final double? spinnerSize;
 
   /// Color for icon and spinner.

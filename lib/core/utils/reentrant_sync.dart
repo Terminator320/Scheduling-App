@@ -1,6 +1,7 @@
 import 'dart:async';
 
-/// Reentrancy guard that coalesces concurrent calls so the latest state always wins; `body` must handle its own errors.
+/// Reentrancy guard that coalesces concurrent calls, so the latest state
+/// always wins. `body` is responsible for handling its own errors.
 mixin ReentrantSync {
   bool _syncBusy = false;
   bool _syncPending = false;

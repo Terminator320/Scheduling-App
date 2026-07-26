@@ -29,13 +29,15 @@ final pushRegistrationControllerProvider = Provider<PushRegistrationController>(
   PushRegistrationController.new,
 );
 
-/// The live OS notification-authorization status (read without prompting); invalidate to re-read after user changes permissions.
+/// The live OS notification-authorization status, read without prompting the
+/// user. Invalidate this to re-read it after permissions change.
 final notificationAuthStatusProvider =
     FutureProvider.autoDispose<AuthorizationStatus>(
       (ref) => ref.watch(pushNotificationServiceProvider).authorizationStatus(),
     );
 
-/// Gate for push registration: active employees and admins (admins register for timed nudges; server withholds change-driven pushes from them).
+/// Gate for push registration — active employees and admins. Admins register
+/// too, for timed nudges, but the server withholds change-driven pushes from them.
 bool shouldRegisterPush({
   required String role,
   required String status,
@@ -43,7 +45,7 @@ bool shouldRegisterPush({
 }) => signedIn && status == 'active' && (role == 'employee' || role == 'admin');
 
 /// Registers this device's FCM token for the signed-in active employee and
-/// tears it down on sign-out. Driven by `main.dart` on every
+/// tears it down on sign-out; driven by `main.dart` on every
 /// `currentUserDocProvider` emission and on app-language change.
 class PushRegistrationController with ReentrantSync {
   PushRegistrationController(this._ref, {FirebaseAuth? auth})
@@ -63,7 +65,8 @@ class PushRegistrationController with ReentrantSync {
   static String _currentLocale() =>
       AppLanguageController.instance.value == 'fr' ? 'fr' : 'en';
 
-  /// Idempotent and safe to call on every account-doc emission or language change; concurrent calls coalesce so latest state wins.
+  /// Idempotent and safe to call on every account-doc emission or language
+  /// change. Concurrent calls coalesce, so whichever finishes last wins.
   Future<void> sync() => runCoalesced(_syncGuarded);
 
   Future<void> _syncGuarded() async {
@@ -79,7 +82,8 @@ class PushRegistrationController with ReentrantSync {
 
     final uid = _auth.currentUser?.uid;
     final locale = _currentLocale();
-    // Fast path: already registered for this uid+locale with live refresh subscription; skip query and upsert.
+    // Fast path — already registered for this uid+locale with a live refresh
+    // subscription, so skip the query and upsert.
     if (uid != null &&
         uid == _registeredUid &&
         locale == _registeredLocale &&
@@ -113,7 +117,8 @@ class PushRegistrationController with ReentrantSync {
       _registeredLocale = locale;
       _subscribeRefresh(docId, uid);
     } catch (e, st) {
-      // Don't let registration failure escape as uncaught async error (sync() is unawaited); log as non-fatal instead.
+      // sync() is called unawaited, so don't let a registration failure
+      // escape as an uncaught async error — just log it as non-fatal.
       _logger.warn('PUSH sync failed', e, st);
     }
   }
@@ -145,8 +150,8 @@ class PushRegistrationController with ReentrantSync {
         );
   }
 
-  /// Best-effort de-registration for sign-out: delete the token doc and
-  /// invalidate the FCM token. Never throws — sign-out must not be blocked.
+  /// Best-effort de-registration for sign-out — deletes the token doc and
+  /// invalidates the FCM token; never throws, so sign-out is never blocked.
   Future<void> unregisterCurrentDevice() async {
     try {
       final docId = _registeredDocId;

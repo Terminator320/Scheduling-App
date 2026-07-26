@@ -23,42 +23,32 @@ const {
   enforceDurableRateLimit,
 } = require("../security");
 
-// Accepted automatic-import cadences (mirrors the app's WaveImportSchedule enum
-// and the wave/connection field). "off" is the default when the field is
-// absent.
+// Accepted automatic-import cadences (mirrors the app's WaveImportSchedule
+// enum and the wave/connection field); "off" is the default when absent.
 const IMPORT_SCHEDULE_SET = new Set(SCHEDULE_VALUES);
 
-// waveImportCustomers is a heavy one-shot admin op (it paginates ~650 customers
-// across ~7 Wave pages). A modest durable cap keeps a stuck/retried admin from
-// hammering Wave: 5 imports per hour is ample for a setup/reconcile action.
+// waveImportCustomers is a heavy one-shot admin op (~650 customers across ~7 Wave
+// pages), so a modest cap keeps a stuck/retried admin from hammering Wave.
 const WAVE_IMPORT_RATE_MAX = 5;
 const WAVE_IMPORT_RATE_WINDOW_MS = 60 * 60 * 1000;
-// waveBootstrap's not-yet-connected path makes live Wave calls (whoami +
-// listBusinesses). Cap it per-admin so a buggy/looping client can't burn the
-// Wave request budget before a connection exists. The idempotent short-circuit
-// (already-connected) runs before this and is not rate-limited.
+// Caps how many live Wave calls (whoami + listBusinesses) an admin can make.
+// The already-connected short-circuit runs first and isn't rate-limited.
 const WAVE_BOOTSTRAP_RATE_MAX = 10;
 
-// The Wave business to connect, kept in Secret Manager so the name never ships
-// in the app and can change without an app release. Set it with
-// `firebase functions:secrets:set WAVE_BUSINESS_NAME`. waveBootstrap (which
-// declares it in its `secrets`) uses it as the target whenever the client
-// supplies no businessId/businessName.
+// The Wave business to connect, kept in Secret Manager so the name never
+// ships in the app. waveBootstrap uses it whenever the client supplies no
+// businessId/businessName.
 const WAVE_BUSINESS_NAME = defineSecret("WAVE_BUSINESS_NAME");
 
 // ----- Wave Accounting integration ------------------------------------------
 //
-// These functions wire the app's `clients` collection to Wave Accounting
-// customers (plan Task 5). The single `wave/connection` doc holds the selected
-// business id; `waveSyncQueue` is a durable outbox drained on a schedule. The
-// heavy lifting (GraphQL transport, mapping, queue mechanics) lives in the
-// `wave/*` modules — these functions are thin orchestrators that add auth,
-// admin, and rate-limit guards and translate Wave errors into HttpsErrors.
+// Wires the app's `clients` collection to Wave Accounting customers. The
+// `wave/connection` doc holds the selected business id, `waveSyncQueue` is a
+// durable outbox drained on a schedule, and these functions are just thin
+// wrappers adding auth/admin/rate-limit guards around the `wave/*` modules.
 
 /**
- * Reads the connected Wave `businessId` from the `wave/connection` doc, or
- * returns "" when the doc/field is absent. Used by the callables/scheduler to
- * gate on "bootstrapped yet?".
+ * Reads the connected Wave `businessId` from the `wave/connection` doc.
  * @return {!Promise<string>} The business id, or "" if not connected.
  */
 async function readWaveBusinessId() {
@@ -67,12 +57,10 @@ async function readWaveBusinessId() {
   return data && typeof data.businessId === "string" ? data.businessId : "";
 }
 
-// Per-instance cache for the scheduled worker's connection gate. The worker
-// fires every 5 minutes forever, so an installation that never connects Wave
-// would otherwise pay a Firestore read every run per warm instance. A found
-// businessId is cached for the instance's lifetime (bootstrap is
-// set-once-never-changed); a NOT-connected result is cached for a short TTL
-// so a fresh bootstrap is still picked up within a few minutes.
+// Per-instance cache for the scheduled worker's connection gate. A found
+// businessId caches for the instance's lifetime; a not-connected result only
+// caches for a short TTL, so a fresh bootstrap still gets picked up within a
+// few minutes.
 const NOT_CONNECTED_CACHE_MS = 5 * 60 * 1000;
 let cachedBusinessId = "";
 let notConnectedUntilMs = 0;
@@ -94,10 +82,9 @@ async function readWaveBusinessIdCached() {
 }
 
 /**
- * Selects the intended Wave business from the listed businesses. Selection
- * order: by name when `wantName` (the server-configured business name) is
- * given, else the single business when exactly one exists. Never blindly takes
- * the first of several.
+ * Selects the intended Wave business from the listed businesses — by name
+ * when `wantName` is given, else the single business when exactly one exists,
+ * never blindly taking the first of several.
  * @param {!Array<{id: string, name: string}>} businesses Listed businesses.
  * @param {string} wantName Configured business name ("" when not set).
  * @return {{id: string, name: string}} The selected business.
@@ -107,13 +94,13 @@ async function readWaveBusinessIdCached() {
 function selectBusiness(businesses, wantName) {
   const list = Array.isArray(businesses) ? businesses : [];
   if (wantName) {
-    // NOTE: name match is case-insensitive and trims surrounding whitespace so
-    // "acme co" / "  Acme Co  " both reach the same business. Id match above
-    // stays exact (ids are opaque tokens).
+    // Name match is case-insensitive and whitespace-trimmed, so "acme co"
+    // and "  Acme Co  " both match. Id match stays exact since ids are
+    // opaque tokens.
     const want = wantName.trim().toLowerCase();
-    // `b.name` is guarded too: a business with no name would otherwise throw a
-    // raw TypeError that classifyWaveError turns into a misleading generic
-    // Wave failure instead of the intended wave/business-not-found.
+    // We guard `b.name` too — a business with no name would otherwise throw
+    // a raw TypeError, which classifyWaveError would turn into a misleading
+    // generic Wave failure instead of the intended wave/business-not-found.
     const match = list.find((b) => b && typeof b.name === "string" &&
         b.name.trim().toLowerCase() === want);
     if (!match) throw new HttpsError("not-found", "wave/business-not-found");
@@ -123,7 +110,7 @@ function selectBusiness(businesses, wantName) {
   throw new HttpsError("failed-precondition", "wave/business-ambiguous");
 }
 
-// 1) waveBootstrap — admin-only, idempotent get-or-create of wave/connection.
+// waveBootstrap — admin-only, idempotent get-or-create of wave/connection.
 const waveBootstrap = onCall(
     {
       secrets: [WAVE_FULL_ACCESS_TOKEN, WAVE_BUSINESS_NAME],
@@ -139,7 +126,8 @@ const waveBootstrap = onCall(
       const db = getFirestore();
       const ref = db.collection("wave").doc("connection");
 
-      // Idempotent: an already-connected doc is returned unchanged.
+      // Already-connected doc gets returned unchanged, so this call is safe
+      // to make more than once.
       const existing = await ref.get();
       if (existing.exists && existing.data() &&
           typeof existing.data().businessId === "string" &&
@@ -153,8 +141,8 @@ const waveBootstrap = onCall(
       }
 
       // The target business is chosen server-side from the Secret Manager
-      // value — the app never names the business. `|| ""` guards an unset/empty
-      // secret against a trim() throw.
+      // value — the app never names it. The `|| ""` guards against an
+      // unset/empty secret throwing on `.trim()`.
       const wantName = (WAVE_BUSINESS_NAME.value() || "").trim();
 
       // Only the not-yet-connected path (live Wave calls) is rate-limited.
@@ -165,9 +153,9 @@ const waveBootstrap = onCall(
           WAVE_IMPORT_RATE_WINDOW_MS,
       );
 
-      // Network calls run OUTSIDE the transaction (transactions retry; a Wave
-      // mutation must never run more than once). whoami() fast-fails a bad
-      // token before we list businesses.
+      // Network calls run outside the transaction — transactions retry, and
+      // a Wave mutation must never run twice. whoami() fast-fails a bad
+      // token before we bother listing businesses.
       let selected;
       try {
         await whoami();
@@ -181,7 +169,8 @@ const waveBootstrap = onCall(
       }
 
       // Transaction set-if-absent so concurrent first calls converge on one
-      // connection (the first writer wins; later writers return its value).
+      // connection — the first writer wins, and later writers just return
+      // its value.
       const result = await db.runTransaction(async (tx) => {
         const fresh = await tx.get(ref);
         const fd = fresh.exists ? fresh.data() : null;
@@ -234,9 +223,9 @@ const waveGetConnection = onCall(
     },
 );
 
-// 2b) waveSetImportSchedule — admin-only setter for the automatic-import
-// cadence. Writes the `importSchedule` field on the single wave/connection doc.
-// No secret, no rate limit (a cheap Firestore write); App Check + admin only.
+// waveSetImportSchedule — admin-only setter for the auto-import cadence on
+// the wave/connection doc. Just needs App Check + admin, no secret or rate
+// limit.
 const waveSetImportSchedule = onCall(
     {enforceAppCheck: true},
     async (req) => {
@@ -264,7 +253,7 @@ const waveSetImportSchedule = onCall(
     },
 );
 
-// 2) waveImportCustomers — admin-only one-shot Wave → App seed.
+// waveImportCustomers — admin-only one-shot Wave → App seed.
 const waveImportCustomers = onCall(
     {
       secrets: [WAVE_FULL_ACCESS_TOKEN],
@@ -318,11 +307,9 @@ const waveImportCustomers = onCall(
     },
 );
 
-// 3) waveUpsertCustomer — enqueues a Wave write-back when a client doc's mapped
-// fields change. No secret needed (it only writes to the Firestore outbox).
-// `retry: true` is safe: the handler is idempotent (deterministic jobId via
-// set-merge; the mark-pending update writes absolute values) and hash-guarded
-// (shouldEnqueueClientWrite absorbs echoes), so a crash-retry converges.
+// waveUpsertCustomer — enqueues a Wave write-back when a client doc's mapped
+// fields change. `retry: true` is safe here since the handler is idempotent
+// and hash-guarded.
 const waveUpsertCustomer = onDocumentWritten(
     {document: "clients/{clientId}", retry: true},
     async (event) => {
@@ -330,22 +317,23 @@ const waveUpsertCustomer = onDocumentWritten(
       const afterSnap = event.data?.after;
       const after = afterSnap?.exists ? afterSnap.data() : null;
 
-      // Delete: the local doc is dropped and Wave is left intact (plan). No
-      // enqueue.
+      // On delete, the local doc is just dropped and Wave is left intact —
+      // nothing to enqueue.
       if (!after) return;
 
       const before = beforeSnap?.exists ? beforeSnap.data() : null;
       if (!shouldEnqueueClientWrite(before, after)) return;
 
-      // NOTE: the mark-pending write touches only wave.* fields, so
-      // shouldEnqueueClientWrite returns false when the trigger re-fires
-      // (mappedFieldsHash is unchanged) — no second pending-write or loop.
+      // The mark-pending write below only touches wave.* fields, so when
+      // the trigger re-fires on it, mappedFieldsHash is unchanged and
+      // shouldEnqueueClientWrite returns false — no second pending-write,
+      // no loop.
       const clientId = event.params.clientId;
       const db = getFirestore();
 
-      // Compute once here; shouldEnqueueClientWrite also hashes internally
-      // but does not expose its result, so this call is the single explicit
-      // hash at the enqueue site.
+      // We compute the hash once here. shouldEnqueueClientWrite also hashes
+      // internally but doesn't expose its result, so this is the one
+      // explicit hash computed at the enqueue site.
       const hash = mappedFieldsHash(after);
 
       // Mark-pending + enqueue land in ONE WriteBatch so a crash between the
@@ -356,17 +344,17 @@ const waveUpsertCustomer = onDocumentWritten(
         "wave.syncState": "pending",
         "wave.syncError": null,
       });
-      // payloadHash is diagnostic only: the worker re-reads the live doc
-      // and recomputes before writing — the doc is the source of truth.
+      // payloadHash is diagnostic only — the worker re-reads the live doc
+      // and recomputes the hash before writing, since the doc is the real
+      // source of truth.
       await enqueueCustomerUpsert(clientId, {batch, payloadHash: hash});
       try {
         await batch.commit();
       } catch (e) {
-        // The batch fails atomically when the doc was deleted between the
-        // trigger firing and the commit (update precondition). Fall back to
-        // enqueue-only: the worker resolves a missing doc as a clean skip,
-        // and nothing is left half-written. Any other failure surfaces the
-        // same way; retry:true re-runs the (idempotent) handler.
+        // The batch fails atomically when the doc was deleted before
+        // commit, so we fall back to enqueue-only. The worker treats a
+        // missing doc as a clean skip, and any other failure just retries
+        // via retry:true's idempotent re-run.
         logger.warn("waveUpsertCustomer: batched mark-pending failed; " +
             "enqueueing without it", {clientId, err: e.message});
         await enqueueCustomerUpsert(clientId, {payloadHash: hash});
@@ -375,17 +363,13 @@ const waveUpsertCustomer = onDocumentWritten(
     },
 );
 
-// 4) waveSyncWorker — drains the Wave outbox on a schedule. Single instance so
-// Wave pacing stays simple; the worker's lease reaper + transactional claim
-// handle robustness. 1 run / 5 min × default batchLimit 30 = 6 Wave calls/min
-// (< 60); the 5-min cadence is a cost tradeoff — a customer edit syncs within a
-// few minutes rather than ~1, in exchange for ~5x fewer scheduler invocations.
-//
-// timeoutSeconds is raised to 540 because a worst-case drain is minutes long
-// (up to 30 serial jobs, each with client-level Retry-After sleeps of up to
-// 60s × 3 retries); the default 60s timeout would kill the run mid-dispatch.
-// drainQueue additionally gets a wall-clock deadline at ~70% of the timeout
-// so it stops claiming new jobs in time to finish its outcome writes cleanly.
+// waveSyncWorker — drains the Wave outbox on a schedule. It's single-instance
+// for simple pacing; the lease reaper and transactional claim are what
+// actually handle robustness.
+// timeoutSeconds is raised to 540 because a worst-case 30-job drain (with
+// Retry-After sleeps) would blow past the default 60s. drainQueue gets a
+// deadline at ~70% of the timeout, so it stops claiming new jobs in time to
+// finish writing outcomes cleanly.
 const WORKER_TIMEOUT_SECONDS = 540;
 const WORKER_DEADLINE_FRACTION = 0.7;
 
@@ -397,16 +381,18 @@ const waveSyncWorker = onSchedule(
       timeoutSeconds: WORKER_TIMEOUT_SECONDS,
     },
     async () => {
-      // Cheap gate: skip the run entirely while Wave is not connected (the
-      // cached read avoids a Firestore read every run on idle installs).
+      // Cheap gate that skips the run entirely while Wave isn't connected.
+      // The cached read avoids a Firestore read on every run for idle
+      // installs.
       const businessId = await readWaveBusinessIdCached();
       if (!businessId) {
         logger.debug("waveSyncWorker: not bootstrapped — nothing to do");
         return;
       }
-      // `graphql`/`upsertCustomer` intentionally omitted: drainQueue defaults
-      // to the real Wave client (WAVE_FULL_ACCESS_TOKEN is in scope via this
-      // function's `secrets` binding).
+      // We intentionally don't pass `graphql`/`upsertCustomer` here —
+      // drainQueue defaults to the real Wave client, and
+      // WAVE_FULL_ACCESS_TOKEN is already in scope via this function's
+      // `secrets` binding.
       const deadlineMs = Date.now() +
         WORKER_TIMEOUT_SECONDS * 1000 * WORKER_DEADLINE_FRACTION;
       const summary = await drainQueue({businessId, deadlineMs});
@@ -421,10 +407,9 @@ const waveSyncWorker = onSchedule(
     },
 );
 
-// 5) waveScheduledImport — daily Wave → App auto-import. Runs importCustomers()
-// only when the configured cadence is due (see isImportDue). Server-triggered,
-// so no App Check / rate limit. Idempotent import path; a per-run failure is
-// logged (there is no user to surface it to) and retried on the next day's run.
+// waveScheduledImport — daily Wave → App auto-import, only runs
+// importCustomers() when the configured cadence is due. A per-run failure
+// just logs and retries the next day.
 const waveScheduledImport = onSchedule(
     {
       schedule: "every 24 hours",

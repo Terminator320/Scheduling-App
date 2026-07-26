@@ -77,19 +77,20 @@ class SignInState {
 }
 
 /// Orchestrates the sign-in flow shared by the login form and the
-/// return-from-signup path (auth call, uid-keyed profile lookup with retry,
-/// active check, best-effort cache writes) and returns a [SignInOutcome];
-/// the screen owns form state and navigation.
+/// return-from-signup path, returning a [SignInOutcome]; the screen owns form
+/// state and navigation.
 class SignInController extends Notifier<SignInState> {
   @override
   SignInState build() => const SignInState();
 
-  /// Full credential sign-in; on success stays in-progress, otherwise resets to enable form.
+  /// Runs a full credential sign-in — on success it stays in-progress, and on
+  /// any failure it resets itself so the form re-enables.
   Future<SignInOutcome> signIn({
     required String email,
     required String password,
   }) async {
-    // Resolve dependencies before first await (disposed notifier ref throws in Riverpod 3).
+    // Grab these dependencies before the first await — in Riverpod 3, reading
+    // ref after the notifier is disposed throws.
     final auth = ref.read(authServiceProvider);
     final employees = ref.read(employeesRepositoryProvider);
     final authCache = ref.read(authCacheProvider);
@@ -105,7 +106,8 @@ class SignInController extends Notifier<SignInState> {
         return const SignInInvalidCredentials();
       }
 
-      // Provisioned users have uid-keyed doc; invited employees activated server-side, no client fallback.
+      // Provisioned users have a doc keyed by uid. Invited employees get
+      // activated server-side, so there's no client-side fallback here.
       final userDoc = await _retryOnAuthPropagation(
         () => employees.findUserByUid(user.uid),
       );
@@ -125,8 +127,9 @@ class SignInController extends Notifier<SignInState> {
         return const SignInAccountDisabled();
       }
 
-      // Best-effort identity cache + remembered email: neither may delay or
-      // fail the sign-in, so they run unawaited and only log on failure.
+      // The identity cache and remembered email are best-effort — neither
+      // should delay or fail the sign-in, so we fire them off unawaited and
+      // just log if they fail.
       unawaited(
         authCache.save(employee).catchError((Object e, StackTrace st) {
           logger.warn('login.auth_cache_save', e, st);
@@ -167,9 +170,8 @@ class SignInController extends Notifier<SignInState> {
       if (userDoc == null) return const SignInProfilePending();
       return SignInSuccess(EmployeeRecord.fromMap(userDoc.id, userDoc.data));
     } catch (error, stackTrace) {
-      // The account IS created and active server-side — a failed profile read
-      // here must not escape to the zone handler and strand the user with no
-      // message. "Pending" tells them to sign in normally, which recovers.
+      // The account is already created and active server-side, so we just
+      // report "pending" here — the user can recover by signing in normally.
       logger.warn('login.resume_after_sign_up', error, stackTrace);
       return const SignInProfilePending();
     }
@@ -180,11 +182,9 @@ class SignInController extends Notifier<SignInState> {
   }
 }
 
-/// signInWithEmailAndPassword resolves before the freshly minted ID token has
-/// propagated to Firestore's request channel, so the first authorized read
-/// fired right after sign-in can come back permission-denied even though the
-/// user is signed in — the "have to tap Sign in twice" race. Retry such a
-/// read once after a short delay, by which point the token has propagated.
+/// Retries a read once after a short delay if it comes back permission-denied,
+/// since the freshly minted ID token can lag Firestore's request channel
+/// right after sign-in.
 Future<T> _retryOnAuthPropagation<T>(Future<T> Function() read) async {
   try {
     return await read();

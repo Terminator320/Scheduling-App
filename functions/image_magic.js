@@ -3,15 +3,14 @@
 /**
  * @fileoverview Pure image magic-byte validation, split out from the Storage
  * trigger (`maintenance.js`) so it is unit-testable without loading
- * firebase-functions — `onObjectFinalized` eagerly resolves a Storage bucket
- * at trigger-definition time, which a plain unit test has no config for.
+ * firebase-functions (`onObjectFinalized` eagerly resolves a Storage bucket
+ * at load).
  * @module image_magic
  */
 
 /**
- * True when the first bytes are a JPEG (FF D8 FF) or PNG (89 50 4E 47) magic
- * signature. Client contentType/extension are not trusted — this is the
- * server-side backstop against a direct REST/SDK caller.
+ * True when the first bytes match a JPEG or PNG magic signature. This is the
+ * server-side backstop, since client contentType/extension can't be trusted.
  * @param {?Buffer} buffer First bytes of the uploaded object.
  * @return {boolean}
  */

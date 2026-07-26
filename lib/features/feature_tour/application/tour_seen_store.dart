@@ -8,7 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// SharedPreferences key: names of hub tabs whose tour has been seen.
 const _keyTourSeenTabs = 'tour_seen_tabs';
 
-/// Tours seen on device; await ready before reading to avoid replaying on cold start.
+/// Tracks which tours this device has already seen. Await `ready` before
+/// reading it, or a cold start can replay a tour that was already seen.
 class TourSeenController extends Notifier<Set<AdaptiveDestination>> {
   late final Future<void> ready = _load();
 
@@ -27,7 +28,8 @@ class TourSeenController extends Notifier<Set<AdaptiveDestination>> {
           if (names.contains(tab.name)) tab,
       };
     } catch (e, st) {
-      // Unawaited from build(); defaults to fresh install.
+      // This is unawaited from build(), so on failure we just fall back to
+      // treating the device like a fresh install.
       ref.read(loggerProvider).warn('TOUR read seen flags failed', e, st);
     }
   }
@@ -42,7 +44,7 @@ class TourSeenController extends Notifier<Set<AdaptiveDestination>> {
     await _save();
   }
 
-  /// Unserialized save; safe only because writers can't overlap.
+  /// Saves aren't serialized, but that's fine since writers never overlap.
   Future<void> _save() async {
     try {
       final prefs = await SharedPreferences.getInstance();

@@ -5,10 +5,10 @@
 // renders the "System Card" design: small = next job, medium/large = the day's
 // job list.
 //
-// The payload carries BOTH today's and tomorrow's jobs plus a `rolloverAt`
-// instant. The timeline seeds an entry at that instant so the widget flips from
-// today to tomorrow ON-DEVICE — with no app run or push — one hour after the
-// last job of the day is finished (see buildWidgetPayload in
+// The payload carries both today's and tomorrow's jobs plus a `rolloverAt`
+// instant. The timeline seeds an entry at that instant so the widget flips
+// from today to tomorrow ON-DEVICE (no app run or push needed) about an
+// hour after the day's last job finishes (see buildWidgetPayload in
 // widget_sync_service.dart).
 //
 // This file is compiled only on macOS/Xcode (see the Mac handoff runbook).
@@ -21,11 +21,10 @@ import WidgetKit
 private let appGroupId = "group.net.vogas.scheduling"
 private let payloadKey = "schedulePayload"
 
-// The Flutter side emits an absolute UTC instant with milliseconds
-// (e.g. 2026-07-11T18:30:00.000Z). A default ISO8601DateFormatter has NO
-// `.withFractionalSeconds` and returns nil for that string, so job times would
-// render blank and the timeline would never roll over. Parse with fractional
-// seconds first, then fall back to the no-millis form for safety.
+// The Flutter side emits UTC instants with milliseconds
+// (e.g. 2026-07-11T18:30:00.000Z). The default ISO8601DateFormatter can't
+// parse that unless `.withFractionalSeconds` is set, so we try the
+// fractional-seconds format first and fall back to the no-millis form.
 private let isoWithMillis: ISO8601DateFormatter = {
     let f = ISO8601DateFormatter()
     f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -47,8 +46,8 @@ struct Job: Codable, Hashable {
     }
 
     /// Deep link into the app's calendar for this appointment. The Flutter
-    /// side (home_widget `widgetClicked`) opens its detail sheet. Scheme is
-    /// registered in Info.plist (`CFBundleURLTypes`).
+    /// side (home_widget `widgetClicked`) opens the detail sheet via the
+    /// scheme registered in Info.plist (`CFBundleURLTypes`).
     var deepLink: URL? {
         URL(string: "esproschedule://appointment?id=\(id)")
     }
@@ -64,8 +63,9 @@ struct SchedulePayload: Codable {
     let generatedAt: String
     let todayDate: String?
     let tomorrowDate: String?
-    // When to switch today -> tomorrow (1h after the last job of the day is
-    // finished). Nil while any job is still open, so the widget stays on today.
+    // When to switch from today to tomorrow — 1h after the day's last job
+    // finishes. It's nil while any job is still open, so the widget stays on
+    // today.
     let rolloverAt: String?
     let todayJobs: [Job]?
     let tomorrowJobs: [Job]?
@@ -327,9 +327,10 @@ struct ScheduleWidgetEntryView: View {
     @Environment(\.widgetFamily) var family
     var entry: Provider.Entry
 
-    // Resolve which day to show FOR THIS ENTRY'S DATE — a future entry seeded at
-    // the rollover instant renders tomorrow even though the payload was written
-    // (with the app open / by a push) while it was still today.
+    // Resolve which day to show FOR THIS ENTRY'S DATE. A future entry seeded
+    // at the rollover instant renders tomorrow, even though the payload
+    // itself was written earlier — while it was still today, either with the
+    // app open or by a push.
     private var day: DaySchedule {
         entry.payload?.resolved(at: entry.date) ?? .empty
     }
@@ -357,10 +358,10 @@ struct ScheduleWidgetEntryView: View {
 }
 
 extension View {
-    /// iOS 17 requires widgets to declare a container background or they render
-    /// a "Please adopt containerBackground" placeholder. Gated so it still
-    /// compiles at the iOS 15 deployment target. `.background` follows the
-    /// phone's light/dark mode, matching the "System Card" design.
+    /// iOS 17 requires a declared container background, or widgets render a
+    /// "Please adopt containerBackground" placeholder. This is gated so it
+    /// still compiles at the iOS 15 deployment target, and uses `.background`
+    /// to match the phone's light/dark mode.
     @ViewBuilder
     func widgetContainerBackground() -> some View {
         if #available(iOS 17.0, *) {

@@ -13,7 +13,8 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
     this.textScaler = TextScaler.noScaling,
   });
 
-  /// Vertical margins around the field — fixed chrome, doesn't grow with text size.
+  /// Vertical margins around the field. This is fixed chrome, so it doesn't
+  /// grow with text size.
   static const double _verticalMargins = AppSpacing.sp8 * 2;
 
   /// The field itself (text + content padding + border) at text scale 1.0.
@@ -23,7 +24,7 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
 
   final ValueChanged<String>? onChanged;
 
-  /// Placeholder shown in the field; defaults to localized "Search...".
+  /// Placeholder shown in the field. Defaults to the localized "Search..." string.
   final String? hintText;
   final TextEditingController? controller;
   final FocusNode? focusNode;

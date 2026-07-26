@@ -21,7 +21,7 @@ import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/centered_error_text.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 
-/// Admin-only business overview; reached from settings drawer.
+/// Business overview for admins only, reached from the settings drawer.
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({
     required this.isAdmin,
@@ -41,7 +41,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  // Key for end drawer; matches hub screens' pattern.
+  // Key for the end drawer, matching the pattern used by the hub screens.
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
@@ -79,7 +79,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           Navigator.pop(context);
         },
         actions: [
-          // No drawer in split layout (nav rail shown instead).
+          // Split layout shows a nav rail instead, so there's no drawer to open here.
           if (!context.isSplitLayout)
             IconButton(
               icon: Icon(Icons.menu, color: scheme.onPrimary),
@@ -122,8 +122,8 @@ class _StatsList extends ConsumerWidget {
     final colorMap = ref.watch(employeeColorMapProvider);
     final nameMap = ref.watch(employeeNameMapProvider);
     final now = ref.watch(dashboardClockProvider)();
-    // Zero list padding so the hero bleeds edge-to-edge; the sections carry
-    // their own sp16 inset.
+    // List padding is zero so the hero bleeds edge-to-edge — the sections
+    // below add their own sp16 inset.
     return ListView(
       padding: EdgeInsets.zero,
       children: [

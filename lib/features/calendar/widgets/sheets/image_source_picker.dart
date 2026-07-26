@@ -9,7 +9,8 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/permissions/media_permission_service.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Prompt for capture source and return picked files (gallery: OS picker, camera: gated by permission).
+/// Prompts the user to pick a capture source and returns the picked files.
+/// Gallery goes straight to the OS picker; camera is gated behind a permission check first.
 Future<List<File>> pickAppointmentImages(
   BuildContext context,
   WidgetRef ref,

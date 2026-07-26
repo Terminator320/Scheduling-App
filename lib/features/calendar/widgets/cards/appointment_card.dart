@@ -119,7 +119,7 @@ class _TitleHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Plain Text, not AutoSizeText (IntrinsicHeight can't measure its LayoutBuilder).
+    // Use a plain Text here, not AutoSizeText — IntrinsicHeight can't measure AutoSizeText's LayoutBuilder.
     final titleText = Text(
       title,
       maxLines: compact ? 3 : 2,
@@ -128,7 +128,7 @@ class _TitleHeader extends StatelessWidget {
     );
     final chip = StatusChip(status: status);
 
-    // Overdue jobs get a leading warning glyph (employee-color bar is identity, not status).
+    // Overdue jobs get a leading warning glyph. The employee-color bar on the left is about identity, not status, so it stays as-is.
     Widget titleContent = titleText;
     if (status == AppointmentStatus.overdue) {
       titleContent = Row(

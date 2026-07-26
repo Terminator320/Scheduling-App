@@ -101,9 +101,8 @@ describe("toWaveCustomerInput", () => {
   });
 
   test("full display address → addressLine1 is the street line only", () => {
-    // The app stores `address` as a full display address; city/province/
-    // country/postalCode are sent as their own fields, so addressLine1 must
-    // NOT repeat them.
+    // addressLine1 must not repeat city/province/country/postalCode — those
+    // are sent as their own fields.
     const result = toWaveCustomerInput({
       name: "Test",
       address: "3450 Main St, Montreal, QC H3Z 2Y7, Canada",
@@ -120,8 +119,8 @@ describe("toWaveCustomerInput", () => {
   });
 
   test("full address with apt already in street → apt not doubled", () => {
-    // App-saved clients bake the apt into `address` (e.g. "12-3450 Main St,
-    // ...") AND keep it in `apt`; addressLine1 must keep a single apt prefix.
+    // Some app-saved clients have apt baked into both `address` and `apt` —
+    // addressLine1 must not double the prefix.
     const result = toWaveCustomerInput({
       name: "Test",
       address: "12-3450 Main St, Montreal, QC H3Z 2Y7, Canada",
@@ -237,7 +236,7 @@ describe("toWaveCustomerInput", () => {
     expect(result).not.toHaveProperty("id");
   });
 
-  // Fix 1: province case-insensitivity
+  // Province matching should be case-insensitive too.
   test("province lowercase qc → provinceCode CA-QC", () => {
     const result = toWaveCustomerInput({name: "T", province: "qc"});
     expect(result.address.provinceCode).toBe("CA-QC");
@@ -248,13 +247,13 @@ describe("toWaveCustomerInput", () => {
     expect(result.address.provinceCode).toBe("CA-QC");
   });
 
-  // Fix 1: country ISO-2 passthrough case-insensitivity
+  // Same case-insensitivity for the ISO-2 country passthrough.
   test("country lowercase ca → countryCode CA", () => {
     const result = toWaveCustomerInput({name: "T", country: "ca"});
     expect(result.address.countryCode).toBe("CA");
   });
 
-  // Fix 2: name trimming
+  // Names should get trimmed too.
   test("name with trailing space → trimmed in output", () => {
     const result = toWaveCustomerInput({name: "Acme "});
     expect(result.name).toBe("Acme");
@@ -325,7 +324,7 @@ describe("mappedFieldsHash", () => {
     expect(h1).not.toBe(h2);
   });
 
-  // Fix 2: name trim produces identical hash regardless of trailing space
+  // Trimming shouldn't change the hash, even with a trailing space on input.
   test("name with trailing space → same hash as trimmed name", () => {
     const base = {
       city: "Montreal", province: "QC", country: "Canada",
@@ -453,8 +452,8 @@ describe("fromWaveCustomer", () => {
         addressLine2: "Suite 400",
       },
     });
-    // Joining line2 into `address` would truncate it on write-back (the
-    // patch path extracts the street line) — keep it separate instead.
+    // Joining line2 into `address` would truncate it on write-back, since the
+    // patch path only pulls out the street line — so we keep it separate.
     expect(result.address).toBe("3450 Main St");
     expect(result.addressLine2).toBe("Suite 400");
   });
@@ -578,9 +577,9 @@ describe("round-trip identity", () => {
     expect(imported.address).toBe("3450 Main St");
     expect(imported.addressLine2).toBe("Suite 400");
 
-    // …then map the stored doc back to a Wave patch input: BOTH lines must
-    // come back intact (previously line2 was joined into address on import
-    // and truncated away on write-back).
+    // …then map the stored doc back to a Wave patch input. Both lines need
+    // to survive intact — line2 used to get joined into address on import
+    // and then truncated away on write-back.
     const patchInput = toWaveCustomerInput(imported);
     expect(patchInput.address.addressLine1).toBe("3450 Main St");
     expect(patchInput.address.addressLine2).toBe("Suite 400");
@@ -601,9 +600,8 @@ describe("round-trip identity", () => {
           },
         };
         const imported = fromWaveCustomer(node);
-        // The import stamps lastSyncedHash = mappedFieldsHash(imported); the
-        // trigger's echo suppression relies on the re-read doc hashing to the
-        // same value.
+        // The trigger's echo suppression relies on the re-read doc hashing to
+        // the same lastSyncedHash.
         expect(mappedFieldsHash(imported)).toBe(mappedFieldsHash({
           ...imported,
         }));
@@ -619,15 +617,15 @@ describe("round-trip identity", () => {
       country: "Canada",
       postalCode: "H2X 1Y4",
     });
-    // Locality tail segments are stripped; the comma INSIDE the street line
-    // ("Building A") survives instead of being cut at the first comma.
+    // Locality tail segments are stripped, but a comma inside the street line
+    // itself ("Building A") is preserved.
     expect(result.address.addressLine1).toBe("100 Main St, Building A");
   });
 
   test("imported line1 containing a comma survives write-back untouched",
       () => {
-        // An imported Wave customer stores line1 verbatim in `address`; with
-        // no locality tail matching, nothing may be cut off.
+        // No locality tail matches, so an imported line1 must survive
+        // write-back untouched.
         const result = toWaveCustomerInput({
           name: "T",
           address: "100 Main St, Building A",
@@ -660,9 +658,8 @@ describe("round-trip identity", () => {
   });
 
   test("apt-prefixed address round-trips: apt merged into address", () => {
-    // When apt is present, toWaveCustomerInput merges it into addressLine1.
-    // On import the merged string becomes `address` and apt is always ''.
-    // This is the intended lossy-for-apt behaviour (Wave has no apt field).
+    // Merging apt into addressLine1 on export is intentionally lossy — import
+    // always returns apt as '' since Wave has no apt field.
     const client = {
       name: "Apt Client",
       address: "3450 Main St",
@@ -683,7 +680,8 @@ describe("round-trip identity", () => {
         country: {code: "CA", name: "Canada"},
       },
     });
-    // The merged form becomes the new address; apt is blank (Wave has no apt).
+    // The merged form becomes the new address, and apt comes back blank
+    // since Wave has no apt field.
     expect(imported.address).toBe("12-3450 Main St");
     expect(imported.apt).toBe("");
   });

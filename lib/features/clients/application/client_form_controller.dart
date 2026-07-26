@@ -10,7 +10,7 @@ import 'package:scheduling/features/clients/contact_export_launcher.dart';
 import 'package:scheduling/features/clients/data/contact_link_store.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 
-/// Outcome of client add/update; mapped to notices/navigation by the forms.
+/// Outcome of a client add/update. The forms map this to notices or navigation.
 sealed class ClientSaveOutcome {
   const ClientSaveOutcome();
 }
@@ -64,18 +64,22 @@ class ClientFormActivity {
   int get hashCode => Object.hash(isSaving, isDeleting);
 }
 
-/// CRUD orchestration shared by add/edit/detail views; repository write, list refresh, and best-effort phone-contact sync.
+/// CRUD orchestration shared by the add/edit/detail views. Handles the repository
+/// write, the list refresh, and a best-effort phone-contact sync.
 class ClientFormController extends Notifier<ClientFormActivity> {
   @override
   ClientFormActivity build() => const ClientFormActivity();
 
-  /// Persists new client; state resets in finally since this provider is shared with detail pane (split layout).
+  /// Persists a new client. State resets in the `finally` block because this provider
+  /// is shared with the detail pane in the split layout.
   Future<ClientSaveOutcome> addClient(ClientRecord client) async {
-    // Fail fast offline; Firestore writes block until server ack, so button would spin until reconnect (CLI-ADD maps exception).
+    // Bail out early if we're offline — Firestore writes block until the server acks,
+    // so the button would just spin until reconnect (CLI-ADD maps the exception).
     if (ref.read(isOfflineProvider)) {
       return const ClientSaveFailed(SocketException('offline'));
     }
-    // Resolve dependencies before first await (disposed notifier Ref throws in Riverpod 3).
+    // Resolve dependencies before the first await — in Riverpod 3, a disposed notifier's
+    // Ref throws if you read it after that point.
     final repo = ref.read(clientsRepositoryProvider);
     final refresh = ref.read(clientsRefreshProvider.notifier);
     final logger = ref.read(loggerProvider);
@@ -94,7 +98,7 @@ class ClientFormController extends Notifier<ClientFormActivity> {
 
   /// Persists edit and mirrors to phone contact (best-effort, never blocks/fails the save).
   Future<ClientSaveOutcome> updateClient(ClientRecord client) async {
-    // Fail fast offline (CLI-SAVE notice on edit form).
+    // Bail out early if we're offline (the edit form shows the CLI-SAVE notice).
     if (ref.read(isOfflineProvider)) {
       return const ClientSaveFailed(SocketException('offline'));
     }

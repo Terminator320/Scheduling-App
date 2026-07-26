@@ -4,7 +4,8 @@ import 'package:scheduling/features/calendar/application/appointments_providers.
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 
-/// Facade over calendar-owned appointment history; keeps only calendar domain import for record type.
+/// A thin facade over calendar-owned appointment history, so this file only needs
+/// the calendar domain import for the record type.
 final historyPagerProvider = Provider<HistoryPager>(
   (ref) => HistoryPager(ref.watch(appointmentsRepositoryProvider)),
 );
@@ -23,7 +24,8 @@ class HistoryPager {
   }
 }
 
-/// Database-backed history search across whole window; autoDispose frees each query instance when unwatched.
+/// Database-backed history search across the whole window. It's autoDispose, so each
+/// query instance gets freed once nothing's watching it anymore.
 final historySearchProvider = FutureProvider.autoDispose
     .family<List<AppointmentRecord>, String>((
       ref,
@@ -36,7 +38,8 @@ final historySearchProvider = FutureProvider.autoDispose
       return repo.searchHistory(query);
     });
 
-/// Client appointments for Job history section; autoDispose keyed by clientId, re-fetches on local write.
+/// Client appointments for the Job history section. AutoDispose, keyed by clientId,
+/// and re-fetches whenever there's a local write.
 final clientJobHistoryProvider = FutureProvider.autoDispose
     .family<List<AppointmentRecord>, String>((ref, clientId) async {
       final repo = ref.watch(appointmentsRepositoryProvider);

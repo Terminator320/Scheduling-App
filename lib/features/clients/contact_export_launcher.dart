@@ -8,7 +8,8 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Contact properties the client sync owns; updating only these preserves others (photo, groups, account).
+/// The contact properties the client sync owns. Updating only these keeps everything
+/// else (photo, groups, account) untouched.
 const Set<ContactProperty> _syncedProperties = {
   ContactProperty.name,
   ContactProperty.organization,
@@ -49,7 +50,8 @@ Future<void> saveClientToPhoneContacts(
       }
     }
   } catch (e, st) {
-    // Contacts-plugin failure must reach Crashlytics; matches updateLinkedPhoneContact below.
+    // Log this so a contacts-plugin failure still reaches Crashlytics, same as
+    // updateLinkedPhoneContact below.
     ref
         .read(loggerProvider)
         .warn('CLI-CONTACT-SAVE saveClientToPhoneContacts failed', e, st);
@@ -59,13 +61,14 @@ Future<void> saveClientToPhoneContacts(
   }
 }
 
-/// Syncs client details to phone contact (best-effort, silent); overwrites only synced fields.
+/// Syncs client details to the phone contact, best-effort and silent. Only overwrites
+/// the synced fields.
 Future<void> updateLinkedPhoneContact({
   required ContactLinkStore linkStore,
   required AppLogger logger,
   required ClientRecord client,
 }) async {
-  // Whole sync is guarded; any failure must leave client save untouched.
+  // Guard the whole sync — any failure here must not affect the client save.
   try {
     final contactId = await linkStore.contactIdFor(client.id);
     if (contactId == null) return;
@@ -85,7 +88,8 @@ Future<void> updateLinkedPhoneContact({
     final mapped = clientToContact(client);
     await FlutterContacts.update(
       existing.copyWith(
-        // copyWith keeps old value on null; pass empty Name to clear contact name for name-only client.
+        // copyWith keeps the old value when passed null, so we pass an empty Name here
+        // to actually clear the contact's name for a name-only client.
         name: mapped.name ?? const Name(),
         organizations: mapped.organizations,
         phones: mapped.phones,
@@ -98,7 +102,8 @@ Future<void> updateLinkedPhoneContact({
   }
 }
 
-/// Maps ClientRecord to flutter_contacts Contact; display name lands on organization; first/last name structured.
+/// Maps a ClientRecord to a flutter_contacts Contact. The display name goes on the
+/// organization field, while first/last name gets its own structured field.
 Contact clientToContact(ClientRecord client) {
   final displayName = client.name.trim();
   final first = client.firstName.trim();
@@ -107,7 +112,8 @@ Contact clientToContact(ClientRecord client) {
   final mobile = client.mobile.trim();
   final email = client.email.trim();
 
-  // Structured first/last name preferred; falls back to display name so name-only client gets contact name.
+  // Prefer the structured first/last name; fall back to the display name so a
+  // name-only client still gets a contact name.
   final Name? name;
   if (first.isNotEmpty || last.isNotEmpty) {
     name = Name(first: first, last: last);

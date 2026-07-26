@@ -46,7 +46,8 @@ void main() {
     when(() => query.limit(any())).thenReturn(query);
     when(() => query.get()).thenAnswer((_) async => snapshot);
 
-    // Deliberately NOT in start-time order: the repository must sort in Dart.
+    // These are deliberately out of start-time order — the repository is
+    // responsible for sorting them in Dart.
     final docs = [
       doc('older', {
         'clientId': 'c1',
@@ -73,7 +74,8 @@ void main() {
     await repo().fetchClientHistory(clientId: 'c1', limit: 25);
     verify(() => collection.where('clientId', isEqualTo: 'c1')).called(1);
     verify(() => query.limit(25)).called(1);
-    // No composite index: the query must never add a server-side orderBy.
+    // There's no composite index, so the query must never add a server-side
+    // orderBy.
     verifyNever(() => query.orderBy(any()));
   });
 

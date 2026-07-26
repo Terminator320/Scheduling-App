@@ -1,8 +1,8 @@
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 
-/// Comma-joined assignee names for [appointment] from [nameMap], falling back
-/// to denormalized `employeeNames` when an assignee is missing from that
-/// stream (null if no name is known).
+/// Joins the assignee names for [appointment] using [nameMap], falling back
+/// to the denormalized `employeeNames` when an assignee isn't in that
+/// stream. Returns null if no name can be found at all.
 String? resolveAssigneeNames(
   AppointmentRecord appointment,
   Map<String, String> nameMap,

@@ -32,7 +32,8 @@ final appointmentsInRangeProvider = StreamProvider.family
       return ref.watch(appointmentsRepositoryProvider).watchInRange(range);
     });
 
-/// Family key for [myAppointmentsProvider]; records are structural so alias is private.
+/// Family key for [myAppointmentsProvider]. Kept as a private typedef since
+/// records are structurally typed anyway.
 typedef _MyAppointmentsKey = ({String employeeId, AppointmentDateRange range});
 
 final myAppointmentsProvider = StreamProvider.family

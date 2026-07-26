@@ -23,7 +23,8 @@ class ClientsRefresh extends Notifier<int> {
   void bump() => state++;
 }
 
-/// Comprehensive client search with relevance scoring; autoDispose frees results per query instance.
+/// Full client search with relevance scoring. AutoDispose frees the results once each
+/// query instance is no longer watched.
 final clientSearchProvider = FutureProvider.autoDispose
     .family<List<ClientRecord>, String>((
       ref,

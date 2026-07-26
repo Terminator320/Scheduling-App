@@ -92,7 +92,8 @@ class AppCalendar extends StatelessWidget {
             Theme.of(context).textTheme.titleMedium ?? const TextStyle(),
       ),
 
-      // table_calendar wraps day cells in Semantics that swallow inner Semantics; markerBuilder's count merges into the announcement.
+      // table_calendar wraps each day cell in Semantics that swallow any inner
+      // Semantics nodes, so markerBuilder's count just merges into that same announcement.
       calendarBuilders: CalendarBuilders(
         todayBuilder: (context, day, focusedDay) {
           final scheme = Theme.of(context).colorScheme;
@@ -135,9 +136,9 @@ class AppCalendar extends StatelessWidget {
           final appointments = events.cast<AppointmentRecord>();
           final fallback = Theme.of(context).colorScheme.outline;
 
-          // The dots are colour-only, so exclude them from semantics and
-          // announce the day's appointment count instead, merging into the
-          // cell's full-date node (see the note on calendarBuilders above).
+          // The dots are colour-only, so we exclude them from semantics and announce
+          // the day's appointment count instead. That announcement merges into the
+          // cell's full-date node (see the calendarBuilders note above).
           return Positioned(
             bottom: 2,
             child: Semantics(

@@ -135,8 +135,9 @@ describe("syncUsersByUid bridge/presence isolation", () => {
       commit: jest.fn().mockResolvedValue(undefined),
     };
     presenceDelete = jest.fn().mockRejectedValue(new Error("boom"));
-    // recursiveDeletes records the collection paths handed to
-    // db.recursiveDelete; collectionDeletes records deleted doc-marker paths.
+    // recursiveDeletes records the collection paths passed to
+    // db.recursiveDelete, and collectionDeletes records the deleted
+    // doc-marker paths.
     recursiveDeletes = [];
     collectionDeletes = [];
     db = {
@@ -207,8 +208,8 @@ describe("syncUsersByUid bridge/presence isolation", () => {
             syncUsersByUid.run(makeEvent("u_doc", before, after)),
         ).resolves.toBeUndefined();
 
-        // Both token subcollections were recursively deleted (paginates past
-        // the 500-write batch cap).
+        // Both token subcollections were recursively deleted — that's what
+        // lets us paginate past the 500-write batch cap.
         expect(recursiveDeletes).toEqual([
           "users/u_doc/fcmTokens",
           "users/u_doc/liveActivityTokens",

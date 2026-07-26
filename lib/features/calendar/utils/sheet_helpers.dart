@@ -21,7 +21,7 @@ Future<AppointmentRecord?> showAddEventPopup(
   );
 }
 
-/// Opens the appointment detail sheet; [showActions] is REQUIRED (defaulting to true exposed admin-only controls to employees).
+/// Opens the appointment detail sheet. [showActions] is REQUIRED — a past default of true once exposed admin-only controls to employees, so don't add a default back.
 Future<void> showEventDetails(
   BuildContext context,
   AppointmentRecord a, {

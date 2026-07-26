@@ -8,7 +8,8 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/info_card.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
-/// Additional contacts section (shared by client/appointment detail views); collapsible hides cards behind a header.
+/// The additional-contacts section, shared by the client and appointment detail views.
+/// When collapsible, the cards stay hidden behind a header until tapped.
 class ClientContactsCards extends StatelessWidget {
   const ClientContactsCards({
     required this.contacts,

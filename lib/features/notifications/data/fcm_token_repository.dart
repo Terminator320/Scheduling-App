@@ -2,7 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
 
-/// Reads/writes `users/{docId}/fcmTokens/{token}` device-token docs; logs and swallows failures so token writes never break a flow.
+/// Reads and writes `users/{docId}/fcmTokens/{token}` device-token docs.
+/// Logs and swallows failures so a token write never breaks a flow.
 class FcmTokenRepository {
   FcmTokenRepository({required FirebaseFirestore firestore, AppLogger? logger})
     : _firestore = firestore,
@@ -20,8 +21,9 @@ class FcmTokenRepository {
       .collection('fcmTokens')
       .doc(token);
 
-  /// Upserts a device token with createdAt only on first write (not overwritten on refresh).
-  /// Plain get-then-set, NOT a transaction: concurrent transactions crash in cloud_firestore iOS plugin; cosmetic re-stamp of createdAt is acceptable.
+  /// Upserts a device token, setting `createdAt` only on the first write.
+  /// This is a plain get-then-set rather than a transaction, because
+  /// concurrent transactions crash the cloud_firestore iOS plugin.
   Future<void> upsertToken({
     required String userDocId,
     required String token,

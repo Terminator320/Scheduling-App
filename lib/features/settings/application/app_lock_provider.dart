@@ -16,7 +16,8 @@ class AppLockController extends Notifier<bool> {
           .read(secureStorageServiceProvider)
           .readFlag(SecureStorageKeys.biometricEnabled);
     } catch (e, st) {
-      // Encrypted-storage reads throw on Android keystore failure or iOS pre-first-unlock (environmental, not defect).
+      // Encrypted-storage reads can throw on an Android keystore failure or
+      // iOS pre-first-unlock — that's environmental, not a bug.
       if (isKeychainLockedError(e)) {
         ref.read(loggerProvider).warn('APPLOCK read skipped: keychain locked');
       } else {

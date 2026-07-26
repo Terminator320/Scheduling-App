@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 
-/// Centered muted error text; reads as empty state, not alarm.
+/// Centered muted error text — reads as an empty state, not an alarm.
 class CenteredErrorText extends StatelessWidget {
   const CenteredErrorText({required this.message, super.key});
 

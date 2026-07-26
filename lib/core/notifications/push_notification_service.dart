@@ -5,7 +5,8 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
 
-/// Thin wrapper over [FirebaseMessaging] with every call guarded; device-only, no unit tests.
+/// Thin wrapper over [FirebaseMessaging] with every call guarded against
+/// errors. Device-only, so there are no unit tests for it.
 class PushNotificationService {
   PushNotificationService({FirebaseMessaging? messaging, AppLogger? logger})
     : _injectedMessaging = messaging,
@@ -14,11 +15,13 @@ class PushNotificationService {
   final FirebaseMessaging? _injectedMessaging;
   final AppLogger _logger;
 
-  // Resolved lazily; eager .instance throws when Firebase isn't initialized.
+  // Resolved lazily, since eager .instance access throws if Firebase isn't
+  // initialized yet.
   FirebaseMessaging get _messaging =>
       _injectedMessaging ?? FirebaseMessaging.instance;
 
-  /// Prompts for OS notification permission; returns true when granted or provisional.
+  /// Prompts for OS notification permission. Returns true when granted or
+  /// provisional.
   Future<bool> requestPermission() async {
     try {
       final settings = await _messaging.requestPermission();
@@ -29,7 +32,8 @@ class PushNotificationService {
     }
   }
 
-  /// OS-level authorization status without prompting; defaults to notDetermined on failure.
+  /// OS-level authorization status without prompting. Defaults to
+  /// notDetermined on failure.
   Future<AuthorizationStatus> authorizationStatus() async {
     try {
       final settings = await _messaging.getNotificationSettings();
@@ -55,7 +59,8 @@ class PushNotificationService {
     }
   }
 
-  /// iOS foreground banners; without this, foreground notifications show nothing on iOS.
+  /// Enables iOS foreground banners — without this, foreground notifications
+  /// show nothing on iOS.
   Future<void> configureForegroundPresentation() async {
     try {
       await _messaging.setForegroundNotificationPresentationOptions(
@@ -68,7 +73,8 @@ class PushNotificationService {
     }
   }
 
-  /// Device FCM token (null on failure); on iOS, retries briefly if APNS token is momentarily null.
+  /// Device FCM token, or null on failure. On iOS, retries briefly if the
+  /// APNS token is momentarily null.
   Future<String?> currentToken() async {
     try {
       if (Platform.isIOS) {

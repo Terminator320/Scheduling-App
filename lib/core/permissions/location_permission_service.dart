@@ -11,7 +11,9 @@ enum LocationPermissionResult {
   servicesDisabled,
 }
 
-/// Wraps runtime location permission for presence tracking; both whileInUse and always grant access, with one-time Always upgrade prompt on iOS.
+/// Wraps runtime location permission for presence tracking. Both whileInUse
+/// and always count as granted access, and iOS gets a one-time prompt to
+/// upgrade from whileInUse to Always.
 class LocationPermissionService {
   LocationPermissionService({
     Future<bool> Function()? isServiceEnabled,
@@ -33,7 +35,8 @@ class LocationPermissionService {
     var permission = await _checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await _requestPermission();
-      // Fresh while-in-use grant: re-prompt to escalate to Always.
+      // Just got a fresh while-in-use grant — re-prompt once to try to
+      // escalate it to Always.
       if (permission == LocationPermission.whileInUse) {
         permission = await _requestPermission();
       }

@@ -4,7 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 
-/// Centralized key namespace for [SecureStorageService]; one place to audit persistence.
+/// Centralized key namespace for [SecureStorageService], so there's one
+/// place to audit persistence.
 abstract final class SecureStorageKeys {
   /// Last e-mail used to sign in, prefilled on the login screen.
   static const rememberedEmail = 'remembered_email';
@@ -21,7 +22,8 @@ abstract final class SecureStorageKeys {
   static const cacheColorValue = 'uc_color_value';
   static const cacheName = 'uc_name';
 
-  /// All user-data keys; add new keys here for iOS accessibility migration.
+  /// All user-data keys — add new keys here so they get picked up by the iOS
+  /// accessibility migration.
   static const all = [
     rememberedEmail,
     biometricEnabled,
@@ -33,11 +35,13 @@ abstract final class SecureStorageKeys {
   ];
 }
 
-/// True when [e] is the iOS Keychain refusing access because the device is locked (-25308); log without Crashlytics error record.
+/// True when [e] is the iOS Keychain refusing access because the device is
+/// locked (-25308). Log this case without sending it to Crashlytics as an error.
 bool isKeychainLockedError(Object e) =>
     e is PlatformException && (e.message?.contains('-25308') ?? false);
 
-/// Thin wrapper using first_unlock_this_device accessibility to avoid -25308 on locked phones; _ensureMigrated rewrites keys before any operation.
+/// Thin wrapper that uses first_unlock_this_device accessibility to avoid
+/// -25308 on locked phones. _ensureMigrated rewrites keys before any operation runs.
 class SecureStorageService {
   SecureStorageService({FlutterSecureStorage? storage, AppLogger? logger})
     : _storage =
@@ -73,7 +77,8 @@ class SecureStorageService {
     return _migration ??= _migrate();
   }
 
-  // One-shot per launch; retries until the migration marker is written.
+  // Runs once per launch, and keeps retrying on future launches until the
+  // migration marker gets written.
   Future<void> _migrate() async {
     try {
       if (await _storage.read(key: _migratedMarker) == 'true') return;
@@ -94,7 +99,8 @@ class SecureStorageService {
       }
       await _storage.write(key: _migratedMarker, value: 'true');
     } catch (e, st) {
-      // Locked keychain or transient failure; retry next launch and log separately.
+      // Could be a locked keychain or just a transient failure — either way,
+      // retry next launch and log the two cases separately.
       if (isKeychainLockedError(e)) {
         _logger.warn('APPLOCK keychain migration deferred (device locked)');
       } else {

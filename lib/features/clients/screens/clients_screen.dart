@@ -126,10 +126,7 @@ class _ListInformationState extends State<ListInformation> {
                 TourStepId.clientsAdd,
                 targetBorderRadius: BorderRadius.circular(AppRadius.r16),
                 child: FloatingActionButton(
-                  // Unique across the hub: the IndexedStack keeps every tab's
-                  // Scaffold (and FAB) mounted at once, so a default/shared hero
-                  // tag collides with another tab's FAB ("multiple heroes share
-                  // the same tag").
+                  // Needs to be unique across tabs, since IndexedStack keeps every tab's FAB mounted at the same time.
                   heroTag: 'clientsAddFab',
                   onPressed: _onAddClient,
                   tooltip: context.l10n.clients_addClient,
@@ -137,9 +134,7 @@ class _ListInformationState extends State<ListInformation> {
                 ),
               )
             : null,
-        // The nav shell is built once. Only the master list listens to the search
-        // controller, so typing rebuilds just the list — not the chrome, and not
-        // the (search-independent) detail pane in the split layout.
+        // Only the master list listens to the search controller, so typing rebuilds just the list.
         body: AdaptiveShell(
           currentDestination: AdaptiveDestination.clients,
           isAdmin: widget.isAdmin,
@@ -150,9 +145,7 @@ class _ListInformationState extends State<ListInformation> {
               builder: (context, _) => ClientsListView(
                 searchQuery: _searchController.text,
                 isAdmin: widget.isAdmin,
-                // Only highlight the selected row when the detail pane is
-                // actually shown (two-pane). On a single-pane phone a tap opens a
-                // sheet instead, so there is no persistent selection to reflect.
+                // Only highlight the selected row when the detail pane is shown (two-pane).
                 selectedClientId: context.isTwoPane
                     ? _selectedClient?.id
                     : null,

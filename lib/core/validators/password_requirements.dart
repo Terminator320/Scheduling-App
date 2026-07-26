@@ -1,4 +1,5 @@
-/// Individual password requirements for new passwords; sign-in uses looser rules for backward compatibility.
+/// Individual password requirements for new passwords. Sign-in uses looser
+/// rules, for backward compatibility with existing accounts.
 enum PasswordRequirement {
   minLength,
   uppercase,

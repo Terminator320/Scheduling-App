@@ -36,9 +36,8 @@ Widget _wrap(ClientsRepository repo, ClientRecord client) {
   return ProviderScope(
     overrides: [
       clientsRepositoryProvider.overrideWithValue(repo),
-      // The detail view now renders the Job History section, which reads the
-      // real appointments repo; this test only exercises contacts, so serve it
-      // an empty history rather than hitting Firebase.
+      // The Job History section reads the real appointments repo; serve an
+      // empty history so this contacts-only test doesn't hit Firebase.
       clientJobHistoryProvider.overrideWith(
         (ref, clientId) async => <AppointmentRecord>[],
       ),
@@ -90,8 +89,7 @@ void main() {
   });
 
   setUp(() {
-    // The edit-save flow consults the contact-link store (SharedPreferences);
-    // with no link present the phone-contact sync is a no-op.
+    // With no contact-link present, the edit-save phone-contact sync is a no-op.
     SharedPreferences.setMockInitialValues({});
     repo = _MockClientsRepo();
   });

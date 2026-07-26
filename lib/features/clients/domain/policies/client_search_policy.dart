@@ -1,6 +1,7 @@
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 
-/// Pre-normalized searchable projection built once per data change for efficient per-keystroke filtering.
+/// A pre-normalized searchable projection of a client. We build this once per data
+/// change so filtering on every keystroke stays cheap.
 typedef ClientSearchEntry = ({
   ClientRecord client,
   String text,
@@ -13,7 +14,7 @@ class ClientSearchPolicy {
   static const int serverReadLimit = 1000;
   static const int resultDisplayLimit = 25;
 
-  // Compiled once; normalize/digitsOnly run per row per keystroke.
+  // These are compiled once, since normalize/digitsOnly run per row on every keystroke.
   static final _accentA = RegExp('[\u00E0\u00E1\u00E2\u00E3\u00E4\u00E5]');
   static final _accentE = RegExp('[\u00E8\u00E9\u00EA\u00EB]');
   static final _accentI = RegExp('[\u00EC\u00ED\u00EE\u00EF]');
@@ -23,7 +24,8 @@ class ClientSearchPolicy {
   static final _nonAlphanumeric = RegExp('[^a-z0-9]+');
   static final _nonDigit = RegExp(r'\D');
 
-  // Triggers on first letter/digit; blank/punctuation-only input ignored to avoid full collection scan.
+  // Kicks in on the first letter or digit — blank or punctuation-only input is ignored
+  // so we don't trigger a full collection scan.
   static bool shouldSearch(String query) => normalize(query).isNotEmpty;
 
   static String cacheKey(String query) => normalize(query);
@@ -43,7 +45,8 @@ class ClientSearchPolicy {
 
   static String digitsOnly(String value) => value.replaceAll(_nonDigit, '');
 
-  // Client-side fallback matcher for instant results; single source of truth for these fields.
+  // Client-side fallback matcher used for instant results — this is the single source
+  // of truth for matching on these fields.
   static bool matchesClient(ClientRecord client, String query) {
     final q = normalize(query);
     final qDigits = digitsOnly(query);
@@ -51,7 +54,8 @@ class ClientSearchPolicy {
     return entryMatches(index(client), queryText: q, queryDigits: qDigits);
   }
 
-  /// Hoisted normalization of one client into [ClientSearchEntry], run once per data change instead of per keystroke.
+  /// Normalizes one client into a [ClientSearchEntry]. Hoisted out so this runs once
+  /// per data change instead of once per keystroke.
   static ClientSearchEntry index(ClientRecord client) => (
     client: client,
     text: normalize(
@@ -77,7 +81,8 @@ class ClientSearchPolicy {
     ),
   );
 
-  /// Cheap half of [matchesClient] using pre-normalized entry and query (two substring checks).
+  /// The cheap half of [matchesClient] — just two substring checks against an
+  /// already-normalized entry and query.
   static bool entryMatches(
     ClientSearchEntry entry, {
     required String queryText,

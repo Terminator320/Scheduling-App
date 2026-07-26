@@ -7,7 +7,7 @@ abstract class EmployeesRepository {
 
   Stream<List<EmployeeRecord>> watchAssignableUsers();
 
-  /// Creates invite, returns one-time signup code to show admin.
+  /// Creates an invite and returns the one-time signup code to show the admin.
   Future<String> createEmployeeInvite({
     required String name,
     required String email,
@@ -15,7 +15,7 @@ abstract class EmployeesRepository {
     required String colorValue,
   });
 
-  /// Redeems signup code, activates the invite.
+  /// Redeems a signup code and activates the invite.
   Future<void> redeemSignupCode(String code);
 
   Future<void> updateEmployee({
@@ -35,7 +35,8 @@ abstract class EmployeesRepository {
 
   Future<void> reactivateEmployee(String docId);
 
-  /// Streams signed-in user's `users/{uid}` doc (single listener for name, status, role).
+  /// Streams the signed-in user's `users/{uid}` doc — a single listener that
+  /// covers name, status, and role.
   Stream<Map<String, dynamic>> watchUserDoc(String uid);
 }
 

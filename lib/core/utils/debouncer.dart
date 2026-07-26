@@ -1,6 +1,7 @@
 import 'dart:async';
 
-/// Coalesces rapid calls into one, firing only the last action within [duration] (e.g. per-keystroke search); own per widget state.
+/// Coalesces rapid calls into one, firing only the last action within
+/// [duration] (e.g. per-keystroke search). Own one instance per widget state.
 class Debouncer {
   Debouncer(this.duration);
 

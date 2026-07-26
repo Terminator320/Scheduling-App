@@ -1,4 +1,5 @@
-/// External URLs; privacyPolicy is required for App Store submission — update to the hosted URL before release.
+/// External URLs. privacyPolicy is required for App Store submission, so
+/// update it to the hosted URL before release.
 class AppUrls {
   const AppUrls._();
 

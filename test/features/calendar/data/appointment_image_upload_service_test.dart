@@ -68,8 +68,8 @@ void main() {
   File makeSource(String name) =>
       File('${sourceDir.path}/$name')..writeAsStringSync('data');
 
-  // Manually stage files + enqueue an entry, as _stageAndRun would have.
-  // Defaults to a fresh timestamp so drainPending's 7-day prune leaves it alone.
+  // Manually stages files and enqueues an entry, the same way _stageAndRun
+  // would. Uses a fresh timestamp so drainPending's 7-day prune leaves it alone.
   Future<PendingUpload> stageEntry(
     String appointmentId,
     List<String> names, {
@@ -166,7 +166,7 @@ void main() {
 
       final service = makeService();
       final first = service.drainPending(); // enters, blocks on the gate
-      await service.drainPending(); // guard is synchronous → immediate no-op
+      await service.drainPending(); // synchronous guard, so this is an immediate no-op
       gate.complete(_img('1.jpg'));
       await first;
 
@@ -184,7 +184,7 @@ void main() {
 
       makeService().uploadInBackground(appointmentId: 'a1', newImages: [src]);
 
-      // Poll until staged + enqueued (upload still gated open).
+      // Poll until the file is staged and enqueued (upload is still gated open).
       var entries = <PendingUpload>[];
       for (var i = 0; i < 50 && entries.isEmpty; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 5));

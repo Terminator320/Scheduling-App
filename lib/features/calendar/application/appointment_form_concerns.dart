@@ -21,7 +21,8 @@ abstract interface class AppointmentFormFields {
   Map<String, AppointmentFormError> get errors;
 }
 
-/// One form state change, applied via each controller's adapter; null = unchanged.
+/// One form state change, applied through each controller's adapter. A null
+/// field just means that part of the state is unchanged.
 @immutable
 class AppointmentFormUpdate {
   const AppointmentFormUpdate({
@@ -52,7 +53,8 @@ class AppointmentFormUpdate {
   final List<File>? pendingImages;
 }
 
-/// Shared form behavior: search, select, toggle, pick, clear; adapted per controller.
+/// Shared form behavior for searching, selecting, toggling, picking, and
+/// clearing. Each controller adapts it to its own state.
 mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
     on Notifier<StateT> {
   static const int maxImagesPerAppointment = 10;
@@ -89,7 +91,7 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
     }
     final requestId = ++_searchRequestId;
     _apply(const AppointmentFormUpdate(isSearchingClient: true));
-    // Resolve before await to survive sheet dismissal (Riverpod 3).
+    // Resolve these before the await so they survive the sheet being dismissed (Riverpod 3).
     final logger = ref.read(loggerProvider);
     final clientsRepo = ref.read(clientsRepositoryProvider);
     try {

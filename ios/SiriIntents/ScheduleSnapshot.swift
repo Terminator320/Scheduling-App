@@ -1,13 +1,13 @@
 // ScheduleSnapshot — the read model the Siri App Intents extension answers from.
 //
 // The Flutter app writes this JSON into the shared App Group
-// (`group.net.vogas.scheduling`, key `schedule_snapshot`) via home_widget; see
-// buildScheduleSnapshot in lib/features/siri/domain/schedule_snapshot.dart.
-// Keep this decoder and that builder in lockstep — they are hand-mirrored.
+// (`group.net.vogas.scheduling`, key `schedule_snapshot`) via home_widget —
+// see buildScheduleSnapshot in lib/features/siri/domain/schedule_snapshot.dart.
+// Keep this decoder and that builder in lockstep; they're hand-mirrored.
 //
-// Phases 1-3 are deliberately Firebase-free: snapshot in, speech out. That is
-// what makes an answer arrive in milliseconds and work offline. Do not add a
-// network client here without the Phase-4 review.
+// Phases 1-3 are deliberately Firebase-free (snapshot in, speech out) for
+// millisecond, offline answers — don't add a network client here without the
+// Phase-4 review.
 //
 // This file is compiled only on macOS/Xcode (see the Mac handoff runbook).
 
@@ -17,7 +17,7 @@ private let appGroupId = "group.net.vogas.scheduling"
 private let snapshotKey = "schedule_snapshot"
 
 /// Schema version this decoder understands. A snapshot stamped with anything
-/// else is rejected rather than mis-decoded.
+/// else is rejected outright, rather than risk a mis-decode.
 private let supportedVersion = 1
 
 struct SnapshotAppointment: Codable, Hashable {
@@ -38,8 +38,8 @@ struct SnapshotAppointment: Codable, Hashable {
         return s == "done" || s == "completed"
     }
 
-    /// Deep link into the app's appointment detail sheet. Scheme is registered
-    /// in Info.plist (`CFBundleURLTypes`); the widget uses the same one.
+    /// Deep link into the app's appointment detail sheet, using the scheme
+    /// registered in Info.plist (`CFBundleURLTypes`) that the widget also uses.
     var deepLink: URL? {
         URL(string: "esproschedule://appointment?id=\(id)")
     }
@@ -68,8 +68,8 @@ struct ScheduleSnapshot: Codable {
 
     var today: SnapshotDay? { day(on: Date()) }
 
-    /// Earliest upcoming visit across the whole window that hasn't been marked
-    /// done. Cancelled visits are already excluded at build time.
+    /// Earliest upcoming visit across the whole window that hasn't been
+    /// marked done. Cancelled visits are already excluded at build time.
     func nextAppointment(after now: Date = Date()) -> SnapshotAppointment? {
         days
             .flatMap { $0.appointments }

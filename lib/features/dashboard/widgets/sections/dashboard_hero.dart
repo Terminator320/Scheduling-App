@@ -7,17 +7,20 @@ import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-/// Non-zero status count with bar/legend color (shared by views).
+/// A non-zero status count paired with its bar/legend color, shared between
+/// the bar and legend widgets.
 typedef _Segment = (AppointmentStatus status, Color color, int count);
 
-/// Hero summary: total, date, status bar, unassigned warning.
+/// Hero summary showing the total, the date, a status bar, and an
+/// unassigned warning.
 class DashboardHero extends StatelessWidget {
   const DashboardHero({required this.ops, required this.now, super.key});
 
   final TodayOps ops;
   final DateTime now;
 
-  // Theme-invariant on-primary hues; legend text carries meaning.
+  // These hues stay fixed regardless of theme — the legend text is what
+  // actually carries the meaning.
   static const Color _inProgressSegment = Color(0xFF00A6F4);
   static const Color _overdueSegment = Color(0xFFF54A00);
 
@@ -34,7 +37,8 @@ class DashboardHero extends StatelessWidget {
       (AppointmentStatus.done, statusColors.success),
       (AppointmentStatus.cancelled, scheme.error),
     ];
-    // Resolve counts once; keep only non-zero so views stay in sync.
+    // Resolve the counts once here and keep only the non-zero ones, so the
+    // bar and legend stay in sync.
     final visible = <_Segment>[
       for (final (status, color) in segments)
         if ((ops.statusCounts[DashboardAggregator.statusCountKey(status)] ??
@@ -110,7 +114,8 @@ class DashboardHero extends StatelessWidget {
   }
 }
 
-/// Proportional single-row bar; an empty day shows a faint track instead.
+/// A single-row bar sized proportionally to the counts. On an empty day it
+/// just shows a faint track instead.
 class _StatusBar extends StatelessWidget {
   const _StatusBar({required this.visible, required this.total});
 
@@ -141,7 +146,8 @@ class _StatusBar extends StatelessWidget {
   }
 }
 
-/// Wrapped dot + count + label per non-zero status, mirroring [_StatusBar].
+/// A wrapped row of dot, count, and label for each non-zero status,
+/// mirroring [_StatusBar].
 class _StatusLegend extends StatelessWidget {
   const _StatusLegend({required this.visible});
 
