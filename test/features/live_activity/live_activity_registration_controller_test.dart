@@ -18,11 +18,10 @@ class _MockEmployeesRepo extends Mock implements EmployeesRepository {}
 class _MockTokenRepo extends Mock implements LiveActivityTokenRepository {}
 
 // NOTE ON COVERAGE / SKIPPED CASES
-// `sync()`/`canHostCards()`/`endLocalCards()` hard-gate on `dart:io
-// Platform.isIOS`, which is unfakeable on this Windows test host, so
-// cold-start/concurrent-sync contracts (a)/(c) and the device-only token
-// streams are untested here — only `unregister()` (contract (b), fully
-// covered) and the off-iOS no-op path (contract (d)) are exercised.
+// `sync()`/`canHostCards()`/`endLocalCards()` hard-gate on `dart:io Platform.isIOS`,
+// which is unfakeable on this Windows test host, so the cold-start, concurrent-sync,
+// and device-only token-stream paths are untested here — only `unregister()` (fully
+// covered) and the off-iOS no-op path are exercised.
 void main() {
   late _MockAuth auth;
   late _MockUser user;

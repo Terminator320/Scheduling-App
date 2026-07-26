@@ -6,11 +6,11 @@
  * `{db, messaging, fetchImpl, apiKey, now, logger}` deps so jest can drive it
  * with mocks, mirroring notification_utils.js.
  *
- * Origin decision (per employee, per candidate appointment):
- *   1. intervening appointment's address (they'll depart from that job)
- *   2. fresh background-GPS presence doc (updatedAt <= 25 min)
- *   3. recently-ended previous appointment's address (<= 4 h, not cancelled)
- *   4. null -> fixed 30-min fallback with the plain reminder text
+ * Origin decision (per employee, per candidate appointment): prefers an intervening
+ * appointment's address (they'll depart from that job), then falls back to a fresh
+ * background-GPS presence doc (updatedAt <= 25 min), then a recently-ended previous
+ * appointment's address (<= 4 h, not cancelled), then null (fixed 30-min fallback with
+ * the plain reminder text).
  *
  * @module travel_utils
  */
@@ -157,8 +157,8 @@ function decideOrigin({presence, employeeAppointments, candidate, now}) {
   const candidateStartMs = toMillis(candidate && candidate.startTime);
   const apps = employeeAppointments || [];
 
-  // 1. Intervening appointment — they'll depart from THAT job's address, not
-  // from wherever they are now; marking it done promotes GPS below.
+  // Intervening appointment — they'll depart from THAT job's address, not from
+  // wherever they are now; marking it done promotes GPS below.
   let intervening = null;
   for (const r of apps) {
     if (candidate && r.id === candidate.id) continue;
@@ -176,7 +176,7 @@ function decideOrigin({presence, employeeAppointments, candidate, now}) {
   }
   if (intervening) return {kind: "address", address: _address(intervening)};
 
-  // 2. Fresh background-GPS fix.
+  // Fresh background-GPS fix.
   if (presence) {
     const updatedMs = toMillis(presence.updatedAt);
     const lat = presence.lat;
@@ -188,8 +188,8 @@ function decideOrigin({presence, employeeAppointments, candidate, now}) {
     }
   }
 
-  // 3. Recently-ended previous appointment (any status except cancelled — a
-  // cancelled visit never happened); newest endTime wins.
+  // Recently-ended previous appointment (any status except cancelled — a cancelled
+  // visit never happened); newest endTime wins.
   let previous = null;
   const floorMs = nowMs - PREV_APPOINTMENT_LOOKBACK_HOURS * 60 * MINUTE_MS;
   for (const r of apps) {
