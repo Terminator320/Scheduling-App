@@ -583,7 +583,7 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
   });
 
   const resp = await messaging.sendEach(messages);
-  // Nothing below may throw: the caller treats a 0 return as "nothing sent"
+  // Nothing below may throw. The caller treats a 0 return as "nothing sent"
   // and releases the idempotency claim, so a post-delivery throw here would
   // cause a resend of an already-delivered message.
   try {
@@ -607,9 +607,9 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
     if (deletions.length > 0) await Promise.all(deletions);
     return sent;
   } catch (err) {
-    // Bookkeeping failed but the batch already went out, so report the batch
-    // size to keep the claim (erring toward a missed stale-token cleanup,
-    // which self-heals, over a duplicate push).
+    // Bookkeeping failed but the batch already went out, so report the
+    // batch size to keep the claim. Better to risk a missed stale-token
+    // cleanup, which self-heals, than to risk a duplicate push.
     if (logger) {
       logger.warn("fcm: post-send bookkeeping failed", {employeeDocId, err});
     }
@@ -648,10 +648,10 @@ function _contextFor(kind, before, after) {
 
 /**
  * Reads an employee's appointments in the widget lookahead window
- * ([today 00:00 Toronto, +WIDGET_LOOKAHEAD_DAYS days)) so the change push can
- * carry a fresh widget payload (served by the existing `(employeeIds
- * CONTAINS, startTime ASC)` index); never throws, a failed read just yields
- * an empty window so the notification still sends.
+ * ([today 00:00 Toronto, +WIDGET_LOOKAHEAD_DAYS days)), so the change push
+ * can carry a fresh widget payload (served by the existing `(employeeIds
+ * CONTAINS, startTime ASC)` index). Never throws — a failed read just
+ * yields an empty window, and the notification still sends.
  * @param {!Object} db
  * @param {string} employeeDocId
  * @param {(Date|number)} now
@@ -680,10 +680,11 @@ async function fetchEmployeeWidgetWindow(db, employeeDocId, now, logger) {
 
 /**
  * Ends any live card for a job that hit a terminal transition (done,
- * cancelled, deleted, or unassigned), deliberately unconditional on start
- * time since that's exactly when the notification diff suppresses events as
- * past; best-effort and non-throwing, resolving through the server-owned
- * card marker so it's a safe no-op for any other target.
+ * cancelled, deleted, or unassigned). This is deliberately unconditional on
+ * start time, since that's exactly when the notification diff would
+ * otherwise suppress the event as past. Best-effort and non-throwing —
+ * it resolves through the server-owned card marker, so it's a safe no-op
+ * for any other target.
  * @param {string} id appointment doc id.
  * @param {?Object} before
  * @param {?Object} after
@@ -703,7 +704,8 @@ async function endCardOnTerminal(id, before, after, deps, now) {
     const becameCancelled = statusOf(before) !== "cancelled" &&
         statusOf(after) === "cancelled";
     if (becameDone || becameCancelled) {
-      // Union: a save can change status and assignees in one write.
+      // Union both sides, since one save can change status and assignees
+      // at the same time.
       for (const e of toIdList(before.employeeIds)) targets.add(e);
       for (const e of toIdList(after.employeeIds)) targets.add(e);
     } else {
@@ -741,10 +743,10 @@ async function endCardOnTerminal(id, before, after, deps, now) {
 }
 
 /**
- * Orchestrates an appointment write (diff → per-employee localized send);
- * each change push also carries a fresh, locale-correct `widgetPayload`
- * (+ APNs content-available) so the widget updates with the app closed.
- * Injectable deps `{db, messaging, now, logger}`.
+ * Orchestrates an appointment write: diff, then a per-employee localized
+ * send. Each change push also carries a fresh, locale-correct
+ * `widgetPayload` (plus APNs content-available), so the widget updates even
+ * with the app closed. Injectable deps `{db, messaging, now, logger}`.
  * @param {string} id appointment doc id.
  * @param {?Object} before
  * @param {?Object} after
@@ -754,22 +756,23 @@ async function endCardOnTerminal(id, before, after, deps, now) {
 async function handleAppointmentWrite(id, before, after, deps) {
   const now = deps.now || new Date();
   // Every terminal transition ends the card here, server-side and
-  // unconditionally — the device can't disambiguate which card belongs to
-  // which appointment, so a tech marking one job done wouldn't wrongly kill
-  // the card for a job they're still driving to.
+  // unconditionally. The device can't tell which card belongs to which
+  // appointment, so doing it server-side means a tech marking one job done
+  // won't wrongly kill the card for a job they're still driving to.
   await endCardOnTerminal(id, before, after, deps, now);
   const events = diffAppointmentForNotifications(before, after, now, id);
   if (events.length === 0) return {events: 0, sent: 0};
   let sent = 0;
   // A repeat-series batch rewrites up to ~15 sibling docs, each firing this
-  // trigger, so without a claim one delete/reschedule sent ~15 pushes; this
-  // covers delete/cancel/reschedule/unassign since create is already deduped
-  // by the differ's anchor rule.
+  // trigger, so without a claim one delete/reschedule would send ~15
+  // pushes. The claim below covers delete/cancel/reschedule/unassign; create
+  // is already deduped by the differ's anchor rule.
   const seriesId = String(((after || before) || {}).seriesId || "");
-  // A fresh op-id is only trustworthy on a write (after.seriesOpId was minted
-  // by this operation); a delete has none — before.seriesOpId is stale and
-  // shared by every future delete — so the empty string routes it to
-  // claimSeriesNotice's seriesId+window fallback instead.
+  // A fresh op-id is only trustworthy on a write, since after.seriesOpId was
+  // minted by this operation. A delete has none — before.seriesOpId is
+  // stale and shared by every future delete — so we pass an empty string
+  // and let claimSeriesNotice fall back to its seriesId+window logic
+  // instead.
   const freshOpId = after ? String(after.seriesOpId || "") : "";
   // One window read per distinct employee across this write's events.
   const windows = new Map();

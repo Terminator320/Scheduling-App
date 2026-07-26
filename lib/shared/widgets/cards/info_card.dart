@@ -33,7 +33,8 @@ class InfoCard extends StatelessWidget {
   }
 }
 
-/// One InfoCard row: icon chip, value, optional trailing affordance.
+/// One row in an InfoCard — an icon chip, a value, and an optional trailing
+/// affordance.
 class InfoCardRow extends StatelessWidget {
   const InfoCardRow({
     required this.icon,

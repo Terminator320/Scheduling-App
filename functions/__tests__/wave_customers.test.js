@@ -371,9 +371,10 @@ describe("upsertCustomer phone/mobile create fallback", () => {
 
         expect(result).toEqual({status: "created", waveCustomerId: "wave-new"});
         const u = ref.updates[0];
-        // The customer is linked + synced, but the recorded hash reflects what
-        // actually reached Wave (no phone), so a later upsert detects the diff
-        // and retries the phone instead of no-op'ing forever.
+        // The customer ends up linked and synced, but the recorded hash
+        // reflects what actually reached Wave — without the phone. That way
+        // a later upsert notices the difference and retries the phone
+        // instead of treating it as done forever.
         expect(u["wave.syncState"]).toBe("synced");
         expect(u["wave.lastSyncedHash"]).toBe(
             mappedFieldsHash({...CLIENT, phone: "", mobile: ""}),
@@ -622,8 +623,9 @@ function importDb(existingDocs, opts = {}) {
   const batchLog = {sets: [], commits: []};
   const newRefs = [];
   let autoId = 0;
-  // Mirror upsertDb: an explicit "" must reach readBusinessId (not-connected),
-  // so only fall back to "biz-1" when businessId is omitted entirely.
+  // This mirrors upsertDb — an explicit "" still needs to reach
+  // readBusinessId as not-connected, so we only fall back to "biz-1" when
+  // businessId is left out entirely.
   const connectionData = opts.businessId !== undefined ?
     {businessId: opts.businessId} : {businessId: "biz-1"};
   const waveColl = {
@@ -745,9 +747,9 @@ describe("importCustomers", () => {
         expect(op.ref).toBe(existingRef);
         expect(op.opts).toEqual({merge: true});
         expect(op.data.name).toBe("Alpha");
-        // updatedAt always refreshed; createdAt backfilled because the existing
-        // doc lacked one (an earlier import that omitted it stays hidden
-        // otherwise).
+        // updatedAt is always refreshed. createdAt gets backfilled too, since
+        // the existing doc didn't have one — otherwise an earlier import
+        // that omitted it would stay hidden forever.
         expect(op.data.updatedAt).toBe(TS);
         expect(op.data.createdAt).toBe(TS);
       });
@@ -786,8 +788,8 @@ describe("importCustomers", () => {
 // ---------------------------------------------------------------------------
 // sanitizeInputErrors
 // ---------------------------------------------------------------------------
-// Security contract: Wave's raw `message` text must never reach our UI or
-// logs — only messages mapped from a known `code`.
+// Wave's raw `message` text must never reach our UI or logs — we only ever
+// surface messages mapped from a known `code`.
 describe("sanitizeInputErrors", () => {
   test("maps a known code to its safe message", () => {
     expect(sanitizeInputErrors([{code: "INVALID_EMAIL"}]))

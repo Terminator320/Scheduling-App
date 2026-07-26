@@ -106,11 +106,12 @@ function isCancelledStatus(status) {
 }
 
 /**
- * Builds the widget payload for one employee: carries both days plus a
- * `rolloverAt` instant so the WidgetKit timeline flips today -> tomorrow
- * on-device with no app run or push (set once today has no incomplete job
- * left, else null). Pure mirror of `buildWidgetPayload`
- * (widget_sync_service.dart) — keep it and the Swift decoder in lockstep.
+ * Builds the widget payload for one employee. It carries both days plus a
+ * `rolloverAt` instant so the WidgetKit timeline can flip from today to
+ * tomorrow on-device with no app run or push — set once today has no
+ * incomplete job left, else null. This is a pure mirror of
+ * `buildWidgetPayload` (widget_sync_service.dart) — keep it and the Swift
+ * decoder in lockstep.
  * @param {!Array<!Object>} records The employee's appointments in the lookahead
  *   window.
  * @param {(Date|number)} now

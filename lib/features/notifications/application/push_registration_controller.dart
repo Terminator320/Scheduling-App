@@ -29,7 +29,8 @@ final pushRegistrationControllerProvider = Provider<PushRegistrationController>(
   PushRegistrationController.new,
 );
 
-/// The live OS notification-authorization status (read without prompting); invalidate to re-read after user changes permissions.
+/// The live OS notification-authorization status, read without prompting the
+/// user. Invalidate this to re-read it after permissions change.
 final notificationAuthStatusProvider =
     FutureProvider.autoDispose<AuthorizationStatus>(
       (ref) => ref.watch(pushNotificationServiceProvider).authorizationStatus(),
