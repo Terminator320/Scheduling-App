@@ -10,9 +10,7 @@ import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
-/// Pending-soon and never-closed visits, rendered with the shared
-/// [AppointmentCard] so they match the calendar list and the rest of the
-/// dashboard exactly; the group header carries the severity, not the card.
+/// Pending-soon and never-closed visits, rendered with the shared [AppointmentCard].
 class AttentionFlagsSection extends StatelessWidget {
   const AttentionFlagsSection({
     required this.flags,

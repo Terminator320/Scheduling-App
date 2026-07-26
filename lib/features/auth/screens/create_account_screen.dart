@@ -144,8 +144,7 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
       TextInput.finishAutofillContext();
 
       if (!mounted) return;
-      // The account is now active and the user is signed in. Pop back to the
-      // sign-in flow with created:true; the caller routes the signed-in user in.
+      // Pop back to sign-in with created:true; the caller routes the signed-in user in.
       Navigator.of(context).pop(
         CreateAccountResult(
           created: true,
