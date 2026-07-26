@@ -107,7 +107,9 @@ class _SheetHandle extends StatelessWidget {
   }
 }
 
-/// Standard scrollable body for a detail view (bottom sheet with drag [showHandle], or master-detail pane) — centralises the padding and keyboard-inset-aware bottom gap.
+/// Standard scrollable body for a detail view — a bottom sheet with a drag
+/// handle ([showHandle]), or a master-detail pane. Centralizes the padding
+/// and the keyboard-inset-aware bottom gap.
 class DetailSheetListView extends StatelessWidget {
   const DetailSheetListView({
     required this.children,
@@ -148,7 +150,9 @@ class DetailSheetListView extends StatelessWidget {
   }
 }
 
-/// Standard chrome for an add/edit form sheet ([DraggableSheetFrame] plus a scrollable body with a drag handle and [title] — put form fields in [children]); the write-side mirror of [DetailSheetListView].
+/// Standard chrome for an add/edit form sheet: [DraggableSheetFrame] plus a
+/// scrollable body with a drag handle and [title]. Put your form fields in
+/// [children] — this is the write-side mirror of [DetailSheetListView].
 class FormSheetScaffold extends StatelessWidget {
   const FormSheetScaffold({
     required this.title,

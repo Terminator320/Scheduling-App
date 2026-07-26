@@ -52,7 +52,7 @@ class _AddressAutocompleteFieldState
   String _lastTypedApt = '';
   String _lastFetched = '';
 
-  /// Request id; stale responses are discarded.
+  /// Request id used to discard stale responses that come back late.
   int _requestId = 0;
 
   static const _minQueryLength = 3;
@@ -98,8 +98,9 @@ class _AddressAutocompleteFieldState
   }
 
   Future<void> _fetch(String query) async {
-    // Skip re-fetching the exact query last fetched successfully, to avoid
-    // billing an identical call (set on success only, so a failed one retries).
+    // Skip re-fetching the exact query we already fetched successfully, so we
+    // don't bill for an identical call. This is only set on success, so a
+    // failed fetch will still retry.
     if (query == _lastFetched) return;
     final requestId = ++_requestId;
     setState(() {

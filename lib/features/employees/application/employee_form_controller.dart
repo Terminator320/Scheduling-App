@@ -6,7 +6,8 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 
-/// Outcome of an employee save (invite or edit), mapped by form to notices/errors/navigation.
+/// Outcome of an employee save, whether an invite or an edit — the form maps
+/// this to a notice, an error, or a navigation action.
 sealed class EmployeeSaveOutcome {
   const EmployeeSaveOutcome();
 }
@@ -16,7 +17,8 @@ class EmployeeUpdated extends EmployeeSaveOutcome {
   const EmployeeUpdated();
 }
 
-/// Invite created; [code] is the one-time signup code to show the admin once.
+/// The invite was created. [code] is the one-time signup code to show the
+/// admin once.
 class EmployeeInvited extends EmployeeSaveOutcome {
   const EmployeeInvited(this.code);
   final String code;
@@ -61,7 +63,8 @@ class EmployeeDeleteFailed extends EmployeeDeleteOutcome {
   final Object error;
 }
 
-/// Busy flags for employee form/detail surfaces: drive Save and status/delete button spinners.
+/// Busy flags for the employee form/detail surfaces — these drive the Save
+/// button and the status/delete button spinners.
 @immutable
 class EmployeeFormActivity {
   const EmployeeFormActivity({
@@ -97,14 +100,16 @@ class EmployeeFormActivity {
   int get hashCode => Object.hash(isSaving, isTogglingStatus, isDeleting);
 }
 
-/// Employee create/update/status/delete orchestration shared by the form
-/// sheet and the details view; the employees list streams from Firestore, so
-/// no refresh bump is needed here (unlike the paginated clients list).
+/// Handles employee create/update/status/delete, shared by the form sheet
+/// and the details view. The employees list streams straight from Firestore,
+/// so there's no need for a refresh bump here like the paginated clients
+/// list needs.
 class EmployeeFormController extends Notifier<EmployeeFormActivity> {
   @override
   EmployeeFormActivity build() => const EmployeeFormActivity();
 
-  /// Creates an invite; the one-time signup code rides back on the outcome.
+  /// Creates an invite. The one-time signup code rides back on the outcome
+  /// so the caller can show it to the admin.
   Future<EmployeeSaveOutcome> inviteEmployee({
     required String name,
     required String email,
@@ -148,8 +153,9 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
   Future<EmployeeSaveOutcome> _save(
     Future<EmployeeSaveOutcome> Function(EmployeesRepository repo) write,
   ) async {
-    // Resolve dependencies before the first await: the sheet can be dismissed
-    // mid-save, and using the Ref of a disposed notifier throws in Riverpod 3.
+    // Resolve dependencies before the first await. The sheet can be
+    // dismissed mid-save, and using the Ref of a disposed notifier throws in
+    // Riverpod 3.
     final repo = ref.read(employeesRepositoryProvider);
     final logger = ref.read(loggerProvider);
     state = state.copyWith(isSaving: true);
@@ -190,8 +196,9 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
     }
   }
 
-  /// Deletes the employee's users doc; on success [state] stays deleting so
-  /// the details surface keeps its spinner while its host pops/clears it.
+  /// Deletes the employee's users doc. On success, [state] stays in the
+  /// deleting state so the details surface keeps its spinner while its host
+  /// pops or clears it.
   Future<EmployeeDeleteOutcome> deleteEmployee(String docId) async {
     // Resolved before the first await — see _save.
     final repo = ref.read(employeesRepositoryProvider);

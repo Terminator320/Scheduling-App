@@ -17,7 +17,8 @@ class WeeklyBarSeries {
   final String label;
 }
 
-/// Dashboard chart: 8 weekly buckets, 1–2 series, no touch, legend when two series.
+/// Dashboard chart showing 8 weekly buckets with 1 or 2 series. Touch
+/// interaction is disabled, and a legend appears only when there are two series.
 class WeeklyBarChart extends StatelessWidget {
   const WeeklyBarChart({
     required this.weekStarts,

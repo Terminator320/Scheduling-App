@@ -1,17 +1,18 @@
 "use strict";
 
 /**
- * @fileoverview Orchestrates the iOS "time to leave" Live Activity (registry
- * lookup -> payload build -> direct APNs send -> prune dead rows) — the only
- * surface `travel_utils.js`/`notification_utils.js` call, so neither touches
- * APNs or the registry directly.
+ * @fileoverview Orchestrates the iOS "time to leave" Live Activity: registry
+ * lookup, then payload build, then a direct APNs send, then pruning any dead
+ * rows. This is the only surface `travel_utils.js`/`notification_utils.js`
+ * call, so neither of them touches APNs or the registry directly.
  *
  * Talks to APNs directly (see apns_client.js) because FCM cannot send
  * `apns-push-type: liveactivity`.
  *
- * Every export is best-effort and never throws — no token, no APNs
- * credentials, iOS < 17.2, or Live Activities disabled all degrade silently to
- * the existing, independently-firing `leaveNow` push.
+ * Every export here is best-effort and never throws. No token, no APNs
+ * credentials, iOS < 17.2, or Live Activities turned off — any of those just
+ * make it degrade silently to the existing, independently-firing `leaveNow`
+ * push.
  *
  * @module live_activity_dispatch
  */
@@ -55,8 +56,8 @@ function buildAttributes({appointmentId, employeeDocId, employeeColorValue}) {
 
 /**
  * The assignee's `colorValue`, which drives the card's colour rail (mirroring
- * `AppointmentCard`) — a failed read yields 0, and the Swift side's amber
- * fallback is never a reason to skip the card.
+ * `AppointmentCard`). A failed read just yields 0 — the Swift side's amber
+ * fallback is fine, so that's never a reason to skip the card.
  * @param {!Object} deps `{db, logger}`.
  * @param {string} employeeDocId
  * @return {!Promise<number>}
@@ -76,9 +77,10 @@ async function _employeeColorValue(deps, employeeDocId) {
 
 /**
  * This employee's live update-token rows, but only when the card marker
- * confirms the live card is showing `appointmentId` (`[]` otherwise) — the
- * marker check is load-bearing, since rows are keyed by employee only and a
- * push-started activity's id can never be stamped back onto its own row.
+ * confirms the live card is actually showing `appointmentId` (`[]`
+ * otherwise). That marker check is load-bearing: rows are keyed by employee
+ * only, and a push-started activity's id can never be stamped back onto its
+ * own row.
  * @param {!Object} deps
  * @param {{appointmentId: string, employeeDocId: string}} args
  * @return {!Promise<!Array<!Object>>}
@@ -93,8 +95,8 @@ async function _liveRowsFor(deps, {appointmentId, employeeDocId}) {
 
 /**
  * `{authKey, keyId, teamId}` for APNs, or null when the secrets aren't
- * configured (every verb here then no-ops) — read lazily so a module load
- * outside a secret-bound function can't throw.
+ * configured — every verb here just no-ops in that case. Read lazily so a
+ * module load outside a secret-bound function can't throw.
  * @param {!Object} deps
  * @return {?Object}
  */
@@ -106,7 +108,7 @@ function _authOf(deps) {
 
 /**
  * Sends one payload to one registry row, pruning it when APNs says the
- * activity is gone; returns 1 on a delivered push, else 0.
+ * activity is gone. Returns 1 on a delivered push, else 0.
  * @param {!Object} deps `{logger, apnsAuth}`.
  * @param {!Object} row A row from the registry.
  * @param {!Object} payload
@@ -137,7 +139,7 @@ async function _sendToRow(deps, row, payload, label) {
 }
 
 /**
- * Content state for a row's locale — card text is built server-side per the
+ * Content state for a row's locale. Card text is built server-side using the
  * per-token `locale` already stored, the same rule the notification bodies
  * follow.
  * @param {!Object} row
@@ -240,9 +242,9 @@ async function updateLiveActivity(deps, args) {
       });
       updated += await _sendToRow(deps, row, payload, "update");
     }
-    // Keeps the marker's startTime/phase authoritative on reschedule, so
-    // `listCardsDueForOnSite`'s flip (keyed off marker.startTime) fires at the
-    // right time and exactly once.
+    // Keeps the marker's startTime/phase authoritative on reschedule.
+    // `listCardsDueForOnSite`'s flip is keyed off marker.startTime, so this
+    // is what makes it fire at the right time and exactly once.
     if (updated > 0) {
       await setCardStart(
           deps, {employeeDocId, startTime: ctx.startTime, phase});
@@ -257,9 +259,9 @@ async function updateLiveActivity(deps, args) {
 }
 
 /**
- * Ends this employee's live card (the cancel/remove hook), dropping its
- * registry rows and card marker, with `dismissal-date: now` so it clears the
- * Lock Screen immediately instead of lingering up to four hours.
+ * Ends this employee's live card — the cancel/remove hook. Drops its
+ * registry rows and card marker, and sets `dismissal-date: now` so the card
+ * clears the Lock Screen immediately instead of lingering up to four hours.
  * @param {!Object} deps `{db, logger, apnsAuth}`.
  * @param {!Object} args `{appointmentId, employeeDocId, ctx, nowDate}`.
  * @return {!Promise<number>} Cards ended.

@@ -123,13 +123,15 @@ class AppMotion {
   static const Duration tabSwitch = Duration(milliseconds: 220);
 }
 
-/// Black or white, whichever contrasts with [background]; data-driven, not theme-brightness-based.
+/// Picks black or white, whichever contrasts with [background]. This is
+/// data-driven off the actual color, not the theme's brightness setting.
 Color contrastingForegroundFor(Color background) =>
     ThemeData.estimateBrightnessForColor(background) == Brightness.dark
     ? Colors.white
     : Colors.black;
 
-/// Surface-card decoration shared across settings; light/dark treatment via [AppCardStyle].
+/// Surface-card decoration shared across settings. Light/dark treatment
+/// comes from [AppCardStyle].
 BoxDecoration appCardDecoration(
   ThemeData theme, {
   double radius = AppRadius.r12,
@@ -144,7 +146,8 @@ BoxDecoration appCardDecoration(
   );
 }
 
-/// Per-theme surface-card treatment (shadow vs. border); registered on ThemeData.extensions for brightness-independent access.
+/// Per-theme surface-card treatment (shadow vs. border), registered on
+/// ThemeData.extensions so it can be looked up without checking brightness directly.
 @immutable
 class AppCardStyle extends ThemeExtension<AppCardStyle> {
   const AppCardStyle({

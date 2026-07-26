@@ -179,13 +179,16 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     );
     final notifier = ref.read(provider.notifier);
 
-    // Editing a repeating visit prompts this-visit-only vs. future visits (mirrors delete); changing the repeat rule itself skips the prompt and always rewrites the series.
+    // Editing a repeating visit asks whether the change should apply to just
+    // this visit or to future ones too, same as delete does. But if the
+    // repeat rule itself is what changed, we skip that prompt and just
+    // rewrite the whole series.
     final state = ref.read(provider);
     if (state.isSaving) return; // a save (or its prompt) is already in flight
     var applyToSeries = false;
     if (appointment.seriesId.isNotEmpty && state.repeat == state.savedRepeat) {
       // Busy the form while the prompt is open so a second tap can't stack a
-      // duplicate dialog; reset before save() takes over the flag.
+      // duplicate dialog. We reset it below before save() takes over the flag.
       notifier.setSaving(busy: true);
       final choice = await showSeriesScopeDialog(
         context,

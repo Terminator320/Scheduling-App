@@ -109,7 +109,7 @@ class _LoginState extends ConsumerState<Login> {
 
     switch (outcome) {
       case SignInSuccess(:final employee):
-        TextInput.finishAutofillContext(); // Offer credentials to OS password manager.
+        TextInput.finishAutofillContext(); // Offer to save these credentials in the OS password manager.
         await _routeToCalendar(employee);
       case SignInInvalidCredentials():
         setState(() {
@@ -130,7 +130,7 @@ class _LoginState extends ConsumerState<Login> {
             AuthErrorContext.login,
           );
         });
-      // resumeAfterSignUp-only; signIn() never produces these.
+      // These only come from resumeAfterSignUp() — signIn() never produces them.
       case SignInNoSession() || SignInProfilePending():
         break;
     }
@@ -172,7 +172,8 @@ class _LoginState extends ConsumerState<Login> {
     );
   }
 
-  // Create-account returns with authenticated session; resolve and route to app.
+  // Create-account leaves us with an authenticated session, so resolve the
+  // profile and route straight into the app.
   Future<void> _routeAfterSignUp() async {
     final outcome = await ref
         .read(signInControllerProvider.notifier)
@@ -188,7 +189,7 @@ class _LoginState extends ConsumerState<Login> {
       case SignInSuccess(:final employee):
         TextInput.finishAutofillContext();
         await _routeToCalendar(employee);
-      // signIn()-only; resumeAfterSignUp() never produces these.
+      // These only come from signIn() — resumeAfterSignUp() never produces them.
       case SignInInvalidCredentials() ||
           SignInNoProfile() ||
           SignInAccountDisabled() ||
@@ -282,7 +283,8 @@ class _LoginState extends ConsumerState<Login> {
   }
 }
 
-/// Bottom CTA on sign-in: muted prompt + "Create account" link, wrapped to flow at large text scale.
+/// The bottom CTA on the sign-in screen — a muted prompt plus a "Create account"
+/// link, wrapped so it still flows nicely at large text scale.
 class _CreateAccountPrompt extends StatelessWidget {
   const _CreateAccountPrompt({
     required this.enabled,

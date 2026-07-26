@@ -1,17 +1,19 @@
 "use strict";
 
 /**
- * @fileoverview Pure payload logic for the iOS "time to leave" Live Activity —
- * no Firebase, no network, so jest loads this directly (same as
- * `widget_payload_utils.js`/`notification_utils.js`'s pure half).
+ * @fileoverview Pure payload logic for the iOS "time to leave" Live
+ * Activity. No Firebase, no network, so jest can load this directly (same
+ * as `widget_payload_utils.js`/`notification_utils.js`'s pure half).
  *
  * Card text is built here, server-side, in EN and FR from a `_STRINGS` table
- * shaped like `notification_utils.js`'s `_MESSAGES`, rejecting Swift-side
- * `NSLocalizedString` so translations don't fork outside the ARB files.
+ * shaped like `notification_utils.js`'s `_MESSAGES`. We deliberately skip
+ * Swift-side `NSLocalizedString`, so translations can't fork outside the ARB
+ * files.
  *
- * The travel -> on-site flip is clock-derived ([phaseFor]), mirroring
- * `AppointmentRecord.displayStatus`; `in_progress` is never written by the
- * app, and this feature deliberately has no `markInProgress` path.
+ * The travel -> on-site flip is derived straight from the clock
+ * ([phaseFor]), mirroring `AppointmentRecord.displayStatus`. The app never
+ * writes `in_progress`, and this feature deliberately has no
+ * `markInProgress` path.
  *
  * @module live_activity_utils
  */
@@ -27,9 +29,9 @@ const PHASE_ON_SITE = "onSite";
 const {toMillis, formatTimeOfDay} = require("./time_utils");
 
 /**
- * Absolute UTC ISO-8601 for an instant, or null — the Swift decoder's
- * `ISO8601DateFormatter` can't parse a zone-less local string (the same trap
- * the widget payload documents).
+ * Absolute UTC ISO-8601 for an instant, or null. The Swift decoder's
+ * `ISO8601DateFormatter` can't parse a zone-less local string — same trap
+ * the widget payload docs call out.
  * @param {*} value
  * @return {?string}
  */
@@ -108,10 +110,10 @@ function liveActivityStrings(locale) {
 }
 
 /**
- * The card's phase, derived from the clock alone (`travel` strictly before
- * `startTime`, `onSite` after, mirroring `AppointmentRecord.displayStatus`) —
- * an unreadable `startTime` stays `travel` since the card would rather
- * under-promise than claim the tech is on site.
+ * The card's phase, derived from the clock alone: `travel` strictly before
+ * `startTime`, `onSite` after, mirroring `AppointmentRecord.displayStatus`.
+ * An unreadable `startTime` stays `travel` — the card would rather
+ * under-promise than claim the tech is already on site.
  * @param {{startTime: *, now: *}} args
  * @return {string} PHASE_TRAVEL | PHASE_ON_SITE.
  */
@@ -123,10 +125,10 @@ function phaseFor({startTime, now}) {
 }
 
 /**
- * Builds the ActivityKit content state the Swift `ContentState` decodes, with
- * all display text localized here (the extension renders strings verbatim);
- * `endTime` feeds the on-site countdown, which counts down to the scheduled
- * end rather than up from the start.
+ * Builds the ActivityKit content state the Swift `ContentState` decodes,
+ * with all display text localized here (the extension just renders strings
+ * verbatim). `endTime` feeds the on-site countdown, which counts down to the
+ * scheduled end rather than up from the start.
  * @param {{clientName: string, address: string, startTime: *, endTime: *,
  *   leaveAt: *, travelMinutes: ?number, phase: string,
  *   locale: (string|undefined)}} args

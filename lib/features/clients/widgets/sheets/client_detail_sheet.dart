@@ -6,7 +6,8 @@ import 'package:scheduling/features/clients/widgets/views/client_detail_view.dar
 import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-/// Opens read-only client detail sheet with settle/unfocus sequence; shared by list and master-detail.
+/// Opens the read-only client detail sheet with the settle/unfocus sequence. Shared by
+/// the list view and the master-detail layout.
 Future<void> showClientDetailSheet(
   BuildContext context,
   ClientRecord client,

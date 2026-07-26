@@ -1,7 +1,8 @@
 /**
- * Regression tests: a deleted/cancelled/completed/unassigned job must END its
- * Live Activity card even after it started, and the on-site flip pass must
- * end (not just un-mark) a card whose appointment is gone.
+ * Regression tests for a nasty edge case: a deleted, cancelled, completed, or
+ * unassigned job must still END its Live Activity card even after it's
+ * started. The on-site flip pass has to actually end a card whose
+ * appointment is gone, not just un-mark it.
  */
 
 jest.mock("../live_activity_dispatch", () => ({
@@ -32,8 +33,8 @@ const {handleAppointmentWrite} = require("../notification_utils");
 const {runOnSiteFlipPass} = require("../travel_utils");
 const {buildContentState, PHASE_ON_SITE} = require("../live_activity_utils");
 
-// The job STARTED an hour ago — the notification diff suppresses every event
-// for it, which is precisely the regression window.
+// The job STARTED an hour ago, so the notification diff suppresses every
+// event for it — that's exactly the regression window we're testing.
 const NOW = new Date("2026-07-21T15:00:00.000Z");
 const STARTED = new Date("2026-07-21T14:00:00.000Z");
 const ENDS = new Date("2026-07-21T16:00:00.000Z");

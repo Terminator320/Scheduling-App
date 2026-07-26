@@ -8,7 +8,7 @@ import 'package:scheduling/l10n/l10n.dart';
 
 enum SeriesScopeChoice { thisOnly, thisAndFuture }
 
-/// Shared 'this only / this and future' picker for repeating appointments; [destructive] styles as delete.
+/// Shared 'this only' / 'this and future' picker for repeating appointments. Pass [destructive] to style it as a delete action.
 Future<SeriesScopeChoice?> showSeriesScopeDialog(
   BuildContext context, {
   required String title,

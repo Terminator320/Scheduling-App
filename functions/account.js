@@ -30,13 +30,15 @@ function isReauthStale(authTime, nowSec, maxAgeSeconds) {
 
 // ----- deleteAccount callable ------------------------------------------------
 //
-// Satisfies the in-app deletion requirement from Apple App Store Guideline 5.1.1(v)
-// and the Google Play Account Deletion policy; the client re-authenticates first and
-// the server also re-checks auth_time against REAUTH_MAX_AGE_SECONDS.
+// Satisfies the in-app deletion requirement from Apple App Store Guideline
+// 5.1.1(v) and the Google Play Account Deletion policy. The client
+// re-authenticates first, and the server also re-checks auth_time against
+// REAUTH_MAX_AGE_SECONDS.
 //
-// Deletion is intentionally narrow: it removes the caller's `users/{docId}` doc
-// (which cascades to `usersByUid/{uid}` via syncUsersByUid) and the Firebase Auth
-// user, leaving shared business data (appointments, clients, images) untouched.
+// Deletion is intentionally narrow — it only removes the caller's
+// `users/{docId}` doc (which cascades to `usersByUid/{uid}` via
+// syncUsersByUid) and the Firebase Auth user. Shared business data
+// (appointments, clients, images) is left untouched.
 const deleteAccount = onCall(
     {enforceAppCheck: true},
     async (req) => {
@@ -102,9 +104,9 @@ const deleteAccount = onCall(
         }
       }
 
-      // Delete the Auth user FIRST — the reverse order risks a live login
-      // with no profile doc; a failed doc delete after Auth is gone just
-      // leaves recoverable orphaned data.
+      // Delete the Auth user FIRST — doing it the other way round risks a
+      // live login with no profile doc. A failed doc delete after Auth is
+      // already gone just leaves recoverable orphaned data.
       try {
         await getAuth().deleteUser(uid);
       } catch (err) {
@@ -112,8 +114,9 @@ const deleteAccount = onCall(
           uid,
           err: err.message,
         });
-        // Server-side failure — refund the rate-limit slot (best-effort) so
-        // legitimate retries aren't locked out by our own errors.
+        // Refund the rate-limit slot on a best-effort basis — this was a
+        // server-side failure, so legitimate retries shouldn't get locked
+        // out by our own errors.
         await limiter.refund();
         throw new HttpsError("internal", "delete-auth-user-failed");
       }
@@ -121,8 +124,8 @@ const deleteAccount = onCall(
       if (docId) {
         try {
           // recursiveDelete removes the users doc and all its subcollections
-          // (fcmTokens now, presence later); a plain doc delete would orphan
-          // them, leaving a deleted account still receiving pushes.
+          // (fcmTokens now, presence later). A plain doc delete would orphan
+          // them, leaving a deleted account that still receives pushes.
           await db.recursiveDelete(db.collection("users").doc(docId));
         } catch (err) {
           // The Auth user is already gone, so log for cleanup but report

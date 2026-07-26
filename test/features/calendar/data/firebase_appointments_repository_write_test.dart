@@ -45,7 +45,8 @@ void main() {
   setUpAll(() {
     registerFallbackValue(_FakeDoc());
     registerFallbackValue(<String, dynamic>{});
-    // Fallback + stub must match the transaction handler's reified Null return type.
+    // The fallback and the stub both need to match the transaction handler's
+    // reified Null return type.
     registerFallbackValue(_fallbackHandler);
   });
 

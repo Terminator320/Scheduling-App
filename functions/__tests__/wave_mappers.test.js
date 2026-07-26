@@ -236,7 +236,7 @@ describe("toWaveCustomerInput", () => {
     expect(result).not.toHaveProperty("id");
   });
 
-  // Fix 1: province case-insensitivity
+  // Province matching should be case-insensitive too.
   test("province lowercase qc → provinceCode CA-QC", () => {
     const result = toWaveCustomerInput({name: "T", province: "qc"});
     expect(result.address.provinceCode).toBe("CA-QC");
@@ -247,13 +247,13 @@ describe("toWaveCustomerInput", () => {
     expect(result.address.provinceCode).toBe("CA-QC");
   });
 
-  // Fix 1: country ISO-2 passthrough case-insensitivity
+  // Same case-insensitivity for the ISO-2 country passthrough.
   test("country lowercase ca → countryCode CA", () => {
     const result = toWaveCustomerInput({name: "T", country: "ca"});
     expect(result.address.countryCode).toBe("CA");
   });
 
-  // Fix 2: name trimming
+  // Names should get trimmed too.
   test("name with trailing space → trimmed in output", () => {
     const result = toWaveCustomerInput({name: "Acme "});
     expect(result.name).toBe("Acme");
@@ -324,7 +324,7 @@ describe("mappedFieldsHash", () => {
     expect(h1).not.toBe(h2);
   });
 
-  // Fix 2: name trim produces identical hash regardless of trailing space
+  // Trimming shouldn't change the hash, even with a trailing space on input.
   test("name with trailing space → same hash as trimmed name", () => {
     const base = {
       city: "Montreal", province: "QC", country: "Canada",

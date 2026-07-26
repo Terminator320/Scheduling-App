@@ -1,9 +1,9 @@
 "use strict";
 
 /**
- * Unit tests for the shared instant + business-time-zone primitives, focused
- * on DST boundaries since a push, a Live Activity card, and the widget
- * payload must all render the same instant identically in America/Toronto.
+ * Tests for the shared instant + business-time-zone primitives. These focus
+ * on DST boundaries, since a push, a Live Activity card, and the widget
+ * payload all need to render the same instant identically in America/Toronto.
  */
 
 const {
@@ -96,7 +96,8 @@ describe("formatTimeOfDay", () => {
 
   test("fr renders the same instant in French form", () => {
     const fr = formatTimeOfDay("fr", new Date("2026-07-15T16:00:00Z"));
-    // fr-CA uses a 24h clock ("12 h 00"); only the hour/minute must agree.
+    // fr-CA uses a 24h clock ("12 h 00"), so we only check that the hour and
+    // minute agree.
     expect(fr).toContain("12");
     expect(fr).toContain("00");
   });

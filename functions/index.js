@@ -5,8 +5,9 @@ setGlobalOptions({maxInstances: 10});
 
 initializeApp();
 
-// Thin wiring surface — each function group lives in its own domain module and is
-// re-exported here under its original name so the deployed function set stays stable.
+// This file is just wiring: each function group lives in its own domain
+// module, and we re-export it here under its original name so the deployed
+// function set stays stable.
 const bridge = require("./bridge");
 const places = require("./places");
 const account = require("./account");

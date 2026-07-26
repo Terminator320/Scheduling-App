@@ -47,7 +47,9 @@ function shouldPurgePresence(beforeData, afterData) {
 }
 
 /**
- * Decides whether to revoke or restore the user's Auth credential, since the Firestore `status` field alone never blocked sign-in; `"restore"` also safely no-ops on first activation (invited->active).
+ * Decides whether to revoke or restore the user's Auth credential — the
+ * Firestore `status` field alone never blocked sign-in on its own.
+ * `"restore"` also safely no-ops on first activation (invited->active).
  * @param {?object} beforeData user doc fields before the write, or null.
  * @param {?object} afterData user doc fields after the write, or null.
  * @return {?string} "revoke" | "restore" | null.
@@ -67,7 +69,9 @@ function authAccessChange(beforeData, afterData) {
 }
 
 /**
- * Applies [authAccessChange]'s decision to the Auth account; idempotent, and a missing user (already removed by account deletion) is swallowed rather than retried forever.
+ * Applies [authAccessChange]'s decision to the Auth account. It's idempotent,
+ * and if the user is already gone (removed by account deletion), we swallow
+ * that instead of retrying forever.
  * @param {string} uid Firebase Auth uid.
  * @param {string} change "revoke" | "restore".
  * @param {!Object} auth Admin Auth instance.
@@ -77,8 +81,9 @@ async function applyAuthAccess(uid, change, auth) {
   try {
     if (change === "revoke") {
       await auth.updateUser(uid, {disabled: true});
-      // Stops new ID tokens; an already-issued one stays valid until it
-      // expires (<=1 h), during which the firestore.rules status gate blocks reads.
+      // Stops new ID tokens. An already-issued one stays valid until it
+      // expires (<=1 h), but the firestore.rules status gate blocks reads
+      // during that window.
       await auth.revokeRefreshTokens(uid);
     } else {
       await auth.updateUser(uid, {disabled: false});
@@ -93,7 +98,9 @@ async function applyAuthAccess(uid, change, auth) {
 }
 
 /**
- * Deletes every push/Live-Activity delivery artifact for a user (FCM/Live Activity token rows plus the card marker); idempotent since deletes of missing docs are no-ops.
+ * Deletes every push/Live-Activity delivery artifact for a user — FCM/Live
+ * Activity token rows plus the card marker. It's idempotent since deleting a
+ * doc that's already gone is a no-op.
  * @param {!Object} db Firestore instance.
  * @param {string} userId Firestore doc id of the user.
  * @return {!Promise<void>}
@@ -109,8 +116,8 @@ async function purgeDeliveryState(db, userId) {
 }
 
 // Mirrors `users` into `usersByUid/{uid}` so security rules can resolve a
-// caller's role from their auth uid alone; `retry: true` is safe since every
-// path writes absolute values (set/delete on deterministic doc ids).
+// caller's role from their auth uid alone. `retry: true` is safe here since
+// every path writes absolute values (set/delete on deterministic doc ids).
 const syncUsersByUid = onDocumentWritten(
     {document: "users/{userId}", retry: true},
     async (event) => {
@@ -133,8 +140,8 @@ const syncUsersByUid = onDocumentWritten(
       // Mirrors the users doc into the usersByUid bridge — auth-critical, so
       // it runs first and its errors stay un-swallowed (retry:true re-runs).
       const mirrorBridge = async () => {
-        // Defensive: skips writes with an unexpected role; the presence purge
-        // below still runs so PII is cleaned up regardless.
+        // Skip writes with an unexpected role, as a defensive check. The
+        // presence purge below still runs, so PII gets cleaned up regardless.
         if (after && after.role && !VALID_ROLES.has(after.role)) {
           logger.warn("syncUsersByUid: unexpected role; skipping", {
             userId,
@@ -143,9 +150,10 @@ const syncUsersByUid = onDocumentWritten(
           return;
         }
 
-        // uid rotation: the stale delete and new set land in ONE WriteBatch so
-        // a crash between them can't leave both bridge docs live; the batch
-        // error is not swallowed — retry:true re-runs the handler.
+        // On a uid rotation, the stale delete and the new set land in ONE
+        // WriteBatch, so a crash between them can't leave both bridge docs
+        // live. We don't swallow the batch error — retry:true re-runs the
+        // handler.
         if (after && shouldHaveBridge(after)) {
           const batch = db.batch();
           if (staleUid) batch.delete(bridge.doc(staleUid));
@@ -189,16 +197,17 @@ const syncUsersByUid = onDocumentWritten(
 
       await mirrorBridge();
 
-      // Purges PII presence data after the bridge mirror completes; failures
-      // rethrow so retry:true safely reconverges (mirrorBridge and delete()
-      // are both idempotent).
+      // Purges PII presence data after the bridge mirror completes. Failures
+      // rethrow so retry:true safely reconverges — mirrorBridge and delete()
+      // are both idempotent.
       if (shouldPurgePresence(before, after)) {
         try {
           await db.doc(`users/${userId}/presence/location`).delete();
-          // Stops push/Live Activity delivery with the account so a
-          // deactivated tech doesn't keep showing a client's Lock Screen card;
-          // ending the on-device card needs APNs (left to the two functions
-          // binding APNS_SECRETS), so it just expires on its own TTL.
+          // Stops push/Live Activity delivery along with the account, so a
+          // deactivated tech doesn't keep showing up on a client's Lock
+          // Screen card. Ending the on-device card itself needs APNs (left
+          // to the two functions that bind APNS_SECRETS), so it just expires
+          // on its own TTL.
           await purgeDeliveryState(db, userId);
         } catch (err) {
           logger.warn("syncUsersByUid: presence purge failed", {
@@ -209,8 +218,9 @@ const syncUsersByUid = onDocumentWritten(
         }
       }
 
-      // Auth credential last: defence-in-depth beyond the rules' status gate,
-      // run after the bridge mirror so it never blocks that write.
+      // Handle the Auth credential last — this is defence-in-depth beyond
+      // the rules' status gate, and running it after the bridge mirror means
+      // it never blocks that write.
       const change = authAccessChange(before, after);
       const authUid = afterUid || beforeUid;
       if (change && authUid) {
@@ -218,7 +228,7 @@ const syncUsersByUid = onDocumentWritten(
           await applyAuthAccess(authUid, change, getAuth());
           logger.info("syncUsersByUid: auth access updated", {userId, change});
         } catch (err) {
-          // Rethrown so retry:true re-runs; every step above is idempotent.
+          // Rethrown so retry:true re-runs — every step above is idempotent.
           logger.warn("syncUsersByUid: auth access update failed", {
             userId,
             change,

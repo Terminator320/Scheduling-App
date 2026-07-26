@@ -22,7 +22,7 @@ void main() {
     test(
       'a dark phone on the default system mode flips to light in one tap',
       () {
-        // The reported bug: system + dark used to need two taps.
+        // System + dark mode used to need two taps here. This test pins that bug.
         expect(
           toggledThemeMode(ThemeMode.system, Brightness.dark),
           ThemeMode.light,

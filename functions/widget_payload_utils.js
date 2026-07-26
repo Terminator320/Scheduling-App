@@ -2,11 +2,11 @@
 
 /**
  * @fileoverview Server-side mirror of the Flutter widget payload builder
- * (`lib/features/home_widget/application/widget_sync_service.dart`); a
+ * (`lib/features/home_widget/application/widget_sync_service.dart`). A
  * change-driven push carries the fresh payload so the iOS home-screen widget
- * can rewrite from a background isolate with the app closed. Kept pure and
- * dependency-free so jest can load it directly and its JSON shape stays in
- * lockstep with the Dart builder and the Swift decoder
+ * can rewrite itself from a background isolate even with the app closed.
+ * It's kept pure and dependency-free so jest can load it directly, and its
+ * JSON shape stays in lockstep with the Dart builder and the Swift decoder
  * (`ios/ScheduleWidget/ScheduleWidget.swift`).
  *
  * Day boundaries use America/Toronto (`BUSINESS_TIME_ZONE`), so a
@@ -22,8 +22,8 @@ const {
   businessMidnight,
 } = require("./time_utils");
 
-// Terminal statuses filtered out of the widget's job list; mirrors
-// AppointmentStatus.isTerminal (status_chip.dart): done/cancelled plus the
+// Terminal statuses filtered out of the widget's job list. Mirrors
+// AppointmentStatus.isTerminal (status_chip.dart) — done/cancelled plus the
 // legacy `completed` alias.
 const TERMINAL_STATUSES = new Set(["done", "completed", "cancelled"]);
 
@@ -60,9 +60,9 @@ function torontoDayStartMs(now) {
 
 /**
  * Serializes one appointment record into the widget's job JSON, mirroring
- * `_job` in widget_sync_service.dart; `startTime` is an absolute UTC instant
- * with milliseconds so Swift's ISO8601DateFormatter parses it, and every
- * other field is a plain non-null string or the Swift decode fails.
+ * `_job` in widget_sync_service.dart. `startTime` is an absolute UTC instant
+ * with milliseconds so Swift's ISO8601DateFormatter can parse it, and every
+ * other field must be a plain non-null string or the Swift decode fails.
  * @param {!Object} r Appointment record (`{id, startTime, clientName, ...}`).
  * @return {!Object}
  */

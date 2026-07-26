@@ -58,7 +58,8 @@ class DetailsViewBody extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Cancelled visits keep the edit affordance; only `showActions` gates it.
+        // Cancelled visits still show the edit affordance — `showActions` is
+        // the only thing that gates it.
         if (showActions)
           Align(
             alignment: compactHeader
@@ -149,8 +150,9 @@ class DetailsViewBody extends ConsumerWidget {
     );
   }
 
-  /// Surfaces a status write's result; [EventDetailsActionBusy] stays silent
-  /// since the guard skipped the write and the sheet stays open.
+  /// Surfaces the result of a status write. [EventDetailsActionBusy] stays
+  /// silent because the guard already skipped the write, so the sheet just
+  /// stays open.
   void _onStatusOutcome(
     BuildContext context,
     WidgetRef ref,
@@ -178,9 +180,9 @@ class DetailsViewBody extends ConsumerWidget {
   }
 }
 
-/// Pure-data derivations for [DetailsViewBody], computed once per build and
-/// context-free; the layout flag (`compactHeader`) and ref-dependent
-/// callbacks stay in `build`.
+/// Pure-data derivations for [DetailsViewBody]. These are computed once per
+/// build and don't need a context — the layout flag (`compactHeader`) and any
+/// ref-dependent callbacks stay in `build`.
 class _DetailsViewData {
   const _DetailsViewData({
     required this.displayStatus,
@@ -200,8 +202,9 @@ class _DetailsViewData {
     ClientRecord? client,
   ) {
     final status = AppointmentStatus.fromRaw(appointment.status);
-    // Real stored status gates the actions (mark-done/cancel/edit); the
-    // time-derived one drives the header chip so it matches the card.
+    // The actions (mark-done/cancel/edit) are gated on the real stored
+    // status, while the header chip uses the time-derived one instead, so it
+    // matches what the card shows.
     final displayStatus = AppointmentStatus.fromRaw(appointment.displayStatus);
     final now = DateTime.now();
     final phone = (client?.phone.isNotEmpty ?? false)
@@ -216,9 +219,11 @@ class _DetailsViewData {
       displayStatus: displayStatus,
       isCancelled: status.isCancelled,
       isDone: status.isDone,
-      // Gates "Mark as complete" on the visit having STARTED, not on it being
-      // today, so employees on multi-day/overnight visits aren't stuck without
-      // a status surface — rules allow an assignee's `status:'done'` write with no date restriction.
+      // Gate "Mark as complete" on the visit having STARTED, not on it being
+      // today, so employees on multi-day/overnight visits aren't stuck
+      // without a way to update status. This matches the security rules,
+      // which allow an assignee's `status:'done'` write with no date
+      // restriction.
       hasStarted: !appointment.startTime.isAfter(now),
       clientName: client?.displayName ?? appointment.clientName,
       phone: phone,
@@ -243,9 +248,9 @@ class _DetailsViewData {
   final List<ClientContact> extraContacts;
 }
 
-/// Quick-actions row + client info card (name/phone/address); call and
-/// directions callbacks are resolved in the parent's `build` where `ref`
-/// lives, and a null callback hides its affordance.
+/// Quick-actions row plus the client info card (name/phone/address). The call
+/// and directions callbacks are resolved in the parent's `build`, where `ref`
+/// lives, and a null callback just hides that affordance.
 class _ClientSection extends StatelessWidget {
   const _ClientSection({
     required this.clientName,

@@ -241,8 +241,8 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     );
   }
 
-  /// Reconciles the selected employee against the live users stream by id, so an
-  /// in-pane enable/disable/edit doesn't leave the pane showing a stale status.
+  /// Keeps the selected employee in sync with the live users stream, so an in-pane
+  /// enable/disable/edit doesn't leave the detail pane showing a stale status.
   EmployeeRecord? _liveSelectedEmployee() {
     final snapshot = _selectedEmployee;
     if (snapshot == null) return null;
@@ -276,7 +276,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
 
   @override
   Widget build(BuildContext context) {
-    // Log only on the data→error transition, not on every rebuild while errored.
+    // Only log on the data→error transition — otherwise this would re-log on every rebuild while the stream stays errored.
     ref.listen(employeesStreamProvider, (previous, next) {
       if (next is! AsyncError || previous is AsyncError) return;
       ref
@@ -300,7 +300,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
                 TourStepId.employeesAdd,
                 targetBorderRadius: BorderRadius.circular(AppRadius.r16),
                 child: FloatingActionButton(
-                  // Must be unique across tabs — IndexedStack keeps every tab's FAB mounted at once.
+                  // Needs to be unique across tabs, since IndexedStack keeps every tab's FAB mounted at the same time.
                   heroTag: 'employeesAddFab',
                   onPressed: _openEmployeeSheet,
                   tooltip: context.l10n.employees_inviteEmployee,

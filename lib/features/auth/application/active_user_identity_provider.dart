@@ -8,7 +8,9 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 /// The signed-in user's role + users-doc id for schedule surfaces.
 typedef ActiveUserIdentity = ({String role, String docId});
 
-/// Signed-in active user's role + doc id, or null signed-out/inactive; clears off-screen mirrors (widget, Siri snapshot).
+/// Resolves the signed-in active user's role and doc id, or null if they're
+/// signed out or inactive. Also clears off-screen mirrors like the widget
+/// and Siri snapshot.
 final activeUserIdentityProvider =
     FutureProvider.autoDispose<ActiveUserIdentity?>((ref) async {
       final doc = ref.watch(currentUserDocProvider).value ?? const {};
@@ -19,7 +21,8 @@ final activeUserIdentityProvider =
       }
       final uid = ref.watch(authUidProvider).value;
       if (uid == null) return null;
-      // Retry post-sign-in read; ID-token/role bridge lag would wipe mirrors.
+      // Retry this read right after sign-in — if we don't, ID-token/role
+      // bridge lag can wipe the mirrors.
       final repo = ref.watch(employeesRepositoryProvider);
       final match = await retryAsync(
         () => repo.findUserByUid(uid),

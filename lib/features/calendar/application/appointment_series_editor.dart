@@ -4,20 +4,23 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-/// Outcome of a series rewrite: record, future bookings count, removed count.
+/// Result of a series rewrite: the updated record, plus how many future
+/// bookings were created and how many old ones were removed.
 typedef SeriesRewriteResult = ({
   AppointmentRecord updated,
   int futureBookings,
   int removedBookings,
 });
 
-/// Repo-driven series mechanics: rewrite and apply-to-all-future operations.
+/// Handles series-level appointment mechanics backed by the repo: rewriting
+/// a series, and applying an edit to all future occurrences.
 class AppointmentSeriesEditor {
   const AppointmentSeriesEditor(this._repo);
 
   final AppointmentsRepository _repo;
 
-  /// Repeat changed: rewrite series, drop old future, book new cadence atomically.
+  /// Called when the repeat interval changes. Rewrites the series by dropping
+  /// the old future occurrences and booking the new cadence, all atomically.
   Future<SeriesRewriteResult> rewrite({
     required AppointmentRecord updated,
     required AppointmentRecord appointment,
@@ -58,7 +61,8 @@ class AppointmentSeriesEditor {
     );
   }
 
-  /// Apply-to-all: propagate edited details to this visit and future non-terminal siblings.
+  /// The "apply to all" option: propagates the edited details to this visit
+  /// and to its future non-terminal siblings in the series.
   Future<int> propagate({
     required AppointmentRecord updated,
     required AppointmentRecord appointment,
@@ -91,7 +95,7 @@ class AppointmentSeriesEditor {
           originalEnd: end,
           copyStart: copyStart,
         ),
-        // Canonicalize each sibling's status to avoid legacy value rejection.
+        // Normalize each sibling's status so a legacy or unknown value doesn't get rejected.
         status: AppointmentStatus.storedRaw(v.status),
       );
     }).toList();

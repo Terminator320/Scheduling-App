@@ -15,7 +15,8 @@ abstract class AppointmentsRepository {
   /// All appointments belonging to one repeat series.
   Future<List<AppointmentRecord>> getSeries(String seriesId);
 
-  /// Atomically rewrite series: save, delete, create in one batch.
+  /// Atomically rewrites a series — saves, deletes, and creates all happen
+  /// in one batch.
   Future<void> rewriteSeries({
     required AppointmentRecord updated,
     required List<String> deleteIds,
@@ -27,10 +28,10 @@ abstract class AppointmentsRepository {
   /// Atomically update series to propagate edit across visit and future siblings.
   Future<void> updateAppointments(List<AppointmentRecord> appointments);
 
-  /// Appends [pictures] to the appointment's stored pictures without
-  /// rewriting the array (server-side union), so a background upload landing
-  /// after a concurrent edit can't clobber photos it never saw — and vice
-  /// versa.
+  /// Appends [pictures] to the appointment's stored pictures using a
+  /// server-side union instead of rewriting the whole array. That way a
+  /// background upload landing after a concurrent edit can't clobber photos
+  /// it never saw, and the edit can't clobber the upload either.
   Future<void> appendAppointmentPictures(
     String id,
     List<AppointmentImage> pictures,
@@ -54,7 +55,8 @@ abstract class AppointmentsRepository {
 
   Stream<List<AppointmentRecord>> watchInRange(AppointmentDateRange range);
 
-  /// One newest-first page of terminal appointments; [after] is cursor or null.
+  /// One newest-first page of terminal appointments. Pass [after] as the
+  /// cursor to continue from, or null to start from the beginning.
   Future<List<AppointmentRecord>> fetchHistoryPage({
     required int limit,
     AppointmentRecord? after,
@@ -63,7 +65,7 @@ abstract class AppointmentsRepository {
   /// Search terminal appointments by client/employee name or phone, newest-first.
   Future<List<AppointmentRecord>> searchHistory(String query);
 
-  /// Client's appointments (any status), newest-first, bounded by [limit].
+  /// This client's appointments in any status, newest-first, capped at [limit].
   Future<List<AppointmentRecord>> fetchClientHistory({
     required String clientId,
     int limit,

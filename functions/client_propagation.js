@@ -14,9 +14,9 @@
  *   - Only FUTURE appointments (`startTime >= now`) are rewritten — history
  *     records what was true at the time of the visit.
  *
- * Idempotent (every write is an absolute value), so the trigger runs with
- * `retry: true`; updates go out in WriteBatches of ≤500 (the Firestore hard
- * limit).
+ * Every write is an absolute value, so this is idempotent and the trigger
+ * runs with `retry: true`. Updates go out in WriteBatches of ≤500 (the
+ * Firestore hard limit).
  *
  * Requires the composite index `(clientId ASC, startTime ASC)` on
  * `appointments` (declared in firestore.indexes.json).
@@ -62,9 +62,9 @@ function clientDisplayName(data) {
  * @param {!Object} before Pre-edit client document fields.
  * @param {!Object} after Post-edit client document fields.
  * @return {?{clientName: (string|undefined), clientPhone: (string|undefined),
- *   address: (?{from: string, to: string})}} Null when nothing changed;
+ *   address: (?{from: string, to: string})}} Null when nothing changed.
  *   `address` is set only when the client's address changed from a
- *   non-empty value (matching appointments get `to`).
+ *   non-empty value — matching appointments get `to`.
  */
 function relevantClientChange(before, after) {
   const b = before || {};
@@ -89,8 +89,9 @@ function relevantClientChange(before, after) {
 
   const addrBefore = typeof b.address === "string" ? b.address.trim() : "";
   const addrAfter = typeof a.address === "string" ? a.address.trim() : "";
-  // Only propagate when the OLD address was non-empty: appointments whose
-  // address is empty are custom/none, and matching "" would clobber them.
+  // Only propagate when the OLD address was non-empty — appointments with
+  // an empty address are custom/none, and matching against "" would clobber
+  // them.
   if (addrAfter !== addrBefore && addrBefore !== "") {
     change.address = {from: addrBefore, to: addrAfter};
     any = true;
@@ -122,9 +123,10 @@ function buildAppointmentPatch(change, apptData) {
   }
   if (change.address) {
     const current = typeof d.address === "string" ? d.address.trim() : "";
-    // Follows-the-client: only an address still equal to the client's
-    // previous value is updated (a differing address is custom, left alone;
-    // an already-propagated doc matches nothing and is skipped on retry).
+    // This follows the client: only an address still equal to the client's
+    // previous value gets updated. A differing address is custom and stays
+    // untouched, and an already-propagated doc matches nothing so it's
+    // skipped on retry.
     if (current === change.address.from) {
       patch.address = change.address.to;
     }
@@ -192,9 +194,10 @@ async function propagateClientChange(clientId, before, after, deps = {}) {
   return {updated};
 }
 
-// Trigger: client edits → future appointments; fires only on UPDATE, since
-// creates have no appointments yet and deletes intentionally leave history
-// intact (`retry: true` is safe — see idempotency note in the fileoverview).
+// This trigger fans client edits out to future appointments. It fires only
+// on UPDATE, since creates have no appointments yet and deletes intentionally
+// leave history intact. (`retry: true` is safe — see the idempotency note in
+// the fileoverview.)
 const propagateClientEdits = onDocumentUpdated(
     {document: "clients/{clientId}", retry: true},
     async (event) => {
@@ -210,7 +213,7 @@ const propagateClientEdits = onDocumentUpdated(
 module.exports = {
   propagateClientEdits,
   // Exported so the orchestrator can be driven with injected {db, logger,
-  // now}; test coverage today is on the pure helpers below only.
+  // now}. Test coverage today only covers the pure helpers below.
   propagateClientChange,
   relevantClientChange,
   buildAppointmentPatch,

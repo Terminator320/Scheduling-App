@@ -1,9 +1,10 @@
 "use strict";
 
 /**
- * Unit tests for the pure stale-reauth guard behind deleteAccount — the
- * security predicate that gates an irreversible delete on a fresh in-app
- * re-authentication, not the integration-heavy delete orchestration itself.
+ * Tests for the pure stale-reauth guard behind deleteAccount. This is the
+ * security predicate that decides whether the in-app re-auth is fresh enough
+ * to allow an irreversible delete — the delete orchestration itself is
+ * integration-heavy and isn't covered here.
  */
 
 const {isReauthStale} = require("../account");

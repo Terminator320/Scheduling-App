@@ -11,9 +11,9 @@ final connectivityResultsProvider = StreamProvider<List<ConnectivityResult>>((
   yield* connectivity.onConnectivityChanged;
 });
 
-/// True only on a confirmed "no connection at all" report — unknown states
-/// (initial check still running, plugin error) count as online so the
-/// offline banner never flashes without a real signal.
+/// True only when we get a confirmed "no connection at all" report. Unknown
+/// states — like the initial check still running, or a plugin error — count
+/// as online, so the offline banner never flashes without a real signal.
 final isOfflineProvider = Provider<bool>((ref) {
   final results = ref.watch(connectivityResultsProvider).value;
   if (results == null) return false;

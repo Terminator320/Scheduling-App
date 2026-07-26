@@ -380,8 +380,9 @@ describe("travelReminderLedgerId", () => {
 // ----- sweep orchestration with mocks ---------------------------------------
 
 /**
- * Fakes Firestore for the travel sweep, telling queries apart by their
- * where() field, with presence via getAll and a get/create/delete ledger.
+ * Fakes Firestore for the travel sweep. It tells queries apart by their
+ * where() field, serves presence data through getAll, and backs the
+ * reminder ledger with get/create/delete stubs.
  * @param {!Object} config users/tokens/appointments/context/presence/
  *   ledgerExisting/throwLedgerGetFor fixtures.
  * @return {!Object} `{db, ledgerCreates, ledgerDeletes}`.
@@ -689,7 +690,8 @@ describe("runTravelAwareReminderSweep", () => {
       `appointmentReminders/${
         travelReminderLedgerId("job1", startMs, "e2")}`,
     ]);
-    // e2 has no fresh GPS and no context -> 30-min fallback, FR locale.
+    // e2 has no fresh GPS and no context, so it falls back to the 30-min
+    // default, and it should get the FR locale.
     const frMsg = messaging.sent.find((m) => m.token === "t2");
     expect(frMsg.data.kind).toBe("reminder");
     expect(frMsg.notification.title).toBe("Visite à venir");

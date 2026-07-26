@@ -9,8 +9,8 @@
  */
 
 /**
- * True when the first bytes are a JPEG or PNG magic signature; the
- * server-side backstop since client contentType/extension aren't trusted.
+ * True when the first bytes match a JPEG or PNG magic signature. This is the
+ * server-side backstop, since client contentType/extension can't be trusted.
  * @param {?Buffer} buffer First bytes of the uploaded object.
  * @return {boolean}
  */

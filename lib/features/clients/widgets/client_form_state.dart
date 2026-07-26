@@ -1,7 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:scheduling/features/clients/widgets/sections/additional_contacts_section.dart';
 
-/// Shared form-state plumbing for add/edit forms; call disposeAdditionalContacts from dispose.
+/// Shared form-state plumbing for the add/edit forms. Remember to call
+/// disposeAdditionalContacts from dispose.
 mixin ClientFormState<T extends StatefulWidget> on State<T> {
   /// Field key -> error message (null when valid). Drives the field errorText.
   final Map<String, String?> errors = {};
@@ -9,7 +10,7 @@ mixin ClientFormState<T extends StatefulWidget> on State<T> {
   /// Extra business contacts beyond the primary name/phone/email.
   final List<ContactFields> additionalContacts = [];
 
-  /// True if client has no stored address; set per appointment.
+  /// True if the client has no stored address. Set per appointment.
   bool noFixedAddress = false;
 
   /// Toggles [noFixedAddress]; clears any stale address error when enabling.

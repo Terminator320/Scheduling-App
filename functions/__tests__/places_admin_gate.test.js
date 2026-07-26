@@ -1,5 +1,6 @@
-// assertAdmin and enforceDurableRateLimit are mocked (need live Firestore); the rest
-// stay real to lock in the actual guard order for these billable endpoints.
+// assertAdmin and enforceDurableRateLimit are mocked here since they need live
+// Firestore. Everything else stays real so we lock in the actual guard order
+// for these billable endpoints.
 jest.mock("../security", () => {
   const actual = jest.requireActual("../security");
   return {

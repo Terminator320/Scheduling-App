@@ -26,7 +26,7 @@ class _MockRepo extends Mock implements EmployeesRepository {}
 // XL) plus Android system-level 2.0× to catch the worst case.
 const _scales = <double>[0.8, 1, 1.2, 1.4, 2];
 
-// Smallest physical phone in common use is ~375 logical width; picking
+// Smallest physical phone in common use is ~375 logical width, so picking
 // that dimension exposes overflow most reliably.
 const _viewport = Size(375, 667);
 

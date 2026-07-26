@@ -1,8 +1,9 @@
 rules_version = '2';
 
-// Role resolution goes through the `usersByUid/{uid}` bridge (maintained by
-// syncUsersByUid in functions/index.js), since rules can only `get` by full
-// path and `users` docs use Firestore-generated IDs.
+// Role resolution goes through the `usersByUid/{uid}` bridge, kept up to date by
+// syncUsersByUid in functions/index.js. Rules can only `get` a doc by its full path,
+// and `users` docs have Firestore-generated IDs, so this bridge is how we look up a
+// user from just their auth uid.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -28,83 +29,88 @@ service cloud.firestore {
         && userByUid().data.status == 'active';
     }
 
-    // True when the CALLER (not the resource) is an active user, keeping list queries provable.
+    // True when the person making the request — not the resource being read — is an
+    // active user. Checking the caller instead of the resource is what keeps list
+    // queries provable.
     function isActiveUser() {
       return userByUidExists()
         && userByUid().data.status == 'active';
     }
 
-    // Returns the current user's Firestore doc ID, used to check appointment.employeeIds membership.
+    // Returns the current user's Firestore doc ID — we use this to check whether
+    // they're in an appointment's employeeIds.
     function myDocId() {
       return userByUid().data.docId;
     }
 
-    // Requires an active-status gate too: deactivation doesn't revoke the Auth credential,
-    // so without it a disabled employee would keep reading their assigned jobs.
+    // We also check active status here, because deactivating someone doesn't revoke
+    // their Auth credential — without this, a disabled employee could keep reading
+    // their assigned jobs.
     function isAssignedEmployee(appointmentData) {
       return isActiveUser()
         && myDocId() in appointmentData.employeeIds;
     }
 
-    // No catch-all deny rule needed — Firestore already denies by default, and an explicit
-    // one here has been observed to interact oddly with list queries.
+    // We don't add a catch-all deny rule here — Firestore already denies by default,
+    // and we've seen an explicit one interact oddly with list queries.
 
     // ── usersByUid (bridge collection) ───────────────────────────────────────
-    // Written only by the syncUsersByUid Cloud Function via Admin SDK. Clients
-    // can read their own doc; no client writes allowed.
+    // Only the syncUsersByUid Cloud Function writes here, via the Admin SDK. Clients
+    // can read their own doc, but none of them can write.
     match /usersByUid/{uid} {
       allow read: if isSignedIn() && request.auth.uid == uid;
       allow write: if false;
     }
 
     // ── rateLimits (abuse counters) ──────────────────────────────────────────
-    // Admin-SDK-only (enforceDurableRateLimit); a client that could read/reset its own
-    // counter would defeat the auth-route brute-force cap.
+    // Admin SDK only, via enforceDurableRateLimit — if a client could read or reset
+    // its own counter, it would defeat the brute-force cap on auth routes.
     match /rateLimits/{id} {
       allow read, write: if false;
     }
 
-    // Admin-SDK-only — a client able to read a code hash could brute-force it offline,
-    // and one able to write could mint codes.
+    // Admin SDK only — a client that could read a code hash could brute-force it
+    // offline, and one that could write could just mint its own codes.
     match /signupCodes/{codeHash} {
       allow read, write: if false;
     }
 
-    // Admin-SDK-only idempotency ledger for the 30-minute reminder sweep; a client that
-    // could delete an entry could force duplicate reminders.
+    // Admin-SDK-only idempotency ledger for the 30-minute reminder sweep. If a client
+    // could delete an entry, it could force a duplicate reminder.
     match /appointmentReminders/{id} {
       allow read, write: if false;
     }
 
-    // Admin-SDK-only idempotency ledger for the overdue "job finished?" sweep; same
-    // posture as appointmentReminders.
+    // Admin-SDK-only idempotency ledger for the overdue "job finished?" sweep — same
+    // posture as appointmentReminders above.
     match /appointmentOverduePrompts/{id} {
       allow read, write: if false;
     }
 
     // Admin-SDK-only claim ledger that collapses a repeat-series batch into one push
-    // per employee per kind; same posture as the ledgers above.
+    // per employee per kind — same posture as the ledgers above.
     match /appointmentSeriesNotices/{id} {
       allow read, write: if false;
     }
 
-    // Admin-SDK-only server-owned mapping of tech to live-activity appointment; a client
-    // write could redirect another tech's card and leak a client's address.
+    // Admin-SDK-only mapping of each tech to their live-activity appointment, owned
+    // entirely by the server — a client write here could redirect another tech's card
+    // and leak a client's address.
     match /liveActivityCards/{employeeDocId} {
       allow read, write: if false;
     }
 
     // ── users ─────────────────────────────────────────────────────────────────
-    // Read: admins see all; active employees see active peers (picker/display);
-    // a registering user can find their own invited doc by email match.
-    // Write: admin only. Invite activation is server-side (the redeemSignupCode
-    // callable via the Admin SDK), so there is no client self-activation path.
+    // Admins can read everything; active employees can see active peers (for pickers
+    // and display); and someone signing up can find their own invited doc by email
+    // match. Only an admin can write — invite activation happens server-side via
+    // redeemSignupCode, so there's no way for a client to self-activate.
     match /users/{userId} {
-      // The invited-doc clause only matches a direct get, not a client list query —
-      // Firestore can't prove the email-equality condition from a query constraint.
-      // The active-peers clause is caller-side (via the usersByUid bridge) so the list
-      // query stays provable, and blocks a signed-in stranger with no bridge doc from
-      // dumping the staff directory.
+      // The invited-doc clause only works for a direct get, not a client list query,
+      // since Firestore can't prove the email-equality check from a query constraint.
+      // The active-peers clause checks the caller (via the usersByUid bridge) rather
+      // than the resource, which keeps list queries provable and stops a signed-in
+      // stranger with no bridge doc from dumping the whole staff directory.
       allow read: if isAdmin()
         || (isActiveUser() && resource.data.status == 'active')
         || (isSignedIn() && resource.data.uid == request.auth.uid)
@@ -115,14 +121,15 @@ service cloud.firestore {
 
       allow create, delete: if isAdmin();
 
-      // Rejects a colorValue write that doesn't parse as an integer, so a malformed
-      // value can't fall back to the default blue.
+      // Rejects a colorValue write that isn't a valid integer string — otherwise a bad
+      // value could sneak through and the client would silently fall back to the
+      // default blue.
       function isValidColorValue(s) {
         return s is string && s.matches('^-?[0-9]+$');
       }
 
-      // Constrains role/status to the allowlist so a compromised admin session can't
-      // mint a bogus role or desync the usersByUid bridge.
+      // Keeps role and status limited to the allowlist, so a compromised admin
+      // session can't mint a bogus role or throw the usersByUid bridge out of sync.
       function isValidRole(r) {
         return r in ['admin', 'employee'];
       }
@@ -130,9 +137,10 @@ service cloud.firestore {
         return s in ['active', 'disabled', 'invited'];
       }
 
-      // Admin-only; invite activation happens server-side via redeemSignupCode, so
-      // there's no client self-activation path. `uid` links the doc to an Auth account
-      // and is client-immutable — rewriting it could hijack another account's bridge doc.
+      // Only an admin can update. Invite activation happens server-side via
+      // redeemSignupCode, so there's no client self-activation path. `uid` links this
+      // doc to an Auth account and clients can never change it — rewriting it could
+      // hijack another account's bridge doc.
       allow update: if isAdmin()
             && !request.resource.data.diff(resource.data)
                  .affectedKeys()
@@ -144,8 +152,8 @@ service cloud.firestore {
             && (!('status' in request.resource.data.keys())
                 || isValidUserStatus(request.resource.data.status));
 
-      // FCM device tokens; a user can only read/write their own, and writes are
-      // shape-constrained so a token can't be planted under a spoofed identity.
+      // FCM device tokens — a user can only read or write their own, and writes are
+      // shape-constrained so nobody can plant a token under a spoofed identity.
       match /fcmTokens/{token} {
         allow read, delete: if isActiveUser() && myDocId() == userId;
         allow create, update: if isActiveUser()
@@ -161,8 +169,8 @@ service cloud.firestore {
               || request.resource.data.updatedAt is timestamp);
       }
 
-      // Live Activity tokens; same self-only discipline as fcmTokens, iOS-only, keyed
-      // by the ActivityKit activity id or the literal `pushToStart`.
+      // Live Activity tokens — same self-only rule as fcmTokens, iOS-only, keyed by
+      // the ActivityKit activity id or the literal `pushToStart`.
       match /liveActivityTokens/{activityId} {
         allow read, delete: if isActiveUser() && myDocId() == userId;
         allow create, update: if isActiveUser()
@@ -185,20 +193,20 @@ service cloud.firestore {
               || request.resource.data.createdAt is timestamp)
           && (!('updatedAt' in request.resource.data.keys())
               || request.resource.data.updatedAt is timestamp)
-          // Required because the TTL policy and pruneExpiredActivityTokens both key on
-          // this field, and Firestore excludes docs missing it — an optional value would
-          // let a client mint permanently undeletable rows. Bounded just above
-          // liveActivityPushToStartTtl (30d) so a client can't outlive the sweep's reach —
-          // raise both together.
+          // This has to be required: the TTL policy and pruneExpiredActivityTokens both
+          // key on it, and Firestore skips docs that are missing the field — so an
+          // optional value would let a client mint rows nothing could ever clean up.
+          // We cap it just above liveActivityPushToStartTtl (30d) so a client can't write
+          // an expiry that outlives the sweep — raise both together if that changes.
           && request.resource.data.expiresAt is timestamp
           && request.resource.data.expiresAt
              < request.time + duration.value(31, 'd');
       }
 
-      // Live-location presence for travel-time reminders; owner access is self-only
-      // here, with admins reading all via the collectionGroup rule below.
-      // `updatedAt == request.time` forces serverTimestamp() so a client can't fake
-      // freshness with a future timestamp.
+      // Live-location presence for travel-time reminders. Owners can only touch their
+      // own doc here — admins read everything via the collectionGroup rule below.
+      // `updatedAt == request.time` forces serverTimestamp(), so a client can't fake
+      // freshness by writing a future timestamp.
       match /presence/{presenceId} {
         allow read, delete: if isActiveUser() && myDocId() == userId;
         allow create, update: if isActiveUser()
@@ -218,18 +226,18 @@ service cloud.firestore {
     }
 
     // ── presence (admin live-map read) ───────────────────────────────────
-    // Grants admins read (get + list, including collectionGroup) over every presence
-    // subcollection; the nested rule above still governs owner access. isAdmin() is
-    // caller-side only, keeping the unfiltered collection-group query provable.
-    // Note: {path=**} reserves the `presence` subcollection name for any future
-    // collection too.
+    // Gives admins read access (get + list, including collectionGroup) over every
+    // presence subcollection — the nested rule above still governs what an owner can
+    // do. isAdmin() only checks the caller, which is what keeps this unfiltered
+    // collection-group query provable. Note that {path=**} reserves the `presence`
+    // subcollection name for any future collection too.
     match /{path=**}/presence/{presenceId} {
       allow read: if isAdmin();
     }
 
     // ── appointments ──────────────────────────────────────────────────────────
-    // Lifecycle is pending -> in_progress -> done, plus cancelled; employee writes are
-    // further restricted to 'done' only (see below).
+    // The lifecycle goes pending -> in_progress -> done, plus cancelled. Employees
+    // can only ever write 'done' (see below).
     function isValidAppointmentStatus(s) {
       return s in ['pending', 'in_progress', 'done', 'cancelled'];
     }
@@ -238,12 +246,13 @@ service cloud.firestore {
       // Read: admin sees all; assigned employee sees their appointments.
       allow read: if isAdmin() || isAssignedEmployee(resource.data);
 
-      // Admin only; rejects unknown status values from the client.
+      // Admin only, and rejects any status value the client sends that isn't on
+      // the allowlist.
       allow create: if isAdmin()
         && isValidAppointmentStatus(request.resource.data.status);
 
-      // Admin has full access (status allowlist enforced); an assigned employee may
-      // only flip status to 'done', nothing else.
+      // Admins have full access (with the status allowlist still enforced); an
+      // assigned employee can only flip the status to 'done' — nothing else.
       allow update: if (isAdmin()
             && isValidAppointmentStatus(request.resource.data.status))
         || (isAssignedEmployee(resource.data)
@@ -257,7 +266,8 @@ service cloud.firestore {
     }
 
     // ── clients ───────────────────────────────────────────────────────────────
-    // Client PII, admin-only — employees never need direct access.
+    // This is all client PII, so it's admin-only — employees never need direct
+    // access to it.
     function isValidClientData(data) {
       return (!('name' in data) || (data.name is string && data.name.size() <= 200))
         && (!('businessName' in data) || (data.businessName is string && data.businessName.size() <= 200))
@@ -272,25 +282,26 @@ service cloud.firestore {
         && (!('province' in data) || (data.province is string && data.province.size() <= 128))
         && (!('country' in data) || (data.country is string && data.country.size() <= 128))
         && (!('postalCode' in data) || (data.postalCode is string && data.postalCode.size() <= 32))
-        // KNOWN GAP: rules can't cap contact element strings (only array length), so an
-        // admin write can still reach Firestore's 1 MB ceiling and fan out via
-        // propagateClientEdits — accepted since it's admin-only. Fix properly with a
-        // per-field TextLimits cap in the contacts editor, not by tightening this number.
+        // Known gap: rules can't cap the length of each contact's fields, only how
+        // many contacts there are. So an admin write can still reach Firestore's 1 MB
+        // ceiling and fan out via propagateClientEdits — we've accepted that since
+        // it's admin-only. The real fix is a per-field TextLimits cap in the contacts
+        // editor, not tightening this array-length number.
         && (!('contacts' in data) || (data.contacts is list && data.contacts.size() <= 50))
         && (!('noFixedAddress' in data) || data.noFixedAddress is bool);
     }
 
     match /clients/{clientId} {
       allow read: if isAdmin();
-      // `waveCustomerId` and `wave` are written exclusively by Cloud Functions
-      // via Admin SDK (which bypasses these rules). The client app must never
-      // set or modify these fields; reject any create that includes them.
+      // `waveCustomerId` and `wave` are written only by Cloud Functions via the
+      // Admin SDK, which bypasses these rules entirely. The client app should never
+      // touch these fields, so we reject any create that includes them.
       allow create: if isAdmin()
         && isValidClientData(request.resource.data)
         && !('waveCustomerId' in request.resource.data.keys())
         && !('wave' in request.resource.data.keys());
-      // For updates, reject only if the client is changing/adding the Wave
-      // fields — an update that leaves them untouched has no affected keys.
+      // On updates we only reject if the client is trying to change or add the Wave
+      // fields — an update that leaves them alone has no affected keys, so it's fine.
       allow update: if isAdmin()
         && isValidClientData(request.resource.data)
         && !request.resource.data.diff(resource.data)
@@ -300,21 +311,19 @@ service cloud.firestore {
     }
 
     // ── wave (Wave Accounting connection metadata) ────────────────────────────
-    // Written exclusively by Cloud Functions via Admin SDK (connection status,
-    // businessId, last-sync timestamps; the access token lives only in Secret
-    // Manager, never here). No client may read connection state — treat this
-    // collection like rateLimits. The default
-    // deny-everything would already block access; the explicit rule documents
-    // intent for a security-sensitive collection.
+    // Only Cloud Functions write here, via the Admin SDK — connection status,
+    // businessId, last-sync timestamps. The access token itself lives only in Secret
+    // Manager, never here. No client can read connection state; treat this like
+    // rateLimits.
     match /wave/{docId} {
       allow read, write: if false;
     }
 
     // ── waveSyncQueue (outbox for Wave API sync jobs) ─────────────────────────
-    // Jobs are enqueued and processed exclusively by Cloud Functions via Admin
-    // SDK. No client may read pending jobs, inspect retry state, or reset the
-    // queue — doing so could expose Wave API credentials embedded in job
-    // payloads or allow a client to cancel/replay sync operations.
+    // Cloud Functions enqueue and process these jobs via the Admin SDK. No client
+    // can read pending jobs, inspect retry state, or reset the queue — that could
+    // expose Wave API credentials sitting in job payloads, or let a client cancel
+    // or replay a sync.
     match /waveSyncQueue/{jobId} {
       allow read, write: if false;
     }

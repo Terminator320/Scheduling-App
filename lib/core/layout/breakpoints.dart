@@ -6,7 +6,8 @@ class Breakpoints {
   /// Two-pane threshold for master-detail + nav rail on genuinely large screens.
   static const double tablet = 840;
 
-  /// Tablet-class cutoff on shortest side; landscape phones stay narrow and use list + sheet instead of two-pane.
+  /// Tablet-class cutoff on shortest side. Landscape phones stay narrow and
+  /// use list + sheet instead of two-pane.
   static const double tabletShortestSide = 600;
 
   /// Extended (labelled) nav-rail threshold — only on large screens, so the
@@ -32,15 +33,19 @@ extension ResponsiveContext on BuildContext {
   bool get isLandscape =>
       MediaQuery.orientationOf(this) == Orientation.landscape;
 
-  /// Use side nav rail + multi-pane on tablets or any landscape device; portrait phones stay single-column.
+  /// Use a side nav rail with multi-pane layout on tablets or any landscape
+  /// device. Portrait phones stay single-column.
   bool get isSplitLayout => isWide || isLandscape;
 
-  /// Show two-pane master-detail for tablet-class devices only; landscape phones fall back to single list + sheet despite isSplitLayout.
+  /// Two-pane master-detail is only for tablet-class devices. Landscape
+  /// phones fall back to a single list + sheet, even though isSplitLayout is
+  /// true for them too.
   bool get isTwoPane =>
       MediaQuery.sizeOf(this).shortestSide >= Breakpoints.tabletShortestSide;
 
-  /// Dense rows (cards, headers, action bars) stack vertically: a narrow phone
-  /// OR a large text scale that would otherwise overflow a horizontal row.
+  /// True when dense rows (cards, headers, action bars) should stack
+  /// vertically instead of horizontally — either the phone is narrow, or the
+  /// text scale is large enough that a horizontal row would overflow.
   bool get isCompact =>
       MediaQuery.sizeOf(this).width < Breakpoints.compactWidth ||
       MediaQuery.textScalerOf(this).scale(1) > Breakpoints.compactTextScale;

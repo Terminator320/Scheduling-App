@@ -14,9 +14,9 @@ void main() {
     requestPermission: () async => afterRequest,
   );
 
-  /// Fake whose successive request() calls return [answers] in order (the last
-  /// value repeats once exhausted), so escalation — a second request — can be
-  /// distinguished from the first.
+  /// Fake whose successive request() calls step through [answers] in order,
+  /// repeating the last value once exhausted. That way we can tell escalation
+  /// (a second request) apart from the initial one.
   LocationPermissionService escalatingService(
     List<LocationPermission> answers, {
     LocationPermission current = LocationPermission.denied,

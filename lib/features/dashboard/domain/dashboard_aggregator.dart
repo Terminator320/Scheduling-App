@@ -4,7 +4,8 @@ import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-/// Pure reducers over dashboard appointments range; keyed on `now` for testability.
+/// Pure reducer functions over the dashboard's appointment range, keyed on
+/// `now` so tests can control the clock.
 class DashboardAggregator {
   DashboardAggregator._();
 
@@ -16,7 +17,8 @@ class DashboardAggregator {
   static DateTime mondayOf(DateTime day) =>
       DateTime(day.year, day.month, day.day - (day.weekday - DateTime.monday));
 
-  /// Query range: 8 ISO weeks back through next Monday, +3 days for pending window.
+  /// The query range spans 8 ISO weeks back through next Monday, extended
+  /// by 3 days to cover the pending window.
   static AppointmentDateRange rangeAround(DateTime now) {
     final monday = mondayOf(now);
     final start = DateTime(
@@ -32,7 +34,8 @@ class DashboardAggregator {
     );
   }
 
-  /// Mirror of displayStatus; use statusCountKey to avoid overdue.raw throwing.
+  /// Mirrors displayStatus, but use statusCountKey to key off it instead —
+  /// calling `.raw` directly on overdue would throw.
   static String displayStatusAt(AppointmentRecord appointment, DateTime now) {
     if (_isTerminal(appointment)) return appointment.status;
     if (now.isAfter(appointment.endTime)) return 'overdue';
@@ -40,7 +43,8 @@ class DashboardAggregator {
     return appointment.status;
   }
 
-  /// Stable key for statusCounts; 'overdue' has no stored raw, keys on literal 'overdue'.
+  /// Stable key for statusCounts. 'overdue' has no stored raw value, so we
+  /// just key it on the literal string 'overdue'.
   static String statusCountKey(AppointmentStatus status) =>
       status == AppointmentStatus.overdue ? 'overdue' : status.raw;
 
@@ -69,9 +73,10 @@ class DashboardAggregator {
     );
   }
 
-  /// Jobs per employee today / this ISO week (cancelled excluded, a
-  /// multi-assignee visit counts once per assignee); [employees] is the
-  /// active-only list from `employeesStreamProvider`.
+  /// Counts jobs per employee for today and for this ISO week. Cancelled
+  /// visits are excluded, and a multi-assignee visit counts once for each
+  /// assignee. [employees] should be the active-only list from
+  /// `employeesStreamProvider`.
   static List<EmployeeWorkload> computeWorkload(
     List<AppointmentRecord> appointments,
     List<EmployeeRecord> employees,
@@ -149,8 +154,9 @@ class DashboardAggregator {
     ];
   }
 
-  /// Busiest weekday over the window (cancelled excluded); ties resolve to
-  /// the earliest weekday, null when nothing counts.
+  /// Finds the busiest weekday over the window, excluding cancelled visits.
+  /// Ties go to the earliest weekday, and this returns null when nothing
+  /// counts.
   static BusiestWeekday? computeBusiestWeekday(
     List<AppointmentRecord> appointments,
     DateTime now,

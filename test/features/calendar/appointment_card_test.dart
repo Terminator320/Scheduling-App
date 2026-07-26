@@ -1,7 +1,6 @@
-// Guards against a layout crash: IntrinsicHeight (stretching the
-// employee-color bar) can't query intrinsic dimensions through AutoSizeText's
-// internal LayoutBuilder, so the title must stay a plain Text (see
-// appointment_card.dart:49).
+// Guards against a layout crash — IntrinsicHeight (which stretches the employee-color
+// bar) can't query intrinsic dimensions through AutoSizeText's internal LayoutBuilder,
+// so the title has to stay a plain Text (see appointment_card.dart:49).
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,7 +17,8 @@ AppointmentRecord _fakeAppt() => AppointmentRecord(
   employeeIds: const ['e1'],
 );
 
-// Past endTime + non-terminal status → displayStatus resolves to `overdue`.
+// When endTime is in the past and the status isn't terminal, displayStatus
+// resolves to `overdue`.
 AppointmentRecord _overdueAppt() => AppointmentRecord(
   id: '2',
   title: 'Water heater leak',

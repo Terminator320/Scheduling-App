@@ -14,11 +14,13 @@ enum LiveActivityTokenKind {
   final String raw;
 }
 
-/// How long a token row stays useful before server-side TTL prune (30 days for push-to-start device tokens, 1 day for per-activity update tokens).
+/// How long a token row stays useful before the server's TTL prune kicks in
+/// — 30 days for push-to-start device tokens, 1 day for per-activity update tokens.
 const liveActivityPushToStartTtl = Duration(days: 30);
 const liveActivityUpdateTtl = Duration(days: 1);
 
-/// Doc id for a token row (push-to-start keys on token itself, update keys on activity id so token rotation replaces not duplicates).
+/// Doc id for a token row. Push-to-start keys on the token itself; update
+/// keys on the activity id, so a token rotation replaces the row instead of duplicating it.
 String liveActivityTokenDocId({
   required LiveActivityTokenKind kind,
   required String token,

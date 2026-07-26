@@ -7,9 +7,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// SharedPreferences key for the user's Live Activity opt-out.
 const _keyLiveActivityEnabled = 'live_activity_enabled';
 
-/// Whether this device may host the "time to leave" Live Activity card (default on); turning OFF must call `unregister()` since the server push-starts cards from registered tokens.
+/// Whether this device may host the "time to leave" Live Activity card (on
+/// by default). Turning this off must call `unregister()`, since the server
+/// push-starts cards from whatever tokens are registered.
 class LiveActivityPreferenceController extends Notifier<bool> {
-  /// Resolves once disk read completes; callers that act on the preference must await this, or cold-start sees default and re-registers opted-out devices.
+  /// Resolves once the disk read completes. Callers that act on the
+  /// preference must await this first, or a cold start sees the default value
+  /// and re-registers a device that had opted out.
   late final Future<void> ready = _load();
 
   @override
@@ -23,7 +27,8 @@ class LiveActivityPreferenceController extends Notifier<bool> {
       final prefs = await SharedPreferences.getInstance();
       state = prefs.getBool(_keyLiveActivityEnabled) ?? true;
     } catch (e, st) {
-      // Default to enabled (same as fresh install) since an uncaught throw from unawaited ready would be fatal.
+      // Default to enabled, same as a fresh install — an uncaught throw here
+      // from the unawaited `ready` future would be fatal.
       ref.read(loggerProvider).warn('LIVE-ACT read preference failed', e, st);
     }
   }

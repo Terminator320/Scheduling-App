@@ -42,7 +42,7 @@ class PhotoPickerSection extends StatelessWidget {
     ImageViewer.open(context, images: providers, initialIndex: tappedIndex);
   }
 
-  // Read-only swipeable carousel; returns empty box when no real images so failure banner stands alone.
+  // A read-only swipeable carousel. Returns an empty box when there are no real images, so the failure banner can stand alone.
   Widget _readOnlyGallery() {
     final providers = buildImageProviders(
       urls: existingImages.map((i) => i.url).toList(),

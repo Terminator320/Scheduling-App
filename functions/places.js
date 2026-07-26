@@ -11,16 +11,16 @@ const {
 } = require("./security");
 const {GOOGLE_MAP_API_KEY} = require("./params");
 
-// Both callables proxy the Places API v1 so the billing-sensitive key (in
-// Secret Manager) never ships in the Flutter binary; clients must be
+// Both callables proxy the Places API v1 so the billing-sensitive key (kept
+// in Secret Manager) never ships in the Flutter binary. Clients must be
 // authenticated and pass App Check.
 
 const PLACE_ID_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const INPUT_MAX_LEN = 200;
 
-// Per-uid sliding-window rate limit, in-memory per function instance — a cheap,
-// latency-free guard for the high-volume autocomplete path (set a GCP billing alert
-// too; other routes use the durable Firestore limiter instead).
+// Per-uid sliding-window rate limit, in-memory per function instance — a
+// cheap, latency-free guard for the high-volume autocomplete path. Set a GCP
+// billing alert too — other routes use the durable Firestore limiter instead.
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const rateBuckets = new Map();
@@ -32,16 +32,16 @@ const PLACES_DETAILS_RATE_MAX = 40;
 const PLACES_DETAILS_RATE_WINDOW_MS = 15 * 60 * 1000;
 
 // Reverse geocoding backs the live staff-location map (tap-driven, not
-// keystroke-driven); a generous hourly cap via the durable Firestore limiter
+// keystroke-driven). A generous hourly cap via the durable Firestore limiter
 // covers normal admin usage while bounding cost.
 const REVERSE_GEOCODE_RATE_MAX = 120;
 const REVERSE_GEOCODE_RATE_WINDOW_MS = 60 * 60 * 1000;
 const REVERSE_GEOCODE_LOCALES = new Set(["en", "fr"]);
 
 /**
- * Shared response-handling triad (transport-error catch, non-200 check,
- * JSON-parse catch) for the three Places/Geocoding proxies; request
- * construction stays at each call site since it differs per callable.
+ * Handles the three things every Places/Geocoding proxy needs to check —
+ * transport errors, non-200 responses, and JSON parse failures. Request
+ * construction stays at each call site, since it differs per callable.
  * @param {string} url Fully-built request URL.
  * @param {?object} options fetch() options (method, headers, body).
  * @param {{label: string, uid: string, logResponsePreview: boolean}} opts
@@ -122,8 +122,9 @@ const placesAutocomplete = onCall(
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
       }
-      // Admin-only: address autocomplete is only surfaced on admin appointment
-      // forms, and the in-memory limiter below is a cost guard, not a hard cap.
+      // This is admin-only — address autocomplete is only surfaced on admin
+      // appointment forms. The in-memory limiter below is a cost guard, not
+      // a hard cap.
       await assertAdmin(req.auth.uid);
       assertPayloadShape(req.data, new Set(["input", "sessionToken"]));
       const input = requireString(req.data, "input", INPUT_MAX_LEN);
@@ -176,7 +177,7 @@ const placesGetDetails = onCall(
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
       }
-      // Place details is admin-only for the same reason as autocomplete; it
+      // Place details is admin-only for the same reason as autocomplete. It
       // also keeps the durable Firestore rate cap below.
       await assertAdmin(req.auth.uid);
       assertPayloadShape(req.data, new Set(["placeId", "sessionToken"]));
@@ -225,8 +226,8 @@ const placesGetDetails = onCall(
 );
 
 // Reverse-geocodes a lat/lng into a human-readable address for the live
-// staff-location map; uses the classic Geocoding API since that's the
-// endpoint offering reverse-geocode mode.
+// staff-location map. Uses the classic Geocoding API, since that's the
+// endpoint that offers reverse-geocode mode.
 const placesReverseGeocode = onCall(
     {
       enforceAppCheck: true,

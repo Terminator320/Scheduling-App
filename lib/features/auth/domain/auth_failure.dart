@@ -127,7 +127,9 @@ class AuthFailureSignupCodeExpired extends AuthFailure {
       c.l10n.error_thatCodeHasExpiredAskYourAdmin;
 }
 
-// Code is valid but issued for a different email; distinct from "invalid code" so the message points at the email.
+// The code itself is valid, but it was issued for a different email. We keep
+// this distinct from "invalid code" so the message can point the user at the
+// email mismatch.
 class AuthFailureSignupEmailMismatch extends AuthFailure {
   const AuthFailureSignupEmailMismatch();
   @override

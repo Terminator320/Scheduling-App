@@ -42,8 +42,9 @@ function validateRedemption({codeData, inviteData, tokenEmail, nowMs}) {
   const inviteEmail = String(inviteData.email || "").trim().toLowerCase();
   const claimEmail = String(tokenEmail || "").trim().toLowerCase();
   if (!claimEmail) return {ok: false, reason: "invalid"};
-  // Surfaced distinctly (not "invalid code") so the UI can tell the user to
-  // use the exact invited email; only reached with an otherwise-valid code.
+  // We surface this distinctly (not as "invalid code") so the UI can tell
+  // the user to use the exact invited email. It's only reached once we
+  // already have an otherwise-valid code.
   if (inviteEmail !== claimEmail) {
     return {ok: false, reason: "email-mismatch"};
   }

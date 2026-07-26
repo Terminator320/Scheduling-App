@@ -2,8 +2,9 @@
 
 /**
  * @fileoverview Push-notification logic for employee job alerts, 30-minute
- * reminders, and the nightly digest; pure helpers plus orchestration take
- * injected `{db, messaging, now, logger}` so jest can drive them with mocks.
+ * reminders, and the nightly digest. Both the pure helpers and the
+ * orchestration functions take injected `{db, messaging, now, logger}` so
+ * jest can drive them with mocks.
  *
  * `sendToEmployee` lives here (not in notifications.js) so it's unit-testable
  * with an injected Firestore + Messaging.
@@ -30,8 +31,8 @@ const {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// How long after its endTime a job stays eligible for the overdue prompt; a
-// job left open longer than this gets no prompt (accepted v1 gap).
+// How long after its endTime a job stays eligible for the overdue prompt. A
+// job left open longer than this just gets no prompt — an accepted v1 gap.
 const OVERDUE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 
 // The overdue sweep queries by startTime (endTime would need a new index),
@@ -40,21 +41,21 @@ const OVERDUE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 const OVERDUE_QUERY_WINDOW_MS = 2 * OVERDUE_LOOKBACK_MS;
 
 // Safety valve bounding the candidate set so one run can't blow the function
-// timeout; logs a warning instead of silently truncating if ever hit.
+// timeout. Logs a warning instead of silently truncating if it's ever hit.
 const OVERDUE_SWEEP_MAX = 500;
 
-// FCM's hard cap on a message's data map is 4 KB; this leaves headroom for the
-// other data keys (kind, appointment id, deep link) alongside the payload.
+// FCM's hard cap on a message's data map is 4 KB. This leaves headroom for
+// the other data keys (kind, appointment id, deep link) alongside the payload.
 const WIDGET_PAYLOAD_MAX_BYTES = 3000;
 
-// Ledger docs are useless once their occurrence ages out of eligibility;
-// expiresAt + a Firestore TTL policy on both ledger collections keeps them
-// from accumulating forever.
+// Ledger docs are useless once their occurrence ages out of eligibility, so
+// expiresAt plus a Firestore TTL policy on both ledger collections keeps
+// them from piling up forever.
 const LEDGER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * The body every claim-ledger doc in this file is written with; `expiresAt` is
- * the ABSOLUTE deletion instant, so the Firestore TTL policy on these
+ * The body every claim-ledger doc in this file is written with. `expiresAt`
+ * is the ABSOLUTE deletion instant, so the Firestore TTL policy on these
  * collections must use expiration offset 0.
  *
  * @param {!Date} nowDate Sweep/trigger time.
@@ -67,9 +68,9 @@ function ledgerBody(nowDate) {
   };
 }
 
-// Statuses that leave a job open past endTime (shown as `overdue`);
-// deliberately an allowlist so terminal statuses (`done`/`cancelled`, legacy
-// `completed`) stay excluded.
+// Statuses that leave a job open past endTime (shown as `overdue`). This is
+// deliberately an allowlist, so terminal statuses (`done`/`cancelled`,
+// legacy `completed`) stay excluded.
 const OPEN_LIKE = new Set(["pending", "in_progress", "confirmed"]);
 
 // Same allowlist as an array for `where("status", "in", ...)` queries, single-sourced
@@ -84,8 +85,8 @@ const KIND_PRIORITY = {
   assigned: 1,
 };
 
-// Change-driven pushes go to employees only (an admin usually makes those edits
-// themselves); time-based pushes also reach an assigned admin.
+// Change-driven pushes go to employees only — an admin usually makes those
+// edits themselves. Time-based pushes also reach an assigned admin.
 const CHANGE_RECIPIENT_ROLES = new Set(["employee"]);
 const TIMED_RECIPIENT_ROLES = new Set(["employee", "admin"]);
 
@@ -159,8 +160,8 @@ function diffAppointmentForNotifications(before, after, now, id) {
     if (isCancelled(after) || !notPast(after.startTime)) return [];
     // Only the anchor (id === seriesId) sends the assignment push, so a
     // repeating series notifies once instead of once per pre-booked
-    // occurrence; non-repeating appointments (empty seriesId) are never
-    // suppressed.
+    // occurrence. Non-repeating appointments (empty seriesId) are never
+    // suppressed by this check.
     const seriesId = String((after && after.seriesId) || "");
     if (seriesId !== "" && seriesId !== String(id)) return [];
     for (const eid of toIdList(after.employeeIds)) {
@@ -234,8 +235,9 @@ function _timeOnly(locale, startTime) {
 
 /**
  * Localized recurrence phrase ("every 6 months"/"aux 6 mois") for a
- * RepeatInterval raw value, mirroring RepeatInterval.raw (repeat_interval.dart);
- * "" for none/unknown so a one-off job reads as a plain assignment.
+ * RepeatInterval raw value, mirroring RepeatInterval.raw
+ * (repeat_interval.dart). Returns "" for none/unknown, so a one-off job
+ * reads as a plain assignment.
  * @param {string} raw
  * @param {string} locale 'en' | 'fr'.
  * @return {string}
@@ -399,10 +401,10 @@ function buildDigestMessage(jobs, locale) {
 }
 
 /**
- * Filters appointment records to those overdue for a "job finished?" prompt:
- * still open per OPEN_LIKE with an endTime within OVERDUE_LOOKBACK_MS,
- * mirroring the app's AppointmentRecord.displayStatus (a status unknown to
- * OPEN_LIKE is never swept). Pure — unit-testable.
+ * Filters appointment records to those overdue for a "job finished?" prompt
+ * — still open per OPEN_LIKE, with an endTime within OVERDUE_LOOKBACK_MS,
+ * mirroring the app's AppointmentRecord.displayStatus. A status OPEN_LIKE
+ * doesn't recognize is never swept. Pure — unit-testable.
  * @param {!Array<!Object>} records Appointment records ({id, status,
  *   endTime, ...}).
  * @param {(Date|number)} now
@@ -461,9 +463,9 @@ function tomorrowWindowToronto(now) {
 }
 
 /**
- * Overdue-prompt ledger doc id: keyed on the END time (that's what makes a
- * job overdue) and the recipient, so a reschedule that moves endTime re-arms
- * the prompt and each assignee is tracked independently. Pure —
+ * Overdue-prompt ledger doc id, keyed on the END time (that's what makes a
+ * job overdue) and the recipient. That way a reschedule that moves endTime
+ * re-arms the prompt, and each assignee is tracked independently. Pure —
  * unit-testable.
  * @param {string} appointmentId
  * @param {number} endTimeMillis
@@ -475,9 +477,9 @@ function overduePromptLedgerId(appointmentId, endTimeMillis, employeeDocId) {
 }
 
 /**
- * True for FCM error codes meaning the token is dead and should be deleted;
- * deliberately excludes `messaging/invalid-argument`, which can signal a bad
- * payload rather than a bad token. Pure — unit-testable.
+ * True for FCM error codes meaning the token is dead and should be deleted.
+ * Deliberately excludes `messaging/invalid-argument`, since that can signal
+ * a bad payload rather than a bad token. Pure — unit-testable.
  * @param {string} code
  * @return {boolean}
  */
@@ -510,13 +512,13 @@ function isAlreadyExists(err) {
  *   assigned admin).
  * @param {!Map<string, {user: ?Object, tokenDocs: !Array<!Object>}>=} cache
  *   Per-sweep read cache keyed by employee doc id, so an employee assigned to
- *   several jobs in one sweep is fetched at most once (stale-token pruning
- *   still works since deletes are idempotent and the ledger, not the token
- *   list, prevents duplicate pushes).
- * @param {function(string): !Object=} augmentData Optional per-token extra data
- *   keyed by locale ('en'|'fr'), used to attach a locale-correct
- *   `widgetPayload` (a non-empty payload also sets APNs `content-available`
- *   so iOS applies it with the app closed).
+ *   several jobs in one sweep is fetched at most once. Stale-token pruning
+ *   still works fine with this cache, since deletes are idempotent and it's
+ *   the ledger, not the token list, that actually prevents duplicate pushes.
+ * @param {function(string): !Object=} augmentData Optional per-token extra
+ *   data keyed by locale ('en'|'fr'), used to attach a locale-correct
+ *   `widgetPayload`. A non-empty payload also sets APNs `content-available`
+ *   so iOS applies it even with the app closed.
  * @return {!Promise<number>}
  */
 async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
@@ -544,10 +546,10 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
     const locale = (doc.data() || {}).locale === "fr" ? "fr" : "en";
     const {title, body} = buildMsg(locale);
     let msgData = augmentData ? {...data, ...augmentData(locale)} : data;
-    // Drops widgetPayload if it would push the 4 KB FCM data-map cap (losing
-    // the whole message), measuring UTF-8 bytes since accented text is 2
-    // bytes but 1 code unit; msgData is copied first since it may alias the
-    // caller's `data`.
+    // Drop widgetPayload if it would push us over the 4 KB FCM data-map cap
+    // and lose the whole message. We measure UTF-8 bytes since accented text
+    // is 2 bytes but only 1 code unit. msgData is copied first since it may
+    // alias the caller's `data`.
     if (typeof msgData.widgetPayload === "string" &&
         Buffer.byteLength(msgData.widgetPayload, "utf8") >
           WIDGET_PAYLOAD_MAX_BYTES) {
@@ -555,16 +557,17 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
       delete msgData.widgetPayload;
     }
     const aps = {sound: "default"};
-    // A fresh widget payload also sets APNs content-available so iOS wakes
-    // the app in the background to rewrite the widget (needs the
-    // remote-notification UIBackgroundMode + registered background handler);
-    // the visible alert still shows alongside it.
+    // A fresh widget payload also sets APNs content-available, so iOS wakes
+    // the app in the background to rewrite the widget. That needs the
+    // remote-notification UIBackgroundMode plus a registered background
+    // handler on the client; the visible alert still shows alongside it.
     if (typeof msgData.widgetPayload === "string" && msgData.widgetPayload) {
       aps["content-available"] = 1;
     }
-    // Time-sensitive so a departure alert isn't buried in a Focus-mode
-    // summary; needs the Xcode Time Sensitive Notifications entitlement, or
-    // iOS silently downgrades it to `active` (safe to ship server-first).
+    // Marked time-sensitive so a departure alert isn't buried in a
+    // Focus-mode summary. This needs the Xcode Time Sensitive Notifications
+    // entitlement on the client, or iOS silently downgrades it to `active` —
+    // safe to ship server-first either way.
     if (msgData.kind === "leaveNow") {
       aps["interruption-level"] = "time-sensitive";
     }

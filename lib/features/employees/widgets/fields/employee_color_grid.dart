@@ -6,7 +6,8 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Tap-friendly employee color grid: hides used colors, shows custom picker swatch.
+/// A tap-friendly grid of employee colors. Hides colors already in use and
+/// shows a swatch for the custom picker.
 class EmployeeColorGrid extends ConsumerWidget {
   const EmployeeColorGrid({
     required this.selectedColor,
@@ -69,7 +70,8 @@ class EmployeeColorGrid extends ConsumerWidget {
         l10n.employees_customColor,
         style: Theme.of(context).textTheme.titleMedium,
       ),
-      // Tap-a-swatch palette with shade rows only — no wheel (finger-dragging precision) and no hex-code field.
+      // Just a tap-to-pick palette with shade rows — no color wheel, since
+      // that needs precise finger-dragging, and no hex field either.
       pickersEnabled: const <ColorPickerType, bool>{
         ColorPickerType.primary: true,
         ColorPickerType.accent: false,
@@ -155,8 +157,8 @@ class _SwatchButton extends StatelessWidget {
   }
 }
 
-/// The "more colors" affordance: a rainbow-ringed swatch that reads as
-/// "any color", sized and rippled like the palette swatches.
+/// The "more colors" affordance — a rainbow-ringed swatch that reads as
+/// "any color". It's sized and rippled the same way as the palette swatches.
 class _CustomColorButton extends StatelessWidget {
   const _CustomColorButton({required this.onTap});
 
@@ -185,7 +187,7 @@ class _CustomColorButton extends StatelessWidget {
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: SweepGradient(
-                    // Deliberately theme-invariant decorative spectrum.
+                    // This spectrum is purely decorative, so it deliberately ignores the theme.
                     colors: [
                       Color(0xFFEF4444), // red
                       Color(0xFFF59E0B), // amber

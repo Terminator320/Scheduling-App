@@ -17,7 +17,8 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-/// Opens add-client sheet; resolves to created client (with Firestore id) or null if dismissed.
+/// Opens the add-client sheet. Resolves to the created client, with its Firestore id
+/// set, or null if the sheet was dismissed.
 Future<ClientRecord?> showAddClientSheet(
   BuildContext context, {
   String? initialName,
@@ -32,7 +33,8 @@ Future<ClientRecord?> showAddClientSheet(
     builder: (_) => AddClientSheet(initialName: initialName),
   );
   if (settleFocus && context.mounted) await SheetFocus.unfocusAfterSheet();
-  // Guard against unmounting while sheet open; don't hand client to disposed form.
+  // Guard against the widget unmounting while the sheet is open — we shouldn't hand
+  // the client back to a form that's already been disposed.
   return context.mounted ? created : null;
 }
 

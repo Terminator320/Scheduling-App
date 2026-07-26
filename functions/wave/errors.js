@@ -2,11 +2,12 @@
 
 /**
  * @fileoverview Maps Wave error objects to Cloud Functions HttpsError
- * `{code, message}` pairs — kept pure and in its own module (so it's
- * unit-testable and can require both `WaveApiError` and `WaveValidationError`
- * without an import cycle between `client.js`/`customers.js`); the pairs are
- * a stable, PII-free contract mirrored by the Flutter error mapper, never
- * Wave's raw error text.
+ * `{code, message}` pairs. This lives in its own module so it stays pure and
+ * unit-testable, and so it can require both `WaveApiError` and
+ * `WaveValidationError` without creating an import cycle between
+ * `client.js`/`customers.js`. The pairs are a stable, PII-free contract
+ * mirrored by the Flutter error mapper — we never surface Wave's raw error
+ * text.
  * @module wave/errors
  */
 
@@ -15,8 +16,8 @@ const {WaveValidationError} = require("./customers");
 
 /**
  * Classifies a caught Wave error into the HttpsError `{code, message}` the
- * callable should throw (do not change the mapping without updating the
- * Flutter mapper):
+ * callable should throw. Don't change this mapping without updating the
+ * Flutter mapper too:
  *   - `WaveApiError` auth        → failed-precondition / wave/token-invalid
  *   - `WaveApiError` rateLimited → resource-exhausted  / wave/rate-limited
  *   - `WaveApiError` network     → unavailable         / wave/network
