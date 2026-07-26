@@ -20,7 +20,7 @@ import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-/// The eight text controllers an appointment form drives (shared by add and edit to keep field sets in sync).
+/// The eight text controllers an appointment form drives. Shared between the add and edit flows so their field sets stay in sync.
 class AppointmentFormControllers {
   const AppointmentFormControllers({
     required this.title,
@@ -55,8 +55,8 @@ class AppointmentFormControllers {
   }
 }
 
-/// Shared appointment form field stack for add and edit flows; the status
-/// block renders only when [editingStatus]/[onStatusChanged] are provided.
+/// Shared appointment form field stack for the add and edit flows. The status
+/// block only renders when both [editingStatus] and [onStatusChanged] are provided.
 class AppointmentFormFields extends StatelessWidget {
   const AppointmentFormFields({
     required this.controllers,
@@ -116,10 +116,10 @@ class AppointmentFormFields extends StatelessWidget {
   final String? editingStatus;
   final ValueChanged<String>? onStatusChanged;
 
-  /// Opens the add-client sheet and auto-selects the created client (null hides the affordance).
+  /// Opens the add-client sheet and auto-selects the created client. Pass null to hide the affordance entirely.
   final Future<ClientRecord?> Function(String initialName)? onRequestAddClient;
 
-  /// Add flow only; one-tap job-template chips render above the title (null hides chips for edit flow).
+  /// Add flow only — renders one-tap job-template chips above the title. Null hides the chips, which is how the edit flow uses this.
   final ValueChanged<JobTemplate>? onApplyTemplate;
 
   String? _err(BuildContext context, String field) {

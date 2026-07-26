@@ -22,7 +22,8 @@ final allUsersStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
   return repo.watchAssignableUsers();
 });
 
-/// Container-scoped mutable holders for content-equality memo; each container gets its own cache.
+/// Container-scoped mutable holders for the content-equality memo — each
+/// container gets its own cache.
 final _colorMapMemoProvider = Provider((ref) => _MapMemo<Color>());
 final _nameMapMemoProvider = Provider((ref) => _MapMemo<String>());
 
@@ -30,7 +31,9 @@ class _MapMemo<V> {
   Map<String, V>? value;
 }
 
-// Memoized lookup maps: prevent re-allocation on rebuilds and reuse identical instance when content-equal (skips notifying watchers).
+// Memoized lookup maps — avoids re-allocating on every rebuild, and reuses
+// the same instance when the content hasn't actually changed so watchers
+// don't get notified for nothing.
 Map<String, V> _memoizedEmployeeMap<V>(
   Ref ref,
   Provider<_MapMemo<V>> memoProvider,
@@ -64,7 +67,8 @@ typedef _EmployeeSearchEntry = ({
   String phoneDigits,
 });
 
-// Pre-normalized search index, memoized; per-keystroke filtering only normalizes query, not every employee field.
+// Pre-normalized, memoized search index — per-keystroke filtering then only
+// has to normalize the query, not every employee field.
 final _employeeSearchIndexProvider = Provider<List<_EmployeeSearchEntry>>((
   ref,
 ) {

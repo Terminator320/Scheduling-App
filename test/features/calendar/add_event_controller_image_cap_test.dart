@@ -6,8 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
 
 /// L3: `AddEventController.addImages` caps selected images at
-/// `maxImagesPerAppointment` (10) to bound RAM, silently truncating the
-/// incoming list rather than throwing.
+/// `maxImagesPerAppointment` (10) to bound RAM. It truncates the incoming
+/// list silently instead of throwing.
 void main() {
   late ProviderContainer container;
   final initialDate = DateTime(2026, 5, 15);

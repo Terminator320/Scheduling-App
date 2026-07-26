@@ -21,10 +21,12 @@ class FirebaseClientsRepository implements ClientsRepository {
   /// Injectable time source so the search-cache TTL is testable.
   final DateTime Function() _clock;
 
-  // Bounded LRU cache (evicts oldest past _searchCacheMax) to prevent unbounded growth.
+  // Bounded LRU cache — once it hits _searchCacheMax entries, the oldest one gets evicted
+  // so this can't grow without limit.
   static const int _searchCacheMax = 50;
 
-  /// Cache TTL for search results and scan window; local writes patch immediately, this is a safety net for remote writes.
+  /// Cache TTL for search results and the scan window. Local writes patch the cache
+  /// immediately, so this TTL is really just a safety net for remote writes.
   static const Duration _searchCacheTtl = Duration(minutes: 2);
 
   final Map<String, _CachedClientSearch> _searchCache = {};
@@ -43,14 +45,16 @@ class FirebaseClientsRepository implements ClientsRepository {
     _searchCache[key] = _CachedClientSearch(results, _clock());
   }
 
-  // Selective invalidation for LOCAL writes: patch written doc into/out of scan window for zero-read search recompute.
+  // For local writes we patch the written doc into (or out of) the scan window directly,
+  // so search can recompute without an extra read.
   void _applyLocalWrite(String id, Map<String, dynamic>? data) {
     final window = _scanWindow;
     if (window != null && _isFresh(window.fetchedAt)) {
       final docs = [
         for (final doc in window.docs)
           if (doc.id != id) doc,
-        // Position in window irrelevant; matching is per-doc, final order from relevance sort.
+        // Where it lands in the window doesn't matter — matching happens per-doc, and the
+        // final order comes from the relevance sort anyway.
         if (data != null) (id: id, data: data),
       ];
       _scanWindow = _CachedClientScanWindow(docs, window.fetchedAt);
@@ -60,7 +64,8 @@ class FirebaseClientsRepository implements ClientsRepository {
     _searchCache.clear();
   }
 
-  // Page-boundary doc names keyed by id; cursor uses exact Firestore value (not fallback `businessName`) to avoid skipping docs.
+  // Page-boundary doc names keyed by id. The cursor needs the exact Firestore `name`
+  // value, not the `businessName` fallback, or we'd end up skipping docs.
   final Map<String, String> _pageBoundaryNames = {};
 
   @override
@@ -94,7 +99,7 @@ class FirebaseClientsRepository implements ClientsRepository {
 
   @override
   Future<List<ClientRecord>> fetchClientsCreatedSince(DateTime since) async {
-    // Defensive ceiling for windowed reads to avoid unbounded queries.
+    // Cap this so a windowed read can never turn into an unbounded query.
     final snapshot = await _clients
         .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
         .orderBy('createdAt')
@@ -159,14 +164,16 @@ class FirebaseClientsRepository implements ClientsRepository {
     return results;
   }
 
-  /// Raw name-ordered window of clients every search scans; served from cache so successive queries share one read.
+  /// The raw, name-ordered window of clients every search scans. Served from cache so
+  /// successive queries can share a single read.
   Future<_CachedClientScanWindow?> _clientScanWindow() async {
     final cached = _scanWindow;
     if (cached != null && _isFresh(cached.fetchedAt)) return cached;
 
     final QuerySnapshot<Map<String, dynamic>> snapshot;
     try {
-      // Order by `name` (not createdAt) to keep legacy business-only docs searchable; `name` is set on every write.
+      // Order by `name`, not createdAt, so legacy business-only docs stay searchable —
+      // `name` is the one field that's set on every write.
       snapshot = await _clients
           .orderBy('name')
           .limit(ClientSearchPolicy.serverReadLimit)

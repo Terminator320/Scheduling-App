@@ -52,7 +52,8 @@ enum AdaptiveDestination {
   ),
 };
 
-/// Tab-switch contract so core can drive navigation without core→routes dependency; userName/userEmail are sticky on the shell side.
+/// Tab-switch contract that lets core drive navigation without depending on
+/// routes. userName/userEmail stay sticky on the shell side.
 // One-method contract by design: an abstract class (vs a callback type)
 // keeps the InheritedWidget field debuggable and the signature named.
 // ignore: one_member_abstracts
@@ -68,9 +69,9 @@ abstract interface class HubTabSelector {
   });
 }
 
-/// Lets shell descendants (the nav rail, hub back buttons) reach the
-/// enclosing hub shell to switch tabs; [current] is carried so dependents
-/// rebuild when the selection changes.
+/// Lets shell descendants — the nav rail, hub back buttons — reach the
+/// enclosing hub shell to switch tabs. [current] is carried along so
+/// dependents rebuild when the selection changes.
 class HubShellScope extends InheritedWidget {
   const HubShellScope({
     required this.shell,
@@ -83,7 +84,7 @@ class HubShellScope extends InheritedWidget {
   final AdaptiveDestination current;
 
   /// The enclosing shell, or null when hosted outside one (standalone route,
-  /// tests); does not create a rebuild dependency — for one-shot navigation.
+  /// tests). Doesn't create a rebuild dependency — meant for one-shot navigation.
   static HubTabSelector? maybeOf(BuildContext context) =>
       context.getInheritedWidgetOfExactType<HubShellScope>()?.shell;
 
@@ -102,7 +103,9 @@ class HubShellScope extends InheritedWidget {
       current != oldWidget.current || shell != oldWidget.shell;
 }
 
-/// Navigates to destination — the single nav action so rail and back buttons can't drift; inside the shell it's a tab switch, outside it's route replacement.
+/// The single nav action for switching destinations, so the rail and back
+/// buttons can't drift out of sync. Inside the shell it's a tab switch;
+/// outside it, it's a route replacement.
 void navigateToDestination(
   BuildContext context,
   AdaptiveDestination destination, {

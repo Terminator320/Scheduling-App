@@ -12,7 +12,8 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
 
-/// Appointment history screen (searchable, filterable list); owns chrome, delegates list to AppointmentHistoryView.
+/// The appointment history screen — searchable, filterable list. This owns the chrome
+/// and delegates the actual list to AppointmentHistoryView.
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({
     required this.isAdmin,

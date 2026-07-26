@@ -117,7 +117,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     );
   }
 
-  // Show the "today" FAB when the visible month isn't current (key on year+month, not day).
+  // Show the "today" FAB whenever the visible month isn't the current one — keyed on year+month, not the exact day.
   bool get _showTodayButton {
     final now = DateTime.now();
     return _focusedDay.year != now.year || _focusedDay.month != now.month;
@@ -141,7 +141,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   }
 
   Map<DateTime, List<AppointmentRecord>>? _dayIndex;
-  // Memoization key for _dayIndex: the appointments list last indexed.
+  // Remembers which appointments list _dayIndex was last built from, so we know when it needs rebuilding.
   List<AppointmentRecord>? _indexedAppointments;
 
   /// Rebuilds [_dayIndex] only when [source] is a different list instance than
@@ -182,7 +182,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     }
   }
 
-  // Error logging fires only on data→error transition (unlike .when which fires every rebuild).
+  // Only log on the data→error transition — .when would otherwise fire this on every rebuild while the stream stays errored.
   void _onAppointmentsAsyncChange(
     AsyncValue<List<AppointmentRecord>>? previous,
     AsyncValue<List<AppointmentRecord>> next,
@@ -207,7 +207,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         );
   }
 
-  // Route non-admin upgraded to 'admin' to the admin calendar post-frame (guarded for single fire).
+  // If a non-admin gets upgraded to 'admin', route them to the admin calendar after this frame. The flag just guards against firing more than once.
   void _upgradeIfAdmin(String? role) {
     if (role != 'admin' || !mounted || _upgradingToAdmin) return;
     _upgradingToAdmin = true;
@@ -241,7 +241,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     child: child,
   );
 
-  /// The appointments stream this screen renders (business-wide for admin, otherwise employee-only).
+  /// The appointments stream this screen renders — the whole business for admins, just their own jobs for employees.
   StreamProvider<List<AppointmentRecord>> get _appointmentsProvider =>
       widget.isAdmin
       ? appointmentsInRangeProvider(_appointmentRange)
@@ -250,7 +250,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           range: _appointmentRange,
         ));
 
-  /// Watch providers and refresh caches; return only values [build] renders.
+  /// Watches the relevant providers, refreshes the caches, and returns only the values [build] actually renders.
   ({
     String userName,
     Map<String, Color> colorMap,
@@ -318,7 +318,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           compact: context.isLandscape,
           actions: _appBarActions(context, scheme),
           bottom: PreferredSize(
-            // Scale month bar label to user text size to avoid clipping at large accessibility scales.
+            // Scale the month bar's height to the user's text size, so it doesn't clip at large accessibility scales.
             preferredSize: Size.fromHeight(
               MediaQuery.textScalerOf(
                 context,
@@ -453,7 +453,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
             child: PrimaryScrollScope(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  // Size month rows to pane height (compact on landscape phones, comfortable on tablets).
+                  // Size month rows to the pane's height — compact on landscape phones, more comfortable on tablets.
                   final rowHeight = ((constraints.maxHeight - 40) / 6).clamp(
                     40.0,
                     88.0,
@@ -477,7 +477,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Size week-rows to body height, not full screen, to prevent overflow and event-list starvation.
+        // Size week rows to the body's height, not the full screen, so the calendar doesn't overflow or starve the event list of space.
         final rowHeight = ((constraints.maxHeight * 0.55 - 36) / 6).clamp(
           36.0,
           56.0,
@@ -495,7 +495,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   }
 }
 
-/// The app-bar bottom row: tappable month label and selected day's appointment count.
+/// The app bar's bottom row — a tappable month label plus the selected day's appointment count.
 class _CalendarMonthBar extends StatelessWidget {
   const _CalendarMonthBar({
     required this.monthLabel,
@@ -555,7 +555,7 @@ class _CalendarMonthBar extends StatelessWidget {
   }
 }
 
-/// The "jump to today" FAB — scales/fades when today is in view.
+/// The "jump to today" FAB. It scales and fades out once today is already in view.
 class _TodayFab extends StatelessWidget {
   const _TodayFab({required this.visible, required this.onPressed});
 

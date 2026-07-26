@@ -2,10 +2,10 @@
 // extension.
 //
 // An App Intents extension (`com.apple.appintents-extension`) is an
-// ExtensionKit extension needing a `@main` type conforming to
-// `AppIntentsExtension`, or the built `.appex` has no `__swift5_entry`
-// section and App Store validation rejects it (409, "Invalid Mach-O header
-// … __swift5_entry section is missing").
+// ExtensionKit extension, and it needs a `@main` type conforming to
+// `AppIntentsExtension`. Without it, the built `.appex` has no
+// `__swift5_entry` section, and App Store validation rejects it (409,
+// "Invalid Mach-O header … __swift5_entry section is missing").
 //
 // The intents and AppShortcutsProvider are discovered through
 // compiler-generated App Intents metadata, not referenced here — this type

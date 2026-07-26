@@ -11,7 +11,8 @@ import 'package:scheduling/features/employees/screens/employees_screen.dart';
 import 'package:scheduling/features/presence/screens/live_map_screen.dart';
 import 'package:scheduling/features/settings/screens/settings_screen.dart';
 
-/// Post-login shell: six tab destinations in IndexedStack kept alive; Android back → calendar unless already on it.
+/// Post-login shell with six tab destinations, all kept alive in an
+/// IndexedStack. Android back goes to calendar, unless we're already there.
 class HubShell extends StatefulWidget {
   const HubShell({
     required this.isAdmin,
@@ -33,10 +34,11 @@ class HubShell extends StatefulWidget {
   final String userName;
   final String userEmail;
 
-  /// Test seam: replace real screens with stubs.
+  /// Lets tests swap in stub screens instead of the real ones.
   final Widget Function(AdaptiveDestination destination)? screenBuilder;
 
-  /// Most recent live shell; redirects hub-route pushes into tab switches.
+  /// The most recently active shell — used to redirect hub-route pushes into
+  /// tab switches.
   static HubShellState? get liveState => HubShellState._live;
 
   @override
@@ -58,7 +60,8 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
   /// The tab currently shown.
   AdaptiveDestination get currentDestination => _current;
 
-  /// Live role; used by deep links to gate admin-only edit/cancel/delete controls.
+  /// The live role, used by deep links to gate admin-only edit/cancel/delete
+  /// controls.
   bool get isAdmin => _isAdmin;
 
   @override
@@ -156,14 +159,16 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
           children: [
             for (final destination in AdaptiveDestination.values)
               if (_built.contains(destination))
-                // Mute animations on hidden tabs; pin viewInsets to prevent rebuild churn.
+                // Mute animations on hidden tabs, and pin viewInsets so they
+                // don't cause rebuild churn while hidden.
                 TickerMode(
                   enabled: destination == _current,
                   child: _TabViewInsets(
                     active: destination == _current,
                     // Each tab needs its own PrimaryScrollController.
                     child: PrimaryScrollScope(
-                      // Fade in new tabs; instant swap with reduced motion.
+                      // Fade in new tabs, unless reduced motion is on — then
+                      // just swap instantly.
                       child: AnimatedOpacity(
                         opacity: destination == _current ? 1 : 0,
                         duration: MediaQuery.disableAnimationsOf(context)
@@ -188,7 +193,8 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
     );
   }
 
-  /// Cache screens to skip rebuild on unchanged tabs; clear when identity changes.
+  /// Caches screens so unchanged tabs skip a rebuild — cleared whenever
+  /// identity changes.
   final Map<AdaptiveDestination, Widget> _screenCache = {};
   ({bool isAdmin, String employeeId, String userName, String userEmail})?
   _screenCacheIdentity;
@@ -252,7 +258,8 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
   }
 }
 
-/// Pin hidden tab viewInsets to zero to prevent rebuild churn; always present.
+/// Pins hidden tab viewInsets to zero so hidden tabs don't cause rebuild
+/// churn. This widget stays mounted whether its tab is active or not.
 class _TabViewInsets extends StatelessWidget {
   const _TabViewInsets({required this.active, required this.child});
 

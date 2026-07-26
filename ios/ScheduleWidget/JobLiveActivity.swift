@@ -1,7 +1,7 @@
-// JobLiveActivity — the "time to leave" Live Activity (Lock Screen card plus
-// Dynamic Island), started, updated, and ended entirely by the server over
-// direct APNs (FCM cannot send `apns-push-type: liveactivity`); nothing here
-// talks to Firebase or the network.
+// JobLiveActivity is the "time to leave" Live Activity — the Lock Screen
+// card plus Dynamic Island. The server starts, updates, and ends it entirely
+// over direct APNs (FCM can't send `apns-push-type: liveactivity`), so
+// nothing here talks to Firebase or the network.
 //
 // Visual direction is "Option B — job-card continuity" (see
 // docs/plans/2026-07-19-ios-live-activities.md): employee colour rail, client
@@ -9,7 +9,7 @@
 // AppointmentCard, so staff read a layout they already know all day.
 //
 // Every display string comes from the content state, built server-side in
-// EN/FR; never NSLocalizedString here, translations live in the ARBs.
+// EN/FR. Don't use NSLocalizedString here — translations live in the ARBs.
 //
 // Gated to iOS 17.2, not 17.0 — `pushToStartTokenUpdates` is 17.2+ and
 // push-to-start is the only way this card ever starts, so older devices just
@@ -154,8 +154,9 @@ private struct LockScreenCard: View {
                 Spacer(minLength: 0)
                 StatusChip(label: state.statusLabel, tint: tint)
             }
-            // On site: count down to the scheduled end (a live system timer,
-            // correct on wake); once overrun (or no endTime), fall back to
+            // While on site, count down to the scheduled end using a live
+            // system timer (it stays correct after the device wakes). Once
+            // that's overrun, or if there's no endTime, fall back to
             // counting up from the start.
             if state.isOnSite, let start = state.startDate {
                 if let end = state.endDate, now < end {
@@ -194,8 +195,8 @@ private struct LockScreenCard: View {
         }
     }
 
-    // Travel: Directions leads; on site: Complete leads — matching what the
-    // tech would actually tap next.
+    // While traveling, Directions is the lead button. Once on site, Complete
+    // takes the lead instead — matching what the tech would actually tap next.
     private func buttons(tint: Color) -> some View {
         HStack(spacing: 8) {
             if state.isOnSite {
@@ -254,10 +255,11 @@ struct JobLiveActivity: Widget {
             let tint = phaseAccent(for: state, now: Date())
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    // Leads on an ABSOLUTE time ("Leave at 7:54"), never a
-                    // countdown: a countdown frozen by a delayed push or a
-                    // sleeping device is actively misleading, while an
-                    // absolute time is still correct on wake.
+                    // Always show an absolute time ("Leave at 7:54"), never
+                    // a countdown. A countdown can freeze if a push is
+                    // delayed or the device is asleep, which is actively
+                    // misleading — an absolute time stays correct even
+                    // after the device wakes.
                     VStack(alignment: .leading, spacing: 2) {
                         Text(state.timeLabel)
                             .font(.headline)

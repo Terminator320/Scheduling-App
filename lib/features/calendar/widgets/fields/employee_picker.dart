@@ -20,7 +20,7 @@ class EmployeePicker extends StatelessWidget {
   final bool selectable;
   final bool hasError;
 
-  /// When non-null, render an error row below the chips (borders highlighted).
+  /// When this is non-null, an error row is rendered below the chips and their borders get highlighted.
   final String? errorText;
   final void Function(EmployeeRecord)? onToggle;
 

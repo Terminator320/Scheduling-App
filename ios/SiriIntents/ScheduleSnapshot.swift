@@ -1,9 +1,9 @@
 // ScheduleSnapshot — the read model the Siri App Intents extension answers from.
 //
 // The Flutter app writes this JSON into the shared App Group
-// (`group.net.vogas.scheduling`, key `schedule_snapshot`) via home_widget
-// (see buildScheduleSnapshot in lib/features/siri/domain/schedule_snapshot.dart)
-// — keep this decoder and that builder in lockstep, they're hand-mirrored.
+// (`group.net.vogas.scheduling`, key `schedule_snapshot`) via home_widget —
+// see buildScheduleSnapshot in lib/features/siri/domain/schedule_snapshot.dart.
+// Keep this decoder and that builder in lockstep; they're hand-mirrored.
 //
 // Phases 1-3 are deliberately Firebase-free (snapshot in, speech out) for
 // millisecond, offline answers — don't add a network client here without the
@@ -16,8 +16,8 @@ import Foundation
 private let appGroupId = "group.net.vogas.scheduling"
 private let snapshotKey = "schedule_snapshot"
 
-/// Schema version this decoder understands; a snapshot stamped otherwise is
-/// rejected rather than mis-decoded.
+/// Schema version this decoder understands. A snapshot stamped with anything
+/// else is rejected outright, rather than risk a mis-decode.
 private let supportedVersion = 1
 
 struct SnapshotAppointment: Codable, Hashable {
@@ -69,7 +69,7 @@ struct ScheduleSnapshot: Codable {
     var today: SnapshotDay? { day(on: Date()) }
 
     /// Earliest upcoming visit across the whole window that hasn't been
-    /// marked done; cancelled visits are already excluded at build time.
+    /// marked done. Cancelled visits are already excluded at build time.
     func nextAppointment(after now: Date = Date()) -> SnapshotAppointment? {
         days
             .flatMap { $0.appointments }

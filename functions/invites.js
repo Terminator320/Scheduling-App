@@ -11,7 +11,7 @@ const {
   INVITE_CODE_TTL_MS, generateSignupCode, hashSignupCode, validateRedemption,
 } = require("./signup_code_utils");
 
-// Mirrors account.js's throttle; redeem is keyed by token email (below).
+// Mirrors account.js's throttle, but redeem is keyed by token email (below).
 const REDEEM_RATE_MAX = 5;
 const REDEEM_RATE_WINDOW_MS = 15 * 60 * 1000;
 
@@ -20,8 +20,8 @@ const REDEEM_RATE_WINDOW_MS = 15 * 60 * 1000;
 const INVITE_RATE_MAX = 20;
 const INVITE_RATE_WINDOW_MS = 60 * 60 * 1000;
 
-// Optional trimmed string with a length + control-char guard (phone may be
-// empty; requireString rejects empty, so read it leniently here).
+// Optional trimmed string with a length + control-char guard. Phone may be
+// empty and requireString rejects empty, so we read it leniently here.
 /**
  * Optional trimmed string field — like requireString but allows empty.
  * @param {object} data callable request data.
@@ -43,9 +43,9 @@ const APP_CHECK = {enforceAppCheck: true};
  * Transactional core of createEmployeeInvite, extracted for unit testing.
  *
  * Runs the duplicate-email lookup, prior-code sweep, and writes inside ONE
- * Firestore transaction, closing races the old check-then-write flow had
- * (duplicate invites for the same email, and a re-issue racing a concurrent
- * redeemSignupCode).
+ * Firestore transaction. This closes races the old check-then-write flow
+ * had — duplicate invites for the same email, and a re-issue racing a
+ * concurrent redeemSignupCode.
  *
  * @param {!Object} db Firestore instance.
  * @param {{name: string, email: string, phone: string, colorValue: string}}
@@ -67,8 +67,8 @@ async function performCreateInvite(db, fields, opts) {
         db.collection("users").where("email", "==", email).limit(1),
     );
     const existing = dup.empty ? null : dup.docs[0];
-    // A real (claimed) account blocks re-use; a still-pending invite is
-    // re-issued instead (idempotent, e.g. for a lost/expired code).
+    // A real (claimed) account blocks re-use. A still-pending invite gets
+    // re-issued instead — idempotent, useful for e.g. a lost or expired code.
     if (existing && existing.data().status !== "invited") {
       return {ok: false};
     }
@@ -78,7 +78,8 @@ async function performCreateInvite(db, fields, opts) {
           db.collection("signupCodes")
               .where("inviteDocId", "==", existing.id),
       );
-      // Re-issue: refresh the editable fields and replace the invite's code.
+      // Refresh the editable fields and replace the invite's code — this is
+      // the re-issue path.
       prior.forEach((d) => tx.delete(d.ref));
       tx.update(existing.ref, {
         name, phone, colorValue,

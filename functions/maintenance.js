@@ -55,17 +55,18 @@ const validateUploadedImage = onObjectFinalized(async (event) => {
 // ----- Scheduled history purge ----------------------------------------------
 //
 // Purges done/cancelled appointments (Firestore doc + Storage images) once
-// HISTORY_RETENTION_YEARS has elapsed since `startTime`; non-terminal appointments
-// are never touched.
+// HISTORY_RETENTION_YEARS has elapsed since `startTime`. Non-terminal
+// appointments are never touched.
 const HISTORY_RETENTION_YEARS = 2;
 const PURGE_STATUSES = ["done", "cancelled"];
 // Well under Firestore's 500-writes-per-batch ceiling, with headroom.
 const PURGE_BATCH_SIZE = 200;
 
 /**
- * Best-effort deletion of every Storage object under an appointment's image
- * prefix (`appointments/{id}/images/`). Returns false (and logs) on failure
- * so the caller keeps the doc around for the next run to retry.
+ * Deletes every Storage object under an appointment's image prefix
+ * (`appointments/{id}/images/`) — best effort, so a failure just logs and
+ * returns false, and the caller keeps the doc around for the next run to
+ * retry.
  * @param {string} appointmentId Firestore doc id of the purged appointment.
  * @return {!Promise<boolean>} true when the prefix was cleared.
  */
@@ -85,9 +86,9 @@ async function deleteAppointmentImages(appointmentId) {
 
 const purgeExpiredHistory = onSchedule(
     {
-      // Quarterly — 03:00 Toronto on the 1st of Jan/Apr/Jul/Oct (unix-cron:
-      // min hour dom mon dow) — plenty since history only grows past the
-      // 2-year cutoff slowly.
+      // Runs quarterly at 03:00 Toronto on the 1st of Jan/Apr/Jul/Oct
+      // (unix-cron: min hour dom mon dow). That's plenty, since history
+      // only grows past the 2-year cutoff slowly.
       schedule: "0 3 1 1,4,7,10 *",
       timeZone: "America/Toronto",
       maxInstances: 1,
@@ -103,9 +104,10 @@ const purgeExpiredHistory = onSchedule(
 
       let purged = 0;
       let imageFailures = 0;
-      // A plain limit loop advances without a cursor since cleared docs are
-      // deleted; the loop stops when a page makes no progress (all image
-      // cleanups failed, so they'd just repeat).
+      // A plain limit loop advances without a cursor, since cleared docs
+      // are deleted. The loop stops when a page makes no progress —
+      // meaning all image cleanups failed, so retrying would just repeat
+      // them.
       for (;;) {
         const snap = await col
             .where("status", "in", PURGE_STATUSES)
@@ -135,8 +137,8 @@ const purgeExpiredHistory = onSchedule(
         if (deletable > 0) await batch.commit();
         purged += deletable;
 
-        // No page progress — bail rather than refetching the same stuck
-        // docs forever; the next quarterly run retries them.
+        // No page progress, so bail rather than refetching the same stuck
+        // docs forever — the next quarterly run will retry them.
         if (deletable === 0) break;
         if (snap.size < PURGE_BATCH_SIZE) break;
       }

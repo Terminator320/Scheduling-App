@@ -35,7 +35,8 @@ class EventDetailsView extends ConsumerStatefulWidget {
 }
 
 class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
-  // Created lazily on first edit; view-only opens don't allocate these.
+  // Created lazily on first edit — view-only opens never need to allocate
+  // these.
   AppointmentFormControllers? _editControllers;
 
   @override
@@ -93,7 +94,8 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
     final state = ref.watch(
       eventDetailsControllerProvider(EventDetailsKey(widget.appointment)),
     );
-    // Cancelled visits stay editable; only `showActions` gates the edit form.
+    // Cancelled visits stay editable — `showActions` is the only thing that
+    // gates the edit form.
     final showEdit = state.isEditing && widget.showActions;
     return DetailSheetListView(
       scrollController: widget.scrollController,

@@ -9,7 +9,8 @@ import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:showcaseview/showcaseview.dart';
 
-/// One hub tab's feature tour: registers scope, auto-starts when ready, marks seen on finish.
+/// Runs one hub tab's feature tour — registers the scope, auto-starts once
+/// ready, and marks the tab seen when the tour finishes.
 class FeatureTourHost extends ConsumerStatefulWidget {
   const FeatureTourHost({
     required this.tab,
@@ -24,10 +25,11 @@ class FeatureTourHost extends ConsumerStatefulWidget {
   final AdaptiveDestination tab;
   final bool isAdmin;
 
-  /// Gate for data-dependent tabs; pass `!isLoading` to avoid targeting skeleton content.
+  /// Gate for tabs whose content loads asynchronously — pass `!isLoading`
+  /// so the tour doesn't end up targeting skeleton placeholders.
   final bool ready;
 
-  /// Per-step keys; missing or unrendered ids are ignored.
+  /// Keys for each step — an id that's missing or not yet rendered is just skipped.
   final Map<TourStepId, GlobalKey> stepKeys;
 
   /// Enable auto-scroll for tabs with below-fold targets (e.g., Settings).
@@ -43,7 +45,9 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
   bool _started = false;
   bool _wasVisible = false;
 
-  /// True from startShowCase until onFinish/onDismiss; gates mark-seen to prevent marking unseen tours seen.
+  /// True while the tour is actually running, from startShowCase until
+  /// onFinish/onDismiss. Gates markSeen so we never mark a tour seen that
+  /// didn't actually run.
   bool _tourRunning = false;
 
   String get _scope => tourScopeName(widget.tab);
@@ -51,7 +55,8 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
   @override
   void initState() {
     super.initState();
-    // register() replaces existing scope of same name; safe on identity rebuild.
+    // register() replaces any existing scope with the same name, so this is
+    // safe to call again on an identity rebuild.
     ShowcaseView.register(
       scope: _scope,
       onFinish: _onTourEnd,
@@ -62,7 +67,8 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
 
   @override
   void dispose() {
-    // No unregister — identity rebuild's new initState runs before dispose.
+    // No unregister here — on an identity rebuild, the new widget's initState
+    // runs before this dispose does.
     if (_tourRunning) {
       _tourRunning = false; // Don't mark seen (unfinished tour).
       try {
@@ -74,7 +80,7 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
     super.dispose();
   }
 
-  /// Finish and dismiss both end the tour; only a tour that actually ran
+  /// Finish and dismiss both end the tour, but only a tour that actually ran
   /// marks the tab seen.
   void _onTourEnd() {
     if (!_tourRunning) return;
@@ -114,13 +120,14 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
   }
 
   Future<void> _start() async {
-    // Await ready; never act on optimistic empty default.
+    // Wait for ready — we never want to act on the optimistic empty default.
     await ref.read(tourSeenProvider.notifier).ready;
     if (!mounted) return;
     if (ref.read(tourSeenProvider).contains(widget.tab)) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      // Reset _started on tab-switch to allow later retry (avoid wedging).
+      // Reset _started when the tab's been switched away from, so we don't
+      // get stuck and can retry later.
       if (HubShellScope.readCurrentOf(context) != widget.tab) {
         _started = false;
         return;
@@ -136,14 +143,14 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
               key,
         ];
         if (keys.isEmpty) {
-          // No targets (layout variant/role) — mark seen directly.
+          // No targets for this layout/role, so just mark it seen directly.
           _markSeen();
           return;
         }
         _tourRunning = true;
         showcaseView.startShowCase(keys);
       } catch (e, st) {
-        // getNamed throws if scope vanished; don't crash the tab.
+        // getNamed throws if the scope's already gone — don't let that crash the tab.
         _tourRunning = false;
         ref.read(loggerProvider).warn('TOUR start failed', e, st);
       }

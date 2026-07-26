@@ -123,7 +123,8 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }) async {
     final normalizedEmail = email.trim().toLowerCase();
 
-    // Pre-check uniqueness (not atomic, but server-side invite flow is authoritative).
+    // Check uniqueness up front. This isn't atomic, but the server-side
+    // invite flow is the real authority here.
     final existing = await _users
         .where('email', isEqualTo: normalizedEmail)
         .get();
@@ -153,9 +154,9 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       updateData['role'] = isAdmin ? 'admin' : 'employee';
     }
 
-    // Best-available client-side hardening: commit inside a transaction that
-    // re-reads the doc and aborts if its email moved since the uniqueness
-    // check (e.g. a concurrent admin edit).
+    // This is the best client-side hardening we can do: commit inside a
+    // transaction that re-reads the doc and aborts if the email changed
+    // since the uniqueness check — say, a concurrent admin edit.
     final ref = _users.doc(docId);
     await ref.firestore.runTransaction<void>((txn) async {
       final snapshot = await txn.get(ref);
@@ -207,10 +208,10 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
           .limit(1)
           .snapshots()
           .where((snapshot) {
-            // Skip the transient empty from-cache snapshot on a cold cache —
-            // reporting it as deleted would falsely sign the user out; an
-            // authoritative empty from the server still passes through to flag
-            // a real deletion.
+            // Skip the transient empty snapshot you get from a cold cache —
+            // reporting it as deleted would falsely sign the user out. An
+            // authoritative empty snapshot from the server still gets
+            // through, so a real deletion still gets flagged.
             return snapshot.docs.isNotEmpty || !snapshot.metadata.isFromCache;
           })
           .map((snapshot) {
@@ -223,9 +224,9 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
 }
 
 // Twin of `_isAuthPropagationDenied` in
-// `lib/features/calendar/data/firebase_appointments_repository.dart` (keep in
-// sync): retries a permission-denied on the first users listen, since a
-// freshly signed-in token can lag auth state — a genuine denial still
-// surfaces after retrying.
+// `lib/features/calendar/data/firebase_appointments_repository.dart` — keep
+// them in sync. Retries a permission-denied on the first users listen, since
+// a freshly signed-in token can lag behind auth state; a genuine denial
+// still comes through once retries are exhausted.
 bool _isAuthPropagationDenied(Object error) =>
     error is FirebaseException && error.code == 'permission-denied';

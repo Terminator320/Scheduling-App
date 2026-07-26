@@ -1,4 +1,4 @@
-/// Repeat frequency; occurrences pre-booked up to [horizonMonths] ahead.
+/// Repeat frequency for an appointment series. Occurrences are pre-booked up to [horizonMonths] ahead.
 enum RepeatInterval {
   none(0),
   fourMonths(4),
@@ -13,7 +13,7 @@ enum RepeatInterval {
   /// Pre-booking horizon (five years).
   static const int horizonMonths = 60;
 
-  /// Upper bound on occurrences, keeps clear of WriteBatch 500-op limit.
+  /// Upper bound on how many occurrences we generate, so a series stays safely under Firestore's WriteBatch 500-op limit.
   static const int maxOccurrences = 120;
 
   /// Firestore string value. [fromRaw] is the only string→interval mapper.
@@ -47,7 +47,7 @@ enum RepeatInterval {
     return starts;
   }
 
-  /// Add months, preserving time-of-day; day clamped to month length.
+  /// Adds months while keeping the same time-of-day. If the resulting day doesn't exist in that month, it clamps to the last valid day.
   static DateTime _addMonthsClamped(DateTime date, int months) {
     final zeroBased = date.month - 1 + months;
     final year = date.year + zeroBased ~/ 12;
@@ -58,13 +58,13 @@ enum RepeatInterval {
   }
 }
 
-/// End time for repeated occurrence, preserving day-span and time-of-day (DST-safe).
+/// Computes the end time for a repeated occurrence, keeping the original day-span and time-of-day. Uses UTC dates so DST doesn't throw off the math.
 DateTime occurrenceEnd({
   required DateTime originalStart,
   required DateTime originalEnd,
   required DateTime copyStart,
 }) {
-  // UTC midnights are DST-agnostic for accurate day-span calculation.
+  // Use UTC midnights here so DST shifts don't throw off the day-span calculation.
   final daySpan =
       DateTime.utc(
             originalEnd.year,

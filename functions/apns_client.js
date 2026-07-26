@@ -1,21 +1,21 @@
 "use strict";
 
 /**
- * @fileoverview Direct APNs HTTP/2 client for Live Activity pushes — the ONE
- * path that talks to Apple directly, since FCM can't set
- * `apns-push-type: liveactivity`; ordinary notifications still go through
+ * @fileoverview Direct APNs HTTP/2 client for Live Activity pushes. This is
+ * the one place that talks to Apple directly, because FCM can't set
+ * `apns-push-type: liveactivity` — ordinary notifications still go through
  * `notification_utils.sendToEmployee`.
  *
- * Auth is a cached ES256 provider JWT signed from the `.p8` key via
- * `node:crypto`, re-minted at PROVIDER_TOKEN_TTL_MS to satisfy APNs' 1-hour
- * expiry and 20-minute re-mint rate limit.
+ * Auth is a cached ES256 provider JWT, signed from the `.p8` key via
+ * `node:crypto` and re-minted at PROVIDER_TOKEN_TTL_MS to stay ahead of
+ * APNs' 1-hour expiry and 20-minute re-mint rate limit.
  *
- * Failure posture is best-effort — nothing here ever throws; every path
- * resolves `{ok, status, reason, gone}`, and `gone` tells the caller to prune
- * that token row.
+ * Everything here is best-effort — nothing ever throws. Every path resolves
+ * `{ok, status, reason, gone}`, and `gone` tells the caller to prune that
+ * token row.
  *
- * Deps are injected (`{now, http2Impl, signer}`) so jest drives the whole
- * module with no socket.
+ * Deps are injected (`{now, http2Impl, signer}`) so jest can drive the whole
+ * module without opening a real socket.
  *
  * @module apns_client
  */
@@ -27,14 +27,15 @@ const http2 = require("node:http2");
 // build (TestFlight / App Store).
 const APNS_HOST = "https://api.push.apple.com";
 
-// Sandbox APNs, tried only as a fallback when production returns `BadDeviceToken`
-// (a dev-signed build's sandbox token hitting the production host).
+// Sandbox APNs — we only fall back here when production returns
+// `BadDeviceToken`, which is what a dev-signed build's sandbox token looks
+// like when it hits the production host.
 const APNS_SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 
 const BUNDLE_ID = "net.vogas.scheduling";
 
-// ActivityKit requires the `.push-type.liveactivity` topic suffix; the plain
-// bundle id is rejected.
+// ActivityKit requires the `.push-type.liveactivity` topic suffix — the
+// plain bundle id gets rejected.
 const LIVE_ACTIVITY_TOPIC = `${BUNDLE_ID}.push-type.liveactivity`;
 
 // Re-mint just under the 1h APNs expiry and well over the 20-min re-mint
@@ -52,18 +53,19 @@ const GONE_REASONS = new Set([
   "ExpiredToken",
 ]);
 
-// Validates token shape before interpolating into `:path`, since the registry
-// rule only size-caps the field; defense-in-depth — Node would reject bad
-// path chars anyway, but this fails cleaner and marks the row prunable.
+// Checks the token shape before interpolating it into `:path`, since the
+// registry rule only size-caps the field. This is really defense-in-depth —
+// Node would reject bad path characters anyway — but failing here is
+// cleaner and lets us mark the row prunable.
 const TOKEN_SHAPE = /^[A-Za-z0-9]+$/;
 
-// Closes a reused APNs session after this long idle; one session per host
-// amortizes the TCP+TLS+HTTP/2 handshake across a sweep's pushes instead of
-// paying it per push.
+// Closes a reused APNs session after this long idle. Keeping one session per
+// host lets us amortize the TCP+TLS+HTTP/2 handshake across a sweep's
+// pushes instead of paying for it on every push.
 const SESSION_IDLE_TIMEOUT_MS = 30 * 1000;
 
-// host -> {impl, session}; dropped on transport error, close, idle timeout,
-// or an impl swap (tests inject their own http2Impl).
+// host -> {impl, session}. We drop an entry on transport error, close, idle
+// timeout, or an impl swap (tests inject their own http2Impl).
 const _sessions = new Map();
 
 // Cached provider JWT, keyed by keyId+teamId so a rotated secret can't serve a
@@ -84,9 +86,9 @@ function _b64url(value) {
 }
 
 /**
- * Default ES256 signer: signs `input` with the `.p8` EC private key and
- * returns the raw 64-byte JOSE signature (`ieee-p1363`, NOT the DER encoding
- * `crypto` produces by default — APNs rejects DER).
+ * Default ES256 signer. Signs `input` with the `.p8` EC private key and
+ * returns the raw 64-byte JOSE signature — that's `ieee-p1363`, not the DER
+ * encoding `crypto` produces by default, since APNs rejects DER.
  * @param {string} input The `header.payload` signing input.
  * @param {string} authKey PEM contents of the APNs `.p8` auth key.
  * @return {!Buffer}
@@ -99,8 +101,8 @@ function signEs256(input, authKey) {
 }
 
 /**
- * Mints a fresh ES256 provider JWT; pure apart from the injected clock and
- * signer — no caching here, see [providerToken].
+ * Mints a fresh ES256 provider JWT. Pure apart from the injected clock and
+ * signer — this function does no caching itself, see [providerToken] for that.
  * @param {{authKey: string, keyId: string, teamId: string,
  *   now: (Date|undefined), signer: (function(string, string): !Buffer|
  *   undefined)}} opts
@@ -116,8 +118,8 @@ function mintProviderToken({authKey, keyId, teamId, now, signer}) {
 }
 
 /**
- * Cached provider JWT, re-minted once it is older than
- * PROVIDER_TOKEN_TTL_MS or when the key/team changed under it.
+ * Returns the cached provider JWT, re-minting it once it's older than
+ * PROVIDER_TOKEN_TTL_MS or the key/team underneath it has changed.
  * @param {{authKey: string, keyId: string, teamId: string,
  *   now: (Date|undefined), signer: (function(string, string): !Buffer|
  *   undefined)}} opts
@@ -191,13 +193,13 @@ function _dropSession(host) {
   try {
     if (typeof entry.session.close === "function") entry.session.close();
   } catch (err) {
-    // Nothing useful to do about a failed session teardown.
+    // Not worth handling if closing an already-dead session fails.
   }
 }
 
 /**
- * Closes every cached APNs session — for test isolation between cases, and
- * usable on shutdown.
+ * Closes every cached APNs session. Used to isolate tests from each other,
+ * and safe to call on shutdown too.
  * @return {void}
  */
 function resetSessionCache() {
@@ -256,7 +258,7 @@ function _request(client, headers, body, timeoutMs) {
       try {
         if (req && typeof req.close === "function") req.close();
       } catch (err) {
-        // Closing a already-dead stream is not interesting.
+        // Not worth handling if closing an already-dead stream fails.
       }
       finish({ok: false, status: 0, reason: "timeout", gone: false});
     }, timeoutMs);
@@ -289,9 +291,9 @@ function _request(client, headers, body, timeoutMs) {
 }
 
 /**
- * Sends ONE Live Activity push to ONE activity token. Best-effort by
- * contract: it never throws, and a `gone: true` result means the caller
- * should delete that `liveActivityTokens` row.
+ * Sends ONE Live Activity push to ONE activity token. This never throws by
+ * design — a `gone: true` result just means the caller should delete that
+ * `liveActivityTokens` row.
  * @param {{token: string, payload: !Object, auth: !Object,
  *   topic: (string|undefined), pushType: (string|undefined),
  *   priority: (number|undefined), expiration: (number|undefined),
@@ -342,10 +344,10 @@ async function sendLiveActivityPush(opts) {
   if (collapseId) headers["apns-collapse-id"] = String(collapseId);
   const body = JSON.stringify(payload);
 
-  // One request against a per-host session reused across this instance's
-  // pushes; never throws, and a transport-level failure (status 0) drops the
-  // session so the next push reconnects fresh, while an HTTP-level outcome
-  // keeps it.
+  // One request against a per-host session, reused across this instance's
+  // pushes. This never throws. A transport-level failure (status 0) drops
+  // the session so the next push reconnects fresh; an HTTP-level outcome
+  // just keeps the session around.
   const sendTo = async (host) => {
     try {
       const client = _sessionFor(impl, host);
@@ -362,10 +364,10 @@ async function sendLiveActivityPush(opts) {
   // An explicit host override (tests) is honoured verbatim — no dual-try.
   if (opts && opts.host) return sendTo(opts.host);
 
-  // Production first — `BadDeviceToken` is the signature of a sandbox token
-  // hitting the production host, so retry sandbox before pruning; any other
-  // outcome is returned as-is since only the environment mismatch merits a
-  // second request.
+  // Try production first. `BadDeviceToken` looks like a sandbox token
+  // hitting the production host, so we retry against sandbox before giving
+  // up on the token. Any other outcome is returned as-is — only that
+  // environment mismatch is worth a second request.
   const prod = await sendTo(APNS_HOST);
   if (prod.ok || prod.reason !== "BadDeviceToken") return prod;
   return sendTo(APNS_SANDBOX_HOST);

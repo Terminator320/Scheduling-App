@@ -16,8 +16,8 @@ Widget _list(String keyPrefix) => ListView.builder(
 
 Widget _harness({required Widget child}) => MaterialApp(
   scrollBehavior: const AppScrollBehavior(),
-  // Forces the CupertinoScrollbar path, which requires its controller to
-  // hold exactly ONE ScrollPosition — the regression this pins.
+  // Forces the CupertinoScrollbar path. Its controller can only attach to one
+  // ScrollPosition, which is exactly the regression this test guards against.
   theme: ThemeData(platform: TargetPlatform.iOS),
   home: Scaffold(body: child),
 );

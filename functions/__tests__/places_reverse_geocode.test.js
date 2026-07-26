@@ -1,6 +1,6 @@
-// placesReverseGeocode is safe to require directly (no eager bucket
-// resolution); assertAdmin/enforceDurableRateLimit are mocked (need live
-// Firestore) while the real validation helpers stay real for this test.
+// placesReverseGeocode is safe to require directly since it has no eager
+// bucket resolution. We mock assertAdmin/enforceDurableRateLimit because they
+// need live Firestore, but leave the real validation helpers in place.
 jest.mock("../security", () => {
   const actual = jest.requireActual("../security");
   return {

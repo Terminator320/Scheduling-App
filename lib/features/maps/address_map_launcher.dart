@@ -48,7 +48,8 @@ class AddressMapLauncher {
 
     if (!context.mounted) return;
 
-    // iOS uses a native CupertinoActionSheet, Android the Material sheet; both resolve to one launched URI.
+    // iOS uses a native CupertinoActionSheet, Android uses the Material sheet
+    // — both just resolve to one launched URI.
     final Uri? chosen;
     if (context.isCupertino) {
       chosen = await showAdaptiveActionSheet<Uri>(
@@ -115,7 +116,8 @@ class AddressMapLauncher {
     }
 
     if (chosen == null || !context.mounted) return;
-    // Guard unguarded launchUrl throws (would become FATAL); log before mounted guard.
+    // launchUrl can throw and an unguarded throw here would be fatal, so log
+    // it before we even check mounted.
     var opened = false;
     try {
       opened = await launchUrl(chosen, mode: LaunchMode.externalApplication);

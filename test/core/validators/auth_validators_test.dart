@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// S3: password validator requires 8+ characters; uses a real
+/// S3: password validator requires 8+ characters. This test uses a real
 /// [Localizations] harness so `context.l10n.*` messages match what users
 /// actually see.
 

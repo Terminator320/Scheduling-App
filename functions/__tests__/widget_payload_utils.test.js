@@ -1,9 +1,9 @@
 "use strict";
 
 /**
- * Unit tests for the server-side widget payload builder, mirroring the Dart
- * widget_payload_test.dart cases (and the Toronto day-boundary) to keep both
- * builders and the Swift decoder in lockstep.
+ * Unit tests for the server-side widget payload builder. These mirror the
+ * Dart widget_payload_test.dart cases (plus the Toronto day-boundary one) so
+ * both builders and the Swift decoder stay in lockstep.
  */
 
 const {
@@ -78,8 +78,8 @@ describe("buildWidgetPayload", () => {
   });
 
   test("the today cutoff is Toronto midnight, not UTC", () => {
-    // 23:00 Toronto today (03:00Z next day) is still today; 01:00 Toronto
-    // tomorrow (05:00Z) is tomorrow.
+    // 23:00 Toronto today (03:00Z the next day) still counts as today. 01:00
+    // Toronto tomorrow (05:00Z) counts as tomorrow.
     const payload = buildWidgetPayload([
       appt("tonight", "2026-07-09T03:00:00.000Z"),
       appt("after-midnight", "2026-07-09T05:00:00.000Z"),

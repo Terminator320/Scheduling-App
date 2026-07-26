@@ -43,7 +43,7 @@ abstract class EventDetailsState
     required String editingStatus,
     @Default(false) bool isEditing,
     @Default(RepeatInterval.none) RepeatInterval repeat,
-    // Previous stored repeat; changed repeat triggers new bookings.
+    // The repeat value as last saved — if the user changes it, that triggers new bookings.
     @Default(RepeatInterval.none) RepeatInterval savedRepeat,
     @Default(<EmployeeRecord>[]) List<EmployeeRecord> selectedEmployees,
     @Default(<AppointmentImage>[]) List<AppointmentImage> existingImages,
@@ -55,7 +55,7 @@ abstract class EventDetailsState
     @Default(<ClientRecord>[]) List<ClientRecord> clientResults,
     @Default(false) bool isSearchingClient,
     @Default(false) bool useCustomAddress,
-    // User explicitly removed client, blocks placeholder fallback.
+    // Set when the user explicitly removes the client, so we don't fall back to a placeholder.
     @Default(false) bool clientCleared,
     @Default(<String, AppointmentFormError>{})
     Map<String, AppointmentFormError> errors,
@@ -83,13 +83,15 @@ class EventDetailsController extends Notifier<EventDetailsState>
       editingStatus: AppointmentStatus.storedRaw(appointment.status),
       repeat: appointment.repeat,
       savedRepeat: appointment.repeat,
-      // Sync-seeded to prevent race with async load; visibility keys on employeeIds.
+      // Seeded synchronously to avoid a race with the async load below — employee
+      // visibility depends on employeeIds being set right away.
       selectedEmployees: _assigneesFromRecord(appointment),
       existingImages: List.of(appointment.pictures),
     );
   }
 
-  /// Placeholder employees from stored ids/names; swapped for full records on load.
+  /// Builds placeholder employees from the stored ids and names. They get
+  /// swapped for the full records once those load.
   static List<EmployeeRecord> _assigneesFromRecord(AppointmentRecord a) => [
     for (var i = 0; i < a.employeeIds.length; i++)
       EmployeeRecord(
@@ -98,7 +100,8 @@ class EventDetailsController extends Notifier<EventDetailsState>
       ),
   ];
 
-  /// Enriches seeded placeholders with full records (display only); user toggles always win.
+  /// Fills in the seeded placeholders with full employee records, for display
+  /// only — whatever the user has toggled still wins.
   Future<void> _enrichSelectedEmployees() async {
     if (state.selectedEmployees.isEmpty) return;
     final logger = ref.read(loggerProvider);
@@ -116,14 +119,16 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
   }
 
-  /// Active staff set resolved identically for seeding and assignee resolution.
+  /// Resolves the active staff set the same way for both seeding and
+  /// assignee resolution.
   Future<List<EmployeeRecord>> _resolveActiveEmployees() =>
       ref.read(employeesRepositoryProvider).watchEmployees().first;
 
   Future<void> _loadClientIfNeeded(String clientId) async {
     final id = clientId.trim();
     if (id.isEmpty || state.client != null) return;
-    // Clients read rule is admin-only; skip load for employees to avoid permission-denied logs.
+    // The clients read rule is admin-only, so skip this load for employees —
+    // otherwise it just logs a permission-denied error.
     if (ref.exists(currentUserDocProvider)) {
       final role = ref.read(userRoleProvider).value ?? '';
       if (role.isNotEmpty && role != 'admin') return;
@@ -132,7 +137,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     final clientsRepo = ref.read(clientsRepositoryProvider);
     try {
       final client = await clientsRepo.getClientById(id);
-      // Re-check after await: user may have picked a client while loading.
+      // Check again after the await, since the user might have picked a client while this was loading.
       if (!ref.mounted) return;
       if (client == null || state.client != null) return;
       if (state.selectedClient == null && !state.clientCleared) {
@@ -237,7 +242,8 @@ class EventDetailsController extends Notifier<EventDetailsState>
     );
   }
 
-  /// Writes `status: 'done'`; the widget layer composes a failure notice from the outcome.
+  /// Writes `status: 'done'`. If it fails, the widget layer builds a failure
+  /// notice from the returned outcome.
   Future<EventDetailsActionOutcome> markAsDone(AppointmentRecord appointment) {
     return _setStatusOnRepo(appointment, 'done');
   }
@@ -256,14 +262,15 @@ class EventDetailsController extends Notifier<EventDetailsState>
     if (id == null) {
       return EventDetailsActionFailed(StateError('appointment has no id'));
     }
-    // Reject double-tap on status write, consistent with save() reentrancy guard.
+    // Reject a double-tap on the status write — same reentrancy guard save() uses.
     if (state.isSaving) return const EventDetailsActionBusy();
     state = state.copyWith(isSaving: true);
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
     try {
       await repo.updateAppointmentStatus(id: id, status: status);
-      // Card is ended server-side via liveActivityCards marker; don't end locally.
+      // The live activity card gets ended server-side via the liveActivityCards
+      // marker, so don't end it locally here.
       if (ref.mounted) state = state.copyWith(isSaving: false);
       return const EventDetailsActionOk();
     } catch (e, st) {
@@ -277,7 +284,8 @@ class EventDetailsController extends Notifier<EventDetailsState>
   void setSaving({required bool busy}) =>
       state = state.copyWith(isSaving: busy);
 
-  /// Builds final assignees: selected + unseen originals to prevent silent unassignment.
+  /// Builds the final assignee list: the selected employees plus any original
+  /// assignees that weren't in the picker, so we don't silently unassign them.
   Future<({List<String> ids, List<String> names})> _resolveAssignees(
     AppointmentRecord appointment,
   ) async {
@@ -299,19 +307,23 @@ class EventDetailsController extends Notifier<EventDetailsState>
     required String materialsNeeded,
     bool applyToSeries = false,
   }) async {
-    // Reentrancy guard: mark in-flight before seed-settle await to prevent concurrent saves.
+    // Mark this in-flight before the seed-settle await, so a double-tap can't
+    // start a concurrent save.
     if (state.isSaving) return const EventDetailsInvalid();
 
-    // Fail fast offline before setting flag, else Save spins waiting for server ack.
+    // Bail out early if we're offline, before setting the flag — otherwise
+    // Save just spins waiting for a server ack that isn't coming.
     if (ref.read(isOfflineProvider)) {
       return const EventDetailsFailed(SocketException('offline'));
     }
     state = state.copyWith(isSaving: true);
 
-    // Resolve dependencies before first await to survive sheet dismissal (Riverpod 3).
+    // Resolve dependencies before the first await, so they survive the sheet
+    // being dismissed (Riverpod 3).
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
-    // Resolve upload service only if there are photos (avoids FirebaseStorage init).
+    // Only resolve the upload service if there are photos, so we skip
+    // initializing FirebaseStorage otherwise.
     final uploader = state.newImages.isEmpty
         ? null
         : ref.read(appointmentImageUploadProvider);
@@ -337,7 +349,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
       state.selectedStartTime,
     );
 
-    // Snapshot photo state before writes to survive sheet dismissal.
+    // Snapshot the photo state before writing, so it survives the sheet being dismissed.
     final removedImages = state.removedExistingImages;
     final newImages = state.newImages;
 
@@ -382,7 +394,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
   }
 
-  /// Applies photo changes after record write (ordering is load-bearing).
+  /// Applies photo changes after the record write — this ordering matters.
   Future<void> _applyPhotoChanges({
     required String id,
     required AppointmentsRepository repo,
@@ -406,12 +418,13 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
   }
 
-  /// Settles seed and validates form; returns stop-outcome or null to proceed.
+  /// Waits for the seed to settle, then validates the form. Returns a stop
+  /// outcome if it's invalid, or null to keep going.
   Future<EventDetailsSaveOutcome?> _settleAndValidate(
     AppointmentRecord appointment, {
     required String title,
   }) async {
-    // Settle enrichment for warm active-employee read in assignee resolution.
+    // Wait for enrichment to finish, so assignee resolution reads a warm active-employee list.
     await _seedFuture;
     if (!ref.mounted) return const EventDetailsInvalid();
 
@@ -439,7 +452,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     return null;
   }
 
-  // Build edited record from form fields + resolved assignees.
+  // Build the edited record from the form fields and the resolved assignees.
   AppointmentRecord _buildUpdatedRecord(
     AppointmentRecord appointment, {
     required String id,
@@ -465,7 +478,8 @@ class EventDetailsController extends Notifier<EventDetailsState>
       employeeNames: assignees.names,
       notes: notes.trim(),
       materialsNeeded: materialsNeeded.trim(),
-      // Pictures included only for outcome/UI; updates use append/remove instead.
+      // Pictures are included here only for the outcome/UI — actual updates
+      // go through append/remove instead.
       pictures: state.existingImages,
       status: state.editingStatus,
       repeat: state.repeat,
@@ -473,7 +487,8 @@ class EventDetailsController extends Notifier<EventDetailsState>
     );
   }
 
-  // Apply edit: series rewrite if repeat changed, propagate if applyToSeries, else update.
+  // Apply the edit: rewrite the series if the repeat changed, propagate it if
+  // applyToSeries is set, or otherwise just update the single appointment.
   Future<EventDetailsSaved> _applySeriesChange(
     AppointmentRecord appointment, {
     required AppointmentsRepository repo,
@@ -513,8 +528,9 @@ class EventDetailsController extends Notifier<EventDetailsState>
     return EventDetailsSaved(updated);
   }
 
-  /// Returns null on success, or the failure error; with [includeFuture], also
-  /// deletes the series' future visits (done/cancelled preserved) in one batch.
+  /// Returns null on success, or the failure error otherwise. When
+  /// [includeFuture] is set, this also deletes the series' future visits in
+  /// one batch (done/cancelled visits are preserved).
   Future<Object?> deleteAppointment(
     AppointmentRecord appointment, {
     bool includeFuture = false,
@@ -524,7 +540,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
       return StateError('Cannot delete an appointment without an id.');
     }
     state = state.copyWith(isSaving: true);
-    // Resolve before first await to survive sheet dismissal.
+    // Resolve these before the first await, so they survive the sheet being dismissed.
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
     try {
@@ -536,7 +552,8 @@ class EventDetailsController extends Notifier<EventDetailsState>
           excludeId: id,
           after: appointment.startTime,
         );
-        // Only deleted visits contribute orphaned bytes; preserved visits keep pictures.
+        // Only the visits we're deleting contribute orphaned bytes — the
+        // preserved visits keep their pictures.
         final futureIdSet = futureIds.toSet();
         for (final a in series) {
           if (a.id != null && futureIdSet.contains(a.id)) {
@@ -560,7 +577,8 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
   }
 
-  /// Best-effort cleanup; orphaned bytes are harmless and logged only.
+  /// Best-effort cleanup — if it fails, the orphaned bytes are harmless, so
+  /// we just log it.
   Future<void> _deleteOrphanedImages(
     List<AppointmentImage> images, {
     required String tag,

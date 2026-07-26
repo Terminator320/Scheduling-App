@@ -6,7 +6,8 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-/// Shared name + contact field block (add-client sheet and edit form); field behavior centralized here.
+/// Shared name and contact field block, used by both the add-client sheet and the edit
+/// form, so field behavior stays centralized in one place.
 class ClientPersonalFieldsSection extends StatelessWidget {
   const ClientPersonalFieldsSection({
     required this.nameController,

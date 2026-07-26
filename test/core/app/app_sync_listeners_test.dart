@@ -61,8 +61,8 @@ void main() {
   tearDown(() => accountDocs.close());
 
   /// Mounts a bare ConsumerWidget that registers the listeners, so the wiring
-  /// is exercised without building a MaterialApp — which is exactly what
-  /// AppSyncListeners was extracted from `_PaulAppState` to allow.
+  /// gets exercised without needing a full MaterialApp. That's exactly why
+  /// AppSyncListeners was pulled out of `_PaulAppState` in the first place.
   Future<ProviderContainer> pump(WidgetTester tester) async {
     late ProviderContainer container;
     await tester.pumpWidget(
@@ -136,8 +136,8 @@ void main() {
     });
 
     testWidgets('does NOT drain when signed out', (tester) async {
-      // Storage rules need an authed user — a signed-out drain would just
-      // re-queue the batch, so the listener gates on a populated account doc.
+      // Storage rules need an authed user, so a signed-out drain would just
+      // re-queue the batch. That's why the listener gates on a populated account doc.
       final container = await pump(tester);
 
       container.read(_offline.notifier).goOffline();

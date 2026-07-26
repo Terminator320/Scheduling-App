@@ -1,16 +1,18 @@
-// DirectionsIntent — Live Activity button App Intent that opens Apple Maps
-// driving directions to the card's address (primary action during the travel
-// phase, secondary once on-site; see JobLiveActivity.swift).
+// DirectionsIntent is the Live Activity button that opens Apple Maps driving
+// directions to the card's address. It's the primary action during travel,
+// and the secondary one once on-site (see JobLiveActivity.swift).
 //
-// No auth, no network, no Firebase — just builds a URL and hands it to the
-// system via `OpenURLIntent`, safe entirely inside the widget extension.
+// No auth, no network, no Firebase — it just builds a URL and hands it off
+// to the system via `OpenURLIntent`, so it's safe to run entirely inside the
+// widget extension.
 //
 // `OpenURLIntent` requires a universal (https) link, so custom schemes are
 // rejected — that's why "Complete" stays a plain SwiftUI `Link` at its call
 // site instead of an App Intent (see JobLiveActivity.swift).
 //
-// Deliberately `daddr=`+`dirflg=d` (turn-by-turn driving directions), not the
-// `q=` "show a pin" form `AddressMapLauncher` uses elsewhere for browsing.
+// This deliberately uses `daddr=` plus `dirflg=d` for turn-by-turn driving
+// directions, not the `q=` "show a pin" form that `AddressMapLauncher` uses
+// elsewhere for browsing.
 
 import AppIntents
 import Foundation
@@ -39,9 +41,9 @@ struct DirectionsIntent: AppIntent {
         .result(opensIntent: OpenURLIntent(Self.mapsURL(for: address)))
     }
 
-    /// Apple Maps universal link requesting driving directions to `address`;
-    /// falls back to a bare Maps launch rather than crash on an
-    /// empty/unencodable address.
+    /// Builds an Apple Maps universal link with driving directions to
+    /// `address`. Falls back to a bare Maps launch rather than crash on an
+    /// empty or unencodable address.
     static func mapsURL(for address: String) -> URL {
         var components = URLComponents(string: "https://maps.apple.com/")!
         components.queryItems = [

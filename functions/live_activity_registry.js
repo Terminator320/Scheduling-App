@@ -3,17 +3,18 @@
 /**
  * @fileoverview Reads and prunes the Live Activity token registry at
  * `users/{docId}/liveActivityTokens/{activityId}` (doc id = ActivityKit
- * activity id), written self-only by the client and read here across
- * employees via `collectionGroup`.
+ * activity id). The client writes its own rows only; we read across
+ * employees here via `collectionGroup`.
  *
- * Deps are injected (`{db, now, logger}`) so jest drives this without
- * firebase-admin, and every export is best-effort — a failed read returns
- * `[]` and the caller degrades to the plain `leaveNow` push.
+ * Deps are injected (`{db, now, logger}`) so jest can drive this without
+ * firebase-admin. Every export here is also best-effort — a failed read just
+ * returns `[]` and the caller degrades to the plain `leaveNow` push.
  *
- * Also owns the card marker at `liveActivityCards/{employeeDocId}`, the
- * Admin-SDK-only record of which appointment a tech's live card is showing —
- * needed because a push-started activity's id is minted by ActivityKit and
- * the device can't stamp `appointmentId` back onto its own token row.
+ * This module also owns the card marker at
+ * `liveActivityCards/{employeeDocId}`, the Admin-SDK-only record of which
+ * appointment a tech's live card is showing. We need that marker because a
+ * push-started activity's id is minted by ActivityKit, and the device has no
+ * way to stamp `appointmentId` back onto its own token row.
  *
  * @module live_activity_registry
  */
@@ -26,7 +27,7 @@ const KIND_UPDATE = "update";
 
 const CARDS_COLLECTION = "liveActivityCards";
 
-// A card outlives its job by at most a few hours; this is the marker's own
+// A card outlives its job by at most a few hours. This is the marker's own
 // TTL backstop for the case where no end push ever lands.
 const CARD_TTL_MS = 12 * 60 * 60 * 1000;
 
@@ -37,8 +38,9 @@ const IN_QUERY_MAX = 30;
 // Safety valve on a single prune pass so one run can't blow the timeout.
 const PRUNE_MAX = 400;
 
-// How long a registered token stays valid without a refresh; NOTE unused by any write
-// path — `_pruneExpired` actually reaps by the device's own `expiresAt` field instead.
+// How long a registered token stays valid without a refresh. No write path
+// actually uses this — `_pruneExpired` reaps by the device's own
+// `expiresAt` field instead.
 const TOKEN_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 
 /**
@@ -120,8 +122,8 @@ async function listPushToStartTokens(deps, {employeeDocIds}) {
 
 /**
  * The per-activity update tokens an employee's device(s) registered, keyed by
- * employee (not appointment) — pair with [readCardMarker] to confirm which
- * appointment the live card is actually showing.
+ * employee (not appointment). Pair this with [readCardMarker] to confirm
+ * which appointment the live card is actually showing.
  * @param {!Object} deps `{db, logger}`.
  * @param {{employeeDocId: string}} args
  * @return {!Promise<!Array<!Object>>}
@@ -186,10 +188,11 @@ async function readCardMarker(deps, {employeeDocId}) {
 }
 
 /**
- * Refreshes the marker's `startTime`/phase after a reschedule (merges, unlike
- * `writeCardMarker`'s absolute write, so `appointmentId`/`startedAt`/
- * `expiresAt` are preserved) — otherwise the on-site backstop, which keys its
- * flip off this field, fires at the old start time; never throws.
+ * Refreshes the marker's `startTime`/phase after a reschedule. This merges
+ * rather than overwriting like `writeCardMarker` does, so `appointmentId`/
+ * `startedAt`/`expiresAt` are preserved. Without this, the on-site backstop —
+ * which keys its flip off this field — would fire at the old start time.
+ * Never throws.
  * @param {!Object} deps `{db, logger}`.
  * @param {{employeeDocId: string, startTime: *, phase: string}} args
  * @return {!Promise<boolean>}
@@ -226,8 +229,8 @@ async function clearCardMarker(deps, {employeeDocId}) {
 }
 
 /**
- * Card markers still in the `travel` phase whose `startTime` has passed — the
- * on-site flip backstop's candidate set; never throws.
+ * Card markers still in the `travel` phase whose `startTime` has passed —
+ * the on-site flip backstop's candidate set. Never throws.
  * @param {!Object} deps `{db, now, logger}`.
  * @param {{limit: (number|undefined)}=} args
  * @return {!Promise<!Array<!Object>>}
@@ -253,7 +256,7 @@ async function listCardsDueForOnSite(deps, args) {
 
 /**
  * Deletes one registry row when APNs reports the activity gone (410 /
- * BadDeviceToken) or after the server ends a card; never throws.
+ * BadDeviceToken) or after the server ends a card. Never throws.
  * @param {!Object} deps `{logger}`.
  * @param {{ref: !Object}} args The `ref` from a listed row.
  * @return {!Promise<boolean>} True when the row is gone.
@@ -272,8 +275,8 @@ async function deleteActivityToken(deps, {ref}) {
 }
 
 /**
- * Deletes rows of `query` whose `expiresAt` has passed, bounded by `cap` (a
- * hit cap just defers the remainder to the next run); never throws.
+ * Deletes rows of `query` whose `expiresAt` has passed, bounded by `cap` —
+ * hitting the cap just defers the remainder to the next run. Never throws.
  * @param {!Object} deps `{now, logger}`.
  * @param {!Object} collection A collection or collection-group ref.
  * @param {number} cap
@@ -295,8 +298,8 @@ async function _pruneExpired(deps, collection, cap, label) {
   }
   let pruned = 0;
   for (const row of rows) {
-    // Serial deletes: the expired set is tiny and a failure on one row must
-    // not abort the rest.
+    // Delete these serially — the expired set is tiny, and a failure on one
+    // row must not abort the rest.
     if (await deleteActivityToken(deps, row)) pruned += 1;
   }
   if (rows.length === cap && logger) {
@@ -306,8 +309,8 @@ async function _pruneExpired(deps, collection, cap, label) {
 }
 
 /**
- * Deletes token rows whose `expiresAt` has passed — the TTL sweep (design
- * doc's "Still open" section) for a card the server never got to end.
+ * Deletes token rows whose `expiresAt` has passed — the TTL sweep (see the
+ * design doc's "Still open" section) for a card the server never got to end.
  * @param {!Object} deps `{db, now, logger}`.
  * @param {{limit: (number|undefined)}=} args
  * @return {!Promise<{pruned: number}>}

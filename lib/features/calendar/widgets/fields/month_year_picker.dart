@@ -6,7 +6,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 class MonthYearPicker {
-  // Year wheel spans a sliding window relative to today (no manual bumps needed).
+  // The year wheel spans a window relative to today, so it never needs manual bumping as time passes.
   static const int _pastYears = 5;
   static const int _futureYears = 15;
 

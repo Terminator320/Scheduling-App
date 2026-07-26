@@ -1,8 +1,8 @@
 "use strict";
 
 /**
- * @fileoverview Exercises the dispatch orchestration alone (registry lookup
- * -> payload -> APNs -> prune), with APNs and the registry mocked; payload
+ * @fileoverview Exercises the dispatch orchestration alone — registry lookup
+ * -> payload -> APNs -> prune — with APNs and the registry mocked. Payload
  * shapes and wire format are covered elsewhere.
  */
 

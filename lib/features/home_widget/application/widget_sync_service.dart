@@ -14,17 +14,19 @@ import 'package:scheduling/features/calendar/application/appointments_providers.
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-/// App Group shared with the iOS WidgetKit extension; public because the app
-/// must call `HomeWidget.setAppGroupId` with it before any widget read, or
-/// iOS throws `AppGroupId not set`.
+/// App Group shared with the iOS WidgetKit extension. This is public because
+/// the app has to call `HomeWidget.setAppGroupId` with it before any widget
+/// read, or iOS throws `AppGroupId not set`.
 const widgetAppGroupId = 'group.net.vogas.scheduling';
 const _iosWidgetName = 'ScheduleWidget';
 const _payloadKey = 'schedulePayload';
 
 Map<String, dynamic> _job(AppointmentRecord a) => {
-  // Carried for deep-linking widget taps; `?? ''` prevents null from blanking the widget (Swift decodes as non-optional).
+  // Carried so tapping the widget can deep-link back to the job. `?? ''`
+  // avoids sending null, since Swift decodes this field as non-optional.
   'id': a.id ?? '',
-  // Emit absolute UTC instant (…Z) — bare toIso8601String() lacks zone designator that widget formatter needs.
+  // Emit an absolute UTC instant with the Z suffix — a bare toIso8601String()
+  // omits the zone designator the widget's formatter needs.
   'startTime': a.startTime.toUtc().toIso8601String(),
   'clientName': a.clientName,
   'title': a.title,
@@ -36,9 +38,9 @@ Map<String, dynamic> _job(AppointmentRecord a) => {
 /// today before it rolls forward to tomorrow's schedule.
 const widgetRolloverGrace = Duration(hours: 1);
 
-/// Serializes an employee's schedule into JSON the iOS widget renders (pure,
-/// unit-testable), carrying today+tomorrow jobs plus a `rolloverAt` instant so
-/// WidgetKit can switch on-device without an app run.
+/// Serializes an employee's schedule into the JSON the iOS widget renders.
+/// Pure and unit-testable — carries today's and tomorrow's jobs plus a
+/// `rolloverAt` instant so WidgetKit can switch on-device without the app running.
 Map<String, dynamic> buildWidgetPayload(
   List<AppointmentRecord> appointments,
   DateTime now, {
@@ -75,7 +77,8 @@ Map<String, dynamic> buildWidgetPayload(
   DateTime? rolloverAt;
   if (todayIncomplete.isEmpty) {
     final finished = todayAll.where((a) => !statusOf(a).isCancelled).toList();
-    // Use stable past instant if empty/all-cancelled (prevents churn), otherwise 1h after last job's end.
+    // If today's jobs are empty or all cancelled, use a stable past instant so
+    // we don't churn; otherwise roll over 1h after the last job ends.
     rolloverAt = finished.isEmpty
         ? startOfToday
         : finished
@@ -96,7 +99,9 @@ Map<String, dynamic> buildWidgetPayload(
   };
 }
 
-/// Writes already-encoded payload JSON into the App Group and reloads the widget (iOS-only); used by FCM background handler since it has no Riverpod container.
+/// Writes an already-encoded payload JSON into the App Group and reloads the
+/// widget. iOS-only — used by the FCM background handler, which has no
+/// Riverpod container to build the payload the normal way.
 Future<void> writeWidgetPayloadJson(String payloadJson) async {
   if (!Platform.isIOS) return;
   if (payloadJson.isEmpty) return;
@@ -110,15 +115,16 @@ Future<void> writeWidgetPayloadJson(String payloadJson) async {
   }
 }
 
-/// Writes the widget payload into the App Group and refreshes the widget;
-/// iOS-only, device-verified (no unit tests — the payload builder above is
-/// the tested part).
+/// Writes the widget payload into the App Group and refreshes the widget.
+/// iOS-only, and verified on-device rather than with unit tests — the payload
+/// builder above is the part that's actually tested.
 class WidgetSyncService {
   WidgetSyncService({AppLogger? logger}) : _logger = logger ?? AppLogger();
 
   final AppLogger _logger;
 
-  /// Signature of the last successful write for dedup (null = not written, [_clearedState] = cleared).
+  /// Signature of the last successful write, used to dedup repeat syncs.
+  /// Null means nothing's been written yet; [_clearedState] means we cleared it.
   static const _clearedState = '__cleared__';
   String? _lastState;
 
@@ -166,12 +172,14 @@ final widgetSyncServiceProvider = Provider<WidgetSyncService>(
   (ref) => WidgetSyncService(logger: ref.watch(loggerProvider)),
 );
 
-/// The signed-in user's doc id (null when signed-out); both employees and admins qualify since admins can assign themselves to jobs.
+/// The signed-in user's doc id, or null when signed out. Both employees and
+/// admins qualify here, since admins can assign themselves to jobs too.
 final widgetEmployeeIdProvider = FutureProvider.autoDispose<String?>(
   (ref) async => (await ref.watch(activeUserIdentityProvider.future))?.docId,
 );
 
-/// The current widget payload for the signed-in employee (null when widget should be cleared); watches today+lookahead range.
+/// The current widget payload for the signed-in employee, or null when the
+/// widget should be cleared. Watches today plus the lookahead range.
 final widgetPayloadProvider =
     Provider.autoDispose<AsyncValue<Map<String, dynamic>?>>((ref) {
       final empIdAsync = ref.watch(widgetEmployeeIdProvider);

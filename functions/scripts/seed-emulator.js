@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Emulator-only seed: creates Firebase Auth accounts and matching Firestore
-// `users` docs (fanned into `usersByUid` by the syncUsersByUid trigger).
+// This is an emulator-only seed script — it creates Firebase Auth accounts
+// and matching Firestore `users` docs, which the syncUsersByUid trigger then
+// fans into `usersByUid`.
 //
 // Usage (PowerShell):
 //   $env:FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080"
@@ -8,7 +9,8 @@
 //   $env:GCLOUD_PROJECT = "schedulingapp-88727"
 //   node functions/scripts/seed-emulator.js
 //
-// Idempotent: re-running clears all auth users + users docs first, then re-seeds.
+// Re-running this script is safe: it clears all auth users and users docs
+// first, then re-seeds them.
 
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");

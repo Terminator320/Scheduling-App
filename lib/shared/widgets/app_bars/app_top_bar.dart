@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/shared/widgets/primitives/app_back_button.dart';
 
-/// Standard top bar (primary [AppBar], bold title, optional back/[actions]/[bottom], [compact] for landscape) — use instead of hand-building an [AppBar].
+/// Standard top bar with a bold title and optional back button, [actions],
+/// and [bottom] row — pass [compact] for landscape. Use this instead of
+/// hand-building an [AppBar].
 class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   const AppTopBar({
     required this.title,

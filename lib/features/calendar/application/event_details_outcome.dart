@@ -2,7 +2,8 @@ import 'package:flutter/foundation.dart';
 
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 
-/// Result of `EventDetailsController.save`; widget switches for success/failure notice.
+/// Result of `EventDetailsController.save`. The widget switches on this to
+/// show a success or failure notice.
 sealed class EventDetailsSaveOutcome {
   const EventDetailsSaveOutcome();
 }
@@ -35,7 +36,8 @@ class EventDetailsFailed extends EventDetailsSaveOutcome {
   final Object error;
 }
 
-/// Result of status setters; sealed so call sites handle [EventDetailsActionBusy].
+/// Result of the status setters. Sealed so call sites are forced to handle
+/// [EventDetailsActionBusy].
 sealed class EventDetailsActionOutcome {
   const EventDetailsActionOutcome();
 }
@@ -45,7 +47,7 @@ class EventDetailsActionOk extends EventDetailsActionOutcome {
   const EventDetailsActionOk();
 }
 
-/// Skipped because another action held the busy flag; nothing written.
+/// Skipped because another action already held the busy flag — nothing was written.
 class EventDetailsActionBusy extends EventDetailsActionOutcome {
   const EventDetailsActionBusy();
 }
@@ -55,7 +57,8 @@ class EventDetailsActionFailed extends EventDetailsActionOutcome {
   final Object error;
 }
 
-/// Family key for `eventDetailsControllerProvider`; keys by id alone for identity stability.
+/// Family key for `eventDetailsControllerProvider`. Keys off the id alone,
+/// so identity stays stable.
 @immutable
 class EventDetailsKey {
   const EventDetailsKey(this.appointment);

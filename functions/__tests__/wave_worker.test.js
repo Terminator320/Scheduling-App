@@ -48,8 +48,8 @@ function snap(id, data, ref) {
 }
 
 /**
- * Fake doc ref that records `set` and `update` calls and exposes a mutable
- * `_data` field for in-place mutation (simulates Firestore writes).
+ * Fake doc ref that records `set` and `update` calls. It exposes a mutable
+ * `_data` field you can mutate in place, mimicking real Firestore writes.
  * @param {string} id Document id.
  * @param {Object|null} initialData Initial snapshot data.
  * @return {!Object}
@@ -113,8 +113,8 @@ function enqueueDb(jobId, existingData = null) {
  *
  * @param {!Array<{id:string, data:Object}>} jobs Job docs to return from query.
  * @param {Object=} opts
- * @param {boolean=} opts.claimSucceeds Whether the claim txn should succeed
- *   (default true — sets inflight).
+ * @param {boolean=} opts.claimSucceeds Whether the claim transaction succeeds.
+ *   Defaults to true, which sets the job inflight.
  * @param {boolean=} opts.claimSetsInflight Whether the re-read in the txn
  *   still shows 'queued' (default true).
  * @return {{db: !Object, refs: !Array<!Object>}}
@@ -149,8 +149,9 @@ function drainDb(jobs, opts = {}) {
         }),
         update: jest.fn((ref, fields) => {
           if (claimSetsInflight) {
-            // Record the write (claim + outcome both flow through tx.update)
-            // and mutate _data so a later re-read in the same drain sees it.
+            // Record the write — both the claim and the outcome flow
+            // through tx.update — then mutate _data so a later re-read in
+            // the same drain sees it.
             ref.updates.push(fields);
             Object.assign(ref._data, fields);
           }
@@ -277,9 +278,9 @@ describe("drainQueue happy path", () => {
       });
 
   test("skips jobs not due (nextAttemptAt in the future)", async () => {
-    // The fake db always returns whatever docs we give it, so here we verify
-    // that the WHERE clause args are correct (we trust Firestore to filter,
-    // but verify the builder is called with the right constraints).
+    // The fake db always returns whatever docs we give it, so we can't
+    // actually test the filtering here. We trust Firestore to enforce it,
+    // and just check that the query builder gets the right constraints.
     const {db} = drainDb([]);
     const mockUpsert = jest.fn();
     await drainQueue({
@@ -329,8 +330,9 @@ describe("drainQueue happy path", () => {
     });
 
     expect(capturedLimit).toBe(3);
-    // All 5 are in the fake snapshot, so all 5 get processed (the real
-    // Firestore would only return 3; we verify the limit arg is passed).
+    // All 5 docs are in the fake snapshot, so all 5 get processed — a real
+    // Firestore query would only return 3, but here we're just checking
+    // that the limit argument gets passed through.
     expect(refs).toHaveLength(5);
   });
 });
@@ -353,7 +355,7 @@ describe("drainQueue claim atomicity", () => {
         idempotencyKey: "customerUpsert__c1",
       },
     };
-    // Simulate the re-read showing the job as already inflight (race).
+    // Simulate a race: the re-read shows the job as already inflight.
     const {db} = drainDb([job], {claimSetsInflight: false});
 
     // Override runTransaction so that the re-read returns 'inflight'.
@@ -430,8 +432,8 @@ describe("drainQueue outcome guard", () => {
         };
         const {db, refs} = drainDb([job]);
 
-        // Simulate a client edit re-enqueuing the same job mid-dispatch; the
-        // dispatch succeeds using the data it read first.
+        // Simulate a client edit re-enqueuing the same job mid-dispatch.
+        // The dispatch still succeeds, using the data it read first.
         const mockUpsert = jest.fn(() => {
           Object.assign(refs[0]._data, {
             status: "queued",
@@ -448,8 +450,8 @@ describe("drainQueue outcome guard", () => {
           backoffFn: fixedBackoff(),
         });
 
-        // The re-enqueued job must stay 'queued' so the newer edit still syncs;
-        // the worker must NOT overwrite it to 'done'.
+        // The re-enqueued job must stay 'queued' so the newer edit still
+        // syncs. The worker must not overwrite it to 'done'.
         expect(refs[0]._data.status).toBe("queued");
         const doneWrite = refs[0].updates.find((u) => u.status === "done");
         expect(doneWrite).toBeUndefined();
@@ -481,7 +483,8 @@ describe("drainQueue retryable errors", () => {
           },
         };
         const {db, refs} = drainDb([job]);
-        // Real numeric clock so nextAttemptAt is a real (not Invalid) Date.
+        // Use a real clock here so nextAttemptAt ends up a valid Date,
+        // not an Invalid one.
         const nowDate = new Date("2024-06-01T10:00:00Z");
         const nowFn = () => nowDate;
         const networkErr = new WaveApiError("network", "fetch failed");
@@ -504,14 +507,16 @@ describe("drainQueue retryable errors", () => {
         expect(finalUpdate.status).toBe("queued");
         expect(finalUpdate.attempts).toBe(1);
         expect(finalUpdate.lastError).toBe("WaveApiError(network)");
-        // nextAttemptAt must be a VALID future Date — guards against the
-        // Invalid-Date regression that would never re-match the due query.
+        // nextAttemptAt must be a valid future Date. This guards against an
+        // old regression where an Invalid Date would never re-match the
+        // due query again.
         expect(finalUpdate.nextAttemptAt).toBeInstanceOf(Date);
         expect(Number.isNaN(finalUpdate.nextAttemptAt.getTime())).toBe(false);
         expect(finalUpdate.nextAttemptAt.getTime())
             .toBe(nowDate.getTime() + 5000);
 
-        // backoffFn called with attempts-1 (0-indexed attempt index).
+        // backoffFn is called with attempts-1, since attempt indices are
+        // 0-indexed.
         expect(backoffFn).toHaveBeenCalledWith(0);
 
         // Must not dead-log on a retryable error.
@@ -563,7 +568,8 @@ describe("drainQueue retryable errors", () => {
         type: "customerUpsert",
         refPath: "clients/c1",
         status: "queued",
-        // Already at maxAttempts - 1: next failure pushes it to the cap.
+        // This job is already at maxAttempts - 1, so the next failure
+        // pushes it over the cap.
         attempts: maxAttempts - 1,
         nextAttemptAt: new Date("2024-01-01"),
         lastError: "WaveApiError(network)",
@@ -629,7 +635,7 @@ describe("drainQueue retryable errors", () => {
     expect(summary.dead).toBe(0);
     const finalUpdate = refs[0].updates[refs[0].updates.length - 1];
     expect(finalUpdate.status).toBe("queued");
-    // lastError must not echo the raw error message (PII guard).
+    // lastError must not echo the raw error message — that would leak PII.
     expect(finalUpdate.lastError).not.toContain("boom");
   });
 });
@@ -965,8 +971,9 @@ function reclaimDb(staleJobs, opts = {}) {
   const staleSnaps = staleRefs.map((ref, i) =>
     snap(staleJobs[i].id, {...staleJobs[i].data}, ref));
 
-  // Each collection() call returns a fresh query builder: 'inflight' filters
-  // yield the stale docs, 'queued' filters yield an empty result.
+  // Each collection() call returns a fresh query builder. Filtering by
+  // 'inflight' returns the stale docs, and filtering by 'queued' returns
+  // nothing.
   const makeQueryBuilder = () => {
     // Use a closure variable so arrow functions can read the accumulated
     // filter without triggering the no-invalid-this lint rule.
@@ -997,8 +1004,8 @@ function reclaimDb(staleJobs, opts = {}) {
         get: jest.fn((ref) =>
           Promise.resolve(snap(ref.id, {...ref._data}, ref))),
         update: jest.fn((ref, fields) => {
-          // Record the reclaim's transactional write so tests can assert on
-          // ref.updates, and mutate _data so a re-read reflects it.
+          // Record the reclaim's transactional write so tests can assert
+          // on ref.updates. Also mutate _data so a re-read reflects it.
           ref.updates.push(fields);
           Object.assign(ref._data, fields);
         }),
@@ -1011,15 +1018,15 @@ function reclaimDb(staleJobs, opts = {}) {
 }
 
 describe("drainQueue reclaim pass", () => {
-  // Fixed "now" for reclaim tests: jobs claimed before this minus leaseMs
-  // are stale.
+  // This is the fixed "now" for reclaim tests — jobs claimed before this,
+  // minus leaseMs, count as stale.
   const NOW_MS = new Date("2024-06-01T10:00:00Z").getTime();
   const nowDate = new Date(NOW_MS);
   const nowFn = () => nowDate;
 
   // A claimedAt that is definitely stale (2 × leaseMs ago).
   const staleClaimedAt = new Date(NOW_MS - TEST_LEASE_MS * 2);
-  // A claimedAt that is fresh (half leaseMs ago — within the lease).
+  // A claimedAt that's fresh — half the lease ago, still within the window.
   const freshClaimedAt = new Date(NOW_MS - TEST_LEASE_MS / 2);
 
   test("stale inflight job is reset to queued, attempts bumped, " +
@@ -1082,8 +1089,9 @@ describe("drainQueue reclaim pass", () => {
       },
     };
 
-    // Override the reclaim query transaction to simulate a fresh job:
-    // when the tx re-reads, claimedAt is within the lease window.
+    // Override the reclaim query's transaction to simulate a fresh job.
+    // When the transaction re-reads, claimedAt comes back within the
+    // lease window.
     const {db, staleRefs} = reclaimDb([freshJob]);
 
     // Replace the transaction to return data with a fresh claimedAt so the
@@ -1109,8 +1117,8 @@ describe("drainQueue reclaim pass", () => {
     });
 
     expect(summary.reclaimed).toBe(0);
-    // The ref should have no outcome update (only the reclaim transaction ran,
-    // which bailed out without writing).
+    // The ref should have no outcome update — only the reclaim transaction
+    // ran, and it bailed out without writing anything.
     expect(staleRefs[0].updates).toHaveLength(0);
   });
 
@@ -1193,9 +1201,10 @@ describe("drainQueue reclaim pass", () => {
 
   test("stale job re-enqueued before the reclaim write is NOT clobbered",
       async () => {
-        // A client edit re-enqueues the job between the reclaim query and its
-        // transactional re-read; reclaim must leave it alone rather than
-        // overwrite it to queued/dead or bump the reclaimed counter.
+        // A client edit re-enqueues the job between the reclaim query and
+        // its transactional re-read. Reclaim must leave it alone — it
+        // shouldn't overwrite the job to queued/dead or bump the reclaimed
+        // counter.
         const staleJob = {
           id: "customerUpsert__c1",
           data: {
@@ -1394,7 +1403,8 @@ describe("drainQueue deadline budget", () => {
     expect(summary.processed).toBe(1);
     expect(summary.done).toBe(1);
 
-    // Job 1 got a clean outcome; jobs 2 and 3 were left untouched (queued).
+    // Job 1 got a clean outcome. Jobs 2 and 3 were left untouched, still
+    // queued.
     const lastUpdate = refs[0].updates[refs[0].updates.length - 1];
     expect(lastUpdate.status).toBe("done");
     expect(refs[1].updates).toHaveLength(0);
@@ -1444,8 +1454,8 @@ describe("drainQueue per-claim claimedAt stamping", () => {
         }));
         const {db} = drainDb(jobs);
 
-        // now() advances 1s per call: call 0 = drain-start nowValue, later
-        // calls = per-claim stamps.
+        // now() advances by 1s on each call: the first call returns the
+        // drain-start value, and later calls give each claim its own stamp.
         const BASE = new Date("2024-06-01T10:00:00Z").getTime();
         let call = 0;
         const nowFn = jest.fn(() => new Date(BASE + (call++) * 1000));
@@ -1476,12 +1486,13 @@ describe("drainQueue per-claim claimedAt stamping", () => {
         const drainStartMs = BASE; // first now() call
         const stamp1 = claimWrites[0].claimedAt.getTime();
         const stamp2 = claimWrites[1].claimedAt.getTime();
-        // Stamps are actual claim times — strictly after drain start and
-        // distinct per job.
+        // These are real per-claim times — each one comes strictly after
+        // the drain started, and each job gets its own distinct stamp.
         expect(stamp1).toBeGreaterThan(drainStartMs);
         expect(stamp2).toBeGreaterThan(stamp1);
 
-        // Outcomes still commit (the claim-stamp guard matches itself).
+        // Outcomes still commit, since the claim-stamp guard matches
+        // against itself.
         expect(summary.done).toBe(2);
       });
 });
@@ -1760,7 +1771,8 @@ describe("drainQueue forwards priorAttempts", () => {
 // ---------------------------------------------------------------------------
 
 describe("shouldEnqueueClientWrite", () => {
-  // A representative mapped-field set; helpers tweak copies of this.
+  // A representative mapped-field set. Individual tests tweak copies of
+  // this as needed.
   const base = {
     name: "Acme Co",
     email: "billing@acme.test",
@@ -1806,8 +1818,9 @@ describe("shouldEnqueueClientWrite", () => {
       waveCustomerId: "wv-1",
       wave: {syncState: "synced", lastSyncedHash: mappedFieldsHash(base)},
     };
-    // before differs in mapped fields, so rule 1 does NOT short-circuit;
-    // rule 2 (lastSyncedHash match) is what suppresses the enqueue.
+    // before differs in mapped fields, so rule 1 doesn't short-circuit
+    // here. What actually suppresses the enqueue is rule 2 — the
+    // lastSyncedHash match.
     const before = {...base, name: "Old Name"};
     expect(shouldEnqueueClientWrite(before, after)).toBe(false);
   });

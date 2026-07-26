@@ -2,14 +2,14 @@
 
 /**
  * @fileoverview Instant + Toronto-local formatting primitives shared by every
- * pure payload module; requires nothing, deliberately, so it can sit under
- * `notification_utils` -> `live_activity_dispatch` -> `live_activity_utils`
- * without closing a require cycle.
+ * pure payload module. It deliberately requires nothing else, so it can sit
+ * under `notification_utils` -> `live_activity_dispatch` ->
+ * `live_activity_utils` without closing a require cycle.
  *
  * @module time_utils
  */
 
-/** The one business time zone (Quebec); every user-facing time renders here. */
+/** The one business time zone (Quebec) — every user-facing time renders here. */
 const BUSINESS_TIME_ZONE = "America/Toronto";
 
 /**
@@ -114,8 +114,8 @@ function businessOffsetMs(date) {
 }
 
 /**
- * Business-local midnight of a calendar date as a UTC Date; stable because
- * DST shifts happen at 02:00, not midnight.
+ * Business-local midnight of a calendar date as a UTC Date. This stays
+ * stable because DST shifts happen at 02:00, not midnight.
  * @param {number} year
  * @param {number} month 1-based.
  * @param {number} day May overflow (day + 1 rolls the month).

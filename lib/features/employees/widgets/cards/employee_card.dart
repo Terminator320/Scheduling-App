@@ -22,7 +22,8 @@ class EmployeeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    // ListItemTile's InkWell exposes button semantics; no explicit Semantics label needed.
+    // ListItemTile's InkWell already exposes button semantics, so we don't
+    // need an explicit Semantics label here.
     return ListItemTile(
       avatarName: employee.name.isEmpty ? '?' : employee.name,
       avatarColor: employee.isDisabled ? scheme.outlineVariant : employee.color,

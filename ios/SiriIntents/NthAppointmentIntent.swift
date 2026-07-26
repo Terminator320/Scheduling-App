@@ -1,9 +1,9 @@
 // "Read a specific appointment in ES Pro" → Siri asks "Which appointment?"
 //
-// Phase 3 — the multi-turn beat: an Int can't sit inside a spoken phrase
-// (Siri only allows AppEnum/AppEntity there), so the phrase triggers the
-// intent and Siri asks "Which appointment? Say its number," reading back
-// that position — the buildable form of "read me the third one."
+// This is Phase 3, the multi-turn beat. An Int can't sit inside a spoken
+// phrase — Siri only allows AppEnum/AppEntity there — so the phrase triggers
+// the intent, and Siri asks "Which appointment? Say its number," then reads
+// back that position. It's the buildable form of "read me the third one."
 //
 // Positions are 1-based over TODAY's list, matching the natural follow-up to
 // "what's my schedule today." Answers from the App Group snapshot only — no

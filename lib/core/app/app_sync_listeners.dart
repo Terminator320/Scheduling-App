@@ -13,7 +13,7 @@ import 'package:scheduling/features/presence/application/presence_sync_controlle
 import 'package:scheduling/features/siri/application/schedule_snapshot_provider.dart';
 import 'package:scheduling/features/siri/application/schedule_snapshot_service.dart';
 
-/// Cross-cutting sync wiring (device registration, mirrors, photo drain) extracted for testability; account-lifecycle listeners stay in main.dart due to registration order.
+/// Cross-cutting sync wiring — device registration, mirrors, photo drain — pulled out here for testability. Account-lifecycle listeners stay in main.dart, since registration order matters there.
 ///
 /// [registerAll] must be called from `build`, like any `ref.listen`.
 class AppSyncListeners {
@@ -32,9 +32,9 @@ class AppSyncListeners {
   }
 
   void _pushRegistration() {
-    // Registers this device's FCM token when an active employee's or admin's
-    // account doc resolves (admins get time-based nudges for jobs they're
-    // assigned to); a no-op for signed-out users.
+    // Registers this device's FCM token once an active employee's or admin's
+    // account doc resolves. Admins also get time-based nudges for jobs
+    // they're assigned to. This is a no-op for signed-out users.
     ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
       prev,
       next,
@@ -44,7 +44,8 @@ class AppSyncListeners {
   }
 
   void _presenceSync() {
-    // Starts/stops the background location stream feeding the travel-time "leave now" reminders, same emission-driven shape as push registration above.
+    // Starts or stops the background location stream that feeds the travel-time
+    // "leave now" reminders — same emission-driven shape as push registration above.
     ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
       prev,
       next,
@@ -54,7 +55,9 @@ class AppSyncListeners {
   }
 
   void _liveActivitySync() {
-    // Registers this device's Live Activity APNs tokens so the server can put the "time to leave" card on a locked phone (iOS 17.2+ only; other devices just get the plain leaveNow push).
+    // Registers this device's Live Activity APNs tokens so the server can show
+    // the "time to leave" card on a locked phone. That only works on iOS 17.2+ —
+    // other devices just get the plain leaveNow push.
     ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
       prev,
       next,
@@ -64,7 +67,8 @@ class AppSyncListeners {
   }
 
   void _widgetSync() {
-    // iOS home-screen widget only — never wires on Android, so the employee-appointments listener it would open is never opened.
+    // iOS home-screen widget only. It never wires up on Android, so the
+    // employee-appointments listener it would open never opens.
     if (!Platform.isIOS) return;
     ref.listen<AsyncValue<Map<String, dynamic>?>>(widgetPayloadProvider, (
       prev,
@@ -98,7 +102,8 @@ class AppSyncListeners {
   }
 
   void _uploadDrain() {
-    // Reconnect: retry queued photo batches once per offline→online flip.
+    // When we come back online after being offline, retry any queued photo
+    // batches — once per flip.
     ref
       ..listen<bool>(isOfflineProvider, (previous, next) {
         final isSignedIn =
@@ -107,8 +112,9 @@ class AppSyncListeners {
           unawaited(ref.read(appointmentImageUploadProvider).drainPending());
         }
       })
-      // Startup / sign-in: one drain when the account doc first arrives
-      // (Storage rules need an authed user; a signed-out drain re-queues).
+      // On startup or sign-in, drain once as soon as the account doc first
+      // arrives. Storage rules require an authenticated user, so draining
+      // while signed out would just re-queue everything.
       ..listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
         previous,
         next,

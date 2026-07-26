@@ -126,7 +126,7 @@ class _ListInformationState extends State<ListInformation> {
                 TourStepId.clientsAdd,
                 targetBorderRadius: BorderRadius.circular(AppRadius.r16),
                 child: FloatingActionButton(
-                  // Must be unique across tabs — IndexedStack keeps every tab's FAB mounted at once.
+                  // Needs to be unique across tabs, since IndexedStack keeps every tab's FAB mounted at the same time.
                   heroTag: 'clientsAddFab',
                   onPressed: _onAddClient,
                   tooltip: context.l10n.clients_addClient,

@@ -72,7 +72,7 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     'seriesId': seriesId,
   };
 
-  /// Time-derived display status (never stored); keep in sync with functions/notification_utils.js.
+  /// A display status computed from the current time — never stored. Keep this in sync with functions/notification_utils.js.
   String get displayStatus {
     final s = status.toLowerCase();
     if (s == 'done' || s == 'completed' || s == 'cancelled') return status;

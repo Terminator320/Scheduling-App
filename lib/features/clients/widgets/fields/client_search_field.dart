@@ -28,10 +28,12 @@ class ClientSearchField extends StatelessWidget {
   final VoidCallback onClear;
   final String? errorText;
 
-  /// When non-null, shows "Add client" affordance; null shows plain no-results text.
+  /// When non-null, shows an "Add client" affordance. When null, just shows plain
+  /// no-results text.
   final VoidCallback? onAddNew;
 
-  /// Max dropdown height (about 5 dense tiles); list scrolls to keep all 25 results reachable.
+  /// Max dropdown height, about 5 dense tiles. The list scrolls so all 25 results
+  /// stay reachable.
   static const double _maxDropdownHeight = 280;
 
   @override
@@ -66,7 +68,8 @@ class ClientSearchField extends StatelessWidget {
                         padding: EdgeInsets.all(AppSpacing.sp12),
                         child: AdaptiveProgressIndicator(size: 16),
                       )
-                    // Typed-but-unselected: "x" clears query and results; empty shows search icon.
+                    // Typed but not yet selected — an "x" to clear the query and results,
+                    // or the search icon if the field's empty.
                     : ClearTextButton(
                         controller: controller,
                         onCleared: () => onChanged(''),

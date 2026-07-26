@@ -5,7 +5,8 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 /// An assignable employee surfaced as a history filter option.
 typedef HistoryEmployeeOption = ({String id, String name});
 
-/// Horizontally scrollable row of dropdown filter chips (year, employee); chips hide when no options.
+/// A horizontally scrollable row of dropdown filter chips (year, employee). Chips
+/// hide themselves when there's nothing to filter by.
 class HistoryFilterBar extends StatelessWidget {
   const HistoryFilterBar({
     required this.years,
@@ -91,7 +92,8 @@ class _FilterOption {
   final VoidCallback onSelected;
 }
 
-/// FilterChip that opens MenuAnchor of choices; highlights when non-default value chosen.
+/// A FilterChip that opens a MenuAnchor of choices, highlighted whenever a non-default
+/// value is chosen.
 class _DropdownFilterChip extends StatelessWidget {
   const _DropdownFilterChip({
     required this.label,

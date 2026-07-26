@@ -8,7 +8,8 @@ final authCacheProvider = Provider<AuthCache>(
   (ref) => AuthCache(storage: ref.watch(secureStorageServiceProvider)),
 );
 
-/// Caches signed-in employee's display identity (encrypted storage, never role).
+/// Caches the signed-in employee's display identity in encrypted storage —
+/// never their role.
 class AuthCache {
   AuthCache({SecureStorageService? storage})
     : _storage = storage ?? SecureStorageService();

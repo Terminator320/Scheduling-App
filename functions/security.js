@@ -5,12 +5,14 @@ const {getFirestore} = require("firebase-admin/firestore");
 
 const SESSION_TOKEN_MAX_LEN = 64;
 
-// Hard cap on a callable payload once serialized. Every payload here is a
-// couple of short strings; anything larger is malformed or abusive.
+// Hard cap on a callable payload once serialized. Every payload here is just
+// a couple of short strings, so anything larger is malformed or abusive.
 const MAX_PAYLOAD_BYTES = 4 * 1024;
 
 /**
- * True when the string contains a C0 control character or DEL, guarded against so logged values can't carry log-injection or odd upstream behaviour.
+ * True if the string contains a C0 control character or DEL. We guard
+ * against these so logged values can't carry log-injection or odd upstream
+ * behaviour.
  * @param {string} s value to inspect.
  * @return {boolean}
  */
@@ -23,7 +25,9 @@ function hasControlChar(s) {
 }
 
 /**
- * Throws HttpsError("invalid-argument") when `data` isn't a plain object, is oversized once serialized, or carries a key outside `allowedKeys` (mass-assignment defence); null/undefined is treated as empty.
+ * Throws HttpsError("invalid-argument") when `data` isn't a plain object, is
+ * oversized once serialized, or carries a key outside `allowedKeys` — this is
+ * our mass-assignment defence. null/undefined is treated as empty.
  * @param {*} data raw callable request data.
  * @param {!Set<string>} allowedKeys the only keys this endpoint accepts.
  */
@@ -97,7 +101,11 @@ function readSessionToken(data) {
 }
 
 /**
- * Firestore-backed sliding-window rate limit that survives across function instances and cold starts (unlike the in-memory limiter), throwing HttpsError("resource-exhausted") when the caller exceeds `max` attempts within `windowMs`; counters live in `rateLimits/*`, which firestore.rules denies to all clients.
+ * A sliding-window rate limit backed by Firestore, so it survives across
+ * function instances and cold starts (unlike the in-memory limiter). Throws
+ * HttpsError("resource-exhausted") once the caller exceeds `max` attempts
+ * within `windowMs`. Counters live in `rateLimits/*`, which firestore.rules
+ * denies to all clients.
  * @param {string} route stable endpoint identifier (part of the doc key).
  * @param {string} key per-caller limiter key — usually the Auth uid, but the
  *   token email for redeemSignupCode (a failed signup re-mints the uid).
@@ -106,9 +114,10 @@ function readSessionToken(data) {
  * @param {string} [keyKind] label for `key` ("uid" | "email"), purely for log
  *   discrimination; email keys are PII, so only a hash is logged.
  * @return {!Promise<{refund: function(): !Promise<void>}>} A handle whose
- *   `refund()` best-effort-undoes the recorded attempt so a server-side
- *   (not caller-attributable) failure doesn't burn a caller's limited slot;
- *   existing callers that ignore the return value are unaffected.
+ *   `refund()` undoes the recorded attempt on a best-effort basis, so a
+ *   server-side failure (not the caller's fault) doesn't burn one of their
+ *   limited attempts. Existing callers that ignore the return value are
+ *   unaffected.
  */
 async function enforceDurableRateLimit(route, key, max, windowMs,
     keyKind = "uid") {
@@ -120,8 +129,8 @@ async function enforceDurableRateLimit(route, key, max, windowMs,
     const snap = await tx.get(ref);
     const data = snap.exists ? snap.data() : null;
     const prior = data && Array.isArray(data.attempts) ? data.attempts : [];
-    // True sliding window: per-attempt timestamps, not a single windowStart
-    // counter that would let a caller burst 2×max across the boundary.
+    // We track per-attempt timestamps instead of a single windowStart
+    // counter — a counter would let a caller burst 2×max across the boundary.
     const recent = prior.filter(
         (t) => typeof t === "number" && now - t < windowMs,
     );
@@ -140,8 +149,8 @@ async function enforceDurableRateLimit(route, key, max, windowMs,
     });
   });
   if (overLimit) {
-    // Never log the raw key (PII for the email-keyed route); log a short
-    // sha256 prefix so operators can still correlate breaches.
+    // Never log the raw key — it's PII for the email-keyed route. Log a
+    // short sha256 prefix instead so operators can still correlate breaches.
     const keyHash = crypto.createHash("sha256").update(key)
         .digest("hex").slice(0, 12);
     logger.warn("enforceDurableRateLimit: limit exceeded",
@@ -149,8 +158,9 @@ async function enforceDurableRateLimit(route, key, max, windowMs,
     throw new HttpsError("resource-exhausted", "too-many-attempts");
   }
 
-  // Best-effort refund of the recorded attempt; swallows its own errors since
-  // refunding is an optimization, not worth failing the caller's error path.
+  // Best-effort refund of the recorded attempt. It swallows its own errors
+  // since refunding is just an optimization — not worth failing the
+  // caller's error path.
   const refund = async () => {
     try {
       await db.runTransaction(async (tx) => {
@@ -174,7 +184,9 @@ async function enforceDurableRateLimit(route, key, max, windowMs,
 }
 
 /**
- * Throws HttpsError("permission-denied", "wave/not-admin") unless the `usersByUid/{uid}` bridge (kept in sync by syncUsersByUid) shows an active admin — role is read from Firestore, never client-supplied.
+ * Throws HttpsError("permission-denied", "wave/not-admin") unless the
+ * `usersByUid/{uid}` bridge (kept in sync by syncUsersByUid) shows an active
+ * admin. Role always comes from Firestore, never from the client.
  * @param {string} uid Firebase Auth uid of the caller.
  * @return {!Promise<void>}
  */
@@ -192,8 +204,8 @@ async function assertAdmin(uid) {
   }
 }
 
-// NOTE: keep guards inline per callable — a shared helper here would close
-// over the real assertAdmin and break the guard-order mocks in
+// Keep guards inline per callable — a shared helper here would close over
+// the real assertAdmin and break the guard-order mocks in
 // __tests__/places_admin_gate.test.js.
 
 module.exports = {

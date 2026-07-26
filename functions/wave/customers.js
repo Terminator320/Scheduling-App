@@ -1,13 +1,13 @@
 "use strict";
 
 /**
- * @fileoverview Syncs Firestore `clients` docs with Wave Accounting customers
- * via `upsertCustomer` (App → Wave, hash-gated create/patch) and
- * `importCustomers` (one-time Wave → App seed, idempotent on
- * `waveCustomerId`); no Wave network call ever runs inside a Firestore
- * transaction, transport failures surface as `WaveApiError` while a
- * validation rejection throws `WaveValidationError`, and this module never
- * logs customer PII, tokens, or Wave's raw error text.
+ * @fileoverview Syncs Firestore `clients` docs with Wave Accounting customers.
+ * `upsertCustomer` pushes App → Wave with a hash-gated create/patch, and
+ * `importCustomers` does a one-time Wave → App seed, idempotent on
+ * `waveCustomerId`. No Wave network call ever runs inside a Firestore
+ * transaction. Transport failures surface as `WaveApiError`, a validation
+ * rejection throws `WaveValidationError`, and this module never logs
+ * customer PII, tokens, or Wave's raw error text.
  * @module wave/customers
  */
 
@@ -46,7 +46,8 @@ class WaveValidationError extends Error {
 // GraphQL documents
 // ---------------------------------------------------------------------------
 
-// Shared customer selection set (plan §10); currency is read back for display only, never written on input.
+// Shared customer selection set (plan §10). Currency is read back for
+// display only — we never write it on input.
 const CUSTOMER_FIELDS = `
   id
   name
@@ -187,7 +188,9 @@ function isPhoneFieldError(err) {
 }
 
 /**
- * True when every input error in the array targets a phone/mobile field (so a create-without-phone retry is worth attempting); an empty array is false.
+ * True when every input error in the array targets a phone/mobile field,
+ * meaning a create-without-phone retry is worth attempting. An empty array
+ * is false.
  * @param {Array<Object>} inputErrors Wave input errors.
  * @return {boolean}
  */
@@ -216,13 +219,20 @@ function readMutationPayload(payload) {
 // ---------------------------------------------------------------------------
 
 /**
- * Pushes a single client document to Wave (App → Wave), hash-gated: a missing doc skips, an already-synced hash no-ops, an existing `waveCustomerId` patches, and an unlinked doc creates (with a phone/mobile fallback); success writes the sync result back in a short idempotency-checked transaction, and a Wave validation rejection flags the doc `error` and throws `WaveValidationError` while transport `WaveApiError`s propagate unchanged.
+ * Pushes a single client document to Wave, hash-gated so we don't do
+ * redundant work: a missing doc skips, an already-synced hash no-ops, an
+ * existing `waveCustomerId` patches, and an unlinked doc creates (with a
+ * phone/mobile fallback). On success we write the sync result back in a
+ * short idempotency-checked transaction. A Wave validation rejection flags
+ * the doc `error` and throws `WaveValidationError`; transport `WaveApiError`s
+ * just propagate unchanged.
  * @param {string} clientId Firestore `clients` document id.
  * @param {Object=} deps Injectable dependencies — `db`, `graphql`,
  *   `businessId`, `now`, `priorAttempts` (the outbox job's failed-attempt
- *   count; when > 0 an unlinked create first searches Wave for a customer a
- *   crashed previous attempt may already have created and links it instead of
- *   duplicating). No default touches real Firestore/network during a unit test.
+ *   count). When `priorAttempts > 0`, an unlinked create first searches Wave
+ *   for a customer a crashed previous attempt may already have created, and
+ *   links it instead of duplicating. No default touches real Firestore or
+ *   network during a unit test.
  * @return {!Promise<!Object>} A status object (see decision flow).
  * @throws {WaveValidationError} On a Wave validation rejection.
  */
@@ -264,7 +274,9 @@ async function upsertCustomer(clientId, deps = {}) {
     return {status: "patched", waveCustomerId};
   }
 
-  // Step 5 — create a new Wave customer; on retry (priorAttempts > 0) of an unlinked doc, search Wave by name+email first and link instead of duplicating, in case a crashed previous attempt already created it.
+  // Step 5 — create a new Wave customer. On a retry (priorAttempts > 0) of
+  // an unlinked doc, search Wave by name+email first and link instead of
+  // duplicating, in case a crashed previous attempt already created it.
   const priorAttempts =
     typeof deps.priorAttempts === "number" ? deps.priorAttempts : 0;
   if (priorAttempts > 0) {
@@ -307,7 +319,11 @@ async function upsertCustomer(clientId, deps = {}) {
 }
 
 /**
- * Searches Wave customers (paginating `LIST_CUSTOMERS`, since Wave has no server-side name/email filter) for one matching a client doc's normalized name+email identity, used only on the crash-retry path of an unlinked create; archived customers are skipped and transport errors propagate.
+ * Searches Wave customers for one matching a client doc's normalized
+ * name+email identity — only used on the crash-retry path of an unlinked
+ * create. We paginate `LIST_CUSTOMERS` since Wave has no server-side
+ * name/email filter. Archived customers are skipped, and transport errors
+ * just propagate.
  * @param {!Function} graphql Injected graphql function.
  * @param {string} businessId Connected Wave business id.
  * @param {!Object} mappedFields Mapped Wave customer fields for the doc.
@@ -352,7 +368,9 @@ async function findCustomerByIdentity(graphql, businessId, mappedFields,
 }
 
 /**
- * Calls a customer mutation and returns the normalized payload; transport errors propagate but a `didSucceed:false` is returned (not thrown) so callers can branch.
+ * Calls a customer mutation and returns the normalized payload. Transport
+ * errors still propagate, but a `didSucceed:false` comes back as a return
+ * value rather than a throw, so callers can branch on it.
  * @param {!Function} graphql Injected graphql function.
  * @param {string} mutation The mutation document.
  * @param {!Object} input The mutation input (becomes the `input` variable).
@@ -365,7 +383,9 @@ async function runCustomerMutation(graphql, mutation, input) {
 }
 
 /**
- * Creates a Wave customer with the plan §7 phone/mobile fallback: if create fails on phone/mobile errors only, retry without them then patch them onto the new id; any other failure is returned as-is.
+ * Creates a Wave customer with the plan §7 phone/mobile fallback. If create
+ * fails on phone/mobile errors only, we retry without them and then patch
+ * them onto the new id afterward. Any other failure is just returned as-is.
  * @param {!Function} graphql Injected graphql function.
  * @param {string} businessId Connected Wave business id.
  * @param {!Object} mappedFields Mapped Wave customer fields.
@@ -395,7 +415,9 @@ async function createCustomerWithPhoneFallback(graphql, businessId,
   // Nothing to patch back (defensive — we only get here on a phone error).
   let phoneDeferred = false;
   if (newId && Object.keys(phoneFields).length > 0) {
-    // Best-effort patch of phone/mobile onto the new customer; `phoneDeferred` tells the caller to fall back to a phone-less hash if it fails.
+    // Try to patch phone/mobile onto the new customer, best effort.
+    // `phoneDeferred` tells the caller to fall back to a phone-less hash
+    // if this patch fails.
     const patched = await runCustomerMutation(
         graphql, PATCH_CUSTOMER, {id: newId, ...phoneFields},
     );
@@ -408,7 +430,11 @@ async function createCustomerWithPhoneFallback(graphql, businessId,
 }
 
 /**
- * Writes a successful sync result back to the client doc inside a short transaction that re-checks the create idempotency guard: `waveCustomerId` is only set when still unlinked (never overwrites a concurrent create), and a patch (`waveCustomerId:null`) leaves the link untouched.
+ * Writes a successful sync result back to the client doc inside a short
+ * transaction that re-checks the create idempotency guard. `waveCustomerId`
+ * only gets set when the doc is still unlinked, so we never overwrite a
+ * concurrent create. A patch call (`waveCustomerId:null`) leaves the
+ * existing link untouched.
  * @param {!Object} db Firestore instance.
  * @param {!Object} ref Client document reference.
  * @param {!Function} now serverTimestamp factory.
@@ -418,7 +444,8 @@ async function createCustomerWithPhoneFallback(graphql, businessId,
 async function writeSyncSuccess(db, ref, now, result) {
   await db.runTransaction(async (tx) => {
     const fresh = await tx.get(ref);
-    // Doc deleted between the initial read and this write-back — leave the orphaned Wave customer unlinked and no-op.
+    // Doc was deleted between the initial read and this write-back — leave
+    // the orphaned Wave customer unlinked and just no-op.
     if (!fresh || !fresh.exists) return;
     const cur = (fresh && fresh.exists && fresh.data()) || {};
     const update = {
@@ -428,7 +455,8 @@ async function writeSyncSuccess(db, ref, now, result) {
       "wave.syncError": null,
     };
     if (result.waveCustomerId) {
-      // Idempotency guard: only set the link when the doc is still unlinked.
+      // Only set the link when the doc is still unlinked — that's what
+      // keeps this idempotent.
       const existing =
         typeof cur.waveCustomerId === "string" ? cur.waveCustomerId : "";
       if (!existing) update.waveCustomerId = result.waveCustomerId;
@@ -465,7 +493,10 @@ async function writeSyncError(db, ref, now, inputErrors) {
 const BATCH_LIMIT = 500;
 
 /**
- * One-time Wave → App seed that paginates customers, skips archived ones, and writes active ones to `clients`, idempotent on `waveCustomerId` (not used as the doc id since Wave Node ids are base64 and can contain `/`, illegal in a Firestore doc id).
+ * One-time Wave → App seed. Paginates customers, skips archived ones, and
+ * writes active ones to `clients`. Idempotent on `waveCustomerId` — we don't
+ * use it as the doc id directly, since Wave Node ids are base64 and can
+ * contain `/`, which isn't legal in a Firestore doc id.
  * @param {Object=} deps Injectable dependencies — `db`, `graphql`,
  *   `businessId`, `pageSize` (default 100), `now`. No default touches real
  *   Firestore/network during a unit test.
@@ -533,8 +564,9 @@ async function importCustomers(deps = {}) {
       const waveId = fields.waveCustomerId;
       const existing = waveId ? existingByWaveId.get(waveId) : undefined;
       if (existing) {
-        // Preserve the original createdAt; only backfill it when the existing
-        // doc lacks one (e.g. a doc from an earlier import that omitted it).
+        // Preserve the original createdAt. Only backfill it when the
+        // existing doc lacks one (e.g. a doc from an earlier import that
+        // omitted it).
         const update = {...docFields, updatedAt: now()};
         if (!existing.hasCreatedAt) update.createdAt = now();
         batch.set(existing.ref, update, {merge: true});
@@ -567,7 +599,12 @@ async function importCustomers(deps = {}) {
 }
 
 /**
- * Builds a `Map<waveCustomerId, {ref, hasCreatedAt}>` over the `clients` collection in one pass (docs without a `waveCustomerId` skipped) so a re-run can backfill a missing `createdAt` without clobbering an existing one; loads the whole collection into memory, safe at the ~650-customer import scale but should move to a cursor if that grows.
+ * Builds a `Map<waveCustomerId, {ref, hasCreatedAt}>` over the `clients`
+ * collection in one pass, skipping docs without a `waveCustomerId`. This
+ * lets a re-run backfill a missing `createdAt` without clobbering an
+ * existing one. It loads the whole collection into memory, which is fine at
+ * the ~650-customer import scale we're at now, but should move to a cursor
+ * if that grows.
  * @param {!Object} db Firestore instance.
  * @return {!Promise<!Map<string, {ref: !Object, hasCreatedAt: boolean}>>}
  */

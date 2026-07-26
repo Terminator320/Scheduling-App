@@ -1,4 +1,5 @@
-/// Merge picker selection with unseen original assignees to prevent silent unassignment.
+/// Merges the picker's selection with any original assignees the picker
+/// couldn't show, so they don't get silently unassigned.
 ({List<String> ids, List<String> names}) mergeRetainedAssignees({
   required List<String> originalIds,
   required List<String> originalNames,

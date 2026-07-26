@@ -7,7 +7,8 @@ import 'package:scheduling/features/dashboard/domain/dashboard_aggregator.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 
-/// Injectable clock for tests; midnight-aligned range prevents listener churn.
+/// Injectable clock for tests. The range below is midnight-aligned, which
+/// keeps it stable and avoids extra listener churn.
 final dashboardClockProvider = Provider<DateTime Function()>(
   (ref) => DateTime.now,
 );
@@ -16,7 +17,8 @@ final dashboardRangeProvider = Provider.autoDispose<AppointmentDateRange>(
   (ref) => DashboardAggregator.rangeAround(ref.watch(dashboardClockProvider)()),
 );
 
-/// Client createdAt within dashboard window (legacy docs without createdAt excluded).
+/// Client createdAt timestamps within the dashboard window. Legacy docs that
+/// don't have a createdAt are excluded.
 final newClientDatesProvider = FutureProvider.autoDispose<List<DateTime>>((
   ref,
 ) async {
