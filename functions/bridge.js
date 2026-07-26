@@ -161,8 +161,8 @@ const syncUsersByUid = onDocumentWritten(
           return;
         }
 
-        // No new bridge follows — the deletes below are terminal cleanup. They
-        // also stay un-swallowed so retry:true can re-run a failed delete.
+        // No new bridge follows — the deletes below are terminal cleanup and
+        // stay un-swallowed so retry:true can re-run a failed delete.
         if (staleUid) {
           await bridge.doc(staleUid).delete();
         }
@@ -189,28 +189,16 @@ const syncUsersByUid = onDocumentWritten(
 
       await mirrorBridge();
 
-      // Live-location presence is PII. Once the account is deleted or
-      // deactivated, purge its last coordinates. This runs strictly AFTER the
-      // bridge mirror above (which stays un-swallowed and completes first) —
-      // a purge failure must never precede, block, or corrupt that mirror.
-      // But a purge failure MUST still be retried: on error, log (no
-      // coordinates) then RETHROW so retry:true re-runs the handler. That's
-      // safe because mirrorBridge is idempotent (absolute set/delete writes,
-      // per the comments above), so a retried event just re-mirrors — a
-      // harmless no-op if it already succeeded — then re-attempts the purge.
-      // delete() of an already-missing doc is itself a no-op, so repeated
-      // retries converge without ever leaving stale coordinates unpurged.
+      // Purges PII presence data after the bridge mirror completes; failures
+      // rethrow so retry:true safely reconverges (mirrorBridge and delete()
+      // are both idempotent).
       if (shouldPurgePresence(before, after)) {
         try {
           await db.doc(`users/${userId}/presence/location`).delete();
-          // Push + Live Activity delivery must stop with the account. Without
-          // this a deactivated tech keeps a Lock Screen card showing a client
-          // name and address, and a later reschedule pushes a refreshed one.
-          // Deleting the token rows is what actually stops delivery; the card
-          // marker goes too so the dispatcher stops resolving a card that can
-          // no longer be reached. (Ending the on-device card needs an APNs
-          // send, and only the two functions binding APNS_SECRETS may do that
-          // — the orphaned card expires on its own TTL.)
+          // Stops push/Live Activity delivery with the account so a
+          // deactivated tech doesn't keep showing a client's Lock Screen card;
+          // ending the on-device card needs APNs (left to the two functions
+          // binding APNS_SECRETS), so it just expires on its own TTL.
           await purgeDeliveryState(db, userId);
         } catch (err) {
           logger.warn("syncUsersByUid: presence purge failed", {
@@ -221,11 +209,8 @@ const syncUsersByUid = onDocumentWritten(
         }
       }
 
-      // Auth credential last: the rules gate (isAssignedEmployee /
-      // isAssignedToAppointment require status 'active') is the immediate
-      // protection, this is defence-in-depth that stops the account
-      // authenticating at all. Runs AFTER the bridge mirror for the same
-      // reason the purge does — it must never block or corrupt that write.
+      // Auth credential last: defence-in-depth beyond the rules' status gate,
+      // run after the bridge mirror so it never blocks that write.
       const change = authAccessChange(before, after);
       const authUid = afterUid || beforeUid;
       if (change && authUid) {

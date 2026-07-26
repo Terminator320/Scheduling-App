@@ -5,12 +5,12 @@ setGlobalOptions({maxInstances: 10});
 
 initializeApp();
 
-// Thin wiring surface: each function group lives in its own module (auth/admin
-// guards in security.js, the usersByUid bridge in bridge.js, Places proxies in
-// places.js, account deletion in account.js, signup-code invite callables in
-// invites.js, scheduled maintenance + image validation in maintenance.js, and
-// the Wave orchestration callables in wave/callables.js). Re-export each
-// trigger here under its original name so the deployed function set is stable.
+// Thin wiring surface — each function group lives in its own module (guards
+// in security.js, usersByUid bridge in bridge.js, Places proxies in
+// places.js, account deletion in account.js, invites in invites.js,
+// maintenance in maintenance.js, Wave orchestration in wave/callables.js) —
+// re-exported here under its original name so the deployed function set
+// stays stable.
 const bridge = require("./bridge");
 const places = require("./places");
 const account = require("./account");

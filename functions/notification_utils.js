@@ -979,14 +979,11 @@ async function claimSeriesNotice(deps, opts) {
 }
 
 /**
- * Orchestrates the overdue "job finished?" sweep. Queries by startTime (the
- * existing `(status, startTime)` index; endTime would need a new one) over
- * the last OVERDUE_QUERY_WINDOW_MS — wide enough that the longest bookable
- * visit is still in range when its endTime passes — then filters to
- * ended-within-24h-but-open in code. Each assignee is claimed on its own
- * endTime-keyed per-recipient ledger (see [_deliverRecipientOnce]): fired at
- * most once, retried while eligible if nothing was delivered, never re-sent
- * once delivered. Injectable deps `{db, messaging, now, logger}`.
+ * Orchestrates the overdue "job finished?" sweep: queries by startTime
+ * (endTime would need a new index) over OVERDUE_QUERY_WINDOW_MS, then filters
+ * to ended-within-24h-but-open in code, claiming each assignee on its own
+ * endTime-keyed per-recipient ledger (see [_deliverRecipientOnce]).
+ * Injectable deps `{db, messaging, now, logger}`.
  * @param {!Object} deps
  * @return {!Promise<{prompted: number}>}
  */
@@ -995,11 +992,10 @@ async function runOverduePromptSweep(deps) {
   const nowDate = now || new Date();
   const nowMs = nowMillis(nowDate);
   const windowStart = new Date(nowMs - OVERDUE_QUERY_WINDOW_MS);
-  // Order newest-first so the cap keeps the most-recently-started jobs — those
-  // are the ones whose endTime is likeliest still within the eligible 24h
-  // window (`selectOverdueCandidates`). Without the explicit orderBy Firestore
-  // returns the OLDEST first (implicit startTime ASC), spending the cap on
-  // already-aged-out jobs. Uses the existing `(status, startTime DESC)` index.
+  // Ordered newest-first so the cap keeps jobs likeliest still within the
+  // eligible 24h window; without it Firestore defaults to oldest-first,
+  // spending the cap on already-aged-out jobs (uses the existing
+  // `(status, startTime DESC)` index).
   const snap = await db
       .collection("appointments")
       .where("status", "in", OPEN_STATUSES)
