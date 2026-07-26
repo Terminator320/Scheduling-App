@@ -365,7 +365,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
   }
 
-  /// Unregisters (ending any live card) on OFF, re-registers on ON; best-effort, never throws.
+  /// Turning this off unregisters the device, which ends any live card;
+  /// turning it back on re-registers. Best effort — it never throws.
   Future<void> _toggleLiveActivity({required bool value}) async {
     await ref
         .read(liveActivityEnabledProvider.notifier)
@@ -559,7 +560,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     if (_isSigningOut) return;
     setState(() => _isSigningOut = true);
     try {
-      // Best-effort cleanup of this device's push token, presence, and Live Activity state.
+      // Clean up this device's push token, presence, and Live Activity state
+      // — best effort, so a failure here doesn't block sign-out.
       await ref
           .read(pushRegistrationControllerProvider)
           .unregisterCurrentDevice();
@@ -580,7 +582,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Future<void> _confirmDeleteAccount() async {
     if (_isDeletingAccount) return;
-    // Fail fast offline: the deleteAccount callable would otherwise hang ~30 s.
+    // Bail out early if we're offline — otherwise the call just hangs for ~30s.
     if (ref.read(isOfflineProvider)) {
       ref
           .read(noticeServiceProvider)
@@ -602,7 +604,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
     if (!result || !mounted) return;
 
-    // Platform-matched presentation to match the adaptive confirm dialog before it.
+    // Match the platform presentation of the adaptive confirm dialog shown before this.
     final password = context.isCupertino
         ? await showCupertinoDialog<String>(
             context: context,
