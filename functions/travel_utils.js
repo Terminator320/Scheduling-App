@@ -2,15 +2,16 @@
 
 /**
  * @fileoverview Travel-time "leave now" logic for the reminder sweep: pure
- * helpers plus an orchestrator with injected
+ * helpers plus an orchestrator, with injected
  * `{db, messaging, fetchImpl, apiKey, now, logger}` deps so jest can drive it
  * with mocks, mirroring notification_utils.js.
  *
- * Origin decision (per employee, per candidate appointment): prefers an intervening
- * appointment's address (they'll depart from that job), then falls back to a fresh
- * background-GPS presence doc (updatedAt <= 25 min), then a recently-ended previous
- * appointment's address (<= 4 h, not cancelled), then null (fixed 30-min fallback with
- * the plain reminder text).
+ * For each employee/candidate-appointment pair, we decide an origin in this
+ * order: an intervening appointment's address first (they'll depart from
+ * that job), then a fresh background-GPS presence doc (updatedAt <= 25 min),
+ * then a recently-ended previous appointment's address (<= 4 h, not
+ * cancelled), and finally null — which falls back to the fixed 30-min
+ * reminder with the plain reminder text.
  *
  * @module travel_utils
  */
@@ -54,31 +55,31 @@ const PRESENCE_STALE_MINUTES = 25;
 // employee just was".
 const PREV_APPOINTMENT_LOOKBACK_HOURS = 4;
 
-// Caps the per-employee context read; ordered by endTime ASC so the cap keeps
-// the earliest-ending jobs decideOrigin actually needs, instead of every
-// future appointment in a pre-booked series.
+// Caps the per-employee context read. Ordered by endTime ASC, so the cap
+// keeps the earliest-ending jobs decideOrigin actually needs, instead of
+// every future appointment in a pre-booked series.
 const CONTEXT_QUERY_MAX = 50;
 
-// Longest bookable visit (24h cap); the context query's upper bound must clear
-// the travel window plus one full visit or a long intervening job drops out
-// of decideOrigin.
+// Longest bookable visit (24h cap). The context query's upper bound has to
+// clear the travel window plus one full visit, or a long intervening job
+// drops out of decideOrigin.
 const MAX_BOOKING_MS = 24 * 60 * MINUTE_MS;
 
 // Sweep candidate window: MAX_LEAD_MINUTES ahead, so the longest computable
 // lead is already in range when it becomes due.
 const TRAVEL_WINDOW_MS = MAX_LEAD_MINUTES * MINUTE_MS;
 
-// A recent cached estimate lets a clearly-not-due pair skip the metered Routes
-// call; this can only DEFER a send, never trigger one — the fire decision
-// always uses a fresh Routes response.
+// A recent cached estimate lets a clearly-not-due pair skip the metered
+// Routes call. This can only DEFER a send, never trigger one — the fire
+// decision always uses a fresh Routes response.
 const ESTIMATE_TTL_MS = 10 * MINUTE_MS;
 const SKIP_MARGIN_MS = 15 * MINUTE_MS;
 const _estimateCache = new Map();
 
 /**
- * Drops every expired entry — read-triggered eviction alone can't reclaim a
- * pair that stopped being swept, so the sweep prunes the whole map once per
- * run to bound the warm instance.
+ * Drops every expired entry. Read-triggered eviction alone can't reclaim a
+ * pair that stopped being swept, so the sweep also prunes the whole map
+ * once per run to keep the warm instance bounded.
  * @param {!Map} cache
  * @param {number} nowMs
  * @return {void}
@@ -119,8 +120,8 @@ function canDeferRoutes({seconds, startTimeMillis, nowMillis}) {
   return nowMillis < startTimeMillis - leadMs - SKIP_MARGIN_MS;
 }
 
-// Statuses that still expect the visit to happen; `confirmed` is the retired
-// legacy alias, kept so pre-retirement docs still earn reminders.
+// Statuses that still expect the visit to happen. `confirmed` is the
+// retired legacy alias, kept so pre-retirement docs still earn reminders.
 const PENDING_LIKE = new Set(["pending", "confirmed"]);
 
 // Same allowlist as an array for the candidate query's `where("status", "in",
@@ -128,7 +129,7 @@ const PENDING_LIKE = new Set(["pending", "confirmed"]);
 // `in_progress` has no "time to leave" left to remind about.
 const PENDING_STATUSES = [...PENDING_LIKE];
 
-// A job in one of these no longer occupies the employee; legacy `completed`
+// A job in one of these no longer occupies the employee. Legacy `completed`
 // is the retired alias of `done`.
 const TERMINAL = new Set(["done", "completed", "cancelled"]);
 
@@ -157,8 +158,8 @@ function decideOrigin({presence, employeeAppointments, candidate, now}) {
   const candidateStartMs = toMillis(candidate && candidate.startTime);
   const apps = employeeAppointments || [];
 
-  // Intervening appointment — they'll depart from THAT job's address, not from
-  // wherever they are now; marking it done promotes GPS below.
+  // Intervening appointment — they'll depart from THAT job's address, not
+  // from wherever they are now. Marking it done promotes GPS below.
   let intervening = null;
   for (const r of apps) {
     if (candidate && r.id === candidate.id) continue;
@@ -188,8 +189,8 @@ function decideOrigin({presence, employeeAppointments, candidate, now}) {
     }
   }
 
-  // Recently-ended previous appointment (any status except cancelled — a cancelled
-  // visit never happened); newest endTime wins.
+  // Recently-ended previous appointment, any status except cancelled since
+  // a cancelled visit never happened. Newest endTime wins.
   let previous = null;
   const floorMs = nowMs - PREV_APPOINTMENT_LOOKBACK_HOURS * 60 * MINUTE_MS;
   for (const r of apps) {
@@ -289,8 +290,8 @@ function parseRoutesDurationSeconds(json) {
 
 /**
  * Calls Routes API computeRoutes and returns drive seconds, or null on ANY
- * failure — never throws (places.js error discipline); `fetchImpl` is
- * injected for jest.
+ * failure — never throws (same error discipline as places.js). `fetchImpl`
+ * is injected for jest.
  * @param {{fetchImpl: !Function, apiKey: string, origin: !Object,
  *   destinationAddress: string, now: (Date|number), logger: ?Object}} args
  * @return {!Promise<?number>}
@@ -346,9 +347,9 @@ async function computeTravelSeconds({fetchImpl, apiKey, origin,
 }
 
 /**
- * Ledger doc id — same `${id}_${startMs}_${employeeDocId}` shape as the push
- * plan's reminderLedgerId, so claims made before the travel upgrade stay
- * honored (no double reminders across the deploy).
+ * Ledger doc id — same `${id}_${startMs}_${employeeDocId}` shape as the
+ * push plan's reminderLedgerId, so claims made before the travel upgrade
+ * still get honored and the deploy doesn't cause double reminders.
  * @param {string} appointmentId
  * @param {number} startTimeMillis
  * @param {string} employeeDocId
@@ -360,12 +361,13 @@ function travelReminderLedgerId(appointmentId, startTimeMillis,
 }
 
 /**
- * Resolves ONE (candidate, assignee) pair: ledger short-circuit -> decideOrigin
- * -> Routes (deferred when a recent estimate proves it isn't due) -> due-check
- * -> claim/send/release -> optional Live Activity start.
+ * Resolves ONE (candidate, assignee) pair: ledger short-circuit, then
+ * decideOrigin, then Routes (deferred when a recent estimate already proves
+ * it isn't due), then the due-check, then claim/send/release, then an
+ * optional Live Activity start.
  *
- * The Live Activity start hangs off `deliverRecipientOnce`'s claim so a
- * racing collision can't double-fire a card; every failure path degrades to
+ * The Live Activity start hangs off `deliverRecipientOnce`'s claim, so a
+ * racing collision can't double-fire a card. Every failure path degrades to
  * the fixed 30-minute `reminder` kind.
  * @param {!Object} deps
  * @param {!Object} args

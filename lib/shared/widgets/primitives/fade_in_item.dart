@@ -23,10 +23,11 @@ class _FadeInItemState extends State<FadeInItem>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Set up after MediaQuery available; honor reduce-motion.
+    // Wait until MediaQuery is available before setting up, and honor
+    // reduce-motion.
     if (_didSetup) return;
     _didSetup = true;
-    // Only first few rows stagger-fade; rest appear instantly.
+    // Only the first few rows stagger-fade in; the rest just appear instantly.
     if (widget.index >= _maxStagger ||
         MediaQuery.disableAnimationsOf(context)) {
       return;

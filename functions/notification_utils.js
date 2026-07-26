@@ -778,15 +778,17 @@ async function handleAppointmentWrite(id, before, after, deps) {
   const windows = new Map();
   for (const {employeeDocId, kind} of events) {
     const ctx = _contextFor(kind, before, after);
-    // Reschedule refreshes an existing Lock Screen card; card ends are
+    // A reschedule refreshes an existing Lock Screen card. Card ends are
     // handled unconditionally by endCardOnTerminal above, and `assigned`
-    // starts no card (only the travel-aware "leave now" sweep does).
-    // Runs before the series claim gate (unlike the push) since the card is
-    // per-occurrence while the claim collapses a reschedule to one
-    // nondeterministic winner; updateLiveActivity is a cheap no-op for any
-    // occurrence that isn't the live card, so refreshing per-occurrence hits
-    // the right one regardless.
-    // Best-effort: never throws, never affects `sent`.
+    // starts no card at all (only the travel-aware "leave now" sweep does
+    // that).
+    // This runs before the series claim gate, unlike the push, because the
+    // card is per-occurrence while the claim collapses a whole reschedule to
+    // one nondeterministic winner. updateLiveActivity is a cheap no-op for
+    // any occurrence that isn't the live card, so refreshing per-occurrence
+    // still lands on the right one regardless of which sibling wins the
+    // claim.
+    // Best-effort: never throws, and never affects `sent`.
     if (kind === "rescheduled") {
       await updateLiveActivity(deps, {
         appointmentId: String(id),
@@ -806,8 +808,9 @@ async function handleAppointmentWrite(id, before, after, deps) {
       const mine = await claimSeriesNotice(deps, {
         seriesId, seriesOpId: freshOpId, kind, employeeDocId, nowDate: now,
       });
-      // Claimed by a sibling in this same batch — it sends the push for the
-      // series (the card was already refreshed per-occurrence above).
+      // A sibling in this same batch already claimed it and will send the
+      // push for the series — the card was already refreshed per-occurrence
+      // above.
       if (!mine) continue;
     }
     const data = {appointmentId: String(id), kind};
@@ -837,11 +840,12 @@ async function handleAppointmentWrite(id, before, after, deps) {
 }
 
 /**
- * Claim → send → release for one (occurrence, recipient) pair via a
- * per-recipient ledger doc: `create()` atomically claims exactly once (safe
- * under concurrent sweeps), releasing on zero delivered so a later sweep
- * retries — and being per-recipient rather than per-occurrence means one
- * slow-to-register assignee doesn't suppress reminders for the others.
+ * Claim, send, then release for one (occurrence, recipient) pair, via a
+ * per-recipient ledger doc. `create()` atomically claims exactly once, which
+ * is safe under concurrent sweeps, and we release the claim on zero
+ * delivered so a later sweep retries. Keying the ledger per-recipient
+ * rather than per-occurrence also means one slow-to-register assignee
+ * doesn't suppress reminders for the others.
  * Returns the number of pushes delivered to this recipient.
  * @param {!Object} deps `{db, messaging, now, logger}`.
  * @param {!Object} opts
@@ -891,10 +895,10 @@ async function _deliverRecipientOnce(deps, opts) {
 }
 
 /**
- * DELETE-fallback window (see [claimSeriesNotice]): covers trigger-scheduling
- * jitter and a retry since siblings in one batch fire within seconds; kept
- * short (seconds, not minutes) so a genuinely separate later delete of the
- * same series still notifies.
+ * DELETE-fallback window (see [claimSeriesNotice]). Covers
+ * trigger-scheduling jitter and a retry, since siblings in one batch fire
+ * within seconds of each other. Kept short — seconds, not minutes — so a
+ * genuinely separate later delete of the same series still notifies.
  */
 const SERIES_CLAIM_WINDOW_MS = 45 * 1000;
 
@@ -918,9 +922,9 @@ const SERIES_CLAIM_COLLECTION = "appointmentSeriesNotices";
  *    is stale and shared by every future delete, so it falls back to
  *    (seriesId, kind, employee) plus a short window and stale-takeover.
  *
- * Fails open everywhere: any error (or an unreadable fallback claim) returns
- * true (send), since failing open only risks an extra push while failing
- * closed could drop a cancellation for a tech already driving.
+ * This fails open everywhere — any error, or an unreadable fallback claim,
+ * returns true (send). Failing open only risks an extra push, while failing
+ * closed could drop a cancellation for a tech who's already on the road.
  *
  * @param {!Object} deps `{db, logger}`.
  * @param {{seriesId: string, seriesOpId: string, kind: string,
@@ -934,10 +938,10 @@ async function claimSeriesNotice(deps, opts) {
   const nowMs = nowMillis(nowDate);
   let ref;
   try {
-    // Built inside the try since `.doc()` throws synchronously on an id
-    // containing "/" and seriesId's contents are unconstrained; a fresh
-    // op-id (uuid) is always slash-safe, but the shared try also covers the
-    // fallback's raw seriesId.
+    // Built inside the try because `.doc()` throws synchronously on an id
+    // containing "/", and seriesId's contents aren't constrained. A fresh
+    // op-id (uuid) is always slash-safe, but sharing this try block also
+    // covers the fallback's raw seriesId.
     const docId = seriesOpId !== "" ?
       `op_${seriesOpId}_${kind}_${employeeDocId}` :
       `${seriesId}_${kind}_${employeeDocId}`;
@@ -952,20 +956,21 @@ async function claimSeriesNotice(deps, opts) {
       }
       return true;
     }
-    // A claim already exists; with a fresh op-id that's definitive (only a
-    // sibling of this batch could have written it), so suppress with no
-    // window needed.
+    // A claim already exists. With a fresh op-id that's definitive — only a
+    // sibling of this batch could have written it — so we suppress the send
+    // with no time window needed.
     if (seriesOpId !== "") return false;
   }
-  // Fallback path (delete): take over a claim older than the window so a
-  // later separate delete still notifies; a race on takeover risks a
-  // duplicate send, never a miss.
+  // Fallback path, for deletes: take over a claim older than the window so
+  // a later, genuinely separate delete still notifies. A race on takeover
+  // risks a duplicate send, never a miss.
   try {
     const snap = await ref.get();
     const createdMs = toMillis(snap.get("createdAt"));
-    // A null createdMs means the doc vanished or carries no usable timestamp
-    // — the opposite of a live claim — so take it over and send (treating it
-    // as live would fail closed in a function that must fail open).
+    // A null createdMs means the doc vanished or carries no usable
+    // timestamp — the opposite of a live claim — so we take it over and
+    // send. Treating it as live here would mean failing closed, in a
+    // function that's supposed to fail open.
     if (createdMs != null && nowMs - createdMs < SERIES_CLAIM_WINDOW_MS) {
       return false;
     }
@@ -981,10 +986,10 @@ async function claimSeriesNotice(deps, opts) {
 }
 
 /**
- * Orchestrates the overdue "job finished?" sweep: queries by startTime
- * (endTime would need a new index) over OVERDUE_QUERY_WINDOW_MS, then filters
- * to ended-within-24h-but-open in code, claiming each assignee on its own
- * endTime-keyed per-recipient ledger (see [_deliverRecipientOnce]).
+ * Orchestrates the overdue "job finished?" sweep. It queries by startTime
+ * (endTime would need a new index) over OVERDUE_QUERY_WINDOW_MS, then
+ * filters to ended-within-24h-but-open in code, and claims each assignee on
+ * its own endTime-keyed per-recipient ledger (see [_deliverRecipientOnce]).
  * Injectable deps `{db, messaging, now, logger}`.
  * @param {!Object} deps
  * @return {!Promise<{prompted: number}>}
@@ -994,10 +999,10 @@ async function runOverduePromptSweep(deps) {
   const nowDate = now || new Date();
   const nowMs = nowMillis(nowDate);
   const windowStart = new Date(nowMs - OVERDUE_QUERY_WINDOW_MS);
-  // Ordered newest-first so the cap keeps jobs likeliest still within the
-  // eligible 24h window; without it Firestore defaults to oldest-first,
-  // spending the cap on already-aged-out jobs (uses the existing
-  // `(status, startTime DESC)` index).
+  // Ordered newest-first so the cap keeps the jobs most likely to still be
+  // within the eligible 24h window. Without this, Firestore defaults to
+  // oldest-first and spends the cap on jobs that have already aged out —
+  // this uses the existing `(status, startTime DESC)` index.
   const snap = await db
       .collection("appointments")
       .where("status", "in", OPEN_STATUSES)
@@ -1034,8 +1039,9 @@ async function runOverduePromptSweep(deps) {
         roles: TIMED_RECIPIENT_ROLES,
         cache,
       });
-      // Count recipients actually prompted (a job with N assignees can prompt
-      // up to N); single-assignee jobs — the common case — read as before.
+      // Count recipients actually prompted — a job with N assignees can
+      // prompt up to N of them. Single-assignee jobs, the common case, read
+      // exactly as before.
       if (delivered > 0) prompted += 1;
     }
   }

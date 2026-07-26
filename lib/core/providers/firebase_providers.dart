@@ -6,7 +6,8 @@ final firebaseAuthProvider = Provider<FirebaseAuth>(
   (ref) => FirebaseAuth.instance,
 );
 
-/// Deferred Firebase bootstrap; main() overrides with App Check activation so Firestore awaits it.
+/// Deferred Firebase bootstrap. main() overrides this with App Check
+/// activation, so Firestore can await it before running.
 final firebaseReadyProvider = FutureProvider<void>((ref) async {});
 
 final firestoreProvider = Provider<FirebaseFirestore>(

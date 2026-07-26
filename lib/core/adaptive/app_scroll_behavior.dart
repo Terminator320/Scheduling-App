@@ -14,7 +14,8 @@ class AppScrollBehavior extends MaterialScrollBehavior {
     Widget child,
     ScrollableDetails details,
   ) {
-    // Only vertical scrollables get the iOS scrollbar; horizontal pagers show none, matching native iOS.
+    // Only vertical scrollables get the iOS scrollbar. Horizontal pagers show
+    // none, matching native iOS behavior.
     final isVertical =
         details.direction == AxisDirection.up ||
         details.direction == AxisDirection.down;

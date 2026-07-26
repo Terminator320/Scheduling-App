@@ -36,7 +36,8 @@ class ClientsListView extends ConsumerStatefulWidget {
 
 class _ClientsListViewState extends ConsumerState<ClientsListView> {
   static const int _pageSize = 50;
-  // Debounce before server search to avoid per-keystroke read storm; local filter covers gap for immediate feel.
+  // Debounce before the server search, so we don't fire a read on every keystroke —
+  // the local filter covers the gap in the meantime so it still feels immediate.
   final _searchDebounce = Debouncer(const Duration(milliseconds: 250));
   String _committedQuery = '';
 
@@ -74,7 +75,8 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     _scheduleSearch();
   }
 
-  // Debounce restarts on query change; clearing commits instantly for zero lag returning to paged list.
+  // The debounce restarts on every query change, but clearing the query commits
+  // instantly, so returning to the paged list has zero lag.
   void _scheduleSearch() {
     final next = widget.searchQuery.trim();
     if (next.isEmpty) {
@@ -135,9 +137,9 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     );
   }
 
-  // Non-scrolling: the first-page indicator lands inside ISP's
-  // SliverFillRemaining, where a nested scrollable (ListView) would throw
-  // an intrinsic-dimension error.
+  // This can't scroll itself — the first-page indicator lands inside ISP's
+  // SliverFillRemaining, and a nested scrollable (ListView) there would throw an
+  // intrinsic-dimension error.
   Widget _skeleton() => const Padding(
     padding: EdgeInsets.all(AppSpacing.sp16),
     child: Column(
@@ -190,8 +192,8 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     ];
   }
 
-  // Comprehensive search runs on the debounced (committed) query across all
-  // fields and pages; the instant local filter fills the gap until it settles.
+  // The full search runs on the debounced, committed query across all fields and
+  // pages. The instant local filter fills the gap until that settles.
   Widget _buildSearchResults(String query) {
     final local = _localFilter(query);
 

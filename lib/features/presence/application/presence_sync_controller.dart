@@ -31,9 +31,9 @@ final presenceSyncControllerProvider = Provider<PresenceSyncController>(
 /// handles granularity; this guards Firestore write volume on a highway.
 const minPresenceUploadGap = Duration(minutes: 2);
 
-/// Stationary re-upsert cadence, keeping `updatedAt` fresh; keep in sync with
-/// PRESENCE_STALE_MINUTES = 25 in functions/travel_utils.js (window
-/// comfortably above two missed heartbeats).
+/// Stationary re-upsert cadence that keeps `updatedAt` fresh. Keep this in
+/// sync with PRESENCE_STALE_MINUTES = 25 in functions/travel_utils.js — the
+/// window is comfortably above two missed heartbeats.
 const presenceHeartbeatEvery = Duration(minutes: 10);
 
 /// Pure gate: presence tracks exactly the timed-push audience; delegates to

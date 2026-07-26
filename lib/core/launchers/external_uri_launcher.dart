@@ -4,7 +4,9 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// Opens uri in an external app with error notice on failure — the single implementation behind launch* helpers to prevent per-copy drift; tag prefixes the logger label for Crashlytics mapping.
+/// Opens uri in an external app, surfacing an error notice on failure. This
+/// is the single implementation behind the launch* helpers, so they can't
+/// drift out of sync — tag prefixes the logger label for Crashlytics mapping.
 Future<bool> launchExternalUri(
   BuildContext context,
   WidgetRef ref,

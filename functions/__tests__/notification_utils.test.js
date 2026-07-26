@@ -547,9 +547,10 @@ describe("handleAppointmentWrite repeat-series claim", () => {
     expect(res.sent).toBe(1);
   });
 
-  // Op-id path: a WRITE (after present) carries a fresh seriesOpId that every
-  // sibling of one batch shares and no other operation reuses, so the claim is
-  // keyed on it with NO time window.
+  // On the op-id path, a WRITE (where `after` is present) carries a fresh
+  // seriesOpId that every sibling in the same batch shares and no other
+  // operation reuses. So the claim is keyed on that op-id, with no time
+  // window needed.
   const cancelUpdate = (db, messaging, id, opId) => {
     const before = {
       seriesId: "series-1", employeeIds: ["e1"],
@@ -591,8 +592,9 @@ describe("handleAppointmentWrite repeat-series claim", () => {
   });
 
   test("op-id path suppresses without a stale-takeover read", async () => {
-    // A duplicate op-id claim is definitive (same batch), so the collision is
-    // answered by create() alone — no get()/set() round-trip.
+    // A duplicate op-id claim is definitive since it's the same batch, so
+    // create() alone can resolve the collision — no need for a get()/set()
+    // round-trip.
     const {db, seriesClaims} = makeDb({
       users: {e1: {role: "employee", status: "active"}},
       tokens: {e1: [{id: "t-en", locale: "en"}]},
@@ -640,7 +642,7 @@ describe("handleAppointmentWrite", () => {
             {id: "t-en", locale: "en"},
             {id: "t-fr", locale: "fr"},
           ]},
-          // Post-write state the widget window read sees.
+          // This is the post-write state that the widget window read sees.
           appointments: [{
             id: "appt1",
             employeeIds: ["e1"],
@@ -756,8 +758,9 @@ describe("handleAppointmentWrite", () => {
         {employeeIds: ["a1"], startTime: future(3 * HOUR)},
         {db, messaging, now: NOW, logger: silentLogger},
     );
-    // Assignment/reschedule/cancel are employee-only — an admin usually makes
-    // those edits, so no push for their own change.
+    // Assignment/reschedule/cancel pushes are employee-only. An admin
+    // usually makes those edits themselves, so we don't push back their
+    // own change.
     expect(res.sent).toBe(0);
     expect(messaging.sent).toHaveLength(0);
   });
@@ -797,8 +800,8 @@ describe("runOverduePromptSweep", () => {
     expect(ledgerCreates.map((c) => c.key)).toEqual([overdueKey]);
     expect(ledgerCreates[0].data.expiresAt).toBeInstanceOf(Date);
     expect(ledgerDeletes).toEqual([]);
-    // The query itself must cover open statuses over a 48h startTime window
-    // (24h eligibility + the <24h max booking duration).
+    // The query needs to cover open statuses across a 48h startTime window:
+    // 24h of eligibility plus the <24h max booking duration.
     expect(appointmentQueries).toEqual([
       {field: "status", op: "in",
         value: ["pending", "in_progress", "confirmed"]},
@@ -829,7 +832,8 @@ describe("runOverduePromptSweep", () => {
   });
 
   test("a zero-delivery claim is released for a later retry", async () => {
-    // Active assignee but no fcmTokens yet (fresh install).
+    // The assignee is active but has no fcmTokens yet, as if on a fresh
+    // install.
     const {db, ledgerCreates, ledgerDeletes} = makeDb({
       users: {e1: {role: "employee", status: "active"}},
       tokens: {},
@@ -896,8 +900,9 @@ describe("runDailyDigest", () => {
   });
 
   test("queries every open status, including in_progress", async () => {
-    // Regression: the digest's hardcoded status list disagreed with its own
-    // filter, silently dropping in_progress jobs from the 18:00 digest.
+    // This is a regression test: the digest's hardcoded status list used to
+    // disagree with its own filter, silently dropping in_progress jobs from
+    // the 18:00 digest.
     const {db, appointmentQueries} = makeDb({
       users: {e1: {role: "employee", status: "active"}},
       tokens: {e1: [{id: "t1", locale: "en"}]},
