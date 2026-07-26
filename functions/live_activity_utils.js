@@ -123,10 +123,10 @@ function phaseFor({startTime, now}) {
 }
 
 /**
- * Builds the ActivityKit content state the Swift `ContentState` decodes. All
- * display text is localized here; the extension renders strings verbatim.
- * `endTime` feeds the on-site remaining-time countdown (the card counts DOWN
- * to the scheduled end, not up from the start).
+ * Builds the ActivityKit content state the Swift `ContentState` decodes, with
+ * all display text localized here (the extension renders strings verbatim);
+ * `endTime` feeds the on-site countdown, which counts down to the scheduled
+ * end rather than up from the start.
  * @param {{clientName: string, address: string, startTime: *, endTime: *,
  *   leaveAt: *, travelMinutes: ?number, phase: string,
  *   locale: (string|undefined)}} args
@@ -159,8 +159,8 @@ function buildContentState({clientName, address, startTime, endTime, leaveAt,
 }
 
 /**
- * Shared `aps` skeleton. Optional date/alert fields are omitted rather than
- * sent null — APNs rejects a null `stale-date`.
+ * Shared `aps` skeleton, omitting optional date/alert fields rather than
+ * sending null since APNs rejects a null `stale-date`.
  * @param {string} event start|update|end.
  * @param {!Object} contentState
  * @param {{now: *, alert: (?Object|undefined), staleDate: *,
@@ -183,7 +183,7 @@ function _envelope(event, contentState, opts) {
 }
 
 /**
- * Push-to-start payload. `attributes-type` + `attributes` are required on a
+ * Push-to-start payload — `attributes-type`/`attributes` are required on
  * start and rejected on update/end.
  * @param {{contentState: !Object, attributes: !Object, now: *,
  *   alert: (?Object|undefined), staleDate: *,
@@ -213,8 +213,8 @@ function buildUpdatePayload({contentState, now, alert, staleDate}) {
 }
 
 /**
- * End payload. Without a `dismissal-date` the card lingers on the Lock Screen
- * for up to four hours, so the caller normally passes `now`.
+ * End payload — without a `dismissal-date` the card lingers on the Lock
+ * Screen up to four hours, so the caller normally passes `now`.
  * @param {{contentState: !Object, now: *, dismissalDate: *,
  *   alert: (?Object|undefined)}} args
  * @return {!Object}
