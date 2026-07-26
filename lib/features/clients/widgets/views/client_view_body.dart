@@ -52,10 +52,11 @@ class ClientDetailViewBody extends ConsumerWidget {
             address: client.address,
           )
         : null;
-    // Always offered, even name-only clients are worth saving to the phone.
+    // Always offered — even a name-only client is worth saving to the phone.
     void onSaveToContacts() => saveClientToPhoneContacts(context, ref, client);
 
-    // `contacts` holds only extra contacts; customer details live in header and contact-info card.
+    // `contacts` holds only the extra contacts — the customer's own details already
+    // live in the header and the contact-info card.
     final extraContacts = client.contacts;
 
     final hasSyncBadge = client.waveSyncState.isNotEmpty;

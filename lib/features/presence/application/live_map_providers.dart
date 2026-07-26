@@ -22,9 +22,9 @@ final liveMapTickProvider = StreamProvider.autoDispose<int>(
   (ref) => Stream<int>.periodic(const Duration(seconds: 30), (i) => i),
 );
 
-/// Presence fixes joined with the active-staff roster into plotted points;
-/// same reduction shape as `dashboardStatsProvider` (first error wins, any
-/// loading source keeps it loading).
+/// Presence fixes joined with the active-staff roster into plotted points.
+/// Uses the same reduction shape as `dashboardStatsProvider` — first error
+/// wins, and any source still loading keeps the whole thing loading.
 final liveMapPointsProvider =
     Provider.autoDispose<AsyncValue<List<StaffMapPoint>>>((ref) {
       final fixes = ref.watch(allPresenceStreamProvider);
