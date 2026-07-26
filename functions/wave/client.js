@@ -22,7 +22,7 @@
 
 const WAVE_GQL_URL = "https://gql.waveapps.com/graphql/public";
 
-// Default retry settings. Override via options.maxRetries / options.sleepFn.
+// Default retry settings, overridable via options.maxRetries / sleepFn.
 const DEFAULT_MAX_RETRIES = 3;
 const BASE_DELAY_MS = 500;
 const MAX_DELAY_MS = 10_000;

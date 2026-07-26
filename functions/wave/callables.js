@@ -315,11 +315,10 @@ const waveImportCustomers = onCall(
     },
 );
 
-// 3) waveUpsertCustomer — enqueues a Wave write-back when a client doc's mapped
-// fields change. No secret needed (it only writes to the Firestore outbox).
-// `retry: true` is safe: the handler is idempotent (deterministic jobId via
-// set-merge; the mark-pending update writes absolute values) and hash-guarded
-// (shouldEnqueueClientWrite absorbs echoes), so a crash-retry converges.
+// 3) waveUpsertCustomer — enqueues a Wave write-back when a client doc's
+// mapped fields change (no secret needed, it only writes to the Firestore
+// outbox); `retry: true` is safe since the handler is idempotent and
+// hash-guarded, so a crash-retry converges.
 const waveUpsertCustomer = onDocumentWritten(
     {document: "clients/{clientId}", retry: true},
     async (event) => {
@@ -327,7 +326,7 @@ const waveUpsertCustomer = onDocumentWritten(
       const afterSnap = event.data?.after;
       const after = afterSnap?.exists ? afterSnap.data() : null;
 
-      // Delete: the local doc is dropped and Wave is left intact (plan). No
+      // Delete: the local doc is dropped and Wave is left intact (plan) — no
       // enqueue.
       if (!after) return;
 
@@ -359,11 +358,10 @@ const waveUpsertCustomer = onDocumentWritten(
       try {
         await batch.commit();
       } catch (e) {
-        // The batch fails atomically when the doc was deleted between the
-        // trigger firing and the commit (update precondition). Fall back to
-        // enqueue-only: the worker resolves a missing doc as a clean skip,
-        // and nothing is left half-written. Any other failure surfaces the
-        // same way; retry:true re-runs the (idempotent) handler.
+        // The batch fails atomically when the doc was deleted before commit,
+        // so fall back to enqueue-only — the worker resolves a missing doc as
+        // a clean skip, and any other failure retries via retry:true's
+        // idempotent re-run.
         logger.warn("waveUpsertCustomer: batched mark-pending failed; " +
             "enqueueing without it", {clientId, err: e.message});
         await enqueueCustomerUpsert(clientId, {payloadHash: hash});
@@ -372,16 +370,15 @@ const waveUpsertCustomer = onDocumentWritten(
     },
 );
 
-// 4) waveSyncWorker — drains the Wave outbox on a schedule. Single instance so
-// Wave pacing stays simple; the worker's lease reaper + transactional claim
-// handle robustness. 1 run / 5 min × default batchLimit 30 = 6 Wave calls/min
-// (< 60); the 5-min cadence is a cost tradeoff — a customer edit syncs within a
-// few minutes rather than ~1, in exchange for ~5x fewer scheduler invocations.
+// 4) waveSyncWorker — drains the Wave outbox on a schedule, single-instance
+// for simple Wave pacing (the lease reaper + transactional claim handle
+// robustness); the 5-min cadence at batchLimit 30 keeps calls under 60/min, in
+// exchange for syncing within minutes rather than ~1 at ~5x fewer scheduler
+// invocations.
 //
-// timeoutSeconds is raised to 540 because a worst-case drain is minutes long
-// (up to 30 serial jobs, each with client-level Retry-After sleeps of up to
-// 60s × 3 retries); the default 60s timeout would kill the run mid-dispatch.
-// drainQueue additionally gets a wall-clock deadline at ~70% of the timeout
+// timeoutSeconds is raised to 540 since a worst-case drain (up to 30 serial
+// jobs, each with Retry-After sleeps of up to 60s × 3 retries) would exceed
+// the default 60s; drainQueue also gets a ~70%-of-timeout wall-clock deadline
 // so it stops claiming new jobs in time to finish its outcome writes cleanly.
 const WORKER_TIMEOUT_SECONDS = 540;
 const WORKER_DEADLINE_FRACTION = 0.7;
@@ -418,10 +415,10 @@ const waveSyncWorker = onSchedule(
     },
 );
 
-// 5) waveScheduledImport — daily Wave → App auto-import. Runs importCustomers()
-// only when the configured cadence is due (see isImportDue). Server-triggered,
-// so no App Check / rate limit. Idempotent import path; a per-run failure is
-// logged (there is no user to surface it to) and retried on the next day's run.
+// 5) waveScheduledImport — daily Wave → App auto-import, running
+// importCustomers() only when the configured cadence is due (see
+// isImportDue); server-triggered so no App Check/rate limit, and a per-run
+// failure just logs (no user to surface it to) and retries the next day.
 const waveScheduledImport = onSchedule(
     {
       schedule: "every 24 hours",
