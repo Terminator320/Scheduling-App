@@ -8,7 +8,9 @@ final placesRepositoryProvider = Provider<PlacesRepository>(
   (ref) => GooglePlacesRepository(),
 );
 
-/// Family key for [reverseGeocodeProvider]; rounds coordinates to a ~110m cell so nearby GPS fixes share one billable lookup, and carries [locale] so a language switch doesn't serve the other language's cached address.
+/// Family key for [reverseGeocodeProvider]. Rounds coordinates to a ~110m
+/// cell so nearby GPS fixes share one billable lookup, and carries [locale]
+/// so a language switch doesn't serve back a cached address in the wrong language.
 @immutable
 class ReverseGeocodeQuery {
   ReverseGeocodeQuery({
@@ -33,7 +35,10 @@ class ReverseGeocodeQuery {
   int get hashCode => Object.hash(lat, lng, locale);
 }
 
-/// Resolves the display address for a rounded lat/lng cell (see [ReverseGeocodeQuery]); a successful lookup is kept alive for the session while a failure stays autoDispose to retry, and the widget should treat an [AsyncError] as "no address available" rather than a notice.
+/// Resolves the display address for a rounded lat/lng cell (see
+/// [ReverseGeocodeQuery]). A successful lookup is kept alive for the session,
+/// while a failure stays autoDispose so it retries later. The widget should
+/// treat an [AsyncError] here as "no address available" rather than a notice.
 final reverseGeocodeProvider = FutureProvider.autoDispose
     .family<String?, ReverseGeocodeQuery>((ref, key) async {
       final repo = ref.watch(placesRepositoryProvider);

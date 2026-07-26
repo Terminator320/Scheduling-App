@@ -325,12 +325,12 @@ describe("listUpdateTokens", () => {
 });
 
 describe("_query error swallowing (characterization)", () => {
-  // PINNED BEHAVIOUR, NOT AN ASSERTION THAT THIS IS DESIRABLE: `_query`
-  // catches every error and returns []. A missing composite index or a rules /
-  // permission regression therefore looks exactly like "this tech has no
-  // registered device" and the caller silently degrades to the plain leaveNow
-  // push. If that posture ever changes, these two tests must be updated
-  // deliberately rather than the change slipping through unnoticed.
+  // This pins the current behaviour — it's not an endorsement of it. `_query`
+  // swallows every error and returns [], so a missing composite index or a
+  // rules/permission regression looks exactly like "this tech has no
+  // registered device," and the caller quietly falls back to the plain
+  // leaveNow push. If that posture ever changes, these two tests should fail
+  // loudly rather than let the change slip through unnoticed.
   test("a failing pushToStart read resolves [] and only warns", async () => {
     const {db} = fakeDb({groupFails: new Error("FAILED_PRECONDITION: index")});
     const logger = fakeLogger();

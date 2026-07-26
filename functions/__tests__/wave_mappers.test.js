@@ -452,8 +452,8 @@ describe("fromWaveCustomer", () => {
         addressLine2: "Suite 400",
       },
     });
-    // Joining line2 into `address` would truncate it on write-back (the
-    // patch path extracts the street line) — keep it separate instead.
+    // Joining line2 into `address` would truncate it on write-back, since the
+    // patch path only pulls out the street line — so we keep it separate.
     expect(result.address).toBe("3450 Main St");
     expect(result.addressLine2).toBe("Suite 400");
   });
@@ -577,9 +577,9 @@ describe("round-trip identity", () => {
     expect(imported.address).toBe("3450 Main St");
     expect(imported.addressLine2).toBe("Suite 400");
 
-    // …then map the stored doc back to a Wave patch input: BOTH lines must
-    // come back intact (previously line2 was joined into address on import
-    // and truncated away on write-back).
+    // …then map the stored doc back to a Wave patch input. Both lines need
+    // to survive intact — line2 used to get joined into address on import
+    // and then truncated away on write-back.
     const patchInput = toWaveCustomerInput(imported);
     expect(patchInput.address.addressLine1).toBe("3450 Main St");
     expect(patchInput.address.addressLine2).toBe("Suite 400");
@@ -680,7 +680,8 @@ describe("round-trip identity", () => {
         country: {code: "CA", name: "Canada"},
       },
     });
-    // The merged form becomes the new address; apt is blank (Wave has no apt).
+    // The merged form becomes the new address, and apt comes back blank
+    // since Wave has no apt field.
     expect(imported.address).toBe("12-3450 Main St");
     expect(imported.apt).toBe("");
   });

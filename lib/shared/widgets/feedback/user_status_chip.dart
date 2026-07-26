@@ -9,7 +9,8 @@ enum UserStatus {
   invited,
   disabled;
 
-  /// Map stored status; anything not explicit falls through to invited.
+  /// Maps a stored status. Anything not explicitly recognized falls through
+  /// to invited.
   static UserStatus fromRaw(String raw) => switch (raw.toLowerCase()) {
     'active' => active,
     'disabled' => disabled,

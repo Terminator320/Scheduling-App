@@ -15,7 +15,8 @@ import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-/// Toggles between read-only view and editable form; owns delete flow (both modes).
+/// Toggles between the read-only view and the editable form, and owns the delete
+/// flow for both modes.
 class ClientDetailView extends ConsumerStatefulWidget {
   const ClientDetailView({
     required this.client,
@@ -31,9 +32,9 @@ class ClientDetailView extends ConsumerStatefulWidget {
   final bool showHandle;
   final double bottomPadding;
 
-  /// Called after a successful delete so a host that keeps this view mounted
-  /// (the split-layout detail pane) can clear the now-deleted selection; in
-  /// sheet mode the sheet pops itself instead.
+  /// Called after a successful delete, so a host that keeps this view mounted (the
+  /// split-layout detail pane) can clear the now-deleted selection. In sheet mode this
+  /// isn't needed — the sheet just pops itself instead.
   final VoidCallback? onDeleted;
 
   @override
@@ -73,7 +74,8 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
     switch (outcome) {
       case ClientDeleted():
         notices.success(context.l10n.clients_clientDeletedSuccessfully);
-        // scrollController present = bottom sheet (close it); otherwise split-layout (ask host to clear pane).
+        // If scrollController is set, we're in a bottom sheet, so close it. Otherwise
+        // we're in the split layout, so ask the host to clear its pane instead.
 
         if (widget.scrollController != null) {
           Navigator.pop(context);

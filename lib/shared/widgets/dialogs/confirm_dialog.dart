@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Cancel/confirm dialog; Cupertino on iOS / Material on Android.
+/// Cancel/confirm dialog — Cupertino on iOS, Material on Android.
 Future<bool> showConfirmDialog(
   BuildContext context, {
   required String title,
@@ -25,7 +25,8 @@ Future<bool> showConfirmDialog(
         content: content ?? Text(message!),
         actions: [
           CupertinoDialogAction(
-            // iOS convention: destructive defaults to Cancel button.
+            // On iOS, destructive actions default focus to the Cancel
+            // button — that's the platform convention.
             isDefaultAction: destructive,
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(ctx.l10n.common_cancel),

@@ -315,7 +315,8 @@ describe("overduePromptLedgerId / isStaleTokenError", () => {
     expect(isStaleTokenError(
         "messaging/invalid-registration-token")).toBe(true);
     expect(isStaleTokenError("messaging/internal-error")).toBe(false);
-    // Generic — could be a payload problem, not a dead token; not stale.
+    // This code is generic — it could be a payload problem rather than a
+    // dead token, so we don't treat it as stale.
     expect(isStaleTokenError("messaging/invalid-argument")).toBe(false);
   });
 });

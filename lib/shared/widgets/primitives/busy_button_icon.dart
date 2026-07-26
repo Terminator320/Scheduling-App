@@ -16,7 +16,7 @@ class BusyButtonIcon extends StatelessWidget {
   final IconData icon;
   final double iconSize;
 
-  /// Spinner size; defaults to iconSize when null.
+  /// Spinner size. Defaults to iconSize when null.
   final double? spinnerSize;
 
   /// Color for icon and spinner.
