@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// Backfills the usersByUid bridge collection from existing `users` docs.
-// Run once after deploying the syncUsersByUid trigger and before deploying
-// the stub-free rules; idempotent and safe to re-run.
+// Backfills the usersByUid bridge collection from existing `users` docs; idempotent
+// and safe to re-run once after deploying the syncUsersByUid trigger.
 //
 // Usage:
 //   For prod:
@@ -22,10 +21,8 @@ const { getFirestore } = require("firebase-admin/firestore");
 const VALID_ROLES = new Set(["admin", "employee"]);
 const VALID_BRIDGE_STATUS = new Set(["active", "disabled"]);
 
-// NOTE: this is a deliberate standalone copy, NOT the shared helper — the
-// authoritative runtime version is `shouldHaveBridge` in ../bridge.js. This
-// one folds the role check in up front so a one-off backfill skips malformed
-// docs outright instead of writing a bridge entry with a bogus role.
+// NOTE: a deliberate standalone copy, not the shared ../bridge.js helper — this one
+// folds the role check in up front so malformed docs are skipped outright.
 function shouldHaveBridge(data) {
   if (!data) return false;
   if (typeof data.uid !== "string" || data.uid === "") return false;

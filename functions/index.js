@@ -5,12 +5,8 @@ setGlobalOptions({maxInstances: 10});
 
 initializeApp();
 
-// Thin wiring surface — each function group lives in its own module (guards
-// in security.js, usersByUid bridge in bridge.js, Places proxies in
-// places.js, account deletion in account.js, invites in invites.js,
-// maintenance in maintenance.js, Wave orchestration in wave/callables.js) —
-// re-exported here under its original name so the deployed function set
-// stays stable.
+// Thin wiring surface — each function group lives in its own domain module and is
+// re-exported here under its original name so the deployed function set stays stable.
 const bridge = require("./bridge");
 const places = require("./places");
 const account = require("./account");

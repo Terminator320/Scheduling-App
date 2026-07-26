@@ -27,10 +27,8 @@ const http2 = require("node:http2");
 // build (TestFlight / App Store).
 const APNS_HOST = "https://api.push.apple.com";
 
-// Sandbox APNs, tried only as a fallback when production returns
-// `BadDeviceToken` — the signature of a dev-signed build's sandbox token
-// hitting the production host; the retry only fires when production didn't
-// deliver, so a token is never double-sent.
+// Sandbox APNs, tried only as a fallback when production returns `BadDeviceToken`
+// (a dev-signed build's sandbox token hitting the production host).
 const APNS_SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 
 const BUNDLE_ID = "net.vogas.scheduling";

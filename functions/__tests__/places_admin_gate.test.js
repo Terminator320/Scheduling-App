@@ -1,7 +1,5 @@
-// assertAdmin and enforceDurableRateLimit are mocked (need live Firestore);
-// assertPayloadShape/requireString stay real to lock in the actual guard
-// order — auth → assertAdmin → payload validation — for these billable
-// endpoints.
+// assertAdmin and enforceDurableRateLimit are mocked (need live Firestore); the rest
+// stay real to lock in the actual guard order for these billable endpoints.
 jest.mock("../security", () => {
   const actual = jest.requireActual("../security");
   return {

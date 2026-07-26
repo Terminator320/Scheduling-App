@@ -37,12 +37,8 @@ const IN_QUERY_MAX = 30;
 // Safety valve on a single prune pass so one run can't blow the timeout.
 const PRUNE_MAX = 400;
 
-// How long a registered token stays valid without a refresh before it's
-// treated as belonging to an activity the server never ended.
-//
-// NOTE: unused by any write path — the device's own `expiresAt` field (see
-// live_activity_token.dart) is what `_pruneExpired` actually reaps by; wiring
-// this in as-is would cut the push-to-start TTL from 30 d to 3 d.
+// How long a registered token stays valid without a refresh; NOTE unused by any write
+// path — `_pruneExpired` actually reaps by the device's own `expiresAt` field instead.
 const TOKEN_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 
 /**

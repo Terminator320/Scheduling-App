@@ -99,13 +99,9 @@ const notifyAppointmentChanges = onDocumentWritten(
     },
 );
 
-// Travel-aware "time to leave" reminders (was: fixed 30-minute reminders).
-// Runs every 5 minutes using the `(status, startTime)` and `(employeeIds
-// CONTAINS, endTime ASC)` composite indexes. Drive time comes from Routes API
-// computeRoutes (TRAFFIC_AWARE); every failure path degrades to the original
-// fixed 30-min reminder. The per-recipient ledger makes each (occurrence,
-// employee) fire exactly once, and a missed run self-heals without
-// double-sending.
+// Travel-aware "time to leave" reminders, every 5 minutes; drive time comes from
+// Routes API and every failure path degrades to a fixed 30-min reminder, with a
+// per-recipient ledger so each occurrence fires exactly once and a missed run self-heals.
 const sendUpcomingJobReminders = onSchedule(
     {
       schedule: "every 5 minutes",
@@ -157,11 +153,9 @@ const sendDailyJobDigest = onSchedule(
     },
 );
 
-// Overdue "job finished?" prompts every 15 minutes: a job whose endTime
-// passed within the last 24h while still pending/in_progress earns one nudge
-// per occurrence, via an endTime-keyed ledger that re-arms on reschedule.
-// Queries by startTime over the last 48h, so the existing `(status,
-// startTime)` index covers it.
+// Overdue "job finished?" prompts every 15 minutes: a job whose endTime passed within
+// the last 24h while still pending/in_progress earns one nudge, via an endTime-keyed
+// ledger that re-arms on reschedule.
 const sendOverdueJobPrompts = onSchedule(
     {
       schedule: "every 15 minutes",

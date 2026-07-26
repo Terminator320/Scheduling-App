@@ -30,10 +30,9 @@ function isReauthStale(authTime, nowSec, maxAgeSeconds) {
 
 // ----- deleteAccount callable ------------------------------------------------
 //
-// Satisfies the in-app deletion requirement from Apple App Store Guideline
-// 5.1.1(v) and the Google Play Account Deletion policy (plan §C6). The client
-// re-authenticates first; the server also re-checks auth_time against
-// REAUTH_MAX_AGE_SECONDS. App Check + auth are required.
+// Satisfies the in-app deletion requirement from Apple App Store Guideline 5.1.1(v)
+// and the Google Play Account Deletion policy; the client re-authenticates first and
+// the server also re-checks auth_time against REAUTH_MAX_AGE_SECONDS.
 //
 // Scope of deletion (intentionally narrow — see plan §C6):
 //   1. The caller's `users/{docId}` Firestore document (syncUsersByUid then
