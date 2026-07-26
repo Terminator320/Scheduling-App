@@ -24,7 +24,8 @@ class SettingsDrawer extends ConsumerStatefulWidget {
   final String? userName;
   final String? email;
 
-  /// Helper for [Scaffold.endDrawer]: returns null when nav rail is showing, else [SettingsDrawer].
+  /// Helper for [Scaffold.endDrawer] — returns null when the nav rail is
+  /// showing, or a [SettingsDrawer] otherwise.
   static Widget? endDrawerFor(
     BuildContext context, {
     required bool isAdmin,
