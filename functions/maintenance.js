@@ -54,11 +54,9 @@ const validateUploadedImage = onObjectFinalized(async (event) => {
 
 // ----- Scheduled history purge ----------------------------------------------
 //
-// done/cancelled appointments are purged (Firestore doc + Storage images)
-// once HISTORY_RETENTION_YEARS has elapsed since `startTime`; non-terminal
-// appointments are never touched. Image cleanup mirrors the manual delete
-// path in EventDetailsController.deleteAppointment. Admin SDK bypasses
-// security rules; this runs unattended.
+// Purges done/cancelled appointments (Firestore doc + Storage images) once
+// HISTORY_RETENTION_YEARS has elapsed since `startTime`; non-terminal appointments
+// are never touched.
 const HISTORY_RETENTION_YEARS = 2;
 const PURGE_STATUSES = ["done", "cancelled"];
 // Well under Firestore's 500-writes-per-batch ceiling, with headroom.

@@ -27,36 +27,27 @@ const {
 // enum and the wave/connection field); "off" is the default when absent.
 const IMPORT_SCHEDULE_SET = new Set(SCHEDULE_VALUES);
 
-// waveImportCustomers is a heavy one-shot admin op (~650 customers across ~7
-// Wave pages), so a modest cap — 5 imports/hour — keeps a stuck/retried admin
-// from hammering Wave.
+// waveImportCustomers is a heavy one-shot admin op (~650 customers across ~7 Wave
+// pages), so a modest cap keeps a stuck/retried admin from hammering Wave.
 const WAVE_IMPORT_RATE_MAX = 5;
 const WAVE_IMPORT_RATE_WINDOW_MS = 60 * 60 * 1000;
-// waveBootstrap's not-yet-connected path makes live Wave calls (whoami +
-// listBusinesses), capped per-admin so a buggy/looping client can't burn the
-// Wave request budget — the idempotent already-connected short-circuit runs
-// before this and isn't rate-limited.
+// Caps waveBootstrap's live Wave calls (whoami + listBusinesses) per admin; the
+// already-connected short-circuit runs before this and isn't rate-limited.
 const WAVE_BOOTSTRAP_RATE_MAX = 10;
 
-// The Wave business to connect, kept in Secret Manager (set via
-// `firebase functions:secrets:set WAVE_BUSINESS_NAME`) so the name never ships
-// in the app and can change without a release; waveBootstrap uses it as the
-// target whenever the client supplies no businessId/businessName.
+// The Wave business to connect, kept in Secret Manager so the name never ships in the
+// app; waveBootstrap uses it whenever the client supplies no businessId/businessName.
 const WAVE_BUSINESS_NAME = defineSecret("WAVE_BUSINESS_NAME");
 
 // ----- Wave Accounting integration ------------------------------------------
 //
-// These functions wire the app's `clients` collection to Wave Accounting
-// customers (plan Task 5): the single `wave/connection` doc holds the selected
-// business id, `waveSyncQueue` is a durable outbox drained on a schedule, and
-// the heavy lifting lives in the `wave/*` modules — these functions are thin
-// orchestrators adding auth/admin/rate-limit guards and translating Wave
-// errors into HttpsErrors.
+// Wires the app's `clients` collection to Wave Accounting customers: the single
+// `wave/connection` doc holds the selected business id, `waveSyncQueue` is a durable
+// outbox drained on a schedule, and these functions are thin orchestrators adding
+// auth/admin/rate-limit guards around the `wave/*` modules.
 
 /**
- * Reads the connected Wave `businessId` from the `wave/connection` doc (or ""
- * when absent), used by the callables/scheduler to gate on "bootstrapped
- * yet?".
+ * Reads the connected Wave `businessId` from the `wave/connection` doc.
  * @return {!Promise<string>} The business id, or "" if not connected.
  */
 async function readWaveBusinessId() {
@@ -65,11 +56,9 @@ async function readWaveBusinessId() {
   return data && typeof data.businessId === "string" ? data.businessId : "";
 }
 
-// Per-instance cache for the scheduled worker's connection gate, so an
-// installation that never connects Wave doesn't pay a Firestore read every
-// 5-minute run — a found businessId caches for the instance's lifetime, a
-// not-connected result for a short TTL so a fresh bootstrap is still picked up
-// within a few minutes.
+// Per-instance cache for the scheduled worker's connection gate: a found businessId
+// caches for the instance's lifetime, a not-connected result for a short TTL so a
+// fresh bootstrap is still picked up within a few minutes.
 const NOT_CONNECTED_CACHE_MS = 5 * 60 * 1000;
 let cachedBusinessId = "";
 let notConnectedUntilMs = 0;
@@ -230,10 +219,8 @@ const waveGetConnection = onCall(
     },
 );
 
-// 2b) waveSetImportSchedule — admin-only setter for the automatic-import
-// cadence, writing `importSchedule` on the single wave/connection doc; no
-// secret or rate limit needed (a cheap Firestore write), just App Check +
-// admin.
+// 2b) waveSetImportSchedule — admin-only setter for the auto-import cadence on the
+// wave/connection doc; just App Check + admin, no secret or rate limit needed.
 const waveSetImportSchedule = onCall(
     {enforceAppCheck: true},
     async (req) => {
@@ -315,10 +302,8 @@ const waveImportCustomers = onCall(
     },
 );
 
-// 3) waveUpsertCustomer — enqueues a Wave write-back when a client doc's
-// mapped fields change (no secret needed, it only writes to the Firestore
-// outbox); `retry: true` is safe since the handler is idempotent and
-// hash-guarded, so a crash-retry converges.
+// 3) waveUpsertCustomer — enqueues a Wave write-back when a client doc's mapped
+// fields change; `retry: true` is safe since the handler is idempotent and hash-guarded.
 const waveUpsertCustomer = onDocumentWritten(
     {document: "clients/{clientId}", retry: true},
     async (event) => {
@@ -370,16 +355,11 @@ const waveUpsertCustomer = onDocumentWritten(
     },
 );
 
-// 4) waveSyncWorker — drains the Wave outbox on a schedule, single-instance
-// for simple Wave pacing (the lease reaper + transactional claim handle
-// robustness); the 5-min cadence at batchLimit 30 keeps calls under 60/min, in
-// exchange for syncing within minutes rather than ~1 at ~5x fewer scheduler
-// invocations.
-//
-// timeoutSeconds is raised to 540 since a worst-case drain (up to 30 serial
-// jobs, each with Retry-After sleeps of up to 60s × 3 retries) would exceed
-// the default 60s; drainQueue also gets a ~70%-of-timeout wall-clock deadline
-// so it stops claiming new jobs in time to finish its outcome writes cleanly.
+// 4) waveSyncWorker — drains the Wave outbox on a schedule, single-instance for
+// simple pacing (the lease reaper + transactional claim handle robustness).
+// timeoutSeconds is raised to 540 since a worst-case 30-job drain (with Retry-After
+// sleeps) would exceed the default 60s; drainQueue gets a ~70%-of-timeout deadline so
+// it stops claiming new jobs in time to finish its outcome writes cleanly.
 const WORKER_TIMEOUT_SECONDS = 540;
 const WORKER_DEADLINE_FRACTION = 0.7;
 
@@ -415,10 +395,9 @@ const waveSyncWorker = onSchedule(
     },
 );
 
-// 5) waveScheduledImport — daily Wave → App auto-import, running
-// importCustomers() only when the configured cadence is due (see
-// isImportDue); server-triggered so no App Check/rate limit, and a per-run
-// failure just logs (no user to surface it to) and retries the next day.
+// 5) waveScheduledImport — daily Wave → App auto-import, running importCustomers()
+// only when the configured cadence is due; a per-run failure just logs and retries
+// the next day.
 const waveScheduledImport = onSchedule(
     {
       schedule: "every 24 hours",

@@ -18,10 +18,9 @@ const {GOOGLE_MAP_API_KEY} = require("./params");
 const PLACE_ID_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const INPUT_MAX_LEN = 200;
 
-// Per-uid sliding-window rate limit, in-memory per function instance — not a
-// hard billing cap (set a GCP billing alert on the Maps Platform API too).
-// A cheap, latency-free guard for the high-volume autocomplete path; other
-// routes use the durable Firestore limiter instead (enforceDurableRateLimit).
+// Per-uid sliding-window rate limit, in-memory per function instance — a cheap,
+// latency-free guard for the high-volume autocomplete path (set a GCP billing alert
+// too; other routes use the durable Firestore limiter instead).
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const rateBuckets = new Map();

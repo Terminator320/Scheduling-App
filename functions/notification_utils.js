@@ -72,10 +72,8 @@ function ledgerBody(nowDate) {
 // `completed`) stay excluded.
 const OPEN_LIKE = new Set(["pending", "in_progress", "confirmed"]);
 
-// The same allowlist as an array for `where("status", "in", ...)` queries,
-// single-sourced so it can't drift from the filter it feeds; the travel
-// sweep's PENDING_LIKE (travel_utils.js) is the one exception, excluding
-// `in_progress` since the visit has already started.
+// Same allowlist as an array for `where("status", "in", ...)` queries, single-sourced
+// so it can't drift from OPEN_LIKE.
 const OPEN_STATUSES = [...OPEN_LIKE];
 
 // Dedupe priority when one employee accrues multiple events for one write.
@@ -86,10 +84,8 @@ const KIND_PRIORITY = {
   assigned: 1,
 };
 
-// Recipient roles per category (status:'active' only): change-driven pushes
-// (assigned/rescheduled/cancelled/removed) go to employees only since an
-// admin usually makes those edits themselves, while time-based pushes
-// (reminder/overdue/digest) also reach an assigned admin.
+// Change-driven pushes go to employees only (an admin usually makes those edits
+// themselves); time-based pushes also reach an assigned admin.
 const CHANGE_RECIPIENT_ROLES = new Set(["employee"]);
 const TIMED_RECIPIENT_ROLES = new Set(["employee", "admin"]);
 
