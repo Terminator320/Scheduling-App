@@ -56,14 +56,14 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
   late final PageController _pageController;
   late int _currentIndex;
 
-  /// Shared by every page's [InteractiveViewer]; drives [_zoomed] to route drags to zoom or dismiss.
+  /// Shared by every page's [InteractiveViewer]. Its transform drives [_zoomed], which decides whether a drag zooms the image or dismisses the viewer.
   final _transformController = TransformationController();
   bool _zoomed = false;
 
   /// Current vertical drag displacement of the image, in logical pixels.
   double _dragOffset = 0;
 
-  /// True while save/share is resolving; disables actions to prevent double-launch.
+  /// True while a save or share is in flight — disables the action buttons so we can't double-launch either one.
   bool _busy = false;
 
   /// Anchors the iPad share-sheet popover to the share button's frame.
@@ -112,9 +112,9 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     setState(() => _dragOffset = 0);
   }
 
-  /// Resolves the on-screen image to an on-disk file that share/save need:
-  /// local picks already are files; network images resolve to their cached
-  /// copy, downloading once if evicted.
+  /// Resolves the on-screen image to an on-disk file for share/save to use.
+  /// Local picks are already files; network images resolve to their cached
+  /// copy, downloading it again if it's been evicted.
   Future<File?> _currentImageFile() async {
     final provider = widget.images[_currentIndex];
     if (provider is FileImage) return provider.file;
@@ -124,9 +124,9 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     return null;
   }
 
-  /// Runs [body] under the shared `_busy` guard (so a double-tap can't launch
-  /// two saves/shares), logging under [logTag] and showing [errorMessage] on
-  /// throw.
+  /// Runs [body] under the shared `_busy` guard, so a double-tap can't launch
+  /// two saves or shares at once. Logs under [logTag] and shows [errorMessage]
+  /// if it throws.
   Future<void> _runExclusive(
     String logTag,
     String errorMessage,
@@ -149,8 +149,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     'IMG-SAVE',
     context.l10n.calendar_couldNotSavePhoto,
     () async {
-      // iOS gates on add-only Photos access; saver_gallery would fail silently
-      // without it. Android (dev-only) handles its own permission natively.
+      // iOS needs add-only Photos access first — saver_gallery fails silently without it. Android (dev-only here) handles its own permission natively.
       if (Platform.isIOS) {
         final perm = await ref
             .read(mediaPermissionServiceProvider)
@@ -192,7 +191,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     () async {
       final file = await _currentImageFile();
       if (file == null) throw StateError('image source not resolvable');
-      // iPad anchors the share popover to the button's frame, else it throws.
+      // On iPad the share popover needs to be anchored to the button's frame, or it throws.
       final box =
           _shareButtonKey.currentContext?.findRenderObject() as RenderBox?;
       final origin = box != null && box.hasSize
@@ -244,8 +243,9 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
       },
     );
 
-    // Drag-follow translate + fade; with reduce-motion on, the image stays
-    // put and the gesture only pops past the threshold.
+    // Translate and fade the image as it follows the drag. With reduce-motion
+    // on, the image just stays put and only pops away once the gesture
+    // crosses the threshold.
     if (!reduceMotion && _dragOffset != 0) {
       pager = Transform.translate(
         offset: Offset(0, _dragOffset),
@@ -280,8 +280,9 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
   }
 }
 
-/// The three fixed overlays drawn above the pager: save/share (top-left),
-/// close (top-right), and the page counter (top-center, multi-image only).
+/// The three fixed overlays drawn above the pager — save/share in the
+/// top-left, close in the top-right, and the page counter top-center
+/// (only shown when there's more than one image).
 class _ViewerOverlay extends StatelessWidget {
   const _ViewerOverlay({
     required this.busy,

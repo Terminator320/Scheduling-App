@@ -3,7 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/live_activity/domain/live_activity_token.dart';
 
-/// Reads/writes `users/{docId}/liveActivityTokens/{id}` APNs token docs for starting, updating, and ending cards; logs and swallows failures.
+/// Reads and writes `users/{docId}/liveActivityTokens/{id}` APNs token docs
+/// for starting, updating, and ending cards. Logs and swallows failures.
 class LiveActivityTokenRepository {
   LiveActivityTokenRepository({
     required FirebaseFirestore firestore,
@@ -23,8 +24,9 @@ class LiveActivityTokenRepository {
       .collection('liveActivityTokens')
       .doc(docId);
 
-  /// Upserts a Live Activity token with createdAt only on first write (iOS token rotation preserves original time).
-  /// Plain get-then-set, NOT a transaction: concurrent transactions crash in cloud_firestore iOS plugin; cosmetic re-stamp of createdAt is acceptable.
+  /// Upserts a Live Activity token, setting `createdAt` only on the first
+  /// write. This is a plain get-then-set rather than a transaction, because
+  /// concurrent transactions crash the cloud_firestore iOS plugin.
   Future<void> upsertToken({
     required String userDocId,
     required String docId,
@@ -54,7 +56,9 @@ class LiveActivityTokenRepository {
     }
   }
 
-  /// Deletes every row of [kind] without needing the token value (push-to-start doc id IS the token, which opt-out may never have seen).
+  /// Deletes every row of [kind] without needing the token value — the
+  /// push-to-start doc id IS the token, and a device that opted out may
+  /// never have had one to look up.
   Future<void> deleteTokensOfKind({
     required String userDocId,
     required LiveActivityTokenKind kind,

@@ -9,8 +9,7 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    // Reads the bridge doc maintained by the syncUsersByUid Cloud Function
-    // (see functions/index.js). Returns true when the caller is an active admin.
+    // True when the caller is an active admin, via the syncUsersByUid bridge doc.
     function isAdmin() {
       let bridge = firestore.get(
         /databases/(default)/documents/usersByUid/$(request.auth.uid)
@@ -21,8 +20,8 @@ service firebase.storage {
         && bridge.data.status == 'active';
     }
 
-    // Returns true when the current user's Firestore doc ID appears in the
-    // appointment's employeeIds array.
+    // True when the current user's Firestore doc ID shows up in this appointment's
+    // employeeIds array.
     function isAssignedToAppointment(appointmentId) {
       let bridge = firestore.get(
         /databases/(default)/documents/usersByUid/$(request.auth.uid)
@@ -30,9 +29,8 @@ service firebase.storage {
       let appt = firestore.get(
         /databases/(default)/documents/appointments/$(appointmentId)
       );
-      // `status == 'active'` mirrors isAdmin() above and is load-bearing: the
-      // bridge doc survives deactivation, so without it a disabled employee
-      // keeps reading job photos for every appointment they were assigned.
+      // `status == 'active'` is load-bearing — the bridge doc survives deactivation,
+      // so without it a disabled employee keeps reading job photos.
       return isSignedIn()
         && bridge != null
         && appt != null
@@ -46,20 +44,16 @@ service firebase.storage {
       // Read: admin sees all; assigned employees see their appointments' images.
       allow read: if isAdmin() || isAssignedToAppointment(appointmentId);
 
-      // Write: admin only. Employees are view-only on appointments — the
-      // firestore.rules employee-update path is capped to ['status',
-      // 'updatedAt'] with status=='done' — and the upload flow runs only in
-      // admin sessions (AppointmentImageUploadService -> updateAppointmentPictures).
-      // Content-type is set by the client and forgeable — the real defense is
-      // the magic-byte trigger in functions/index.js (validateUploadedImage);
-      // contentType + size checks here are defense in depth.
+      // Admin only — employees are view-only on appointments, and the upload flow only
+      // runs in admin sessions anyway. contentType is client-set and easy to fake, so
+      // these checks are just defense in depth; the real defense is the magic-byte
+      // trigger in functions/index.js.
       allow write: if isAdmin()
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/(jpeg|png)');
 
-      // Delete: admin only. Employees cannot modify the Firestore `pictures`
-      // array, so allowing them to delete the underlying blob would strand
-      // the appointment doc with broken imageUrls.
+      // Admin only — employees can't modify the pictures array, so if we let them
+      // delete the blob directly, the doc would end up with broken imageUrls.
       allow delete: if isAdmin();
     }
 

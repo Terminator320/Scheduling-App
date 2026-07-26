@@ -1,23 +1,11 @@
 "use strict";
 
 /**
- * Guard-ORDER tests for the Wave admin callables.
- *
- * The project invariant (.claude/rules/security.md) is:
- *   auth -> assertAdmin -> assertPayloadShape/requireString
- *        -> enforceDurableRateLimit -> work
- *
- * Order is the thing under test, not the guards themselves (those are covered
- * by security.test.js). Two properties matter and are asserted for every
- * callable:
- *  - an unauthenticated caller is rejected before ANY other guard runs, so an
- *    anonymous caller can never reach a Firestore read or burn a limiter slot;
- *  - a NON-ADMIN caller sending a malformed payload gets `wave/not-admin`,
- *    never `unexpected-field` — i.e. the identity guard sits above payload
- *    validation, so payload shape is not an oracle for unprivileged callers.
- *
- * The security module is mocked so the real guards' Firestore dependencies stay
- * out of the picture and `mock.invocationCallOrder` can pin the sequence.
+ * Tests that every Wave admin callable checks its guards in the right
+ * order: auth, then assertAdmin, then assertPayloadShape/requireString,
+ * then enforceDurableRateLimit, and only then the real work (the invariant
+ * documented in .claude/rules/security.md). We mock the security module so
+ * `mock.invocationCallOrder` can confirm that sequence.
  */
 
 jest.mock("../security");
@@ -119,7 +107,8 @@ function expectCalledBefore(first, second) {
 beforeEach(() => {
   jest.clearAllMocks();
 
-  // Real guard semantics, minus their Firestore dependencies.
+  // These mocks behave like the real guards, just without touching
+  // Firestore.
   security.assertAdmin.mockImplementation(async (uid) => {
     if (uid !== ADMIN_UID) {
       throw new HttpsError("permission-denied", "wave/not-admin");
@@ -144,8 +133,8 @@ beforeEach(() => {
   getFirestore.mockReturnValue(fakeFirestore(null).db);
 });
 
-// Table of the four admin callables plus whether they consume a rate-limit
-// slot on the happy path.
+// This table lists the four admin callables and whether each one consumes
+// a rate-limit slot on the happy path.
 const CALLABLES = [
   {name: "waveBootstrap", fn: () => waveBootstrap, rateLimited: true},
   {name: "waveGetConnection", fn: () => waveGetConnection, rateLimited: false},
@@ -186,8 +175,9 @@ describe.each(CALLABLES)("$name guard order", ({fn, rateLimited}) => {
 
     expect(err.code).toBe("permission-denied");
     expect(err.message).toBe("wave/not-admin");
-    // The whole point: payload validation never ran for an unprivileged
-    // caller, so payload shape leaks nothing about the endpoint.
+    // That's the point here: payload validation never runs for an
+    // unprivileged caller, so the payload shape can't leak anything about
+    // the endpoint.
     expect(security.assertPayloadShape).not.toHaveBeenCalled();
     expect(security.enforceDurableRateLimit).not.toHaveBeenCalled();
   });
@@ -198,8 +188,8 @@ describe.each(CALLABLES)("$name guard order", ({fn, rateLimited}) => {
   });
 
   test("assertAdmin runs before assertPayloadShape for an admin", async () => {
-    // Ignore the outcome — some of these fail later on business state; only
-    // the guard sequence is under test.
+    // We ignore the outcome here — some of these calls fail later on
+    // business state. Only the guard sequence matters for this test.
     await fn().run(req(ADMIN_UID, {})).catch(() => {});
 
     expectCalledBefore(security.assertAdmin, security.assertPayloadShape);

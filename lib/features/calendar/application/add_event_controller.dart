@@ -153,7 +153,7 @@ class AddEventController extends Notifier<AddEventState>
     required String materialsNeeded,
     bool forceBusy = false,
   }) async {
-    // Reentrancy guard: block double-tap during conflict check and submit.
+    // Guard against reentrancy: this blocks a double-tap during the conflict check and submit.
     if (state.isSubmitting) return const AddEventInvalid();
     final errors = AppointmentFormValidator.validate(
       AppointmentFormInput(
@@ -168,7 +168,7 @@ class AddEventController extends Notifier<AddEventState>
     state = state.copyWith(errors: errors);
     if (errors.isNotEmpty) return const AddEventInvalid();
 
-    // Fail fast offline before setting flag, else Save spins waiting for server ack.
+    // Bail out early if we're offline — otherwise Save just spins waiting for a server ack that never comes.
     if (ref.read(isOfflineProvider)) {
       return const AddEventFailed(SocketException('offline'));
     }
@@ -184,20 +184,20 @@ class AddEventController extends Notifier<AddEventState>
     );
 
     final repo = ref.read(appointmentsRepositoryProvider);
-    // Resolve before awaits so a disposed notifier doesn't crash (Riverpod 3).
+    // Resolve these before any awaits, so we don't crash if the notifier gets disposed mid-await (Riverpod 3).
     final logger = ref.read(loggerProvider);
     final uploader = ref.read(appointmentImageUploadProvider);
-    // Snapshot state before awaits to survive sheet dismissal mid-submit.
+    // Snapshot the state before the awaits, so it survives if the sheet gets dismissed mid-submit.
     final images = state.selectedImages;
     final client = state.selectedClient!;
     final selectedEmployees = state.selectedEmployees;
     final repeat = state.repeat;
 
-    // Set flag before conflict check so Save button disables immediately.
+    // Set the flag before the conflict check, so the Save button disables right away.
     state = state.copyWith(isSubmitting: true);
 
     try {
-      // Conflict check inside try so errors reset the in-flight flag.
+      // Keep the conflict check inside the try block, so an error there still resets the in-flight flag.
       if (!forceBusy) {
         final busy = await repo.findBusyEmployees(
           candidates: selectedEmployees,
@@ -205,7 +205,7 @@ class AddEventController extends Notifier<AddEventState>
           end: end,
         );
         if (busy.isNotEmpty) {
-          // Not an error; let user decide whether to force through conflicts.
+          // This isn't an error — let the user decide whether to force through the conflicts.
           if (ref.mounted) state = state.copyWith(isSubmitting: false);
           return AddEventBusyEmployees(
             busyEmployees: busy,
@@ -233,7 +233,7 @@ class AddEventController extends Notifier<AddEventState>
         seriesId: repeat == RepeatInterval.none ? '' : docId,
       );
 
-      // Conflict check covers only first occurrence; photos stay on first visit.
+      // The conflict check only covers the first occurrence, and photos stay attached to that first visit.
       final copies = [
         for (final copyStart in repeat.occurrenceStartsAfter(start))
           appointment.copyWith(

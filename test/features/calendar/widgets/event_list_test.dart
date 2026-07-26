@@ -1,5 +1,5 @@
-// The empty state must not tell employees to "Tap +" — only admins have the
-// add FAB. Admins keep the actionable copy; employees get a neutral message.
+// The empty state must not tell employees to "Tap +" (only admins have the
+// add FAB) — admins keep the actionable copy, employees get a neutral message.
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';

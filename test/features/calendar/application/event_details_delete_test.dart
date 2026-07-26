@@ -75,7 +75,7 @@ void main() {
         endTime: DateTime(2026, 6, 6, 10),
       );
       final provider = eventDetailsControllerProvider(EventDetailsKey(appointment));
-      // AutoDispose family: keep state alive across reads (testing.md).
+      // Keep the autoDispose family's state alive across reads (see testing.md).
       final sub = container.listen(provider, (_, _) {});
       addTearDown(sub.close);
 

@@ -90,8 +90,8 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
   Future<void> _save() async {
     if (!_validate()) return;
 
-    // Fail fast offline: the invite callable / employee write would otherwise
-    // hang until reconnect, leaving the Save spinner stuck.
+    // Bail out early if we're offline, or the Save spinner just hangs until
+    // we reconnect.
     if (ref.read(isOfflineProvider)) {
       ref
           .read(noticeServiceProvider)

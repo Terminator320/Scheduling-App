@@ -4,7 +4,8 @@ import 'package:permission_handler/permission_handler.dart';
 /// Outcome of a media-permission request.
 enum MediaPermissionResult { granted, denied, permanentlyDenied }
 
-/// Wraps runtime permission checks for media capture; only camera is gated (gallery uses OS picker).
+/// Wraps runtime permission checks for media capture. Only the camera is
+/// gated — the gallery goes through the OS picker instead.
 class MediaPermissionService {
   MediaPermissionService();
 

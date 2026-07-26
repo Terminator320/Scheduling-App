@@ -8,7 +8,8 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
-/// Trends card: done/cancelled chart, new-clients sparkline, busiest-weekday row.
+/// Trends card with a done/cancelled chart, a new-clients sparkline, and a
+/// busiest-weekday row.
 class BusinessTrendsSection extends StatelessWidget {
   const BusinessTrendsSection({
     required this.buckets,

@@ -15,7 +15,8 @@ import 'package:scheduling/shared/widgets/cards/info_card.dart';
 import 'package:scheduling/shared/widgets/primitives/quick_action_button.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
-/// Read-only display of ClientRecord with quick-action row, contact-info card, and additional-contacts section.
+/// Read-only display of a ClientRecord — a quick-action row, a contact-info card, and
+/// an additional-contacts section.
 class ClientDetailViewBody extends ConsumerWidget {
   const ClientDetailViewBody({required this.client, super.key});
 
@@ -27,7 +28,8 @@ class ClientDetailViewBody extends ConsumerWidget {
     final hasMobile = client.mobile.isNotEmpty;
     final hasEmail = client.email.isNotEmpty;
     final hasAddress = client.address.isNotEmpty;
-    // Person name shown once in header; deliberately not repeated as contact row here.
+    // The person's name is already shown once in the header, so it's deliberately not
+    // repeated as a contact row here.
     final hasContactInfo = hasPhone || hasMobile || hasEmail || hasAddress;
 
     // Handlers built here (where `ref` lives) so widgets stay presentational.
@@ -50,10 +52,11 @@ class ClientDetailViewBody extends ConsumerWidget {
             address: client.address,
           )
         : null;
-    // Always offered, even name-only clients are worth saving to the phone.
+    // Always offered — even a name-only client is worth saving to the phone.
     void onSaveToContacts() => saveClientToPhoneContacts(context, ref, client);
 
-    // `contacts` holds only extra contacts; customer details live in header and contact-info card.
+    // `contacts` holds only the extra contacts — the customer's own details already
+    // live in the header and the contact-info card.
     final extraContacts = client.contacts;
 
     final hasSyncBadge = client.waveSyncState.isNotEmpty;

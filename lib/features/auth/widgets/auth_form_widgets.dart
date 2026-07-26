@@ -20,7 +20,8 @@ class AuthScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    // Fade + rise entrance for the whole form; collapses to instant under reduce-motion.
+    // Fades and slides the whole form in on entrance. Under reduce-motion it
+    // skips straight to the end state instead of animating.
     Widget content = AutofillGroup(child: child);
     if (!MediaQuery.disableAnimationsOf(context)) {
       content = content
@@ -45,7 +46,8 @@ class AuthScaffold extends StatelessWidget {
               horizontal: AppSpacing.sp24,
               vertical: AppSpacing.sp32,
             ),
-            // Cap width for tablets/landscape; no-op on phones narrower than 440.
+            // Caps the width for tablets and landscape — this is a no-op on
+            // phones narrower than 440.
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 440),

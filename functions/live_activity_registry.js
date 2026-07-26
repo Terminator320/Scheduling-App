@@ -2,27 +2,19 @@
 
 /**
  * @fileoverview Reads and prunes the Live Activity token registry at
- * `users/{docId}/liveActivityTokens/{activityId}` — the doc id IS the
- * ActivityKit activity id. Fields: `{token, kind: 'pushToStart'|'update',
- * appointmentId, employeeDocId, locale, uid, platform, createdAt, updatedAt,
- * expiresAt}`. Written self-only by the client; read here across employees
- * with the Admin SDK via `collectionGroup`, the same shape as the admin
- * presence read.
+ * `users/{docId}/liveActivityTokens/{activityId}` (doc id = ActivityKit
+ * activity id). The client writes its own rows only; we read across
+ * employees here via `collectionGroup`.
  *
- * Deps are injected (`{db, now, logger}`) so jest drives this without
- * firebase-admin. Best-effort by contract, matching the design doc's failure
- * posture: a read that throws returns `[]` and the caller degrades to the
- * plain `leaveNow` push.
+ * Deps are injected (`{db, now, logger}`) so jest can drive this without
+ * firebase-admin. Every export here is also best-effort — a failed read just
+ * returns `[]` and the caller degrades to the plain `leaveNow` push.
  *
- * Also owns the **card marker** at `liveActivityCards/{employeeDocId}` — the
- * server's record of which appointment that tech's live card is showing. The
- * marker exists because a PUSH-STARTED activity's id is minted by ActivityKit
- * and the `live_activities` plugin exposes no way to read a started activity's
- * attributes back, so the device physically cannot stamp `appointmentId` onto
- * its own update-token row. Without the marker, cancelling a job next week
- * would end the card for the job the tech is currently driving to. One doc per
- * actively-traveling tech (at most one card per tech by design), Admin-SDK-only
- * — clients cannot read or write it.
+ * This module also owns the card marker at
+ * `liveActivityCards/{employeeDocId}`, the Admin-SDK-only record of which
+ * appointment a tech's live card is showing. We need that marker because a
+ * push-started activity's id is minted by ActivityKit, and the device has no
+ * way to stamp `appointmentId` back onto its own token row.
  *
  * @module live_activity_registry
  */
@@ -35,7 +27,7 @@ const KIND_UPDATE = "update";
 
 const CARDS_COLLECTION = "liveActivityCards";
 
-// A card outlives its job by at most a few hours; this is the marker's own
+// A card outlives its job by at most a few hours. This is the marker's own
 // TTL backstop for the case where no end push ever lands.
 const CARD_TTL_MS = 12 * 60 * 60 * 1000;
 
@@ -46,16 +38,9 @@ const IN_QUERY_MAX = 30;
 // Safety valve on a single prune pass so one run can't blow the timeout.
 const PRUNE_MAX = 400;
 
-// How long a registered token stays valid without a refresh. The client
-// re-upserts on every account-doc emission, so a row older than this belongs
-// to an activity the server never got to end (design doc, "Still open").
-//
-// NOTE: this is NOT the expiry that ships. The device stamps `expiresAt`
-// itself (liveActivityTokenExpiry in live_activity_token.dart: 30 d for
-// pushToStart, 1 d for update) and _pruneExpired reaps by that stored field —
-// so this constant, and activityTokenExpiry below, are currently unused by any
-// write path. Wiring activityTokenExpiry in as-is would silently cut the
-// push-to-start TTL from 30 d to 3 d; reconcile the two sides first.
+// How long a registered token stays valid without a refresh. No write path
+// actually uses this — `_pruneExpired` reaps by the device's own
+// `expiresAt` field instead.
 const TOKEN_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 
 /**
@@ -73,8 +58,8 @@ function _chunk(list, size) {
 }
 
 /**
- * Flattens one query snapshot into registry rows. `activityId` is the doc id;
- * `ref` is kept so the caller can prune a dead row without re-deriving a path.
+ * Flattens one query snapshot into registry rows, keeping `ref` so the caller
+ * can prune a dead row without re-deriving a path.
  * @param {*} snap
  * @return {!Array<!Object>}
  */
@@ -114,8 +99,8 @@ async function _query(deps, build, label) {
 }
 
 /**
- * The push-to-start tokens for the given employees — one per device, used to
- * start a card on a closed, locked phone. Chunked to the Firestore `in` cap.
+ * The push-to-start tokens for the given employees (one per device, used to
+ * start a card on a closed, locked phone), chunked to the Firestore `in` cap.
  * @param {!Object} deps `{db, logger}`.
  * @param {{employeeDocIds: !Array<string>}} args
  * @return {!Promise<!Array<!Object>>}
@@ -136,12 +121,9 @@ async function listPushToStartTokens(deps, {employeeDocIds}) {
 }
 
 /**
- * The per-activity update tokens one employee's device(s) registered. Keyed by
- * employee, NOT by appointment: the device can't know which appointment a
- * push-started card belongs to (see the card-marker note in the file header),
- * so the caller pairs this with [readCardMarker] to confirm the live card is
- * the one it means to update or end. A tech signed in on two phones yields two
- * rows.
+ * The per-activity update tokens an employee's device(s) registered, keyed by
+ * employee (not appointment). Pair this with [readCardMarker] to confirm
+ * which appointment the live card is actually showing.
  * @param {!Object} deps `{db, logger}`.
  * @param {{employeeDocId: string}} args
  * @return {!Promise<!Array<!Object>>}
@@ -158,8 +140,8 @@ async function listUpdateTokens(deps, {employeeDocId}) {
 }
 
 /**
- * Records that this employee's live card now shows `appointmentId`. Absolute
- * write (no merge) — a new card fully replaces the previous one.
+ * Records that this employee's live card now shows `appointmentId`, as an
+ * absolute write that fully replaces any previous marker.
  * @param {!Object} deps `{db, now, logger}`.
  * @param {{employeeDocId: string, appointmentId: string, startTime: *,
  *   phase: string}} args
@@ -206,13 +188,11 @@ async function readCardMarker(deps, {employeeDocId}) {
 }
 
 /**
- * Refreshes the marker's `startTime` (and phase) after a reschedule. The
- * on-site backstop selects candidates with `.where("startTime", "<=", now)`, so
- * a marker whose `startTime` isn't updated on reschedule flips at the OLD start
- * — a job moved earlier stays "On the way" past the tech's real arrival, and a
- * job moved later re-pushes a travel update every sweep until the old time.
- * Merge (not the absolute `writeCardMarker`) so `appointmentId`/`startedAt`/
- * `expiresAt` are preserved. Never throws.
+ * Refreshes the marker's `startTime`/phase after a reschedule. This merges
+ * rather than overwriting like `writeCardMarker` does, so `appointmentId`/
+ * `startedAt`/`expiresAt` are preserved. Without this, the on-site backstop —
+ * which keys its flip off this field — would fire at the old start time.
+ * Never throws.
  * @param {!Object} deps `{db, logger}`.
  * @param {{employeeDocId: string, startTime: *, phase: string}} args
  * @return {!Promise<boolean>}
@@ -249,11 +229,8 @@ async function clearCardMarker(deps, {employeeDocId}) {
 }
 
 /**
- * Card markers still in the `travel` phase whose `startTime` has passed — the
- * candidate set for the on-site flip backstop. No `phase` filter in the query
- * (that would need a composite index for a collection holding one doc per
- * actively-traveling tech); the phase is filtered in code, the same trade the
- * client job-history query documents. Never throws.
+ * Card markers still in the `travel` phase whose `startTime` has passed —
+ * the on-site flip backstop's candidate set. Never throws.
  * @param {!Object} deps `{db, now, logger}`.
  * @param {{limit: (number|undefined)}=} args
  * @return {!Promise<!Array<!Object>>}
@@ -262,10 +239,8 @@ async function listCardsDueForOnSite(deps, args) {
   const {db, now, logger} = deps;
   const nowDate = now || new Date();
   try {
-    // `phase` is filtered in the QUERY, not after: markers are Admin-SDK-only
-    // and always carry one of the two phases, so this is exact — and filtering
-    // post-limit let a batch of already-flipped cards consume the whole cap
-    // and starve the cards actually due for a flip.
+    // Filtered in the query, not post-limit, so a batch of already-flipped
+    // cards can't consume the whole cap and starve the ones actually due.
     const snap = await db
         .collection(CARDS_COLLECTION)
         .where("phase", "==", PHASE_TRAVEL)
@@ -280,8 +255,8 @@ async function listCardsDueForOnSite(deps, args) {
 }
 
 /**
- * Deletes one registry row. Called when APNs reports the activity is gone
- * (410 / BadDeviceToken) and after the server ends a card. Never throws.
+ * Deletes one registry row when APNs reports the activity gone (410 /
+ * BadDeviceToken) or after the server ends a card. Never throws.
  * @param {!Object} deps `{logger}`.
  * @param {{ref: !Object}} args The `ref` from a listed row.
  * @return {!Promise<boolean>} True when the row is gone.
@@ -300,8 +275,8 @@ async function deleteActivityToken(deps, {ref}) {
 }
 
 /**
- * Deletes rows of `query` whose `expiresAt` has passed. Bounded by `cap` — a
- * hit cap just defers the remainder to the next run. Never throws.
+ * Deletes rows of `query` whose `expiresAt` has passed, bounded by `cap` —
+ * hitting the cap just defers the remainder to the next run. Never throws.
  * @param {!Object} deps `{now, logger}`.
  * @param {!Object} collection A collection or collection-group ref.
  * @param {number} cap
@@ -323,8 +298,8 @@ async function _pruneExpired(deps, collection, cap, label) {
   }
   let pruned = 0;
   for (const row of rows) {
-    // Serial deletes: the expired set is tiny and a failure on one row must
-    // not abort the rest.
+    // Delete these serially — the expired set is tiny, and a failure on one
+    // row must not abort the rest.
     if (await deleteActivityToken(deps, row)) pruned += 1;
   }
   if (rows.length === cap && logger) {
@@ -334,9 +309,8 @@ async function _pruneExpired(deps, collection, cap, label) {
 }
 
 /**
- * Deletes token rows whose `expiresAt` has passed. A card the server never got
- * to end would otherwise leak its token row forever; this is the TTL sweep the
- * design doc's "Still open" section flagged.
+ * Deletes token rows whose `expiresAt` has passed — the TTL sweep (see the
+ * design doc's "Still open" section) for a card the server never got to end.
  * @param {!Object} deps `{db, now, logger}`.
  * @param {{limit: (number|undefined)}=} args
  * @return {!Promise<{pruned: number}>}

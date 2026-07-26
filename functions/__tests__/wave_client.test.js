@@ -11,8 +11,8 @@ const {WaveApiError, graphql, whoami, listBusinesses} =
 const noopSleep = () => Promise.resolve();
 
 /**
- * Builds a minimal options bag injecting token + fetchImpl + sleepFn so no
- * real secret or network is touched.
+ * Builds a minimal options bag with a token, fetchImpl, and sleepFn already
+ * injected, so tests never touch a real secret or the network.
  * @param {function} fetchImpl Mock fetch implementation.
  * @param {object=} extra Extra overrides merged into options.
  * @return {object}
@@ -166,7 +166,8 @@ describe("graphql() 429 retry", () => {
     expect(delays[0]).toBe(2000); // 2 seconds in ms
   });
 
-  // Fix #2 regression: Retry-After: 3600 must be clamped to 60000 ms
+  // Regression test for fix #2: a Retry-After of 3600 should get clamped
+  // down to 60000 ms.
   test("Fix#2: Retry-After:3600 is clamped to 60000 ms", async () => {
     const delays = [];
     const sleepSpy = (ms) => {
@@ -188,13 +189,14 @@ describe("graphql() 429 retry", () => {
         },
     );
     expect(delays.length).toBe(1);
-    // 3600 s = 3,600,000 ms; must be clamped to 60,000 ms
+    // 3600 s is 3,600,000 ms, but we clamp it down to 60,000 ms.
     expect(delays[0]).toBe(60000);
     expect(delays[0]).not.toBe(3600000);
   });
 
-  // Fix #4 regression: Retry-After:0 must be honored as 0, not fall through
-  // to jittered backoff (which would always be >= 250 ms)
+  // Regression test for fix #4: a Retry-After of 0 should be honored as
+  // 0 ms, not fall through to jittered backoff, which always waits at
+  // least 250 ms.
   test("Fix#4: Retry-After:0 is honored as 0 ms, not treated as absent",
       async () => {
         const delays = [];
@@ -217,7 +219,8 @@ describe("graphql() 429 retry", () => {
             },
         );
         expect(delays.length).toBe(1);
-        // Must be exactly 0 (header honored), not a backoff value
+        // Should be exactly 0 since the header is honored, not a backoff
+        // value.
         expect(delays[0]).toBe(0);
       });
 });
@@ -425,7 +428,8 @@ describe("whoami()", () => {
         expect(sent.query).toContain("defaultEmail");
       });
 
-  // Fix #1 regression: off-spec 200 must throw WaveApiError, not TypeError
+  // Regression test for fix #1: an off-spec 200 should throw a
+  // WaveApiError, not a raw TypeError.
   test("Fix#1: 200 with {data:{}} (no user) throws WaveApiError kind unknown",
       async () => {
         const fetch = jest.fn().mockResolvedValue(
@@ -513,9 +517,8 @@ describe("listBusinesses()", () => {
         await listBusinesses(opts(fetch));
         const [, init] = fetch.mock.calls[0];
         const sent = JSON.parse(init.body);
-        // page and pageSize are literals in the query document (pagination
-        // constants), not user-supplied values — so they are acceptable inline.
-        // This test ensures no *variable* values are string-interpolated.
+        // page/pageSize are literal pagination constants, not user data.
+        // This test only checks that *variable* values aren't interpolated.
         expect(Object.keys(sent.variables)).toHaveLength(0);
       });
 });
@@ -579,7 +582,8 @@ describe("graphql() drains non-2xx response bodies", () => {
   });
 
   test("a response double WITHOUT .text still works (no throw)", async () => {
-    // mockResponse (no .text) — the drain must be tolerant.
+    // mockResponse doesn't define .text() here, so the drain step needs to
+    // tolerate that.
     const fetch = sequencedFetch(
         mockResponse(500, {}),
         mockResponse(200, {data: {fine: true}}),

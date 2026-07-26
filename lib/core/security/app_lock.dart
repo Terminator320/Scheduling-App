@@ -8,7 +8,8 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/settings/application/app_lock_provider.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// App-wide biometric gate; covers the app on cold start and background return.
+/// App-wide biometric gate. Covers the app on cold start, and again whenever
+/// it returns from the background.
 class AppLock extends ConsumerStatefulWidget {
   const AppLock({required this.child, super.key});
 
@@ -42,7 +43,8 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
           .read(secureStorageServiceProvider)
           .readFlag(SecureStorageKeys.biometricEnabled);
     } catch (e, st) {
-      // Don't lock on unreadable flag (bricking risk); keychain-locked is environmental.
+      // Don't lock the app if we can't read the flag — that risks bricking
+      // someone out. A locked keychain is just environmental, not a real failure.
       if (isKeychainLockedError(e)) {
         ref.read(loggerProvider).warn('APPLOCK read skipped: keychain locked');
       } else {
@@ -58,7 +60,8 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!ref.read(appLockEnabledProvider)) return;
-    // Lock on `inactive` too; the OS app-switcher snapshot is captured during that state.
+    // Lock on `inactive` too, since that's the state the OS grabs its
+    // app-switcher snapshot during.
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {

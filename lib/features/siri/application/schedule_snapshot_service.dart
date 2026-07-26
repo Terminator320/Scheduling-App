@@ -9,19 +9,22 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart'
     show widgetAppGroupId;
 
-/// App Group key the Siri App Intents extension reads its answers from. Shares
-/// the container with the home-screen widget's `schedulePayload` — same App
-/// Group, separate key and separate schema.
+/// App Group key the Siri App Intents extension reads its answers from;
+/// shares the container with the home-screen widget's `schedulePayload`
+/// under a separate key and schema.
 const scheduleSnapshotKey = 'schedule_snapshot';
 
-/// Writes the Siri schedule snapshot into the App Group (iOS-only); does not call `HomeWidget.updateWidget` since the extension reads this on demand.
+/// Writes the Siri schedule snapshot into the App Group. iOS-only, and it
+/// doesn't call `HomeWidget.updateWidget` — the extension just reads this
+/// on demand.
 class ScheduleSnapshotService {
   ScheduleSnapshotService({AppLogger? logger})
     : _logger = logger ?? AppLogger();
 
   final AppLogger _logger;
 
-  /// Signature of the last successful write for dedup (null = not written, [_clearedState] = wiped).
+  /// Signature of the last successful write, used to dedup repeat writes.
+  /// Null means nothing's been written yet; [_clearedState] means we wiped it.
   static const _clearedState = '__cleared__';
   String? _lastState;
 

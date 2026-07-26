@@ -31,14 +31,14 @@ final presenceSyncControllerProvider = Provider<PresenceSyncController>(
 /// handles granularity; this guards Firestore write volume on a highway.
 const minPresenceUploadGap = Duration(minutes: 2);
 
-/// Stationary re-upsert cadence, keeping `updatedAt` fresh; keep in sync with
-/// PRESENCE_STALE_MINUTES = 25 in functions/travel_utils.js (window
-/// comfortably above two missed heartbeats).
+/// Stationary re-upsert cadence that keeps `updatedAt` fresh. Keep this in
+/// sync with PRESENCE_STALE_MINUTES = 25 in functions/travel_utils.js — the
+/// window is comfortably above two missed heartbeats.
 const presenceHeartbeatEvery = Duration(minutes: 10);
 
-/// Pure gate: presence tracks exactly the timed-push audience; delegates to
+/// Pure gate — presence tracks exactly the timed-push audience. Delegates to
 /// [shouldRegisterPush] so the "presence audience == push audience" invariant
-/// holds by construction and can't drift.
+/// holds by construction and can't drift apart.
 bool shouldTrackPresence({
   required String role,
   required String status,
@@ -53,8 +53,8 @@ bool shouldWritePresenceFix({
     lastUploadAt == null ||
     now.difference(lastUploadAt) >= minPresenceUploadGap;
 
-/// Pure gate for the heartbeat tick: only re-upsert when no movement fix has
-/// gone out for a full heartbeat period (a fresh fix already reset the clock).
+/// Pure gate for the heartbeat tick. Only re-upserts when no movement fix
+/// has gone out for a full heartbeat period — a fresh fix already reset the clock.
 bool shouldHeartbeat({
   required DateTime? lastUploadAt,
   required DateTime now,
@@ -62,7 +62,8 @@ bool shouldHeartbeat({
     lastUploadAt != null &&
     now.difference(lastUploadAt) >= presenceHeartbeatEvery;
 
-/// Delay until a throttled fix is allowed, or null if allowed now (arms trailing-flush timer so last fix in burst lands).
+/// Delay until a throttled fix is allowed, or null if it's already allowed.
+/// Used to arm the trailing-flush timer so the last fix in a burst still lands.
 Duration? trailingFlushDelay({
   required DateTime? lastUploadAt,
   required DateTime now,
@@ -90,8 +91,8 @@ class PresenceSyncController with ReentrantSync {
 
   AppLogger get _logger => _ref.read(loggerProvider);
 
-  /// Idempotent no-op for admins/signed-out users (tears the stream down when
-  /// the gate stops passing); concurrent calls coalesce via [ReentrantSync] so
+  /// A no-op for admins or signed-out users — tears the stream down once the
+  /// gate stops passing. Concurrent calls coalesce via [ReentrantSync], so
   /// the latest account state always wins.
   Future<void> sync() => runCoalesced(_syncGuarded);
 
@@ -134,7 +135,8 @@ class PresenceSyncController with ReentrantSync {
       }
       _start(docId: docId, uid: uid);
     } catch (e, st) {
-      // sync() is unawaited; don't let failures escape as uncaught async errors.
+      // sync() is called unawaited, so don't let failures escape as uncaught
+      // async errors.
       _logger.warn('PRESENCE sync failed', e, st);
     }
   }
@@ -198,7 +200,8 @@ class PresenceSyncController with ReentrantSync {
     });
   }
 
-  /// Fires the write with throttle clock at [attemptedAt]; rolls back on failure so dropped write doesn't stall toward staleness window.
+  /// Fires the write with the throttle clock set to [attemptedAt], and rolls
+  /// it back on failure so a dropped write doesn't push us toward the staleness window.
   void _uploadThrottled(Position position, DateTime attemptedAt) {
     final previous = _lastUploadAt;
     _lastUploadAt = attemptedAt;
@@ -227,16 +230,17 @@ class PresenceSyncController with ReentrantSync {
         );
   }
 
-  /// Expected, user-driven ways the position stream dies (permission revoked or Location Services off).
+  /// Expected, user-driven ways the position stream can die — permission
+  /// revoked, or Location Services turned off.
   static bool _isExpectedLocationLoss(Object e) =>
       e is PermissionDeniedException ||
       e is LocationServiceDisabledException ||
       (e is PositionUpdateException &&
           (e.message ?? '').contains('kCLErrorDomain error 1'));
 
-  /// Device capability, not UI look — `defaultTargetPlatform`, not
-  /// `context.isCupertino` (no BuildContext here; same rationale as
-  /// `AddressMapLauncher`).
+  /// This is about device capability, not UI look, so we use
+  /// `defaultTargetPlatform` rather than `context.isCupertino` — there's no
+  /// BuildContext here anyway, same as in `AddressMapLauncher`.
   LocationSettings _settingsForPlatform() {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       return AppleSettings(
@@ -276,8 +280,8 @@ class PresenceSyncController with ReentrantSync {
     _lastUploadAt = null;
   }
 
-  /// Best-effort teardown for sign-out / account deletion: stops the stream
-  /// and deletes the presence doc; never throws, since sign-out must not be blocked.
+  /// Best-effort teardown for sign-out or account deletion — stops the stream
+  /// and deletes the presence doc. Never throws, since sign-out must not be blocked.
   Future<void> unregister() async {
     final docId = _docId;
     _stop();

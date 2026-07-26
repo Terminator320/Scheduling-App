@@ -1,7 +1,5 @@
-// Day-cell accessibility: table_calendar labels every cell with the full
-// date ("<weekday>, <month day, year>"), and AppCalendar's markerBuilder
-// announces the day's appointment count instead of exposing the colour-only
-// marker dots.
+// Day-cell accessibility: AppCalendar's markerBuilder announces the day's
+// appointment count instead of exposing the colour-only marker dots.
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';

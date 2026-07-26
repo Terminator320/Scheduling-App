@@ -4,9 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 
 /// S2: `TextLimits` caps must be applied through
-/// `LengthLimitingTextInputFormatter`. This test verifies the formatter
-/// behaviour the forms rely on — a paste longer than the cap is truncated,
-/// not rejected wholesale.
+/// `LengthLimitingTextInputFormatter`, which truncates a too-long paste
+/// rather than rejecting it outright.
 void main() {
   test('LengthLimitingTextInputFormatter truncates to cap', () {
     final formatter = LengthLimitingTextInputFormatter(
@@ -26,9 +25,8 @@ void main() {
   });
 
   test('caps stay within Firestore safe ranges', () {
-    // Sanity check: every cap should leave room for many documents under
-    // Firestore's 1 MiB doc-size ceiling. If anyone bumps a cap into the
-    // megabyte range, this fails noisily.
+    // Guards against a cap being bumped into the megabyte range, which
+    // would blow past Firestore's 1 MiB doc-size ceiling.
     expect(TextLimits.appointmentTitle, lessThan(10000));
     expect(TextLimits.appointmentAddress, lessThan(10000));
     expect(TextLimits.appointmentNotes, lessThan(50000));

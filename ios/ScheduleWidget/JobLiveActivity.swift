@@ -1,19 +1,19 @@
-// JobLiveActivity — the "time to leave" Live Activity: Lock Screen card plus
-// Dynamic Island. Started, updated, and ended entirely by the server over
-// direct APNs (FCM cannot send `apns-push-type: liveactivity`); nothing here
-// talks to Firebase or the network.
+// JobLiveActivity is the "time to leave" Live Activity — the Lock Screen
+// card plus Dynamic Island. The server starts, updates, and ends it entirely
+// over direct APNs (FCM can't send `apns-push-type: liveactivity`), so
+// nothing here talks to Firebase or the network.
 //
 // Visual direction is "Option B — job-card continuity" (see
 // docs/plans/2026-07-19-ios-live-activities.md): employee colour rail, client
 // as the headline, status chip, metadata row — the same shape as
 // AppointmentCard, so staff read a layout they already know all day.
 //
-// Every display string comes from the content state, which the server builds
-// in EN/FR. Never NSLocalizedString here — translations live in the ARBs.
+// Every display string comes from the content state, built server-side in
+// EN/FR. Don't use NSLocalizedString here — translations live in the ARBs.
 //
-// Gated to iOS 17.2 (not 17.0): `pushToStartTokenUpdates` is 17.2+, and
-// push-to-start is the only way this card ever starts. Devices below that see
-// no card and behave exactly as they do today.
+// Gated to iOS 17.2, not 17.0 — `pushToStartTokenUpdates` is 17.2+ and
+// push-to-start is the only way this card ever starts, so older devices just
+// see no card.
 //
 // This file is compiled only on macOS/Xcode (see LIVE_ACTIVITY_README.md).
 
@@ -39,7 +39,7 @@ private func phaseAccent(
 
 // MARK: - Compact Island text
 
-/// "Leave at 7:54" -> "Leave at". Splitting the server string keeps the
+/// "Leave at 7:54" -> "Leave at" — splitting the server string keeps the
 /// compact Island bilingual without a second translation table.
 private func labelPart(_ text: String) -> String {
     guard let digit = text.firstIndex(where: { $0.isNumber }) else {
@@ -124,10 +124,8 @@ private struct LockScreenCard: View {
     }
 
     var body: some View {
-        // Read once per render. The amber -> red lapse is evaluated here, not
-        // scheduled: no push fires between `leaveAt` and `startTime` (the sweep
-        // only pushes the on-site flip at `startTime`), so the colour turns on
-        // whatever redraw WidgetKit next grants the card.
+        // Read once per render — the amber -> red lapse isn't scheduled, so
+        // the colour turns on whatever redraw WidgetKit next grants the card.
         let now = Date()
         let tint = phaseAccent(for: state, now: now)
         return HStack(alignment: .top, spacing: 10) {
@@ -156,11 +154,10 @@ private struct LockScreenCard: View {
                 Spacer(minLength: 0)
                 StatusChip(label: state.statusLabel, tint: tint)
             }
-            // On site: count DOWN the remaining booked time to the scheduled
-            // end (a live system timer — it keeps ticking without pushes and
-            // is correct on wake). Once the visit overruns its end — or for a
-            // payload with no endTime — fall back to elapsed time counting up
-            // from the start, which honestly signals the overrun.
+            // While on site, count down to the scheduled end using a live
+            // system timer (it stays correct after the device wakes). Once
+            // that's overrun, or if there's no endTime, fall back to
+            // counting up from the start.
             if state.isOnSite, let start = state.startDate {
                 if let end = state.endDate, now < end {
                     Text(timerInterval: max(start, now)...end,
@@ -198,8 +195,8 @@ private struct LockScreenCard: View {
         }
     }
 
-    // Travel: Directions leads (the lock-screen win). On site: Complete leads
-    // — the order matches what the tech would actually tap next.
+    // While traveling, Directions is the lead button. Once on site, Complete
+    // takes the lead instead — matching what the tech would actually tap next.
     private func buttons(tint: Color) -> some View {
         HStack(spacing: 8) {
             if state.isOnSite {
@@ -258,10 +255,11 @@ struct JobLiveActivity: Widget {
             let tint = phaseAccent(for: state, now: Date())
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    // Leads on an ABSOLUTE time ("Leave at 7:54"), never a
-                    // countdown: a countdown frozen by a delayed push or a
-                    // sleeping device is actively misleading, while an
-                    // absolute time is still correct on wake.
+                    // Always show an absolute time ("Leave at 7:54"), never
+                    // a countdown. A countdown can freeze if a push is
+                    // delayed or the device is asleep, which is actively
+                    // misleading — an absolute time stays correct even
+                    // after the device wakes.
                     VStack(alignment: .leading, spacing: 2) {
                         Text(state.timeLabel)
                             .font(.headline)

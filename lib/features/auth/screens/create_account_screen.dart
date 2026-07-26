@@ -140,12 +140,12 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
         code: _codeController.text,
       );
 
-      // OS password manager save prompt.
+      // Trigger the OS password manager's save prompt.
       TextInput.finishAutofillContext();
 
       if (!mounted) return;
-      // The account is now active and the user is signed in. Pop back to the
-      // sign-in flow with created:true; the caller routes the signed-in user in.
+      // Pop back to sign-in with created:true — the caller takes care of
+      // routing the signed-in user into the app.
       Navigator.of(context).pop(
         CreateAccountResult(
           created: true,

@@ -13,7 +13,8 @@ class WaveSyncBadge extends StatelessWidget {
 
   final String syncState;
 
-  /// Raw error string from waveSyncError; exposed as Semantics label when error.
+  /// Raw error string from waveSyncError. Exposed as the Semantics label when
+  /// the state is 'error'.
   final String? syncError;
 
   @override

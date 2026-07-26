@@ -1,47 +1,37 @@
-// LiveActivitiesAppAttributes — shared ActivityKit model for the "time to
-// leave" Live Activity card (Lock Screen + Dynamic Island). See
+// LiveActivitiesAppAttributes is the shared ActivityKit model for the "time
+// to leave" Live Activity card (Lock Screen + Dynamic Island). See
 // JobLiveActivity.swift for the views and DirectionsIntent.swift for the
 // Directions button.
 //
 // HAND-MIRRORED with functions/live_activity_utils.js `buildContentState` and
 // functions/live_activity_dispatch.js `buildAttributes` — change one, change
-// both. The struct NAME is itself a wire contract: the server sends it as the
-// push envelope's `attributes-type` (`ATTRIBUTES_TYPE`).
+// both.
 //
-// The name MUST stay exactly `LiveActivitiesAppAttributes`. The `live_activities`
-// Flutter plugin (linked into Runner) registers the push-to-start and
-// per-activity update-token streams against `Activity<LiveActivitiesAppAttributes>`
-// — a type of that exact name. The device token the server pushes to only
-// resolves when the name agrees in three places: here, the server's
-// `ATTRIBUTES_TYPE`, and this widget's `ActivityConfiguration(for:)`. Rename any
-// one of them and every push-to-start fails silently (degrades to the plain
-// `leaveNow` push, no card, no error).
+// The struct name is a wire contract, so it MUST stay exactly
+// `LiveActivitiesAppAttributes`. It has to match here, in the server's
+// `ATTRIBUTES_TYPE`, and in the `live_activities` Flutter plugin's
+// `Activity<LiveActivitiesAppAttributes>` registration — otherwise
+// push-to-start fails silently, with no card and no error.
 //
-// Every display string is built server-side in EN/FR (from the same table
-// shape as the notification bodies, keyed off the per-token `locale`) and
-// rendered here verbatim. Deliberately NOT `NSLocalizedString`: that would
-// fork translations into a second system outside the ARB files, invisible to
-// `untranslated.json`.
+// Every display string is built server-side in EN/FR and rendered here
+// verbatim. We deliberately don't use `NSLocalizedString`, since that would
+// fork translations outside the ARB files.
 //
-// Target membership: ONLY the ScheduleWidget extension needs this file (it
-// renders the ActivityConfiguration). Token observation is done by the plugin
-// against its own `LiveActivitiesAppAttributes` inside Runner, so this file does
-// NOT belong in the Runner target. New files under ios/ScheduleWidget/ are
-// picked up automatically by the PBXFileSystemSynchronizedRootGroup into the
-// extension target — no manual membership step. See LIVE_ACTIVITY_README.md.
+// Only the ScheduleWidget extension needs this file, since it renders the
+// ActivityConfiguration. It does NOT belong in the Runner target (see
+// LIVE_ACTIVITY_README.md).
 //
-// This file is compiled only on macOS/Xcode. The `ActivityAttributes`
-// conformance is `@available(iOS 16.1, *)`; the widget and every registration
-// path are gated to 17.2+ (not 17.0 — `pushToStartTokenUpdates` is 17.2+, and
-// push-to-start is the only way this card starts).
+// This file is compiled only on macOS/Xcode, gated to iOS 17.2+ rather than
+// 17.0 — `pushToStartTokenUpdates` needs 17.2+, and that's the only way this
+// card ever starts.
 
 import ActivityKit
 import Foundation
 import SwiftUI
 
-// The server emits `new Date().toISOString()`, which HAS fractional seconds. A
-// default ISO8601DateFormatter has no `.withFractionalSeconds` and returns nil
-// for that string — the same trap ScheduleWidget.swift documents.
+// The server emits `new Date().toISOString()`, which includes fractional
+// seconds. The default ISO8601DateFormatter can't parse that unless
+// `.withFractionalSeconds` is set — same trap ScheduleWidget.swift documents.
 private let activityIsoWithMillis: ISO8601DateFormatter = {
     let f = ISO8601DateFormatter()
     f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -57,8 +47,8 @@ private func parseActivityInstant(_ raw: String?) -> Date? {
 
 struct LiveActivitiesAppAttributes: Codable, Hashable {
 
-    /// The mutable half — replaced wholesale by every APNs update push.
-    /// Decodes `buildContentState`'s output key for key.
+    /// The mutable half of the model — replaced wholesale by every APNs
+    /// update push. Decodes `buildContentState`'s output key by key.
     struct ContentState: Codable, Hashable {
         /// Client name — the card headline, mirroring `AppointmentCard`.
         let clientName: String
@@ -66,24 +56,22 @@ struct LiveActivitiesAppAttributes: Codable, Hashable {
         /// Street address. Feeds the metadata row and the Directions intent.
         let address: String
 
-        /// ISO-8601 UTC instant for the appointment's scheduled start. Null
-        /// only if the server could not read it.
+        /// ISO-8601 UTC instant for the appointment's scheduled start. Only
+        /// null if the server couldn't read it.
         let startTime: String?
 
-        /// ISO-8601 UTC instant for the appointment's scheduled end. Feeds
-        /// the on-site remaining-time COUNTDOWN; null (older payloads, or an
-        /// unreadable record) falls back to the elapsed count-up.
+        /// ISO-8601 UTC instant for the scheduled end. Feeds the on-site
+        /// remaining-time COUNTDOWN, and falls back to the elapsed count-up
+        /// when it's null (older payloads, or an unreadable record).
         let endTime: String?
 
-        /// ISO-8601 UTC instant for the absolute "leave at" time, and the
-        /// boundary for the amber → red lapsed state. Only the push that
-        /// STARTS the card carries it; every later update (reschedule, the
-        /// travel → on-site flip) sends null, since "leave at" is meaningless
-        /// once the tech is under way.
+        /// ISO-8601 "leave at" instant and the boundary for the amber → red
+        /// lapsed state. Only the push that STARTS the card carries it —
+        /// every later update sends null once the tech is under way.
         let leaveAt: String?
 
-        /// Drive minutes from the one Routes API call the sweep already makes.
-        /// Informational — this card never re-polls traffic.
+        /// Drive minutes from the sweep's one Routes API call. It's
+        /// informational only — this card never re-polls traffic.
         let travelMinutes: Int?
 
         /// "travel" | "onSite", clock-derived server-side by `phaseFor`.
@@ -165,19 +153,17 @@ struct LiveActivitiesAppAttributes: Codable, Hashable {
         }
     }
 
-    /// Fixed for the activity's lifetime — set once at push-to-start from
-    /// `buildAttributes`, never re-sent in an update. Feeds the "Complete"
-    /// deep link.
+    /// Fixed for the activity's lifetime — set once at push-to-start and
+    /// never re-sent in an update. Feeds the "Complete" deep link.
     let appointmentId: String
 
     /// The assigned employee's users-doc id, as sent by `buildAttributes`.
     let employeeDocId: String
 
-    /// The assignee's `colorValue` (ARGB32 int, see `EmployeeRecord`) driving
-    /// the Lock Screen colour rail. `buildAttributes` always sends it (0 when
-    /// the employee doc has no colour); optional purely for decode safety — a
-    /// missing key on a non-optional field would fail the whole push-to-start
-    /// decode and drop the card.
+    /// The assignee's `colorValue` (ARGB32 int, see `EmployeeRecord`), which
+    /// drives the Lock Screen colour rail. It's optional only for decode
+    /// safety — a missing key on a non-optional field would fail the whole
+    /// decode.
     let employeeColorValue: Int?
 
     init(

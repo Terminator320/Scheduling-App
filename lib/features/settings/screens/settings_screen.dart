@@ -110,18 +110,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Returning from the OS Settings app (where the user may have just toggled
-    // notifications on) — re-read the status so the row updates, and re-run
-    // registration so a newly-granted device actually gets its FCM token
-    // stored server-side. Without the re-sync, "enabled in Settings" would
-    // still deliver no pushes.
+    // Re-check on resume in case the user toggled notifications in OS Settings.
     if (state == AppLifecycleState.resumed && mounted) {
       ref
         ..invalidate(notificationAuthStatusProvider)
-        // Same reasoning for Live Activities: `areActivitiesEnabled()` is a
-        // user-mutable iOS Settings value, and the probe is cached for the
-        // process lifetime — without this the row stays "unsupported" until
-        // the app is relaunched.
+        // Live Activities support is also a cached, user-mutable OS Settings value.
         ..invalidate(liveActivitySupportedProvider);
       unawaited(ref.read(pushRegistrationControllerProvider).sync());
     }
@@ -182,11 +175,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     final langCode = Localizations.localeOf(context).languageCode;
 
     return ListView(
-      // Inflate the whole (short) settings list up front: the feature tour's
-      // below-the-fold targets (notifications, replay row) must be built to
-      // register with showcaseview, or their steps are silently dropped.
-      // `cacheExtent` (double) is deprecated as of Flutter 3.41 in favor of
-      // this typed replacement — same effect, no analyzer warning.
+      // Inflate the whole list up front so below-the-fold feature-tour targets register.
       scrollCacheExtent: const ScrollCacheExtent.pixels(4000),
       padding: const EdgeInsets.all(AppSpacing.sp16),
       children: [
@@ -255,9 +244,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     ThemeNotifier notifier, {
     required String langCode,
   }) {
-    // Resolve against the live OS brightness via MediaQuery so the switch both
-    // matches what's on screen under the default `system` mode and rebuilds if
-    // the OS theme flips while this screen is open.
+    // Resolve against live OS brightness so the switch tracks system theme changes.
     final isDark = isDarkMode(
       notifier.themeMode,
       MediaQuery.platformBrightnessOf(context),
@@ -318,16 +305,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   Widget _notificationsCard(ColorScheme scheme) {
-    // valueOrNull keeps the row rendering during the first async read; default
-    // to notDetermined so the row offers the enable action rather than a
-    // misleading "On" before the status resolves.
+    // Default to notDetermined so the row offers enable rather than a misleading "On".
     final status =
         ref.watch(notificationAuthStatusProvider).asData?.value ??
         AuthorizationStatus.notDetermined;
     final granted = PushNotificationService.isGranted(status);
-    // Hidden off iOS, below 17.2, and when the user turned Live Activities off
-    // in iOS Settings — a device that can't host the card gets no control at
-    // all rather than a permanently dead switch.
+    // Hidden when the device/OS version can't host a Live Activity card.
     final showLiveActivity =
         ref.watch(liveActivitySupportedProvider).asData?.value ?? false;
     return SettingsSectionCard(
@@ -382,10 +365,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
   }
 
-  /// Turning the card OFF must do more than set a flag: the server *push-starts*
-  /// it, so a registered token would keep producing cards. Unregistering ends
-  /// any live card and deletes this device's token rows; turning it back on
-  /// re-registers. Both are best-effort and never throw.
+  /// Turning this off unregisters the device, which ends any live card;
+  /// turning it back on re-registers. Best effort — it never throws.
   Future<void> _toggleLiveActivity({required bool value}) async {
     await ref
         .read(liveActivityEnabledProvider.notifier)
@@ -398,11 +379,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     }
   }
 
-  /// notDetermined → show the one-time OS prompt (the app updated but the ask
-  /// never fired for this user). Any other non-granted state can ONLY be
-  /// recovered from the OS Settings app — iOS never re-shows the system dialog
-  /// once it has been answered. Granted taps also open Settings so the user can
-  /// fine-tune or turn it off. Either way, re-read the status and re-register.
+  /// notDetermined shows the one-time OS prompt; any other status opens OS Settings.
   Future<void> _onNotificationsTap(AuthorizationStatus status) async {
     final service = ref.read(pushNotificationServiceProvider);
     if (status == AuthorizationStatus.notDetermined) {
@@ -569,8 +546,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               ),
             ),
           ),
-          // Blocks the UI during the multi-second, irreversible account
-          // deletion so it can't be re-triggered and the user sees progress.
+          // Blocks the UI during the irreversible account deletion.
           if (_isDeletingAccount)
             _BlockingProgressOverlay(
               label: context.l10n.settings_deletingAccount,
@@ -584,8 +560,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     if (_isSigningOut) return;
     setState(() => _isSigningOut = true);
     try {
-      // Best-effort: drop this device's push token, live location and Live
-      // Activity cards/tokens before the session ends.
+      // Clean up this device's push token, presence, and Live Activity state
+      // — best effort, so a failure here doesn't block sign-out.
       await ref
           .read(pushRegistrationControllerProvider)
           .unregisterCurrentDevice();
@@ -593,8 +569,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       await ref.read(liveActivityRegistrationControllerProvider).unregister();
       await ref.read(authServiceProvider).signOut();
     } catch (e, st) {
-      // signOut clears local state and effectively never throws; if it does,
-      // log it but still route to login so the user isn't stuck signed in.
+      // Log but still route to login so the user isn't stuck signed in.
       ref.read(loggerProvider).warn('ACCT-SIGNOUT signOut failed', e, st);
     }
     if (!mounted) return;
@@ -607,7 +582,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Future<void> _confirmDeleteAccount() async {
     if (_isDeletingAccount) return;
-    // Fail fast offline: the deleteAccount callable would otherwise hang ~30 s.
+    // Bail out early if we're offline — otherwise the call just hangs for ~30s.
     if (ref.read(isOfflineProvider)) {
       ref
           .read(noticeServiceProvider)
@@ -629,8 +604,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
     if (!result || !mounted) return;
 
-    // Platform-matched presentation so the re-auth prompt looks like the
-    // adaptive confirm it directly follows.
+    // Match the platform presentation of the adaptive confirm dialog shown before this.
     final password = context.isCupertino
         ? await showCupertinoDialog<String>(
             context: context,
@@ -651,11 +625,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     final logger = ref.read(loggerProvider);
     try {
       await _deletionService.reauthenticateWithPassword(password);
-      // Best-effort: drop this device's push token while still authenticated —
-      // after deleteAccount removes the users doc the rules would reject the
-      // token delete, leaving an orphan fcmTokens doc behind. Also stop the
-      // location stream (the server's recursiveDelete removes the presence
-      // doc itself).
+      // Drop this device's push token while still authenticated, before deleteAccount revokes access.
       await ref
           .read(pushRegistrationControllerProvider)
           .unregisterCurrentDevice();
@@ -692,9 +662,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 }
 
-/// Full-screen modal barrier + spinner shown while a blocking, irreversible
-/// operation runs. The [ModalBarrier] absorbs all input so the action behind
-/// it can't be re-triggered.
+/// Full-screen modal barrier + spinner shown while a blocking, irreversible operation runs.
 class _BlockingProgressOverlay extends StatelessWidget {
   const _BlockingProgressOverlay({required this.label});
 

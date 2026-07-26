@@ -65,7 +65,8 @@ class AuthService {
     return _auth.sendPasswordResetEmail(email: email.trim().toLowerCase());
   }
 
-  /// Invited-employee signup: register/adopt, redeem code, rollback Auth user if code redemption fails.
+  /// Handles invited-employee signup — registers or adopts the account,
+  /// redeems the signup code, and rolls back the Auth user if redemption fails.
   Future<void> signUpWithCode({
     required String email,
     required String password,
@@ -121,7 +122,9 @@ class AuthService {
     return const AuthFailureUnknown();
   }
 
-  // Delete the freshly-created Auth user; the global account guard may have already signed it out (no doc yet), so reauth before delete to avoid orphaning.
+  // Deletes the freshly-created Auth user. The global account guard may have
+  // already signed it out since there's no doc yet, so we reauth before
+  // deleting to avoid leaving an orphan.
   Future<void> _rollbackOrFailLoud(
     UserCredential credential, {
     required String email,
@@ -174,7 +177,8 @@ class AuthService {
     try {
       await _auth.signOut();
     } finally {
-      // Best-effort cache clear: keystore failure must not fail signOut (checked uid on next launch).
+      // Best-effort cache clear — if the keystore fails here it shouldn't fail
+      // signOut too, since we check the cached uid again on next launch.
       try {
         await _authCache.clear();
       } catch (e, st) {

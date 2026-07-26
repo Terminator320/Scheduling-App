@@ -17,9 +17,9 @@ import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 
-/// L3: `EventDetailsController.addImages` caps `existingImages + newImages`
-/// at `maxImagesPerAppointment` (10). Existing images count toward the
-/// budget because they'll still be on the appointment after save.
+/// L3: `EventDetailsController.addImages` caps `existingImages + newImages` at
+/// `maxImagesPerAppointment` (10), counting existing images since they'll
+/// still be on the appointment after save.
 
 class _MockAppointmentsRepo extends Mock implements AppointmentsRepository {}
 

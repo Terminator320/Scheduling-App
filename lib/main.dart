@@ -77,7 +77,8 @@ Future<void> main() async {
 
       final settingsFuture = SharedPrefsSettingsRepository().load();
 
-      // Load env before Firebase; locale inits run concurrently to avoid blocking.
+      // Load env before Firebase. The locale inits run concurrently alongside
+      // it so we're not blocked waiting.
       await dotenv.load(fileName: 'dev/.env');
 
       await Future.wait([
@@ -235,11 +236,13 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     }
   }
 
-  /// Shared deep-link handler: show calendar and open appointment if valid.
+  /// Shared deep-link handler — shows the calendar, then opens the
+  /// appointment if it's valid.
   Future<void> _openAppointmentDeepLink(String appointmentId) async {
     if (FirebaseAuth.instance.currentUser == null) return;
 
-    // Fetch concurrently with hub startup; one retry survives auth-token race.
+    // Fetch this concurrently with hub startup. One retry is enough to
+    // survive the auth-token race that can happen right after cold start.
     final recordFuture = appointmentId.isEmpty
         ? Future<AppointmentRecord?>.value()
         : retryAsync<AppointmentRecord?>(
@@ -279,7 +282,8 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     await showEventDetails(navContext, record, showActions: shell.isAdmin);
   }
 
-  /// Poll up to ~10s for live hub; null if it never appears.
+  /// Polls for up to ~10s waiting for the live hub to appear. Returns null
+  /// if it never shows up.
   Future<HubShellState?> _awaitLiveHub() async {
     for (var i = 0; i < 50; i++) {
       final shell = HubShell.liveState;
@@ -297,9 +301,9 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   }
 
   void toggleTheme() {
-    // Flip whatever is on screen now — resolving the default `system` mode
-    // against the live OS brightness — so one tap always changes the
-    // appearance (no more "toggle twice" on a dark phone).
+    // Resolve the default `system` mode against the live OS brightness first,
+    // then flip that — so one tap always changes the appearance, instead of
+    // needing two taps on a dark phone.
     final platformBrightness =
         WidgetsBinding.instance.platformDispatcher.platformBrightness;
     setState(() {
@@ -324,9 +328,10 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     unawaited(ref.read(pushRegistrationControllerProvider).sync());
     // Same for the Live Activity tokens — `locale` drives the card's text.
     unawaited(ref.read(liveActivityRegistrationControllerProvider).sync());
-    // The iOS home widget localizes its chrome/status labels from the payload's
-    // `locale`; recompute the payload so the widget follows the app language
-    // instead of waiting for the next appointment-stream emission.
+    // The iOS home widget localizes its chrome/status labels from the
+    // payload's `locale`. Recompute the payload now so the widget follows
+    // the app language right away, instead of waiting for the next
+    // appointment-stream emission.
     ref.invalidate(widgetPayloadProvider);
   }
 
@@ -343,7 +348,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     var exitScheduled = false;
     try {
       final message = selectMessage(AppLocalizations.of(navContext));
-      // Best-effort de-registration first; doesn't block sign-out.
+      // Best-effort de-registration first — a failure here shouldn't block sign-out.
       await ref
           .read(pushRegistrationControllerProvider)
           .unregisterCurrentDevice();
@@ -381,7 +386,8 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     });
   }
 
-  /// Sync on first build with account doc already present; harmless if not ready.
+  /// Syncs once on first build, in case the account doc is already present —
+  /// harmless if it's not ready yet.
   void _primeControllerSyncsOnce() {
     if (_controllerSyncsPrimed) return;
     _controllerSyncsPrimed = true;
@@ -394,7 +400,8 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     ref.listen<AsyncValue<String>>(userRoleProvider, (prev, next) {
       final prevRole = prev?.value;
       final nextRole = next.value;
-      // Empty role is deletion, not demotion; let _listenForDeletedAccount own it.
+      // An empty role means deletion, not demotion — let
+      // _listenForDeletedAccount handle that case.
       if (prevRole == 'admin' &&
           nextRole != null &&
           nextRole != '' &&
@@ -411,7 +418,8 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     ) {
       final isSignedIn = FirebaseAuth.instance.currentUser != null;
       final resolvedUid = ref.read(authUidProvider).value;
-      // Kick-out on populated→empty; cold-start deletion handled below.
+      // Kick the user out on a populated→empty transition. Cold-start
+      // deletion is handled separately, below.
       if (isAccountDeletionSignal(
         isSignedIn: isSignedIn,
         resolvedUid: resolvedUid,
@@ -445,7 +453,8 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _listenForAccountDisabled();
     _listenForRoleRevocation();
     _listenForDeletedAccount();
-    // Register sync listeners; order is load-bearing for account-lifecycle control.
+    // Register the sync listeners — the order here matters for
+    // account-lifecycle control, so don't reorder these calls.
     AppSyncListeners(ref).registerAll();
     _primeControllerSyncsOnce();
     return AppLanguageScope(

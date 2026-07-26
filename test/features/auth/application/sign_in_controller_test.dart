@@ -115,7 +115,7 @@ void main() {
       verify(
         () => storage.write(SecureStorageKeys.rememberedEmail, 'user@test.com'),
       ).called(1);
-      // Stays busy on success: the screen keeps its spinner while routing.
+      // Stays busy on success, since the screen keeps its spinner while routing.
       expect(state().inProgress, isTrue);
     });
 
@@ -287,9 +287,9 @@ void main() {
       final user = _MockUser();
       when(() => user.uid).thenReturn('u1');
       when(() => auth.currentUser).thenReturn(user);
-      // Two denials: the propagation retry absorbs only the first, so the
-      // second rethrows — the account is created, and the user must get the
-      // "sign in normally" path, not a silent crash.
+      // This simulates two denials: the propagation retry only absorbs the first, so
+      // the second one rethrows. The account was already created, though, so the user
+      // needs the "sign in normally" path here, not a silent crash.
       when(() => repo.findUserByUid('u1')).thenThrow(
         FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied'),
       );

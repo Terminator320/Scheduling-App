@@ -8,7 +8,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/shared/widgets/primitives/name_initials.dart';
 
-/// Renders staff map-pin bitmaps (avatar-colored balloon with initials, ring, pointer, and halo when selected); cached per (initials, color, selected, ring/halo, dpr) and failed renders are evicted for retry.
+/// Renders staff map-pin bitmaps — an avatar-colored balloon with initials,
+/// a ring, a pointer, and a halo when selected. Cached per (initials, color,
+/// selected, ring/halo, dpr); a failed render is evicted so the next call retries.
 class StaffMarkerIconRenderer {
   StaffMarkerIconRenderer();
 
@@ -76,8 +78,8 @@ class StaffMarkerIconRenderer {
   static const double _pointerHeight = 9;
   static const double _pad = 6;
 
-  /// Draws one pin and returns its PNG bytes. Pure `dart:ui` — no plugin
-  /// channels — so it runs (and is asserted on) directly in `flutter_test`.
+  /// Draws one pin and returns its PNG bytes; pure `dart:ui`, so it runs (and
+  /// is asserted on) directly in `flutter_test`.
   @visibleForTesting
   static Future<Uint8List> renderBytes({
     required String name,

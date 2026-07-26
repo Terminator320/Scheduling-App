@@ -1,4 +1,5 @@
-/// Highlighted widget in tour; step text resolved separately.
+/// Identifies which widget a tour step highlights; the step's text is
+/// resolved separately.
 enum TourStepId {
   calendarGrid,
   calendarDayList,

@@ -116,10 +116,8 @@ void main() {
             employeesRepositoryProvider.overrideWithValue(mockRepo),
           ],
         );
-        // Teardowns run in reverse order: dispose the container (cancelling
-        // the provider's inner subscription) before awaiting close(). Riverpod
-        // 3 pauses unlistened providers, and a paused subscription never
-        // receives the done event, so the reverse order hangs the test.
+        // Dispose the container before closing the stream. Riverpod 3 pauses unlistened
+        // providers, so closing first would hang waiting for a done event that never comes.
         addTearDown(statusController.close);
         addTearDown(container.dispose);
 
@@ -161,8 +159,9 @@ void main() {
     });
 
     test('false when the auth uid has not resolved yet', () {
-      // Fresh sign-in: FirebaseAuth.currentUser is set but authStateChanges()
-      // lags, so the provider still serves the uid==null placeholder doc.
+      // On a fresh sign-in, FirebaseAuth.currentUser is already set, but
+      // authStateChanges() lags behind, so the provider still serves the
+      // uid==null placeholder doc.
       expect(
         isAccountDeletionSignal(
           isSignedIn: true,
@@ -217,8 +216,8 @@ void main() {
 
     test('true across a loading blip: retained-populated -> empty', () {
       final reloadingPopulated = const AsyncLoading<Map<String, dynamic>>()
-          // No public API builds a loading state that retains prior data;
-          // copyWithPrevious mirrors a live reload blip over a populated doc.
+          // No public API builds a loading state that retains prior data, so
+          // copyWithPrevious is used here to mirror a live reload blip over a populated doc.
           // ignore: invalid_use_of_internal_member
           .copyWithPrevious(populated);
       expect(
@@ -236,8 +235,8 @@ void main() {
       'false for a settled empty doc that was never populated (fresh sign-in '
       'lag / invited-signup bootstrap window)',
       () {
-        // No prior data (first emission), or a prior empty placeholder: the
-        // empty doc is a bootstrap window, not a populated->empty deletion.
+        // There's no prior data (first emission), or just a prior empty placeholder,
+        // so the empty doc reads as a bootstrap window, not a populated->empty deletion.
         expect(
           isAccountDeletionSignal(
             isSignedIn: true,
@@ -273,9 +272,9 @@ void main() {
     test(
       'flags a warm-cache cold start whose users doc is confirmed absent',
       () async {
-        // Cold start after server-side deletion: splash's cache-hit path
-        // routed straight to the calendar, so the doc's first settled
-        // emission is a clean empty with no populated previous.
+        // This simulates a cold start after a server-side deletion — splash's cache-hit
+        // path routed straight to the calendar, so the doc's first settled emission
+        // is a clean empty with no populated previous.
         expect(
           await confirmColdStartDeletion(
             isSignedIn: true,
@@ -360,8 +359,8 @@ void main() {
     test(
       'leaves the populated→empty transition to isAccountDeletionSignal',
       () async {
-        // The live-deletion listener already handles this shape; the
-        // cold-start confirmation only owns the never-populated case.
+        // The live-deletion listener already handles this shape. Cold-start
+        // confirmation only owns the never-populated case.
         expect(
           isColdStartDeletionCandidate(
             isSignedIn: true,
@@ -497,7 +496,7 @@ void main() {
       roleController.add({'role': 'employee'});
       await pumpEventQueue();
 
-      // Sequencing matters: admin must appear before employee, otherwise the
+      // Sequencing matters here — admin has to appear before employee, or the
       // main.dart listener can't detect the admin → employee demotion.
       expect(emissions, containsAllInOrder(['admin', 'employee']));
     });

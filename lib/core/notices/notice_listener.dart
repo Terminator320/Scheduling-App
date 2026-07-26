@@ -68,7 +68,8 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
       ),
     };
 
-    // Native tactile cue alongside the visual notice (best-effort).
+    // Fire off a haptic cue alongside the visual notice too — best effort,
+    // doesn't need to succeed.
     unawaited(switch (notice) {
       NoticeError() => HapticFeedback.mediumImpact(),
       NoticeSuccess() || NoticeInfo() => HapticFeedback.lightImpact(),
@@ -193,7 +194,8 @@ class _TopNoticeState extends State<_TopNotice>
               constraints: const BoxConstraints(maxWidth: 520),
               child: Semantics(
                 liveRegion: true,
-                // U5: swipe up to dismiss; Dismissible handles animation, so remove entry directly.
+                // Swipe up to dismiss. Dismissible already handles the
+                // animation, so we just remove the entry directly.
                 child: Dismissible(
                   key: const ValueKey('app-notice-banner'),
                   direction: DismissDirection.up,
@@ -220,7 +222,8 @@ class _TopNoticeState extends State<_TopNotice>
                             ),
                           ),
                           const SizedBox(width: AppSpacing.sp4),
-                          // U5: a real IconButton (48px tap target + tooltip/semantics), not a bare GestureDetector icon.
+                          // Use a real IconButton here for the 48px tap target
+                          // plus tooltip/semantics, not a bare GestureDetector icon.
                           IconButton(
                             onPressed: _dismiss,
                             tooltip: context.l10n.common_close,

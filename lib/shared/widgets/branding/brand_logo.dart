@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
-/// Company wordmark shown on splash/onboarding; a proper noun, never localized.
+/// Company wordmark shown on splash/onboarding. It's a proper noun, so it's
+/// never localized.
 const String brandName = 'Plombier Eau Secours!';
 
-/// Brand mark; falls back to glyph if asset missing; set decorative when wordmark visible.
+/// Brand mark that falls back to a glyph if the asset is missing. Set
+/// [decorative] to true when a wordmark is already visible nearby.
 class BrandMark extends StatelessWidget {
   const BrandMark({this.size = 72, this.decorative = false, super.key});
 

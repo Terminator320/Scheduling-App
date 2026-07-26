@@ -5,13 +5,15 @@ import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
-/// Single live snapshot of the signed-in user's `users/{uid}` doc for name, status, and role.
+/// Keeps a single live snapshot of the signed-in user's `users/{uid}` doc, covering
+/// their name, status, and role.
 final currentUserDocProvider = StreamProvider<Map<String, dynamic>>((ref) {
   final uid = ref.watch(authUidProvider).value;
   if (uid == null) return Stream.value(const {});
   final repository = ref.watch(employeesRepositoryProvider);
-  // P10: this is the app's first Firestore listener, so hold it until the
-  // deferred App Check activation completes (failures logged elsewhere).
+  // P10: this is the app's first Firestore listener, so we hold it until the
+  // deferred App Check activation finishes. Any failures there get logged
+  // elsewhere.
   final firebaseReady = ref
       .watch(firebaseReadyProvider.future)
       .catchError((Object _) {});
@@ -33,7 +35,9 @@ final userRoleProvider = Provider<AsyncValue<String>>((ref) {
       .whenData((doc) => (doc['role'] ?? '').toString().trim());
 });
 
-/// True only for populated→empty transition; first-seen empty (sign-in lag, pre-activation) is bootstrap, not deletion — use [previous] to distinguish.
+/// True only when the doc goes from populated to empty. A first-seen empty doc
+/// (sign-in lag, or before activation) is just a bootstrap window, not a
+/// deletion — that's why we look at [previous] to tell the two apart.
 bool isAccountDeletionSignal({
   required bool isSignedIn,
   required String? resolvedUid,
@@ -44,12 +48,15 @@ bool isAccountDeletionSignal({
   if (docState.isLoading) return false;
   final doc = docState.value;
   if (doc == null || doc.isNotEmpty) return false;
-  // Only populated→empty counts; `previous?.value` retains data across loading blips.
+  // Only a populated→empty transition counts here. `previous?.value` keeps the
+  // last known data across loading blips, which is what lets us tell the two apart.
   final previousDoc = previous?.value;
   return previousDoc != null && previousDoc.isNotEmpty;
 }
 
-/// True for settled empty doc (never populated) with a signed-in uid; ambiguous with pre-activation, resolved by [confirmColdStartDeletion] via AuthCache.
+/// True when there's a signed-in uid but the doc has settled empty and was never
+/// populated. That's ambiguous with pre-activation, so [confirmColdStartDeletion]
+/// resolves it using AuthCache.
 bool isColdStartDeletionCandidate({
   required bool isSignedIn,
   required String? resolvedUid,
@@ -60,12 +67,16 @@ bool isColdStartDeletionCandidate({
   if (docState.isLoading || docState.hasError) return false;
   final doc = docState.value;
   if (doc == null || doc.isNotEmpty) return false;
-  // Populated previous = live transition (owned by isAccountDeletionSignal); cold-start = empty from start.
+  // If the previous doc was populated, that's a live transition and
+  // isAccountDeletionSignal already owns it. This function only covers the
+  // cold-start case, where the doc was empty from the very start.
   final previousDoc = previous?.value;
   return previousDoc == null || previousDoc.isEmpty;
 }
 
-/// Confirms cold-start deletion: empty doc + warm AuthCache match (cache written post-sign-in, cleared post-signout, never on fresh signup).
+/// Confirms a cold-start deletion by checking for an empty doc plus a warm
+/// AuthCache match. The cache is written right after sign-in, cleared on
+/// sign-out, and never written on a fresh signup.
 Future<bool> confirmColdStartDeletion({
   required bool isSignedIn,
   required String? resolvedUid,
@@ -85,7 +96,8 @@ Future<bool> confirmColdStartDeletion({
   try {
     return await loadWarmCache(resolvedUid!) != null;
   } catch (e, st) {
-    // Fails safe but silently on keystore error (disables kick-out without signal).
+    // If the keystore read fails, we fail safe but silently — this just
+    // disables the kick-out with no visible signal to the user.
     (logger ?? AppLogger()).warn('ACCOUNT-EXIT warm cache read failed', e, st);
     return false;
   }

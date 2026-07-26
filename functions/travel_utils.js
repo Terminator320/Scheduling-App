@@ -1,16 +1,17 @@
 "use strict";
 
 /**
- * @fileoverview Travel-time "leave now" logic for the reminder sweep. Pure
- * helpers plus an orchestrator that takes injected
- * `{db, messaging, fetchImpl, apiKey, now, logger}` so jest can drive it with
- * mocks (no admin/scheduler requires here — mirrors notification_utils.js).
+ * @fileoverview Travel-time "leave now" logic for the reminder sweep: pure
+ * helpers plus an orchestrator, with injected
+ * `{db, messaging, fetchImpl, apiKey, now, logger}` deps so jest can drive it
+ * with mocks, mirroring notification_utils.js.
  *
- * Origin decision (per employee, per candidate appointment):
- *   1. intervening appointment's address (they'll depart from that job)
- *   2. fresh background-GPS presence doc (updatedAt <= 25 min)
- *   3. recently-ended previous appointment's address (<= 4 h, not cancelled)
- *   4. null -> fixed 30-min fallback with the plain reminder text
+ * For each employee/candidate-appointment pair, we decide an origin in this
+ * order: an intervening appointment's address first (they'll depart from
+ * that job), then a fresh background-GPS presence doc (updatedAt <= 25 min),
+ * then a recently-ended previous appointment's address (<= 4 h, not
+ * cancelled), and finally null — which falls back to the fixed 30-min
+ * reminder with the plain reminder text.
  *
  * @module travel_utils
  */
@@ -46,52 +47,39 @@ const MAX_LEAD_MINUTES = 90;
 // original fixed reminder.
 const FALLBACK_LEAD_MINUTES = 30;
 
-// Presence freshness. The client's background stream heartbeats every 10 min
-// while tracking is alive, so a doc older than two missed heartbeats (+slack)
-// reliably means tracking is dead (force-quit, permission revoked) — fall
-// back to the address chain.
+// A presence doc older than this means tracking died (force-quit, permission
+// revoked); fall back to the address chain.
 const PRESENCE_STALE_MINUTES = 25;
 
 // How far back a previous appointment's address still counts as "where the
 // employee just was".
 const PREV_APPOINTMENT_LOOKBACK_HOURS = 4;
 
-// Safety cap on the per-employee origin-context read. `decideOrigin` only ever
-// consumes intervening jobs starting within MAX_LEAD_MINUTES and previous jobs
-// ended within PREV_APPOINTMENT_LOOKBACK_HOURS, so the relevant set is tiny;
-// the unbounded query would otherwise pull every future appointment (repeating
-// pre-booked series → dozens–hundreds of docs) every 5-min sweep. Ordered by
-// endTime ASC, so the cap keeps the earliest-ending — the just-finished
-// previous jobs and current/imminent ones — which is exactly what matters.
+// Caps the per-employee context read. Ordered by endTime ASC, so the cap
+// keeps the earliest-ending jobs decideOrigin actually needs, instead of
+// every future appointment in a pre-booked series.
 const CONTEXT_QUERY_MAX = 50;
 
-// Longest bookable visit (the app caps appointments under 24h). An intervening
-// job may START before the candidate yet END long after the travel window, so
-// the context query's upper bound has to clear the whole window plus one
-// maximum-length visit or a double-booked long job drops out of decideOrigin.
+// Longest bookable visit (24h cap). The context query's upper bound has to
+// clear the travel window plus one full visit, or a long intervening job
+// drops out of decideOrigin.
 const MAX_BOOKING_MS = 24 * 60 * MINUTE_MS;
 
 // Sweep candidate window: MAX_LEAD_MINUTES ahead, so the longest computable
 // lead is already in range when it becomes due.
 const TRAVEL_WINDOW_MS = MAX_LEAD_MINUTES * MINUTE_MS;
 
-// Routes is a metered API and the sweep runs every 5 min, so a job sitting in
-// the 90-min window is otherwise re-priced ~18 times to fire once. A recent
-// estimate lets a pair that is provably far from due skip the call.
-//
-// The estimate may only ever DEFER a call, never trigger a send: a pair is
-// skipped solely when even its cached drive time leaves it outside the due
-// instant by SKIP_MARGIN_MS, and the actual fire/no-fire decision is always
-// made against a fresh Routes response. Traffic would have to worsen by more
-// than the margin within the TTL to matter, and the fallback lead absorbs that.
+// A recent cached estimate lets a clearly-not-due pair skip the metered
+// Routes call. This can only DEFER a send, never trigger one — the fire
+// decision always uses a fresh Routes response.
 const ESTIMATE_TTL_MS = 10 * MINUTE_MS;
 const SKIP_MARGIN_MS = 15 * MINUTE_MS;
 const _estimateCache = new Map();
 
 /**
  * Drops every expired entry. Read-triggered eviction alone can't reclaim a
- * pair that stopped being swept (it fired, or its job was deleted), so the
- * sweep prunes the whole map once per run to bound the warm instance.
+ * pair that stopped being swept, so the sweep also prunes the whole map
+ * once per run to keep the warm instance bounded.
  * @param {!Map} cache
  * @param {number} nowMs
  * @return {void}
@@ -104,7 +92,7 @@ function pruneEstimates(cache, nowMs) {
 
 /**
  * Cached drive-time estimate for a (candidate, employee) pair, or null when
- * absent/stale. Expired entries are dropped on read so the map self-prunes.
+ * absent/stale; expired entries are dropped on read so the map self-prunes.
  * @param {!Map} cache
  * @param {string} key
  * @param {number} nowMs
@@ -121,8 +109,8 @@ function readEstimate(cache, key, nowMs) {
 }
 
 /**
- * True when a cached estimate proves the pair cannot be due yet, so the Routes
- * call can be skipped this sweep. Conservative by SKIP_MARGIN_MS.
+ * True when a cached estimate conservatively (by SKIP_MARGIN_MS) proves the
+ * pair cannot be due yet, so the Routes call can be skipped this sweep.
  * @param {{seconds: ?number, startTimeMillis: number, nowMillis: number}} args
  * @return {boolean}
  */
@@ -132,20 +120,17 @@ function canDeferRoutes({seconds, startTimeMillis, nowMillis}) {
   return nowMillis < startTimeMillis - leadMs - SKIP_MARGIN_MS;
 }
 
-// Statuses that still expect the visit to happen. `confirmed` is the retired
-// legacy alias (treated as pending; new writes rejected since 2026-07-09),
-// kept so pre-retirement docs still earn reminders.
+// Statuses that still expect the visit to happen. `confirmed` is the
+// retired legacy alias, kept so pre-retirement docs still earn reminders.
 const PENDING_LIKE = new Set(["pending", "confirmed"]);
 
-// The same allowlist as an array, for the candidate query's `where("status",
-// "in", ...)`. Intentionally NARROWER than notification_utils' OPEN_STATUSES:
-// `in_progress` is excluded because the visit has already started, so there is
-// no "time to leave" left to remind about (see selectTravelCandidates). Keep
-// the two in sync only in the sense of staying deliberately different.
+// Same allowlist as an array for the candidate query's `where("status", "in",
+// ...)`; deliberately narrower than notification_utils' OPEN_STATUSES since
+// `in_progress` has no "time to leave" left to remind about.
 const PENDING_STATUSES = [...PENDING_LIKE];
 
-// A job in one of these no longer occupies the employee (intervening prong).
-// Legacy `completed` is the retired alias of `done`.
+// A job in one of these no longer occupies the employee. Legacy `completed`
+// is the retired alias of `done`.
 const TERMINAL = new Set(["done", "completed", "cancelled"]);
 
 /**
@@ -173,10 +158,8 @@ function decideOrigin({presence, employeeAppointments, candidate, now}) {
   const candidateStartMs = toMillis(candidate && candidate.startTime);
   const apps = employeeAppointments || [];
 
-  // 1. Intervening appointment: still occupies the employee when the
-  // candidate's leave time comes — they'll depart from THAT job's address,
-  // not from wherever they are now (critical for back-to-back bookings).
-  // Marking it done makes it terminal, which promotes GPS below.
+  // Intervening appointment — they'll depart from THAT job's address, not
+  // from wherever they are now. Marking it done promotes GPS below.
   let intervening = null;
   for (const r of apps) {
     if (candidate && r.id === candidate.id) continue;
@@ -194,7 +177,7 @@ function decideOrigin({presence, employeeAppointments, candidate, now}) {
   }
   if (intervening) return {kind: "address", address: _address(intervening)};
 
-  // 2. Fresh background-GPS fix.
+  // Fresh background-GPS fix.
   if (presence) {
     const updatedMs = toMillis(presence.updatedAt);
     const lat = presence.lat;
@@ -206,9 +189,8 @@ function decideOrigin({presence, employeeAppointments, candidate, now}) {
     }
   }
 
-  // 3. Recently-ended previous appointment. Any status except cancelled — a
-  // cancelled visit never happened, but a done one did (the employee was
-  // physically there). Newest endTime wins.
+  // Recently-ended previous appointment, any status except cancelled since
+  // a cancelled visit never happened. Newest endTime wins.
   let previous = null;
   const floorMs = nowMs - PREV_APPOINTMENT_LOOKBACK_HOURS * 60 * MINUTE_MS;
   for (const r of apps) {
@@ -271,9 +253,8 @@ function isDue(args) {
 }
 
 /**
- * Routes API computeRoutes request body. Routes accepts raw address strings
- * as waypoints, so the fallback origin and the destination need no geocoding.
- * Pure — unit-testable.
+ * Routes API computeRoutes request body — Routes accepts raw address strings
+ * as waypoints, so no geocoding is needed. Pure — unit-testable.
  * @param {{origin: !Object, destinationAddress: string,
  *   departureTimeIso: string}} args
  * @return {!Object}
@@ -309,8 +290,8 @@ function parseRoutesDurationSeconds(json) {
 
 /**
  * Calls Routes API computeRoutes and returns drive seconds, or null on ANY
- * failure (transport, non-200, bad JSON, malformed shape) — never throws
- * (places.js error discipline). Injected `fetchImpl` for jest.
+ * failure — never throws (same error discipline as places.js). `fetchImpl`
+ * is injected for jest.
  * @param {{fetchImpl: !Function, apiKey: string, origin: !Object,
  *   destinationAddress: string, now: (Date|number), logger: ?Object}} args
  * @return {!Promise<?number>}
@@ -343,10 +324,9 @@ async function computeTravelSeconds({fetchImpl, apiKey, origin,
     return null;
   }
   if (!response.ok) {
-    // Status only. The request body carries staff GPS coordinates or a
-    // client's street address, and Google's INVALID_ARGUMENT responses echo
-    // the offending field back — same reason placesReverseGeocode sets
-    // logResponsePreview: false.
+    // Log status only — the request carries staff GPS/address data and
+    // Google's INVALID_ARGUMENT echoes the offending field back (same reason
+    // placesReverseGeocode sets logResponsePreview: false).
     if (logger) {
       logger.warn("travel: routes upstream non-200", {
         status: response.status,
@@ -367,9 +347,9 @@ async function computeTravelSeconds({fetchImpl, apiKey, origin,
 }
 
 /**
- * Ledger doc id — same `${id}_${startMs}_${employeeDocId}` shape as the push
- * plan's reminderLedgerId, so claims made before the travel upgrade stay
- * honored (no double reminders across the deploy).
+ * Ledger doc id — same `${id}_${startMs}_${employeeDocId}` shape as the
+ * push plan's reminderLedgerId, so claims made before the travel upgrade
+ * still get honored and the deploy doesn't cause double reminders.
  * @param {string} appointmentId
  * @param {number} startTimeMillis
  * @param {string} employeeDocId
@@ -381,14 +361,14 @@ function travelReminderLedgerId(appointmentId, startTimeMillis,
 }
 
 /**
- * Resolves ONE (candidate, assignee) pair: ledger short-circuit -> decideOrigin
- * -> Routes (deferred when a recent estimate proves it isn't due) -> due-check
- * -> claim/send/release -> optional Live Activity start.
+ * Resolves ONE (candidate, assignee) pair: ledger short-circuit, then
+ * decideOrigin, then Routes (deferred when a recent estimate already proves
+ * it isn't due), then the due-check, then claim/send/release, then an
+ * optional Live Activity start.
  *
- * The Live Activity start hangs off `deliverRecipientOnce`'s return value so it
- * inherits that ledger's exactly-once claim — starting before the claim would
- * double-fire a card on a collision. Every failure path degrades to the fixed
- * 30-minute `reminder` kind; nothing here may introduce a new way to fail.
+ * The Live Activity start hangs off `deliverRecipientOnce`'s claim, so a
+ * racing collision can't double-fire a card. Every failure path degrades to
+ * the fixed 30-minute `reminder` kind.
  * @param {!Object} deps
  * @param {!Object} args
  * @return {!Promise<{reminded: number, started: number}>}
@@ -401,8 +381,8 @@ async function resolveReminderForAssignee(deps, args) {
 
   const ledgerId = travelReminderLedgerId(
       String(c.id), startMs, employeeDocId);
-  // Cheap pre-check before any Routes spend; the atomic create() inside
-  // deliverRecipientOnce remains the real exactly-once guard.
+  // Cheap pre-check before any Routes spend — the atomic create() inside
+  // deliverRecipientOnce is still the real exactly-once guard.
   const existing = await db
       .collection("appointmentReminders").doc(ledgerId).get();
   if (existing && existing.exists) return none;
@@ -464,8 +444,9 @@ async function resolveReminderForAssignee(deps, args) {
   });
   let started = 0;
   if (kind === "leaveNow" && delivered > 0) {
-    // Best-effort: a Live Activity failure must not change `reminded` or
-    // abort the sweep. No card just leaves the plain leaveNow push, unchanged.
+    // Best-effort — a Live Activity failure must not change `reminded` or
+    // abort the sweep. No card just leaves the plain leaveNow push
+    // unchanged.
     started = await startLiveActivity(deps, {
       appointmentId: String(c.id),
       employeeDocId,
@@ -481,12 +462,10 @@ async function resolveReminderForAssignee(deps, args) {
 }
 
 /**
- * The travel-aware reminder sweep: one sweep, one notification per
- * (appointment, employee), replacing the fixed 30-min runReminderSweep.
- * Per pair: ledger short-circuit -> decideOrigin -> Routes ->
- * due-check -> claim/send/release (see deliverRecipientOnce). Any pair
- * failure is caught and logged; the sweep continues. Injectable deps
- * `{db, messaging, fetchImpl, apiKey, now, logger}`.
+ * The travel-aware reminder sweep — one notification per (appointment,
+ * employee) pair, replacing the fixed 30-min runReminderSweep. Any pair
+ * failure is caught and logged without stopping the rest of the sweep.
+ * Injectable deps `{db, messaging, fetchImpl, apiKey, now, logger}`.
  * @param {!Object} deps
  * @return {!Promise<{reminded: number}>}
  */
@@ -507,9 +486,10 @@ async function runTravelAwareReminderSweep(deps) {
           (doc) => ({id: doc.id, ...(doc.data() || {})})),
       nowDate,
   );
-  // The flip pass must run even with no upcoming candidates: a job stops
-  // being a candidate the moment it starts, so the sweep right after a tech
-  // begins their only job would otherwise never flip that card to `onSite`.
+  // The flip pass must run even with no upcoming candidates. A job stops
+  // being a candidate the moment it starts, so without this, the sweep
+  // right after a tech begins their only job would never flip that card to
+  // `onSite`.
   if (candidates.length === 0) {
     return {
       reminded: 0,
@@ -538,21 +518,19 @@ async function runTravelAwareReminderSweep(deps) {
       if (logger) logger.warn("travel: presence getAll failed", {err});
     }
   }
-  // The per-employee context queries are independent — issue them
-  // concurrently (one throwing employee falls back to [] without failing the
-  // others) rather than blocking on each in turn.
+  // The per-employee context queries are independent, so issue them
+  // concurrently rather than blocking on each in turn. One employee's query
+  // throwing just falls back to [] for them, without failing the others.
   const contextByEmployee = new Map();
   const lookbackStart = new Date(
       nowMs - PREV_APPOINTMENT_LOOKBACK_HOURS * 60 * MINUTE_MS);
   const contextEnd = new Date(nowMs + TRAVEL_WINDOW_MS + MAX_BOOKING_MS);
   await Promise.all(employeeIds.map(async (employeeDocId) => {
     try {
-      // Upper-bounded on the same field: decideOrigin only ever consumes a
-      // just-ended job or one intervening before the candidate's start, so
-      // without this the query matches EVERY future appointment for the
-      // employee and a pre-booked series silently saturates CONTEXT_QUERY_MAX.
-      // The bound clears the window by MAX_BOOKING_MS — an intervening job
-      // can start inside the window and still run for another full day.
+      // Upper-bounded on the same field. Without that bound the query would
+      // match every future appointment, and a pre-booked series would
+      // saturate CONTEXT_QUERY_MAX. The bound clears the window by
+      // MAX_BOOKING_MS since an intervening job can run a full day past it.
       const ctxSnap = await db
           .collection("appointments")
           .where("employeeIds", "array-contains", employeeDocId)
@@ -576,7 +554,7 @@ async function runTravelAwareReminderSweep(deps) {
   let reminded = 0;
   let started = 0;
   const cache = new Map();
-  // Warm-instance memo; injectable so tests get a clean map per run.
+  // Warm-instance memo, injectable so tests get a clean map per run.
   const estimates = deps.estimateCache || _estimateCache;
   pruneEstimates(estimates, nowMs);
   for (const c of candidates) {
@@ -611,16 +589,13 @@ async function runTravelAwareReminderSweep(deps) {
 }
 
 /**
- * Backstop that flips live cards from `travel` to `onSite`. The phase is
- * clock-derived on both sides, but a card already on a Lock Screen won't
- * re-render itself — so one update is pushed per card whose job has started.
- * Rides the existing 5-minute sweep; no new scheduler.
+ * Backstop that pushes one update per started job to flip its Lock Screen
+ * card from `travel` to `onSite`, riding the existing 5-minute sweep with no
+ * new scheduler.
  *
- * Driven off the card markers, NOT a query over appointments: the markers are
- * the only record of which techs actually have a card, so this reads one tiny
- * collection instead of every job that started in the last few minutes, and
- * `setCardStart` inside [updateLiveActivity] makes each card flip exactly once.
- * Best-effort — every failure is swallowed so the reminder sweep is unaffected.
+ * Driven off the card markers, not an appointments query, since they're the
+ * only record of which techs have a card. Best-effort — failures are
+ * swallowed without affecting the reminder sweep.
  * @param {!Object} deps `{db, now, logger, apnsAuth}`.
  * @return {!Promise<number>} Cards updated.
  */
@@ -634,12 +609,9 @@ async function runOnSiteFlipPass(deps) {
       const snap = await db
           .collection("appointments").doc(marker.appointmentId).get();
       const record = snap && snap.exists ? (snap.data() || {}) : null;
-      // A deleted or already-terminal job must END the on-device card, not
-      // just drop the marker: the Lock Screen card outlives the Firestore doc,
-      // and clearing the marker alone would strand it there for hours (the
-      // bug where a deleted event's card stayed on the phone). endLiveActivity
-      // also clears the marker, so this can't retry every sweep either. This
-      // is the backstop for the same end the appointment write trigger sends.
+      // A deleted/terminal job has to call endLiveActivity, not just drop
+      // the marker, since the Lock Screen card outlives the Firestore doc.
+      // We also clear the marker here so this doesn't retry every sweep.
       if (!record ||
           TERMINAL.has(String(record.status || "").toLowerCase())) {
         await endLiveActivity(deps, {

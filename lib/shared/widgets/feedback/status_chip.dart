@@ -3,7 +3,8 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_pill.dart';
 
-/// Appointment states: pending → in_progress → done, plus cancelled; overdue is display-only.
+/// Appointment states run pending → in_progress → done, plus cancelled.
+/// Overdue is display-only — it's never actually stored.
 enum AppointmentStatus {
   pending,
   inProgress,
@@ -11,7 +12,7 @@ enum AppointmentStatus {
   done,
   cancelled;
 
-  /// Map stored status string to enum; unrecognized values default to pending.
+  /// Maps a stored status string to the enum. Unrecognized values default to pending.
   static AppointmentStatus fromRaw(String raw) => switch (raw.toLowerCase()) {
     'done' || 'completed' => done,
     'cancelled' => cancelled,
@@ -23,13 +24,15 @@ enum AppointmentStatus {
   /// Pickable statuses (excludes display-only overdue).
   static const appointmentValues = [pending, inProgress, done];
 
-  /// Normalize stored status to allowlist; legacy/unknown/overdue → pending.
+  /// Normalizes a stored status to the allowlist — legacy, unknown, and
+  /// overdue values all collapse to pending.
   static String storedRaw(String raw) {
     final status = fromRaw(raw);
     return status == overdue ? pending.raw : status.raw;
   }
 
-  /// Stored raw string; overdue throws to catch accidental writes early.
+  /// The stored raw string for this status. overdue throws here, to catch
+  /// an accidental write early.
   String get raw => switch (this) {
     inProgress => 'in_progress',
     overdue => throw StateError(

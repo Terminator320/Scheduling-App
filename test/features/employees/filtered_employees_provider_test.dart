@@ -25,9 +25,8 @@ void main() {
         allUsersStreamProvider.overrideWith((ref) => Stream.value(employees)),
       ],
     );
-    // Keep the stream subscription alive and let Stream.value emit before
-    // reading, then close in order (subscription before container) to avoid the
-    // Riverpod 3 teardown race on StreamProvider futures.
+    // Keep the subscription alive so Stream.value can emit, then close it before
+    // the container to avoid the Riverpod 3 teardown race on StreamProvider futures.
     final sub = container.listen(allUsersStreamProvider, (_, _) {});
     await Future<void>.delayed(Duration.zero);
     final result = container.read(filteredEmployeesProvider(query));

@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Device-local link between client and phone-contact for later edits; non-sensitive SharedPreferences.
+/// A device-local link between a client and its phone contact, kept so later edits can
+/// find it again. Nothing sensitive here, so plain SharedPreferences is fine.
 class ContactLinkStore {
   const ContactLinkStore();
 

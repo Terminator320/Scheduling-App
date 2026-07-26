@@ -58,9 +58,7 @@ void main() {
     when(() => query.snapshots()).thenAnswer((_) => stream);
   }
 
-  // `docs` MUST be fully built before `when(() => snapshot.docs)` starts —
-  // building a `_presenceDoc` calls `when()` itself, and mocktail can't
-  // handle a nested `when()` while the outer one's stub call is still open.
+  // `docs` must be fully built before stubbing `snapshot.docs` — mocktail can't handle a nested `when()` while the outer stub call is open.
   _MockQuerySnapshot snapshotOf(List<_MockQueryDocSnapshot> docs) {
     final snapshot = _MockQuerySnapshot();
     when(() => snapshot.docs).thenReturn(docs);

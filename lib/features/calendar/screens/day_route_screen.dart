@@ -24,10 +24,10 @@ import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-/// A job is "to drive to" (numbered and included in the route) while its status is non-terminal.
+/// A job is still "to drive to" — it gets a number and a spot in the route — as long as its status isn't terminal yet.
 bool _isOpen(String status) => !AppointmentStatus.fromRaw(status).isTerminal;
 
-/// A day's jobs as a numbered route timeline with per-stop navigation; admins pick which employee to view.
+/// Shows a day's jobs as a numbered route timeline with per-stop navigation. Admins can also pick which employee's route to view.
 class DayRouteScreen extends ConsumerStatefulWidget {
   const DayRouteScreen({
     required this.isAdmin,
@@ -61,7 +61,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     );
   }
 
-  // Fall back to the first assignee if a day change leaves the selection empty (non-admins always view their own jobs).
+  // Fall back to the first assignee if switching days leaves the selection empty. Non-admins always view their own jobs anyway.
   String _resolveEmployeeId(List<String> assigneeIds) {
     if (!widget.isAdmin) return widget.employeeId;
     if (assigneeIds.isEmpty) return _selectedEmployeeId;
@@ -70,7 +70,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
         : assigneeIds.first;
   }
 
-  // Fire only on data→error transition, not every rebuild (unlike .when).
+  // Only fire on the data→error transition — .when would otherwise re-fire this on every rebuild while the stream stays errored.
   void _onAppointmentsAsyncChange(
     AsyncValue<List<AppointmentRecord>>? previous,
     AsyncValue<List<AppointmentRecord>> next,
@@ -106,7 +106,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
   Widget build(BuildContext context) {
     final range = _dayRange(_day);
 
-    // Admins read the whole day for the picker; employees read only their own visible jobs.
+    // Admins read the whole day's appointments so the employee picker has something to show. Employees just read their own visible jobs.
     final provider = widget.isAdmin
         ? appointmentsInRangeProvider(range)
         : myAppointmentsProvider((employeeId: widget.employeeId, range: range));
@@ -120,7 +120,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
           // Sort defensively to ensure numbering and launched route stay in driving order.
           ..sort((a, b) => a.startTime.compareTo(b.startTime));
 
-    // Distinct employees assigned that day; use denormalized names as fallback for removed assignees.
+    // Collect the distinct employees assigned that day, falling back to the denormalized names for anyone who's since been removed.
     final assigneeEntries = widget.isAdmin
         ? _assigneesWithJobs(dayAppointments)
         : const <MapEntry<String, String>>[];
@@ -128,7 +128,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
       for (final e in assigneeEntries) e.key,
     ]);
 
-    // Filter whole-day list to the picked assignee for admin; employee's query is already scoped.
+    // For admins, filter the whole-day list down to the picked assignee. The employee's own query is already scoped, so nothing more to do there.
     final jobs = widget.isAdmin
         ? dayAppointments
               .where((a) => a.employeeIds.contains(employeeId))

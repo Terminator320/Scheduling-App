@@ -123,7 +123,8 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }) async {
     final normalizedEmail = email.trim().toLowerCase();
 
-    // Pre-check uniqueness (not atomic, but server-side invite flow is authoritative).
+    // Check uniqueness up front. This isn't atomic, but the server-side
+    // invite flow is the real authority here.
     final existing = await _users
         .where('email', isEqualTo: normalizedEmail)
         .get();
@@ -153,11 +154,9 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       updateData['role'] = isAdmin ? 'admin' : 'employee';
     }
 
-    // Best-available client-side hardening: commit inside a transaction that
-    // re-reads the target doc and aborts when its email moved underneath the
-    // uniqueness check (e.g. another admin edited the same employee
-    // concurrently), so this write can't silently overwrite it with a value
-    // that was never re-validated.
+    // This is the best client-side hardening we can do: commit inside a
+    // transaction that re-reads the doc and aborts if the email changed
+    // since the uniqueness check — say, a concurrent admin edit.
     final ref = _users.doc(docId);
     await ref.firestore.runTransaction<void>((txn) async {
       final snapshot = await txn.get(ref);
@@ -209,11 +208,10 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
           .limit(1)
           .snapshots()
           .where((snapshot) {
-            // Skip the transient empty from-cache snapshot that precedes the
-            // server result on a cold cache. Reporting it as an empty (deleted)
-            // doc would falsely sign the user out and stop the role from
-            // upgrading past the cached employee guess. An authoritative empty
-            // (from the server) still passes through to flag a real deletion.
+            // Skip the transient empty snapshot you get from a cold cache —
+            // reporting it as deleted would falsely sign the user out. An
+            // authoritative empty snapshot from the server still gets
+            // through, so a real deletion still gets flagged.
             return snapshot.docs.isNotEmpty || !snapshot.metadata.isFromCache;
           })
           .map((snapshot) {
@@ -226,12 +224,9 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
 }
 
 // Twin of `_isAuthPropagationDenied` in
-// `lib/features/calendar/data/firebase_appointments_repository.dart` — keep in
-// sync. A freshly signed-in user's ID token and `usersByUid` role bridge can
-// lag the auth state, so the first users listen comes back permission-denied
-// even though the read is authorized. Without the retry, one such error
-// permanently breaks role upgrades and disable/delete detection for the
-// session. Re-subscribing after a short delay succeeds; a genuine denial
-// survives every retry and surfaces as before.
+// `lib/features/calendar/data/firebase_appointments_repository.dart` — keep
+// them in sync. Retries a permission-denied on the first users listen, since
+// a freshly signed-in token can lag behind auth state; a genuine denial
+// still comes through once retries are exhausted.
 bool _isAuthPropagationDenied(Object error) =>
     error is FirebaseException && error.code == 'permission-denied';

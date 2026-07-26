@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 
-/// Evenly-spaced quick action buttons (Call/Email/Directions); empty when no buttons.
+/// Evenly-spaced quick action buttons (Call/Email/Directions). Renders empty
+/// when there are no buttons.
 class QuickActionsRow extends StatelessWidget {
   const QuickActionsRow({required this.buttons, super.key});
 

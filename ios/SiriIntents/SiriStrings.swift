@@ -1,8 +1,8 @@
 // SiriStrings — spoken response text in English and French.
 //
-// The response language follows the device's Siri language (`Locale.current`),
-// matching how ScheduleWidget.swift picks its labels. Kept as plain Swift
-// rather than a string catalog so the two localizations stay side by side and
+// The response language follows the device's Siri language
+// (`Locale.current`), matching ScheduleWidget.swift. It's kept as plain
+// Swift, not a string catalog, so both localizations stay side by side and
 // reviewable in one place.
 //
 // This file is compiled only on macOS/Xcode.
@@ -30,9 +30,9 @@ enum SiriStrings {
         return fmt.string(from: date)
     }
 
-    /// How to name a day in a spoken sentence: "today"/"tomorrow" read more
-    /// naturally than a full weekday, so prefer them; otherwise fall back to the
-    /// weekday-and-date form. Used by the Phase-2 day-schedule answers.
+    /// Prefers "today"/"tomorrow" over a full weekday for natural speech,
+    /// falling back to the weekday-and-date form. Used by the Phase-2
+    /// day-schedule answers.
     static func relativeDay(_ date: Date) -> String {
         let cal = Calendar.current
         if cal.isDateInToday(date) {
@@ -47,7 +47,8 @@ enum SiriStrings {
 
     // MARK: - Shared states
 
-    /// No snapshot in the App Group: signed out, or the app has never run.
+    /// No snapshot in the App Group — meaning either the user is signed out,
+    /// or the app has never run.
     static var noData: String {
         french
             ? "Ouvrez ES Pro pour synchroniser votre horaire."
@@ -190,15 +191,17 @@ enum SiriStrings {
     // MARK: - Nth appointment (Phase 3 — parameter follow-up)
 
     /// Siri's follow-up when "read a specific appointment" arrives with no
-    /// number — the multi-turn beat: Siri asks, the caller answers in-session.
+    /// number. This is the multi-turn beat — Siri asks, and the caller
+    /// answers in-session.
     static var whichPositionPrompt: String {
         french
             ? "Quel rendez-vous ? Dites son numéro."
             : "Which appointment? Say its number."
     }
 
-    // Ordinal words 1-10; beyond that the sentence falls back to "number N" /
-    // "numéro N" (a day rarely has more than ten visits, and the cap is 30).
+    // Ordinal words for 1-10. Beyond that, the sentence falls back to
+    // "number N" / "numéro N" — a day rarely has more than ten visits
+    // anyway, and the cap is 30.
     private static let ordinalsEn = [
         "first", "second", "third", "fourth", "fifth",
         "sixth", "seventh", "eighth", "ninth", "tenth",
@@ -208,8 +211,9 @@ enum SiriStrings {
         "sixième", "septième", "huitième", "neuvième", "dixième",
     ]
 
-    /// The asked-for position is past the end of today's list (or the day is
-    /// empty — reuses the plain "no appointments today").
+    /// The asked-for position is past the end of today's list, or the day is
+    /// empty entirely — in that case we just reuse the plain "no
+    /// appointments today" message.
     static func nthOutOfRange(count: Int, admin: Bool) -> String {
         if count == 0 { return emptyDay(admin: admin) }
         if french {

@@ -3,9 +3,9 @@
 /**
  * @fileoverview Wave Accounting outbox worker.
  *
- * Manages the `waveSyncQueue` collection, which acts as a durable outbox for
- * Wave API write-backs. Enqueue a job for a client; the scheduler calls
- * `drainQueue` to claim and execute pending jobs.
+ * Manages the `waveSyncQueue` collection — a durable outbox for Wave API
+ * write-backs — enqueued per client and drained by the scheduler's
+ * `drainQueue`.
  *
  * ## Job document contract (`waveSyncQueue/{jobId}`)
  * ```
@@ -23,30 +23,26 @@
  * ```
  *
  * ## Claim protocol
- * Each job is claimed transactionally: re-read inside a transaction, skip if
- * not `status=='queued'`, then set `status:'inflight'` and stamp `claimedAt`.
- * This prevents two worker instances from processing the same job concurrently.
+ * To claim a job we re-read it, skip it unless it's still `queued`, then set
+ * it `inflight` and stamp `claimedAt` — all inside one transaction. That's
+ * what keeps two worker instances from grabbing the same job.
  *
  * ## Lease / reclaim protocol
- * The claim (`inflight`) and outcome write (`done`/`queued`/`dead`) are two
- * separate Firestore writes with a Wave API call between them. If the function
- * instance dies in between, the job would be stuck `inflight` forever because
- * `drainQueue` only queries `status=='queued'`. The reclaim pass at the start
- * of `drainQueue` fixes this: it finds jobs whose `claimedAt` is older than
- * `LEASE_MS` and treats each as a failed dispatch (same retry/dead-letter path
- * as a normal failure). `attempts` is bumped so a crash-looping job eventually
- * dead-letters instead of cycling indefinitely. The reclaim re-reads and
- * rewrites each stale job inside ONE transaction — it has no Wave call to span,
- * unlike the main path — so a concurrent reclaim or a client re-enqueue in the
- * same window can't be clobbered.
+ * The claim and the outcome write are separated by a Wave API call, so if
+ * the function instance dies in between, a job could get stranded `inflight`
+ * forever. To fix that, the reclaim pass at the start of `drainQueue` looks
+ * for jobs whose `claimedAt` is older than `LEASE_MS` and retries or
+ * dead-letters them (bumping `attempts`). It does that through the same
+ * atomic re-read-and-rewrite transaction a normal failure uses, so a
+ * concurrent reclaim or re-enqueue happening in that same window can't get
+ * clobbered.
  *
  * ## Outcome-write guard
- * The outcome write (`done`/`queued`/`dead`) is itself transactional
- * (`commitOutcome`): it re-reads the job and writes only while it is still
- * `inflight` with the same `claimedAt` stamped at claim time. If a client edit
- * re-enqueues the job during the in-flight Wave call (status flips back to
- * `queued`), or another worker re-claims it, the outcome is skipped so the
- * newer edit still syncs instead of being clobbered to `done`.
+ * The outcome write is transactional too (`commitOutcome`): it only commits
+ * while the job is still `inflight` with the same `claimedAt` it had at
+ * claim time. That way, if a client re-enqueues the job or another worker
+ * re-claims it while the Wave call is still in flight, our write just gets
+ * skipped instead of incorrectly stomping the job to `done`.
  *
  * ## Retryability taxonomy
  * - `WaveValidationError` — NOT retryable (bad input; dead-letter immediately).
@@ -59,17 +55,15 @@
  * - Any other (unexpected/infra) error — retryable (bounded by maxAttempts).
  *
  * ## Required Firestore composite indexes
- * NOTE: `waveSyncQueue` needs two composite indexes — add BOTH to
- * `firestore.indexes.json` before deploying:
- *   1. `(status ASC, nextAttemptAt ASC)` — for the `drainQueue` queued query.
- *   2. `(status ASC, claimedAt ASC)` — for the reclaim pass.
- * Run `firebase deploy --only firestore:indexes` after updating the file.
+ * `waveSyncQueue` needs both `(status ASC, nextAttemptAt ASC)` (for
+ * `drainQueue`'s queued query) and `(status ASC, claimedAt ASC)` (for the
+ * reclaim pass) in `firestore.indexes.json`. Run
+ * `firebase deploy --only firestore:indexes` after adding them.
  *
  * ## Throughput sizing
- * The drainQueue schedule frequency × batchLimit must stay under Wave's
- * 60-requests-per-minute limit. With the default batchLimit of 30 and a
- * 5-minute schedule cadence, peak throughput is 6/min — well below 60/min.
- * If you increase batchLimit or run on a shorter cadence, adjust accordingly.
+ * drainQueue's schedule frequency × batchLimit must stay under Wave's 60/min
+ * limit — the default (batchLimit 30, 5-min cadence) peaks at 6/min, so
+ * adjust both together if you change either.
  *
  * @module wave/worker
  */
@@ -99,11 +93,9 @@ const BASE_BACKOFF_MS = 60_000;
 const MAX_BACKOFF_MS = 3_600_000;
 
 /**
- * Default lease duration in milliseconds (10 minutes). A job held `inflight`
- * longer than this is assumed lost (the function instance died between claim
- * and outcome write) and is reclaimed by the next drainQueue run. 10 min is
- * comfortably longer than any Cloud Function's maximum runtime, so a still-
- * running instance is never reclaimed.
+ * Default lease duration (10 minutes, comfortably longer than any Cloud
+ * Function's max runtime) after which an `inflight` job is assumed lost and
+ * reclaimed by the next drainQueue run.
  */
 const DEFAULT_LEASE_MS = 600_000;
 
@@ -122,11 +114,10 @@ function adminFirestore() {
 }
 
 /**
- * Default exponential-backoff-with-jitter function.
- * Formula: min(BASE * 2^n, MAX) * (0.75 + random 0..0.25) ms, returned as ms.
+ * Default exponential-backoff-with-jitter: min(BASE * 2^n, MAX) * (0.75 + random 0..0.25) ms.
  * @param {number} attempts The PRE-increment attempt index passed by the
- *   caller (first retry → 0, second → 1, …); it is one less than the
- *   `attempts` value subsequently stored on the job doc.
+ *   caller (first retry → 0, second → 1, …). It's one less than the
+ *   `attempts` value that later gets stored on the job doc.
  * @return {number} Milliseconds to wait before the next attempt.
  */
 function defaultBackoffMs(attempts) {
@@ -135,13 +126,10 @@ function defaultBackoffMs(attempts) {
 }
 
 /**
- * Heuristic: does a `kind === 'graphql'` WaveApiError look like a TRANSIENT
- * server-side failure? Wave returns some server errors as GraphQL `errors`
- * on an HTTP 200 (see client.js), so treating every graphql error as a
- * permanent validation failure dead-letters jobs that a later run would have
- * completed. Matches on the error messages and `extensions.code` values
- * carried in `err.details` (the raw GraphQL errors array) plus the summary
- * message. Anything that doesn't look transient stays permanent.
+ * Treats a `graphql`-kind WaveApiError as transient (retryable) when its
+ * message/extensions.code looks like a server-side failure — Wave sometimes
+ * reports what are really transient errors as GraphQL errors on an HTTP 200
+ * (see client.js), so this is a best-effort heuristic to catch those.
  * @param {!WaveApiError} err A WaveApiError with kind 'graphql'.
  * @return {boolean}
  */
@@ -189,9 +177,7 @@ function isRetryable(err) {
 }
 
 /**
- * Extracts a safe, PII-free error summary for `lastError`. Never logs or
- * stores Wave's raw error message or customer data — only the error class name
- * and (for WaveApiError) the `kind` field.
+ * Extracts a safe, PII-free error summary for `lastError` — only the error class name and (for WaveApiError) its `kind`, never Wave's raw message or customer data.
  * @param {*} err The caught error.
  * @return {string}
  */
@@ -207,11 +193,10 @@ function sanitizeError(err) {
 }
 
 /**
- * Best-effort: flags the client doc behind a dead-lettered job as a sync
- * error so admins see `error` + a sanitized message instead of a forever-
- * `pending` state (the queue doc isn't client-readable). Never throws — a
- * failure here must not disturb the drain loop; the job doc's `dead` status
- * remains the durable source of truth.
+ * Flags the client doc behind a dead-lettered job with a sanitized sync
+ * error, so admins see `error` instead of forever-`pending` — best effort,
+ * so it never throws. The job doc's `dead` status is the real durable
+ * source of truth either way.
  * @param {!Object} db Firestore instance.
  * @param {string} refPath The job's `refPath` (`'clients/<id>'`).
  * @param {string} message Sanitized, PII-free error summary.
@@ -246,9 +231,7 @@ function clientIdFromRefPath(refPath) {
 }
 
 /**
- * Converts a Firestore timestamp-ish value to epoch milliseconds. Handles a JS
- * Date, a Firestore Timestamp (`toMillis`/`toDate`), or a numeric value, and
- * returns NaN for anything non-numeric (e.g. a serverTimestamp sentinel).
+ * Converts a Firestore timestamp-ish value (Date, Timestamp, or number) to epoch milliseconds, returning NaN for anything non-numeric (e.g. a serverTimestamp sentinel).
  * @param {*} value
  * @return {number} Epoch ms, or NaN.
  */
@@ -263,10 +246,7 @@ function timestampToMs(value) {
 }
 
 /**
- * Whether two `claimedAt` stamps identify the same claim. Compares by epoch ms
- * when both are real timestamps (so a Date written and re-read as a Firestore
- * Timestamp still matches), and falls back to strict identity for non-numeric
- * values such as a test serverTimestamp sentinel.
+ * Whether two `claimedAt` stamps identify the same claim — compares by epoch ms when both are real timestamps, else falls back to strict identity (e.g. a test serverTimestamp sentinel).
  * @param {*} a
  * @param {*} b
  * @return {boolean}
@@ -279,18 +259,10 @@ function sameClaim(a, b) {
 }
 
 /**
- * Atomically writes a claimed job's terminal/retry outcome, but ONLY if this
- * worker still owns the claim.
- *
- * The claim (`inflight`) and the outcome write are separated by a multi-second
- * Wave API call. If a client edits the same client during that window, the
- * `onDocumentWritten` trigger re-enqueues the deterministic-id job — flipping
- * its status back to `queued` and resetting attempts. Writing the outcome
- * unconditionally would clobber that re-enqueue to `done`, silently dropping
- * the newer edit's sync. This transaction re-reads the job and applies `update`
- * only while it is still `inflight` with the same `claimedAt` stamped at claim
- * time; otherwise it leaves the job alone so the newer edit still syncs.
- *
+ * Atomically writes a claimed job's terminal/retry outcome, but only while
+ * this worker still owns the claim — same `inflight` status and same
+ * `claimedAt`. That way a concurrent re-enqueue happening during the Wave
+ * call gets left alone instead of clobbered to `done`.
  * @param {!Object} db Firestore instance.
  * @param {!Object} ref The job document ref.
  * @param {*} claimStamp The `claimedAt` value written when the job was claimed.
@@ -317,27 +289,21 @@ async function commitOutcome(db, ref, claimStamp, update) {
 // ---------------------------------------------------------------------------
 
 /**
- * Decides whether a `clients/{id}` document write should enqueue a Wave
- * customer-upsert job. Pure (hash-only comparison, no I/O) so it is unit-
- * testable in isolation; the `onDocumentWritten` trigger in `index.js` calls
- * it with the before/after document data.
+ * Decides whether a `clients/{id}` write should enqueue a Wave
+ * customer-upsert job. It's pure — just a hash comparison — so it's easy to
+ * unit-test in isolation; the `onDocumentWritten` trigger in `index.js`
+ * calls it with the before/after document data.
  *
- * Skip rules (both absorb writes that would create a pointless no-op job):
- *   1. The mapped fields are unchanged
- *      (`mappedFieldsHash(after) === mappedFieldsHash(before)`). Only
- *      `wave.*` / `waveCustomerId` (or other unmapped) fields changed — this
- *      catches the worker's own write-back echo.
- *   2. The mapped fields already match `after.wave.lastSyncedHash` (already in
- *      sync) — this absorbs the import's full-doc writes so they don't enqueue.
- *
- * A create (`before == null`) is enqueued unless rule 2 already marks it
- * synced (e.g. the import wrote the doc with a matching `lastSyncedHash`).
+ * Skips a pointless no-op job when the mapped fields are unchanged from `before`
+ * (catches the worker's own write-back echo) or already match
+ * `after.wave.lastSyncedHash` (catches the import's full-doc writes). A create
+ * (`before == null`) is enqueued unless that same synced-hash check already covers it.
  *
  * @param {Object|null|undefined} before Pre-write client document data
  *   (null/undefined on a create).
- * @param {Object|null|undefined} after Post-write client document data. Callers
- *   must not invoke this for a delete (after absent) — that path returns early
- *   in the trigger.
+ * @param {Object|null|undefined} after Post-write client document data;
+ *   callers must not invoke this for a delete (after absent) — that path
+ *   returns early in the trigger.
  * @return {boolean} True when a job should be enqueued.
  */
 function shouldEnqueueClientWrite(before, after) {
@@ -364,26 +330,19 @@ function shouldEnqueueClientWrite(before, after) {
 // ---------------------------------------------------------------------------
 
 /**
- * Enqueues (or re-enqueues) a `customerUpsert` job for the given client.
- *
- * Uses deterministic dedup: the jobId is always `customerUpsert__<clientId>`,
- * so a burst of client edits collapses into ONE pending job. The doc is
- * written via `set(..., {merge:true})` so a pre-existing job is updated
- * in-place rather than creating a duplicate.
+ * Uses a deterministic jobId (`customerUpsert__<clientId>`) written via `set(..., {merge:true})`, so a burst of client edits collapses into one updated-in-place job.
  *
  * Every enqueue resets `attempts:0` and `lastError:null` so a newly-edited
  * client gets a fresh retry budget, regardless of prior failure history.
  *
  * @param {string} clientId Firestore `clients` document id.
- * @param {Object=} deps Injectable dependencies. `db` defaults to
- *   `getFirestore()`; `now` defaults to `FieldValue.serverTimestamp`. Neither
- *   default may be triggered inside a unit test. Optional `payloadHash`
- *   (string) is written to the job doc when provided; omitted when absent so
- *   the Firestore field is not set for callers that don't supply it.
- *   Optional `batch` (a Firestore WriteBatch): when provided the enqueue is
- *   STAGED on the batch instead of written immediately — the caller owns the
- *   commit, letting it pair the enqueue atomically with other writes (e.g.
- *   the mark-pending update in the waveUpsertCustomer trigger).
+ * @param {Object=} deps Injectable dependencies. `db`/`now` default to
+ *   `getFirestore()`/`FieldValue.serverTimestamp` (never triggered in unit
+ *   tests). Optional `payloadHash` is written to the job doc when provided.
+ *   Optional `batch` (a Firestore WriteBatch) stages the enqueue on the
+ *   caller's batch instead of writing immediately, so it can be paired
+ *   atomically with other writes — e.g. the waveUpsertCustomer trigger's
+ *   mark-pending update.
  * @return {!Promise<string>} The jobId that was enqueued (or staged).
  */
 async function enqueueCustomerUpsert(clientId, deps = {}) {
@@ -441,14 +400,13 @@ async function enqueueCustomerUpsert(clientId, deps = {}) {
  */
 
 /**
- * Reclaim pass — fixes jobs stuck `inflight` because the function instance died
- * between the claim and the outcome write. Each stale job is re-read and
- * rewritten inside ONE transaction (there is no Wave call to span), so a
- * concurrent reclaim or a client re-enqueue in the same window is detected on
- * the transactional re-read and left untouched instead of being clobbered.
+ * Reclaim pass. Fixes jobs stuck `inflight` because the function died
+ * between claim and outcome write, by re-reading and rewriting each stale
+ * job in one transaction — that's what leaves a concurrent reclaim or
+ * re-enqueue untouched instead of getting clobbered.
  *
- * NOTE: requires a composite index `(status ASC, claimedAt ASC)` on
- * `waveSyncQueue` — add to firestore.indexes.json before deploying.
+ * Requires a composite index `(status ASC, claimedAt ASC)` on
+ * `waveSyncQueue` — add it to firestore.indexes.json before deploying.
  *
  * @param {!DrainContext} ctx Shared drain state; `ctx.summary` is mutated.
  * @return {!Promise<void>}
@@ -477,12 +435,10 @@ async function reclaimStaleJobs(ctx) {
       break;
     }
     const jobId = staleDoc.id;
-    // Atomic reclaim: re-read and rewrite the job in ONE transaction, writing
-    // only while it is STILL inflight past its lease. The read and the outcome
-    // write share a transaction (the reclaim has no Wave call to span), so a
-    // concurrent reclaim or a client re-enqueue that flips the status in the
-    // meantime is detected on the transactional re-read and left untouched
-    // instead of being clobbered. `outcome` carries the result out for logging.
+    // This reclaim is atomic: we re-read and rewrite the job in one
+    // transaction, writing only while it's still inflight past its lease.
+    // That leaves a concurrent reclaim or re-enqueue untouched instead of
+    // clobbering it. `outcome` just carries the result out for logging.
     let outcome = null;
 
     try {
@@ -491,11 +447,10 @@ async function reclaimStaleJobs(ctx) {
         const fresh = await tx.get(staleDoc.ref);
         if (!fresh || !fresh.exists) return;
         const freshData = fresh.data() || {};
-        // Only reclaim if STILL inflight AND claimedAt still beyond the lease
-        // (a fresh re-claim by another worker resets claimedAt and is skipped).
-        // A non-finite claimedAt (missing field, unresolved serverTimestamp
-        // echo, corrupt value) is treated as RECLAIMABLE — skipping it would
-        // strand the job inflight forever, since only claimedAt gates reclaim.
+        // Only reclaim if the job is still inflight and past the lease — a
+        // fresh re-claim resets claimedAt, so it gets skipped here. We treat
+        // a non-finite claimedAt as reclaimable too, since skipping it would
+        // strand the job forever.
         if (freshData.status !== "inflight") return;
         const claimedAtMs = timestampToMs(freshData.claimedAt);
         if (Number.isFinite(claimedAtMs) && claimedAtMs > nowMs - leaseMs) {
@@ -538,8 +493,9 @@ async function reclaimStaleJobs(ctx) {
       continue;
     }
 
-    // No outcome → the job was no longer a stale inflight (re-enqueued or
-    // re-claimed in the window); leave it for the owning path to resolve.
+    // No outcome means the job was no longer a stale inflight — it was
+    // re-enqueued or re-claimed in the window, so we leave it for the
+    // owning path to resolve.
     if (!outcome) continue;
 
     if (outcome.dead) {
@@ -549,7 +505,7 @@ async function reclaimStaleJobs(ctx) {
         attempts: outcome.newAttempts,
         reason: "reclaimed: lease expired",
       });
-      // Surface the terminal failure on the client doc (best-effort) so the
+      // Surface the terminal failure on the client doc, best effort, so the
       // admin UI shows 'error' instead of a forever-'pending' sync state.
       await markClientSyncError(
           db, outcome.refPath, "Sync failed after repeated attempts.", logger,
@@ -560,13 +516,13 @@ async function reclaimStaleJobs(ctx) {
 }
 
 /**
- * Main drain — claims and dispatches queued jobs. Each job is claimed
- * transactionally (re-read; skip if not still `queued`; set `inflight` + stamp
- * `claimedAt`) before dispatch, and every outcome is written through
- * `commitOutcome` so a concurrent re-enqueue is never clobbered.
+ * Main drain. Before dispatch, it claims queued jobs transactionally — same
+ * re-read, skip-unless-`queued`, set-`inflight`-and-stamp-`claimedAt` dance
+ * described above — and writes every outcome through `commitOutcome` so a
+ * concurrent re-enqueue never gets clobbered.
  *
- * NOTE: `waveSyncQueue` needs a composite index `(status ASC,
- * nextAttemptAt ASC)` — add to firestore.indexes.json before deploying.
+ * `waveSyncQueue` needs a composite index `(status ASC, nextAttemptAt ASC)`
+ * — add it to firestore.indexes.json before deploying.
  *
  * @param {!DrainContext} ctx Shared drain state; `ctx.summary` is mutated.
  * @return {!Promise<void>}
@@ -587,9 +543,9 @@ async function dispatchQueuedJobs(ctx) {
   const docs = snap && Array.isArray(snap.docs) ? snap.docs : [];
 
   for (const doc of docs) {
-    // Wall-clock budget: stop CLAIMING new jobs once the deadline passes so
-    // the function returns with clean outcome writes instead of being killed
-    // mid-dispatch (unclaimed jobs stay queued for the next run).
+    // Stop claiming new jobs once the wall-clock deadline passes, so the
+    // function returns with clean outcome writes instead of getting killed
+    // mid-dispatch. Unclaimed jobs just stay queued for the next run.
     if (pastDeadline()) {
       logger.warn("WAVE-WORKER deadline budget reached — stopping early", {
         deadlineMs,
@@ -602,9 +558,9 @@ async function dispatchQueuedJobs(ctx) {
     const jobData = doc.data() || {};
 
     // --- Claim the job transactionally ----------------------------------
-    // The claim stamp is the ACTUAL claim time (not the drain-start clock):
-    // with a stale stamp, a long drain could make a job look lease-expired
-    // to a concurrent reclaim pass while it is still being dispatched.
+    // We use the actual claim time here, not the drain-start clock — with a
+    // stale stamp, a long drain could make a job look lease-expired to a
+    // concurrent reclaim pass while it's still being dispatched.
     const claimStamp = nowFn ? nowFn() : new Date();
     let claimed = false;
     try {
@@ -682,8 +638,8 @@ async function dispatchQueuedJobs(ctx) {
     const sanitized = sanitizeError(dispatchError);
 
     if (retryable && newAttempts < maxAttempts) {
-      // Back to queued with backoff. Use the injected clock so retry time is
-      // testable and consistent with the query's `nowValue`.
+      // Back to queued with backoff, using the injected clock so retry time
+      // stays testable and consistent with the query's `nowValue`.
       const delayMs = backoffFn(newAttempts - 1);
       const nextAttemptAt = new Date(nowMs + delayMs);
 
@@ -721,10 +677,10 @@ async function dispatchQueuedJobs(ctx) {
           attempts: newAttempts,
           retryable,
         });
-        // Surface the terminal failure on the client doc (best-effort) so
-        // the admin UI shows 'error' + a sanitized reason instead of a
-        // forever-'pending' sync state. WaveValidationError already wrote a
-        // richer message via writeSyncError in customers.js — keep it.
+        // Surface the terminal failure on the client doc, best effort, so
+        // the admin UI shows 'error' instead of forever-'pending'. Skipped
+        // for WaveValidationError, since that already wrote a richer message
+        // via writeSyncError in customers.js.
         if (!(dispatchError instanceof WaveValidationError)) {
           await markClientSyncError(db, jobData.refPath, sanitized, logger);
         }
@@ -741,19 +697,11 @@ async function dispatchQueuedJobs(ctx) {
 // ---------------------------------------------------------------------------
 
 /**
- * Claims and dispatches pending `waveSyncQueue` jobs.
- *
- * Runs a reclaim pass first: jobs that are `inflight` with a `claimedAt`
- * older than `leaseMs` are treated as lost dispatches (function died between
- * claim and outcome write) and are put back through the retry/dead-letter path
- * with `attempts` incremented, so a crash-looping job eventually dead-letters.
- *
- * Query: `status == 'queued' AND nextAttemptAt <= now`, ordered by
- * `nextAttemptAt ASC`, limited to `batchLimit`.
- *
- * Each job is claimed transactionally (re-read; skip if not still `queued`;
- * set `inflight` + stamp `claimedAt`) before dispatch so two concurrent
- * workers can't race on the same job.
+ * Claims and dispatches pending `waveSyncQueue` jobs. A reclaim pass runs
+ * first, retrying or dead-lettering jobs left `inflight` past `leaseMs` (a
+ * sign of a crashed instance). Then it claims due `queued` jobs
+ * (`nextAttemptAt <= now`, ordered, limited to `batchLimit`) transactionally,
+ * so concurrent workers can't race for the same job.
  *
  * @param {Object=} deps Injectable dependencies:
  *   - `db` {!Object} Firestore instance (default `getFirestore()`).
@@ -769,17 +717,17 @@ async function dispatchQueuedJobs(ctx) {
  *   - `batchLimit` {number} Max jobs per call (default 30; keep
  *     `schedule_frequency × batchLimit < Wave 60/min` limit).
  *   - `leaseMs` {number} Inflight lease duration in ms (default 600000 / 10
- *     min). Jobs still inflight after this long are reclaimed. Must exceed
- *     the function's maximum runtime to avoid reclaiming live jobs.
- *   - `deadlineMs` {number} Absolute wall-clock epoch-ms budget: no NEW job
- *     is claimed once `wallClock()` passes it (in-flight work finishes and
- *     its outcome is still committed). Defaults to Infinity (no budget).
- *     The scheduler passes ~70% of its timeout so the run always ends with
- *     clean outcome writes instead of being killed mid-dispatch.
+ *     min). Jobs still inflight this long get reclaimed, so this needs to
+ *     exceed the function's maximum runtime or it'll reclaim live jobs.
+ *   - `deadlineMs` {number} Wall-clock epoch-ms budget — no new job gets
+ *     claimed past it, though in-flight work still finishes and commits.
+ *     Defaults to Infinity; the scheduler passes ~70% of its timeout so the
+ *     run ends with clean outcome writes instead of getting killed
+ *     mid-dispatch.
  *   - `wallClock` {!Function} Returns the current epoch ms (default
  *     `Date.now`); injectable for deadline tests.
- *   - `logger` {!Object} Logging facade with `.error(msg, meta)` etc.
- *     Defaults to `firebase-functions/logger`. Never use `console`.
+ *   - `logger` {!Object} Logging facade with `.error(msg, meta)` etc.,
+ *     defaulting to `firebase-functions/logger` (never `console`).
  * @return {!Promise<{processed:number, done:number, retried:number,
  *   dead:number, skipped:number, reclaimed:number}>} Summary of the drain run.
  */

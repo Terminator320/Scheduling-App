@@ -1,11 +1,10 @@
 "use strict";
 
 /**
- * Unit tests for the transactional core of createEmployeeInvite
- * (performCreateInvite). The onCall wrapper (auth/admin/rate-limit guards)
- * is not exercised here — only the race-sensitive transaction logic:
- * duplicate-email lookup, prior-code sweep, and writes must all happen
- * inside ONE transaction, reads before writes.
+ * Tests the race-sensitive transaction core of createEmployeeInvite
+ * (performCreateInvite) — the duplicate-email lookup, the prior-code sweep,
+ * and the writes, all inside one transaction. The onCall wrapper's guards
+ * live elsewhere and aren't covered here.
  */
 
 const {performCreateInvite} = require("../invites");
@@ -205,8 +204,8 @@ describe("performCreateInvite — re-issue for a pending invite", () => {
     expect(deletes.map((o) => o.ref.id).sort())
         .toEqual(["old-code-1", "old-code-2"]);
 
-    // The invite doc is refreshed (editable fields only — email/role/status
-    // untouched by the update).
+    // The invite doc gets refreshed, but only the editable fields —
+    // email/role/status are left untouched by the update.
     const update = ops.find((o) => o.op === "update");
     expect(update.ref.id).toBe("invite-1");
     expect(update.data).toEqual({

@@ -35,7 +35,7 @@ void main() {
     String? uid = _uid,
   }) {
     final container = ProviderContainer(
-      // Mirrors main.dart's ProviderScope: Riverpod 3's default automatic
+      // This mirrors main.dart's ProviderScope. Riverpod 3's default automatic
       // provider retry is off, so a failed build surfaces its error instead of
       // looping forever.
       retry: (retryCount, error) => null,
@@ -55,8 +55,8 @@ void main() {
     return container;
   }
 
-  /// Lets the two source streams deliver before reading the identity future —
-  /// the provider rebuilds on each dependency emission and `.future` is
+  /// Lets the two source streams deliver before reading the identity future.
+  /// The provider rebuilds on each dependency emission, and `.future` is
   /// per-build.
   Future<ActiveUserIdentity?> resolve(ProviderContainer container) async {
     await container.read(currentUserDocProvider.future);

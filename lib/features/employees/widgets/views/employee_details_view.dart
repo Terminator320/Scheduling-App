@@ -26,7 +26,8 @@ class EmployeeDetailsView extends ConsumerStatefulWidget {
   final EmployeeRecord employee;
   final bool isCurrentUserAdmin;
 
-  /// Receives action name ('edit', 'deleted', 'enabled', 'disabled') so host can react.
+  /// Receives the action name ('edit', 'deleted', 'enabled', 'disabled') so
+  /// the host can react to it.
   final ValueChanged<String> onAction;
   final ScrollController? scrollController;
   final bool showHandle;
@@ -232,7 +233,8 @@ class _ColorRow extends StatelessWidget {
   }
 }
 
-/// Edit / (admin) Disable-or-Enable / Delete action stack for the detail view.
+/// The action stack for the detail view — Edit, an admin-only
+/// Disable/Enable, and Delete.
 class _ActionButtons extends StatelessWidget {
   const _ActionButtons({
     required this.isCurrentUserAdmin,

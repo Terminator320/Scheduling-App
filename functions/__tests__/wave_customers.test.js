@@ -30,9 +30,8 @@ function snap(data) {
 }
 
 /**
- * Fake `clients/{id}` doc ref that records update() calls and serves a
- * (possibly mutating) snapshot. `freshData` (if set) is what the write-back
- * transaction re-reads; otherwise the same `data` is used.
+ * Fake `clients/{id}` doc ref that records update() calls and serves
+ * `freshData` (or `data` if unset) as the write-back re-read snapshot.
  * @param {Object|null} data Initial snapshot data.
  * @param {Object=} freshData Snapshot data for the write-back re-read.
  * @return {!Object}
@@ -320,8 +319,8 @@ describe("upsertCustomer phone/mobile create fallback", () => {
           {code: "GENERIC_ERROR", message: "bad", path: ["phone"]},
           {code: "GENERIC_ERROR", message: "bad", path: ["mobile"]},
         ];
-        // 1) create with phone fails, 2) create without phone OK,
-        // 3) patch phone onto the new id OK.
+        // Create with phone fails, then create without phone succeeds, then patches
+        // the phone onto the new id.
         const graphql = graphqlSeq(
             createFail(phoneErrors),
             createOk("wave-new"),
@@ -372,9 +371,10 @@ describe("upsertCustomer phone/mobile create fallback", () => {
 
         expect(result).toEqual({status: "created", waveCustomerId: "wave-new"});
         const u = ref.updates[0];
-        // The customer is linked + synced, but the recorded hash reflects what
-        // actually reached Wave (no phone), so a later upsert detects the diff
-        // and retries the phone instead of no-op'ing forever.
+        // The customer ends up linked and synced, but the recorded hash
+        // reflects what actually reached Wave — without the phone. That way
+        // a later upsert notices the difference and retries the phone
+        // instead of treating it as done forever.
         expect(u["wave.syncState"]).toBe("synced");
         expect(u["wave.lastSyncedHash"]).toBe(
             mappedFieldsHash({...CLIENT, phone: "", mobile: ""}),
@@ -430,7 +430,7 @@ describe("upsertCustomer crash-retry create idempotency", () => {
     "NO duplicate create", async () => {
     const data = {...CLIENT}; // unlinked
     const ref = clientRef(data);
-    // 1) LIST_CUSTOMERS returns the match, 2) patch it with current fields.
+    // LIST_CUSTOMERS returns the match, then patches it with current fields.
     const graphql = graphqlSeq(
         listPage1([matchingNode]),
         patchOk("wave-existing"),
@@ -612,8 +612,8 @@ function fakeBatch(log) {
 }
 
 /**
- * Fake Firestore for import: a clients collection whose .get() returns the
- * provided existing docs, and .doc() mints auto-id refs. Records batches.
+ * Fake Firestore for import: a clients collection whose .get() returns
+ * existing docs, .doc() mints auto-id refs, and batches are recorded.
  * @param {!Array<Object>} existingDocs Pre-existing client docs (with .data /
  *   .ref).
  * @param {Object=} opts Connection options (`businessId`).
@@ -623,8 +623,9 @@ function importDb(existingDocs, opts = {}) {
   const batchLog = {sets: [], commits: []};
   const newRefs = [];
   let autoId = 0;
-  // Mirror upsertDb: an explicit "" must reach readBusinessId (not-connected),
-  // so only fall back to "biz-1" when businessId is omitted entirely.
+  // This mirrors upsertDb — an explicit "" still needs to reach
+  // readBusinessId as not-connected, so we only fall back to "biz-1" when
+  // businessId is left out entirely.
   const connectionData = opts.businessId !== undefined ?
     {businessId: opts.businessId} : {businessId: "biz-1"};
   const waveColl = {
@@ -746,9 +747,9 @@ describe("importCustomers", () => {
         expect(op.ref).toBe(existingRef);
         expect(op.opts).toEqual({merge: true});
         expect(op.data.name).toBe("Alpha");
-        // updatedAt always refreshed; createdAt backfilled because the existing
-        // doc lacked one (an earlier import that omitted it stays hidden
-        // otherwise).
+        // updatedAt is always refreshed. createdAt gets backfilled too, since
+        // the existing doc didn't have one — otherwise an earlier import
+        // that omitted it would stay hidden forever.
         expect(op.data.updatedAt).toBe(TS);
         expect(op.data.createdAt).toBe(TS);
       });
@@ -787,10 +788,8 @@ describe("importCustomers", () => {
 // ---------------------------------------------------------------------------
 // sanitizeInputErrors
 // ---------------------------------------------------------------------------
-// This is exported specifically for these tests (the export previously carried
-// an "exported for unit tests" comment with no test behind it). Its security
-// contract is that Wave's raw `message` text NEVER reaches our UI or logs —
-// only messages mapped from a known `code`.
+// Wave's raw `message` text must never reach our UI or logs — we only ever
+// surface messages mapped from a known `code`.
 describe("sanitizeInputErrors", () => {
   test("maps a known code to its safe message", () => {
     expect(sanitizeInputErrors([{code: "INVALID_EMAIL"}]))

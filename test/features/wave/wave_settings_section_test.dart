@@ -28,8 +28,7 @@ class _MockWaveService extends Mock implements WaveService {}
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// A mock service whose mount-time status read defaults to not-connected.
-/// Tests that need a connected state re-stub [WaveService.getConnection].
+/// Mock service defaulting to not-connected; re-stub [WaveService.getConnection] for a connected state.
 _MockWaveService _mockService() {
   final service = _MockWaveService();
   when(service.getConnection).thenAnswer((_) async => null);

@@ -1,13 +1,10 @@
 "use strict";
 
 /**
- * Response-shaping tests for placesAutocomplete and placesGetDetails — the
- * defensive `Array.isArray(...) ? ... : []` / string guards that keep a
- * malformed upstream body from reaching the Flutter client. The onCall
- * modules are lazily loaded (require-safe per the project convention);
- * assertAdmin + enforceDurableRateLimit are mocked (they need live Firestore),
- * while the real payload validators stay real. Reverse-geocode shaping is
- * covered in places_reverse_geocode.test.js.
+ * Tests the response shaping for placesAutocomplete and placesGetDetails —
+ * the defensive `Array.isArray(...) ? ... : []` / string guards that keep a
+ * malformed upstream body from reaching the Flutter client. Reverse-geocode
+ * shaping is covered separately in places_reverse_geocode.test.js.
  */
 jest.mock("../security", () => {
   const actual = jest.requireActual("../security");

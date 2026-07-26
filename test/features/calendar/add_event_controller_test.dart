@@ -75,7 +75,7 @@ void main() {
         appointmentsRepositoryProvider.overrideWithValue(appointments),
         clientsRepositoryProvider.overrideWithValue(clients),
         appointmentImageUploadProvider.overrideWithValue(uploader),
-        // Deterministic online by default; the offline test builds its own.
+        // Online by default here — the offline test below builds its own.
         isOfflineProvider.overrideWithValue(false),
       ],
     );
@@ -238,7 +238,7 @@ void main() {
       expect(saved.status, 'pending');
 
       verify(() => appointments.addAppointment(any())).called(1);
-      // No images selected — uploader should not run.
+      // No images were selected, so the uploader should never run.
       verifyNever(
         () => uploader.uploadInBackground(
           appointmentId: any(named: 'appointmentId'),
@@ -295,7 +295,8 @@ void main() {
       );
 
       expect(outcome, isA<AddEventSubmitted>());
-      // 60-month horizon / 4 = 15 future visits, booked across five years.
+      // A 60-month horizon at every 4 months works out to 15 future visits,
+      // spread across five years.
       expect((outcome as AddEventSubmitted).futureBookings, 15);
 
       final captured = verify(

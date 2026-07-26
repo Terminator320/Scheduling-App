@@ -11,18 +11,17 @@ const {
   INVITE_CODE_TTL_MS, generateSignupCode, hashSignupCode, validateRedemption,
 } = require("./signup_code_utils");
 
-// Mirrors account.js's throttle; redeem is keyed by token email (below).
+// Mirrors account.js's throttle, but redeem is keyed by token email (below).
 const REDEEM_RATE_MAX = 5;
 const REDEEM_RATE_WINDOW_MS = 15 * 60 * 1000;
 
 // Invite issuance is bounded per admin uid — defense-in-depth so a
-// compromised admin session can't mass-create invited users + signup codes
-// (matches the other admin callables, e.g. waveBootstrap).
+// compromised admin session can't mass-create invited users + signup codes.
 const INVITE_RATE_MAX = 20;
 const INVITE_RATE_WINDOW_MS = 60 * 60 * 1000;
 
-// Optional trimmed string with a length + control-char guard (phone may be
-// empty; requireString rejects empty, so read it leniently here).
+// Optional trimmed string with a length + control-char guard. Phone may be
+// empty and requireString rejects empty, so we read it leniently here.
 /**
  * Optional trimmed string field — like requireString but allows empty.
  * @param {object} data callable request data.
@@ -43,18 +42,10 @@ const APP_CHECK = {enforceAppCheck: true};
 /**
  * Transactional core of createEmployeeInvite, extracted for unit testing.
  *
- * EVERYTHING — the duplicate-email lookup, the prior-code sweep, and the
- * writes — runs inside ONE Firestore transaction (equality queries are
- * allowed in transactions via `tx.get(query)`), closing two races the old
- * check-then-write flow had:
- *   1. Two concurrent invites for the same email both passed the
- *      out-of-transaction duplicate check and minted two invite docs.
- *   2. The re-issue branch's query+batch could interleave with a concurrent
- *      redeemSignupCode transaction (which flips the invite to 'active' and
- *      deletes the code doc), re-issuing a code for an already-claimed
- *      account. The transactional read of the invite doc now serializes the
- *      two: whichever commits second sees the other's write and
- *      retries/blocks correctly.
+ * Runs the duplicate-email lookup, prior-code sweep, and writes inside ONE
+ * Firestore transaction. This closes races the old check-then-write flow
+ * had — duplicate invites for the same email, and a re-issue racing a
+ * concurrent redeemSignupCode.
  *
  * @param {!Object} db Firestore instance.
  * @param {{name: string, email: string, phone: string, colorValue: string}}
@@ -76,9 +67,8 @@ async function performCreateInvite(db, fields, opts) {
         db.collection("users").where("email", "==", email).limit(1),
     );
     const existing = dup.empty ? null : dup.docs[0];
-    // A real (claimed) account blocks re-use; a still-pending invite is
-    // re-issued instead (idempotent — covers a lost/expired code and seeds a
-    // code for invites created before signup codes existed).
+    // A real (claimed) account blocks re-use. A still-pending invite gets
+    // re-issued instead — idempotent, useful for e.g. a lost or expired code.
     if (existing && existing.data().status !== "invited") {
       return {ok: false};
     }
@@ -88,7 +78,8 @@ async function performCreateInvite(db, fields, opts) {
           db.collection("signupCodes")
               .where("inviteDocId", "==", existing.id),
       );
-      // Re-issue: refresh the editable fields and replace the invite's code.
+      // Refresh the editable fields and replace the invite's code — this is
+      // the re-issue path.
       prior.forEach((d) => tx.delete(d.ref));
       tx.update(existing.ref, {
         name, phone, colorValue,
@@ -121,20 +112,17 @@ const createEmployeeInvite = onCall(APP_CHECK, async (req) => {
     throw new HttpsError("unauthenticated", "auth-required");
   }
   await assertAdmin(req.auth.uid);
-  // Validate the payload BEFORE consuming a rate-limit slot, so ~20 malformed
-  // submissions can't lock a legitimate admin out of inviting for an hour.
-  // assertAdmin stays above the limiter so non-admins still can't burn slots.
+  // Validate the payload before consuming a rate-limit slot so malformed
+  // submissions can't lock out a legitimate admin for an hour.
   assertPayloadShape(req.data,
       new Set(["name", "email", "phone", "colorValue"]));
   const name = requireString(req.data, "name", 100);
   const email = requireString(req.data, "email", 254).toLowerCase();
   const phone = optionalString(req.data, "phone", 40);
   const colorValue = requireString(req.data, "colorValue", 40);
-  // Mirror the rules' colorValue guard (firestore.rules isValidUserData). This
-  // callable writes the users doc with the Admin SDK, which bypasses rules, so
-  // without this check it is the one path that can seed a value the rules were
-  // written to reject — a malformed one silently degrades the client to the
-  // default blue.
+  // Mirrors the rules' colorValue guard (firestore.rules isValidUserData) —
+  // this Admin SDK write bypasses rules, so it's the one path that could
+  // otherwise seed a value they'd reject.
   if (!/^-?[0-9]+$/.test(colorValue)) {
     throw new HttpsError("invalid-argument", "invalid-colorValue");
   }
@@ -169,10 +157,8 @@ const redeemSignupCode = onCall(APP_CHECK, async (req) => {
   if (typeof tokenEmail !== "string" || tokenEmail === "") {
     throw new HttpsError("failed-precondition", "no-email-claim");
   }
-  // Key the limit by the target email, not the caller uid: an attacker can
-  // delete + re-register the same email to mint a fresh uid (the signup flow
-  // does exactly that on a failed attempt), which would reset a uid-keyed
-  // counter. The email pins the cap to the invite being guessed.
+  // Key the limit by target email, not caller uid — a failed signup deletes
+  // and re-registers to mint a fresh uid, which would reset a uid-keyed cap.
   const rateKey = tokenEmail.trim().toLowerCase();
   await enforceDurableRateLimit(
       "redeemSignupCode", rateKey, REDEEM_RATE_MAX, REDEEM_RATE_WINDOW_MS,

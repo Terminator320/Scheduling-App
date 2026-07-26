@@ -18,23 +18,10 @@ class _MockEmployeesRepo extends Mock implements EmployeesRepository {}
 class _MockTokenRepo extends Mock implements LiveActivityTokenRepository {}
 
 // NOTE ON COVERAGE / SKIPPED CASES
-// --------------------------------
-// `sync()`, `canHostCards()` and `endLocalCards()` all hard-gate on
-// `dart:io Platform.isIOS` BEFORE any injectable seam. A unit-test host (this
-// repo runs on Windows) reports `Platform.isIOS == false`, and `dart:io`
-// exposes no way to fake it (unlike Flutter's `defaultTargetPlatform`). So the
-// documented `sync()` contracts that require the body to execute —
-//   (a) cold-start sync awaits the enabled-preference `ready` before acting,
-//   (c) a concurrent sync coalesces into a pending resync —
-// cannot run past the first line on this host, and the push-to-start / update
-// token streams they drive are method-channel plugin surfaces (device-only
-// verification, per CLAUDE.md). Those two cases are intentionally NOT faked.
-//
-// What IS tested here runs cross-platform:
-//   - `unregister()` and its `_resolveUserDocId()` are NOT iOS-gated, so the
-//     opt-out delete path (contract (b)) is covered in full;
-//   - `sync()` / `canHostCards()` / `endLocalCards()` no-op off iOS (the slice
-//     of contract (d) reachable here: this host genuinely cannot host a card).
+// `sync()`/`canHostCards()`/`endLocalCards()` hard-gate on `dart:io Platform.isIOS`,
+// which is unfakeable on this Windows test host, so the cold-start, concurrent-sync,
+// and device-only token-stream paths are untested here — only `unregister()` (fully
+// covered) and the off-iOS no-op path are exercised.
 void main() {
   late _MockAuth auth;
   late _MockUser user;

@@ -36,7 +36,8 @@ class ClientsListView extends ConsumerStatefulWidget {
 
 class _ClientsListViewState extends ConsumerState<ClientsListView> {
   static const int _pageSize = 50;
-  // Debounce before server search to avoid per-keystroke read storm; local filter covers gap for immediate feel.
+  // Debounce before the server search, so we don't fire a read on every keystroke —
+  // the local filter covers the gap in the meantime so it still feels immediate.
   final _searchDebounce = Debouncer(const Duration(milliseconds: 250));
   String _committedQuery = '';
 
@@ -74,7 +75,8 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     _scheduleSearch();
   }
 
-  // Debounce restarts on query change; clearing commits instantly for zero lag returning to paged list.
+  // The debounce restarts on every query change, but clearing the query commits
+  // instantly, so returning to the paged list has zero lag.
   void _scheduleSearch() {
     final next = widget.searchQuery.trim();
     if (next.isEmpty) {
@@ -135,9 +137,9 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     );
   }
 
-  // Non-scrolling: the first-page indicator lands inside ISP's
-  // SliverFillRemaining, where a nested scrollable (ListView) would throw
-  // an intrinsic-dimension error.
+  // This can't scroll itself — the first-page indicator lands inside ISP's
+  // SliverFillRemaining, and a nested scrollable (ListView) there would throw an
+  // intrinsic-dimension error.
   Widget _skeleton() => const Padding(
     padding: EdgeInsets.all(AppSpacing.sp16),
     child: Column(
@@ -155,11 +157,9 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
   );
 
   // Pre-normalized search index over the loaded pages, memoized on the pages
-  // identity (PagingState.items rebuilds a fresh list each access, but the
-  // underlying pages list only changes when a page loads). Normalizing ~13
-  // fields per client runs once per data change; each keystroke then only
-  // normalizes the query. Mirrors _employeeSearchIndexProvider and the
-  // history view's _filterOptionsPages memo.
+  // identity so normalization reruns only when a page loads, not on every
+  // keystroke (mirrors _employeeSearchIndexProvider and the history view's
+  // _filterOptionsPages memo).
   List<List<ClientRecord>>? _searchIndexPages;
   List<ClientSearchEntry> _searchIndex = const [];
 
@@ -176,8 +176,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
   }
 
   // Instant fallback over the already-loaded pages while the comprehensive
-  // server search resolves. Matches the full field set via the shared policy
-  // (ClientSearchPolicy is the single source of matching truth).
+  // server search resolves, matching the full field set via the shared policy.
   List<ClientRecord> _localFilter(String query) {
     final q = ClientSearchPolicy.normalize(query);
     final qDigits = ClientSearchPolicy.digitsOnly(query);
@@ -193,10 +192,8 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     ];
   }
 
-  // Comprehensive search runs on the debounced (committed) query and finds
-  // clients across all fields and all pages. The instant local filter fills the
-  // gap until the debounce settles and the server result arrives, so results
-  // appear immediately and then expand to the full set.
+  // The full search runs on the debounced, committed query across all fields and
+  // pages. The instant local filter fills the gap until that settles.
   Widget _buildSearchResults(String query) {
     final local = _localFilter(query);
 
@@ -212,9 +209,8 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
               ? _emptyState(query: query)
               : _resultsList(results),
           loading: () => local.isEmpty ? _skeleton() : _resultsList(local),
-          // A failed search must not look like "no such client": when the
-          // instant local fallback is also empty, show an error, not the
-          // empty state. Composes without logging (this is a builder).
+          // A failed search must not look like "no such client" — show an
+          // error when the instant local fallback is also empty, not the empty state.
           error: (e, _) =>
               local.isEmpty ? _searchError(e, query) : _resultsList(local),
         );

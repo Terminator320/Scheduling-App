@@ -72,7 +72,8 @@ class EventList extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final e = value[index];
                     final accent = colorFromMap(e, colorMap) ?? scheme.outline;
-                    // Show every assigned employee; drop unresolved ids and blank names.
+                    // Show every assigned employee, but drop any ids that
+                    // don't resolve to a name and skip blank names.
                     final joinedNames = e.employeeIds
                         .map((id) => nameMap[id])
                         .whereType<String>()

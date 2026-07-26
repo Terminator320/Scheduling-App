@@ -15,7 +15,8 @@ import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/entity_form_header.dart';
 
-/// Editable form for ClientRecord; owns controllers and validate/persist flow, reports saved record via onSaved.
+/// Editable form for a ClientRecord. Owns the controllers and the validate/persist
+/// flow, and reports the saved record back through onSaved.
 class ClientEditForm extends ConsumerStatefulWidget {
   const ClientEditForm({
     required this.client,
@@ -155,8 +156,8 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
     if (errors.values.any((e) => e != null)) return;
 
     // --- Build & persist ---
-    // Preserves the Wave projection fields (waveCustomerId/waveSyncState/
-    // waveSyncError) by copying the loaded record; they're never edited here.
+    // Copying the loaded record preserves the Wave projection fields
+    // (waveCustomerId/waveSyncState/waveSyncError) — this form never edits them.
     final updated = widget.client.copyWith(
       name: name,
       firstName: firstName,

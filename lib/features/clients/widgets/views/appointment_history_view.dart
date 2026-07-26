@@ -17,7 +17,8 @@ import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
-/// Pre-normalized searchable projection built once per page load for per-keystroke filtering.
+/// A pre-normalized searchable projection, built once per page load so filtering on
+/// every keystroke stays cheap.
 typedef _HistorySearchEntry = ({
   AppointmentRecord appointment,
   String clientText,
@@ -25,7 +26,8 @@ typedef _HistorySearchEntry = ({
   String phoneDigits,
 });
 
-/// Paginated history list (newest-first); filters and search operate over loaded pages (client-side model).
+/// Paginated history list, newest first. Filters and search both operate over the
+/// pages already loaded on the client, not a fresh server query.
 class AppointmentHistoryView extends ConsumerStatefulWidget {
   const AppointmentHistoryView({required this.searchQuery, super.key});
 
@@ -39,7 +41,8 @@ class AppointmentHistoryView extends ConsumerStatefulWidget {
 class _AppointmentHistoryViewState
     extends ConsumerState<AppointmentHistoryView> {
   static const int _pageSize = 25;
-  // Debounce before history search (mirrors clients list); loaded-page filter covers gap for instant feel.
+  // Debounce before running a history search, same as the clients list. The
+  // loaded-page filter covers the gap in the meantime so it still feels instant.
   final _searchDebounce = Debouncer(const Duration(milliseconds: 250));
 
   int? _year;
@@ -47,7 +50,8 @@ class _AppointmentHistoryViewState
 
   String _committedQuery = '';
 
-  // Memoized filter options and search index recomputed only on new page (not every filter setState).
+  // Filter options and the search index are memoized — they only get recomputed when
+  // a new page arrives, not on every filter setState.
   List<List<AppointmentRecord>>? _filterOptionsPages;
   List<int> _cachedYears = const [];
   List<HistoryEmployeeOption> _cachedEmployees = const [];
@@ -97,7 +101,8 @@ class _AppointmentHistoryViewState
     _scheduleSearch();
   }
 
-  // Restart the debounce on every query change; clearing commits instantly.
+  // Restart the debounce on every query change. Clearing the query, though, commits
+  // instantly instead of waiting.
   void _scheduleSearch() {
     final next = widget.searchQuery.trim();
     if (next.isEmpty) {
@@ -158,7 +163,7 @@ class _AppointmentHistoryViewState
       _year != null ||
       _employeeId != null;
 
-  // Year/employee chip filters only (no text search). Applied on top of either
+  // Applies only the year/employee chip filters, no text search. Used on top of either
   // the loaded pages or the server-backed search results.
   List<AppointmentRecord> _applyChips(List<AppointmentRecord> appointments) =>
       appointments.where(_matchesChips).toList();
@@ -198,9 +203,10 @@ class _AppointmentHistoryViewState
     return matchesClient || matchesEmployee || matchesPhone;
   }
 
-  // Builds one history entry with the year/day headers that open its group,
-  // derived by comparing against the previous item in [items]. Shared by the
-  // paged (unfiltered) and filtered list paths so grouping looks identical.
+  // Builds one history entry along with the year/day headers that open its group —
+  // whether a header shows is worked out by comparing against the previous item in
+  // [items]. Shared by the paged and filtered list paths so grouping looks identical
+  // either way.
   Widget _historyItem(
     List<AppointmentRecord> items,
     int index,
@@ -350,12 +356,9 @@ class _AppointmentHistoryViewState
       return _filteredList(_filterLoaded(), colorMap);
     }
 
-    // A search reaches the whole history window via the database (not just the
-    // loaded pages). The loaded-page filter fills the gap until the debounce
-    // settles and the server result arrives.
-    // The loaded-page fallback, computed lazily: the steady-state `data` branch
-    // renders the server results and never needs it, so don't filter the loaded
-    // pages on every rebuild once the search has settled.
+    // The local page filter fills the gap until the debounced server search settles.
+    // It's computed lazily, so the settled `data` branch — which renders the server
+    // results — doesn't end up re-filtering on every rebuild.
     Widget localOr(Widget Function() onEmpty) {
       final local = _filterLoaded();
       return local.isEmpty ? onEmpty() : _filteredList(local, colorMap);
@@ -370,9 +373,8 @@ class _AppointmentHistoryViewState
         .when(
           data: (results) => _filteredList(_applyChips(results), colorMap),
           loading: () => localOr(_skeleton),
-          // A failed search shouldn't read as "no history": when the local
-          // fallback is also empty, surface an error, not the empty state.
-          // Composes without logging (this is a builder).
+          // A failed search shouldn't read as "no history" — surface an error
+          // when the local fallback is also empty, not the empty state.
           error: (e, _) => localOr(() => _searchError(e, query)),
         );
   }
@@ -410,8 +412,8 @@ class _AppointmentHistoryViewState
     );
   }
 
-  // Non-scrolling: lands inside ISP's SliverFillRemaining, where a nested
-  // ListView would throw an intrinsic-dimension error.
+  // This can't scroll itself — it lands inside ISP's SliverFillRemaining, and a nested
+  // ListView there would throw an intrinsic-dimension error.
   Widget _skeleton() => const Padding(
     padding: EdgeInsets.all(AppSpacing.sp12),
     child: Column(

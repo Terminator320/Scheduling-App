@@ -40,7 +40,8 @@ class AppRoutes {
         final args = settings.arguments as DashboardArgs?;
         return AppPageRoute(
           settings: settings,
-          // Admin-only screen; default isAdmin to true if pushed without args.
+          // This is an admin-only screen, so default isAdmin to true if it's
+          // pushed without args.
           builder: (_) => DashboardScreen(
             isAdmin: args?.isAdmin ?? true,
             employeeId: args?.employeeId ?? '',
@@ -60,7 +61,8 @@ class AppRoutes {
         );
 
       case mainCalendar:
-        // Post-login entry: builds fresh shell (pushReplacement always).
+        // This is the post-login entry point — always builds a fresh shell
+        // via pushReplacement.
         final args = settings.arguments! as MainCalendarArgs;
         return AppPageRoute(
           settings: settings,
@@ -123,7 +125,8 @@ class AppRoutes {
     }
   }
 
-  /// Non-calendar hub route: redirects to tab switch on live shell or opens fresh one.
+  /// Route for any non-calendar hub tab — redirects into a tab switch if a
+  /// shell is already live, otherwise opens a fresh one.
   static Route<dynamic> _hubRoute(
     RouteSettings routeSettings,
     AdaptiveDestination destination, {
