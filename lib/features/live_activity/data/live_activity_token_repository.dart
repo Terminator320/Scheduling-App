@@ -23,8 +23,7 @@ class LiveActivityTokenRepository {
       .collection('liveActivityTokens')
       .doc(docId);
 
-  /// Upserts a Live Activity token with createdAt only on first write (iOS token rotation preserves original time).
-  /// Plain get-then-set, NOT a transaction: concurrent transactions crash in cloud_firestore iOS plugin; cosmetic re-stamp of createdAt is acceptable.
+  /// Upserts a Live Activity token with createdAt only on first write; plain get-then-set, not a transaction, since concurrent transactions crash the cloud_firestore iOS plugin.
   Future<void> upsertToken({
     required String userDocId,
     required String docId,

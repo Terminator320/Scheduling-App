@@ -68,8 +68,7 @@ void main() {
   File makeSource(String name) =>
       File('${sourceDir.path}/$name')..writeAsStringSync('data');
 
-  // Manually stage files + enqueue an entry, as _stageAndRun would have.
-  // Defaults to a fresh timestamp so drainPending's 7-day prune leaves it alone.
+  // Manually stages files + enqueues an entry (as _stageAndRun would), with a fresh timestamp so drainPending's 7-day prune leaves it alone.
   Future<PendingUpload> stageEntry(
     String appointmentId,
     List<String> names, {

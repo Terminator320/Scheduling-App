@@ -76,8 +76,8 @@ class StaffMarkerIconRenderer {
   static const double _pointerHeight = 9;
   static const double _pad = 6;
 
-  /// Draws one pin and returns its PNG bytes. Pure `dart:ui` — no plugin
-  /// channels — so it runs (and is asserted on) directly in `flutter_test`.
+  /// Draws one pin and returns its PNG bytes; pure `dart:ui`, so it runs (and
+  /// is asserted on) directly in `flutter_test`.
   @visibleForTesting
   static Future<Uint8List> renderBytes({
     required String name,

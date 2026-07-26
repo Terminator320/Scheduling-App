@@ -12,7 +12,10 @@ import 'package:scheduling/features/splash/application/splash_controller.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/branding/brand_logo.dart';
 
-/// Auth-gate splash: matches native splash visual handoff. Optimistic fast path uses AuthCache to route returning users instantly as employees; live role stream upgrades admins, account listeners handle disabled/deleted accounts.
+/// Auth-gate splash matching native splash visual handoff; an optimistic
+/// fast path routes returning users instantly via AuthCache while a live role
+/// stream upgrades admins and account listeners handle disabled/deleted
+/// accounts.
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 

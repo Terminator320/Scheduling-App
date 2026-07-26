@@ -323,11 +323,8 @@ describe("overduePromptLedgerId / isStaleTokenError", () => {
 // ----- orchestration with mocks --------------------------------------------
 
 /**
- * Builds a minimal Firestore mock for the orchestration tests. Ledger ids in
- * `ledgerCreates`/`ledgerDeletes`/`ledgerExisting` are collection-scoped
- * (`collection/docId`) so a sweep writing to the wrong ledger collection
- * fails the assertions; `appointmentQueries` records every `where()` so the
- * query shape itself is testable.
+ * Builds a minimal Firestore mock for the orchestration tests, with
+ * collection-scoped ledger ids and every appointment `where()` recorded.
  * @param {!Object} config users/tokens/appointments/ledgerExisting fixtures.
  * @return {!Object} `{db, deletedTokens, ledgerCreates, ledgerDeletes,
  *   appointmentQueries}`.
@@ -463,10 +460,8 @@ function makeMessaging(resultFor) {
 const silentLogger = {warn: () => {}, info: () => {}, error: () => {}};
 
 describe("handleAppointmentWrite repeat-series claim", () => {
-  // A "this and all future" delete/reschedule writes every affected occurrence
-  // in ONE client batch, so each sibling doc fires this trigger separately.
-  // Without the claim the tech got one push per sibling (~15 for a year of
-  // monthly visits) plus ~15x the Firestore reads.
+  // A "this and all future" edit writes every sibling in one client batch, so
+  // without a claim the tech would get one push per sibling instead of one.
   const sibling = (id) => ({
     id,
     seriesId: "series-1",
@@ -580,9 +575,8 @@ describe("handleAppointmentWrite repeat-series claim", () => {
   });
 
   test("two separate operations each notify, even back-to-back", async () => {
-    // The reported bug: cancelling Tuesday's visit and then Thursday's visit of
-    // the same series within any window used to suppress the second. Distinct
-    // op-ids make them independent regardless of timing.
+    // Distinct op-ids keep separate cancellations (e.g. Tuesday's then
+    // Thursday's) from suppressing each other regardless of timing.
     const {db} = makeDb({
       users: {e1: {role: "employee", status: "active"}},
       tokens: {e1: [{id: "t-en", locale: "en"}]},
@@ -901,12 +895,8 @@ describe("runDailyDigest", () => {
   });
 
   test("queries every open status, including in_progress", async () => {
-    // Regression: the digest hardcoded ["pending", "confirmed"], so a job
-    // stored `in_progress` for tomorrow silently dropped out of the 18:00
-    // digest — while its own pure filter (groupTomorrowsJobsByEmployee)
-    // excludes only `cancelled`, i.e. it expects to receive every open status.
-    // The query and the filter disagreed, so the unit tests below were
-    // exercising records production never delivered.
+    // Regression: the digest's hardcoded status list disagreed with its own
+    // filter, silently dropping in_progress jobs from the 18:00 digest.
     const {db, appointmentQueries} = makeDb({
       users: {e1: {role: "employee", status: "active"}},
       tokens: {e1: [{id: "t1", locale: "en"}]},

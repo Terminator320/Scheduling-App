@@ -1,10 +1,7 @@
-// placesAutocomplete / placesGetDetails are lazily-loaded onCall modules (no
-// eager Storage/scheduler bucket resolution at require time), so they're safe
-// to require directly per the project's Cloud Functions testing convention.
-// assertAdmin and enforceDurableRateLimit are mocked (they need a live
-// Firestore); assertPayloadShape/requireString stay real so this locks in the
-// actual guard order — auth → assertAdmin → payload validation — and proves the
-// billable Places endpoints never fetch for a non-admin or malformed caller.
+// assertAdmin and enforceDurableRateLimit are mocked (need live Firestore);
+// assertPayloadShape/requireString stay real to lock in the actual guard
+// order — auth → assertAdmin → payload validation — for these billable
+// endpoints.
 jest.mock("../security", () => {
   const actual = jest.requireActual("../security");
   return {

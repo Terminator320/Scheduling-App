@@ -1,17 +1,15 @@
 // "Read my schedule for a day in ES Pro" → Siri asks "For what day?"
 //
-// Reads an arbitrary day's bucket out loud. The snapshot already carries today
-// through +7 days, so this is a pure projection over that data — no schema
-// change from the Phase-1 read intents. ("Today" and "tomorrow" have their own
-// deterministic intents; this covers weekdays and dates further out.)
+// Reads an arbitrary day's bucket out loud — a pure projection over the
+// snapshot's today+7 window, no schema change from the Phase-1 read intents
+// ("today"/"tomorrow" have their own deterministic intents; this covers the
+// rest).
 //
-// A `Date` parameter cannot be interpolated into a spoken App Shortcut phrase
-// (Siri only allows AppEnum/AppEntity parameters there), so the phrase triggers
-// the intent and Siri resolves `targetDate` via its own locale-aware date
-// prompt — "Friday"/"vendredi"/"July 25" all parse without a string catalog.
-// We map the resolved date to a `days[]` bucket by its local calendar day; a
-// date outside the 8-day window (past, or > 7 days out) has no bucket and is
-// answered "I only have your schedule for the next 7 days."
+// A `Date` parameter can't be interpolated into a spoken phrase (Siri only
+// allows AppEnum/AppEntity there), so Siri resolves `targetDate` via its own
+// locale-aware prompt and we map it to a `days[]` bucket by local calendar
+// day, answering "I only have your schedule for the next 7 days" outside
+// that window.
 //
 // Answers from the App Group snapshot only — no network, no Firebase.
 // This file is compiled only on macOS/Xcode.

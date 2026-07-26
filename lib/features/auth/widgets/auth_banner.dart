@@ -7,9 +7,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 enum AuthBannerKind { error, success }
 
 /// Inline status banner for the auth forms: fade/size-animates a colored box
-/// in when [message] is non-null and collapses it when cleared. Shared by all
-/// three auth screens — sign-in uses both kinds, the others only the
-/// error kind.
+/// in when [message] is non-null and collapses it when cleared.
 class AuthBanner extends StatelessWidget {
   const AuthBanner({
     required this.message,

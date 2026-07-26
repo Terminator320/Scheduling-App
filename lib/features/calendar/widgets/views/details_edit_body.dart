@@ -179,9 +179,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     );
     final notifier = ref.read(provider.notifier);
 
-    // Editing a repeating visit asks whether to apply the changes to this
-    // visit only or to this and the future visits — mirroring delete. Changing
-    // the repeat rule itself always rewrites the series, so it skips the prompt.
+    // Editing a repeating visit prompts this-visit-only vs. future visits (mirrors delete); changing the repeat rule itself skips the prompt and always rewrites the series.
     final state = ref.read(provider);
     if (state.isSaving) return; // a save (or its prompt) is already in flight
     var applyToSeries = false;

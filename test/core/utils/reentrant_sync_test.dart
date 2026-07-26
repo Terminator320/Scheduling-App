@@ -85,8 +85,8 @@ void main() {
   });
 }
 
-/// Host whose body throws, to prove the guard's `finally` clears busy even on
-/// failure. The host swallows the throw the way the real controllers do.
+/// Host whose body throws (swallowed the way real controllers do), to prove
+/// the guard's `finally` clears busy even on failure.
 class _ThrowingHost with ReentrantSync {
   int started = 0;
 

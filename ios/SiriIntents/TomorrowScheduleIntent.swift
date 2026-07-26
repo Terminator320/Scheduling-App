@@ -1,9 +1,8 @@
 // "What's my schedule tomorrow in ES Pro?"
 //
-// Reads tomorrow's bucket out loud: time + client name per visit. Deterministic
-// (no parameter) so it matches in a single utterance in both languages — the
-// most common relative-day query. Mirrors TodayScheduleIntent exactly, only the
-// target day differs.
+// Reads tomorrow's bucket out loud (time + client name per visit);
+// deterministic (no parameter) for a single-utterance match in both
+// languages, mirroring TodayScheduleIntent with only the target day different.
 //
 // Answers from the App Group snapshot only — no network, no Firebase.
 // This file is compiled only on macOS/Xcode.

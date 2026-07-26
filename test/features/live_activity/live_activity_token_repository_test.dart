@@ -1,6 +1,5 @@
-// Mocktail-style stubs of sealed Firestore types (the canonical workaround
-// for testing repos without fake_cloud_firestore). Mirrors
-// test/features/presence/presence_repository_test.dart.
+// Mocktail-style stubs of sealed Firestore types (workaround for testing without
+// fake_cloud_firestore); mirrors test/features/presence/presence_repository_test.dart.
 // ignore_for_file: subtype_of_sealed_class
 
 import 'package:cloud_firestore/cloud_firestore.dart';

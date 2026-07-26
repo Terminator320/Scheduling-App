@@ -48,11 +48,8 @@ Widget _wrap({
   required Stream<List<EmployeeRecord>> Function() employees,
   List<Override> overrides = const [],
 }) {
-  // The admin list now reads from allUsersStreamProvider (so disabled and
-  // invited users stay reachable for re-enable); the screen still watches
-  // employeesStreamProvider for loading/error state. Override both. Each
-  // call to employees() must return a fresh single-subscription stream
-  // because the two providers subscribe independently.
+  // Overrides both allUsersStreamProvider and employeesStreamProvider — each
+  // employees() call must return a fresh stream since the two subscribe independently.
   return ProviderScope(
     overrides: [
       employeesStreamProvider.overrideWith((_) => employees()),
@@ -75,10 +72,8 @@ Widget _wrap({
   );
 }
 
-/// A broadcast users stream plus an `emit` to push new snapshots. Each `make`
-/// call replays the latest value on subscription (a bare broadcast stream would
-/// drop the seed for a late subscriber) then forwards live updates — so the two
-/// independently-subscribing providers both see the seed and every update.
+/// Broadcast users stream with an `emit` helper; `make` replays the latest
+/// value on subscription so a late subscriber doesn't miss the seed.
 typedef _SeededUsers = ({
   Stream<List<EmployeeRecord>> Function() make,
   void Function(List<EmployeeRecord>) emit,

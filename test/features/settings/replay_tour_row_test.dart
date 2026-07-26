@@ -54,10 +54,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // The master pane's ListView is the scrollable ancestor of an existing
-    // above-the-fold row ("Delete account") — `find.byType(Scrollable).first`
-    // is unreliable here since the split layout also renders a rail/other
-    // scrollable that doesn't contain the target.
+    // Anchor on the ListView ancestor of "Delete account" — `find.byType(Scrollable).first` is unreliable since the split layout renders another scrollable too.
     final masterScrollable = find.ancestor(
       of: find.text('Delete account'),
       matching: find.byType(Scrollable),

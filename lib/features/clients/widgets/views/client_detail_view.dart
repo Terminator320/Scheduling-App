@@ -32,8 +32,8 @@ class ClientDetailView extends ConsumerStatefulWidget {
   final double bottomPadding;
 
   /// Called after a successful delete so a host that keeps this view mounted
-  /// (the split-layout detail pane) can clear the now-deleted selection.
-  /// In sheet mode the sheet pops itself instead.
+  /// (the split-layout detail pane) can clear the now-deleted selection; in
+  /// sheet mode the sheet pops itself instead.
   final VoidCallback? onDeleted;
 
   @override

@@ -151,7 +151,6 @@ class FirebaseClientsRepository implements ClientsRepository {
 
     // Parsing + normalizing + scoring up to serverReadLimit docs is CPU work
     // (8 regex passes over 13 fields per doc) — run it off the UI thread.
-    // Parsing, normalizing, and scoring is CPU work; run off the UI thread.
     final results = await compute(
       matchClientDocs,
       ClientSearchScan(docs: window.docs, query: q),

@@ -14,10 +14,9 @@ import 'package:scheduling/features/calendar/application/appointments_providers.
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-/// App Group shared with the iOS WidgetKit extension. Public because the app
-/// must register it (`HomeWidget.setAppGroupId`) once at startup — before any
-/// widget read (e.g. a launch-from-widget tap in `main.dart`), which otherwise
-/// throws `AppGroupId not set` on iOS.
+/// App Group shared with the iOS WidgetKit extension; public because the app
+/// must call `HomeWidget.setAppGroupId` with it before any widget read, or
+/// iOS throws `AppGroupId not set`.
 const widgetAppGroupId = 'group.net.vogas.scheduling';
 const _iosWidgetName = 'ScheduleWidget';
 const _payloadKey = 'schedulePayload';
@@ -37,8 +36,9 @@ Map<String, dynamic> _job(AppointmentRecord a) => {
 /// today before it rolls forward to tomorrow's schedule.
 const widgetRolloverGrace = Duration(hours: 1);
 
-/// Serializes an employee's schedule into JSON the iOS widget renders (pure, unit-testable).
-/// Carries today+tomorrow jobs plus `rolloverAt` instant (set only when today's jobs are all done/cancelled) so WidgetKit timeline switches on-device without app run.
+/// Serializes an employee's schedule into JSON the iOS widget renders (pure,
+/// unit-testable), carrying today+tomorrow jobs plus a `rolloverAt` instant so
+/// WidgetKit can switch on-device without an app run.
 Map<String, dynamic> buildWidgetPayload(
   List<AppointmentRecord> appointments,
   DateTime now, {
@@ -110,9 +110,9 @@ Future<void> writeWidgetPayloadJson(String payloadJson) async {
   }
 }
 
-/// Writes the widget payload into the App Group and refreshes the widget.
-/// iOS-only (no-op elsewhere); device-verified (platform-channel plugin, no
-/// unit tests — the payload builder above is the tested part).
+/// Writes the widget payload into the App Group and refreshes the widget;
+/// iOS-only, device-verified (no unit tests — the payload builder above is
+/// the tested part).
 class WidgetSyncService {
   WidgetSyncService({AppLogger? logger}) : _logger = logger ?? AppLogger();
 

@@ -30,8 +30,7 @@ class PresenceRepository {
           .collection('presence')
           .doc('location');
 
-  /// Upserts the device's last fix with server-timestamp `updatedAt` (freshness can't be spoofed).
-  /// Never throws; caller uses result to avoid advancing throttle clock on failure and stop tracking on denied.
+  /// Upserts the device's last fix with server-timestamp `updatedAt`; never throws — caller uses the result to avoid advancing the throttle clock on failure and to stop tracking on denied.
   Future<PresenceWriteResult> upsertLocation({
     required String userDocId,
     required String uid,

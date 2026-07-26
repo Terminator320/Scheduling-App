@@ -1,23 +1,11 @@
 "use strict";
 
 /**
- * Guard-ORDER tests for the Wave admin callables.
- *
- * The project invariant (.claude/rules/security.md) is:
- *   auth -> assertAdmin -> assertPayloadShape/requireString
- *        -> enforceDurableRateLimit -> work
- *
- * Order is the thing under test, not the guards themselves (those are covered
- * by security.test.js). Two properties matter and are asserted for every
- * callable:
- *  - an unauthenticated caller is rejected before ANY other guard runs, so an
- *    anonymous caller can never reach a Firestore read or burn a limiter slot;
- *  - a NON-ADMIN caller sending a malformed payload gets `wave/not-admin`,
- *    never `unexpected-field` — i.e. the identity guard sits above payload
- *    validation, so payload shape is not an oracle for unprivileged callers.
- *
- * The security module is mocked so the real guards' Firestore dependencies stay
- * out of the picture and `mock.invocationCallOrder` can pin the sequence.
+ * Guard-ORDER tests for the Wave admin callables — every callable must run
+ * auth -> assertAdmin -> assertPayloadShape/requireString ->
+ * enforceDurableRateLimit -> work (the invariant in .claude/rules/security.md),
+ * with the security module mocked so `mock.invocationCallOrder` can pin the
+ * sequence.
  */
 
 jest.mock("../security");

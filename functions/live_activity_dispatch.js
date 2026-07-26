@@ -1,19 +1,17 @@
 "use strict";
 
 /**
- * @fileoverview Orchestrates the iOS "time to leave" Live Activity: registry
- * lookup -> payload build -> direct APNs send -> prune dead rows. The three
- * exported verbs are the ONLY surface the notification hooks call, so
- * `travel_utils.js` / `notification_utils.js` never touch APNs or the registry
- * directly.
+ * @fileoverview Orchestrates the iOS "time to leave" Live Activity (registry
+ * lookup -> payload build -> direct APNs send -> prune dead rows) — the only
+ * surface `travel_utils.js`/`notification_utils.js` call, so neither touches
+ * APNs or the registry directly.
  *
- * FCM cannot send `apns-push-type: liveactivity`, which is why this path talks
- * to APNs directly (see apns_client.js).
+ * Talks to APNs directly (see apns_client.js) because FCM cannot send
+ * `apns-push-type: liveactivity`.
  *
- * EVERY export here is best-effort and never throws: a Live Activity failure
- * must not change the outcome of the push that hosts it. No token, no APNs
+ * Every export is best-effort and never throws — no token, no APNs
  * credentials, iOS < 17.2, or Live Activities disabled all degrade silently to
- * the existing `leaveNow` push, which fires independently and is unchanged.
+ * the existing, independently-firing `leaveNow` push.
  *
  * @module live_activity_dispatch
  */
@@ -38,11 +36,10 @@ const {
 const {sendLiveActivityPush} = require("./apns_client");
 
 /**
- * The ActivityKit `attributes` a push-to-start carries — the immutable half of
- * the activity. Hand-mirrored with the `ActivityAttributes` struct in
- * `ios/ScheduleWidget/LiveActivitiesAppAttributes.swift`; change one, change
- * both. That struct name is fixed by the `live_activities` plugin — see the
- * note in the Swift file before renaming anything here.
+ * The ActivityKit `attributes` a push-to-start carries — kept in lockstep with
+ * the `ActivityAttributes` struct in
+ * `ios/ScheduleWidget/LiveActivitiesAppAttributes.swift` (plugin-fixed name;
+ * change one, change both).
  * @param {{appointmentId: string, employeeDocId: string,
  *   employeeColorValue: (number|undefined)}} args
  * @return {!Object}

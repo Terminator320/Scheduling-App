@@ -1,9 +1,9 @@
 "use strict";
 
 /**
- * Unit tests for the server-side widget payload builder. Mirrors the Dart
- * widget_payload_test.dart cases so the two builders (and the Swift decoder)
- * stay in lockstep, plus the Toronto day-boundary the server uses.
+ * Unit tests for the server-side widget payload builder, mirroring the Dart
+ * widget_payload_test.dart cases (and the Toronto day-boundary) to keep both
+ * builders and the Swift decoder in lockstep.
  */
 
 const {

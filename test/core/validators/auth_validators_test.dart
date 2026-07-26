@@ -5,11 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// S3: password validator requires at least 8 characters.
-///
-/// Uses a tiny [Localizations] harness so `context.l10n.*` resolves to the
-/// real generated strings — keeps the test honest about what the user
-/// actually sees.
+/// S3: password validator requires 8+ characters; uses a real
+/// [Localizations] harness so `context.l10n.*` messages match what users
+/// actually see.
 
 void main() {
   Future<BuildContext> buildContext(WidgetTester tester) async {

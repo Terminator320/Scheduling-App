@@ -430,9 +430,8 @@ describe("drainQueue outcome guard", () => {
         };
         const {db, refs} = drainDb([job]);
 
-        // Simulate a client edit re-enqueuing the SAME job while the Wave call
-        // is in flight: enqueueCustomerUpsert merges status:'queued',
-        // attempts:0. The dispatch then succeeds for the data it read first.
+        // Simulate a client edit re-enqueuing the same job mid-dispatch; the
+        // dispatch succeeds using the data it read first.
         const mockUpsert = jest.fn(() => {
           Object.assign(refs[0]._data, {
             status: "queued",
@@ -966,9 +965,8 @@ function reclaimDb(staleJobs, opts = {}) {
   const staleSnaps = staleRefs.map((ref, i) =>
     snap(staleJobs[i].id, {...staleJobs[i].data}, ref));
 
-  // Each collection() call returns a fresh query builder. The reclaim query
-  // filters status=='inflight' and gets the stale docs; the main drain query
-  // filters status=='queued' and gets an empty result.
+  // Each collection() call returns a fresh query builder: 'inflight' filters
+  // yield the stale docs, 'queued' filters yield an empty result.
   const makeQueryBuilder = () => {
     // Use a closure variable so arrow functions can read the accumulated
     // filter without triggering the no-invalid-this lint rule.
@@ -1195,11 +1193,9 @@ describe("drainQueue reclaim pass", () => {
 
   test("stale job re-enqueued before the reclaim write is NOT clobbered",
       async () => {
-        // The reclaim query returns this job as a stale inflight, but by the
-        // time the reclaim transaction re-reads it a client edit has
-        // re-enqueued it (status flipped back to queued, attempts reset). The
-        // reclaim must leave it alone so the newer edit still syncs — it must
-        // not overwrite it to queued/dead or bump the reclaimed counter.
+        // A client edit re-enqueues the job between the reclaim query and its
+        // transactional re-read; reclaim must leave it alone rather than
+        // overwrite it to queued/dead or bump the reclaimed counter.
         const staleJob = {
           id: "customerUpsert__c1",
           data: {

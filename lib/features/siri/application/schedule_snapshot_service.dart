@@ -9,9 +9,9 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart'
     show widgetAppGroupId;
 
-/// App Group key the Siri App Intents extension reads its answers from. Shares
-/// the container with the home-screen widget's `schedulePayload` — same App
-/// Group, separate key and separate schema.
+/// App Group key the Siri App Intents extension reads its answers from;
+/// shares the container with the home-screen widget's `schedulePayload`
+/// under a separate key and schema.
 const scheduleSnapshotKey = 'schedule_snapshot';
 
 /// Writes the Siri schedule snapshot into the App Group (iOS-only); does not call `HomeWidget.updateWidget` since the extension reads this on demand.

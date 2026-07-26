@@ -2,9 +2,8 @@
 
 /**
  * Unit tests for the pure core of the client -> future-appointments
- * propagation trigger (propagateClientEdits). Only the dependency-free helpers
- * are exercised — the Firestore fan-out (propagateClientChange) is
- * integration-heavy and is built entirely from these tested building blocks.
+ * propagation trigger (propagateClientEdits); the Firestore fan-out itself
+ * (propagateClientChange) is integration-heavy and untested here.
  */
 
 const {

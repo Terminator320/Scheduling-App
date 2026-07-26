@@ -1,21 +1,18 @@
 "use strict";
 
 /**
- * @fileoverview Direct APNs HTTP/2 client for Live Activity pushes. FCM has no
- * way to set `apns-push-type: liveactivity`, so this is the ONE path in the
- * backend that talks to Apple directly; every ordinary notification still goes
- * through `notification_utils.sendToEmployee`.
+ * @fileoverview Direct APNs HTTP/2 client for Live Activity pushes — the ONE
+ * path that talks to Apple directly, since FCM can't set
+ * `apns-push-type: liveactivity`; ordinary notifications still go through
+ * `notification_utils.sendToEmployee`.
  *
- * Auth is token-based: an ES256 provider JWT signed from the `.p8` key with
- * `node:crypto` (deliberately no new npm dependency). The JWT is cached and
- * re-minted at PROVIDER_TOKEN_TTL_MS — APNs rejects tokens older than one hour
- * AND rate-limits providers that re-mint more often than every 20 minutes, so
- * neither "sign per request" nor "sign once forever" is acceptable.
+ * Auth is a cached ES256 provider JWT signed from the `.p8` key via
+ * `node:crypto`, re-minted at PROVIDER_TOKEN_TTL_MS to satisfy APNs' 1-hour
+ * expiry and 20-minute re-mint rate limit.
  *
- * Failure posture matches the design doc: a Live Activity is additive and
- * best-effort, so nothing here ever throws to the caller. Every path resolves
- * `{ok, status, reason, gone}` and a `gone` result (410 / BadDeviceToken /
- * Unregistered) tells the caller to prune that token row.
+ * Failure posture is best-effort — nothing here ever throws; every path
+ * resolves `{ok, status, reason, gone}`, and `gone` tells the caller to prune
+ * that token row.
  *
  * Deps are injected (`{now, http2Impl, signer}`) so jest drives the whole
  * module with no socket.
@@ -26,18 +23,14 @@
 const crypto = require("node:crypto");
 const http2 = require("node:http2");
 
-// Production APNs, tried first. A production-signed build (TestFlight / App
-// Store) registers a token this host accepts.
+// Production APNs, tried first — accepts tokens from a production-signed
+// build (TestFlight / App Store).
 const APNS_HOST = "https://api.push.apple.com";
 
-// Sandbox APNs, tried ONLY as a fallback when production returns
-// `BadDeviceToken`. A development-signed build (`flutter run`, dev provisioning
-// profile → `aps-environment: development`) registers a SANDBOX push token that
-// the production host rejects with exactly that reason. Retrying sandbox lets
-// the same code path light up a card on a dev build without a second config,
-// and it never risks a duplicate: the retry only runs when the production push
-// did NOT deliver. A production token that succeeds on the first host is never
-// re-sent.
+// Sandbox APNs, tried only as a fallback when production returns
+// `BadDeviceToken` — the signature of a dev-signed build's sandbox token
+// hitting the production host; the retry only fires when production didn't
+// deliver, so a token is never double-sent.
 const APNS_SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 
 const BUNDLE_ID = "net.vogas.scheduling";
@@ -61,22 +54,21 @@ const GONE_REASONS = new Set([
   "ExpiredToken",
 ]);
 
-// ActivityKit push tokens are hex strings; the registry rule only size-caps
-// the field, so validate the shape here before the token is interpolated into
-// the request `:path`. Defense-in-depth — Node rejects invalid path
-// characters anyway; this just fails cleaner and marks the row prunable.
+// Validates token shape before interpolating into `:path`, since the registry
+// rule only size-caps the field; defense-in-depth — Node would reject bad
+// path chars anyway, but this fails cleaner and marks the row prunable.
 const TOKEN_SHAPE = /^[A-Za-z0-9]+$/;
 
-// Close a reused APNs session after this long without a request. One session
-// per host amortizes the TCP+TLS+HTTP/2 handshake across the several pushes a
-// single sweep can issue instead of paying it per push.
+// Closes a reused APNs session after this long idle; one session per host
+// amortizes the TCP+TLS+HTTP/2 handshake across a sweep's pushes instead of
+// paying it per push.
 const SESSION_IDLE_TIMEOUT_MS = 30 * 1000;
 
-// host -> {impl, session}. Sessions are dropped on transport error, close,
-// idle timeout, or an impl swap (tests inject their own http2Impl).
+// host -> {impl, session}; dropped on transport error, close, idle timeout,
+// or an impl swap (tests inject their own http2Impl).
 const _sessions = new Map();
 
-// Cached provider JWT. Keyed by keyId+teamId so a rotated secret can't serve a
+// Cached provider JWT, keyed by keyId+teamId so a rotated secret can't serve a
 // stale signature.
 let _cachedToken = null;
 
@@ -109,7 +101,7 @@ function signEs256(input, authKey) {
 }
 
 /**
- * Mints a fresh ES256 provider JWT. Pure apart from the injected clock and
+ * Mints a fresh ES256 provider JWT; pure apart from the injected clock and
  * signer — no caching here, see [providerToken].
  * @param {{authKey: string, keyId: string, teamId: string,
  *   now: (Date|undefined), signer: (function(string, string): !Buffer|
@@ -151,8 +143,8 @@ function providerToken(opts) {
 }
 
 /**
- * Drops the cached provider JWT. For tests and for a secret rotation that
- * should not wait out the TTL.
+ * Drops the cached provider JWT, for tests or a secret rotation that
+ * shouldn't wait out the TTL.
  * @return {void}
  */
 function resetProviderTokenCache() {
@@ -160,8 +152,8 @@ function resetProviderTokenCache() {
 }
 
 /**
- * The cached-or-fresh HTTP/2 session for [host]. A cached session is reused
- * only while it is alive and was created by the same impl.
+ * The cached-or-fresh HTTP/2 session for [host], reused only while alive and
+ * created by the same impl.
  * @param {!Object} impl The http2 implementation (injectable for tests).
  * @param {string} host
  * @return {!Object} A connected http2 session.
@@ -206,7 +198,7 @@ function _dropSession(host) {
 }
 
 /**
- * Closes every cached APNs session. For tests (isolation between cases) and
+ * Closes every cached APNs session — for test isolation between cases, and
  * usable on shutdown.
  * @return {void}
  */
@@ -242,7 +234,7 @@ function _reasonOf(raw) {
 
 /**
  * Issues one HTTP/2 request on an already-connected session and resolves the
- * outcome. Never rejects.
+ * outcome; never rejects.
  * @param {!Object} client A connected http2 session.
  * @param {!Object} headers
  * @param {string} body
@@ -352,10 +344,10 @@ async function sendLiveActivityPush(opts) {
   if (collapseId) headers["apns-collapse-id"] = String(collapseId);
   const body = JSON.stringify(payload);
 
-  // One request against a single host, on a per-host session reused across
-  // pushes within this instance. Never throws. A transport-level failure
-  // (status 0: timeout, stream/session error) drops the cached session so the
-  // next push reconnects fresh; an HTTP-level outcome keeps it.
+  // One request against a per-host session reused across this instance's
+  // pushes; never throws, and a transport-level failure (status 0) drops the
+  // session so the next push reconnects fresh, while an HTTP-level outcome
+  // keeps it.
   const sendTo = async (host) => {
     try {
       const client = _sessionFor(impl, host);
@@ -372,11 +364,10 @@ async function sendLiveActivityPush(opts) {
   // An explicit host override (tests) is honoured verbatim — no dual-try.
   if (opts && opts.host) return sendTo(opts.host);
 
-  // Production first. `BadDeviceToken` is the specific signature of a sandbox
-  // token hitting the production host, so retry sandbox before the caller
-  // prunes the row. Any other outcome (success, 410/Unregistered, transient
-  // 5xx, topic error) is returned as-is — only the environment mismatch is
-  // worth a second request.
+  // Production first — `BadDeviceToken` is the signature of a sandbox token
+  // hitting the production host, so retry sandbox before pruning; any other
+  // outcome is returned as-is since only the environment mismatch merits a
+  // second request.
   const prod = await sendTo(APNS_HOST);
   if (prod.ok || prod.reason !== "BadDeviceToken") return prod;
   return sendTo(APNS_SANDBOX_HOST);

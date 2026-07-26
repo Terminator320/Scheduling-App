@@ -1,12 +1,9 @@
 // "Read a specific appointment in ES Pro" → Siri asks "Which appointment?"
 //
-// Phase 3 — the multi-turn beat. App Intents has no free-form conversational
-// session ("and tomorrow?" across separate Siri invocations isn't a thing), but
-// it does support in-session parameter follow-up: the phrase carries no number
-// (an Int parameter can't sit inside a spoken phrase — Siri only allows
-// AppEnum/AppEntity there), so Siri asks "Which appointment? Say its number,"
-// the caller answers, and we read that visit. That prompt→answer→read exchange
-// is the realistic, buildable form of "read me the third one."
+// Phase 3 — the multi-turn beat: an Int can't sit inside a spoken phrase
+// (Siri only allows AppEnum/AppEntity there), so the phrase triggers the
+// intent and Siri asks "Which appointment? Say its number," reading back
+// that position — the buildable form of "read me the third one."
 //
 // Positions are 1-based over TODAY's list, matching the natural follow-up to
 // "what's my schedule today." Answers from the App Group snapshot only — no

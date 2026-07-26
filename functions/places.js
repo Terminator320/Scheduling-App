@@ -11,58 +11,45 @@ const {
 } = require("./security");
 const {GOOGLE_MAP_API_KEY} = require("./params");
 
-// Both callables proxy the Places API v1 so the billing-sensitive key never
-// ships in the Flutter binary. The key lives in Secret Manager; clients must
-// be authenticated and pass App Check.
+// Both callables proxy the Places API v1 so the billing-sensitive key (in
+// Secret Manager) never ships in the Flutter binary; clients must be
+// authenticated and pass App Check.
 
 const PLACE_ID_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const INPUT_MAX_LEN = 200;
 
-// Per-uid sliding-window rate limit. In-memory, per function instance.
-// IMPORTANT: Set a GCP billing alert on the Maps Platform API in the Firebase
-// Console — this in-memory limit is per-instance and is not a hard billing cap.
-// With maxInstances: 10, the effective ceiling is RATE_LIMIT_MAX × instance
-// count requests per window. RATE_LIMIT_MAX is kept low to bound that product.
-// This is a cheap, latency-free cost guard appropriate for the high-volume
-// autocomplete path; auth-sensitive routes use the durable Firestore limiter
-// instead (see enforceDurableRateLimit).
+// Per-uid sliding-window rate limit, in-memory per function instance — not a
+// hard billing cap (set a GCP billing alert on the Maps Platform API too).
+// A cheap, latency-free guard for the high-volume autocomplete path; other
+// routes use the durable Firestore limiter instead (enforceDurableRateLimit).
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const rateBuckets = new Map();
 
-// placesGetDetails is low-volume (one billable call per address the user
-// actually selects), so it gets the durable Firestore cap rather than the
-// in-memory limiter — that one resets on cold start and multiplies by
-// maxInstances, giving no real ceiling on the per-detail Places cost. The
-// limit is generous enough for an admin entering many appointments at once.
+// placesGetDetails is low-volume, so it uses the durable Firestore cap rather
+// than the in-memory limiter, with a limit generous enough for an admin
+// entering many appointments at once.
 const PLACES_DETAILS_RATE_MAX = 40;
 const PLACES_DETAILS_RATE_WINDOW_MS = 15 * 60 * 1000;
 
-// Reverse geocoding backs the live staff-location map — a tap-driven, not
-// keystroke-driven, surface. A generous hourly cap comfortably covers normal
-// admin usage while still bounding cost; the durable Firestore limiter is
-// used (not the in-memory one) for the same cold-start/maxInstances reason as
-// placesGetDetails.
+// Reverse geocoding backs the live staff-location map (tap-driven, not
+// keystroke-driven); a generous hourly cap via the durable Firestore limiter
+// covers normal admin usage while bounding cost.
 const REVERSE_GEOCODE_RATE_MAX = 120;
 const REVERSE_GEOCODE_RATE_WINDOW_MS = 60 * 60 * 1000;
 const REVERSE_GEOCODE_LOCALES = new Set(["en", "fr"]);
 
 /**
- * Shared response-handling triad for the three Places/Geocoding proxies:
- * transport-error catch, non-200 check, JSON-parse catch — each throwing the
- * same HttpsError codes the callables already relied on. Request
- * construction (method/headers/body) genuinely differs per callable, so that
- * stays at each call site; only the response half is deduped here.
+ * Shared response-handling triad (transport-error catch, non-200 check,
+ * JSON-parse catch) for the three Places/Geocoding proxies; request
+ * construction stays at each call site since it differs per callable.
  * @param {string} url Fully-built request URL.
  * @param {?object} options fetch() options (method, headers, body).
  * @param {{label: string, uid: string, logResponsePreview: boolean}} opts
- *   label: log-message prefix, matching the callable name (e.g.
- *     "placesAutocomplete") so each site's existing log messages/fields are
- *     preserved exactly. uid: caller uid, logged only on transport error
- *     (same as before). logResponsePreview: when true, reads and logs a
- *     200-char body preview on a non-200 response; placesReverseGeocode
- *     passes false to skip the extra read and keep its logs free of
- *     coordinate/address PII, its existing deliberate posture.
+ *   label: log-message prefix matching the callable name. uid: caller uid,
+ *   logged only on transport error. logResponsePreview: when true, logs a
+ *   200-char body preview on non-200 (placesReverseGeocode passes false to
+ *   keep coordinate/address PII out of its logs).
  * @return {Promise<object>} parsed JSON body.
  */
 async function fetchPlacesJson(url, options, {label, uid, logResponsePreview}) {
@@ -136,10 +123,8 @@ const placesAutocomplete = onCall(
       if (!req.auth || !req.auth.uid) {
         throw new HttpsError("unauthenticated", "auth-required");
       }
-      // Address autocomplete is only surfaced on admin-only appointment forms.
-      // Gate on admin so a non-admin (or invited-but-inactive) principal can't
-      // script the billable Places API — the in-memory limiter below is a
-      // per-instance cost guard, not a hard ceiling.
+      // Admin-only: address autocomplete is only surfaced on admin appointment
+      // forms, and the in-memory limiter below is a cost guard, not a hard cap.
       await assertAdmin(req.auth.uid);
       assertPayloadShape(req.data, new Set(["input", "sessionToken"]));
       const input = requireString(req.data, "input", INPUT_MAX_LEN);
@@ -241,10 +226,8 @@ const placesGetDetails = onCall(
 );
 
 // Reverse-geocodes a lat/lng into a human-readable address for the live
-// staff-location map. Uses the classic Geocoding API (not Places v1) since
-// that's the endpoint that offers a reverse-geocode mode; the request is
-// GET+query-string, so the key travels as a query param like the other
-// Geocoding-family endpoints.
+// staff-location map; uses the classic Geocoding API since that's the
+// endpoint offering reverse-geocode mode.
 const placesReverseGeocode = onCall(
     {
       enforceAppCheck: true,
@@ -274,10 +257,8 @@ const placesReverseGeocode = onCall(
           REVERSE_GEOCODE_RATE_WINDOW_MS,
       );
 
-      // Round before the upstream call — high-precision jitter (e.g. from a
-      // live GPS stream) would otherwise defeat any upstream/edge caching and
-      // multiply the effective request volume for what is functionally the
-      // same location.
+      // Round before the upstream call so GPS jitter doesn't defeat
+      // upstream/edge caching for what is functionally the same location.
       const roundedLat = Math.round(lat * 1e5) / 1e5;
       const roundedLng = Math.round(lng * 1e5) / 1e5;
 

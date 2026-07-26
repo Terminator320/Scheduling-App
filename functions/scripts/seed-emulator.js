@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// Emulator-only seed. Creates Firebase Auth accounts AND matching Firestore
-// `users` docs so the Flutter app can sign in. The syncUsersByUid trigger
-// fans these out into `usersByUid` automatically.
+// Emulator-only seed: creates Firebase Auth accounts and matching Firestore
+// `users` docs (fanned into `usersByUid` by the syncUsersByUid trigger).
 //
 // Usage (PowerShell):
 //   $env:FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080"

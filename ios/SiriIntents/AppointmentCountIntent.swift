@@ -11,9 +11,8 @@ struct AppointmentCountIntent: AppIntent {
     static var description = IntentDescription(
         "Says how many appointments are on today's schedule.")
 
-    // Reads are safe from the lock screen: it's the caller's own schedule, and
-    // the hands-free case (driving between jobs) is the point. Write intents
-    // (Phase 4) must NOT set this.
+    // Safe from the lock screen — it's the caller's own schedule; write
+    // intents (Phase 4) must NOT set this.
     static var openAppWhenRun: Bool = false
     static var authenticationPolicy: IntentAuthenticationPolicy =
         .alwaysAllowed

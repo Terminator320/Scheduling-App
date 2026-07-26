@@ -56,8 +56,7 @@ class PendingUploadStore {
 
   Future<T> _serialized<T>(Future<T> Function() action) {
     final result = _mutations.then((_) => action());
-    // Swallow errors on the chain only — `result` still surfaces them to the
-    // caller. Without this a failed mutation would poison every later one.
+    // Swallow errors on the chain only, so one failed mutation doesn't poison every later one — `result` still surfaces to the caller.
     _mutations = result.then((_) {}, onError: (_) {});
     return result;
   }

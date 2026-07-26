@@ -3,9 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/core/notices/app_notice.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 
-/// N1 / N2: the notice surface is now the project's single user-message
-/// pipeline. Lock down the basic contract so a future refactor doesn't
-/// silently drop emissions.
+/// N1 / N2: locks down the notice surface's basic contract so a future
+/// refactor doesn't silently drop emissions.
 void main() {
   test('success() emits a NoticeSuccess with the message', () async {
     final service = NoticeService();

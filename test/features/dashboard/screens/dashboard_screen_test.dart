@@ -123,8 +123,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Hero big-number label lives in a Text.rich span. Exactly one visit is
-    // today (the overdue one is yesterday), so the label is singular.
+    // Hero label lives in a Text.rich span; singular because only one visit is today.
     expect(
       find.textContaining('visit today', findRichText: true),
       findsOneWidget,

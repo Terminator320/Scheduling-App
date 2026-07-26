@@ -1,7 +1,7 @@
-// Guards against the IntrinsicHeight + LayoutBuilder layout crash: the card's
-// IntrinsicHeight (which stretches the employee-color bar) queries intrinsic
-// dimensions, which AutoSizeText's internal LayoutBuilder cannot answer. The
-// title must stay a plain Text. See appointment_card.dart:49.
+// Guards against a layout crash: IntrinsicHeight (stretching the
+// employee-color bar) can't query intrinsic dimensions through AutoSizeText's
+// internal LayoutBuilder, so the title must stay a plain Text (see
+// appointment_card.dart:49).
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';

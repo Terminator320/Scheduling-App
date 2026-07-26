@@ -1,9 +1,6 @@
-// placesReverseGeocode is a lazily-loaded onCall module (no eager Storage/
-// scheduler bucket resolution at require time), so it's safe to require
-// directly per the project's Cloud Functions testing convention. assertAdmin
-// and enforceDurableRateLimit are mocked out (they need a live Firestore) —
-// the real assertPayloadShape/requireString/requireNumberInRange stay real so
-// this test locks in actual input-validation behavior.
+// placesReverseGeocode is safe to require directly (no eager bucket
+// resolution); assertAdmin/enforceDurableRateLimit are mocked (need live
+// Firestore) while the real validation helpers stay real for this test.
 jest.mock("../security", () => {
   const actual = jest.requireActual("../security");
   return {

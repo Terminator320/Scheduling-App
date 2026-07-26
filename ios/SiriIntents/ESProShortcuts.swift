@@ -1,8 +1,8 @@
 // ESProShortcuts — the spoken phrases Siri recognizes, with no user setup.
 //
 // Apple requires the app name in every phrase; `\(.applicationName)` resolves
-// to the app's name (and its alternate names, if declared in
-// `AppShortcuts.strings`). Both English and French phrases are listed here —
+// to the app's name (and alternate names, if declared in
+// `AppShortcuts.strings`) — both English and French phrases are listed here,
 // Siri matches whichever language the device is set to.
 //
 // This file is compiled only on macOS/Xcode.
@@ -62,11 +62,9 @@ struct ESProShortcuts: AppShortcutsProvider {
             shortTitle: "Tomorrow's schedule",
             systemImageName: "calendar.badge.clock")
 
-        // Any other day. A `Date` parameter can't be interpolated into a
-        // spoken phrase (Siri only allows AppEnum/AppEntity parameters there),
-        // so the phrase triggers the intent and Siri then asks "For what day?"
-        // and parses the spoken date — locale-aware, so "Friday"/"vendredi"
-        // and "July 25" both resolve without a string catalog.
+        // Any other day — Siri can't interpolate a `Date` parameter into a
+        // phrase, so this triggers the intent and asks "For what day?",
+        // parsing the spoken answer locale-aware without a string catalog.
         AppShortcut(
             intent: DayScheduleIntent(),
             phrases: [
@@ -79,10 +77,9 @@ struct ESProShortcuts: AppShortcutsProvider {
             shortTitle: "Schedule for a day",
             systemImageName: "calendar")
 
-        // Phase 3 — parameter follow-up. The position can't sit in the phrase
-        // (Int isn't an allowed phrase parameter), so the phrase triggers the
-        // intent and Siri asks "Which appointment? Say its number" — the
-        // multi-turn beat, in-session.
+        // Phase 3 — parameter follow-up: an Int can't sit in the phrase, so
+        // this triggers the intent and Siri asks "Which appointment? Say its
+        // number" (the multi-turn beat, in-session).
         AppShortcut(
             intent: NthAppointmentIntent(),
             phrases: [

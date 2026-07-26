@@ -5,8 +5,8 @@ import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 /// Schema version; bump only alongside Swift `ScheduleSnapshot` decoder.
 const scheduleSnapshotVersion = 1;
 
-/// Days carried beyond today. Phase-2 date queries ("what's my schedule
-/// Friday?") resolve against these buckets; anything further out is answered
+/// Days carried beyond today; Phase-2 date queries ("what's my schedule
+/// Friday?") resolve against these buckets, and anything further out gets
 /// "I only have your schedule for the next 7 days."
 const scheduleSnapshotLookaheadDays = 7;
 
@@ -28,8 +28,9 @@ String _dayKey(DateTime day) =>
     '${day.month.toString().padLeft(2, '0')}-'
     '${day.day.toString().padLeft(2, '0')}';
 
-/// Serializes the schedule the Siri App Intents extension answers from (pure, unit-testable).
-/// Carries one bucket per day (today through lookahead); excludes cancelled visits and id-less records (Phase-4 write actions resolve by id).
+/// Serializes the schedule the Siri App Intents extension answers from (pure,
+/// unit-testable), carrying one bucket per day and excluding cancelled
+/// visits and id-less records (Phase-4 write actions resolve by id).
 Map<String, dynamic> buildScheduleSnapshot({
   required List<AppointmentRecord> appointments,
   required String role,

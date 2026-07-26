@@ -5,22 +5,19 @@ const {getFirestore} = require("firebase-admin/firestore");
 
 const {assertPayloadShape, enforceDurableRateLimit} = require("./security");
 
-// deleteAccount is an auth-sensitive callable capped at AUTH_RATE_MAX attempts
-// per AUTH_RATE_WINDOW_MS. Unlike the in-memory Places limiter, this is
-// enforced in Firestore so the cap holds across function instances and cold
-// starts — a brute-force caller cannot multiply it by maxInstances.
+// deleteAccount is capped at AUTH_RATE_MAX attempts per AUTH_RATE_WINDOW_MS,
+// enforced in Firestore (not in-memory) so the cap holds across instances
+// and cold starts.
 const AUTH_RATE_MAX = 5;
 const AUTH_RATE_WINDOW_MS = 15 * 60 * 1000;
 
 // deleteAccount requires the caller to have re-authenticated within this
-// window. Firebase ID tokens are valid ~1 hour, so without this check a
-// stolen-but-not-yet-expired token could trigger irreversible deletion.
+// window, since a still-valid ID token alone shouldn't trigger deletion.
 const REAUTH_MAX_AGE_SECONDS = 5 * 60;
 
 /**
  * True when the caller's re-authentication is missing or too old to permit an
- * irreversible delete. A live-but-stale ID token (valid ~1 hour) must not be
- * enough on its own — deletion requires a fresh in-app re-auth. Pure/testable.
+ * irreversible delete. Pure/testable.
  * @param {*} authTime ID-token `auth_time` (epoch seconds) or undefined.
  * @param {number} nowSec Current time in epoch seconds.
  * @param {number} maxAgeSeconds Allowed staleness window in seconds.
@@ -33,20 +30,16 @@ function isReauthStale(authTime, nowSec, maxAgeSeconds) {
 
 // ----- deleteAccount callable ------------------------------------------------
 //
-// Implements C6 from the production-readiness plan and satisfies the in-app
-// deletion requirement from Apple App Store Guideline 5.1.1(v) and the Google
-// Play Account Deletion policy. The Flutter client re-authenticates the user
-// immediately before invoking this; the server also re-checks the ID token's
-// auth_time against REAUTH_MAX_AGE_SECONDS so a live-but-stale token cannot
-// trigger deletion without going through the in-app re-auth flow.
-// App Check + auth are required.
+// Satisfies the in-app deletion requirement from Apple App Store Guideline
+// 5.1.1(v) and the Google Play Account Deletion policy (plan §C6). The client
+// re-authenticates first; the server also re-checks auth_time against
+// REAUTH_MAX_AGE_SECONDS. App Check + auth are required.
 //
 // Scope of deletion (intentionally narrow — see plan §C6):
-//   1. The caller's `users/{docId}` Firestore document. The syncUsersByUid
-//      Firestore trigger then clears `usersByUid/{uid}` automatically.
+//   1. The caller's `users/{docId}` Firestore document (syncUsersByUid then
+//      clears `usersByUid/{uid}` automatically).
 //   2. The Firebase Auth user.
-// We do NOT touch shared business data (appointments, clients, appointment
-// images): those are owned by the business, not the individual account.
+// Shared business data (appointments, clients, images) is untouched.
 const deleteAccount = onCall(
     {enforceAppCheck: true},
     async (req) => {
@@ -54,9 +47,8 @@ const deleteAccount = onCall(
         throw new HttpsError("unauthenticated", "auth-required");
       }
       assertPayloadShape(req.data, new Set());
-      // Stale-auth is checked BEFORE the rate limiter so a stale-but-cheap
-      // rejection doesn't burn one of the caller's 5 deletion slots (which
-      // would let a few reauth retries lock them out of deletion entirely).
+      // Checked before the rate limiter so a stale-auth rejection doesn't
+      // burn one of the caller's deletion slots.
       const authTime = req.auth.token?.auth_time;
       const nowSec = Math.floor(Date.now() / 1000);
       if (isReauthStale(authTime, nowSec, REAUTH_MAX_AGE_SECONDS)) {
@@ -76,9 +68,8 @@ const deleteAccount = onCall(
       const uid = req.auth.uid;
       const db = getFirestore();
 
-      // Resolve the users doc BEFORE any destructive step: once the Auth user
-      // is gone the caller can no longer retry, so everything that can fail
-      // recoverably happens first.
+      // Resolve the users doc before any destructive step — once the Auth
+      // user is gone the caller can no longer retry.
       const bridgeSnap = await db
           .collection("usersByUid")
           .doc(uid)
@@ -94,9 +85,8 @@ const deleteAccount = onCall(
       let docId = bridgeSnap?.exists ? bridgeSnap.data().docId : null;
 
       if (!docId) {
-        // No bridge row — it may simply be stale/missing while a users doc
-        // still exists. Fall back to a direct uid lookup so we don't strand
-        // the profile doc (account-deletion completeness for store policy).
+        // No bridge row — fall back to a direct uid lookup so we don't
+        // strand the profile doc.
         logger.warn("deleteAccount: no bridge for uid; querying users by uid", {
           uid,
         });
@@ -115,13 +105,9 @@ const deleteAccount = onCall(
         }
       }
 
-      // Delete the Auth user FIRST. Ordering rationale: if the Firestore doc
-      // were deleted first and the Auth delete then failed, the caller would
-      // be left with a live login and no profile — and because their ID token
-      // still works, a retry storm burns their rate-limit slots against a
-      // half-deleted account. The reverse partial failure (Auth gone, doc
-      // delete fails) is recoverable server-side: the doc is orphaned data an
-      // admin/cleanup can remove, and the caller's account is genuinely gone.
+      // Delete the Auth user FIRST — the reverse order risks a live login
+      // with no profile doc; a failed doc delete after Auth is gone just
+      // leaves recoverable orphaned data.
       try {
         await getAuth().deleteUser(uid);
       } catch (err) {
@@ -137,16 +123,13 @@ const deleteAccount = onCall(
 
       if (docId) {
         try {
-          // recursiveDelete removes the users doc AND all its subcollections
-          // (fcmTokens now, presence later) in one call — a plain doc delete
-          // would orphan the subcollections, leaving a deleted account still
-          // receiving pushes.
+          // recursiveDelete removes the users doc and all its subcollections
+          // (fcmTokens now, presence later); a plain doc delete would orphan
+          // them, leaving a deleted account still receiving pushes.
           await db.recursiveDelete(db.collection("users").doc(docId));
         } catch (err) {
-          // The Auth user is already gone (the irreversible, policy-relevant
-          // part). A doc-delete failure only leaves recoverable orphaned data
-          // — log loudly for cleanup but report success to the caller, who
-          // could not retry anyway (their credentials no longer work).
+          // The Auth user is already gone, so log for cleanup but report
+          // success — the caller's credentials no longer work anyway.
           logger.error("deleteAccount: users doc delete failed after auth " +
               "delete — orphaned users doc needs cleanup", {
             uid,

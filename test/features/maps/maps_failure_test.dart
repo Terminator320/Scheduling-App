@@ -90,10 +90,7 @@ void main() {
     tester,
   ) async {
     final context = await harness(tester);
-    // Construct a failure with an obvious sentinel and confirm it doesn't
-    // make it into the user-visible string. Locks down the original bug
-    // where `throw Exception('Autocomplete failed: ${response.body}')`
-    // could surface API payloads to users / logs.
+    // Guards against the original bug where `throw Exception('Autocomplete failed: ${response.body}')` could surface API payloads to users/logs.
     const sentinel = '!!SENSITIVE_RESPONSE_BODY!!';
     const failures = <MapsFailure>[
       MapsFailureNetwork(cause: sentinel),

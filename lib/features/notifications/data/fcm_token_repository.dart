@@ -20,8 +20,7 @@ class FcmTokenRepository {
       .collection('fcmTokens')
       .doc(token);
 
-  /// Upserts a device token with createdAt only on first write (not overwritten on refresh).
-  /// Plain get-then-set, NOT a transaction: concurrent transactions crash in cloud_firestore iOS plugin; cosmetic re-stamp of createdAt is acceptable.
+  /// Upserts a device token with createdAt only on first write; plain get-then-set, not a transaction, since concurrent transactions crash the cloud_firestore iOS plugin.
   Future<void> upsertToken({
     required String userDocId,
     required String token,

@@ -85,11 +85,7 @@ DateTime combineEndDateAndTime(
   final end = combineDateAndTime(date, endTime);
   if (startTime == null) return end;
   final start = combineDateAndTime(date, startTime);
-  // Bump to the next day only when the end is strictly before the start
-  // (overnight, via wall-clock construction rather than adding a Duration so
-  // a DST transition keeps the right time-of-day) — an end equal to the
-  // start stays same-day so the validator rejects it instead of silently
-  // booking a ~24h appointment.
+  // Bump to the next day only when the end is strictly before the start (overnight); an equal end/start stays same-day so the validator rejects it instead of booking ~24h.
   return end.isBefore(start)
       ? DateTime(
           date.year,

@@ -237,8 +237,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     );
   }
 
-  /// Writes `status: 'done'`. The widget layer switches on the outcome and
-  /// composes a failure into an APPT-STATUS notice.
+  /// Writes `status: 'done'`; the widget layer composes a failure notice from the outcome.
   Future<EventDetailsActionOutcome> markAsDone(AppointmentRecord appointment) {
     return _setStatusOnRepo(appointment, 'done');
   }
@@ -514,9 +513,8 @@ class EventDetailsController extends Notifier<EventDetailsState>
     return EventDetailsSaved(updated);
   }
 
-  /// Returns null on success, or the error that caused the failure. With
-  /// [includeFuture], also deletes the series' future visits (done/cancelled
-  /// visits are preserved) in one atomic batch.
+  /// Returns null on success, or the failure error; with [includeFuture], also
+  /// deletes the series' future visits (done/cancelled preserved) in one batch.
   Future<Object?> deleteAppointment(
     AppointmentRecord appointment, {
     bool includeFuture = false,

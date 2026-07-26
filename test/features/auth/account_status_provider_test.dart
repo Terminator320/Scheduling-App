@@ -116,10 +116,9 @@ void main() {
             employeesRepositoryProvider.overrideWithValue(mockRepo),
           ],
         );
-        // Teardowns run in reverse order: dispose the container (cancelling
-        // the provider's inner subscription) before awaiting close(). Riverpod
-        // 3 pauses unlistened providers, and a paused subscription never
-        // receives the done event, so the reverse order hangs the test.
+        // Dispose the container before closing the stream — Riverpod 3 pauses
+        // unlistened providers, so closing first hangs waiting for a done
+        // event that never arrives.
         addTearDown(statusController.close);
         addTearDown(container.dispose);
 

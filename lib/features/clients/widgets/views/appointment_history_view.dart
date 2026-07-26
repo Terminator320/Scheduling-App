@@ -158,8 +158,7 @@ class _AppointmentHistoryViewState
       _year != null ||
       _employeeId != null;
 
-  // Year/employee chip filters only (no text search). Applied on top of either
-  // the loaded pages or the server-backed search results.
+  // Year/employee chip filters only (no text search), applied on top of either the loaded pages or the server-backed search results.
   List<AppointmentRecord> _applyChips(List<AppointmentRecord> appointments) =>
       appointments.where(_matchesChips).toList();
 
@@ -198,9 +197,9 @@ class _AppointmentHistoryViewState
     return matchesClient || matchesEmployee || matchesPhone;
   }
 
-  // Builds one history entry with the year/day headers that open its group,
-  // derived by comparing against the previous item in [items]. Shared by the
-  // paged (unfiltered) and filtered list paths so grouping looks identical.
+  // Builds one history entry with the year/day headers that open its group
+  // (derived by comparing against the previous item in [items]); shared by the
+  // paged and filtered list paths so grouping looks identical.
   Widget _historyItem(
     List<AppointmentRecord> items,
     int index,
@@ -350,12 +349,9 @@ class _AppointmentHistoryViewState
       return _filteredList(_filterLoaded(), colorMap);
     }
 
-    // A search reaches the whole history window via the database (not just the
-    // loaded pages). The loaded-page filter fills the gap until the debounce
-    // settles and the server result arrives.
-    // The loaded-page fallback, computed lazily: the steady-state `data` branch
-    // renders the server results and never needs it, so don't filter the loaded
-    // pages on every rebuild once the search has settled.
+    // Local page filter fills the gap until the debounced server search
+    // settles; computed lazily so the settled `data` branch (which renders
+    // server results) doesn't re-filter on every rebuild.
     Widget localOr(Widget Function() onEmpty) {
       final local = _filterLoaded();
       return local.isEmpty ? onEmpty() : _filteredList(local, colorMap);
@@ -370,9 +366,8 @@ class _AppointmentHistoryViewState
         .when(
           data: (results) => _filteredList(_applyChips(results), colorMap),
           loading: () => localOr(_skeleton),
-          // A failed search shouldn't read as "no history": when the local
-          // fallback is also empty, surface an error, not the empty state.
-          // Composes without logging (this is a builder).
+          // A failed search shouldn't read as "no history" — surface an error
+          // when the local fallback is also empty, not the empty state.
           error: (e, _) => localOr(() => _searchError(e, query)),
         );
   }
