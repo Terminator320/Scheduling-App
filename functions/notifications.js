@@ -156,9 +156,9 @@ const sendDailyJobDigest = onSchedule(
     },
 );
 
-// Overdue "job finished?" prompts every 15 minutes: a job whose endTime passed within
-// the last 24h while still pending/in_progress earns one nudge, via an endTime-keyed
-// ledger that re-arms on reschedule.
+// Overdue "job finished?" prompts, every 15 minutes. A job whose endTime
+// passed within the last 24h while still pending/in_progress earns one
+// nudge, tracked via an endTime-keyed ledger that re-arms on reschedule.
 const sendOverdueJobPrompts = onSchedule(
     {
       schedule: "every 15 minutes",

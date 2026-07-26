@@ -9,9 +9,9 @@ import 'package:scheduling/features/presence/domain/models/presence_fix.dart';
 /// with PRESENCE_STALE_MINUTES in functions/travel_utils.js.
 const presenceStaleAfter = Duration(minutes: 25);
 
-/// Pure reducers joining raw presence fixes with the active staff roster for
-/// the admin live-location map; every function takes `now` explicitly so the
-/// whole feature tests with a fixed clock.
+/// Pure reducers that join raw presence fixes with the active staff roster
+/// for the admin live-location map. Every function takes `now` explicitly so
+/// the whole feature can be tested with a fixed clock.
 class LiveMapAggregator {
   LiveMapAggregator._();
 
@@ -41,8 +41,8 @@ class LiveMapAggregator {
     return points;
   }
 
-  /// True strictly once [updatedAt] is older than [presenceStaleAfter]; null
-  /// (a pending own-write's server timestamp) reads as fresh.
+  /// True only once [updatedAt] is older than [presenceStaleAfter]. A null
+  /// value — a pending own-write's server timestamp — reads as fresh.
   static bool isStale(DateTime? updatedAt, DateTime now) {
     if (updatedAt == null) return false;
     return now.difference(updatedAt) > presenceStaleAfter;
@@ -59,8 +59,9 @@ class LiveMapAggregator {
     return FreshnessHoursAgo(elapsed.inHours);
   }
 
-  /// Great-circle distance in metres between two lat/lng pairs (haversine),
-  /// pure math so the roster ordering tests without the geolocator plugin.
+  /// Great-circle distance in metres between two lat/lng pairs (haversine
+  /// formula). Pure math, so the roster ordering can be tested without the
+  /// geolocator plugin.
   static double distanceMeters(
     double lat1,
     double lng1,
@@ -81,9 +82,9 @@ class LiveMapAggregator {
 
   static double _radians(double degrees) => degrees * math.pi / 180.0;
 
-  /// Orders roster rows nearest-first relative to [selfDocId]'s point (self
-  /// row always leads); with no self point in [points], incoming name order
-  /// is preserved.
+  /// Orders roster rows nearest-first relative to [selfDocId]'s point — the
+  /// self row always leads. If there's no self point in [points], the
+  /// incoming name order is preserved.
   static List<StaffMapPoint> sortedByProximity(
     List<StaffMapPoint> points, {
     required String? selfDocId,
@@ -116,10 +117,10 @@ class LiveMapAggregator {
     return [origin, ...rest.map((e) => e.point)];
   }
 
-  /// Best-effort city/locality pulled from a Google-formatted address such as
-  /// `"123 Rue X, Montréal, QC H2X 1Y4, Canada"` → `"Montréal"` (tuned for the
-  /// Canadian `street, City, PROV Postal, Country` shape); null when nothing
-  /// usable can be isolated.
+  /// Best-effort city/locality pulled from a Google-formatted address, e.g.
+  /// `"123 Rue X, Montréal, QC H2X 1Y4, Canada"` → `"Montréal"`. Tuned for
+  /// the Canadian `street, City, PROV Postal, Country` shape; returns null
+  /// when nothing usable can be picked out.
   static String? cityFromAddress(String? formatted) {
     final raw = formatted?.trim() ?? '';
     if (raw.isEmpty) return null;

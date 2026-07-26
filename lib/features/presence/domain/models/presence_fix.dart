@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
-/// A single staff member's last-known location fix; updatedAt is null (treated as fresh) pending own-write's serverTimestamp().
+/// A single staff member's last-known location fix. `updatedAt` is null
+/// (treated as fresh) while the own-write's serverTimestamp() is still pending.
 @immutable
 class PresenceFix {
   const PresenceFix({

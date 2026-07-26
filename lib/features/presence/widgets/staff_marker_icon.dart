@@ -8,7 +8,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/shared/widgets/primitives/name_initials.dart';
 
-/// Renders staff map-pin bitmaps (avatar-colored balloon with initials, ring, pointer, and halo when selected); cached per (initials, color, selected, ring/halo, dpr) and failed renders are evicted for retry.
+/// Renders staff map-pin bitmaps — an avatar-colored balloon with initials,
+/// a ring, a pointer, and a halo when selected. Cached per (initials, color,
+/// selected, ring/halo, dpr); a failed render is evicted so the next call retries.
 class StaffMarkerIconRenderer {
   StaffMarkerIconRenderer();
 
