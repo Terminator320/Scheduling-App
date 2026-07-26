@@ -2,16 +2,16 @@
 
 /**
  * @fileoverview Server-side mirror of the Flutter widget payload builder
- * (`lib/features/home_widget/application/widget_sync_service.dart`). A
+ * (`lib/features/home_widget/application/widget_sync_service.dart`); a
  * change-driven push carries the fresh payload so the iOS home-screen widget
- * can be rewritten from a background isolate — with the app closed — instead of
- * only when the app next runs. Kept a pure, dependency-free module so jest can
- * load it directly and so the JSON shape stays in lockstep with the Dart
- * builder and the Swift decoder (`ios/ScheduleWidget/ScheduleWidget.swift`).
+ * can rewrite from a background isolate with the app closed. Kept pure and
+ * dependency-free so jest can load it directly and its JSON shape stays in
+ * lockstep with the Dart builder and the Swift decoder
+ * (`ios/ScheduleWidget/ScheduleWidget.swift`).
  *
- * Day boundaries use America/Toronto (`BUSINESS_TIME_ZONE`, the one business
- * time zone); a Toronto-based device computes the same local midnight, so the
- * server- and app-written payloads agree.
+ * Day boundaries use America/Toronto (`BUSINESS_TIME_ZONE`), so a
+ * Toronto-based device computes the same local midnight and server- and
+ * app-written payloads agree.
  *
  * @module widget_payload_utils
  */
@@ -22,9 +22,9 @@ const {
   businessMidnight,
 } = require("./time_utils");
 
-// Terminal statuses are filtered out of the widget's job list. Mirrors
-// AppointmentStatus.isTerminal (status_chip.dart): done/cancelled, plus the
-// legacy `completed` alias of done.
+// Terminal statuses filtered out of the widget's job list; mirrors
+// AppointmentStatus.isTerminal (status_chip.dart): done/cancelled plus the
+// legacy `completed` alias.
 const TERMINAL_STATUSES = new Set(["done", "completed", "cancelled"]);
 
 // How many days past today the "next job" lookahead spans (matches the Dart
@@ -59,11 +59,10 @@ function torontoDayStartMs(now) {
 }
 
 /**
- * Serializes one appointment record into the widget's job JSON. Mirrors `_job`
- * in widget_sync_service.dart — `startTime` is an absolute UTC instant with
- * milliseconds (…Z) so the Swift ISO8601DateFormatter (with fractional
- * seconds) parses it; every other field is a plain string (never null, or the
- * Swift non-optional decode of the whole payload fails).
+ * Serializes one appointment record into the widget's job JSON, mirroring
+ * `_job` in widget_sync_service.dart; `startTime` is an absolute UTC instant
+ * with milliseconds so Swift's ISO8601DateFormatter parses it, and every
+ * other field is a plain non-null string or the Swift decode fails.
  * @param {!Object} r Appointment record (`{id, startTime, clientName, ...}`).
  * @return {!Object}
  */
@@ -107,13 +106,11 @@ function isCancelledStatus(status) {
 }
 
 /**
- * Builds the widget payload for one employee. Carries BOTH days plus a
+ * Builds the widget payload for one employee: carries both days plus a
  * `rolloverAt` instant so the WidgetKit timeline flips today -> tomorrow
- * on-device, with no app run or push: `todayJobs`/`tomorrowJobs` are each day's
- * upcoming non-terminal visits; `rolloverAt` is set only once today has no
- * incomplete job left (then last-job `endTime` + 1h; empty/all-cancelled today
- * rolls immediately). Pure mirror of `buildWidgetPayload`
- * (widget_sync_service.dart) — keep the two and the Swift decoder in lockstep.
+ * on-device with no app run or push (set once today has no incomplete job
+ * left, else null). Pure mirror of `buildWidgetPayload`
+ * (widget_sync_service.dart) — keep it and the Swift decoder in lockstep.
  * @param {!Array<!Object>} records The employee's appointments in the lookahead
  *   window.
  * @param {(Date|number)} now

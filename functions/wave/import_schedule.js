@@ -1,9 +1,9 @@
 "use strict";
 
 /**
- * @fileoverview Pure cadence helper for the scheduled Wave import. Kept in a
- * plain module (no Storage/Firestore load at require time) so jest can require
- * it directly — the onSchedule module that uses it cannot be required in tests.
+ * @fileoverview Pure cadence helper for the scheduled Wave import, kept in a
+ * plain module (no Storage/Firestore load at require time) so jest can
+ * require it directly, unlike the onSchedule module that uses it.
  * @module wave/import_schedule
  */
 

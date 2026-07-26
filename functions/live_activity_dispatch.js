@@ -55,8 +55,8 @@ function buildAttributes({appointmentId, employeeDocId, employeeColorValue}) {
 
 /**
  * The assignee's `colorValue`, which drives the card's colour rail (mirroring
- * `AppointmentCard`). A failed read yields 0 and the Swift side falls back to
- * the amber accent — never a reason to skip the card.
+ * `AppointmentCard`) — a failed read yields 0, and the Swift side's amber
+ * fallback is never a reason to skip the card.
  * @param {!Object} deps `{db, logger}`.
  * @param {string} employeeDocId
  * @return {!Promise<number>}
@@ -75,16 +75,10 @@ async function _employeeColorValue(deps, employeeDocId) {
 }
 
 /**
- * This employee's live update-token rows, but ONLY when the card marker
- * confirms the live card is showing `appointmentId`; `[]` otherwise.
- *
- * The marker is load-bearing, not a convenience. A push-STARTED activity's id
- * is minted by ActivityKit and `live_activities` exposes no way to read a
- * started activity's attributes back, so the device physically cannot stamp
- * `appointmentId` onto its own token row — the rows are only ever keyed by
- * employee. Resolving by employee alone would let a cancel on next week's job
- * end the card for the job the tech is currently driving to; resolving by a
- * row-level `appointmentId` that is never written would match nothing at all.
+ * This employee's live update-token rows, but only when the card marker
+ * confirms the live card is showing `appointmentId` (`[]` otherwise) — the
+ * marker check is load-bearing, since rows are keyed by employee only and a
+ * push-started activity's id can never be stamped back onto its own row.
  * @param {!Object} deps
  * @param {{appointmentId: string, employeeDocId: string}} args
  * @return {!Promise<!Array<!Object>>}
@@ -99,8 +93,8 @@ async function _liveRowsFor(deps, {appointmentId, employeeDocId}) {
 
 /**
  * `{authKey, keyId, teamId}` for APNs, or null when the secrets aren't
- * configured — in which case every verb here no-ops. Read lazily so a module
- * load outside a secret-bound function can't throw.
+ * configured (every verb here then no-ops) — read lazily so a module load
+ * outside a secret-bound function can't throw.
  * @param {!Object} deps
  * @return {?Object}
  */
@@ -111,8 +105,8 @@ function _authOf(deps) {
 }
 
 /**
- * Sends one payload to one registry row and prunes the row when APNs says the
- * activity is gone. Returns 1 on a delivered push, else 0.
+ * Sends one payload to one registry row, pruning it when APNs says the
+ * activity is gone; returns 1 on a delivered push, else 0.
  * @param {!Object} deps `{logger, apnsAuth}`.
  * @param {!Object} row A row from the registry.
  * @param {!Object} payload
@@ -166,10 +160,9 @@ function _stateFor(row, ctx, nowDate) {
 }
 
 /**
- * Starts the Lock Screen card for ONE (job, assignee) pair via push-to-start.
- * Called from the travel-aware sweep immediately after the reminder's ledger
- * claim succeeded and delivered, so it inherits that claim's exactly-once
- * guarantee rather than adding a second one.
+ * Starts the Lock Screen card for one (job, assignee) pair via push-to-start,
+ * called right after the reminder's ledger claim succeeds so it inherits that
+ * claim's exactly-once guarantee rather than adding a second one.
  * @param {!Object} deps `{db, logger, apnsAuth}`.
  * @param {!Object} args `{appointmentId, employeeDocId, ctx, nowDate}`.
  * @return {!Promise<number>} Cards started.
@@ -224,9 +217,9 @@ async function startLiveActivity(deps, args) {
 }
 
 /**
- * Pushes a fresh content state to this employee's live card — the reschedule
- * hook and the on-site phase-flip backstop both land here. A no-op when the
- * employee has no card, or has one for a different appointment.
+ * Pushes a fresh content state to this employee's live card (the reschedule
+ * hook and the on-site phase-flip backstop both land here); a no-op when the
+ * employee has no card, or one for a different appointment.
  * @param {!Object} deps `{db, logger, apnsAuth}`.
  * @param {!Object} args `{appointmentId, employeeDocId, ctx, nowDate}`.
  * @return {!Promise<number>} Cards updated.
@@ -247,11 +240,9 @@ async function updateLiveActivity(deps, args) {
       });
       updated += await _sendToRow(deps, row, payload, "update");
     }
-    // Keep the marker's startTime authoritative on reschedule: the on-site
-    // backstop (`listCardsDueForOnSite`) keys the flip off `marker.startTime`,
-    // so a stale value flips the card at the OLD start. Writing the current
-    // `phase` here also stamps the on-site flip so the backstop fires exactly
-    // once.
+    // Keeps the marker's startTime/phase authoritative on reschedule, so
+    // `listCardsDueForOnSite`'s flip (keyed off marker.startTime) fires at the
+    // right time and exactly once.
     if (updated > 0) {
       await setCardStart(
           deps, {employeeDocId, startTime: ctx.startTime, phase});
@@ -266,9 +257,9 @@ async function updateLiveActivity(deps, args) {
 }
 
 /**
- * Ends this employee's live card and drops its registry rows + card marker —
- * the cancel/remove hook. `dismissal-date: now` clears it from the Lock Screen
- * immediately; without it ActivityKit lingers for up to four hours.
+ * Ends this employee's live card (the cancel/remove hook), dropping its
+ * registry rows and card marker, with `dismissal-date: now` so it clears the
+ * Lock Screen immediately instead of lingering up to four hours.
  * @param {!Object} deps `{db, logger, apnsAuth}`.
  * @param {!Object} args `{appointmentId, employeeDocId, ctx, nowDate}`.
  * @return {!Promise<number>} Cards ended.

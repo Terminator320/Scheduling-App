@@ -2,7 +2,7 @@
 
 /**
  * @fileoverview Instant + Toronto-local formatting primitives shared by every
- * pure payload module. Requires nothing — deliberately, so it can sit under
+ * pure payload module; requires nothing, deliberately, so it can sit under
  * `notification_utils` -> `live_activity_dispatch` -> `live_activity_utils`
  * without closing a require cycle.
  *
@@ -114,8 +114,8 @@ function businessOffsetMs(date) {
 }
 
 /**
- * Business-local midnight of a calendar date, as a UTC Date. DST shifts happen
- * at 02:00, not midnight, so the midnight offset is stable.
+ * Business-local midnight of a calendar date as a UTC Date; stable because
+ * DST shifts happen at 02:00, not midnight.
  * @param {number} year
  * @param {number} month 1-based.
  * @param {number} day May overflow (day + 1 rolls the month).

@@ -10,10 +10,7 @@ const SESSION_TOKEN_MAX_LEN = 64;
 const MAX_PAYLOAD_BYTES = 4 * 1024;
 
 /**
- * True when the string contains a C0 control character (code < 0x20) or DEL
- * (0x7F). Control characters have no place in a place query, place id, or
- * session token; rejecting them sanitizes the input against log injection
- * (these values get logged) and odd upstream behaviour.
+ * True when the string contains a C0 control character or DEL, guarded against so logged values can't carry log-injection or odd upstream behaviour.
  * @param {string} s value to inspect.
  * @return {boolean}
  */
@@ -26,10 +23,7 @@ function hasControlChar(s) {
 }
 
 /**
- * Rejects malformed, oversized, or unexpected callable payloads. Throws
- * HttpsError("invalid-argument") when `data` is not a plain object, exceeds
- * MAX_PAYLOAD_BYTES once serialized, or carries any key outside `allowedKeys`
- * (mass-assignment defence). A null/undefined payload is treated as empty.
+ * Throws HttpsError("invalid-argument") when `data` isn't a plain object, is oversized once serialized, or carries a key outside `allowedKeys` (mass-assignment defence); null/undefined is treated as empty.
  * @param {*} data raw callable request data.
  * @param {!Set<string>} allowedKeys the only keys this endpoint accepts.
  */
@@ -55,9 +49,7 @@ function assertPayloadShape(data, allowedKeys) {
 }
 
 /**
- * Validates and returns a trimmed string field from the callable payload.
- * Throws HttpsError("invalid-argument") when missing, wrong type, out of the
- * [1, maxLen] range, or containing control characters.
+ * Validates and returns a trimmed string field, throwing HttpsError("invalid-argument") when missing, wrong type, out of range, or containing control characters.
  * @param {object} data callable request data.
  * @param {string} key field name.
  * @param {number} maxLen max length (inclusive).
@@ -72,9 +64,7 @@ function requireString(data, key, maxLen) {
 }
 
 /**
- * Validates and returns a finite number field within [min, max] (inclusive).
- * Throws HttpsError("invalid-argument") when the value is missing, not a
- * number, NaN, non-finite (Infinity/-Infinity), or out of range.
+ * Validates and returns a finite number within [min, max], throwing HttpsError("invalid-argument") when missing, non-numeric, non-finite, or out of range.
  * @param {*} value raw payload value.
  * @param {string} name field name, used to build the error code.
  * @param {number} min minimum allowed value (inclusive).
@@ -90,9 +80,7 @@ function requireNumberInRange(value, name, min, max) {
 }
 
 /**
- * Reads an optional sessionToken from the payload. Returns "" if absent;
- * throws HttpsError("invalid-argument") when present but malformed (wrong
- * type, too long, or containing control characters).
+ * Reads an optional sessionToken, returning "" if absent and throwing HttpsError("invalid-argument") if present but malformed.
  * @param {object} data callable request data.
  * @return {string}
  */
@@ -109,25 +97,18 @@ function readSessionToken(data) {
 }
 
 /**
- * Firestore-backed sliding-window rate limit. Unlike the in-memory limiter, it
- * holds across function instances and cold starts, so it is the right tool for
- * auth-sensitive routes — a brute-force caller cannot get maxInstances × max
- * tries. Counters live in `rateLimits/*`, which firestore.rules denies to all
- * clients (a client able to reset its own counter would defeat the cap).
- * Throws HttpsError("resource-exhausted") when the caller exceeds `max`
- * attempts within `windowMs`.
+ * Firestore-backed sliding-window rate limit that survives across function instances and cold starts (unlike the in-memory limiter), throwing HttpsError("resource-exhausted") when the caller exceeds `max` attempts within `windowMs`; counters live in `rateLimits/*`, which firestore.rules denies to all clients.
  * @param {string} route stable endpoint identifier (part of the doc key).
  * @param {string} key per-caller limiter key — usually the Auth uid, but the
  *   token email for redeemSignupCode (a failed signup re-mints the uid).
  * @param {number} max max attempts per window.
  * @param {number} windowMs window length in milliseconds.
- * @param {string} [keyKind] label for `key` ("uid" | "email"); email keys are
- *   PII, so only a hash is logged. Purely for log discrimination.
+ * @param {string} [keyKind] label for `key` ("uid" | "email"), purely for log
+ *   discrimination; email keys are PII, so only a hash is logged.
  * @return {!Promise<{refund: function(): !Promise<void>}>} A handle whose
- *   `refund()` removes the attempt just recorded (best-effort, never throws).
- *   Callers may use it so a server-side (`internal`) failure does not burn one
- *   of the caller's limited slots; caller-attributable failures must NOT be
- *   refunded. Existing callers that ignore the return value are unaffected.
+ *   `refund()` best-effort-undoes the recorded attempt so a server-side
+ *   (not caller-attributable) failure doesn't burn a caller's limited slot;
+ *   existing callers that ignore the return value are unaffected.
  */
 async function enforceDurableRateLimit(route, key, max, windowMs,
     keyKind = "uid") {
@@ -139,9 +120,8 @@ async function enforceDurableRateLimit(route, key, max, windowMs,
     const snap = await tx.get(ref);
     const data = snap.exists ? snap.data() : null;
     const prior = data && Array.isArray(data.attempts) ? data.attempts : [];
-    // True sliding window: keep only the attempt timestamps still inside the
-    // window. A single windowStart counter would reset at the boundary and let
-    // a caller burst 2×max across it; per-attempt timestamps cannot.
+    // True sliding window: per-attempt timestamps, not a single windowStart
+    // counter that would let a caller burst 2×max across the boundary.
     const recent = prior.filter(
         (t) => typeof t === "number" && now - t < windowMs,
     );
@@ -160,9 +140,8 @@ async function enforceDurableRateLimit(route, key, max, windowMs,
     });
   });
   if (overLimit) {
-    // Never log the raw key: for the email-keyed route it is PII. Log a short
-    // sha256 prefix so operators can still correlate breaches without storing
-    // the address.
+    // Never log the raw key (PII for the email-keyed route); log a short
+    // sha256 prefix so operators can still correlate breaches.
     const keyHash = crypto.createHash("sha256").update(key)
         .digest("hex").slice(0, 12);
     logger.warn("enforceDurableRateLimit: limit exceeded",
@@ -170,9 +149,8 @@ async function enforceDurableRateLimit(route, key, max, windowMs,
     throw new HttpsError("resource-exhausted", "too-many-attempts");
   }
 
-  // Best-effort refund of the single attempt recorded above (one occurrence
-  // of `now`). Swallows its own errors: refunding is an optimization, never
-  // worth failing the caller's error path over.
+  // Best-effort refund of the recorded attempt; swallows its own errors since
+  // refunding is an optimization, not worth failing the caller's error path.
   const refund = async () => {
     try {
       await db.runTransaction(async (tx) => {
@@ -196,11 +174,7 @@ async function enforceDurableRateLimit(route, key, max, windowMs,
 }
 
 /**
- * Asserts the caller is an active admin by reading the `usersByUid/{uid}`
- * bridge (kept in sync by syncUsersByUid; fields `{role, docId, status}`).
- * Throws HttpsError("permission-denied", "wave/not-admin") for any caller who
- * is not an `admin` with an `active` status — including a missing bridge doc.
- * The role is read from Firestore, never from a client-supplied value.
+ * Throws HttpsError("permission-denied", "wave/not-admin") unless the `usersByUid/{uid}` bridge (kept in sync by syncUsersByUid) shows an active admin — role is read from Firestore, never client-supplied.
  * @param {string} uid Firebase Auth uid of the caller.
  * @return {!Promise<void>}
  */
@@ -218,12 +192,9 @@ async function assertAdmin(uid) {
   }
 }
 
-// NOTE: guards stay inline per callable — do NOT fold auth -> assertAdmin ->
-// assertPayloadShape into a helper here. The callable suites mock `assertAdmin`
-// to pin each callable's guard ORDER (__tests__/places_admin_gate.test.js); a
-// helper defined in this module closes over the real one, so the mock stops
-// applying. When adding a callable, copy the order from an existing one along
-// with its guard tests.
+// NOTE: keep guards inline per callable — a shared helper here would close
+// over the real assertAdmin and break the guard-order mocks in
+// __tests__/places_admin_gate.test.js.
 
 module.exports = {
   hasControlChar,
