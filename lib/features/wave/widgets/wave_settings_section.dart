@@ -23,9 +23,9 @@ String _scheduleLabel(BuildContext context, WaveImportSchedule schedule) =>
       WaveImportSchedule.monthly => context.l10n.wave_autoImportMonthly,
     };
 
-/// Admin-only Wave integration controls in Settings; holds ephemeral
-/// [WaveConnection] and busy-flag state, and surfaces [WaveFailure] via
-/// notices (never ScaffoldMessenger).
+/// Admin-only Wave integration controls in Settings. Holds ephemeral
+/// [WaveConnection] and busy-flag state, and surfaces any [WaveFailure] via
+/// notices — never ScaffoldMessenger.
 class WaveSettingsSection extends ConsumerStatefulWidget {
   const WaveSettingsSection({super.key});
 
@@ -42,8 +42,8 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
   bool _importBusy = false;
   bool _scheduleBusy = false;
 
-  /// Fail-fast offline guard so the ~20s Wave callables don't hang; surfaces
-  /// the network notice and returns true so the caller aborts first.
+  /// Fail-fast offline guard so the ~20s Wave callables don't hang. Surfaces
+  /// the network notice and returns true, so the caller can abort first.
   bool _blockedOffline() {
     if (!ref.read(isOfflineProvider)) return false;
     ref
@@ -53,7 +53,8 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
   }
 
   /// Shared try/on-WaveFailure/finally-busy-reset shape for the three actions
-  /// below; logs under `WAVE-<tag>` before the notice so failures reach Crashlytics.
+  /// below. Logs under `WAVE-<tag>` before showing the notice, so failures
+  /// still reach Crashlytics.
   Future<void> _runWaveAction({
     required String tag,
     required void Function({required bool busy}) setBusy,
@@ -159,8 +160,8 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
     final connection = _connection ?? connectionAsync.value;
     final connected = connection != null;
 
-    // Distinguish loading/error from not-connected so a connected admin
-    // doesn't see the Connect CTA flash and failures offer a retry.
+    // Distinguish loading/error from not-connected, so a connected admin
+    // doesn't see the Connect CTA flash, and a failure still offers a retry.
     if (_connection == null && connectionAsync.isLoading) {
       return const _WaveStatusLoading();
     }
@@ -189,7 +190,8 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
             onPressed: _connectBusy || _importBusy ? null : _connect,
           )
         else
-          // Import only makes sense once connected — disconnected, a tap is guaranteed to fail.
+          // Import only makes sense once connected — a tap while disconnected
+          // is guaranteed to fail.
           AnimatedLoadingButton(
             label: context.l10n.wave_importCustomers,
             isLoading: _importBusy,

@@ -12,10 +12,10 @@ import 'package:scheduling/features/splash/application/splash_controller.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/branding/brand_logo.dart';
 
-/// Auth-gate splash matching native splash visual handoff; an optimistic
-/// fast path routes returning users instantly via AuthCache while a live role
-/// stream upgrades admins and account listeners handle disabled/deleted
-/// accounts.
+/// Auth-gate splash that matches the native splash's visual handoff. An
+/// optimistic fast path routes returning users instantly via AuthCache, a
+/// live role stream upgrades admins, and account listeners handle
+/// disabled/deleted accounts.
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -38,9 +38,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     _decideRoute();
   }
 
-  /// Optimistic fast path: cache hit routes immediately (as employee), miss falls back to authoritative provider.
+  /// Optimistic fast path — a cache hit routes immediately as an employee; a
+  /// miss falls back to the authoritative provider.
   Future<void> _decideRoute() async {
-    // Read uid (restored synchronously by Firebase.initializeApp) and fire cache read in parallel with App Check.
+    // Read the uid, which Firebase.initializeApp restores synchronously, and
+    // fire the cache read in parallel with App Check.
     final uid = ref.read(firebaseAuthProvider).currentUser?.uid;
     final cacheFuture = uid == null
         ? null
@@ -146,7 +148,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     );
   }
 
-  /// Mascot mark (static, opaque for native splash alignment) + wordmark fading in, scroll-wrapped for text scale overflow.
+  /// Mascot mark (static and opaque, to line up with the native splash) plus
+  /// a wordmark that fades in. Scroll-wrapped to handle text-scale overflow.
   Widget _buildHero(ThemeData theme) {
     Widget wordmark = Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp24),
