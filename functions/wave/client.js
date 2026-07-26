@@ -3,10 +3,10 @@
 /**
  * @fileoverview GraphQL transport client for the Wave Accounting public API.
  *
- * All network I/O is funnelled through `graphql()`. Every argument value
- * travels in `variables` — values are never string-interpolated into the
- * query document (Wave rejects inline String-typed args and this keeps the
- * calls injection-safe).
+ * All network I/O is funnelled through `graphql()`, with every argument value
+ * passed via `variables` rather than string-interpolated into the query
+ * document (Wave rejects inline String-typed args; this also keeps calls
+ * injection-safe).
  *
  * Retry policy (exponential backoff + jitter):
  *   - 429 Too Many Requests: respect `Retry-After` header when present.
@@ -66,8 +66,8 @@ class WaveApiError extends Error {
 // ---------------------------------------------------------------------------
 
 /**
- * Returns a delay in milliseconds for retry attempt `n` (0-indexed).
- * Formula: min(BASE * 2^n, MAX) * (0.5 + random 0..0.5) for jitter.
+ * Delay in milliseconds for retry attempt `n` (0-indexed): min(BASE * 2^n,
+ * MAX) * (0.5 + random 0..0.5) for jitter.
  * @param {number} n Attempt index (0 = first retry).
  * @return {number} Delay in milliseconds.
  */
@@ -77,9 +77,8 @@ function backoffMs(n) {
 }
 
 /**
- * Parses the `Retry-After` header value into a millisecond delay.
- * Handles both the integer-seconds form and the HTTP-date form.
- * Returns `null` when the header is absent or unparseable.
+ * Parses the `Retry-After` header (integer-seconds or HTTP-date form) into a
+ * millisecond delay, or `null` when absent/unparseable.
  * @param {Headers} headers Response headers.
  * @return {number|null}
  */
@@ -104,10 +103,9 @@ function sleep(sleepFn, ms) {
 }
 
 /**
- * Consumes (and discards) a response body. Undici/Node fetch keeps the
- * underlying socket pinned until the body is read or cancelled, so every
- * non-2xx retry/throw path must drain the body or connections leak across
- * the retry loop. Errors are swallowed — this is purely a resource release.
+ * Consumes (and discards) a response body so its socket isn't pinned across
+ * the retry loop (Undici/Node fetch requires this); errors are swallowed
+ * since this is purely a resource release.
  * @param {*} response A fetch Response (or a test double without `.text`).
  * @return {!Promise<void>}
  */
@@ -128,10 +126,10 @@ async function discardBody(response) {
 /**
  * Runs the POST-with-retry loop and returns the first 2xx response.
  *
- * Retry policy: 429 (honoring a clamped `Retry-After`), 5xx and fetch
- * rejections are retried up to `maxRetries` times; 401/403 and any other
- * non-2xx status throw immediately. Every non-2xx path drains the body first
- * so sockets are not pinned across the loop.
+ * Retry policy: 429 (honoring a clamped `Retry-After`), 5xx, and fetch
+ * rejections retry up to `maxRetries` times, while 401/403 and any other
+ * non-2xx throw immediately — every path drains the body first so sockets
+ * aren't pinned across the loop.
  *
  * @param {string} requestBody Serialized GraphQL request body.
  * @param {!Object} requestHeaders Request headers including Authorization.
@@ -239,11 +237,10 @@ async function postWithRetry(
 }
 
 /**
- * Parses a 2xx Wave response body and returns its `data` field.
- *
- * Throws `network` for a non-JSON body, `unknown` for a null/array/non-object
- * body, and `graphql` when the body carries a non-empty top-level `errors`
- * array (Wave reports resolver failures on an HTTP 200).
+ * Parses a 2xx Wave response body into its `data` field, throwing `network`
+ * for a non-JSON body, `unknown` for a null/array/non-object body, or
+ * `graphql` for a body carrying a non-empty top-level `errors` array (Wave
+ * reports resolver failures on an HTTP 200).
  *
  * @param {*} response A 2xx fetch Response.
  * @return {!Promise<*>} The `data` field of the GraphQL response.
@@ -291,9 +288,9 @@ async function parseGraphqlResponse(response) {
  * @param {string} query GraphQL query or mutation document string.
  * @param {!Object=} variables GraphQL variables (all argument values go here
  *   — never string-interpolate values into `query`).
- * @param {Object=} options Dependency-injection bag. Accepts: token (string),
- *   fetchImpl (function), sleepFn (function), maxRetries (number). Defaults
- *   use getWaveToken(), global.fetch, a setTimeout-based delay, and 3 retries.
+ * @param {Object=} options Dependency-injection bag (token, fetchImpl,
+ *   sleepFn, maxRetries), defaulting to getWaveToken(), global.fetch, a
+ *   setTimeout-based delay, and 3 retries respectively.
  * @return {!Promise<*>} The `data` field of a successful GraphQL response.
  * @throws {WaveApiError}
  */
@@ -322,8 +319,8 @@ async function graphql(query, variables = {}, options = {}) {
 // ---------------------------------------------------------------------------
 
 /**
- * Fetches the authenticated Wave user's id and default email.
- * Used to fast-fail an invalid or missing token.
+ * Fetches the authenticated Wave user's id and default email, used to
+ * fast-fail an invalid or missing token.
  * @param {Object=} options Injectable options (see `graphql`).
  * @return {!Promise<Object>} The user object with id and defaultEmail.
  */
@@ -346,8 +343,8 @@ async function whoami(options = {}) {
 }
 
 /**
- * Lists the first page (up to 50) of Wave businesses for the token owner.
- * Returns an array of `{id, name}` objects.
+ * Lists the first page (up to 50) of Wave businesses for the token owner as
+ * an array of `{id, name}` objects.
  * @param {Object=} options Injectable options (see `graphql`).
  * @return {!Promise<!Array<Object>>} Business nodes with id and name.
  */

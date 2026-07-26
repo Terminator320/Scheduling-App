@@ -23,42 +23,40 @@ const {
   enforceDurableRateLimit,
 } = require("../security");
 
-// Accepted automatic-import cadences (mirrors the app's WaveImportSchedule enum
-// and the wave/connection field). "off" is the default when the field is
-// absent.
+// Accepted automatic-import cadences (mirrors the app's WaveImportSchedule
+// enum and the wave/connection field); "off" is the default when absent.
 const IMPORT_SCHEDULE_SET = new Set(SCHEDULE_VALUES);
 
-// waveImportCustomers is a heavy one-shot admin op (it paginates ~650 customers
-// across ~7 Wave pages). A modest durable cap keeps a stuck/retried admin from
-// hammering Wave: 5 imports per hour is ample for a setup/reconcile action.
+// waveImportCustomers is a heavy one-shot admin op (~650 customers across ~7
+// Wave pages), so a modest cap — 5 imports/hour — keeps a stuck/retried admin
+// from hammering Wave.
 const WAVE_IMPORT_RATE_MAX = 5;
 const WAVE_IMPORT_RATE_WINDOW_MS = 60 * 60 * 1000;
 // waveBootstrap's not-yet-connected path makes live Wave calls (whoami +
-// listBusinesses). Cap it per-admin so a buggy/looping client can't burn the
-// Wave request budget before a connection exists. The idempotent short-circuit
-// (already-connected) runs before this and is not rate-limited.
+// listBusinesses), capped per-admin so a buggy/looping client can't burn the
+// Wave request budget — the idempotent already-connected short-circuit runs
+// before this and isn't rate-limited.
 const WAVE_BOOTSTRAP_RATE_MAX = 10;
 
-// The Wave business to connect, kept in Secret Manager so the name never ships
-// in the app and can change without an app release. Set it with
-// `firebase functions:secrets:set WAVE_BUSINESS_NAME`. waveBootstrap (which
-// declares it in its `secrets`) uses it as the target whenever the client
-// supplies no businessId/businessName.
+// The Wave business to connect, kept in Secret Manager (set via
+// `firebase functions:secrets:set WAVE_BUSINESS_NAME`) so the name never ships
+// in the app and can change without a release; waveBootstrap uses it as the
+// target whenever the client supplies no businessId/businessName.
 const WAVE_BUSINESS_NAME = defineSecret("WAVE_BUSINESS_NAME");
 
 // ----- Wave Accounting integration ------------------------------------------
 //
 // These functions wire the app's `clients` collection to Wave Accounting
-// customers (plan Task 5). The single `wave/connection` doc holds the selected
-// business id; `waveSyncQueue` is a durable outbox drained on a schedule. The
-// heavy lifting (GraphQL transport, mapping, queue mechanics) lives in the
-// `wave/*` modules — these functions are thin orchestrators that add auth,
-// admin, and rate-limit guards and translate Wave errors into HttpsErrors.
+// customers (plan Task 5): the single `wave/connection` doc holds the selected
+// business id, `waveSyncQueue` is a durable outbox drained on a schedule, and
+// the heavy lifting lives in the `wave/*` modules — these functions are thin
+// orchestrators adding auth/admin/rate-limit guards and translating Wave
+// errors into HttpsErrors.
 
 /**
- * Reads the connected Wave `businessId` from the `wave/connection` doc, or
- * returns "" when the doc/field is absent. Used by the callables/scheduler to
- * gate on "bootstrapped yet?".
+ * Reads the connected Wave `businessId` from the `wave/connection` doc (or ""
+ * when absent), used by the callables/scheduler to gate on "bootstrapped
+ * yet?".
  * @return {!Promise<string>} The business id, or "" if not connected.
  */
 async function readWaveBusinessId() {
@@ -67,12 +65,11 @@ async function readWaveBusinessId() {
   return data && typeof data.businessId === "string" ? data.businessId : "";
 }
 
-// Per-instance cache for the scheduled worker's connection gate. The worker
-// fires every 5 minutes forever, so an installation that never connects Wave
-// would otherwise pay a Firestore read every run per warm instance. A found
-// businessId is cached for the instance's lifetime (bootstrap is
-// set-once-never-changed); a NOT-connected result is cached for a short TTL
-// so a fresh bootstrap is still picked up within a few minutes.
+// Per-instance cache for the scheduled worker's connection gate, so an
+// installation that never connects Wave doesn't pay a Firestore read every
+// 5-minute run — a found businessId caches for the instance's lifetime, a
+// not-connected result for a short TTL so a fresh bootstrap is still picked up
+// within a few minutes.
 const NOT_CONNECTED_CACHE_MS = 5 * 60 * 1000;
 let cachedBusinessId = "";
 let notConnectedUntilMs = 0;
@@ -94,10 +91,9 @@ async function readWaveBusinessIdCached() {
 }
 
 /**
- * Selects the intended Wave business from the listed businesses. Selection
- * order: by name when `wantName` (the server-configured business name) is
- * given, else the single business when exactly one exists. Never blindly takes
- * the first of several.
+ * Selects the intended Wave business from the listed businesses — by name
+ * when `wantName` is given, else the single business when exactly one exists,
+ * never blindly taking the first of several.
  * @param {!Array<{id: string, name: string}>} businesses Listed businesses.
  * @param {string} wantName Configured business name ("" when not set).
  * @return {{id: string, name: string}} The selected business.
@@ -107,9 +103,9 @@ async function readWaveBusinessIdCached() {
 function selectBusiness(businesses, wantName) {
   const list = Array.isArray(businesses) ? businesses : [];
   if (wantName) {
-    // NOTE: name match is case-insensitive and trims surrounding whitespace so
-    // "acme co" / "  Acme Co  " both reach the same business. Id match above
-    // stays exact (ids are opaque tokens).
+    // NOTE: name match is case-insensitive and whitespace-trimmed (so
+    // "acme co" / "  Acme Co  " both match); id match stays exact since ids
+    // are opaque tokens.
     const want = wantName.trim().toLowerCase();
     // `b.name` is guarded too: a business with no name would otherwise throw a
     // raw TypeError that classifyWaveError turns into a misleading generic
@@ -153,8 +149,8 @@ const waveBootstrap = onCall(
       }
 
       // The target business is chosen server-side from the Secret Manager
-      // value — the app never names the business. `|| ""` guards an unset/empty
-      // secret against a trim() throw.
+      // value (the app never names it); `|| ""` guards an unset/empty secret
+      // against a trim() throw.
       const wantName = (WAVE_BUSINESS_NAME.value() || "").trim();
 
       // Only the not-yet-connected path (live Wave calls) is rate-limited.
@@ -165,9 +161,9 @@ const waveBootstrap = onCall(
           WAVE_IMPORT_RATE_WINDOW_MS,
       );
 
-      // Network calls run OUTSIDE the transaction (transactions retry; a Wave
-      // mutation must never run more than once). whoami() fast-fails a bad
-      // token before we list businesses.
+      // Network calls run outside the transaction (transactions retry, and a
+      // Wave mutation must never run twice); whoami() fast-fails a bad token
+      // before listing businesses.
       let selected;
       try {
         await whoami();
@@ -235,8 +231,9 @@ const waveGetConnection = onCall(
 );
 
 // 2b) waveSetImportSchedule — admin-only setter for the automatic-import
-// cadence. Writes the `importSchedule` field on the single wave/connection doc.
-// No secret, no rate limit (a cheap Firestore write); App Check + admin only.
+// cadence, writing `importSchedule` on the single wave/connection doc; no
+// secret or rate limit needed (a cheap Firestore write), just App Check +
+// admin.
 const waveSetImportSchedule = onCall(
     {enforceAppCheck: true},
     async (req) => {
