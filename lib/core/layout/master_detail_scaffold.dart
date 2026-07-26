@@ -23,7 +23,9 @@ class MasterDetailScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Single column on phones; landscape phones open detail as sheet despite nav rail; only tablet-class shows two panes.
+    // Phones get a single column. Landscape phones open the detail as a
+    // sheet even though they have a nav rail; only tablet-class devices
+    // actually show two panes.
     if (!context.isTwoPane) {
       return master;
     }

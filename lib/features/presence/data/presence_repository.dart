@@ -4,7 +4,8 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/presence/domain/models/presence_fix.dart';
 
-/// Outcome of a presence write: ok/failed/denied (controller distinguishes transient failure from rules denial).
+/// Outcome of a presence write. Lets the controller distinguish a transient
+/// failure from a rules denial.
 enum PresenceWriteResult { ok, failed, denied }
 
 /// Upper bound on the admin live-map presence feed, mirroring the users
@@ -12,9 +13,9 @@ enum PresenceWriteResult { ok, failed, denied }
 /// unbounded snapshot to the client.
 const _presenceStreamLimit = 500;
 
-/// Reads/writes the single `users/{docId}/presence/location` doc that feeds
-/// the server's travel-time "leave now" reminders; logs and swallows failures
-/// so a presence write never breaks a flow.
+/// Reads and writes the single `users/{docId}/presence/location` doc that
+/// feeds the server's travel-time "leave now" reminders. Logs and swallows
+/// failures so a presence write never breaks a flow.
 class PresenceRepository {
   PresenceRepository({required FirebaseFirestore firestore, AppLogger? logger})
     : _firestore = firestore,
@@ -30,7 +31,9 @@ class PresenceRepository {
           .collection('presence')
           .doc('location');
 
-  /// Upserts the device's last fix with server-timestamp `updatedAt`; never throws — caller uses the result to avoid advancing the throttle clock on failure and to stop tracking on denied.
+  /// Upserts the device's last fix with a server-timestamp `updatedAt`. Never
+  /// throws — the caller uses the returned result to avoid advancing the
+  /// throttle clock on failure, and to stop tracking entirely on denial.
   Future<PresenceWriteResult> upsertLocation({
     required String userDocId,
     required String uid,

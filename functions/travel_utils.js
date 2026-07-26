@@ -381,8 +381,8 @@ async function resolveReminderForAssignee(deps, args) {
 
   const ledgerId = travelReminderLedgerId(
       String(c.id), startMs, employeeDocId);
-  // Cheap pre-check before any Routes spend; the atomic create() inside
-  // deliverRecipientOnce remains the real exactly-once guard.
+  // Cheap pre-check before any Routes spend — the atomic create() inside
+  // deliverRecipientOnce is still the real exactly-once guard.
   const existing = await db
       .collection("appointmentReminders").doc(ledgerId).get();
   if (existing && existing.exists) return none;
@@ -445,7 +445,8 @@ async function resolveReminderForAssignee(deps, args) {
   let started = 0;
   if (kind === "leaveNow" && delivered > 0) {
     // Best-effort — a Live Activity failure must not change `reminded` or
-    // abort the sweep; no card just leaves the plain leaveNow push unchanged.
+    // abort the sweep. No card just leaves the plain leaveNow push
+    // unchanged.
     started = await startLiveActivity(deps, {
       appointmentId: String(c.id),
       employeeDocId,
@@ -462,9 +463,9 @@ async function resolveReminderForAssignee(deps, args) {
 
 /**
  * The travel-aware reminder sweep — one notification per (appointment,
- * employee) pair, replacing the fixed 30-min runReminderSweep; any pair
- * failure is caught and logged without stopping the sweep. Injectable deps
- * `{db, messaging, fetchImpl, apiKey, now, logger}`.
+ * employee) pair, replacing the fixed 30-min runReminderSweep. Any pair
+ * failure is caught and logged without stopping the rest of the sweep.
+ * Injectable deps `{db, messaging, fetchImpl, apiKey, now, logger}`.
  * @param {!Object} deps
  * @return {!Promise<{reminded: number}>}
  */
@@ -485,9 +486,10 @@ async function runTravelAwareReminderSweep(deps) {
           (doc) => ({id: doc.id, ...(doc.data() || {})})),
       nowDate,
   );
-  // The flip pass must run even with no upcoming candidates: a job stops
-  // being a candidate the moment it starts, so the sweep right after a tech
-  // begins their only job would otherwise never flip that card to `onSite`.
+  // The flip pass must run even with no upcoming candidates. A job stops
+  // being a candidate the moment it starts, so without this, the sweep
+  // right after a tech begins their only job would never flip that card to
+  // `onSite`.
   if (candidates.length === 0) {
     return {
       reminded: 0,
@@ -516,19 +518,19 @@ async function runTravelAwareReminderSweep(deps) {
       if (logger) logger.warn("travel: presence getAll failed", {err});
     }
   }
-  // The per-employee context queries are independent — issue them
-  // concurrently (one throwing employee falls back to [] without failing the
-  // others) rather than blocking on each in turn.
+  // The per-employee context queries are independent, so issue them
+  // concurrently rather than blocking on each in turn. One employee's query
+  // throwing just falls back to [] for them, without failing the others.
   const contextByEmployee = new Map();
   const lookbackStart = new Date(
       nowMs - PREV_APPOINTMENT_LOOKBACK_HOURS * 60 * MINUTE_MS);
   const contextEnd = new Date(nowMs + TRAVEL_WINDOW_MS + MAX_BOOKING_MS);
   await Promise.all(employeeIds.map(async (employeeDocId) => {
     try {
-      // Upper-bounded on the same field — without it the query matches every
-      // future appointment and a pre-booked series saturates
-      // CONTEXT_QUERY_MAX; the bound clears the window by MAX_BOOKING_MS since
-      // an intervening job can run a full day past it.
+      // Upper-bounded on the same field. Without that bound the query would
+      // match every future appointment, and a pre-booked series would
+      // saturate CONTEXT_QUERY_MAX. The bound clears the window by
+      // MAX_BOOKING_MS since an intervening job can run a full day past it.
       const ctxSnap = await db
           .collection("appointments")
           .where("employeeIds", "array-contains", employeeDocId)
@@ -552,7 +554,7 @@ async function runTravelAwareReminderSweep(deps) {
   let reminded = 0;
   let started = 0;
   const cache = new Map();
-  // Warm-instance memo; injectable so tests get a clean map per run.
+  // Warm-instance memo, injectable so tests get a clean map per run.
   const estimates = deps.estimateCache || _estimateCache;
   pruneEstimates(estimates, nowMs);
   for (const c of candidates) {
@@ -591,8 +593,8 @@ async function runTravelAwareReminderSweep(deps) {
  * card from `travel` to `onSite`, riding the existing 5-minute sweep with no
  * new scheduler.
  *
- * Driven off the card markers (not an appointments query), since they're the
- * only record of which techs have a card; best-effort, so failures are
+ * Driven off the card markers, not an appointments query, since they're the
+ * only record of which techs have a card. Best-effort — failures are
  * swallowed without affecting the reminder sweep.
  * @param {!Object} deps `{db, now, logger, apnsAuth}`.
  * @return {!Promise<number>} Cards updated.
@@ -607,9 +609,9 @@ async function runOnSiteFlipPass(deps) {
       const snap = await db
           .collection("appointments").doc(marker.appointmentId).get();
       const record = snap && snap.exists ? (snap.data() || {}) : null;
-      // A deleted/terminal job must call endLiveActivity (not just drop the
-      // marker) since the Lock Screen card outlives the Firestore doc; it
-      // also clears the marker so this won't retry every sweep.
+      // A deleted/terminal job has to call endLiveActivity, not just drop
+      // the marker, since the Lock Screen card outlives the Firestore doc.
+      // We also clear the marker here so this doesn't retry every sweep.
       if (!record ||
           TERMINAL.has(String(record.status || "").toLowerCase())) {
         await endLiveActivity(deps, {
