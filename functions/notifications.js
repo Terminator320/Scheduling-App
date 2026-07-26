@@ -57,8 +57,8 @@ function liveActivityDeps() {
 
 /**
  * APNs provider credentials for the Live Activity path, or null when the
- * secrets aren't bound (every Live Activity verb then no-ops). Read lazily
- * since `.value()` throws outside a secret-bound invocation.
+ * secrets aren't bound — every Live Activity verb just no-ops in that case.
+ * Read lazily since `.value()` throws outside a secret-bound invocation.
  * @return {?{authKey: string, keyId: string, teamId: string}}
  */
 function apnsAuth() {
@@ -99,9 +99,10 @@ const notifyAppointmentChanges = onDocumentWritten(
     },
 );
 
-// Travel-aware "time to leave" reminders, every 5 minutes; drive time comes from
-// Routes API and every failure path degrades to a fixed 30-min reminder, with a
-// per-recipient ledger so each occurrence fires exactly once and a missed run self-heals.
+// Travel-aware "time to leave" reminders, every 5 minutes. Drive time comes
+// from the Routes API, and every failure path degrades to a fixed 30-min
+// reminder. A per-recipient ledger makes sure each occurrence fires exactly
+// once, and a missed run just self-heals on the next sweep.
 const sendUpcomingJobReminders = onSchedule(
     {
       schedule: "every 5 minutes",
@@ -125,8 +126,9 @@ const sendUpcomingJobReminders = onSchedule(
     },
 );
 
-// Nightly digest at 18:00 America/Toronto: one push per employee with >=1 job
-// tomorrow. No ledger — runs once daily, so a rare duplicate is accepted.
+// Nightly digest at 18:00 America/Toronto — one push per employee with >=1
+// job tomorrow. No ledger here; it only runs once daily, so we accept the
+// occasional rare duplicate.
 const sendDailyJobDigest = onSchedule(
     {
       schedule: "0 18 * * *",
@@ -136,8 +138,9 @@ const sendDailyJobDigest = onSchedule(
     async () => {
       const deps = liveDeps();
       await runDailyDigest(deps);
-      // Rides the digest rather than adding a scheduler; isolated in its own
-      // try so a failed prune can't fail the digest that already sent.
+      // Rides the digest rather than adding a whole new scheduler for it.
+      // Isolated in its own try so a failed prune can't fail the digest,
+      // which has already sent by this point.
       try {
         const tokens = await pruneExpiredActivityTokens(deps);
         const cards = await pruneExpiredCardMarkers(deps);

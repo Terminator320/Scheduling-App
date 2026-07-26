@@ -17,7 +17,8 @@ Future<T> retryAsync<T>(
   throw StateError('retryAsync exited without returning or throwing.');
 }
 
-/// Stream sibling of [retryAsync]: re-subscribes on errors accepted by [retryWhen], surviving the post-sign-in permission-denied race.
+/// Stream sibling of [retryAsync] — re-subscribes on errors accepted by
+/// [retryWhen], to survive the post-sign-in permission-denied race.
 Stream<T> retryStream<T>(
   Stream<T> Function() create, {
   required bool Function(Object error) retryWhen,
