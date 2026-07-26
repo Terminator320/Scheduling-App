@@ -319,8 +319,8 @@ describe("upsertCustomer phone/mobile create fallback", () => {
           {code: "GENERIC_ERROR", message: "bad", path: ["phone"]},
           {code: "GENERIC_ERROR", message: "bad", path: ["mobile"]},
         ];
-        // 1) create with phone fails, 2) create without phone OK,
-        // 3) patch phone onto the new id OK.
+        // Create with phone fails, then create without phone succeeds, then patches
+        // the phone onto the new id.
         const graphql = graphqlSeq(
             createFail(phoneErrors),
             createOk("wave-new"),
@@ -429,7 +429,7 @@ describe("upsertCustomer crash-retry create idempotency", () => {
     "NO duplicate create", async () => {
     const data = {...CLIENT}; // unlinked
     const ref = clientRef(data);
-    // 1) LIST_CUSTOMERS returns the match, 2) patch it with current fields.
+    // LIST_CUSTOMERS returns the match, then patches it with current fields.
     const graphql = graphqlSeq(
         listPage1([matchingNode]),
         patchOk("wave-existing"),

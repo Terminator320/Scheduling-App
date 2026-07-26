@@ -34,11 +34,9 @@ function isReauthStale(authTime, nowSec, maxAgeSeconds) {
 // and the Google Play Account Deletion policy; the client re-authenticates first and
 // the server also re-checks auth_time against REAUTH_MAX_AGE_SECONDS.
 //
-// Scope of deletion (intentionally narrow — see plan §C6):
-//   1. The caller's `users/{docId}` Firestore document (syncUsersByUid then
-//      clears `usersByUid/{uid}` automatically).
-//   2. The Firebase Auth user.
-// Shared business data (appointments, clients, images) is untouched.
+// Deletion is intentionally narrow: it removes the caller's `users/{docId}` doc
+// (which cascades to `usersByUid/{uid}` via syncUsersByUid) and the Firebase Auth
+// user, leaving shared business data (appointments, clients, images) untouched.
 const deleteAccount = onCall(
     {enforceAppCheck: true},
     async (req) => {

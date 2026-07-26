@@ -108,7 +108,7 @@ function selectBusiness(businesses, wantName) {
   throw new HttpsError("failed-precondition", "wave/business-ambiguous");
 }
 
-// 1) waveBootstrap — admin-only, idempotent get-or-create of wave/connection.
+// waveBootstrap — admin-only, idempotent get-or-create of wave/connection.
 const waveBootstrap = onCall(
     {
       secrets: [WAVE_FULL_ACCESS_TOKEN, WAVE_BUSINESS_NAME],
@@ -219,7 +219,7 @@ const waveGetConnection = onCall(
     },
 );
 
-// 2b) waveSetImportSchedule — admin-only setter for the auto-import cadence on the
+// waveSetImportSchedule — admin-only setter for the auto-import cadence on the
 // wave/connection doc; just App Check + admin, no secret or rate limit needed.
 const waveSetImportSchedule = onCall(
     {enforceAppCheck: true},
@@ -248,7 +248,7 @@ const waveSetImportSchedule = onCall(
     },
 );
 
-// 2) waveImportCustomers — admin-only one-shot Wave → App seed.
+// waveImportCustomers — admin-only one-shot Wave → App seed.
 const waveImportCustomers = onCall(
     {
       secrets: [WAVE_FULL_ACCESS_TOKEN],
@@ -302,8 +302,8 @@ const waveImportCustomers = onCall(
     },
 );
 
-// 3) waveUpsertCustomer — enqueues a Wave write-back when a client doc's mapped
-// fields change; `retry: true` is safe since the handler is idempotent and hash-guarded.
+// waveUpsertCustomer — enqueues a Wave write-back when a client doc's mapped fields
+// change; `retry: true` is safe since the handler is idempotent and hash-guarded.
 const waveUpsertCustomer = onDocumentWritten(
     {document: "clients/{clientId}", retry: true},
     async (event) => {
@@ -355,7 +355,7 @@ const waveUpsertCustomer = onDocumentWritten(
     },
 );
 
-// 4) waveSyncWorker — drains the Wave outbox on a schedule, single-instance for
+// waveSyncWorker — drains the Wave outbox on a schedule, single-instance for
 // simple pacing (the lease reaper + transactional claim handle robustness).
 // timeoutSeconds is raised to 540 since a worst-case 30-job drain (with Retry-After
 // sleeps) would exceed the default 60s; drainQueue gets a ~70%-of-timeout deadline so
@@ -395,7 +395,7 @@ const waveSyncWorker = onSchedule(
     },
 );
 
-// 5) waveScheduledImport — daily Wave → App auto-import, running importCustomers()
+// waveScheduledImport — daily Wave → App auto-import, running importCustomers()
 // only when the configured cadence is due; a per-run failure just logs and retries
 // the next day.
 const waveScheduledImport = onSchedule(

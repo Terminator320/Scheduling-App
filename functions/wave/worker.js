@@ -52,11 +52,9 @@
  * - Any other (unexpected/infra) error — retryable (bounded by maxAttempts).
  *
  * ## Required Firestore composite indexes
- * NOTE: `waveSyncQueue` needs two composite indexes — add BOTH to
- * `firestore.indexes.json` before deploying:
- *   1. `(status ASC, nextAttemptAt ASC)` — for the `drainQueue` queued query.
- *   2. `(status ASC, claimedAt ASC)` — for the reclaim pass.
- * Run `firebase deploy --only firestore:indexes` after updating the file.
+ * NOTE: `waveSyncQueue` needs both `(status ASC, nextAttemptAt ASC)` (for `drainQueue`'s
+ * queued query) and `(status ASC, claimedAt ASC)` (for the reclaim pass) in
+ * `firestore.indexes.json`; run `firebase deploy --only firestore:indexes` after adding them.
  *
  * ## Throughput sizing
  * drainQueue's schedule frequency × batchLimit must stay under Wave's 60/min
@@ -280,14 +278,10 @@ async function commitOutcome(db, ref, claimStamp, update) {
 /**
  * Decides whether a `clients/{id}` write should enqueue a Wave customer-upsert job; pure (hash comparison only) so it's unit-testable in isolation — the `onDocumentWritten` trigger in `index.js` calls it with the before/after document data.
  *
- * Skip rules (both absorb writes that would create a pointless no-op job):
- *   1. The mapped fields are unchanged from `before` (only `wave.*` /
- *      `waveCustomerId` changed) — catches the worker's own write-back echo.
- *   2. The mapped fields already match `after.wave.lastSyncedHash` (already in
- *      sync) — this absorbs the import's full-doc writes so they don't enqueue.
- *
- * A create (`before == null`) is enqueued unless rule 2 already marks it
- * synced (e.g. the import wrote the doc with a matching `lastSyncedHash`).
+ * Skips a pointless no-op job when the mapped fields are unchanged from `before`
+ * (catches the worker's own write-back echo) or already match
+ * `after.wave.lastSyncedHash` (catches the import's full-doc writes). A create
+ * (`before == null`) is enqueued unless that same synced-hash check already covers it.
  *
  * @param {Object|null|undefined} before Pre-write client document data
  *   (null/undefined on a create).
