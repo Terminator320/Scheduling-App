@@ -105,6 +105,7 @@ class PresenceRepository {
   }
 }
 
-// Retries permission-denied from auth-token propagation lag (twin in firebase_employees_repository.dart; keep in sync).
+// Retries permission-denied errors caused by auth-token propagation lag —
+// there's a twin of this in firebase_employees_repository.dart, keep them in sync.
 bool _isAuthPropagationDenied(Object error) =>
     error is FirebaseException && error.code == 'permission-denied';

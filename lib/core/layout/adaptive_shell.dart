@@ -89,7 +89,7 @@ class HubShellScope extends InheritedWidget {
       context.getInheritedWidgetOfExactType<HubShellScope>()?.shell;
 
   /// The currently visible hub tab as a build dependency (null outside a
-  /// shell); used by FeatureTourHost to start/stop a tab's tour.
+  /// shell). Used by FeatureTourHost to start or stop a tab's tour.
   static AdaptiveDestination? currentOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<HubShellScope>()?.current;
 

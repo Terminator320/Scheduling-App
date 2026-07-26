@@ -49,9 +49,10 @@ class LiveMapConfig {
   final void Function(LatLng position) onTap;
 }
 
-/// Admin-only live staff-location map: a colored avatar marker per active staff
-/// member, with per-person freshness and a tap-to-open info card (hub tab
-/// between History and Settings; modeled on `HistoryScreen` for its chrome).
+/// Admin-only live staff-location map — a colored avatar marker per active
+/// staff member, with per-person freshness and a tap-to-open info card. Sits
+/// as the hub tab between History and Settings, modeled on `HistoryScreen`
+/// for its chrome.
 class LiveMapScreen extends ConsumerStatefulWidget {
   const LiveMapScreen({
     required this.isAdmin,
@@ -134,13 +135,14 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Mirrors the hub's TickerMode (false when tab hidden or an opaque route
-    // covers the hub); defaults true outside the shell (standalone / tests).
+    // Mirrors the hub's TickerMode — false when the tab is hidden or an
+    // opaque route covers the hub. Defaults to true outside the shell
+    // (standalone / tests).
     final visible = TickerMode.valuesOf(context).enabled;
 
-    // Paused (tab hidden): render the kept-alive map with the last-known
-    // markers and DON'T watch the data providers, so autoDispose tears down
-    // the presence listener + ticker.
+    // Paused (tab hidden) — render the kept-alive map with the last-known
+    // markers, and don't watch the data providers, so autoDispose can tear
+    // down the presence listener and ticker.
     final Widget body;
     if (visible) {
       body = _liveBody(context);
@@ -235,7 +237,8 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
         );
   }
 
-  /// The stored selection, or null once that person has left current points; clears post-frame so stale card doesn't render over vanished data.
+  /// The stored selection, or null once that person has left the current
+  /// points. Clears post-frame so a stale card doesn't render over vanished data.
   String? _effectiveSelected(List<StaffMapPoint> points) {
     final id = _selectedDocId;
     if (id == null) return null;
@@ -322,7 +325,9 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     int token,
   ) async {
     try {
-      // Render every icon in parallel; renderer caches per key so superseded/repeated batches are near-free; one failure aborts.
+      // Render every icon in parallel. The renderer caches per key, so
+      // repeated or superseded batches are near-free, but one failure aborts
+      // the whole batch.
       final icons = await Future.wait(
         points.map(
           (point) => _renderer.resolve(
@@ -411,7 +416,9 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     _animateCamera(CameraUpdate.newLatLngBounds(_boundsOf(points), 48));
   }
 
-  /// Map controller can outlive its platform view (shell swap recreates GoogleMap subtree); animateCamera throws "used after disposed" on stale controller.
+  /// The map controller can outlive its platform view — a shell swap
+  /// recreates the GoogleMap subtree — so `animateCamera` can throw "used
+  /// after disposed" on a stale controller.
   void _animateCamera(CameraUpdate update) {
     final controller = _mapController;
     if (controller == null) return;

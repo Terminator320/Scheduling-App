@@ -9,7 +9,9 @@ import 'package:scheduling/features/presence/domain/live_map_aggregator.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
-/// Bottom overlay when staff marker is tapped: avatar, name, freshness line, and address with "Open in Maps" action; watches 30s tick for freshness refresh.
+/// Bottom overlay shown when a staff marker is tapped — avatar, name,
+/// freshness line, and an address with an "Open in Maps" action. Watches the
+/// 30s tick to keep the freshness line refreshed.
 class StaffInfoCard extends ConsumerWidget {
   const StaffInfoCard({
     required this.point,

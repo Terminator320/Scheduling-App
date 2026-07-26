@@ -4,7 +4,8 @@ import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Stacked traffic + satellite toggles; filled background when active signals state.
+/// Stacked traffic and satellite toggles. A filled background signals which
+/// one is active.
 class MapToggles extends StatelessWidget {
   const MapToggles({
     required this.traffic,
