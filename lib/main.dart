@@ -23,6 +23,7 @@ import 'package:scheduling/core/adaptive/app_scroll_behavior.dart';
 import 'package:scheduling/core/app/app_sync_listeners.dart';
 import 'package:scheduling/core/connectivity/offline_banner.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/logging/unhandled_error_severity.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/notifications/fcm_background_handler.dart';
@@ -106,7 +107,11 @@ Future<void> main() async {
         final crashlytics = FirebaseCrashlytics.instance;
         FlutterError.onError = crashlytics.recordFlutterFatalError;
         PlatformDispatcher.instance.onError = (error, stack) {
-          crashlytics.recordError(error, stack, fatal: true);
+          crashlytics.recordError(
+            error,
+            stack,
+            fatal: isFatalUnhandledError(error),
+          );
           return true;
         };
 
@@ -137,7 +142,11 @@ Future<void> main() async {
       );
     },
     (error, stack) {
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      FirebaseCrashlytics.instance.recordError(
+        error,
+        stack,
+        fatal: isFatalUnhandledError(error),
+      );
     },
   );
 }

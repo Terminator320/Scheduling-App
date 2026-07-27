@@ -22,6 +22,33 @@ sealed class AuthFailure extends Failure {
     BuildContext context,
     AuthErrorContext errorContext,
   );
+
+  /// True when this is a routine, user-correctable outcome (mistyped password,
+  /// wrong signup code, offline) rather than a defect. Catch sites log these as
+  /// a breadcrumb instead of a Crashlytics error record — otherwise every user
+  /// who fat-fingers a field files a non-fatal issue. The `false` cases are
+  /// genuine misconfiguration or bugs and must keep surfacing.
+  bool get isExpected => switch (this) {
+    AuthFailureInvalidEmail() ||
+    AuthFailureUserDisabled() ||
+    AuthFailureUserNotFound() ||
+    AuthFailureWrongCredentials() ||
+    AuthFailureTooManyRequests() ||
+    AuthFailureNetwork() ||
+    AuthFailureEmailAlreadyInUse() ||
+    AuthFailureWeakPassword() ||
+    AuthFailureRequiresRecentLogin() ||
+    AuthFailureNotAuthorized() ||
+    AuthFailureInvalidSignupCode() ||
+    AuthFailureSignupCodeExpired() ||
+    AuthFailureSignupEmailMismatch() => true,
+    // Console misconfiguration, a rules rejection, an unmapped error, or an
+    // orphaned Auth user — all real defects worth a non-fatal.
+    AuthFailureOperationNotAllowed() ||
+    AuthFailurePermissionDenied() ||
+    AuthFailureUnknown() ||
+    AuthFailureAccountCreationIncomplete() => false,
+  };
 }
 
 class AuthFailureInvalidEmail extends AuthFailure {

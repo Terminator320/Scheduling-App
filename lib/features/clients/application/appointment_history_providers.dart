@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -33,7 +34,12 @@ final historySearchProvider = FutureProvider.autoDispose
     ) async {
       final repo = ref.watch(appointmentsRepositoryProvider);
       // Invalidate on local write so deleted visits don't linger in cached results.
-      final sub = repo.onLocalWrite.listen((_) => ref.invalidateSelf());
+      final sub = repo.onLocalWrite.listen(
+        (_) => ref.invalidateSelf(),
+        onError: (Object e, StackTrace st) => ref
+            .read(loggerProvider)
+            .warn('HIST-SEARCH invalidate error', e, st),
+      );
       ref.onDispose(sub.cancel);
       return repo.searchHistory(query);
     });
@@ -43,7 +49,11 @@ final historySearchProvider = FutureProvider.autoDispose
 final clientJobHistoryProvider = FutureProvider.autoDispose
     .family<List<AppointmentRecord>, String>((ref, clientId) async {
       final repo = ref.watch(appointmentsRepositoryProvider);
-      final sub = repo.onLocalWrite.listen((_) => ref.invalidateSelf());
+      final sub = repo.onLocalWrite.listen(
+        (_) => ref.invalidateSelf(),
+        onError: (Object e, StackTrace st) =>
+            ref.read(loggerProvider).warn('HIST-LOAD invalidate error', e, st),
+      );
       ref.onDispose(sub.cancel);
       return repo.fetchClientHistory(clientId: clientId);
     });

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/animations/app_animation_constants.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/app_notice.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -27,7 +28,16 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
   @override
   void initState() {
     super.initState();
-    _sub = ref.read(noticeServiceProvider).stream.listen(_show);
+    // Without onError a stream failure escapes to the zone handler and is
+    // recorded as a FATAL crash — for a notice we could not display.
+    _sub = ref
+        .read(noticeServiceProvider)
+        .stream
+        .listen(
+          _show,
+          onError: (Object e, StackTrace st) =>
+              ref.read(loggerProvider).warn('NOTICE stream error', e, st),
+        );
   }
 
   @override

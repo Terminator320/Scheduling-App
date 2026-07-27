@@ -44,4 +44,37 @@ void main() {
       contains('different email'),
     );
   });
+
+  group('isExpected', () {
+    test('user-correctable failures are expected', () {
+      for (final failure in const <AuthFailure>[
+        AuthFailureInvalidEmail(),
+        AuthFailureUserDisabled(),
+        AuthFailureUserNotFound(),
+        AuthFailureWrongCredentials(),
+        AuthFailureTooManyRequests(),
+        AuthFailureNetwork(),
+        AuthFailureEmailAlreadyInUse(),
+        AuthFailureWeakPassword(),
+        AuthFailureRequiresRecentLogin(),
+        AuthFailureNotAuthorized(),
+        AuthFailureInvalidSignupCode(),
+        AuthFailureSignupCodeExpired(),
+        AuthFailureSignupEmailMismatch(),
+      ]) {
+        expect(failure.isExpected, isTrue, reason: '${failure.runtimeType}');
+      }
+    });
+
+    test('defects and misconfiguration are not expected', () {
+      for (final failure in const <AuthFailure>[
+        AuthFailureOperationNotAllowed(),
+        AuthFailurePermissionDenied(),
+        AuthFailureUnknown(),
+        AuthFailureAccountCreationIncomplete(),
+      ]) {
+        expect(failure.isExpected, isFalse, reason: '${failure.runtimeType}');
+      }
+    });
+  });
 }
