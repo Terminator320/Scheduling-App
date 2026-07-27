@@ -360,7 +360,8 @@ async function listBusinesses(options = {}) {
   return edges
       .filter((e) => e && e.node)
       // Coerce a null/non-string name to "" so an off-spec node doesn't blow
-      // up downstream name matching (selectBusiness) when it calls `name.trim()`.
+      // up downstream name matching (selectBusiness) when it calls
+      // `name.trim()`.
       .map((e) => ({
         id: e.node.id,
         name: typeof e.node.name === "string" ? e.node.name : "",

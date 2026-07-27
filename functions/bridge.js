@@ -7,7 +7,8 @@ const VALID_ROLES = new Set(["admin", "employee"]);
 const VALID_BRIDGE_STATUS = new Set(["active", "disabled"]);
 
 /**
- * True when the user doc should have a bridge entry — suppressed for invited users (no uid) or unknown statuses.
+ * True when the user doc should have a bridge entry — suppressed for
+ * invited users (no uid) or unknown statuses.
  * @param {object} data user document fields.
  * @return {boolean}
  */
@@ -35,7 +36,8 @@ function bridgeBody(userId, data) {
 }
 
 /**
- * True when the user doc was deleted or an active account was deactivated — coordinates are PII and must not outlive the account.
+ * True when the user doc was deleted or an active account was deactivated —
+ * coordinates are PII and must not outlive the account.
  * @param {?object} beforeData user doc fields before the write, or null.
  * @param {?object} afterData user doc fields after the write, or null.
  * @return {boolean}

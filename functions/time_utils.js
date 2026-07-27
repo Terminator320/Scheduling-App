@@ -9,7 +9,9 @@
  * @module time_utils
  */
 
-/** The one business time zone (Quebec) — every user-facing time renders here. */
+/**
+ * The one business time zone (Quebec) — every user-facing time renders here.
+ */
 const BUSINESS_TIME_ZONE = "America/Toronto";
 
 /**

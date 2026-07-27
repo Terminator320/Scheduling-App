@@ -116,7 +116,8 @@ query ListCustomers($id: ID!, $page: Int!, $pageSize: Int!) {
 // Error sanitization
 // ---------------------------------------------------------------------------
 
-// Maps Wave inputError codes to safe, app-owned messages — Wave's raw `message` is never surfaced verbatim.
+// Maps Wave inputError codes to safe, app-owned messages — Wave's raw
+// `message` is never surfaced verbatim.
 const ERROR_CODE_MESSAGES = {
   "GENERIC_ERROR": "Wave rejected the customer data.",
   "MISSING_REQUIRED": "A required customer field is missing.",
@@ -128,7 +129,8 @@ const ERROR_CODE_MESSAGES = {
 };
 
 /**
- * Builds a single sanitized message from a Wave `inputErrors` array, mapping by `code` only (never Wave's raw `message`).
+ * Builds a single sanitized message from a Wave `inputErrors` array, mapping
+ * by `code` only (never Wave's raw `message`).
  * @param {Array<{code:string}>} inputErrors Wave input errors.
  * @return {string}
  */
@@ -149,7 +151,8 @@ function sanitizeInputErrors(inputErrors) {
 // ---------------------------------------------------------------------------
 
 /**
- * Lazily requires `firebase-admin/firestore` so tests that inject `db`/`now` never trigger it.
+ * Lazily requires `firebase-admin/firestore` so tests that inject `db`/`now`
+ * never trigger it.
  * @return {{getFirestore: !Function, FieldValue: !Object}}
  */
 function adminFirestore() {
@@ -174,7 +177,8 @@ async function readBusinessId(db) {
 }
 
 /**
- * Returns true when a Wave inputError path (an array of segments or a dotted string) points at the `phone` or `mobile` field.
+ * Returns true when a Wave inputError path (an array of segments or a dotted
+ * string) points at the `phone` or `mobile` field.
  * @param {{path:(Array<string>|string)}} err A single input error.
  * @return {boolean}
  */
@@ -309,7 +313,9 @@ async function upsertCustomer(clientId, deps = {}) {
   }
   const newId = created.customer && typeof created.customer.id === "string" ?
     created.customer.id : "";
-  // When the phone/mobile patch was deferred, record the hash of what actually landed in Wave (without phone) so the next upsert sees a mismatch and retries instead of treating it as synced.
+  // When the phone/mobile patch was deferred, record the hash of what actually
+  // landed in Wave (without phone) so the next upsert sees a mismatch and
+  // retries instead of treating it as synced.
   const syncedHash = created.phoneDeferred ?
     mappedFieldsHash({...data, phone: "", mobile: ""}) : hash;
   await writeSyncSuccess(

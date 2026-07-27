@@ -18,7 +18,7 @@ import 'package:scheduling/features/live_activity/application/live_activity_pref
 import 'package:scheduling/features/live_activity/data/live_activity_token_repository.dart';
 import 'package:scheduling/features/live_activity/domain/live_activity_token.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart'
-    show PushRegistrationController, shouldRegisterPush;
+    show shouldRegisterPush;
 
 final liveActivityTokenRepositoryProvider =
     Provider<LiveActivityTokenRepository>(
@@ -29,9 +29,11 @@ final liveActivityTokenRepositoryProvider =
     );
 
 final liveActivityRegistrationControllerProvider =
-    Provider<LiveActivityRegistrationController>(
-      LiveActivityRegistrationController.new,
-    );
+    Provider<LiveActivityRegistrationController>((ref) {
+      final controller = LiveActivityRegistrationController(ref);
+      ref.onDispose(controller.dispose);
+      return controller;
+    });
 
 /// Whether this device can host a push-started Live Activity. Drives whether
 /// the Settings row is shown.
@@ -343,5 +345,11 @@ class LiveActivityRegistrationController with ReentrantSync {
     _pushToStartSub = null;
     await _activitySub?.cancel();
     _activitySub = null;
+  }
+
+  /// Container-teardown cleanup — cancels the token streams without the
+  /// network delete that [unregister] does on sign-out/opt-out.
+  void dispose() {
+    unawaited(_cancelStreams());
   }
 }
