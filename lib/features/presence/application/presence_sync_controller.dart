@@ -74,7 +74,9 @@ Duration? trailingFlushDelay({
   return minPresenceUploadGap - now.difference(lastUploadAt!);
 }
 
-/// Owns the background position stream that keeps `users/{docId}/presence/location` fresh for travel-time reminders.
+/// Owns the foreground position stream that keeps
+/// `users/{docId}/presence/location` fresh for travel-time reminders. iOS
+/// suspends it on background — see `_settingsForPlatform`.
 class PresenceSyncController with ReentrantSync {
   PresenceSyncController(this._ref, {FirebaseAuth? auth})
     : _auth = auth ?? FirebaseAuth.instance;
@@ -93,9 +95,6 @@ class PresenceSyncController with ReentrantSync {
 
   AppLogger get _logger => _ref.read(loggerProvider);
 
-  /// A no-op for admins or signed-out users — tears the stream down once the
-  /// gate stops passing. Concurrent calls coalesce via [ReentrantSync], so
-  /// the latest account state always wins.
   Future<void> sync() => runCoalesced(_syncGuarded);
 
   Future<void> _syncGuarded() async {
@@ -184,8 +183,6 @@ class PresenceSyncController with ReentrantSync {
     });
   }
 
-  /// Arms a one-shot timer so the last fix in a throttled burst still lands
-  /// once the throttle window clears, instead of being silently dropped.
   void _armTrailingFlush(DateTime now) {
     final delay = trailingFlushDelay(lastUploadAt: _lastUploadAt, now: now);
     if (delay == null) return;
@@ -249,9 +246,6 @@ class PresenceSyncController with ReentrantSync {
         accuracy: LocationAccuracy.medium,
         distanceFilter: 250,
         activityType: ActivityType.automotiveNavigation,
-        // The status-bar indicator while backgrounded is deliberate — honest
-        // optics for staff whose location is being read.
-        showBackgroundLocationIndicator: true,
         pauseLocationUpdatesAutomatically: true,
       );
     }

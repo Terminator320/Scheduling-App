@@ -35,6 +35,12 @@ const {
   clearCardMarker,
 } = require("./live_activity_registry");
 const {sendLiveActivityPush} = require("./apns_client");
+const {toMillis} = require("./time_utils");
+
+// Local rather than imported from travel_utils: that module requires this one
+// (travel_utils -> live_activity_dispatch), so reaching back would close a
+// cycle.
+const MINUTE_MS = 60 * 1000;
 
 /**
  * The ActivityKit `attributes` a push-to-start carries — kept in lockstep with
@@ -86,11 +92,37 @@ async function _employeeColorValue(deps, employeeDocId) {
  * @return {!Promise<!Array<!Object>>}
  */
 async function _liveRowsFor(deps, {appointmentId, employeeDocId}) {
-  if (!employeeDocId) return [];
+  if (!employeeDocId) return {rows: [], marker: null};
   const marker = await readCardMarker(deps, {employeeDocId});
-  if (!marker || marker.appointmentId !== String(appointmentId)) return [];
+  if (!marker || marker.appointmentId !== String(appointmentId)) {
+    return {rows: [], marker: null};
+  }
   const rows = await listUpdateTokens(deps, {employeeDocId});
-  return rows.filter((row) => row && row.token);
+  return {rows: rows.filter((row) => row && row.token), marker};
+}
+
+/**
+ * Fills in a `leaveAt` (and drive line) from the card marker's stored lead
+ * when the caller has none. Returns `ctx` untouched when it already carries
+ * one, when no lead was ever recorded, or when the start is unreadable — the
+ * content builder then labels the time "Starts at" rather than "Leave at".
+ * @param {!Object} ctx
+ * @param {?Object} marker
+ * @return {!Object}
+ */
+function _withLeaveAt(ctx, marker) {
+  if (!ctx || ctx.leaveAt != null) return ctx;
+  if (!marker || typeof marker.leadMinutes !== "number") return ctx;
+  const startMs = toMillis(ctx.startTime);
+  if (startMs == null) return ctx;
+  return {
+    ...ctx,
+    leaveAt: new Date(startMs - marker.leadMinutes * MINUTE_MS),
+    travelMinutes: typeof ctx.travelMinutes === "number" ?
+        ctx.travelMinutes :
+        (typeof marker.travelMinutes === "number" ?
+            marker.travelMinutes : null),
+  };
 }
 
 /**
@@ -207,6 +239,8 @@ async function startLiveActivity(deps, args) {
         appointmentId: String(appointmentId),
         startTime: ctx.startTime,
         phase: phaseFor({startTime: ctx.startTime, now: nowDate}),
+        leadMinutes: ctx.leadMinutes,
+        travelMinutes: ctx.travelMinutes,
       });
     }
     return started;
@@ -230,13 +264,19 @@ async function updateLiveActivity(deps, args) {
   const {appointmentId, employeeDocId, ctx, nowDate} = args;
   if (!_authOf(deps)) return 0;
   try {
-    const rows = await _liveRowsFor(deps, {appointmentId, employeeDocId});
+    const {rows, marker} = await _liveRowsFor(
+        deps, {appointmentId, employeeDocId});
     if (rows.length === 0) return 0;
     const phase = phaseFor({startTime: ctx.startTime, now: nowDate});
+    // A reschedule hook has no drive estimate of its own, so rebuild `leaveAt`
+    // off the NEW start using the lead the sweep already measured for this
+    // card. Without this the card falls back to the appointment time and
+    // labels it "Leave at", sending the tech off a whole drive-time late.
+    const effectiveCtx = _withLeaveAt(ctx, marker);
     let updated = 0;
     for (const row of rows) {
       const payload = buildUpdatePayload({
-        contentState: _stateFor(row, ctx, nowDate),
+        contentState: _stateFor(row, effectiveCtx, nowDate),
         now: nowDate,
         staleDate: ctx.startTime,
       });
@@ -270,7 +310,7 @@ async function endLiveActivity(deps, args) {
   const {appointmentId, employeeDocId, ctx, nowDate} = args;
   if (!_authOf(deps)) return 0;
   try {
-    const rows = await _liveRowsFor(deps, {appointmentId, employeeDocId});
+    const {rows} = await _liveRowsFor(deps, {appointmentId, employeeDocId});
     if (rows.length === 0) return 0;
     let ended = 0;
     for (const row of rows) {

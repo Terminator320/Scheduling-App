@@ -148,7 +148,9 @@ async function listUpdateTokens(deps, {employeeDocId}) {
  * @return {!Promise<boolean>}
  */
 async function writeCardMarker(
-    deps, {employeeDocId, appointmentId, startTime, phase}) {
+    deps,
+    {employeeDocId, appointmentId, startTime, phase, leadMinutes,
+      travelMinutes}) {
   const {db, now, logger} = deps;
   if (!employeeDocId || !appointmentId) return false;
   const nowDate = now || new Date();
@@ -158,6 +160,12 @@ async function writeCardMarker(
       appointmentId,
       startTime: startTime || null,
       phase,
+      // The sweep's drive estimate, carried so a later reschedule can rebuild
+      // a real `leaveAt` off the NEW start instead of falling back to the
+      // appointment time (which the card would otherwise label "Leave at").
+      // `setCardStart` merges, so a reschedule preserves these.
+      leadMinutes: typeof leadMinutes === "number" ? leadMinutes : null,
+      travelMinutes: typeof travelMinutes === "number" ? travelMinutes : null,
       startedAt: nowDate,
       expiresAt: new Date(nowDate.getTime() + CARD_TTL_MS),
     });

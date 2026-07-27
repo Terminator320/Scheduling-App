@@ -452,8 +452,11 @@ async function resolveReminderForAssignee(deps, args) {
       employeeDocId,
       ctx: {
         ...ctx,
-        leaveAt: new Date(
-            startMs - computeLeadMinutes(travelSeconds) * MINUTE_MS),
+        leaveAt: new Date(startMs - leadMinutes * MINUTE_MS),
+        // Persisted on the card marker so a later reschedule can rebuild
+        // `leaveAt` off the new start instead of mislabelling the job's own
+        // start time as the departure time.
+        leadMinutes,
       },
       nowDate,
     });

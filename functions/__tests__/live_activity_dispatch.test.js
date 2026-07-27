@@ -46,6 +46,8 @@ const CTX = {
   startTime: START,
   leaveAt: new Date("2026-07-19T11:32:00Z"),
   travelMinutes: 18,
+  // 18 min drive + the sweep's 10-min buffer.
+  leadMinutes: 28,
 };
 
 /**
@@ -138,6 +140,8 @@ describe("startLiveActivity", () => {
       appointmentId: "appt1",
       startTime: START,
       phase: "travel",
+      leadMinutes: CTX.leadMinutes,
+      travelMinutes: CTX.travelMinutes,
     });
   });
 
@@ -221,6 +225,62 @@ describe("updateLiveActivity", () => {
         expect.anything(),
         {employeeDocId: "emp1", startTime: START, phase: "travel"});
   });
+
+  test("a reschedule rebuilds leaveAt from the marker's stored lead",
+      async () => {
+        // Regression: the reschedule hook passes leaveAt/travelMinutes null
+        // (it has no Routes estimate), which used to make the card render the
+        // NEW start time labelled "Leave at" — a whole drive-time late.
+        listUpdateTokens.mockResolvedValue([row()]);
+        readCardMarker.mockResolvedValue({
+          employeeDocId: "emp1", appointmentId: "appt1", phase: "travel",
+          leadMinutes: 28, travelMinutes: 18,
+        });
+        const movedTo = new Date("2026-07-19T14:00:00Z");
+
+        await updateLiveActivity(deps(), {
+          appointmentId: "appt1",
+          employeeDocId: "emp1",
+          ctx: {
+            clientName: "Ada", address: "14 Elm St", startTime: movedTo,
+            endTime: null, leaveAt: null, travelMinutes: null,
+          },
+          nowDate: NOW,
+        });
+
+        const state = sendLiveActivityPush.mock.calls[0][0]
+            .payload.aps["content-state"];
+        // 14:00Z minus the 28-minute lead the sweep measured.
+        expect(state.leaveAt).toBe("2026-07-19T13:32:00.000Z");
+        expect(state.timeLabel).toContain("Leave at");
+        expect(state.timeLabel).not.toContain("Starts at");
+        expect(state.driveLabel).toBe("About 18 min drive");
+      });
+
+  test("a reschedule with no recorded lead says Starts at, never Leave at",
+      async () => {
+        listUpdateTokens.mockResolvedValue([row()]);
+        readCardMarker.mockResolvedValue({
+          employeeDocId: "emp1", appointmentId: "appt1", phase: "travel",
+        });
+
+        await updateLiveActivity(deps(), {
+          appointmentId: "appt1",
+          employeeDocId: "emp1",
+          ctx: {
+            clientName: "Ada", address: "14 Elm St",
+            startTime: new Date("2026-07-19T14:00:00Z"),
+            endTime: null, leaveAt: null, travelMinutes: null,
+          },
+          nowDate: NOW,
+        });
+
+        const state = sendLiveActivityPush.mock.calls[0][0]
+            .payload.aps["content-state"];
+        expect(state.leaveAt).toBeNull();
+        expect(state.timeLabel).toContain("Starts at");
+        expect(state.timeLabel).not.toContain("Leave at");
+      });
 
   test("flips to the on-site phase once startTime has passed", async () => {
     listUpdateTokens.mockResolvedValue([row()]);
