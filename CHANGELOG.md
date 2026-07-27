@@ -10,6 +10,18 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.36.1+61] - 2026-07-27
+### Fixed
+- **Photos attached to a job no longer go missing when the connection drops
+  during upload.** If a photo finished uploading but the app briefly lost the
+  network before linking it to the appointment, the picture could end up stored
+  but never shown on the job. Those photos are now retried and attached once
+  you're back online, without uploading them a second time.
+- **A section's walkthrough no longer gets skipped if you switch tabs while it's
+  starting.** Quickly moving away from a screen as its guided tour was about to
+  begin could stop that tour from ever appearing again for the session; it now
+  shows the next time you open the screen.
+
 ## [1.36.0+60] - 2026-07-22
 ### Added
 - **A guided tour now introduces each part of the app.** The first time you open

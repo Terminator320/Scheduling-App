@@ -58,12 +58,11 @@ class PendingUpload {
     );
   }
 
-  // Serialize the timestamp as ISO-8601 (fromMap parses it back), so an
-  // uploaded image round-trips through SharedPreferences byte-identically.
+  // Reuse toMap() for the shared fields; only override uploadedAt, which
+  // toMap() leaves as a DateTime that jsonEncode can't handle. ISO-8601 round-
+  // trips through fromMap, so an uploaded image survives SharedPreferences.
   static Map<String, dynamic> _imageToJson(AppointmentImage image) => {
-    'url': image.url,
-    'storagePath': image.storagePath,
-    'fileName': image.fileName,
+    ...image.toMap(),
     'uploadedAt': image.uploadedAt?.toIso8601String(),
   };
 }
