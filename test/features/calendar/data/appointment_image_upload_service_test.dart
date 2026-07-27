@@ -129,6 +129,53 @@ void main() {
       expect(notifier.failureFor('a1')?.failedCount, 1);
     });
 
+    test('append failure re-queues uploaded images for an append-only '
+        'retry instead of orphaning them', () async {
+      final entry = await stageEntry('a1', ['1.jpg']);
+      when(
+        () => storage.uploadImage(any(), any()),
+      ).thenAnswer((_) async => _img('1.jpg'));
+      when(
+        () => appointments.appendAppointmentPictures(any(), any()),
+      ).thenThrow(const SocketException('offline'));
+
+      await makeService().drainPending();
+
+      final remaining = await store.load();
+      expect(remaining, hasLength(1));
+      // The upload succeeded so the local file is gone and no path re-uploads,
+      // but the uploaded image is carried for an append-only retry.
+      expect(remaining.single.paths, isEmpty);
+      expect(remaining.single.uploaded, hasLength(1));
+      expect(remaining.single.uploaded.single.storagePath, endsWith('1.jpg'));
+      expect(remaining.single.enqueuedAtMs, entry.enqueuedAtMs);
+      expect(File(entry.paths.single).existsSync(), isFalse);
+      expect(notifier.failureFor('a1')?.failedCount, 1);
+    });
+
+    test('a re-queued append-only entry re-links without re-uploading '
+        'once the write succeeds', () async {
+      // Seed the queue directly with a link-only entry (no on-disk paths).
+      await store.add(
+        PendingUpload(
+          appointmentId: 'a1',
+          paths: const [],
+          enqueuedAtMs: DateTime.now().millisecondsSinceEpoch,
+          uploaded: [_img('1.jpg')],
+        ),
+      );
+
+      await makeService().drainPending();
+
+      expect(await store.load(), isEmpty);
+      expect(notifier.failureFor('a1'), isNull);
+      // No file existed to upload; only the append was re-attempted.
+      verifyNever(() => storage.uploadImage(any(), any()));
+      verify(
+        () => appointments.appendAppointmentPictures(any(), any()),
+      ).called(1);
+    });
+
     test('permanent ImageUploadFailure drops the file and the entry', () async {
       await stageEntry('a1', ['bad.jpg']);
       when(
@@ -166,7 +213,8 @@ void main() {
 
       final service = makeService();
       final first = service.drainPending(); // enters, blocks on the gate
-      await service.drainPending(); // synchronous guard, so this is an immediate no-op
+      await service
+          .drainPending(); // synchronous guard, so this is an immediate no-op
       gate.complete(_img('1.jpg'));
       await first;
 

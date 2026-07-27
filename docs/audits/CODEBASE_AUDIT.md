@@ -1,189 +1,134 @@
-# Codebase Audit — 2026-07-26
+# Codebase Audit — 2026-07-26 (second pass)
 
 > **Implementation status (same session, uncommitted on `notification`).**
-> ALL reported findings implemented ("do all of them"). B1 (22 `max-len` lint
-> errors wrapped — functions lint now green), I1 (5 settings cards extracted to
-> their own `ConsumerWidget`s), I2 (`notification_utils.js` → new
-> `notification_messages.js`, 1122→893 lines), I3 (2 new test files, +22 tests:
-> keychain `_migrate` + presence throttle math), I4 (`ref.onDispose` on the 3
-> sync controllers), I5 (`settings_tiles.dart` split into 4 cohesive files +
-> barrel), and both 🟡 quality nits (dashboard_hero token dedup; the
-> employee_color_grid ring was left — intentional). Plus the 3 safe auto-fixes.
-> Verification: `flutter analyze` clean · `flutter test` **1055/1055** ·
-> functions `npm run lint` green · functions `npm test` **664/664** · no BOM on
-> any new file. No pre-ship items existed this run.
+> "Do all" — implemented **B1, I1, I3**. **I2 was deliberately NOT implemented**:
+> on inspection there are only **2** genuine adaptive show-dialog branch sites
+> (the third the review cited is a widget-build branch that can't route through
+> a show-helper), which is below the project's 3+-instance bar for extraction —
+> a helper for 2 six-line branches is the premature abstraction the anti-defaults
+> forbid. The 🟡 quality items are intentionally left as-is. Verification:
+> `flutter analyze` clean (no new errors/warnings), **1062 flutter tests green**
+> (1055 baseline + 7 new).
 
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
 `firestore.indexes.json`, `test/`). Baseline: working tree on branch
-`notification` (clean at start; last commit `912f972`).
+`notification` (clean before audit — prior audit 295118d already committed).
 
 ## Summary
-- Scanned: ~282 Dart files (`lib/`) + ~59 JS files (`functions/`) + rules/indexes.
-- Auto-fixed (safe, in the diff): **3** — 1 unused import removed, 2 unused
-  `show` names trimmed from imports.
-- Reported for your decision: **8**  (⚠️ 0 pre-ship · 🔴 0 security · 🟠 1 bug/blocker · 🔵 5 improvements · 🟡 2 quality)
-- Verification: `flutter analyze` **clean** (no errors/warnings vs. baseline) ·
-  presence + live_activity tests **87/87 pass** · Functions lint **FAILS**
-  (22 `max-len` errors — see B1, pre-existing, not introduced here).
+- Scanned: ~279 lib files + `functions/` + rules; deep-reviewed by 5 parallel
+  agents (security, bugs, dead code/convention, performance, maintainability).
+- Auto-fixed (safe, in the diff): **0** — `flutter analyze` clean (no
+  errors/warnings), `dart fix --dry-run` "Nothing to fix", Functions ESLint
+  clean, no confirmed dead code, no convention drift. Nothing safe to change.
+- Reported for your decision: **5** (⚠️ 0 pre-ship · 🔴 0 security · 🟠 1 bug ·
+  🔵 3 improvements · 🟡 1 quality)
+- Verification: no edits made, so baseline unchanged — `flutter analyze` clean,
+  Functions lint clean (as run by the static scan).
 
-**Top 3 to look at first:**
-1. **B1** — Functions `npm run lint` is currently red (22 `max-len` errors in
-   committed code). The documented deploy pre-flight runs this, so a deploy
-   would fail at the lint gate until these lines are wrapped.
-2. **I1** — Split `settings_screen.dart` (700 lines, 8 card builders) and the
-   3–4 >75-line `build()` methods into standalone widgets.
-3. **I3** — Add targeted tests for the keychain `_migrate()` and the presence
-   throttle/rollback logic — both load-bearing, both currently untested.
-
-The security, bug, and performance deep reviews came back **clean** — no
-exploitable findings, no traceable defects above the confidence bar, no
-significant performance wins. This is a repeatedly-audited, well-maintained
-codebase; the findings below are proportionate polish, not defects.
-
-## Auto-applied cleanups (review the diff)
-| File:line | Change | Why |
-|---|---|---|
-| `lib/core/permissions/location_permission_service.dart:3` | Removed unused import `media_permission_service.dart` | `unused_import` (dart fix) |
-| `lib/features/live_activity/application/live_activity_registration_controller.dart:21` | Trimmed unused `PushRegistrationController` from `show` (kept `shouldRegisterPush`) | `unused_shown_name` |
-| `lib/features/presence/application/presence_sync_controller.dart:16` | Trimmed unused `PushRegistrationController` from `show` (kept `shouldRegisterPush`) | `unused_shown_name` |
-> Full detail is in `git diff`. Nothing below this line was auto-changed.
+## Auto-applied cleanups
+None. The static level is entirely clean and no dead code was confirmed, so
+there was nothing reversible-and-obvious to apply. Expected state for this repo
+after its prior audit passes.
 
 ## ⚠️ Pre-ship checklist
-None this run. No `TODO(pre-ship)` scaffolding, no destructive testing-only
-actions wired into the UI, and no `enforceAppCheck: false` carve-outs remain in
-`lib/` or `functions/`. App Check is active in `main()`.
+None. No `TODO(pre-ship)`, `FIXME`, `HACK`, or destructive scaffolding markers
+exist in `lib/`. No pre-ship App Check flips outstanding (all callables enforce
+App Check; providers gate Debug on `kDebugMode`).
 
 ## 🔴 Security findings
-None. The `security-reviewer` pass over rules, callables, secret handling, and
-client trust boundaries found no real, exploitable finding. Everything that
-looked like a gap traced back to a correct server-side control (deny-by-default
-rules, Admin-SDK-only collections, `enforceAppCheck: true` + guard-ordered
-callables, role never cached, `toMap` never emitting `wave*`).
+None. Full sweep found no new verifiable issues. Verified concretely: App Check
+active + every callable `enforceAppCheck: true`; Firestore/Storage rules
+deny-by-default with correct query-vs-get discipline; client-writable TTL field
+`liveActivityTokens.expiresAt` required + bounded; `presence` writes anti-spoofed
+(`updatedAt == request.time`, self-only); every callable validates payload before
+consuming a rate slot; secrets only in Secret Manager; no role/`isAdmin` from
+SharedPreferences; no PII in function logs; image magic-byte validation client-
+and server-side.
 
-*Informational only (already documented + accepted):* `firestore.rules:271-292`
-`isValidClientData` caps the `contacts` array at 50 entries but cannot cap each
-contact's field lengths, so an admin write could theoretically approach
-Firestore's 1 MB ceiling and fan out via `propagateClientEdits`. Admin-only
-surface; the noted real fix is a per-field `TextLimits` cap in the contacts
-editor, not a rules change. No action unless the contacts editor gains untrusted
-input.
+_Informational only (not shipped code):_ `functions/scripts/seed-emulator.js:123`
+logs throwaway test-account passwords — emulator-only dev seeding, not deployed,
+standard practice. No action.
 
-## 🟠 Bug / blocker findings (review required)
+## 🟠 Bug findings
 
-### B1 — Cloud Functions lint gate is currently red (22 `max-len` errors) · severity: medium · confidence: high
-- **Where:** `functions/` — `bridge.js:10,38`, `security.js:56,71,87`,
-  `notification_utils.js:76`, `time_utils.js:12`, `wave/callables.js:30`,
-  `wave/client.js:363`, `wave/customers.js:119,131,152,177,312`,
-  `wave/worker.js:117,180,234,249,297,300,333`, `__tests__/wave_customers.test.js:322`.
-- **Problem:** `cd functions && npm run lint` (Google ESLint, 80-char cap) exits
-  non-zero with 22 `max-len` errors on committed code. The project's deploy flow
-  and the `/deploy` skill both run `npm run lint` as a required pre-flight, so a
-  functions/rules deploy would stop at the lint step. These are pre-existing (not
-  introduced by this audit's edits) — likely a lint run was skipped on an earlier
-  commit.
-- **Fix:** Wrap the offending lines to ≤80 chars. `eslint --fix` does **not**
-  auto-fix `max-len`, so this is manual (mechanical) line-wrapping — behavior-
-  preserving but needs a human choice of break points, hence report-only rather
-  than auto-applied. Then re-run `npm run lint` to confirm green. Good candidate
-  for the implement pass.
+### B1 — Photos can be orphaned if the metadata append throws transiently after uploads succeed · severity: low · confidence: medium (~65%)
+- **Where:** `lib/features/calendar/data/appointment_image_upload_service.dart:107-155`
+- **Problem:** In `_attempt`, each file uploads to Storage and its local staged
+  copy is `_deleteQuietly`-d immediately on success (L125–126). Only after the
+  loop does `appendAppointmentPictures` (L151) link them to the appointment doc.
+  If that single `arrayUnion` update throws **transiently** (e.g.
+  `deadline-exceeded` / a brief blip right after the uploads land), the exception
+  propagates, the queue entry is **not** removed, and on the next drain
+  `_attempt` maps `entry.paths` → `File`s filtered by `existsSync()` — but those
+  files were already deleted — so `files` is empty, the entry is removed (L113),
+  and the already-uploaded Storage objects are never linked. Result: photos exist
+  in Storage but are invisible on the appointment (effectively lost + orphaned
+  bytes). Narrow: uploads must succeed, then the metadata write must fail
+  non-hangingly. `permission-denied`/`not-found` cases are harmless (appointment
+  is gone anyway); the real exposure is a transient error on the append.
+- **Note:** The eager-delete is a **deliberate** design (documented in CLAUDE.md)
+  to avoid `DateTime.now()`-minted duplicate Storage paths on retry — so this is
+  a tradeoff, not an oversight. Any fix must not reintroduce the duplicate-path
+  risk.
+- **Fix (if pursued):** Remove the queue entry only after the append succeeds.
+  On append failure, re-queue the successfully-uploaded images as a "link-only"
+  batch (by URL/path) so the retry re-attempts just the Firestore `arrayUnion`
+  without re-uploading or re-minting paths.
 
-## 🔵 Areas to improve (review required)
+## 🔵 Areas to improve
 
-### I1 — Split `settings_screen.dart` and the longest `build()` methods · impact: medium · confidence: high
-- **Where:** `lib/features/settings/screens/settings_screen.dart` (700 lines,
-  2 State classes, 8 `_*Card` builders; `_buildMaster` @172 ~70 lines,
-  `_notificationsCard` @307 ~63); plus
-  `lib/features/employees/widgets/sheets/employee_form_sheet.dart`
-  `_buildAccountStatusSection` @265 (~93 lines);
-  `lib/features/calendar/screens/day_route_screen.dart` `build` @106 (~82);
-  `lib/features/calendar/widgets/views/details_view_body.dart` `build` @37 (~79);
-  `lib/features/presence/screens/live_map_screen.dart` `_mapStack` @454 (~77).
-- **Opportunity:** All exceed the project's ~60-line `build()` guideline. They're
-  cohesive, not tangled, but the settings cards and the account-status block are
-  the clearest wins — extracting each `_*Card` into a standalone widget both
-  shrinks the 700-line file and shortens the builders.
-- **Suggested improvement:** Pull the settings `_*Card` builders and the
-  `employee_form_sheet` account-status block into their own widget files; extract
-  the remaining inline bodies of `day_route_screen`/`details_view_body`/`live_map_screen`
-  into `_body()`/section methods. No behavior change.
+### I1 — No direct test for the shared `AppointmentFormConcerns` search race-guard · impact: medium · confidence: high
+- **Where:** `lib/features/calendar/application/appointment_form_concerns.dart`
+  (169-line shared mixin)
+- **Opportunity:** Holds non-trivial shared logic used by both add + edit flows:
+  `searchClients` debounce + a **request-id race guard** (stale results dropped),
+  `selectClient` custom-address seeding, `toggleEmployee`. It's only exercised
+  indirectly through the two controller tests, which may not pin the race guard —
+  a regression that drops the request-id check could ship green.
+- **Suggested improvement:** Add a focused test driving two overlapping
+  `searchClients` calls asserting the stale result is discarded, plus
+  `toggleEmployee` add/remove.
 
-### I2 — `functions/notification_utils.js` is a 1122-line god file · impact: medium · confidence: high
-- **Where:** `functions/notification_utils.js` (1122 lines, 69 functions).
-- **Opportunity:** Diff logic + the `_MESSAGES` i18n table + message builders +
-  ledger helpers + `sendToEmployee` all live in one module. Fully jest-tested and
-  cohesive, but there's a clean seam: message-building (`_MESSAGES` +
-  `build*Message`) is separable from the diff/ledger/send pipeline.
-- **Suggested improvement:** Extract the message table + builders into a sibling
-  (e.g. `notification_messages.js`), re-required by `notification_utils.js`.
-  Keep the jest tests pointed at whichever module owns each pure helper. Optional;
-  do only if this file keeps growing.
+### I2 — Three raw cupertino/material dialog branches could share one helper · impact: low-medium · confidence: high
+- **Where:** `lib/features/settings/screens/settings_screen.dart:417` (reauth) and
+  the signup-code dialog (2×) — each inlines
+  `context.isCupertino ? showCupertinoDialog<T> : showDialog<T>`.
+- **Opportunity:** The already-extracted `confirm_dialog.dart` proves the pattern;
+  these three remain hand-rolled (3 instances → warrants extraction).
+- **Suggested improvement:** Add one `showAdaptiveAppDialog<T>(context, builder)`
+  in `core/adaptive/` (mirrors the existing `showAdaptiveActionSheet`) and route
+  the three sites through it.
 
-### I3 — Test-coverage gap: keychain `_migrate()` and presence throttle/rollback · impact: medium · confidence: medium
-- **Where:** `lib/core/storage/secure_storage_service.dart` `_migrate()` (the
-  `ios_keychain_accessibility_v2` backup-slot → delete → rewrite migration);
-  `lib/features/presence/application/presence_sync_controller.dart` (250 m/2 min
-  throttle, 10-min heartbeat, failed-write clock rollback, `denied → _stop()`).
-- **Opportunity:** Both are called out as load-bearing in CLAUDE.md (the -25308
-  lock fix; the presence-drift/Crashlytics-spam fixes) yet neither has a direct
-  test. Only the `shouldTrackPresence` gate predicate is covered today. The
-  decision logic in both is pure enough to test with a fake storage/repo + clock.
-- **Suggested improvement:** Add a targeted test for `_migrate()` (exercise the
-  non-injected branch against a mock `FlutterSecureStorage`, or extract the
-  migration to a pure helper taking a storage interface) and one for the presence
-  throttle/rollback orchestration with a fake repo returning
-  `ok`/`failed`/`denied`.
-
-### I4 — Three app-scoped sync controllers lack a `ref.onDispose` cleanup hook · impact: low · confidence: high
-- **Where:** `presence_sync_controller.dart`,
-  `live_activity_registration_controller.dart`,
-  `push_registration_controller.dart` (the plain `Provider`s that open
-  `StreamSubscription`s/`Timer`s).
-- **Opportunity:** They cancel their streams/timers in their own `_stop()`/
-  `dispose()` (driven by `AppSyncListeners` on sign-out) and live for the app
-  lifetime, so nothing leaks today — but they don't register
-  `ref.onDispose(() => _stop())`, unlike `appointments_providers.dart` which
-  wires it correctly. Adding it hardens cleanup against any future container
-  disposal.
-- **Suggested improvement:** Add `ref.onDispose(() => controller._stop())` (or
-  `dispose()`) in each provider body, mirroring `appointments_providers.dart`.
-
-### I5 — `settings_tiles.dart` holds 11 widget classes in one file · impact: low · confidence: high
-- **Where:** `lib/features/settings/widgets/cards/settings_tiles.dart` (476 lines,
-  11 widget classes).
-- **Opportunity:** Against the project's "one class/widget per file" convention.
-  All small and cohesive, so low urgency — flag for consistency only.
-- **Suggested improvement:** Split into per-tile files under the same folder if/
-  when the file is touched next; not worth a dedicated pass.
+### I3 — `day_route_screen` build() mixes ~35 lines of data-prep · impact: low · confidence: high
+- **Where:** `lib/features/calendar/screens/day_route_screen.dart:106-163`
+  (build is 57 lines; first ~35 are filter-cancelled / sort / resolve-assignee /
+  compute-stops derivation).
+- **Opportunity:** Under the 60-line guideline but mixes derivation into `build()`.
+- **Suggested improvement:** Extract into a `_DayRouteData _prepareBuild()` helper
+  — matches the `_prepareBuild` pattern already used in `main_calendar_screen.dart`.
 
 ## 🟡 Code-quality suggestions (optional)
-- `lib/features/dashboard/widgets/sections/dashboard_hero.dart:24` —
-  `static const Color _inProgressSegment = Color(0xFF00A6F4)` is a verbatim
-  duplicate of `AppColors.accent` (`0xFF00A6F4`). Reference the token instead so
-  the segment follows a future brand-blue change. (The sibling
-  `_overdueSegment = Color(0xFFF54A00)` has no exact token match — leave it, or
-  add a token if a fixed overdue hue is wanted.) The other three segments already
-  use `statusColors`/`scheme.error` correctly.
-- `lib/features/employees/widgets/fields/employee_color_grid.dart:192-198` — the
-  custom-color dialog's decorative swatch ring hardcodes 7 hex colors that
-  overlap `AppColors.employeeColors`. Low value and **likely intentional**
-  (CLAUDE.md marks `EmployeeColorGrid` a deliberate design surface, and this is a
-  decorative loop, not the selectable palette). Report-only; leave unless a
-  palette-unification pass is wanted.
+- **"One class per file" grab-bags** (`.claude/rules/code-quality.md`) — intentional
+  "related small widgets" groupings, low priority, split only if they keep growing:
+  `auth_form_widgets.dart` (372 lines, 8 classes),
+  `photo_picker_section.dart` (476, 7), `details_view_leaf_widgets.dart` (294, 6),
+  `image_viewer.dart` (376, 3).
+- **`event_details_controller.dart`** (600 lines) — cohesive but broad; `save()` is
+  a ~93-line coordinator that delegates cleanly. Optional: peel the photo-
+  orchestration helpers (`_applyPhotoChanges`, `_deleteOrphanedImages`) into an
+  `EventDetailsPhotoSync` collaborator. Don't force it — genuinely one controller.
 
 ## Notes / uncertainties
-- Generated files (`*.g.dart`, `*.freezed.dart`, `lib/l10n/.gen/**`,
-  `firebase_options.dart`, `build/**`) were excluded per `analysis_options.yaml`.
-- **Dead-code scans came back clean beyond the 3 auto-fixed imports:** 0 orphaned
-  files (2,864 import/export lines cross-checked), **0 orphaned l10n keys** (all
-  463 `app_en.arb` keys referenced — no separate l10n pass needed), 0 dead design
-  tokens, 0 dead public types/top-level functions, 0 dead JS exports.
-- **Unused-dependency heuristic hits are all false positives:**
-  `google_maps_flutter_ios_sdk9` (endorsed SPM override), `build_runner` +
-  `freezed` (codegen for the `.freezed.dart` value classes — confirmed in use),
-  `flutter_launcher_icons` (icon-gen tool). None removable.
-- Sub-threshold notes from the deep review (not defects, logged for completeness):
-  `notification_utils.js:695` `endCardOnTerminal` doesn't explicitly
-  `clearCardMarker` after `endLiveActivity` in the narrow "card push-started but
-  update-token not yet registered" window — TTL-backstopped, no wrong card
-  produced; `travel_utils.js:386-388` one extra ledger `.get()` per candidate per
-  sweep — a deliberate trade to avoid billable Routes spend.
+- **Dead code / l10n:** zero confirmed dead code, zero unreferenced files, zero
+  orphaned ARB keys (463 keys, 1:1 `@`-metadata, all referenced). Nothing to prune.
+- **Performance:** no High/Medium wins found. Two negligible LOW items —
+  once-daily digest N+1 (`notification_utils.js:888`, runs 1×/day, small staff)
+  and a double `jsonEncode` in `widget_sync_service.dart:133-137` — not worth
+  acting on.
+- **Robustness:** essentially clean — all 5 StreamSubscriptions cancelled with
+  `onError`, controllers/timers disposed, `mounted`/`ref.mounted` guards present.
+  The decl-vs-dispose count flagged `add_appointment_sheet.dart` and
+  `event_details_view.dart` but both are false positives (controllers bundled in
+  `AppointmentFormControllers`, released by one `.dispose()`).
+- Generated files (`.gen/`, `*.g.dart`, `firebase_options.dart`) excluded per
+  `analysis_options.yaml`.
