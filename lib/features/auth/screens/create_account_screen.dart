@@ -154,13 +154,12 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
       );
     } catch (error, st) {
       final failure = AuthErrorMapper.map(error);
-      if (failure.isExpected) {
-        AppLogger().breadcrumb(
-          'auth.create_account signUp rejected (${failure.runtimeType})',
-        );
-      } else {
-        AppLogger().warn('auth.create_account signUp failed', error, st);
-      }
+      AppLogger().authFailure(
+        'auth.create_account signUp failed',
+        failure,
+        error,
+        st,
+      );
       if (!mounted) return;
       setState(() {
         _bannerError = failure.toLocalizedMessageInContext(

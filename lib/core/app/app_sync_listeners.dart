@@ -44,7 +44,7 @@ class AppSyncListeners {
   }
 
   void _presenceSync() {
-    // Starts or stops the background location stream that feeds the travel-time
+    // Starts or stops the foreground location stream that feeds the travel-time
     // "leave now" reminders — same emission-driven shape as push registration above.
     ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
       prev,

@@ -2,7 +2,7 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-07-21 by auditing the source against the app's call sites and
+refreshed 2026-07-27 by auditing the source against the app's call sites and
 the live deployment (the iOS Live Activity stack added behind
 `notifyAppointmentChanges` / `sendUpcomingJobReminders` — APNs secrets, direct
 HTTP/2 client; `purgeExpiredHistory`'s timeout corrected to the 1800s scheduled
@@ -239,7 +239,11 @@ through the Admin-SDK-only `liveActivityCards/{employeeDocId}` marker plus the
 self-only `users/{docId}/liveActivityTokens` rows; both carry `expiresAt` for a
 TTL prune (the rules cap a client-written `expiresAt` at `request.time + 31 d`,
 just above the app's 30-day push-to-start TTL). Card text is built server-side
-in EN/FR (`live_activity_utils.js`).
+in EN/FR (`live_activity_utils.js`). The marker also stores the sweep's
+`leadMinutes`/`travelMinutes`, because only the sweep ever has a Routes
+estimate: a later reschedule rebuilds `leaveAt` from the new start minus that
+lead (`_withLeaveAt`), and with no recorded lead the card renders "Starts at"
+rather than labelling the job's own start time as the departure time.
 
 Two **composite indexes are load-bearing** here: `liveActivityTokens`
 `(kind ASC, employeeDocId ASC)` at **COLLECTION_GROUP** scope, and

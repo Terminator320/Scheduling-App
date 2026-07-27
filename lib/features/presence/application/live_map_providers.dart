@@ -5,7 +5,6 @@ import 'package:scheduling/features/presence/application/presence_sync_controlle
 import 'package:scheduling/features/presence/domain/live_map_aggregator.dart';
 import 'package:scheduling/features/presence/domain/models/presence_fix.dart';
 
-
 final allPresenceStreamProvider = StreamProvider.autoDispose<List<PresenceFix>>(
   (ref) => ref.watch(presenceRepositoryProvider).watchAllPresence(),
 );
@@ -14,11 +13,9 @@ final liveMapClockProvider = Provider<DateTime Function()>(
   (ref) => DateTime.now,
 );
 
-
 final liveMapTickProvider = StreamProvider.autoDispose<int>(
   (ref) => Stream<int>.periodic(const Duration(seconds: 30), (i) => i),
 );
-
 
 final liveMapPointsProvider =
     Provider.autoDispose<AsyncValue<List<StaffMapPoint>>>((ref) {

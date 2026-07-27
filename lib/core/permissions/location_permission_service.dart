@@ -9,14 +9,8 @@ enum LocationPermissionResult {
   servicesDisabled,
 }
 
-/// Wraps runtime location permission for presence tracking. Both whileInUse
-/// and always count as granted access.
-///
-/// **Never request an Always upgrade.** The app ships without the `location`
-/// UIBackgroundModes entry (App Store guideline 2.5.4 — see the presence
-/// invariant in CLAUDE.md), so an Always grant would buy nothing while making
-/// the app look like it tracks staff off-shift. A pre-existing Always grant
-/// from an older build still maps to `granted`; we simply never ask for one.
+/// Never requests an Always upgrade. A pre-existing Always grant still counts
+/// as granted.
 class LocationPermissionService {
   LocationPermissionService({
     Future<bool> Function()? isServiceEnabled,
