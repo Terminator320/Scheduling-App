@@ -676,10 +676,10 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (1021 test cases as of 2026-07-22; `functions` adds 664 jest
+Run: `flutter test` (1050 test cases as of 2026-07-27; `functions` adds 664 jest
 tests in `functions/__tests__/` — the parallel `functions/test/` directory was
-merged away). `flutter analyze` reports **0 errors and 0 warnings** (three
-intentional info-level lints remain — see Analysis & Linting below); see
+merged away). `flutter analyze` reports **0 errors, 0 warnings, and 0 info
+lints** — see Analysis & Linting below; see
 `analysis_options.yaml` for the lints intentionally disabled (below).
 
 Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delegates in their test `MaterialApp` — add `AppLocalizations.delegate`, `GlobalMaterialLocalizations.delegate`, `GlobalWidgetsLocalizations.delegate`, and `supportedLocales: AppLocalizations.supportedLocales`.
@@ -688,11 +688,8 @@ Widgets that call `context.l10n` (e.g. `StatusChip`) require localization delega
 
 ## Analysis & Linting
 
-Baseline is `very_good_analysis` (strict). `flutter analyze` reports **0 errors and 0
-warnings** — keep it that way. Three info-level lints remain
-(`avoid_catching_errors` in `live_map_screen.dart`,
-`avoid_positional_boolean_parameters` in `wave_settings_section.dart`,
-`comment_references` in `app_bottom_sheet.dart`). Six rules are intentionally disabled in `analysis_options.yaml`, each because it fights
+Baseline is `very_good_analysis` (strict). `flutter analyze` reports **0 errors,
+0 warnings, and 0 info lints** — keep it that way. Six rules are intentionally disabled in `analysis_options.yaml`, each because it fights
 a deliberate convention rather than catching a real problem:
 
 | Disabled / excluded | Why |

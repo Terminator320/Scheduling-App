@@ -119,10 +119,19 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   by `PendingUploadStore` (one JSON list under the SharedPreferences key
   `pending_photo_uploads`, entries pruned after 7 days) so uploads survive
   going offline. `AppointmentImageUploadService.drainPending()` retries the
-  queue — it's reentrancy-guarded, re-queues only the *unsent*
+  queue — it's reentrancy-guarded, re-queues the *unsent*
   paths on a transient failure (preserving `enqueuedAtMs` so a batch can't
   retry past the prune window), and `arrayUnion`-appends uploaded pictures so a
   concurrent edit or the batch's other half never clobbers them.
+  **When the uploads land but the `arrayUnion` doc-link append itself throws
+  transiently, the already-uploaded images are carried forward on the queue
+  entry's `uploaded` field for an append-only retry — NOT re-uploaded (their
+  local temp files are already gone), and NEVER dropped, or the Storage bytes
+  orphan invisibly on the job.** That re-link stays idempotent because each
+  carried image serializes its exact `uploadedAt` (ISO-8601 in the JSON,
+  round-tripped by `AppointmentImage.fromMap`), so an append that actually
+  committed server-side dedupes on the next pass. An entry with no paths AND no
+  carried `uploaded` images is the only genuinely-empty one that drains away.
   **Staging and draining share ONE serialized path** (`drainPending`, guarded
   by `_draining` + `_pendingDrain`): a save that stages a batch does NOT upload
   it directly, because a listener-driven `drainPending()` firing in that window
@@ -320,7 +329,11 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   rendered via `isTargetRendered` — **never `GlobalKey.currentContext`: the
   5.x `Showcase` widget does NOT forward its key to the element tree, so
   currentContext is always null** (zero survivors → mark seen, never
-  crash/retry). **Data-dependent tabs MUST pass `FeatureTourHost(ready:)` false
+  crash/retry). The auto-start sets a `_started` guard before its post-frame
+  callback runs; **reset `_started` on the visibility-changed early-return** (the
+  tab was switched away before the callback fired) — a stale `true` there
+  permanently suppresses that tab's tour for the session, so a fast tab-switch
+  during auto-start otherwise wedges it shut. **Data-dependent tabs MUST pass `FeatureTourHost(ready:)` false
   while their body shows a loading/error placeholder** — the tour's targets
   don't exist yet, so an ungated start finds zero survivors and permanently
   marks the tab seen against an empty body (bit LiveMap: its FAB targets live in

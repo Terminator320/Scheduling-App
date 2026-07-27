@@ -416,7 +416,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
   }
 }
 
-/// The render-ready slice of a day computed once per [build] by `_prepareBuild`.
+/// The render-ready slice of a day computed once per `build` by `_prepareBuild`.
 class _DayRouteData {
   const _DayRouteData({
     required this.assigneeEntries,

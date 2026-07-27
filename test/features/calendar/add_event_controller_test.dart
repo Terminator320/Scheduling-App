@@ -184,7 +184,6 @@ void main() {
         id: 'c9',
         name: 'Nomad',
         phone: '555-0009',
-        address: '',
         noFixedAddress: true,
       );
       readNotifier().selectClient(nomad);
