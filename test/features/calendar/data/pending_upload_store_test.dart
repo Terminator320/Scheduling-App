@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/calendar/data/pending_upload_store.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -26,6 +27,53 @@ void main() {
     expect(loaded.first.paths, ['/x/1.jpg', '/x/2.jpg']);
     expect(loaded.first.id, 'a1_1000');
   });
+
+  test(
+    'round-trips already-uploaded images preserving the exact timestamp',
+    () async {
+      // Microsecond precision must survive so the arrayUnion re-link stays
+      // idempotent against a Firestore Timestamp minted from the same instant.
+      final uploadedAt = DateTime.utc(2026, 7, 26, 13, 45, 12, 340, 567);
+      final store = PendingUploadStore();
+      await store.add(
+        PendingUpload(
+          appointmentId: 'a1',
+          paths: const [],
+          enqueuedAtMs: 1000,
+          uploaded: [
+            AppointmentImage(
+              url: 'https://example.com/1.jpg',
+              storagePath: 'appointments/a1/images/1.jpg',
+              fileName: '1.jpg',
+              uploadedAt: uploadedAt,
+            ),
+          ],
+        ),
+      );
+      final loaded = await store.load();
+      expect(loaded, hasLength(1));
+      expect(loaded.single.paths, isEmpty);
+      final img = loaded.single.uploaded.single;
+      expect(img.url, 'https://example.com/1.jpg');
+      expect(img.storagePath, 'appointments/a1/images/1.jpg');
+      expect(img.uploadedAt, uploadedAt);
+    },
+  );
+
+  test(
+    'an entry without uploaded images omits the field and loads empty',
+    () async {
+      final store = PendingUploadStore();
+      await store.add(
+        const PendingUpload(
+          appointmentId: 'a1',
+          paths: ['/x/1.jpg'],
+          enqueuedAtMs: 1,
+        ),
+      );
+      expect((await store.load()).single.uploaded, isEmpty);
+    },
+  );
 
   test('remove drops only the matching entry', () async {
     final store = PendingUploadStore();

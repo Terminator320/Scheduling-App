@@ -109,12 +109,14 @@ class AppointmentImageUploadService {
         .map(File.new)
         .where((f) => f.existsSync())
         .toList();
-    if (files.isEmpty) {
+    if (files.isEmpty && entry.uploaded.isEmpty) {
       await _store.remove(entry.id);
       return;
     }
 
-    final uploaded = <AppointmentImage>[];
+    // Carry forward images uploaded on a prior pass whose doc-link append
+    // didn't land, so we re-attempt just the append without re-uploading them.
+    final uploaded = <AppointmentImage>[...entry.uploaded];
     var permanentFailures = 0;
     final tooLargeNames = <String>[];
     var transientFailure = false;
@@ -146,17 +148,32 @@ class AppointmentImageUploadService {
       }
     }
 
+    var appendFailed = false;
     if (uploaded.isNotEmpty) {
-      // Use arrayUnion so concurrent edits/retries never clobber existing pictures.
-      await _appointments.appendAppointmentPictures(
-        entry.appointmentId,
-        uploaded,
-      );
+      try {
+        // Use arrayUnion so concurrent edits/retries never clobber existing pictures.
+        await _appointments.appendAppointmentPictures(
+          entry.appointmentId,
+          uploaded,
+        );
+      } catch (e, st) {
+        // Uploads landed but the doc-link write didn't. The local files are
+        // already deleted, so re-queue the uploaded images for an append-only
+        // retry rather than dropping them — otherwise the bytes sit orphaned
+        // in Storage, invisible on the appointment.
+        appendFailed = true;
+        _logger.warn(
+          'IMG-UPLOAD append failed for ${entry.appointmentId}',
+          e,
+          st,
+        );
+      }
     }
 
-    if (transientFailure) {
-      // Re-queue the paths that didn't make it, keeping the original
-      // enqueued time so the 7-day pruning still counts from when the
+    if (transientFailure || appendFailed) {
+      // Re-queue whatever didn't land — survivor paths to re-upload, plus the
+      // already-uploaded images if only their append failed — keeping the
+      // original enqueued time so the 7-day pruning still counts from when the
       // batch first showed up.
       await _store.remove(entry.id);
       await _store.add(
@@ -164,11 +181,12 @@ class AppointmentImageUploadService {
           appointmentId: entry.appointmentId,
           paths: survivors,
           enqueuedAtMs: entry.enqueuedAtMs,
+          uploaded: appendFailed ? uploaded : const [],
         ),
       );
       _notifier.reportFailure(
         entry.appointmentId,
-        failedCount: survivors.length,
+        failedCount: survivors.length + (appendFailed ? uploaded.length : 0),
       );
     } else {
       await _store.remove(entry.id);

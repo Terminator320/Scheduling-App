@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// One queued photo batch for an appointment (staged file paths on disk).
@@ -10,11 +11,20 @@ class PendingUpload {
     required this.appointmentId,
     required this.paths,
     required this.enqueuedAtMs,
+    this.uploaded = const [],
   });
 
   final String appointmentId;
   final List<String> paths;
   final int enqueuedAtMs;
+
+  /// Images already uploaded to Storage on a previous pass whose
+  /// appointment-doc link (the `arrayUnion` append) hasn't landed yet. They're
+  /// re-attempted append-only on the next drain — never re-uploaded, since
+  /// their local files are already gone. Preserving each image's exact
+  /// `uploadedAt` keeps the `arrayUnion` re-link idempotent if the earlier
+  /// append actually committed server-side.
+  final List<AppointmentImage> uploaded;
 
   String get id => '${appointmentId}_$enqueuedAtMs';
 
@@ -22,6 +32,7 @@ class PendingUpload {
     'appointmentId': appointmentId,
     'paths': paths,
     'enqueuedAtMs': enqueuedAtMs,
+    if (uploaded.isNotEmpty) 'uploaded': uploaded.map(_imageToJson).toList(),
   };
 
   static PendingUpload? fromJson(Object? raw) {
@@ -33,12 +44,28 @@ class PendingUpload {
     if (appointmentId.isEmpty || enqueuedAtMs is! int || paths is! List) {
       return null;
     }
+    final rawUploaded = map['uploaded'];
     return PendingUpload(
       appointmentId: appointmentId,
       paths: paths.map((p) => p.toString()).toList(),
       enqueuedAtMs: enqueuedAtMs,
+      uploaded: rawUploaded is List
+          ? rawUploaded
+                .whereType<Map<Object?, Object?>>()
+                .map((m) => AppointmentImage.fromMap(m.cast<String, dynamic>()))
+                .toList()
+          : const [],
     );
   }
+
+  // Serialize the timestamp as ISO-8601 (fromMap parses it back), so an
+  // uploaded image round-trips through SharedPreferences byte-identically.
+  static Map<String, dynamic> _imageToJson(AppointmentImage image) => {
+    'url': image.url,
+    'storagePath': image.storagePath,
+    'fileName': image.fileName,
+    'uploadedAt': image.uploadedAt?.toIso8601String(),
+  };
 }
 
 /// A durable queue of photo batches that failed to upload, or just haven't

@@ -113,8 +113,35 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     final async = ref.watch(provider);
     ref.listen(provider, _onAppointmentsAsyncChange);
 
+    final data = _prepareBuild(async.value ?? const <AppointmentRecord>[]);
+
+    return Scaffold(
+      appBar: AppTopBar(
+        title: context.l10n.calendar_dayRouteTitle,
+        onBack: () => Navigator.pop(context),
+        compact: context.isLandscape,
+      ),
+      bottomNavigationBar: _routeButton(data.stops),
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            _daySwitcher(),
+            if (widget.isAdmin && data.assigneeEntries.isNotEmpty)
+              _employeePicker(data.assigneeEntries, data.employeeId),
+            Expanded(child: _timeline(async, data.jobs, data.employeeId)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Derives the render-ready slice of the day from the raw appointments:
+  // filter+sort into driving order, resolve which assignee's route to show,
+  // then the jobs for that assignee and their navigable stops.
+  _DayRouteData _prepareBuild(List<AppointmentRecord> source) {
     final dayAppointments =
-        (async.value ?? const <AppointmentRecord>[])
+        source
             .where((a) => !AppointmentStatus.fromRaw(a.status).isCancelled)
             .toList()
           // Sort defensively to ensure numbering and launched route stay in driving order.
@@ -135,30 +162,15 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
               .toList()
         : dayAppointments;
     final stops = jobs
-        .where(
-          (a) => _isOpen(a.status) && a.address.trim().isNotEmpty,
-        )
+        .where((a) => _isOpen(a.status) && a.address.trim().isNotEmpty)
         .map((a) => a.address)
         .toList();
 
-    return Scaffold(
-      appBar: AppTopBar(
-        title: context.l10n.calendar_dayRouteTitle,
-        onBack: () => Navigator.pop(context),
-        compact: context.isLandscape,
-      ),
-      bottomNavigationBar: _routeButton(stops),
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            _daySwitcher(),
-            if (widget.isAdmin && assigneeEntries.isNotEmpty)
-              _employeePicker(assigneeEntries, employeeId),
-            Expanded(child: _timeline(async, jobs, employeeId)),
-          ],
-        ),
-      ),
+    return _DayRouteData(
+      assigneeEntries: assigneeEntries,
+      employeeId: employeeId,
+      jobs: jobs,
+      stops: stops,
     );
   }
 
@@ -402,6 +414,21 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
       ),
     );
   }
+}
+
+/// The render-ready slice of a day computed once per [build] by `_prepareBuild`.
+class _DayRouteData {
+  const _DayRouteData({
+    required this.assigneeEntries,
+    required this.employeeId,
+    required this.jobs,
+    required this.stops,
+  });
+
+  final List<MapEntry<String, String>> assigneeEntries;
+  final String employeeId;
+  final List<AppointmentRecord> jobs;
+  final List<String> stops;
 }
 
 class _StopTile extends StatelessWidget {

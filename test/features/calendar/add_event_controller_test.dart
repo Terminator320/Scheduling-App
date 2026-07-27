@@ -170,6 +170,39 @@ void main() {
     });
   });
 
+  group('selectClient', () {
+    test('picking a normal client leaves the address in client mode', () {
+      readNotifier().selectClient(_aClient);
+      expect(readState().selectedClient, _aClient);
+      expect(readState().clientResults, isEmpty);
+      // _aClient has a real address, so the custom-address toggle stays off.
+      expect(readState().useCustomAddress, isFalse);
+    });
+
+    test('picking a no-fixed-address client seeds the custom address on', () {
+      const nomad = ClientRecord(
+        id: 'c9',
+        name: 'Nomad',
+        phone: '555-0009',
+        address: '',
+        noFixedAddress: true,
+      );
+      readNotifier().selectClient(nomad);
+      expect(readState().useCustomAddress, isTrue);
+    });
+
+    test('picking a client with a blank address seeds custom address on', () {
+      const blank = ClientRecord(
+        id: 'c8',
+        name: 'Blank',
+        phone: '555-0008',
+        address: '   ',
+      );
+      readNotifier().selectClient(blank);
+      expect(readState().useCustomAddress, isTrue);
+    });
+  });
+
   group('submit', () {
     test(
       'returns AddEventInvalid and populates errors on empty form',
