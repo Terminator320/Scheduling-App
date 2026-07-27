@@ -150,6 +150,11 @@ function buildContentState({clientName, address, startTime, endTime, leaveAt,
   const timeSource = onSite || !leaveKnown ? startTime : leaveAt;
   const timeText = _timeOnly(timeSource, loc);
   const minutes = typeof travelMinutes === "number" ? travelMinutes : null;
+  let timeLabel = "";
+  if (timeText) {
+    if (onSite) timeLabel = t.startedAt(timeText);
+    else timeLabel = leaveKnown ? t.leaveAt(timeText) : t.startsAt(timeText);
+  }
   return {
     clientName: (clientName || "").trim() || t.who({}),
     address: (address || "").trim(),
@@ -159,9 +164,7 @@ function buildContentState({clientName, address, startTime, endTime, leaveAt,
     travelMinutes: minutes,
     phase: onSite ? PHASE_ON_SITE : PHASE_TRAVEL,
     statusLabel: t.status(onSite ? PHASE_ON_SITE : PHASE_TRAVEL),
-    timeLabel: timeText ?
-      (onSite ? t.startedAt(timeText) :
-        (leaveKnown ? t.leaveAt(timeText) : t.startsAt(timeText))) : "",
+    timeLabel,
     driveLabel: !onSite && minutes != null ? t.drive(minutes) : "",
     directionsLabel: t.directions,
     completeLabel: t.complete,

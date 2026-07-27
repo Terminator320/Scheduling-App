@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import 'package:scheduling/core/errors/failure.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 enum AuthErrorContext {
@@ -49,6 +50,23 @@ sealed class AuthFailure extends Failure {
     AuthFailureUnknown() ||
     AuthFailureAccountCreationIncomplete() => false,
   };
+}
+
+/// Files an auth failure at the severity [AuthFailure.isExpected] implies:
+/// a breadcrumb when expected, a Crashlytics non-fatal otherwise.
+extension AuthFailureLogging on AppLogger {
+  void authFailure(
+    String label,
+    AuthFailure failure,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    if (failure.isExpected) {
+      breadcrumb('$label (${failure.runtimeType})');
+    } else {
+      warn(label, error, stackTrace);
+    }
+  }
 }
 
 class AuthFailureInvalidEmail extends AuthFailure {

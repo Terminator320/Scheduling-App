@@ -149,11 +149,7 @@ class SignInController extends Notifier<SignInState> {
       return SignInSuccess(employee);
     } catch (error, stackTrace) {
       final failure = AuthErrorMapper.map(error);
-      if (failure.isExpected) {
-        logger.breadcrumb('login.sign_in rejected (${failure.runtimeType})');
-      } else {
-        logger.warn('login.sign_in', error, stackTrace);
-      }
+      logger.authFailure('login.sign_in', failure, error, stackTrace);
       _settle();
       return SignInError(failure);
     }

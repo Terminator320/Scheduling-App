@@ -69,13 +69,12 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
       await _authService.sendPasswordResetEmail(email);
     } catch (error, st) {
       final failure = AuthErrorMapper.map(error);
-      if (failure.isExpected) {
-        AppLogger().breadcrumb(
-          'auth.forgot_password rejected (${failure.runtimeType})',
-        );
-      } else {
-        AppLogger().warn('auth.forgot_password reset failed', error, st);
-      }
+      AppLogger().authFailure(
+        'auth.forgot_password reset failed',
+        failure,
+        error,
+        st,
+      );
       if (!mounted) return;
       systemError = failure.toForgotPasswordMessage(context);
     }

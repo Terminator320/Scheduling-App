@@ -89,7 +89,7 @@ async function _employeeColorValue(deps, employeeDocId) {
  * own row.
  * @param {!Object} deps
  * @param {{appointmentId: string, employeeDocId: string}} args
- * @return {!Promise<!Array<!Object>>}
+ * @return {!Promise<{rows: !Array<!Object>, marker: ?Object}>}
  */
 async function _liveRowsFor(deps, {appointmentId, employeeDocId}) {
   if (!employeeDocId) return {rows: [], marker: null};
@@ -118,10 +118,7 @@ function _withLeaveAt(ctx, marker) {
   return {
     ...ctx,
     leaveAt: new Date(startMs - marker.leadMinutes * MINUTE_MS),
-    travelMinutes: typeof ctx.travelMinutes === "number" ?
-        ctx.travelMinutes :
-        (typeof marker.travelMinutes === "number" ?
-            marker.travelMinutes : null),
+    travelMinutes: ctx.travelMinutes ?? marker.travelMinutes ?? null,
   };
 }
 

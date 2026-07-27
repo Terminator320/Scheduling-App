@@ -10,6 +10,22 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.37.0+62] - 2026-07-27
+### Changed
+- **Your location is now shared only while the app is open.** The app no longer
+  tracks your position in the background, and it asks for location permission
+  just once instead of following up with a second request. Your "time to leave"
+  alerts and your pin on the staff map still work whenever you have the app
+  open; when it's closed, the reminder falls back to timing the trip from your
+  previous job's address, or to a standard 30-minute heads-up.
+
+### Fixed
+- **The live job card no longer shows the appointment's own start time as your
+  departure time.** When the card couldn't work out when to leave, it labelled
+  the job's start time "Leave at" — which would have sent you off a whole
+  drive-time late. It now says "Starts at" instead, and a rescheduled job
+  rebuilds a correct departure time from the drive it already measured.
+
 ## [1.36.1+61] - 2026-07-27
 ### Fixed
 - **Photos attached to a job no longer go missing when the connection drops

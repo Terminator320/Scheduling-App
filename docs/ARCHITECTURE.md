@@ -22,7 +22,7 @@ lib/
 │   ├── images/                      Image picker (native resize/compress at pick time) + Firebase Storage upload service
 │   ├── launchers/                   external_uri_launcher.dart (launchExternalUri — the ONE launch+log+notice implementation; the others are thin wrappers over it) + phone_call_launcher.dart (launchPhoneCall — shared tel: dialer) + web_url_launcher.dart (launchWebUrl — external https: opener for the Settings privacy-policy link) + route_map_launcher.dart (launchGoogleMapsRoute — opens a prebuilt multi-stop directions URI); parallel AddressMapLauncher (keeps its own guard — it surfaces a sanctioned SnackBar, not a notice) / EmailComposeLauncher
 │   ├── layout/                      Responsive shell — AdaptiveShell (nav rail), MasterDetailScaffold, PrimaryScrollScope (per-pane PrimaryScrollController so simultaneously-alive primary scrollables don't share one — the app-wide Scrollbar needs one ScrollPosition per controller), breakpoints (context.isWide / isLandscape / isSplitLayout for the rail chrome; isTwoPane (shortestSide ≥ 600) for the list master-detail; isCompact / isNarrowWidth for small-phone & large-text row folding)
-│   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics)
+│   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics) — `warn` records a non-fatal, `breadcrumb` only leaves a trail; `unhandled_error_severity.dart` gates the `fatal:` flag on main.dart's two global handlers so an unhandled `permission-denied` (auth teardown racing a live listener) is recorded, not filed as a crash
 │   ├── notices/                     In-app toast system: AppNotice types, NoticeService (stream), NoticeListener (widget)
 │   ├── notifications/               fcm_background_handler.dart — the top-level @pragma('vm:entry-point') isolate that rewrites the iOS widget from a content-available push while the app is closed; must stay dependency-light (no Firebase/Riverpod in that isolate)
 │   ├── permissions/                 MediaPermissionService — camera permission gate (permission_handler); LocationPermissionService — location gate for presence tracking (geolocator; whileInUse/always both → granted)
@@ -266,7 +266,7 @@ stops a double-tap during the settle from stacking two sheets.
 
 Domain-layer `Failure` subtypes (sealed, one per feature) carry localised messages. Each family lives at `lib/features/<f>/domain/<f>_failure.dart` and implements `toLocalizedMessage(BuildContext)`. The base `Failure` (`lib/core/errors/failure.dart`) `implements Exception`, so repositories and services can `throw` failures without tripping the `only_throw_errors` lint:
 
-- **`AuthFailure`** — `AuthFailureWrongCredentials`, `AuthFailureUserDisabled`, `AuthFailureUserNotFound`, `AuthFailurePermissionDenied`, etc. Mapped from `FirebaseAuthException` (and `FirebaseException(code: 'permission-denied')`) via `AuthErrorMapper`.
+- **`AuthFailure`** — `AuthFailureWrongCredentials`, `AuthFailureUserDisabled`, `AuthFailureUserNotFound`, `AuthFailurePermissionDenied`, etc. Mapped from `FirebaseAuthException` (and `FirebaseException(code: 'permission-denied')`) via `AuthErrorMapper`. The family also carries its own Crashlytics severity: `isExpected` marks the user-correctable variants, and the `AuthFailureLogging` extension (`logger.authFailure(label, failure, error, st)`) is the single logging path for all four auth catch sites — expected outcomes leave a breadcrumb, defects record a non-fatal.
 - **`EmployeesFailure`** — `EmployeesFailureEmailAlreadyExists` (raised by `firebase_employees_repository` on duplicate-email writes). Surfaced as a field-level error under the email input only — no banner notice, since the field error already describes the problem precisely.
 - **`MapsFailure`** — `MapsFailureNetwork`, `MapsFailureParse`, `MapsFailureRateLimit`, `MapsFailureUnauthorized`, `MapsFailureInvalidInput` (raised by `google_places_repository`). The `cause` field captures the underlying error for Crashlytics, but `toLocalizedMessage` never echoes it back to the user (response bodies and HTTP error payloads stay out of the UI surface).
 - **`ImageUploadFailure`** — `ImageUploadFailureInvalidFormat`, `ImageUploadFailureTooLarge` (lives at `lib/core/images/image_upload_failure.dart`, not a feature folder). Thrown by `ImageStorageService` when a file fails magic-byte validation or exceeds the size cap.
@@ -676,7 +676,7 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (1050 test cases as of 2026-07-27; `functions` adds 664 jest
+Run: `flutter test` (1056 test cases as of 2026-07-27; `functions` adds 667 jest
 tests in `functions/__tests__/` — the parallel `functions/test/` directory was
 merged away). `flutter analyze` reports **0 errors, 0 warnings, and 0 info
 lints** — see Analysis & Linting below; see
