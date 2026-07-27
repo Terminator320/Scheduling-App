@@ -69,21 +69,31 @@ void main() {
     );
   });
 
-  test('fresh while-in-use grant escalates to Always', () async {
-    // First request → whileInUse, second (escalation) → always.
-    final svc = escalatingService([
-      LocationPermission.whileInUse,
-      LocationPermission.always,
-    ]);
+  test('fresh while-in-use grant is NOT escalated to Always', () async {
+    // The app ships without the `location` background mode (guideline 2.5.4),
+    // so an Always upgrade prompt would buy nothing and would read as
+    // off-shift tracking. Exactly one prompt, and whileInUse is the answer we
+    // keep.
+    var requests = 0;
+    final svc = LocationPermissionService(
+      isServiceEnabled: () async => true,
+      checkPermission: () async => LocationPermission.denied,
+      requestPermission: () async {
+        requests++;
+        return LocationPermission.whileInUse;
+      },
+    );
     expect(await svc.ensureLocation(), LocationPermissionResult.granted);
+    expect(requests, 1);
   });
 
-  test('escalation that stays while-in-use is still granted', () async {
-    // User keeps while-in-use on the upgrade prompt — a working degraded mode.
-    final svc = escalatingService([
-      LocationPermission.whileInUse,
-      LocationPermission.whileInUse,
-    ]);
+  test('pre-existing Always grant is still honored', () async {
+    // Users upgrading from a build that did request Always keep that grant;
+    // we just never ask for it again.
+    final svc = escalatingService(
+      [LocationPermission.always],
+      current: LocationPermission.always,
+    );
     expect(await svc.ensureLocation(), LocationPermissionResult.granted);
   });
 

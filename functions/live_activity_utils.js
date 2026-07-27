@@ -66,6 +66,7 @@ const _STRINGS = {
     who: (c) => (c.clientName || "").trim() || "Client",
     status: (phase) => phase === PHASE_ON_SITE ? "On site" : "On the way",
     leaveAt: (t) => `Leave at ${t}`,
+    startsAt: (t) => `Starts at ${t}`,
     startedAt: (t) => `Started at ${t}`,
     drive: (m) => `About ${m} min drive`,
     directions: "Directions",
@@ -83,6 +84,7 @@ const _STRINGS = {
     who: (c) => (c.clientName || "").trim() || "un client",
     status: (phase) => phase === PHASE_ON_SITE ? "Sur place" : "En route",
     leaveAt: (t) => `Départ à ${t}`,
+    startsAt: (t) => `Débute à ${t}`,
     startedAt: (t) => `Début à ${t}`,
     drive: (m) => `Environ ${m} min de route`,
     directions: "Itinéraire",
@@ -139,8 +141,13 @@ function buildContentState({clientName, address, startTime, endTime, leaveAt,
   const loc = locale === "fr" ? "fr" : "en";
   const t = liveActivityStrings(loc);
   const onSite = phase === PHASE_ON_SITE;
-  const timeSource = onSite ? startTime : (leaveAt != null ? leaveAt :
-      startTime);
+  // A travel card with no known departure instant must NEVER label the job's
+  // own `startTime` as "Leave at" — that reads as a departure time and would
+  // send the tech off a whole drive-time late. Callers that can't supply a
+  // `leaveAt` (the reschedule hook, before the marker's lead is known) get the
+  // honest "Starts at" instead.
+  const leaveKnown = !onSite && leaveAt != null;
+  const timeSource = onSite || !leaveKnown ? startTime : leaveAt;
   const timeText = _timeOnly(timeSource, loc);
   const minutes = typeof travelMinutes === "number" ? travelMinutes : null;
   return {
@@ -153,7 +160,8 @@ function buildContentState({clientName, address, startTime, endTime, leaveAt,
     phase: onSite ? PHASE_ON_SITE : PHASE_TRAVEL,
     statusLabel: t.status(onSite ? PHASE_ON_SITE : PHASE_TRAVEL),
     timeLabel: timeText ?
-      (onSite ? t.startedAt(timeText) : t.leaveAt(timeText)) : "",
+      (onSite ? t.startedAt(timeText) :
+        (leaveKnown ? t.leaveAt(timeText) : t.startsAt(timeText))) : "",
     driveLabel: !onSite && minutes != null ? t.drive(minutes) : "",
     directionsLabel: t.directions,
     completeLabel: t.complete,

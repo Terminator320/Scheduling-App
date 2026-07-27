@@ -114,7 +114,10 @@ describe("buildContentState", () => {
     expect(buildContentState({...base, clientName: "", locale: "fr"})
         .clientName).toBe("un client");
   });
-  test("tolerates a missing leaveAt and travelMinutes", () => {
+  test("a missing leaveAt never labels the start as a departure time", () => {
+    // Regression: this used to render "Leave at 8:00 a.m." off `startTime`,
+    // i.e. the appointment's own start presented as the leave time — which
+    // sends the tech off a whole drive-time late.
     const cs = buildContentState({
       clientName: "Acme", address: "", startTime: START,
       leaveAt: null, travelMinutes: null, phase: PHASE_TRAVEL, locale: "en",
@@ -122,7 +125,15 @@ describe("buildContentState", () => {
     expect(cs.leaveAt).toBeNull();
     expect(cs.travelMinutes).toBeNull();
     expect(cs.driveLabel).toBe("");
-    expect(cs.timeLabel).toBe("Leave at 8:00 a.m.");
+    expect(cs.timeLabel).toBe("Starts at 8:00 a.m.");
+  });
+
+  test("the same fallback is localized in French", () => {
+    const cs = buildContentState({
+      clientName: "Acme", address: "", startTime: START,
+      leaveAt: null, travelMinutes: null, phase: PHASE_TRAVEL, locale: "fr",
+    });
+    expect(cs.timeLabel).toBe("Débute à 8 h 00");
   });
 });
 
