@@ -319,8 +319,8 @@ describe("upsertCustomer phone/mobile create fallback", () => {
           {code: "GENERIC_ERROR", message: "bad", path: ["phone"]},
           {code: "GENERIC_ERROR", message: "bad", path: ["mobile"]},
         ];
-        // Create with phone fails, then create without phone succeeds, then patches
-        // the phone onto the new id.
+        // Create with phone fails, then create without phone succeeds, then
+        // patches the phone onto the new id.
         const graphql = graphqlSeq(
             createFail(phoneErrors),
             createOk("wave-new"),

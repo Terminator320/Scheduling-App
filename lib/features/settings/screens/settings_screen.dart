@@ -10,18 +10,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
-import 'package:scheduling/core/constants/app_urls.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
-import 'package:scheduling/core/launchers/web_url_launcher.dart';
 import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
-import 'package:scheduling/core/notifications/push_notification_service.dart';
 import 'package:scheduling/core/security/biometric_auth_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
@@ -38,6 +34,11 @@ import 'package:scheduling/features/presence/application/presence_sync_controlle
 import 'package:scheduling/features/settings/application/app_info_provider.dart';
 import 'package:scheduling/features/settings/application/app_lock_provider.dart';
 import 'package:scheduling/features/settings/screens/text_size_screen.dart';
+import 'package:scheduling/features/settings/widgets/cards/account_settings_card.dart';
+import 'package:scheduling/features/settings/widgets/cards/appearance_settings_card.dart';
+import 'package:scheduling/features/settings/widgets/cards/legal_settings_card.dart';
+import 'package:scheduling/features/settings/widgets/cards/notifications_settings_card.dart';
+import 'package:scheduling/features/settings/widgets/cards/security_settings_card.dart';
 import 'package:scheduling/features/settings/widgets/cards/settings_tiles.dart';
 import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dialog.dart';
 import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
@@ -132,13 +133,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       ? widget.email
       : FirebaseAuth.instance.currentUser?.email ?? '';
 
-  String _textScaleLabel(BuildContext context, double scale) {
-    if (scale <= 0.85) return context.l10n.settings_textScaleSmall;
-    if (scale <= 1.05) return context.l10n.settings_textScaleMedium;
-    if (scale <= 1.25) return context.l10n.settings_textScaleLarge;
-    return context.l10n.settings_textScaleXL;
-  }
-
   bool get _isAdmin => widget.role == 'admin';
 
   Future<void> _toggleAppLock({required bool value}) async {
@@ -171,8 +165,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Widget _buildMaster() {
     final scheme = Theme.of(context).colorScheme;
-    final notifier = ThemeNotifier.of(context);
-    final langCode = Localizations.localeOf(context).languageCode;
 
     return ListView(
       // Inflate the whole list up front so below-the-fold feature-tour targets register.
@@ -190,25 +182,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         ),
         _tourStep(
           TourStepId.settingsAppearance,
-          child: _appearanceCard(scheme, notifier, langCode: langCode),
+          child: AppearanceSettingsCard(onTextSizeTap: _onTextSizeTap),
         ),
         const SizedBox(height: AppSpacing.sp24),
         SettingsSectionHeader(
           label: context.l10n.settings_account.toUpperCase(),
         ),
-        _accountCard(scheme),
+        AccountSettingsCard(
+          onSignOut: _signOut,
+          onDeleteAccount: _confirmDeleteAccount,
+        ),
         const SizedBox(height: AppSpacing.sp24),
         SettingsSectionHeader(
           label: context.l10n.settings_security.toUpperCase(),
         ),
-        _securityCard(scheme),
+        SecuritySettingsCard(onToggleAppLock: _toggleAppLock),
         const SizedBox(height: AppSpacing.sp24),
         SettingsSectionHeader(
           label: context.l10n.settings_notifications.toUpperCase(),
         ),
         _tourStep(
           TourStepId.settingsNotifications,
-          child: _notificationsCard(scheme),
+          child: NotificationsSettingsCard(
+            onNotificationsTap: _onNotificationsTap,
+            onToggleLiveActivity: _toggleLiveActivity,
+          ),
         ),
         if (_isAdmin) ...[
           const SizedBox(height: AppSpacing.sp24),
@@ -226,7 +224,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         SettingsSectionHeader(
           label: context.l10n.settings_legal.toUpperCase(),
         ),
-        _legalCard(scheme),
+        const LegalSettingsCard(),
         const SizedBox(height: AppSpacing.sp24),
         SettingsSectionHeader(
           label: context.l10n.settings_help.toUpperCase(),
@@ -236,132 +234,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         _buildVersionFooter(scheme),
         const SizedBox(height: AppSpacing.sp32),
       ],
-    );
-  }
-
-  Widget _appearanceCard(
-    ColorScheme scheme,
-    ThemeNotifier notifier, {
-    required String langCode,
-  }) {
-    // Resolve against live OS brightness so the switch tracks system theme changes.
-    final isDark = isDarkMode(
-      notifier.themeMode,
-      MediaQuery.platformBrightnessOf(context),
-    );
-    return SettingsSectionCard(
-      child: Column(
-        children: [
-          SettingsTile(
-            iconBg: scheme.primaryContainer,
-            icon: isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-            iconColor: scheme.primary,
-            label: context.l10n.settings_darkMode,
-            trailing: Switch.adaptive(
-              value: isDark,
-              onChanged: (_) => notifier.toggleTheme(),
-              activeTrackColor: scheme.primary,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-          ),
-          const SettingsTileDivider(),
-          SettingsTile(
-            iconBg: scheme.tertiaryContainer,
-            icon: Icons.text_fields_rounded,
-            iconColor: scheme.tertiary,
-            label: context.l10n.settings_textSize,
-            trailing: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: AppSpacing.sp4,
-              runSpacing: AppSpacing.sp4,
-              children: [
-                SettingsTrailingPill(
-                  label: _textScaleLabel(context, notifier.textScale),
-                ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ],
-            ),
-            onTap: _onTextSizeTap,
-          ),
-          const SettingsTileDivider(),
-          SettingsTile(
-            iconBg: scheme.secondaryContainer,
-            icon: Icons.language_rounded,
-            iconColor: scheme.secondary,
-            label: context.l10n.common_language,
-            trailing: LanguageToggle(
-              currentCode: langCode,
-              onChanged: notifier.setLanguage,
-            ),
-            isLast: true,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _notificationsCard(ColorScheme scheme) {
-    // Default to notDetermined so the row offers enable rather than a misleading "On".
-    final status =
-        ref.watch(notificationAuthStatusProvider).asData?.value ??
-        AuthorizationStatus.notDetermined;
-    final granted = PushNotificationService.isGranted(status);
-    // Hidden when the device/OS version can't host a Live Activity card.
-    final showLiveActivity =
-        ref.watch(liveActivitySupportedProvider).asData?.value ?? false;
-    return SettingsSectionCard(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SettingsTile(
-            iconBg: granted ? scheme.primaryContainer : scheme.errorContainer,
-            icon: granted
-                ? Icons.notifications_active_rounded
-                : Icons.notifications_off_rounded,
-            iconColor: granted ? scheme.primary : scheme.error,
-            label: context.l10n.settings_notifications,
-            isLast: !showLiveActivity,
-            trailing: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: AppSpacing.sp4,
-              runSpacing: AppSpacing.sp4,
-              children: [
-                SettingsTrailingPill(
-                  label: granted
-                      ? context.l10n.settings_notificationsOn
-                      : context.l10n.settings_notificationsOff,
-                ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ],
-            ),
-            onTap: () => _onNotificationsTap(status),
-          ),
-          if (showLiveActivity) ...[
-            const SettingsTileDivider(),
-            SettingsTile(
-              iconBg: scheme.primaryContainer,
-              icon: Icons.directions_car_rounded,
-              iconColor: scheme.primary,
-              label: context.l10n.settings_liveActivity,
-              isLast: true,
-              trailing: Switch.adaptive(
-                value: ref.watch(liveActivityEnabledProvider),
-                onChanged: (value) => _toggleLiveActivity(value: value),
-                activeTrackColor: scheme.primary,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-          ],
-        ],
-      ),
     );
   }
 
@@ -390,69 +262,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     if (!mounted) return;
     ref.invalidate(notificationAuthStatusProvider);
     unawaited(ref.read(pushRegistrationControllerProvider).sync());
-  }
-
-  Widget _accountCard(ColorScheme scheme) {
-    return SettingsSectionCard(
-      child: Column(
-        children: [
-          SettingsTile(
-            iconBg: scheme.errorContainer,
-            icon: Icons.logout_rounded,
-            iconColor: scheme.error,
-            label: context.l10n.settings_logOut,
-            labelColor: scheme.error,
-            onTap: _signOut,
-          ),
-          const SettingsTileDivider(),
-          SettingsTile(
-            iconBg: scheme.errorContainer,
-            icon: Icons.delete_forever_rounded,
-            iconColor: scheme.error,
-            label: context.l10n.settings_deleteAccount,
-            labelColor: scheme.error,
-            isLast: true,
-            onTap: _confirmDeleteAccount,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _securityCard(ColorScheme scheme) {
-    return SettingsSectionCard(
-      child: SettingsTile(
-        iconBg: scheme.primaryContainer,
-        icon: Icons.fingerprint_rounded,
-        iconColor: scheme.primary,
-        label: context.l10n.settings_appLock,
-        isLast: true,
-        trailing: Switch.adaptive(
-          value: ref.watch(appLockEnabledProvider),
-          onChanged: (value) => _toggleAppLock(value: value),
-          activeTrackColor: scheme.primary,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
-      ),
-    );
-  }
-
-  Widget _legalCard(ColorScheme scheme) {
-    return SettingsSectionCard(
-      child: SettingsTile(
-        iconBg: scheme.secondaryContainer,
-        icon: Icons.privacy_tip_rounded,
-        iconColor: scheme.secondary,
-        label: context.l10n.settings_privacyPolicy,
-        isLast: true,
-        trailing: Icon(
-          Icons.open_in_new_rounded,
-          size: 18,
-          color: scheme.onSurfaceVariant,
-        ),
-        onTap: () => launchWebUrl(context, ref, AppUrls.privacyPolicy),
-      ),
-    );
   }
 
   Widget _helpCard(ColorScheme scheme) {

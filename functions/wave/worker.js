@@ -114,7 +114,8 @@ function adminFirestore() {
 }
 
 /**
- * Default exponential-backoff-with-jitter: min(BASE * 2^n, MAX) * (0.75 + random 0..0.25) ms.
+ * Default exponential-backoff-with-jitter:
+ * min(BASE * 2^n, MAX) * (0.75 + random 0..0.25) ms.
  * @param {number} attempts The PRE-increment attempt index passed by the
  *   caller (first retry → 0, second → 1, …). It's one less than the
  *   `attempts` value that later gets stored on the job doc.
@@ -177,7 +178,9 @@ function isRetryable(err) {
 }
 
 /**
- * Extracts a safe, PII-free error summary for `lastError` — only the error class name and (for WaveApiError) its `kind`, never Wave's raw message or customer data.
+ * Extracts a safe, PII-free error summary for `lastError` — only the error
+ * class name and (for WaveApiError) its `kind`, never Wave's raw message or
+ * customer data.
  * @param {*} err The caught error.
  * @return {string}
  */
@@ -231,7 +234,9 @@ function clientIdFromRefPath(refPath) {
 }
 
 /**
- * Converts a Firestore timestamp-ish value (Date, Timestamp, or number) to epoch milliseconds, returning NaN for anything non-numeric (e.g. a serverTimestamp sentinel).
+ * Converts a Firestore timestamp-ish value (Date, Timestamp, or number) to
+ * epoch milliseconds, returning NaN for anything non-numeric (e.g. a
+ * serverTimestamp sentinel).
  * @param {*} value
  * @return {number} Epoch ms, or NaN.
  */
@@ -246,7 +251,9 @@ function timestampToMs(value) {
 }
 
 /**
- * Whether two `claimedAt` stamps identify the same claim — compares by epoch ms when both are real timestamps, else falls back to strict identity (e.g. a test serverTimestamp sentinel).
+ * Whether two `claimedAt` stamps identify the same claim — compares by epoch
+ * ms when both are real timestamps, else falls back to strict identity (e.g. a
+ * test serverTimestamp sentinel).
  * @param {*} a
  * @param {*} b
  * @return {boolean}
@@ -294,10 +301,11 @@ async function commitOutcome(db, ref, claimStamp, update) {
  * unit-test in isolation; the `onDocumentWritten` trigger in `index.js`
  * calls it with the before/after document data.
  *
- * Skips a pointless no-op job when the mapped fields are unchanged from `before`
- * (catches the worker's own write-back echo) or already match
+ * Skips a pointless no-op job when the mapped fields are unchanged from
+ * `before` (catches the worker's own write-back echo) or already match
  * `after.wave.lastSyncedHash` (catches the import's full-doc writes). A create
- * (`before == null`) is enqueued unless that same synced-hash check already covers it.
+ * (`before == null`) is enqueued unless that same synced-hash check already
+ * covers it.
  *
  * @param {Object|null|undefined} before Pre-write client document data
  *   (null/undefined on a create).
@@ -330,7 +338,9 @@ function shouldEnqueueClientWrite(before, after) {
 // ---------------------------------------------------------------------------
 
 /**
- * Uses a deterministic jobId (`customerUpsert__<clientId>`) written via `set(..., {merge:true})`, so a burst of client edits collapses into one updated-in-place job.
+ * Uses a deterministic jobId (`customerUpsert__<clientId>`) written via
+ * `set(..., {merge:true})`, so a burst of client edits collapses into one
+ * updated-in-place job.
  *
  * Every enqueue resets `attempts:0` and `lastError:null` so a newly-edited
  * client gets a fresh retry budget, regardless of prior failure history.

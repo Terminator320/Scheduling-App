@@ -13,7 +13,7 @@ import 'package:scheduling/core/utils/reentrant_sync.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart'
-    show PushRegistrationController, shouldRegisterPush;
+    show shouldRegisterPush;
 import 'package:scheduling/features/presence/data/presence_repository.dart';
 
 final presenceRepositoryProvider = Provider<PresenceRepository>(
@@ -23,9 +23,11 @@ final presenceRepositoryProvider = Provider<PresenceRepository>(
   ),
 );
 
-final presenceSyncControllerProvider = Provider<PresenceSyncController>(
-  PresenceSyncController.new,
-);
+final presenceSyncControllerProvider = Provider<PresenceSyncController>((ref) {
+  final controller = PresenceSyncController(ref);
+  ref.onDispose(controller.dispose);
+  return controller;
+});
 
 /// Movement uploads at most this often — the stream's 250 m `distanceFilter`
 /// handles granularity; this guards Firestore write volume on a highway.
@@ -293,5 +295,13 @@ class PresenceSyncController with ReentrantSync {
     } catch (e, st) {
       _logger.warn('PRESENCE unregister failed', e, st);
     }
+  }
+
+  /// Container-teardown cleanup — cancels the stream, timers, and lifecycle
+  /// listener without the network delete that [unregister] does on sign-out.
+  void dispose() {
+    _stop();
+    _lifecycle?.dispose();
+    _lifecycle = null;
   }
 }

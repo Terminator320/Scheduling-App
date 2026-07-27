@@ -20,8 +20,9 @@ class DashboardHero extends StatelessWidget {
   final DateTime now;
 
   // These hues stay fixed regardless of theme — the legend text is what
-  // actually carries the meaning.
-  static const Color _inProgressSegment = Color(0xFF00A6F4);
+  // actually carries the meaning. In-progress reuses the brand accent so it
+  // tracks a future brand-blue change; overdue has no exact token.
+  static const Color _inProgressSegment = AppColors.accent;
   static const Color _overdueSegment = Color(0xFFF54A00);
 
   @override

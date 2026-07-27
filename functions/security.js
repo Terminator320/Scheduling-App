@@ -53,7 +53,9 @@ function assertPayloadShape(data, allowedKeys) {
 }
 
 /**
- * Validates and returns a trimmed string field, throwing HttpsError("invalid-argument") when missing, wrong type, out of range, or containing control characters.
+ * Validates and returns a trimmed string field, throwing
+ * HttpsError("invalid-argument") when missing, wrong type, out of range, or
+ * containing control characters.
  * @param {object} data callable request data.
  * @param {string} key field name.
  * @param {number} maxLen max length (inclusive).
@@ -68,7 +70,9 @@ function requireString(data, key, maxLen) {
 }
 
 /**
- * Validates and returns a finite number within [min, max], throwing HttpsError("invalid-argument") when missing, non-numeric, non-finite, or out of range.
+ * Validates and returns a finite number within [min, max], throwing
+ * HttpsError("invalid-argument") when missing, non-numeric, non-finite, or
+ * out of range.
  * @param {*} value raw payload value.
  * @param {string} name field name, used to build the error code.
  * @param {number} min minimum allowed value (inclusive).
@@ -84,7 +88,8 @@ function requireNumberInRange(value, name, min, max) {
 }
 
 /**
- * Reads an optional sessionToken, returning "" if absent and throwing HttpsError("invalid-argument") if present but malformed.
+ * Reads an optional sessionToken, returning "" if absent and throwing
+ * HttpsError("invalid-argument") if present but malformed.
  * @param {object} data callable request data.
  * @return {string}
  */

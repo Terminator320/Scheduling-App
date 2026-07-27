@@ -1,7 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:scheduling/core/permissions/media_permission_service.dart'
-    show MediaPermissionService;
 
 /// Outcome of a location-permission request.
 enum LocationPermissionResult {

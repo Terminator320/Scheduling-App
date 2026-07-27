@@ -26,7 +26,11 @@ final fcmTokenRepositoryProvider = Provider<FcmTokenRepository>(
 );
 
 final pushRegistrationControllerProvider = Provider<PushRegistrationController>(
-  PushRegistrationController.new,
+  (ref) {
+    final controller = PushRegistrationController(ref);
+    ref.onDispose(controller.dispose);
+    return controller;
+  },
 );
 
 /// The live OS notification-authorization status, read without prompting the
@@ -172,5 +176,12 @@ class PushRegistrationController with ReentrantSync {
       _registeredUid = null;
       _registeredLocale = null;
     }
+  }
+
+  /// Container-teardown cleanup — cancels the token-refresh subscription
+  /// without the network delete that [unregisterCurrentDevice] does on sign-out.
+  void dispose() {
+    unawaited(_refreshSub?.cancel());
+    _refreshSub = null;
   }
 }

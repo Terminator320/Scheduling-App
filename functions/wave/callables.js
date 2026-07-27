@@ -27,8 +27,8 @@ const {
 // enum and the wave/connection field); "off" is the default when absent.
 const IMPORT_SCHEDULE_SET = new Set(SCHEDULE_VALUES);
 
-// waveImportCustomers is a heavy one-shot admin op (~650 customers across ~7 Wave
-// pages), so a modest cap keeps a stuck/retried admin from hammering Wave.
+// waveImportCustomers is a heavy one-shot admin op (~650 customers across ~7
+// Wave pages), so a modest cap keeps a stuck/retried admin from hammering Wave.
 const WAVE_IMPORT_RATE_MAX = 5;
 const WAVE_IMPORT_RATE_WINDOW_MS = 60 * 60 * 1000;
 // Caps how many live Wave calls (whoami + listBusinesses) an admin can make.
