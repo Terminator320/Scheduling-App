@@ -86,8 +86,16 @@ class AuthService {
     try {
       await _employees.redeemSignupCode(code.trim());
     } catch (e, st) {
-      _logger.warn('signUpWithCode: redeemSignupCode failed', e, st);
       final failure = _mapRedemptionError(e);
+      // A wrong or expired code is the user mistyping, not a defect — keep the
+      // trail, skip the non-fatal.
+      if (failure.isExpected) {
+        _logger.breadcrumb(
+          'signUpWithCode: redeemSignupCode rejected (${failure.runtimeType})',
+        );
+      } else {
+        _logger.warn('signUpWithCode: redeemSignupCode failed', e, st);
+      }
       if (freshlyCreated) {
         await _rollbackOrFailLoud(
           credential,
