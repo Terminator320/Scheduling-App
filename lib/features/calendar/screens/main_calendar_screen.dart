@@ -19,6 +19,7 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/fields/month_year_picker.dart';
+import 'package:scheduling/features/calendar/widgets/views/calendar_header_block.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_month_pager.dart';
 import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
@@ -29,8 +30,6 @@ import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
-import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
-import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/error_snack_bar.dart';
 
 class MainCalendar extends ConsumerStatefulWidget {
@@ -58,6 +57,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   PhotoUploadNotifier? _uploadNotifier;
   bool _upgradingToAdmin = false;
   late DateFormat _monthLabelFormat;
+  late DateFormat _yearLabelFormat;
   String _lastLocale = '';
 
   late final List<TourStepId> _tourSteps = tourStepsFor(
@@ -258,6 +258,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     Map<String, String> nameMap,
     bool isLoading,
     String monthLabel,
+    String yearLabel,
+    String dayTitle,
     String jobLabel,
     DateTime today,
   })
@@ -282,7 +284,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
     final locale = Localizations.localeOf(context).toString();
     if (locale != _lastLocale) {
-      _monthLabelFormat = DateFormat.yMMMM(locale);
+      _monthLabelFormat = DateFormat.MMMM(locale);
+      _yearLabelFormat = DateFormat.y(locale);
       _lastLocale = locale;
     }
 
@@ -292,15 +295,15 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       nameMap: nameMap,
       isLoading: appointmentsAsync.isLoading,
       monthLabel: _monthLabelFormat.format(_focusedDay),
-      jobLabel: context.l10n.calendar_appointmentCount(selectedEvents.length),
+      yearLabel: _yearLabelFormat.format(_focusedDay),
+      dayTitle: DateUtilsHelper.formatDayHeader(selectedDay),
+      jobLabel: context.l10n.calendar_jobsCount(selectedEvents.length),
       today: today,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
     ref.listen(_appointmentsProvider, _onAppointmentsAsyncChange);
     if (!widget.isAdmin) {
       ref.listen<AsyncValue<String>>(
@@ -318,89 +321,118 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       ready: !data.isLoading,
       stepKeys: _tourKeys,
       child: Scaffold(
-        appBar: AppTopBar(
-          title: context.l10n.common_calendar,
-          compact: context.isLandscape,
-          actions: _appBarActions(context, scheme),
-          bottom: PreferredSize(
-            // Scale the month bar's height to the user's text size, so it doesn't clip at large accessibility scales.
-            preferredSize: Size.fromHeight(
-              MediaQuery.textScalerOf(
-                context,
-              ).scale(context.isLandscape ? 22 : 28),
-            ),
-            child: _CalendarMonthBar(
-              monthLabel: data.monthLabel,
-              jobLabel: data.jobLabel,
-              onPickMonth: _pickMonth,
-            ),
-          ),
-        ),
         floatingActionButton: _addAppointmentFab(context),
         endDrawer: AppNavDrawer(
           isAdmin: widget.isAdmin,
           employeeId: widget.employeeId,
           userName: data.userName,
         ),
-        body: SafeArea(
-          child: Stack(
-            children: [
-              _content(
-                isLoading: data.isLoading,
-                colorMap: data.colorMap,
-                nameMap: data.nameMap,
-                today: data.today,
-              ),
-              Positioned(
-                bottom: AppSpacing.sp16,
-                left: AppSpacing.sp16,
-                child: _TodayFab(
-                  visible: _showTodayButton(data.today),
-                  onPressed: () => _goToToday(data.today),
+        body: Column(
+          children: [
+            CalendarHeaderBlock(
+              monthLabel: data.monthLabel,
+              yearLabel: data.yearLabel,
+              onPickMonth: _pickMonth,
+              routeButton: _dayRouteButton(context),
+            ),
+            Expanded(
+              // The header block reserves the status bar itself.
+              child: SafeArea(
+                top: false,
+                child: Stack(
+                  children: [
+                    _content(
+                      isLoading: data.isLoading,
+                      colorMap: data.colorMap,
+                      nameMap: data.nameMap,
+                      today: data.today,
+                      dayTitle: data.dayTitle,
+                      jobLabel: data.jobLabel,
+                    ),
+                    Positioned(
+                      bottom: AppSpacing.sp16,
+                      left: AppSpacing.sp16,
+                      child: _TodayPill(
+                        visible: _showTodayButton(data.today),
+                        onPressed: () => _goToToday(data.today),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The Day-route control. Kept on the screen rather than inside the header
+  /// block because it is a feature-tour target this screen owns.
+  Widget _dayRouteButton(BuildContext context) {
+    final theme = Theme.of(context);
+    return _tourStep(
+      TourStepId.calendarDayRoute,
+      targetBorderRadius: BorderRadius.circular(AppRadius.rIcon),
+      child: Tooltip(
+        message: context.l10n.calendar_dayRouteTitle,
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Center(
+            child: Material(
+              color: theme.colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(AppRadius.rIcon),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => Navigator.pushNamed(
+                  context,
+                  AppRoutes.dayRoute,
+                  arguments: DayRouteArgs(
+                    isAdmin: widget.isAdmin,
+                    employeeId: widget.employeeId,
+                  ),
+                ),
+                highlightColor: theme.palette.blueTintPressed,
+                child: SizedBox(
+                  width: 38,
+                  height: 38,
+                  child: Icon(
+                    Icons.alt_route_rounded,
+                    size: 19,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  List<Widget> _appBarActions(BuildContext context, ColorScheme scheme) => [
-    _tourStep(
-      TourStepId.calendarDayRoute,
-      targetBorderRadius: BorderRadius.circular(AppRadius.rFull),
-      child: IconButton(
-        icon: Icon(Icons.alt_route_rounded, color: scheme.onPrimary),
-        tooltip: context.l10n.calendar_dayRouteTitle,
-        onPressed: () => Navigator.pushNamed(
-          context,
-          AppRoutes.dayRoute,
-          arguments: DayRouteArgs(
-            isAdmin: widget.isAdmin,
-            employeeId: widget.employeeId,
-          ),
-        ),
-      ),
-    ),
-    const AppHeaderPair(),
-  ];
-
   Widget? _addAppointmentFab(BuildContext context) {
     if (!widget.isAdmin) return null;
     return _tourStep(
       TourStepId.calendarAddAppointment,
-      targetBorderRadius: BorderRadius.circular(AppRadius.r16),
-      child: FloatingActionButton(
-        heroTag: 'addFab',
-        tooltip: context.l10n.calendar_newAppointment,
-        onPressed: () async {
-          await showAddEventPopup(
-            context,
-            initialDate: _selectedDay ?? _focusedDay,
-          );
-        },
-        child: const Icon(Icons.add),
+      targetBorderRadius: BorderRadius.circular(AppRadius.rFab),
+      child: SizedBox(
+        width: 58,
+        height: 58,
+        child: FloatingActionButton(
+          heroTag: 'addFab',
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.rFab),
+          ),
+          tooltip: context.l10n.calendar_newAppointment,
+          onPressed: () async {
+            await showAddEventPopup(
+              context,
+              initialDate: _selectedDay ?? _focusedDay,
+            );
+          },
+          child: const Icon(Icons.add, size: 26),
+        ),
       ),
     );
   }
@@ -424,7 +456,10 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     required Map<String, Color> colorMap,
     required Map<String, String> nameMap,
     required DateTime today,
+    required String dayTitle,
+    required String jobLabel,
   }) {
+    final agendaHeader = _AgendaHeader(dayTitle: dayTitle, jobLabel: jobLabel);
     final eventList = _tourStep(
       TourStepId.calendarDayList,
       child: EventList(
@@ -455,7 +490,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           // EventList already returns an Expanded, so wrap it in a Flex.
           Expanded(
             flex: 9,
-            child: PrimaryScrollScope(child: Column(children: [eventList])),
+            child: PrimaryScrollScope(
+              child: Column(children: [agendaHeader, eventList]),
+            ),
           ),
         ],
       );
@@ -465,95 +502,98 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       children: [
         _buildCalendar(colorMap, today),
         const Divider(height: 1),
+        agendaHeader,
         eventList,
       ],
     );
   }
 }
 
-/// The app bar's bottom row — a tappable month label plus the selected day's appointment count.
-class _CalendarMonthBar extends StatelessWidget {
-  const _CalendarMonthBar({
-    required this.monthLabel,
-    required this.jobLabel,
-    required this.onPickMonth,
-  });
+/// The agenda's own header — the selected day's title and a mono job count.
+class _AgendaHeader extends StatelessWidget {
+  const _AgendaHeader({required this.dayTitle, required this.jobLabel});
 
-  final String monthLabel;
+  final String dayTitle;
   final String jobLabel;
-  final VoidCallback onPickMonth;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final labelStyle = theme.textTheme.labelMedium?.copyWith(
-      fontWeight: FontWeight.w500,
-      color: theme.colorScheme.onPrimary.withValues(alpha: 0.82),
-    );
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.sp16,
-        0,
-        AppSpacing.sp16,
-        context.isLandscape ? AppSpacing.sp4 : AppSpacing.sp8,
-      ),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Flexible(
-            child: Semantics(
-              button: true,
-              label: context.l10n.calendar_selectDate,
-              child: GestureDetector(
-                onTap: onPickMonth,
-                child: Text(
-                  monthLabel,
-                  style: labelStyle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
+          Expanded(
+            child: Text(
+              dayTitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleLarge,
             ),
           ),
           const SizedBox(width: AppSpacing.sp8),
-          Flexible(
-            child: Text(
-              jobLabel,
-              style: labelStyle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.end,
-            ),
-          ),
+          Text(jobLabel, style: theme.monoType.data),
         ],
       ),
     );
   }
 }
 
-/// The "jump to today" FAB. It scales and fades out once today is already in view.
-class _TodayFab extends StatelessWidget {
-  const _TodayFab({required this.visible, required this.onPressed});
+/// The "jump to today" pill. It scales and fades out once today is already in
+/// view, staying mounted so the transition is animated both ways.
+class _TodayPill extends StatelessWidget {
+  const _TodayPill({required this.visible, required this.onPressed});
 
   final bool visible;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedScale(
-      scale: visible ? 1.0 : 0.75,
-      duration: AppDuration.normal,
-      curve: Curves.easeInOut,
-      child: AnimatedOpacity(
-        opacity: visible ? 1.0 : 0.0,
-        duration: AppDuration.normal,
-        child: IgnorePointer(
-          ignoring: !visible,
-          child: FloatingActionButton(
-            heroTag: 'todayFab',
-            tooltip: context.l10n.calendar_today,
-            onPressed: onPressed,
-            child: const Icon(Icons.today),
+    final theme = Theme.of(context);
+    final instant = MediaQuery.disableAnimationsOf(context);
+    final radius = BorderRadius.circular(AppRadius.rFull);
+    return IgnorePointer(
+      ignoring: !visible,
+      child: AnimatedScale(
+        scale: visible ? 1 : 0.85,
+        duration: instant ? Duration.zero : AppMotion.popIn,
+        curve: AppMotion.emphasized,
+        child: AnimatedOpacity(
+          opacity: visible ? 1 : 0,
+          duration: instant ? Duration.zero : AppMotion.popIn,
+          child: Tooltip(
+            message: context.l10n.calendar_today,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                boxShadow: theme.cardStyle.pillShadow,
+              ),
+              child: Material(
+                color: theme.colorScheme.surface,
+                borderRadius: radius,
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: onPressed,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 48),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sp16,
+                        vertical: 11,
+                      ),
+                      child: Center(
+                        child: Text(
+                          context.l10n.calendar_today,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: theme.palette.primaryAccent,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),

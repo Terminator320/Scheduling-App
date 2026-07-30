@@ -149,6 +149,19 @@
       }
     }
   },
+  "calendar_scheduleLabel": "SCHEDULE",
+  "@calendar_scheduleLabel": {
+    "description": "Mono all-caps eyebrow label above the month name on the calendar header. Already uppercase in source."
+  },
+  "calendar_jobsCount": "{count, plural, =1{1 JOB} other{{count} JOBS}}",
+  "@calendar_jobsCount": {
+    "description": "Mono all-caps count of the selected day's jobs, shown right-aligned in the agenda header. Already uppercase in source.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "calendar_openMenuTooltip": "Open menu",
   "@calendar_openMenuTooltip": {
     "description": "Tooltip for the calendar app-bar button that opens the settings drawer."

@@ -1,0 +1,198 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import 'package:scheduling/core/layout/breakpoints.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
+
+/// The calendar's fixed header. Deliberately NOT an `AppTopBar`: a
+/// `PreferredSizeWidget` has a height fixed per build and cannot host a week
+/// strip that rises in and out without clipping. Every other screen keeps
+/// `AppTopBar`.
+class CalendarHeaderBlock extends StatelessWidget {
+  const CalendarHeaderBlock({
+    required this.monthLabel,
+    required this.yearLabel,
+    required this.onPickMonth,
+    required this.routeButton,
+    super.key,
+    this.weekStrip,
+  });
+
+  final String monthLabel;
+  final String yearLabel;
+  final VoidCallback onPickMonth;
+
+  /// The Day-route icon button. Passed in because it is a feature-tour target
+  /// the screen owns.
+  final Widget routeButton;
+
+  /// The collapsed week strip, or null while the month grid is expanded.
+  final Widget? weekStrip;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final topInset = MediaQuery.paddingOf(context).top;
+
+    // No AppBar means nothing sets the system overlay style for this screen.
+    // Derived from the surface colour, not the theme brightness — the same
+    // data-driven rule as contrastingForegroundFor.
+    final overlay =
+        ThemeData.estimateBrightnessForColor(scheme.surface) == Brightness.dark
+        ? SystemUiOverlayStyle.light
+        : SystemUiOverlayStyle.dark;
+
+    final title = _TitleColumn(
+      monthLabel: monthLabel,
+      yearLabel: yearLabel,
+      onPickMonth: onPickMonth,
+    );
+    final controls = _Controls(routeButton: routeButton);
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlay,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          border: Border(
+            bottom: BorderSide(color: scheme.outlineVariant),
+          ),
+        ),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(18, topInset + 10, 18, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // The title and the controls never fit side by side once the
+              // Calendar pill's label is scaled up, so they stack instead.
+              if (context.isCompact) ...[
+                title,
+                const SizedBox(height: AppSpacing.sp8),
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: controls,
+                ),
+              ] else
+                Row(
+                  children: [
+                    Expanded(child: title),
+                    const SizedBox(width: AppSpacing.sp8),
+                    controls,
+                  ],
+                ),
+              ?weekStrip,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TitleColumn extends StatelessWidget {
+  const _TitleColumn({
+    required this.monthLabel,
+    required this.yearLabel,
+    required this.onPickMonth,
+  });
+
+  final String monthLabel;
+  final String yearLabel;
+  final VoidCallback onPickMonth;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          context.l10n.calendar_scheduleLabel,
+          style: theme.monoType.label,
+        ),
+        const SizedBox(height: AppSpacing.sp4),
+        _MonthRow(
+          monthLabel: monthLabel,
+          yearLabel: yearLabel,
+          onTap: onPickMonth,
+        ),
+      ],
+    );
+  }
+}
+
+class _Controls extends StatelessWidget {
+  const _Controls({required this.routeButton});
+
+  final Widget routeButton;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [routeButton, const SizedBox(width: 6), const AppHeaderPair()],
+  );
+}
+
+class _MonthRow extends StatelessWidget {
+  const _MonthRow({
+    required this.monthLabel,
+    required this.yearLabel,
+    required this.onTap,
+  });
+
+  final String monthLabel;
+  final String yearLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      button: true,
+      label: '$monthLabel $yearLabel, ${context.l10n.calendar_selectDate}',
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.r8),
+        child: ConstrainedBox(
+          // 40 is the painted row; the header's own padding carries it past the
+          // 48px tap floor.
+          constraints: const BoxConstraints(minHeight: 40),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Flexible(
+                child: Text(
+                  monthLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.displayLarge,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sp8),
+              Text(
+                yearLabel,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: theme.palette.textTertiary,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 18,
+                color: theme.palette.textTertiary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
