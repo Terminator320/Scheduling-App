@@ -462,5 +462,15 @@
   "tour_settingsReplayDesc": "Touchez ici en tout temps pour revoir ces conseils sur chaque écran.",
   "settings_help": "Aide",
   "settings_replayTour": "Revoir la visite guidée",
-  "settings_replayTourDone": "Les conseils de la visite s'afficheront de nouveau."
+  "settings_replayTourDone": "Les conseils de la visite s'afficheront de nouveau.",
+  "nav_goToCalendar": "Calendrier",
+  "nav_openMenu": "Ouvrir le menu",
+  "nav_team": "Équipe",
+  "nav_dayRoute": "Itinéraire du jour",
+  "nav_dashboard": "Tableau de bord",
+  "nav_myDetails": "Mes informations",
+  "nav_groupToday": "AUJOURD'HUI",
+  "nav_groupPeople": "PERSONNES",
+  "nav_groupBusiness": "L'ENTREPRISE",
+  "nav_groupAccount": "COMPTE"
 }
