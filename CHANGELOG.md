@@ -28,6 +28,32 @@ code; it increments by one on every store upload regardless of the semver part.
   always-loaded tabs. History, Dashboard, Day route and Settings now open as
   regular screens you can back out of, which also means the back arrow finally
   behaves like a back arrow everywhere.
+- **The calendar is one continuous screen.** The month grid and the day's jobs
+  now scroll together: keep scrolling and the grid folds away into a compact
+  week strip that stays pinned under the month name, so you can read a long day
+  without losing your place in the week. Scroll back to the top and the full
+  month returns. The month itself now always shows six full weeks, which fixes
+  months whose last days used to fall off the bottom, and swiping left or right
+  moves between months. In landscape and on tablets the month and the day sit
+  side by side as before.
+- **Every job now looks the same everywhere.** One card design is used on the
+  calendar, the day route, a client's job history, the dashboard and the
+  history list. Each card carries a colour bar for whoever is on the job, the
+  time range, and the crew as "Theo +1" rather than a long list of names.
+- **The job details sheet has been rebuilt.** The date and time are one clear
+  line, and the client, phone, address and notes sit in a single panel where
+  the phone and address are tappable. Empty sections are simply left out.
+  "Mark as complete" is now a green button.
+- **Booking forms have a proper header bar.** Cancel, the title and Save now sit
+  in a fixed bar at the top, so Save is always reachable — you no longer have to
+  scroll to the bottom of a long form to find it. Fields are grouped under
+  Templates, Who, Schedule and Details.
+- **Editing a job now warns you about double-booking**, the same way creating
+  one already did — and it no longer mistakes the job you're editing for a
+  clash with itself.
+- **Saving a repeating job tells you what it will actually change.** The
+  prompt now says how many visits are affected and through what date, and the
+  button reads "Save 12 visits" instead of a generic confirm.
 - **"Scheduled" and "Cancelled" job chips are now neutral grey.** Amber is
   reserved for things genuinely awaiting action, so a normally-scheduled job no
   longer looks like a warning.

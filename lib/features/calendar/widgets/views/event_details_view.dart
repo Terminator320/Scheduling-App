@@ -15,7 +15,8 @@ class EventDetailsView extends ConsumerStatefulWidget {
   const EventDetailsView({
     required this.appointment,
     super.key,
-    // Defaults CLOSED — see AppointmentTile.showActions.
+    // Defaults CLOSED — a default of true once exposed admin-only Edit/Cancel/
+    // Delete affordances to employees. Never re-add a `true` default.
     this.showActions = false,
     this.initialEditing = false,
     this.scrollController,
