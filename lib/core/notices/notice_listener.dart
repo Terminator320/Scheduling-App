@@ -56,26 +56,19 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
 
     final accessible =
         MediaQuery.maybeOf(context)?.accessibleNavigation ?? false;
-    final duration = Duration(seconds: accessible ? 6 : 3);
+    // Accessible navigation keeps the longer hold — and is the only mode that
+    // renders a close button, since the design has none.
+    final duration = accessible
+        ? const Duration(seconds: 6)
+        : AppMotion.noticeCycle;
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
 
-    final (Color bg, Color fg, IconData icon) = switch (notice) {
-      NoticeSuccess() => (
-        theme.statusColors.successContainer,
-        theme.statusColors.onSuccessContainer,
-        Icons.check_circle_outline,
-      ),
-      NoticeInfo() => (
-        scheme.surfaceContainerHighest,
-        scheme.onSurface,
-        Icons.info_outline,
-      ),
-      NoticeError() => (
-        scheme.errorContainer,
-        scheme.onErrorContainer,
-        Icons.error_outline,
-      ),
+    // The surface is the same dark ink for all three kinds now; only the
+    // status dot carries the meaning.
+    final dot = switch (notice) {
+      NoticeSuccess() => theme.palette.noticeMint,
+      NoticeInfo() => theme.palette.noticeInfo,
+      NoticeError() => theme.palette.noticeRed,
     };
 
     // Fire off a haptic cue alongside the visual notice too — best effort,
@@ -100,11 +93,10 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
 
     entry = OverlayEntry(
       builder: (_) => _TopNotice(
-        bg: bg,
-        fg: fg,
-        icon: icon,
+        dot: dot,
         message: notice.message,
         duration: duration,
+        showClose: accessible,
         onDismiss: dismiss,
       ),
     );
@@ -119,19 +111,20 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
 
 class _TopNotice extends StatefulWidget {
   const _TopNotice({
-    required this.bg,
-    required this.fg,
-    required this.icon,
+    required this.dot,
     required this.message,
     required this.duration,
+    required this.showClose,
     required this.onDismiss,
   });
 
-  final Color bg;
-  final Color fg;
-  final IconData icon;
+  final Color dot;
   final String message;
   final Duration duration;
+
+  /// The design has no close button. It renders only under accessible
+  /// navigation, where swipe-up is not a usable dismiss affordance.
+  final bool showClose;
   final VoidCallback onDismiss;
 
   @override
@@ -189,10 +182,13 @@ class _TopNoticeState extends State<_TopNotice>
         : padding.right > padding.left
         ? Alignment.centerLeft
         : Alignment.center;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Positioned(
-      top: padding.top + 8,
-      left: padding.left + AppSpacing.sp16,
-      right: padding.right + AppSpacing.sp16,
+      // padding.top already supplies the real status bar — never a literal 56.
+      top: padding.top + AppSpacing.sp16,
+      left: padding.left + 14,
+      right: padding.right + 14,
       child: SlideTransition(
         position: _slide,
         child: FadeTransition(
@@ -210,36 +206,60 @@ class _TopNoticeState extends State<_TopNotice>
                   key: const ValueKey('app-notice-banner'),
                   direction: DismissDirection.up,
                   onDismissed: (_) => widget.onDismiss(),
-                  child: Material(
-                    color: widget.bg,
-                    borderRadius: BorderRadius.circular(AppRadius.r12),
-                    elevation: 4,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.sp12,
-                        AppSpacing.sp4,
-                        AppSpacing.sp4,
-                        AppSpacing.sp4,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(widget.icon, color: widget.fg, size: 20),
-                          const SizedBox(width: AppSpacing.sp12),
-                          Expanded(
-                            child: Text(
-                              widget.message,
-                              style: TextStyle(color: widget.fg, fontSize: 14),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(AppRadius.r16),
+                      boxShadow: theme.cardStyle.noticeShadow,
+                    ),
+                    child: Material(
+                      color: scheme.inverseSurface,
+                      borderRadius: BorderRadius.circular(AppRadius.r16),
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          15,
+                          13,
+                          widget.showClose ? AppSpacing.sp4 : 15,
+                          13,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              key: const ValueKey('notice-dot'),
+                              width: 9,
+                              height: 9,
+                              decoration: BoxDecoration(
+                                color: widget.dot,
+                                shape: BoxShape.circle,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: AppSpacing.sp4),
-                          // Use a real IconButton here for the 48px tap target
-                          // plus tooltip/semantics, not a bare GestureDetector icon.
-                          IconButton(
-                            onPressed: _dismiss,
-                            tooltip: context.l10n.common_close,
-                            icon: Icon(Icons.close, color: widget.fg, size: 20),
-                          ),
-                        ],
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                widget.message,
+                                style: TextStyle(
+                                  fontFamily: kFontSans,
+                                  color: scheme.onInverseSurface,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            if (widget.showClose) ...[
+                              const SizedBox(width: AppSpacing.sp4),
+                              // A real IconButton for the 48px tap target plus
+                              // tooltip/semantics, not a bare gesture icon.
+                              IconButton(
+                                onPressed: _dismiss,
+                                tooltip: context.l10n.common_close,
+                                icon: Icon(
+                                  Icons.close,
+                                  color: scheme.onInverseSurface,
+                                  size: 20,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
