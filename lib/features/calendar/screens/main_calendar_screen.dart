@@ -119,11 +119,12 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     );
   }
 
-  // Show the "today" control whenever the visible month isn't the current one
-  // — keyed on year+month, not the exact day. [today] comes from
-  // currentDayProvider, so it re-derives across midnight.
+  // Show the "today" control whenever the day on screen isn't today — not just
+  // when the visible month differs, which left it hidden while the user was
+  // reading another day of the current month (owner call, 2026-07-30). [today]
+  // comes from currentDayProvider, so it re-derives across midnight.
   bool _showTodayButton(DateTime today) =>
-      _focusedDay.year != today.year || _focusedDay.month != today.month;
+      !isSameDate(_selectedDay ?? _focusedDay, today);
 
   void _goToToday(DateTime today) {
     setState(() {

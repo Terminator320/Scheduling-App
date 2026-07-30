@@ -121,6 +121,66 @@ void main() {
     expect(find.byTooltip('Today'), findsOneWidget);
   });
 
+  testWidgets('the Today pill hides while today is the day on screen', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value(const []),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The pill stays mounted and fades instead of unmounting, so assert on the
+    // opacity rather than on the finder.
+    final opacity = tester.widget<AnimatedOpacity>(
+      find.ancestor(
+        of: find.byTooltip('Today'),
+        matching: find.byType(AnimatedOpacity),
+      ),
+    );
+    expect(opacity.opacity, 0);
+  });
+
+  testWidgets('the Today pill shows for another day of the current month', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value(const []),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Pick a different day that is still inside the visible month — the old
+    // month-keyed rule left the pill hidden here.
+    final today = DateTime.now();
+    final other = today.day == 1
+        ? DateTime(today.year, today.month, 2)
+        : DateTime(today.year, today.month, today.day - 1);
+    final key = ValueKey(
+      'calendar-day-${other.year}-'
+      '${other.month.toString().padLeft(2, '0')}-'
+      '${other.day.toString().padLeft(2, '0')}',
+    );
+    await tester.tap(find.byKey(key));
+    await tester.pumpAndSettle();
+
+    final opacity = tester.widget<AnimatedOpacity>(
+      find.ancestor(
+        of: find.byTooltip('Today'),
+        matching: find.byType(AnimatedOpacity),
+      ),
+    );
+    expect(opacity.opacity, 1);
+  });
+
   testWidgets('month bar pluralizes the selected day appointment count', (
     tester,
   ) async {
