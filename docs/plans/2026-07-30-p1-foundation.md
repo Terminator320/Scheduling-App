@@ -2346,7 +2346,7 @@ git commit -m "fix(p1): collapse to the shell route on appointment deep links"
 
 > **Visual size is not hit area.** Every control here is below the 48×48 minimum. Wrap each in a `SizedBox(width: 48, height: 48)` (or give the `InkResponse` a 24 radius) centring the smaller painted box. Never shrink the hit region to match the mock.
 
-- [ ] **Step 1: Add the l10n keys**
+- [x] **Step 1: Add the l10n keys**
 
 To `lib/l10n/app_en.arb` (with `@key` blocks) and `lib/l10n/app_fr.arb` in lockstep:
 
@@ -2365,7 +2365,7 @@ To `lib/l10n/app_en.arb` (with `@key` blocks) and `lib/l10n/app_fr.arb` in locks
 
 Each `@key` block needs a `description`. The group labels are rendered uppercase by the mono `groupLabel` style but stored uppercase here so the FR accent (`AUJOURD'HUI`) is authored correctly rather than produced by `toUpperCase()`. The ARB hook regenerates l10n — do not run `flutter gen-l10n`.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 ```dart
   testWidgets('the calendar pill and menu button meet the 48px tap minimum',
@@ -2399,7 +2399,7 @@ Each `@key` block needs a `description`. The group labels are rendered uppercase
   });
 ```
 
-- [ ] **Step 3: Run to confirm it fails**
+- [x] **Step 3: Run to confirm it fails**
 
 ```bash
 flutter test test/shared/widgets/app_bars/app_header_pair_test.dart
@@ -2407,7 +2407,7 @@ flutter test test/shared/widgets/app_bars/app_header_pair_test.dart
 
 Expected: FAIL — `AppHeaderPair` does not exist.
 
-- [ ] **Step 4: Build the widget**
+- [x] **Step 4: Build the widget**
 
 `AppHeaderPair` is a `StatelessWidget` rendering a `Row(mainAxisSize: MainAxisSize.min, children: [_CalendarPill(), SizedBox(width: 6), _MenuButton()])`.
 
@@ -2418,7 +2418,7 @@ Expected: FAIL — `AppHeaderPair` does not exist.
 
 `AppHeaderBackButton` is the leading-slot variant: 36×36 visual in a 48×48 target, transparent, `onTap: () => Navigator.maybePop(context)`.
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 ```bash
 flutter test test/shared/widgets/app_bars/app_header_pair_test.dart
@@ -2426,7 +2426,7 @@ flutter test test/shared/widgets/app_bars/app_header_pair_test.dart
 
 Expected: PASS, 3 tests.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add lib/shared/widgets/app_bars/app_header_pair.dart lib/l10n test
@@ -2453,7 +2453,7 @@ git commit -m "feat(p1): add the calendar-pill and hamburger header pair"
 
 > **The counts cost nothing while the drawer is closed.** Verified against the Flutter SDK 2026-07-30: `_DrawerControllerState._buildDrawer` returns `SizedBox.shrink()` (or a bare drag-detector) while `_controller.isDismissed`, so the drawer's child is **never built** until it opens. A `ref.watch` of an `.autoDispose` count provider inside the drawer body therefore subscribes only while the drawer is open and tears down after it closes. **Do not add an "is the drawer open" flag or an `onEndDrawerChanged` hook to work around a cost that does not exist.**
 
-- [ ] **Step 1: Write the failing catalog test**
+- [x] **Step 1: Write the failing catalog test**
 
 ```dart
   test('an admin sees ten rows in four groups', () {
@@ -2476,7 +2476,7 @@ git commit -m "feat(p1): add the calendar-pill and hamburger header pair"
   });
 ```
 
-- [ ] **Step 2: Write the catalog**
+- [x] **Step 2: Write the catalog**
 
 ```dart
 typedef DrawerGroup = ({String Function(AppLocalizations) title,
@@ -2514,7 +2514,7 @@ List<DrawerGroup> drawerGroups({required bool isAdmin}) => [
 
 Dot colours and labels stay drawer-local render concerns (the destination enum stays presentation-free). Per `02-navigation.md`: Calendar `#005CC8` · Day route `#D61F3A` · Live map `#00A5C4` · Team `#0E9B6E` · Time off `#00A5C4` · Clients `#7A3FF2` · Dashboard `#E08A00` · History `#C43F8E` · My details `#8A99B0` · Settings `#5A6B85`. **These are crew-palette hues used as decoration — resolve each through `crewColorOf(theme, hex)`** so they lift in dark like everything else.
 
-- [ ] **Step 3: Build `AppNavDrawer`**
+- [x] **Step 3: Build `AppNavDrawer`**
 
 Every row's handler is the same shape regardless of whether the row is a tab or a pushed page:
 
@@ -2554,17 +2554,17 @@ Counts: Calendar watches an `.autoDispose` today-range provider (`appointmentsIn
 
 A null/absent count renders **nothing** (the empty-omitted rule) — that is also how the Time off row behaves until P6 supplies its provider.
 
-- [ ] **Step 4: Delete `SettingsDrawer`**
+- [x] **Step 4: Delete `SettingsDrawer`**
 
 Remove the file and its six `endDrawer: SettingsDrawer.endDrawerFor(...)` call sites (they are replaced in Task C3). **`endDrawerFor`'s null-on-split-layout behaviour dies with it** — the drawer is now the nav surface at every size, per program decision 4.
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 ```bash
 flutter test test/features/navigation/
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add lib/features/navigation test/features/navigation
@@ -2587,7 +2587,7 @@ git commit -m "feat(p1): add the grouped right-anchored nav drawer"
 - `lib/features/calendar/screens/day_route_screen.dart:119`
 - `lib/features/settings/screens/text_size_screen.dart:13`
 
-- [ ] **Step 1: Give every screen the drawer and the pair**
+- [x] **Step 1: Give every screen the drawer and the pair**
 
 For each: `endDrawer: AppNavDrawer(isAdmin: ..., employeeId: ..., userName: ..., email: ...)` and `AppTopBar(..., actions: const [AppHeaderPair()])`. **Settings, Day route and text-size gain a drawer for the first time.**
 
@@ -2597,11 +2597,11 @@ Because `AppHeaderPair` calls `Scaffold.of(context)`, **no screen needs a `Globa
 
 Pushed screens get a back chevron: `AppTopBar(onBack: ...)` already renders `AppBackButton`; switch pushed screens to `AppHeaderBackButton` for the new styling. Settings and History currently call `navigateToDestination(calendar)` for their back affordance (`settings_screen.dart:338`, `history_screen.dart:48`) — **these become plain `Navigator.maybePop(context)`**, since they are pushed routes now and back means back, not go-home. The Calendar pill covers go-home.
 
-- [ ] **Step 2: Scope the pushed routes' scroll controllers**
+- [x] **Step 2: Scope the pushed routes' scroll controllers**
 
 History, Settings, Dashboard, Day route and the text-size sub-page each wrap their scrollable in `PrimaryScrollScope`. A pushed route sits above the tab scopes and would otherwise attach to the root `PrimaryScrollController`, throwing "attached to more than one ScrollPosition" against the app-wide `Scrollbar`.
 
-- [ ] **Step 3: Check the FAB hero tags**
+- [x] **Step 3: Check the FAB hero tags**
 
 Current set: `addFab`, `todayFab` (calendar), `clientsAddFab`, `employeesAddFab`, `liveMapRosterFab`, `liveMapRecenterFab`. History and Settings have no FAB, so the restructure changes nothing — but confirm no new duplicate appeared:
 
@@ -2609,7 +2609,7 @@ Current set: `addFab`, `todayFab` (calendar), `clientsAddFab`, `employeesAddFab`
 grep -rn "heroTag" lib/
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 ```bash
 flutter analyze 2>&1 | grep -E "error -|warning -"
@@ -2618,7 +2618,7 @@ flutter test
 
 Fix any screen test that asserted on the old `EndDrawerButton` or `SettingsDrawer`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib test
@@ -2644,7 +2644,7 @@ git commit -m "feat(p1): wire the header pair and nav drawer into every screen"
 
 > **Accessibility carve-out.** The design has no close button; the old one is asserted by an existing test and is a real dismiss affordance for switch and screen-reader users. Decision: **render the close button only when `MediaQuery.accessibleNavigationOf(context)` is true**, keep the swipe-up `Dismissible` for everyone, and keep the existing longer hold (6 s) under accessible navigation. Branching on an accessibility flag is legitimate — the banned branch is on *brightness*.
 
-- [ ] **Step 1: Update the test**
+- [x] **Step 1: Update the test**
 
 In `test/core/notices/notice_banner_test.dart`:
 - `'close button is a 48px IconButton with a tooltip'` — wrap the harness in `MediaQuery(data: MediaQueryData(accessibleNavigation: true), ...)` so the button renders; keep the 48px and tooltip assertions.
@@ -2652,13 +2652,13 @@ In `test/core/notices/notice_banner_test.dart`:
 - `'auto-dismiss timer is preserved'` — pump `AppMotion.noticeCycle` instead of `Duration(seconds: 3)`.
 - Add `'the notice renders on the inverse surface with a kind-coloured dot'` asserting the container colour is `lightTheme().colorScheme.inverseSurface` and the dot is `lightTheme().palette.noticeMint` for a success.
 
-- [ ] **Step 2: Run to confirm it fails**
+- [x] **Step 2: Run to confirm it fails**
 
 ```bash
 flutter test test/core/notices/notice_banner_test.dart
 ```
 
-- [ ] **Step 3: Restyle `_show` and `_TopNotice`**
+- [x] **Step 3: Restyle `_show` and `_TopNotice`**
 
 In `_show`, replace the per-kind `(bg, fg, icon)` tuple with a per-kind **dot colour** only — the surface is now the same for all three:
 
@@ -2677,13 +2677,13 @@ The haptic switch is unchanged. In `_TopNotice`:
 - timing: total lifetime `AppMotion.noticeCycle` (2600 ms) — entrance `AppAnimationDurations.banner` (280 ms), hold, exit. Under `MediaQuery.disableAnimationsOf(context)` the slide collapses to instant while the hold still runs.
 - keep `Semantics(liveRegion: true)` and the `Dismissible(direction: DismissDirection.up)`.
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 flutter test test/core/notices/
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/core/notices test/core/notices
@@ -2696,7 +2696,7 @@ git commit -m "feat(p1): restyle the notice as the dark status-dot pill"
 
 **Files:** none — this task only verifies and fixes fallout.
 
-- [ ] **Step 1: Static checks**
+- [x] **Step 1: Static checks**
 
 ```bash
 flutter analyze 2>&1 | grep -E "error -|warning -"
@@ -2704,7 +2704,7 @@ flutter analyze 2>&1 | grep -E "error -|warning -"
 
 Expected: no output.
 
-- [ ] **Step 2: Full suite**
+- [x] **Step 2: Full suite**
 
 ```bash
 flutter test
@@ -2712,7 +2712,7 @@ flutter test
 
 Expected: green. The baseline before P1 was 1068 tests; this plan adds roughly 20 and rewrites about 10.
 
-- [ ] **Step 3: Text-scale sweeps at 375×667**
+- [x] **Step 3: Text-scale sweeps at 375×667**
 
 Every screen this plan touched needs the 0.8–2.0 sweep, per the cross-cutting accessibility requirement:
 
@@ -2723,7 +2723,7 @@ flutter test test/features/auth/screens/auth_screens_scale_sweep_test.dart
 
 Assert `tester.takeException()` is null throughout. A new overflow means a height that stopped deriving from scaled text — fix the height, never clamp the scale.
 
-- [ ] **Step 4: Check for BOMs**
+- [x] **Step 4: Check for BOMs**
 
 The rules call this out as a repo that has been bitten before:
 
@@ -2735,7 +2735,7 @@ done
 
 Expected: no output.
 
-- [ ] **Step 5: Confirm the dead code is gone**
+- [x] **Step 5: Confirm the dead code is gone**
 
 ```bash
 grep -rn "AdaptiveShell\|AdaptiveDestination\|_RailEntry\|isExpanded\|Breakpoints.expanded\|SettingsDrawer\|GoogleFonts\|employeePalette" lib/ test/
@@ -2743,7 +2743,7 @@ grep -rn "AdaptiveShell\|AdaptiveDestination\|_RailEntry\|isExpanded\|Breakpoint
 
 Expected: no output. `isSplitLayout` and `isTwoPane` **must still be present** — only `isExpanded` dies.
 
-- [ ] **Step 6: Device pass**
+- [ ] **Step 6: Device pass** — OWNER-GATED, still outstanding
 
 The biometric app lock, camera capture, image pipeline, push taps and the presence stream are all method-channel paths with no test coverage. Run on a device and walk: sign in → drawer opens from every screen → each of the 8 rows lands correctly → Calendar pill returns home from a pushed page *and* from two-deep → Settings and History tours start on first visit → a notice fires and self-dismisses → dark mode across all four tabs.
 
@@ -2751,11 +2751,11 @@ The biometric app lock, camera capture, image pipeline, push taps and the presen
 flutter run
 ```
 
-- [ ] **Step 7: Update the docs**
+- [x] **Step 7: Update the docs**
 
 `docs/ARCHITECTURE.md` references `AdaptiveDestination` and the nav rail; update it to the new destination family and the drawer. Add a line to `CHANGELOG.md`. Update the CLAUDE.md sections that describe the hub tab set, the drawer, and the token layer — but do this in one pass at the end of P1, not per task.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add -A

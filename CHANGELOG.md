@@ -10,6 +10,39 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [Unreleased]
+### Changed
+- **A new look, and a new way to get around.** The app has been redesigned from
+  the ground up: new colours, new typography, and a full dark theme that was
+  built alongside the light one rather than bolted on. Every screen now carries
+  the same two controls in its header — a **Calendar** button that takes you
+  straight home from wherever you are, and a menu button that opens the new
+  navigation drawer.
+- **The navigation drawer replaces the old side rail.** It slides in from the
+  right on every device and screen size, and groups destinations by when you'd
+  actually reach for them — Today, People, The Business, and Account — instead
+  of by what they are. Today's job count and the number of staff currently on
+  the clock show right on their rows. Employees see only the sections that
+  apply to them.
+- **Calendar, Clients, Team and Live map stay instant.** They remain the four
+  always-loaded tabs. History, Dashboard, Day route and Settings now open as
+  regular screens you can back out of, which also means the back arrow finally
+  behaves like a back arrow everywhere.
+- **"Scheduled" and "Cancelled" job chips are now neutral grey.** Amber is
+  reserved for things genuinely awaiting action, so a normally-scheduled job no
+  longer looks like a warning.
+- **Pop-up messages are now a compact dark pill** at the top of the screen with
+  a coloured status dot, and they clear themselves after a moment. Swipe up to
+  dismiss one early.
+
+### Fixed
+- Opening a job from a notification, or tapping Calendar from a screen you'd
+  drilled into, could leave you stranded on the wrong screen. Both now return
+  you cleanly to the calendar.
+- The Settings and History guided tours never appeared. They do now.
+- The employee detail screen could clip its content at the largest text sizes on
+  a narrow phone.
+
 ## [1.37.0+62] - 2026-07-27
 ### Changed
 - **Your location is now shared only while the app is open.** The app no longer
