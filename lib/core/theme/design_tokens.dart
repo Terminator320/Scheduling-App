@@ -12,66 +12,7 @@ const String kFontMono = 'IBMPlexMono';
 class AppColors {
   AppColors._();
 
-  static const Color primary = Color(0xFF005CC8); // Royal Blue
-  static const Color primaryDark = Color(0xFF00256B); // Dark Navy Blue
-  static const Color primaryTint = Color(0xFF7FD3FF); // Light Sky Blue
-  static const Color primarySurface = Color(0xFFE6F4FF);
-
-  static const Color background = Color(0xFFF8FAFC);
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color surfaceAlt = Color(0xFFF1F5F9);
-  static const Color onSurface = Color(
-    0xFF00256B,
-  ); // Dark Navy Blue (main text)
-  static const Color subtle = Color(0xFF5A6B8C);
-  static const Color muted = Color(0xFF8A99B5);
-  static const Color outline = Color(0xFFD8E1EF);
-
-  static const Color success = Color(0xFF22C55E);
-  static const Color successTint = Color(0xFFDCFCE7);
-  static const Color successText = Color(0xFF166534);
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color warningTint = Color(0xFFFEF9C3);
-  static const Color warningText = Color(0xFF854D0E);
-  static const Color error = Color(0xFFD61F3A); // Plunger Red
-  static const Color errorTint = Color(0xFFFDE7EA);
-  static const Color errorText = Color(0xFF7A1124);
-  static const Color accent = Color(0xFF00A6F4); // Bright Blue
-
-  static const Color darkBackground = Color(0xFF0A1633); // Dark Outline
-  static const Color darkSurface = Color(0xFF142347);
-  static const Color darkSurfaceAlt = Color(0xFF1E3260);
-  static const Color darkOnSurface = Color(0xFFE6F0FF);
-  static const Color darkSubtle = Color(0xFF8FA3C7);
-  static const Color darkMuted = Color(0xFF5A6B8C);
-  static const Color darkOutline = Color(0xFF2A3B66);
-
-  static const Color darkPrimaryTint = Color(0xFF07214F);
-  static const Color darkPrimaryOnDark = Color(0xFF7FD3FF); // Light Sky Blue
-  static const Color darkSuccessTint = Color(0xFF14532D);
-  static const Color darkSuccessText = Color(0xFF86EFAC);
-  static const Color darkWarningTint = Color(0xFF422006);
-  static const Color darkWarningText = Color(0xFFFCD34D);
-  static const Color darkErrorTint = Color(0xFF450A0A);
-  static const Color darkErrorText = Color(0xFFFCA5A5);
-  static const Color darkAccent = Color(0xFFA78BFA);
-  static const Color invitedTint = Color(0xFFF3E8FF);
-  static const Color invitedText = Color(0xFF6B21A8);
-  static const Color darkInvitedTint = Color(0xFF3B0764);
-  static const Color darkInvitedText = Color(0xFFD8B4FE);
-
-  static const List<Color> employeePalette = [
-    Color(0xFF6366F1), // indigo
-    Color(0xFFEC4899), // pink
-    Color(0xFF10B981), // emerald
-    Color(0xFFF59E0B), // amber
-    Color(0xFF3B82F6), // blue
-    Color(0xFF8B5CF6), // violet
-    Color(0xFFEF4444), // red
-    Color(0xFF14B8A6), // teal
-    Color(0xFFF97316), // orange
-    Color(0xFF06B6D4), // cyan
-  ];
 
   // --- Redesign vocabulary (2026-07-30). Light roles. ---
   static const Color ink = Color(0xFF0B1A33);

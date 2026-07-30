@@ -1433,13 +1433,13 @@ git commit -m "feat(p1): migrate call sites to crew resolvers and remap the stat
 
 > Run this only when Tasks A2–A4 are green. The compiler enumerates any missed consumer.
 
-- [ ] **Step 1: Delete the superseded `AppColors` members**
+- [x] **Step 1: Delete the superseded `AppColors` members**
 
 Remove: `primary`, `primaryDark`, `primaryTint`, `primarySurface`, `background`, `surfaceAlt`, `onSurface`, `subtle`, `muted`, `outline`, `success`, `successTint`, `successText`, `warning`, `warningTint`, `warningText`, `error`, `errorTint`, `errorText`, `accent`, `invitedTint`, `invitedText`, `employeePalette`, and every `dark*` member superseded by the new dark roles (`darkBackground`, `darkSurface`, `darkSurfaceAlt`, `darkOnSurface`, `darkSubtle`, `darkMuted`, `darkOutline`, `darkPrimaryTint`, `darkPrimaryOnDark`, `darkSuccessTint`, `darkSuccessText`, `darkWarningTint`, `darkWarningText`, `darkErrorTint`, `darkErrorText`, `darkAccent`, `darkInvitedTint`, `darkInvitedText`).
 
 Keep `surface` (`#FFFFFF`) — the new vocabulary still uses it.
 
-- [ ] **Step 2: Let the compiler find the stragglers**
+- [x] **Step 2: Let the compiler find the stragglers**
 
 ```bash
 flutter analyze 2>&1 | grep -E "error -"
@@ -1447,11 +1447,11 @@ flutter analyze 2>&1 | grep -E "error -"
 
 Fix every reported site by mapping to the new role name. Expected count: zero, if A3 and A4 were complete.
 
-- [ ] **Step 3: Drop google_fonts**
+- [x] **Step 3: Drop google_fonts**
 
 Delete `lib/main.dart` lines 75–76 (the comment and `GoogleFonts.config.allowRuntimeFetching = false;`) and the now-unused `package:google_fonts/google_fonts.dart` import. Remove `google_fonts: ^8.1.0` from `pubspec.yaml` dependencies.
 
-- [ ] **Step 4: Drop the Inter assets**
+- [x] **Step 4: Drop the Inter assets**
 
 Remove the `- family: Inter` block (and the stale comment above it explaining the google_fonts CDN arrangement) from `pubspec.yaml`, then:
 
@@ -1460,7 +1460,7 @@ git rm assets/fonts/Inter-Regular.ttf assets/fonts/Inter-Medium.ttf assets/fonts
 flutter pub get
 ```
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 ```bash
 flutter analyze 2>&1 | grep -E "error -|warning -"
@@ -1470,7 +1470,7 @@ grep -rn "GoogleFonts\|employeePalette\|AppColors.subtle\|AppColors.muted" lib/ 
 
 Expected: no analyzer output, full suite green, and the grep returns nothing.
 
-- [ ] **Step 6: Run the text-scale sweep**
+- [x] **Step 6: Run the text-scale sweep**
 
 The theme change alters every font size, so re-run the accessibility enforcement across the screens with existing sweeps:
 
@@ -1481,7 +1481,7 @@ flutter test --plain-name "scale"
 
 Expected: PASS with `tester.takeException()` null throughout. A new overflow here means a fixed height that the larger ramp no longer fits — fix the height to derive from scaled text, never by clamping the scale.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
