@@ -27,9 +27,10 @@ class EmployeeColorGrid extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
     // Offer only unused colors (selected always stays visible).
     final available = [
-      for (final color in AppColors.employeePalette)
+      for (final color in AppColors.crewPalette)
         if (!usedColors.contains(color.toARGB32()) ||
             color.toARGB32() == selectedColor)
           color,
@@ -44,14 +45,16 @@ class EmployeeColorGrid extends ConsumerWidget {
       children: [
         for (var i = 0; i < available.length; i++)
           _SwatchButton(
-            color: available[i],
+            // Display resolves through the theme; the STORED value stays the
+            // canonical light int.
+            color: crewColorOf(theme, available[i].toARGB32()),
             isSelected: available[i].toARGB32() == selectedColor,
             semanticLabel: context.l10n.employees_colorOption(i + 1),
             onTap: () => _pick(available[i].toARGB32()),
           ),
         if (isCustomColor)
           _SwatchButton(
-            color: Color(selectedColor),
+            color: crewColorOf(theme, selectedColor),
             isSelected: true,
             semanticLabel: context.l10n.employees_customColor,
             onTap: null,
@@ -116,7 +119,8 @@ class _SwatchButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return Semantics(
       button: true,
@@ -145,7 +149,7 @@ class _SwatchButton extends StatelessWidget {
               child: isSelected
                   ? Icon(
                       Icons.check,
-                      color: contrastingForegroundFor(color),
+                      color: avatarForegroundFor(theme, color),
                       size: 18,
                     )
                   : null,

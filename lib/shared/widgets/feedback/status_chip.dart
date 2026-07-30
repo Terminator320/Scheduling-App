@@ -65,7 +65,7 @@ class StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final (bg, fg) = _colorsFor(theme.colorScheme, theme.statusColors);
+    final (bg, fg) = _colorsFor(theme.statusColors);
     return StatusPill(
       label: statusLabel(context.l10n, status),
       background: bg,
@@ -73,27 +73,27 @@ class StatusChip extends StatelessWidget {
     );
   }
 
-  (Color, Color) _colorsFor(ColorScheme scheme, AppStatusColors statusColors) =>
-      switch (status) {
-        AppointmentStatus.pending => (
-          statusColors.warningContainer,
-          statusColors.onWarningContainer,
-        ),
-        AppointmentStatus.inProgress => (
-          statusColors.inProgressContainer,
-          statusColors.onInProgressContainer,
-        ),
-        AppointmentStatus.overdue => (
-          statusColors.overdueContainer,
-          statusColors.onOverdueContainer,
-        ),
-        AppointmentStatus.done => (
-          statusColors.successContainer,
-          statusColors.onSuccessContainer,
-        ),
-        AppointmentStatus.cancelled => (
-          scheme.errorContainer,
-          scheme.onErrorContainer,
-        ),
-      };
+  (Color, Color) _colorsFor(AppStatusColors statusColors) => switch (status) {
+    AppointmentStatus.pending => (
+      // "Scheduled"
+      statusColors.neutralContainer,
+      statusColors.onNeutralContainer,
+    ),
+    AppointmentStatus.inProgress => (
+      statusColors.inProgressContainer,
+      statusColors.onInProgressContainer,
+    ),
+    AppointmentStatus.overdue => (
+      statusColors.overdueContainer,
+      statusColors.onOverdueContainer,
+    ),
+    AppointmentStatus.done => (
+      statusColors.successContainer,
+      statusColors.onSuccessContainer,
+    ),
+    AppointmentStatus.cancelled => (
+      statusColors.neutralContainer,
+      statusColors.onNeutralContainerMuted,
+    ),
+  };
 }

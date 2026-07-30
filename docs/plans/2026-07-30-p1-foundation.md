@@ -1281,7 +1281,7 @@ git commit -m "feat(p1): flip light and dark themes onto the redesign palette an
 - Consumes: `crewColorOf`, `avatarForegroundFor`, `AppColors.crewPalette`, `theme.statusColors`, `theme.monoType` (Tasks A2–A3)
 - Produces: no new API — this task removes the last external readers of the dying `AppColors` names
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `test/shared/widgets/feedback/status_chip_test.dart`:
 
@@ -1312,7 +1312,7 @@ In `test/shared/widgets/feedback/status_chip_test.dart`:
 
 `_wrap` is a `MaterialApp` with `theme: lightTheme()` plus the three localization delegates and `AppLocalizations.supportedLocales` (`StatusChip` calls `context.l10n`).
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 ```bash
 flutter test test/shared/widgets/feedback/status_chip_test.dart
@@ -1320,7 +1320,7 @@ flutter test test/shared/widgets/feedback/status_chip_test.dart
 
 Expected: FAIL — pending resolves to `warningContainer`, cancelled to `scheme.errorContainer`.
 
-- [ ] **Step 3: Remap `_colorsFor`**
+- [x] **Step 3: Remap `_colorsFor`**
 
 `pending` goes neutral grey (amber is now reserved for time-off Pending and employment Invited); `cancelled` leaves the error palette for neutral-with-muted-text. The `ColorScheme` parameter is dropped — nothing reads it any more:
 
@@ -1351,7 +1351,7 @@ Expected: FAIL — pending resolves to `warningContainer`, cancelled to `scheme.
 
 Update the one caller in `build()` to drop the scheme argument. **The enum, `fromRaw`, `storedRaw`, `appointmentValues` and the Firestore allowlist are untouched** — this is display-only.
 
-- [ ] **Step 4: Confirm the `status_pending` label**
+- [x] **Step 4: Confirm the `status_pending` label**
 
 Per the program spec this relabel is **already shipped** (`status_pending` is "Scheduled" / "Planifié" in both ARBs). Verify rather than re-edit:
 
@@ -1361,7 +1361,7 @@ grep -n '"status_pending"' lib/l10n/app_en.arb lib/l10n/app_fr.arb
 
 If either still says "Pending"/"En attente", fix both ARBs in lockstep. The repo hook regenerates l10n on ARB edits — **do not run `flutter gen-l10n` by hand.**
 
-- [ ] **Step 5: Migrate `AppAvatar` onto the crew resolvers**
+- [x] **Step 5: Migrate `AppAvatar` onto the crew resolvers**
 
 In `lib/shared/widgets/primitives/app_avatar.dart`, resolve the stored colour through the theme instead of using it raw:
 
@@ -1374,7 +1374,7 @@ In `lib/shared/widgets/primitives/app_avatar.dart`, resolve the stored colour th
 
 `_colorFromName` keeps its shape but hashes into `AppColors.crewPalette` instead of `employeePalette`.
 
-- [ ] **Step 6: Migrate `EmployeeColorGrid` to resolve-at-display, store-canonical**
+- [x] **Step 6: Migrate `EmployeeColorGrid` to resolve-at-display, store-canonical**
 
 In `employee_color_grid.dart`, iterate `AppColors.crewPalette`, and render each swatch through `crewColorOf` while **still storing the canonical light int**:
 
@@ -1390,17 +1390,17 @@ In `employee_color_grid.dart`, iterate `AppColors.crewPalette`, and render each 
 
 The custom-selected swatch resolves the same way: `color: crewColorOf(theme, selectedColor)`. The checkmark foreground moves from `contrastingForegroundFor` to `avatarForegroundFor(theme, resolvedColour)`.
 
-- [ ] **Step 7: Migrate the three remaining strays**
+- [x] **Step 7: Migrate the three remaining strays**
 
 - `employee_form_sheet.dart:65` — `AppColors.employeePalette.first` becomes `AppColors.crewPalette.first`.
 - `dashboard_hero.dart:25` — the `static const Color _inProgressSegment = AppColors.accent;` field is deleted; the widget reads `theme.statusColors.accent` in `build()` instead (a static const can't be theme-aware).
 - `signup_code_dialog.dart:70` — the raw `fontFamily: 'monospace'` becomes `theme.monoType.data.copyWith(fontSize: 19)` (the design's invite-code size), deleting the last hand-rolled font family in `lib/`.
 
-- [ ] **Step 8: Fix `showConfirmDialog`'s destructive confirm**
+- [x] **Step 8: Fix `showConfirmDialog`'s destructive confirm**
 
 Find the destructive filled-confirm styling in `showConfirmDialog` and repoint its background from `scheme.error` to `theme.palette.dangerFill`. **This is required, not cosmetic:** dark `scheme.error` is now the lifted foreground `#FF6076`, which is unusable as a white-text fill. Same for `destructiveOutlinedButtonStyle`'s *foreground* — that one correctly stays on `scheme.error` (it is a foreground).
 
-- [ ] **Step 9: Run the tests**
+- [x] **Step 9: Run the tests**
 
 ```bash
 flutter test test/shared/widgets/feedback/status_chip_test.dart
@@ -1410,7 +1410,7 @@ flutter test
 
 Expected: the status-chip tests pass; any other test asserting a cancelled chip on `errorContainer` needs its assertion updated to the neutral pair.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add lib test

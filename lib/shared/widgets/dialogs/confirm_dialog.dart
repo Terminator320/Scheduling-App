@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 /// Cancel/confirm dialog — Cupertino on iOS, Material on Android.
@@ -44,7 +45,7 @@ Future<bool> showConfirmDialog(
     result = await showDialog<bool>(
       context: context,
       builder: (ctx) {
-        final scheme = Theme.of(ctx).colorScheme;
+        final palette = Theme.of(ctx).palette;
         return AlertDialog(
           title: Text(title),
           content: content ?? Text(message!),
@@ -56,8 +57,10 @@ Future<bool> showConfirmDialog(
             FilledButton(
               style: destructive
                   ? FilledButton.styleFrom(
-                      backgroundColor: scheme.error,
-                      foregroundColor: scheme.onError,
+                      // Not scheme.error — in dark that is the lifted
+                      // foreground red, unusable as a white-text fill.
+                      backgroundColor: palette.dangerFill,
+                      foregroundColor: palette.onDangerFill,
                     )
                   : null,
               onPressed: () => Navigator.pop(ctx, true),

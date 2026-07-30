@@ -30,9 +30,11 @@ class AppAvatar extends StatelessWidget {
       AvatarSize.md => 13.0,
       AvatarSize.lg => 17.0,
     };
+    final theme = Theme.of(context);
     final initials = nameInitials(name);
-    final background = color ?? _colorFromName(name);
-    final foreground = contrastingForegroundFor(background);
+    final stored = color ?? _colorFromName(name);
+    final background = crewColorOf(theme, stored.toARGB32());
+    final foreground = avatarForegroundFor(theme, background);
     return Container(
       constraints: BoxConstraints.tight(Size(diameter, diameter)),
       decoration: BoxDecoration(
@@ -54,7 +56,7 @@ class AppAvatar extends StatelessWidget {
   }
 
   static Color _colorFromName(String name) {
-    return AppColors.employeePalette[name.hashCode.abs() %
-        AppColors.employeePalette.length];
+    return AppColors.crewPalette[name.hashCode.abs() %
+        AppColors.crewPalette.length];
   }
 }
