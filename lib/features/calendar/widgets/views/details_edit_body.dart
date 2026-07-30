@@ -2,18 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
+import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/series_outlook.dart';
 import 'package:scheduling/features/calendar/utils/adaptive_pickers.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/series_scope_dialog.dart';
+import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
@@ -173,6 +177,24 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     notifier.selectEndTime(picked);
   }
 
+  /// The occurrences a "this and all future" save would touch. A failed count
+  /// must never block the edit, so this degrades to an empty outlook and the
+  /// dialog just renders without its consequence lines.
+  Future<({int count, DateTime? last})> _seriesOutlook(
+    WidgetRef ref,
+    AppointmentRecord appointment,
+  ) async {
+    try {
+      final series = await ref
+          .read(appointmentsRepositoryProvider)
+          .getSeries(appointment.seriesId);
+      return seriesOutlook(series, appointment.startTime);
+    } on Object catch (e, st) {
+      ref.read(loggerProvider).warn('APPT-SAVE series outlook failed', e, st);
+      return (count: 0, last: null);
+    }
+  }
+
   Future<void> _save(BuildContext context, WidgetRef ref) async {
     final appointment = widget.appointment;
     final provider = eventDetailsControllerProvider(
@@ -191,12 +213,33 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       // Busy the form while the prompt is open so a second tap can't stack a
       // duplicate dialog. We reset it below before save() takes over the flag.
       notifier.setSaving(busy: true);
+      // One extra read per series edit — an admin action — so the dialog's
+      // consequence line and button count are true rather than decorative.
+      final outlook = await _seriesOutlook(ref, appointment);
+      if (!context.mounted) {
+        notifier.setSaving(busy: false);
+        return;
+      }
       final choice = await showSeriesScopeDialog(
         context,
-        title: context.l10n.calendar_editAppointment,
-        message: context.l10n.calendar_editSeriesScopeMessage,
+        title: context.l10n.calendar_applyChangesTo,
+        contextLabel: context.l10n.calendar_repeatsEveryLabel(
+          repeatIntervalLabel(context.l10n, state.repeat).toUpperCase(),
+        ),
         thisOnlyLabel: context.l10n.calendar_editThisVisitOnly,
         thisAndFutureLabel: context.l10n.calendar_editThisAndFutureVisits,
+        thisOnlyDetail: context.l10n.calendar_thisVisitKeepsSeries(
+          DateUtilsHelper.formatDate(appointment.startTime),
+        ),
+        thisAndFutureDetail: outlook.last == null
+            ? null
+            : context.l10n.calendar_remainingVisitsThrough(
+                outlook.count,
+                DateUtilsHelper.formatDate(outlook.last!),
+              ),
+        primaryLabelFor: (choice) => choice == SeriesScopeChoice.thisOnly
+            ? context.l10n.calendar_saveThisVisit
+            : context.l10n.calendar_saveNVisits(outlook.count),
       );
       // Reset before the mounted guard — the notifier is context-free, and
       // bailing while still busy would wedge a surviving controller.
