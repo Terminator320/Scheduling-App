@@ -295,6 +295,12 @@ void main() {
 
     expect(find.byType(CalendarMonthPager), findsOneWidget);
     expect(find.byType(CalendarWeekStrip), findsNothing);
+
+    // FadeInItem staggers its first 8 rows by 30ms each. The lazy sliver builds
+    // some of them mid-scroll, so those delays are still pending here and would
+    // trip the "timer still pending after dispose" invariant at teardown.
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('the split layout renders the agenda header in its own pane', (

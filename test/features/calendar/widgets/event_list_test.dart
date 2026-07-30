@@ -79,7 +79,7 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'New Appointment'), findsNothing);
   });
 
-  testWidgets('appointment card lists every assigned employee', (tester) async {
+  testWidgets('appointment card collapses a multi-person crew', (tester) async {
     events = [
       AppointmentRecord(
         id: '1',
@@ -99,7 +99,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Alice, Bob'), findsOneWidget);
+    // The card leads with the first assignee and counts the rest, rather than
+    // listing every name — the design's `Theo +1` line.
+    expect(find.textContaining('Alice +1'), findsOneWidget);
+    expect(find.text('Alice, Bob'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

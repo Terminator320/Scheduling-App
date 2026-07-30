@@ -6,8 +6,10 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
+import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
-import 'package:scheduling/features/calendar/widgets/cards/appointment_tile.dart';
+import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
+import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
 import 'package:scheduling/features/clients/application/appointment_history_providers.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/clients/widgets/sections/history_filter_bar.dart';
@@ -240,12 +242,14 @@ class _AppointmentHistoryViewState
           ),
         Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sp8),
-          child: AppointmentTile(
-            // showActions defaults CLOSED — this history surface is read-only.
+          child: AppointmentCard(
             appointment: app,
-            employeeColorMap: colorMap,
-            alwaysShowChip: true,
+            // No live name map here — crewFor falls back to the record's
+            // denormalized employeeNames.
+            crew: crewFor(app, colorMap: colorMap),
             dimWhenCancelled: true,
+            // showActions stays CLOSED — this history surface is read-only.
+            onTap: () => showEventDetails(context, app, showActions: false),
           ),
         ),
       ],

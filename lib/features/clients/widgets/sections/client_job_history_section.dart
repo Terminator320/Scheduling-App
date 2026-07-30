@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
-import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
 import 'package:scheduling/features/clients/application/appointment_history_providers.dart';
@@ -85,19 +85,17 @@ class _JobList extends StatelessWidget {
           ),
           AppointmentCard(
             appointment: job,
-            employeeColor: colorFromMap(job, colorMap) ?? scheme.outline,
-            employeeName: _employeeNames(job),
+            // No live name map on this surface — crewFor falls back to the
+            // record's denormalized employeeNames, which is what it showed
+            // before.
+            crew: crewFor(job, colorMap: colorMap),
+            dimWhenCancelled: true,
             onTap: () => showEventDetails(context, job, showActions: false),
           ),
           const SizedBox(height: AppSpacing.sp8),
         ],
       ],
     );
-  }
-
-  static String? _employeeNames(AppointmentRecord job) {
-    final names = job.employeeNames.where((n) => n.isNotEmpty).join(', ');
-    return names.isEmpty ? null : names;
   }
 }
 

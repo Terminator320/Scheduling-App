@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
+import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
-import 'package:scheduling/features/dashboard/domain/assignee_names.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
@@ -48,9 +47,12 @@ class UpcomingTodaySection extends StatelessWidget {
             if (i > 0) const SizedBox(height: AppSpacing.sp8),
             AppointmentCard(
               appointment: ops.upcoming[i],
-              employeeColor:
-                  colorFromMap(ops.upcoming[i], colorMap) ?? scheme.outline,
-              employeeName: resolveAssigneeNames(ops.upcoming[i], nameMap),
+              crew: crewFor(
+                ops.upcoming[i],
+                colorMap: colorMap,
+                nameMap: nameMap,
+              ),
+              emphasizeToday: true,
               onTap: () => showEventDetails(
                 context,
                 ops.upcoming[i],

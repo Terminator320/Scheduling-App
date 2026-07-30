@@ -149,6 +149,30 @@
       }
     }
   },
+  "calendar_crewPlusOthers": "{name} +{others}",
+  "@calendar_crewPlusOthers": {
+    "description": "Crew line on an appointment card when more than one person is assigned, e.g. Theo +1.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "others": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_crewAndClient": "{crew} · {client}",
+  "@calendar_crewAndClient": {
+    "description": "Appointment card's third line: the crew label, a middot, then the client name.",
+    "placeholders": {
+      "crew": {
+        "type": "String"
+      },
+      "client": {
+        "type": "String"
+      }
+    }
+  },
   "calendar_scheduleLabel": "SCHEDULE",
   "@calendar_scheduleLabel": {
     "description": "Mono all-caps eyebrow label above the month name on the calendar header. Already uppercase in source."

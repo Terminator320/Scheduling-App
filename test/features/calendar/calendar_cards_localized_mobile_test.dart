@@ -7,10 +7,10 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
+import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
-import 'package:scheduling/features/calendar/widgets/cards/appointment_tile.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_view_body.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
@@ -108,37 +108,17 @@ void main() {
               padding: const EdgeInsets.all(8),
               child: AppointmentCard(
                 appointment: _appointment,
-                employeeColor: const Color(0xFF6366F1),
-                employeeName: 'Alexandrine Tremblay',
+                crew: const [
+                  AppointmentCrew(
+                    name: 'Alexandrine Tremblay',
+                    color: Color(0xFF6366F1),
+                  ),
+                  AppointmentCrew(
+                    name: 'Jean-Sebastien Belanger',
+                    color: Color(0xFF0E9B6E),
+                  ),
+                ],
               ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets(
-    'appointment tile does not overflow under French localized strings at 2x text',
-    (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(320, 640);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      await tester.pumpWidget(
-        MediaQuery(
-          data: const MediaQueryData(textScaler: TextScaler.linear(2)),
-          child: _materialWrap(
-            AppointmentTile(
-              appointment: _appointment,
-              employeeColorMap: const {'e1': Color(0xFF6366F1)},
-              alwaysShowChip: true,
             ),
           ),
         ),

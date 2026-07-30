@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
-import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -36,8 +36,6 @@ class AgendaSliverList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
     return SliverMainAxisGroup(
       slivers: [
         if (isLoading)
@@ -62,14 +60,6 @@ class AgendaSliverList extends StatelessWidget {
               itemCount: events.length,
               itemBuilder: (context, index) {
                 final e = events[index];
-                final accent = colorFromMap(e, colorMap) ?? scheme.outline;
-                // Show every assigned employee, but drop any ids that don't
-                // resolve to a name and skip blank names.
-                final joinedNames = e.employeeIds
-                    .map((id) => nameMap[id])
-                    .whereType<String>()
-                    .where((name) => name.isNotEmpty)
-                    .join(', ');
 
                 return FadeInItem(
                   key: ValueKey(e.id),
@@ -81,8 +71,7 @@ class AgendaSliverList extends StatelessWidget {
                     ),
                     child: AppointmentCard(
                       appointment: e,
-                      employeeColor: accent,
-                      employeeName: joinedNames.isEmpty ? null : joinedNames,
+                      crew: crewFor(e, colorMap: colorMap, nameMap: nameMap),
                       selected: selectedAppointmentId == e.id,
                       onTap: () {
                         if (onAppointmentTap != null) {
