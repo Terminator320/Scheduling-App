@@ -149,6 +149,57 @@
       }
     }
   },
+  "calendar_repeatsEveryLabel": "REPEATS {interval}",
+  "@calendar_repeatsEveryLabel": {
+    "description": "Mono all-caps context label at the top of the repeat-scope dialog, e.g. REPEATS EVERY 2 WEEKS.",
+    "placeholders": {
+      "interval": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_applyChangesTo": "Apply your changes to…",
+  "@calendar_applyChangesTo": {
+    "description": "Title of the repeat-scope dialog shown when saving a repeating appointment."
+  },
+  "calendar_thisVisitKeepsSeries": "{date} · the rest of the series keeps its old details",
+  "@calendar_thisVisitKeepsSeries": {
+    "description": "Consequence line under the this-visit-only option in the repeat-scope dialog.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_remainingVisitsThrough": "{count, plural, =1{1 remaining visit through {date}} other{{count} remaining visits through {date}}}",
+  "@calendar_remainingVisitsThrough": {
+    "description": "Consequence line under the this-and-future option in the repeat-scope dialog.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_saveThisVisit": "Save this visit",
+  "@calendar_saveThisVisit": {
+    "description": "Primary button label in the repeat-scope dialog when only this occurrence is selected."
+  },
+  "calendar_saveNVisits": "{count, plural, =1{Save 1 visit} other{Save {count} visits}}",
+  "@calendar_saveNVisits": {
+    "description": "Primary button label in the repeat-scope dialog when this and all future occurrences are selected.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "common_back": "Back",
+  "@common_back": {
+    "description": "Secondary button that closes a dialog without acting."
+  },
   "calendar_assignedLabel": "ASSIGNED",
   "@calendar_assignedLabel": {
     "description": "Mono all-caps label above the assignee panel in the appointment detail sheet. Already uppercase in source."

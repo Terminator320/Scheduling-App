@@ -22,9 +22,12 @@ Future<SeriesScopeChoice?> showDeleteAppointmentDialog(
   return showSeriesScopeDialog(
     context,
     title: l.calendar_deleteAppointment,
-    message: l.calendar_deleteSeriesScopeMessage,
     thisOnlyLabel: l.calendar_deleteThisVisitOnly,
     thisAndFutureLabel: l.calendar_deleteThisAndFutureVisits,
+    // The scope IS the verb here, so this site keeps its own copy rather than
+    // switching the label on the selection.
+    primaryLabelFor: (_) => l.calendar_deleteAppointment,
+    thisOnlyDetail: l.calendar_deleteSeriesScopeMessage,
     destructive: true,
   );
 }
