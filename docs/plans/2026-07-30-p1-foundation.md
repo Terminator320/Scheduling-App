@@ -996,7 +996,7 @@ git commit -m "feat(p1): add redesign token vocabulary, AppPalette and AppMonoTy
 
 **The placement rule that decides every colour.** A role goes on `ColorScheme` **iff Material's own widgets read that slot implicitly**; everything Material never reads goes on an extension. Where the design splits one Material slot in two (dark's fill-blue `#1D6BE8` vs text-blue `#4B90F7`), the slot takes the variant the framework's implicit consumers need and the extension takes the other. So `primary` is the **fill** blue (FilledButton, FAB, app bar, `Switch.adaptive activeTrackColor`), while `palette.primaryAccent` is the text/icon blue. Conversely `error` is the **lifted foreground** red in dark (`#FF6076` — Material's implicit `error` consumers are input error text and borders), while the saturated destructive *fill* is `palette.dangerFill`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/core/theme/themes_test.dart`:
 
@@ -1060,7 +1060,7 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 ```bash
 flutter test test/core/theme/themes_test.dart
@@ -1068,7 +1068,7 @@ flutter test test/core/theme/themes_test.dart
 
 Expected: FAIL — extensions `AppPalette`/`AppMonoType` are not registered, `primary` is the old value, `surfaceTint` is not transparent, families are Inter.
 
-- [ ] **Step 3: Replace `_buildTextTheme`**
+- [x] **Step 3: Replace `_buildTextTheme`**
 
 Delete the existing `_buildTextTheme(Color onSurface, Color subtle)` (lines 5–60) and its `GoogleFonts.interTextTheme()` base. Replace with:
 
@@ -1118,7 +1118,7 @@ Call sites become `_buildTextTheme(ink: AppColors.ink, body: AppColors.ink80, se
 
 > **Three ramp decisions worth knowing.** (1) **Card title 15.5 folds into `titleMedium` 15** — half a logical pixel is invisible at mobile DPR and `TextTheme` has no free slot; if P2 insists, `AppointmentCard` does a local `copyWith(fontSize: 15.5)`. (2) **The 9px `labelSmall` is gone.** The only sub-11px roles in the new ramp are mono micro-labels, which live on `AppMonoType.micro` — opt-in, never a Material default. (3) **`labelLarge` grows 11 → 14.** Any call site currently using it as a *small* label will visibly grow at this commit; P2–P7 correct those as they sweep screens.
 
-- [ ] **Step 4: Replace the light `ColorScheme`**
+- [x] **Step 4: Replace the light `ColorScheme`**
 
 ```dart
   const cs = ColorScheme.light(
@@ -1157,7 +1157,7 @@ Call sites become `_buildTextTheme(ink: AppColors.ink, body: AppColors.ink80, se
   );
 ```
 
-- [ ] **Step 5: Replace the dark `ColorScheme`**
+- [x] **Step 5: Replace the dark `ColorScheme`**
 
 ```dart
   const cs = ColorScheme.dark(
@@ -1198,7 +1198,7 @@ Call sites become `_buildTextTheme(ink: AppColors.ink, body: AppColors.ink80, se
 
 > **Status chips move to 16%-alpha fills in dark** (`09-dark-theme.md` rule 3). `0x29` is 16% of 255 (40.8 → 41 → `0x29`).
 
-- [ ] **Step 6: Rewire the component themes**
+- [x] **Step 6: Rewire the component themes**
 
 In both builders: `scaffoldBackgroundColor` becomes `AppColors.paper` (light) / `AppColors.darkPage` (dark). Replace all nine `GoogleFonts.*` call sites with `TextStyle(fontFamily: kFontSans, ...)` keeping each site's existing size/weight. Add `fontFamily: kFontSans` to the `ThemeData(...)` call as a default for un-themed text. Register all four extensions:
 
@@ -1213,7 +1213,7 @@ In both builders: `scaffoldBackgroundColor` becomes `AppColors.paper` (light) / 
 
 (and the `.dark` counterparts in the dark builder). Set the modal barrier to the design's scrim on `bottomSheetTheme`: `modalBarrierColor: const Color(0x730B1A33)` light (45%), `const Color(0x8C040810)` dark (55%).
 
-- [ ] **Step 7: Revalue the 13 existing `AppStatusColors` fields**
+- [x] **Step 7: Revalue the 13 existing `AppStatusColors` fields**
 
 In `design_tokens.dart`, change the values (the field names and the three added in Task A2 are unchanged):
 
@@ -1235,7 +1235,7 @@ In `design_tokens.dart`, change the values (the field names and the three added 
 
 > **The Invited chip moves off purple onto amber**, per the status model ("Employment status: Active green, **Invited amber**"). The `invited*` fields stay separate from `warning*` even though they now hold the same values, so employment chips keep their own name and can diverge later. The old `invitedTint`/`invitedText` purple constants die in Task A5.
 
-- [ ] **Step 8: Run the test to verify it passes**
+- [x] **Step 8: Run the test to verify it passes**
 
 ```bash
 flutter test test/core/theme/themes_test.dart
@@ -1243,7 +1243,7 @@ flutter test test/core/theme/themes_test.dart
 
 Expected: PASS, 7 tests.
 
-- [ ] **Step 9: Run the full suite and fix the fallout**
+- [x] **Step 9: Run the full suite and fix the fallout**
 
 ```bash
 flutter analyze 2>&1 | grep -E "error -|warning -"
@@ -1256,7 +1256,7 @@ Expected breakage to fix here — these are the tests that assert on old theme v
 - `test/core/theme/` existing files.
 Update assertions to the new values; do **not** weaken a test into `isNotNull` to make it pass.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add lib/core/theme test/core/theme
