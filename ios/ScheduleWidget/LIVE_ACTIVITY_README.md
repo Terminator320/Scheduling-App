@@ -163,6 +163,10 @@ device, iOS 17.2+, signed in as an employee with a job scheduled:
 - [ ] **Complete** deep-links into the appointment sheet (`esproschedule://`)
       and the existing markAsDone path runs there — nothing writes from the
       extension.
+- [ ] Card body tap (`.widgetURL`) also opens the appointment sheet. If a tap
+      only foregrounds the app, check the URL kept its `homeWidget` query item
+      — the `home_widget` plugin claims only URLs carrying it (fix 2026-07-29;
+      see `Job.deepLink` in ScheduleWidget.swift).
 - [ ] Dynamic Island: expanded leads on the absolute `Leave at 7:54`, never a
       countdown; compact reads label-leading / time-trailing across the cutout
       **without truncating** (the densest part of the design — check FR, which

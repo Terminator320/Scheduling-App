@@ -188,9 +188,12 @@ struct LiveActivitiesAppAttributes: Codable, Hashable {
 
     /// Deep link into the app's appointment detail sheet — the same scheme the
     /// home-screen widget uses (`CFBundleURLTypes` in Runner/Info.plist).
+    /// The `homeWidget` query item is required for the plugin to claim the
+    /// URL — see `Job.deepLink` in ScheduleWidget.swift.
     var deepLink: URL? {
         guard !appointmentId.isEmpty else { return nil }
-        return URL(string: "esproschedule://appointment?id=\(appointmentId)")
+        return URL(string:
+            "esproschedule://appointment?id=\(appointmentId)&homeWidget")
     }
 
     /// The employee colour rail, falling back to the card's amber accent when

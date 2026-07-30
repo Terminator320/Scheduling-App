@@ -52,6 +52,17 @@ iOS notes (Phase 0 of clean-architecture restructure):
   App Attest fails on the iOS Simulator — verify on real hardware.
 - `Info.plist` already declares `NSCameraUsageDescription`,
   `NSPhotoLibraryUsageDescription`, and `LSApplicationQueriesSchemes`.
+- **Deep-link tap URLs must keep the `homeWidget` query item.** The three iOS
+  producers (`ScheduleWidget.swift`, `LiveActivitiesAppAttributes.swift`,
+  `SiriIntents/ScheduleSnapshot.swift`) emit
+  `esproschedule://appointment?id=…&homeWidget`; the `home_widget` plugin's
+  `isWidgetUrl` claims a URL only when that query item is present, and nothing
+  else consumes the scheme (`FlutterDeepLinkingEnabled` is `false` and
+  `AppDelegate` has no `open url` override), so dropping the param silently
+  turns taps into plain app launches (fixed 2026-07-29). Retire the param only
+  together with the `home_widget` tap channel, when the P4b `app_links`
+  dispatcher lands (docs/plans/2026-07-29-redesign-program.md). Swift-side, so
+  Mac-only verification: widget row / Live Activity tap → appointment sheet.
 
 ## Commands
 

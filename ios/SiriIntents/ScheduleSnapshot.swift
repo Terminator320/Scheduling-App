@@ -40,8 +40,10 @@ struct SnapshotAppointment: Codable, Hashable {
 
     /// Deep link into the app's appointment detail sheet, using the scheme
     /// registered in Info.plist (`CFBundleURLTypes`) that the widget also uses.
+    /// The `homeWidget` query item is required for the plugin to claim the
+    /// URL — see `Job.deepLink` in ScheduleWidget.swift.
     var deepLink: URL? {
-        URL(string: "esproschedule://appointment?id=\(id)")
+        URL(string: "esproschedule://appointment?id=\(id)&homeWidget")
     }
 }
 
