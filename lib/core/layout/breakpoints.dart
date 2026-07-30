@@ -10,10 +10,6 @@ class Breakpoints {
   /// use list + sheet instead of two-pane.
   static const double tabletShortestSide = 600;
 
-  /// Extended (labelled) nav-rail threshold — only on large screens, so the
-  /// rail doesn't expand the moment two-pane appears.
-  static const double expanded = 1200;
-
   /// Narrow-phone width gate: below this, dense rows stack vertically.
   static const double compactWidth = 360;
 
@@ -26,8 +22,6 @@ class Breakpoints {
 
 extension ResponsiveContext on BuildContext {
   bool get isWide => MediaQuery.sizeOf(this).width >= Breakpoints.tablet;
-
-  bool get isExpanded => MediaQuery.sizeOf(this).width >= Breakpoints.expanded;
 
   /// Any device held in landscape (wider than tall).
   bool get isLandscape =>

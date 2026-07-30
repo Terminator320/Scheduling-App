@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/routes/hub_shell.dart';
 
@@ -17,7 +18,7 @@ Widget _stubScreen(AdaptiveDestination destination) => Scaffold(
         TextButton(
           onPressed: () => navigateToDestination(
             context,
-            AdaptiveDestination.calendar,
+            HubTab.calendar,
             isAdmin: true,
             employeeId: 'e1',
           ),
@@ -49,7 +50,7 @@ void main() {
     (tester) async {
       await tester.pumpWidget(_app());
       _shellState(tester).select(
-        AdaptiveDestination.settings,
+        PushedDestination.settings,
         isAdmin: true,
         employeeId: 'e1',
       );
@@ -62,7 +63,7 @@ void main() {
 
       expect(
         _shellState(tester).currentDestination,
-        AdaptiveDestination.calendar,
+        HubTab.calendar,
       );
       expect(find.text('screen-calendar'), findsOneWidget);
       // The shell route itself was not popped.
@@ -80,7 +81,7 @@ void main() {
     expect(popScope.canPop, isTrue);
 
     _shellState(tester).select(
-      AdaptiveDestination.clients,
+      HubTab.clients,
       isAdmin: true,
       employeeId: 'e1',
     );
@@ -98,7 +99,7 @@ void main() {
     expect(find.text('screen-liveMap', skipOffstage: false), findsNothing);
 
     _shellState(tester).select(
-      AdaptiveDestination.liveMap,
+      HubTab.liveMap,
       isAdmin: true,
       employeeId: 'e1',
     );
@@ -106,7 +107,7 @@ void main() {
 
     expect(
       _shellState(tester).currentDestination,
-      AdaptiveDestination.liveMap,
+      HubTab.liveMap,
     );
     expect(find.text('screen-liveMap'), findsOneWidget);
   });
@@ -120,7 +121,7 @@ void main() {
     expect(find.text('screen-clients', skipOffstage: false), findsNothing);
 
     _shellState(tester).select(
-      AdaptiveDestination.clients,
+      HubTab.clients,
       isAdmin: true,
       employeeId: 'e1',
     );
@@ -137,7 +138,7 @@ void main() {
     (tester) async {
       await tester.pumpWidget(_app());
       _shellState(tester).select(
-        AdaptiveDestination.history,
+        PushedDestination.history,
         isAdmin: true,
         employeeId: 'e1',
       );
@@ -175,7 +176,7 @@ void main() {
       expect(find.byType(HubShell), findsOneWidget);
       expect(
         _shellState(tester).currentDestination,
-        AdaptiveDestination.clients,
+        HubTab.clients,
       );
       expect(find.text('screen-clients'), findsOneWidget);
       final navigator = tester.state<NavigatorState>(find.byType(Navigator));
@@ -202,17 +203,17 @@ void main() {
           ),
         ),
       );
-      expect(buildCounts[AdaptiveDestination.calendar], 1);
+      expect(buildCounts[HubTab.calendar], 1);
 
       // Visit employees, then return to calendar — identity unchanged.
       _shellState(tester).select(
-        AdaptiveDestination.employees,
+        HubTab.employees,
         isAdmin: true,
         employeeId: 'e1',
       );
       await tester.pump();
       _shellState(tester).select(
-        AdaptiveDestination.calendar,
+        HubTab.calendar,
         isAdmin: true,
         employeeId: 'e1',
       );
@@ -220,8 +221,8 @@ void main() {
 
       // Employees built once on first visit; calendar never rebuilt despite
       // three shell builds (without the cache it would rebuild each time).
-      expect(buildCounts[AdaptiveDestination.employees], 1);
-      expect(buildCounts[AdaptiveDestination.calendar], 1);
+      expect(buildCounts[HubTab.employees], 1);
+      expect(buildCounts[HubTab.calendar], 1);
     },
   );
 
@@ -244,25 +245,25 @@ void main() {
           ),
         ),
       );
-      expect(buildCounts[AdaptiveDestination.calendar], 1);
+      expect(buildCounts[HubTab.calendar], 1);
 
       // Reselecting with the same identity must not rebuild.
       _shellState(tester).select(
-        AdaptiveDestination.calendar,
+        HubTab.calendar,
         isAdmin: false,
         employeeId: 'e1',
       );
       await tester.pump();
-      expect(buildCounts[AdaptiveDestination.calendar], 1);
+      expect(buildCounts[HubTab.calendar], 1);
 
       // Flipping isAdmin changes the identity -> cache clears -> rebuild.
       _shellState(tester).select(
-        AdaptiveDestination.calendar,
+        HubTab.calendar,
         isAdmin: true,
         employeeId: 'e1',
       );
       await tester.pump();
-      expect(buildCounts[AdaptiveDestination.calendar], 2);
+      expect(buildCounts[HubTab.calendar], 2);
     },
   );
 }

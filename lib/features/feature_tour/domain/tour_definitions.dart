@@ -1,4 +1,5 @@
-import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 
 /// The showcaseview scope name for a tab. Each tab needs its own scope
@@ -12,23 +13,23 @@ List<TourStepId> tourStepsFor(
   AdaptiveDestination tab, {
   required bool isAdmin,
 }) => switch (tab) {
-  AdaptiveDestination.calendar => [
+  HubTab.calendar => [
     TourStepId.calendarGrid,
     TourStepId.calendarDayList,
     if (isAdmin) TourStepId.calendarAddAppointment,
     TourStepId.calendarDayRoute,
   ],
-  AdaptiveDestination.clients => [
+  HubTab.clients => [
     if (isAdmin) ...[TourStepId.clientsSearch, TourStepId.clientsAdd],
   ],
-  AdaptiveDestination.employees => [
+  HubTab.employees => [
     if (isAdmin) ...[TourStepId.employeesSearch, TourStepId.employeesAdd],
   ],
-  AdaptiveDestination.history => [if (isAdmin) TourStepId.historySearch],
-  AdaptiveDestination.liveMap => [
+  PushedDestination.history => [if (isAdmin) TourStepId.historySearch],
+  HubTab.liveMap => [
     if (isAdmin) ...[TourStepId.liveMapRoster, TourStepId.liveMapRecenter],
   ],
-  AdaptiveDestination.settings => [
+  PushedDestination.settings => [
     TourStepId.settingsAppearance,
     TourStepId.settingsNotifications,
     TourStepId.settingsReplay,

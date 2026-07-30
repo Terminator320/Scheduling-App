@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/features/auth/screens/forgot_password_screen.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
 import 'package:scheduling/features/calendar/screens/day_route_screen.dart';
@@ -76,7 +77,7 @@ class AppRoutes {
         final args = settings.arguments! as MainCalendarArgs;
         return _hubRoute(
           settings,
-          AdaptiveDestination.employees,
+          HubTab.employees,
           isAdmin: args.isAdmin,
           employeeId: args.employeeId,
         );
@@ -85,7 +86,7 @@ class AppRoutes {
         final args = settings.arguments! as ClientsListArgs;
         return _hubRoute(
           settings,
-          AdaptiveDestination.clients,
+          HubTab.clients,
           isAdmin: args.isAdmin,
           employeeId: args.employeeId,
         );
@@ -94,7 +95,7 @@ class AppRoutes {
         final args = settings.arguments! as HistoryArgs;
         return _hubRoute(
           settings,
-          AdaptiveDestination.history,
+          PushedDestination.history,
           isAdmin: args.isAdmin,
           employeeId: args.employeeId,
         );
@@ -103,7 +104,7 @@ class AppRoutes {
         final args = settings.arguments! as MainCalendarArgs;
         return _hubRoute(
           settings,
-          AdaptiveDestination.liveMap,
+          HubTab.liveMap,
           isAdmin: args.isAdmin,
           employeeId: args.employeeId,
         );
@@ -113,7 +114,7 @@ class AppRoutes {
         final args = settings.arguments! as SettingsArgs;
         return _hubRoute(
           settings,
-          AdaptiveDestination.settings,
+          PushedDestination.settings,
           isAdmin: args.role == 'admin',
           employeeId: args.employeeId,
           userName: args.name,

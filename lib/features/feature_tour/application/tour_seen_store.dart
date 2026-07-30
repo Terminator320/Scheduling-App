@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -24,7 +25,7 @@ class TourSeenController extends Notifier<Set<AdaptiveDestination>> {
       final prefs = await SharedPreferences.getInstance();
       final names = prefs.getStringList(_keyTourSeenTabs) ?? const [];
       state = {
-        for (final tab in AdaptiveDestination.values)
+        for (final tab in allDestinations)
           if (names.contains(tab.name)) tab,
       };
     } catch (e, st) {

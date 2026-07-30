@@ -1,7 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
@@ -193,7 +194,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
     final statusColors = theme.statusColors;
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
-    void go(AdaptiveDestination destination) =>
+    void go(AppDestination destination) =>
         _goTo(context, destination, displayName, displayEmail);
 
     return [
@@ -208,7 +209,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
           icon: Icons.calendar_today_rounded,
           iconColor: scheme.primary,
           label: context.l10n.common_calendar,
-          onTap: () => go(AdaptiveDestination.calendar),
+          onTap: () => go(HubTab.calendar),
         ),
       ),
       if (widget.isAdmin) ...[
@@ -218,7 +219,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             icon: Icons.people_rounded,
             iconColor: statusColors.success,
             label: context.l10n.common_clients,
-            onTap: () => go(AdaptiveDestination.clients),
+            onTap: () => go(HubTab.clients),
           ),
         ),
         Padding(
@@ -227,7 +228,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             icon: Icons.badge_rounded,
             iconColor: statusColors.accent,
             label: context.l10n.common_employees,
-            onTap: () => go(AdaptiveDestination.employees),
+            onTap: () => go(HubTab.employees),
           ),
         ),
         Padding(
@@ -236,7 +237,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             icon: Icons.history_rounded,
             iconColor: statusColors.warning,
             label: context.l10n.common_history,
-            onTap: () => go(AdaptiveDestination.history),
+            onTap: () => go(PushedDestination.history),
           ),
         ),
         Padding(
@@ -245,7 +246,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
             icon: Icons.map_rounded,
             iconColor: scheme.primary,
             label: context.l10n.common_liveMap,
-            onTap: () => go(AdaptiveDestination.liveMap),
+            onTap: () => go(HubTab.liveMap),
           ),
         ),
         Padding(
@@ -286,7 +287,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
           icon: Icons.settings_rounded,
           iconColor: scheme.onSurfaceVariant,
           label: context.l10n.common_settings,
-          onTap: () => go(AdaptiveDestination.settings),
+          onTap: () => go(PushedDestination.settings),
         ),
       ),
       SizedBox(height: bottomPadding + 4),
@@ -295,7 +296,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
 
   void _goTo(
     BuildContext context,
-    AdaptiveDestination destination,
+    AppDestination destination,
     String displayName,
     String displayEmail,
   ) {
@@ -308,7 +309,7 @@ class _SettingsDrawerState extends ConsumerState<SettingsDrawer> {
       userEmail: displayEmail,
     );
     // The calendar is the root screen - replace it instead of stacking.
-    if (destination == AdaptiveDestination.calendar) {
+    if (destination == HubTab.calendar) {
       Navigator.pushReplacementNamed(
         context,
         target.route,

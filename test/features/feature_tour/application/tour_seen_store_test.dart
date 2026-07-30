@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/features/feature_tour/application/tour_seen_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -25,7 +26,7 @@ void main() {
     await container.read(tourSeenProvider.notifier).ready;
     expect(
       container.read(tourSeenProvider),
-      {AdaptiveDestination.calendar, AdaptiveDestination.settings},
+      {HubTab.calendar, PushedDestination.settings},
     );
   });
 
@@ -34,10 +35,10 @@ void main() {
     container = newContainer();
     final notifier = container.read(tourSeenProvider.notifier);
     await notifier.ready;
-    await notifier.markSeen(AdaptiveDestination.clients);
+    await notifier.markSeen(HubTab.clients);
     expect(
       container.read(tourSeenProvider),
-      contains(AdaptiveDestination.clients),
+      contains(HubTab.clients),
     );
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getStringList('tour_seen_tabs'), contains('clients'));
@@ -62,6 +63,6 @@ void main() {
     });
     container = newContainer();
     await container.read(tourSeenProvider.notifier).ready;
-    expect(container.read(tourSeenProvider), {AdaptiveDestination.calendar});
+    expect(container.read(tourSeenProvider), {HubTab.calendar});
   });
 }
