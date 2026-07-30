@@ -91,7 +91,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Widget _tourStep(TourStepId id, {required Widget child}) => TourShowcase(
     showcaseKey: _tourKeys[id]!,
-    tab: PushedDestination.settings,
+    destination: PushedDestination.settings,
     id: id,
     index: _tourSteps.indexOf(id),
     count: _tourSteps.length,
@@ -326,7 +326,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   @override
   Widget build(BuildContext context) {
     return FeatureTourHost(
-      tab: PushedDestination.settings,
+      destination: PushedDestination.settings,
       isAdmin: _isAdmin,
       stepKeys: _tourKeys,
       autoScroll: true,

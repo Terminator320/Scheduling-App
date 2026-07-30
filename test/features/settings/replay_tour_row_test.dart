@@ -69,7 +69,13 @@ void main() {
     await tester.drag(masterScrollable, const Offset(0, -80));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Replay app tour'));
-    await tester.pumpAndSettle();
+    // Settings is a pushed route now, so clearing the flags immediately
+    // restarts its tour; the showcase overlay animates continuously, which
+    // would make pumpAndSettle time out. Bounded pumps flush the async save
+    // and let showcase's auto-scroll settle before the harness tears down.
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 500));
+    }
 
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getStringList('tour_seen_tabs'), isEmpty);

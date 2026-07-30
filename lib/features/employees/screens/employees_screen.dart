@@ -59,7 +59,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     BorderRadius? targetBorderRadius,
   }) => TourShowcase(
     showcaseKey: _tourKeys[id]!,
-    tab: HubTab.employees,
+    destination: HubTab.employees,
     id: id,
     index: _tourSteps.indexOf(id),
     count: _tourSteps.length,
@@ -159,7 +159,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
       bottom: _tourSteps.contains(TourStepId.employeesSearch)
           ? TourShowcaseBar(
               showcaseKey: _tourKeys[TourStepId.employeesSearch]!,
-              tab: HubTab.employees,
+              destination: HubTab.employees,
               id: TourStepId.employeesSearch,
               index: _tourSteps.indexOf(TourStepId.employeesSearch),
               count: _tourSteps.length,
@@ -286,7 +286,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     });
     final selected = _liveSelectedEmployee();
     return FeatureTourHost(
-      tab: HubTab.employees,
+      destination: HubTab.employees,
       isAdmin: widget.isAdmin,
       stepKeys: _tourKeys,
       child: Scaffold(

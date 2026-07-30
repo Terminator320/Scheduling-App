@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,18 +16,30 @@ import 'package:shared_preferences/shared_preferences.dart';
 class _FakeShell implements HubTabSelector {
   @override
   void select(
-    AdaptiveDestination destination, {
+    HubTab tab, {
     required bool isAdmin,
     required String employeeId,
     String userName = '',
     String userEmail = '',
   }) {}
+
+  @override
+  void selectAndReveal(
+    HubTab tab, {
+    required bool isAdmin,
+    required String employeeId,
+    String userName = '',
+    String userEmail = '',
+  }) {}
+
+  @override
+  void goHome() {}
 }
 
 void main() {
   Widget harness({
-    required AdaptiveDestination current,
-    required AdaptiveDestination tab,
+    required HubTab current,
+    required AppDestination destination,
     required Map<TourStepId, GlobalKey> stepKeys,
     required Widget child,
     required ProviderContainer container,
@@ -44,7 +58,7 @@ void main() {
           shell: _FakeShell(),
           current: current,
           child: FeatureTourHost(
-            tab: tab,
+            destination: destination,
             isAdmin: true,
             stepKeys: stepKeys,
             child: Scaffold(body: child),
@@ -68,12 +82,12 @@ void main() {
     await tester.pumpWidget(
       harness(
         current: HubTab.calendar, // another tab is visible
-        tab: HubTab.clients,
+        destination: HubTab.clients,
         stepKeys: {TourStepId.clientsSearch: key},
         container: container,
         child: TourShowcase(
           showcaseKey: key,
-          tab: HubTab.clients,
+          destination: HubTab.clients,
           id: TourStepId.clientsSearch,
           index: 0,
           count: 2,
@@ -98,7 +112,7 @@ void main() {
     await tester.pumpWidget(
       harness(
         current: HubTab.clients,
-        tab: HubTab.clients,
+        destination: HubTab.clients,
         stepKeys: {TourStepId.clientsSearch: GlobalKey()}, // never attached
         container: container,
         child: const Text('no showcase targets here'),
@@ -122,7 +136,7 @@ void main() {
     await tester.pumpWidget(
       harness(
         current: HubTab.clients,
-        tab: HubTab.clients,
+        destination: HubTab.clients,
         stepKeys: {
           TourStepId.clientsSearch: searchKey,
           TourStepId.clientsAdd: addKey,
@@ -132,7 +146,7 @@ void main() {
           children: [
             TourShowcase(
               showcaseKey: searchKey,
-              tab: HubTab.clients,
+              destination: HubTab.clients,
               id: TourStepId.clientsSearch,
               index: 0,
               count: 2,
@@ -140,7 +154,7 @@ void main() {
             ),
             TourShowcase(
               showcaseKey: addKey,
-              tab: HubTab.clients,
+              destination: HubTab.clients,
               id: TourStepId.clientsAdd,
               index: 1,
               count: 2,
@@ -166,12 +180,12 @@ void main() {
     await tester.pumpWidget(
       harness(
         current: HubTab.clients,
-        tab: HubTab.clients,
+        destination: HubTab.clients,
         stepKeys: {TourStepId.clientsSearch: key},
         container: container,
         child: TourShowcase(
           showcaseKey: key,
-          tab: HubTab.clients,
+          destination: HubTab.clients,
           id: TourStepId.clientsSearch,
           index: 0,
           count: 2,
@@ -183,4 +197,74 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Find a client'), findsNothing);
   });
+
+  testWidgets(
+    'a pushed destination gates on its own route being current, not on the '
+    'hub scope',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final container = newContainer();
+      final navigatorKey = GlobalKey<NavigatorState>();
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            navigatorKey: navigatorKey,
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const Scaffold(body: Text('root')),
+          ),
+        ),
+      );
+
+      // Both pushes in one batch, so the toured route is never momentarily
+      // on top — otherwise it gets a legitimate window to start.
+      unawaited(
+        navigatorKey.currentState!.push(
+          MaterialPageRoute<void>(
+            builder: (_) => FeatureTourHost(
+              destination: PushedDestination.settings,
+              isAdmin: true,
+              // Never attached, so a start would mark seen instead.
+              stepKeys: {TourStepId.settingsAppearance: GlobalKey()},
+              child: const Scaffold(body: Text('settings-body')),
+            ),
+          ),
+        ),
+      );
+      unawaited(
+        navigatorKey.currentState!.push(
+          MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(body: Text('on-top')),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.text('on-top'), findsOneWidget);
+      expect(
+        container.read(tourSeenProvider),
+        isNot(contains(PushedDestination.settings)),
+        reason: 'a buried route must not start its tour',
+      );
+
+      // Popping back makes the route current again, re-opening the gate.
+      navigatorKey.currentState!.pop();
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(tester.takeException(), isNull);
+      expect(
+        container.read(tourSeenProvider),
+        contains(PushedDestination.settings),
+      );
+    },
+  );
 }

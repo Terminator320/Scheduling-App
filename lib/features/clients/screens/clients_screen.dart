@@ -51,7 +51,7 @@ class _ListInformationState extends State<ListInformation> {
     BorderRadius? targetBorderRadius,
   }) => TourShowcase(
     showcaseKey: _tourKeys[id]!,
-    tab: HubTab.clients,
+    destination: HubTab.clients,
     id: id,
     index: _tourSteps.indexOf(id),
     count: _tourSteps.length,
@@ -98,7 +98,7 @@ class _ListInformationState extends State<ListInformation> {
       hintText: context.l10n.clients_searchByNameOrPhone,
     );
     return FeatureTourHost(
-      tab: HubTab.clients,
+      destination: HubTab.clients,
       isAdmin: widget.isAdmin,
       stepKeys: _tourKeys,
       child: Scaffold(
@@ -109,7 +109,7 @@ class _ListInformationState extends State<ListInformation> {
           bottom: _tourSteps.contains(TourStepId.clientsSearch)
               ? TourShowcaseBar(
                   showcaseKey: _tourKeys[TourStepId.clientsSearch]!,
-                  tab: HubTab.clients,
+                  destination: HubTab.clients,
                   id: TourStepId.clientsSearch,
                   index: _tourSteps.indexOf(TourStepId.clientsSearch),
                   count: _tourSteps.length,

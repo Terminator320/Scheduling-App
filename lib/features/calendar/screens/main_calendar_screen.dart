@@ -234,7 +234,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     BorderRadius? targetBorderRadius,
   }) => TourShowcase(
     showcaseKey: _tourKeys[id]!,
-    tab: HubTab.calendar,
+    destination: HubTab.calendar,
     id: id,
     index: _tourSteps.indexOf(id),
     count: _tourSteps.length,
@@ -308,7 +308,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     final data = _prepareBuild(context);
 
     return FeatureTourHost(
-      tab: HubTab.calendar,
+      destination: HubTab.calendar,
       isAdmin: widget.isAdmin,
       ready: !data.isLoading,
       stepKeys: _tourKeys,

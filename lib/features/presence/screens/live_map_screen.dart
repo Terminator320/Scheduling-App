@@ -113,7 +113,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     BorderRadius? targetBorderRadius,
   }) => TourShowcase(
     showcaseKey: _tourKeys[id]!,
-    tab: HubTab.liveMap,
+    destination: HubTab.liveMap,
     id: id,
     index: _tourSteps.indexOf(id),
     count: _tourSteps.length,
@@ -155,7 +155,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     }
 
     return FeatureTourHost(
-      tab: HubTab.liveMap,
+      destination: HubTab.liveMap,
       isAdmin: widget.isAdmin,
       ready: _mapTargetsRendered,
       stepKeys: _tourKeys,
