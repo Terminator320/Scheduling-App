@@ -66,8 +66,8 @@ class _SignupCodeDialogState extends State<_SignupCodeDialog> {
           child: SelectableText(
             widget.code,
             textAlign: TextAlign.center,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontFamily: 'monospace',
+            style: theme.monoType.data.copyWith(
+              fontSize: 19,
               letterSpacing: 2,
               fontWeight: FontWeight.w600,
             ),

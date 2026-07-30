@@ -62,7 +62,7 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
     _isAdmin = e?.isAdmin ?? false;
     _isDisabled = e?.isDisabled ?? false;
     _selectedColor =
-        e?.color.toARGB32() ?? AppColors.employeePalette.first.toARGB32();
+        e?.color.toARGB32() ?? AppColors.crewPalette.first.toARGB32();
   }
 
   @override

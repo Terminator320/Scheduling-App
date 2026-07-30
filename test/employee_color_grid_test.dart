@@ -20,7 +20,7 @@ Widget _wrap(Widget child) => ProviderScope(
 );
 
 void main() {
-  const palette = AppColors.employeePalette;
+  const palette = AppColors.crewPalette;
 
   testWidgets('renders every palette swatch plus the custom button', (
     tester,
