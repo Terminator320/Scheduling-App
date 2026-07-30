@@ -2,21 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
-import 'package:scheduling/core/navigation/app_destination.dart';
-import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
+import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/fields/month_year_picker.dart';
-import 'package:scheduling/features/calendar/widgets/views/app_calendar_view.dart';
+import 'package:scheduling/features/calendar/widgets/views/calendar_month_pager.dart';
 import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
@@ -29,7 +32,6 @@ import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/error_snack_bar.dart';
-import 'package:table_calendar/table_calendar.dart';
 
 class MainCalendar extends ConsumerStatefulWidget {
   const MainCalendar({
@@ -46,7 +48,6 @@ class MainCalendar extends ConsumerStatefulWidget {
 }
 
 class _MainCalendarState extends ConsumerState<MainCalendar> {
-
   final ValueNotifier<List<AppointmentRecord>> _selectedEvents = ValueNotifier(
     [],
   );
@@ -118,18 +119,17 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     );
   }
 
-  // Show the "today" FAB whenever the visible month isn't the current one — keyed on year+month, not the exact day.
-  bool get _showTodayButton {
-    final now = DateTime.now();
-    return _focusedDay.year != now.year || _focusedDay.month != now.month;
-  }
+  // Show the "today" control whenever the visible month isn't the current one
+  // — keyed on year+month, not the exact day. [today] comes from
+  // currentDayProvider, so it re-derives across midnight.
+  bool _showTodayButton(DateTime today) =>
+      _focusedDay.year != today.year || _focusedDay.month != today.month;
 
-  void _goToToday() {
-    final now = DateTime.now();
+  void _goToToday(DateTime today) {
     setState(() {
-      _focusedDay = now;
-      _selectedDay = now;
-      _appointmentRange = AppointmentDateRange.visibleMonth(now);
+      _focusedDay = today;
+      _selectedDay = today;
+      _appointmentRange = AppointmentDateRange.visibleMonth(today);
     });
   }
 
@@ -172,15 +172,14 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     return _dayIndex?[key] ?? const <AppointmentRecord>[];
   }
 
-  void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
-    if (!isSameDay(_selectedDay, selectedDay)) {
-      final newRange = AppointmentDateRange.visibleMonth(focusedDay);
-      setState(() {
-        _selectedDay = selectedDay;
-        _focusedDay = focusedDay;
-        if (newRange != _appointmentRange) _appointmentRange = newRange;
-      });
-    }
+  void _onDaySelected(DateTime selectedDay) {
+    if (isSameDate(_selectedDay ?? _focusedDay, selectedDay)) return;
+    final newRange = AppointmentDateRange.visibleMonth(selectedDay);
+    setState(() {
+      _selectedDay = selectedDay;
+      _focusedDay = selectedDay;
+      if (newRange != _appointmentRange) _appointmentRange = newRange;
+    });
   }
 
   // Only log on the data→error transition — .when would otherwise fire this on every rebuild while the stream stays errored.
@@ -259,12 +258,16 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     bool isLoading,
     String monthLabel,
     String jobLabel,
+    DateTime today,
   })
   _prepareBuild(BuildContext context) {
     final appointmentsAsync = ref.watch(_appointmentsProvider);
     final userName = ref.watch(currentUserNameProvider);
     final colorMap = ref.watch(employeeColorMapProvider);
     final nameMap = ref.watch(employeeNameMapProvider);
+    // Watched, not DateTime.now(): the appointments stream only re-emits on a
+    // write, so an app left open across midnight would keep circling yesterday.
+    final today = ref.watch(currentDayProvider);
 
     // Error logging is owned by the onAsyncChange listener in build.
     final visibleAppointments =
@@ -289,6 +292,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       isLoading: appointmentsAsync.isLoading,
       monthLabel: _monthLabelFormat.format(_focusedDay),
       jobLabel: context.l10n.calendar_appointmentCount(selectedEvents.length),
+      today: today,
     );
   }
 
@@ -344,13 +348,14 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
                 isLoading: data.isLoading,
                 colorMap: data.colorMap,
                 nameMap: data.nameMap,
+                today: data.today,
               ),
               Positioned(
                 bottom: AppSpacing.sp16,
                 left: AppSpacing.sp16,
                 child: _TodayFab(
-                  visible: _showTodayButton,
-                  onPressed: _goToToday,
+                  visible: _showTodayButton(data.today),
+                  onPressed: () => _goToToday(data.today),
                 ),
               ),
             ],
@@ -399,18 +404,17 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     );
   }
 
-  Widget _buildCalendar(Map<String, Color> colorMap, double rowHeight) =>
+  Widget _buildCalendar(Map<String, Color> colorMap, DateTime today) =>
       _tourStep(
         TourStepId.calendarGrid,
-        child: AppCalendar(
-          focusedDay: _focusedDay,
-          selectedDay: _selectedDay,
+        child: CalendarMonthPager(
+          month: _focusedDay,
+          selectedDay: _selectedDay ?? _focusedDay,
+          today: today,
           onDaySelected: _onDaySelected,
-          rowHeight: rowHeight,
-          eventLoader: _getEventsForDay,
-          onCalendarCreated: (_) {},
-          onPageChanged: _setFocusedDay,
-          employeeColorMap: colorMap,
+          onMonthChanged: _setFocusedDay,
+          dotColorsFor: (day) => dayCrewColors(_getEventsForDay(day), colorMap),
+          countFor: (day) => _getEventsForDay(day).length,
         ),
       );
 
@@ -418,6 +422,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     required bool isLoading,
     required Map<String, Color> colorMap,
     required Map<String, String> nameMap,
+    required DateTime today,
   }) {
     final eventList = _tourStep(
       TourStepId.calendarDayList,
@@ -437,18 +442,11 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         children: [
           Expanded(
             flex: 11,
+            // The grid derives its own height from the scaled day number, so
+            // the pane scrolls rather than clipping at large text sizes.
             child: PrimaryScrollScope(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  // Size month rows to the pane's height — compact on landscape phones, more comfortable on tablets.
-                  final rowHeight = ((constraints.maxHeight - 40) / 6).clamp(
-                    40.0,
-                    88.0,
-                  );
-                  return SingleChildScrollView(
-                    child: _buildCalendar(colorMap, rowHeight),
-                  );
-                },
+              child: SingleChildScrollView(
+                child: _buildCalendar(colorMap, today),
               ),
             ),
           ),
@@ -462,22 +460,12 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Size week rows to the body's height, not the full screen, so the calendar doesn't overflow or starve the event list of space.
-        final rowHeight = ((constraints.maxHeight * 0.55 - 36) / 6).clamp(
-          36.0,
-          56.0,
-        );
-        return Column(
-          children: [
-            _buildCalendar(colorMap, rowHeight),
-            const SizedBox(height: AppSpacing.sp12),
-            const Divider(),
-            eventList,
-          ],
-        );
-      },
+    return Column(
+      children: [
+        _buildCalendar(colorMap, today),
+        const Divider(height: 1),
+        eventList,
+      ],
     );
   }
 }

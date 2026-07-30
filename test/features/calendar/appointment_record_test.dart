@@ -133,16 +133,29 @@ void main() {
   });
 
   group('AppointmentDateRange.visibleMonth', () {
-    test('starts a week before the 1st of the month', () {
+    test('starts two weeks before the 1st of the month', () {
       final focus = DateTime(2026, 5, 9);
       final range = AppointmentDateRange.visibleMonth(focus);
-      expect(range.start, DateTime(2026, 4, 24));
+      expect(range.start, DateTime(2026, 4, 17));
     });
 
-    test('ends a week after the 1st of the next month', () {
+    test('ends two weeks after the 1st of the next month', () {
       final focus = DateTime(2026, 5, 9);
       final range = AppointmentDateRange.visibleMonth(focus);
-      expect(range.end, DateTime(2026, 6, 8));
+      expect(range.end, DateTime(2026, 6, 15));
+    });
+
+    test('covers the maximum trail a 42-cell grid can show', () {
+      // February 2026 starts on a Sunday: 0 lead cells and 28 days, so the
+      // grid runs a full 14 days into March — the worst trailing case.
+      final range = AppointmentDateRange.visibleMonth(DateTime(2026, 2, 10));
+      expect(range.end.isAfter(DateTime(2026, 3, 14)), isTrue);
+    });
+
+    test('covers the maximum lead a 42-cell grid can show', () {
+      // 1 Aug 2026 is a Saturday: 6 lead cells reach back to 26 July.
+      final range = AppointmentDateRange.visibleMonth(DateTime(2026, 8, 4));
+      expect(range.start.isBefore(DateTime(2026, 7, 26)), isTrue);
     });
 
     test('two ranges over the same focused month are equal', () {

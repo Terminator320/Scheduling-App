@@ -107,10 +107,16 @@ class AppointmentDateRange {
     final firstOfMonth = DateTime(focusedDay.year, focusedDay.month);
     final firstOfNextMonth = DateTime(focusedDay.year, focusedDay.month + 1);
     return AppointmentDateRange(
-      start: firstOfMonth.subtract(const Duration(days: 7)),
-      end: firstOfNextMonth.add(const Duration(days: 7)),
+      start: firstOfMonth.subtract(_gridOverscan),
+      end: firstOfNextMonth.add(_gridOverscan),
     );
   }
+
+  /// A 42-cell month grid shows up to 6 leading and 14 trailing days (the
+  /// worst case being a 28-day February that starts on the week start), so the
+  /// fetch has to reach further than the month itself or those cells render
+  /// dotless.
+  static const Duration _gridOverscan = Duration(days: 14);
 
   final DateTime start;
   final DateTime end;
