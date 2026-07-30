@@ -34,7 +34,8 @@ implementation plan when its turn comes.
 | Density as a user setting | Fixed at **Balanced** | YAGNI; the tokens keep the three values so a setting can come later. |
 | Role-preview segmented control on My details | Not shipped | The handoff itself marks it review-only. Role comes from auth. |
 | `+ ADD` photo tile in the detail sheet for everyone | **Admin-only** | Assignee rules only allow `status`/`updatedAt` writes; an employee add would be `permission-denied`. |
-| Instrument Sans / IBM Plex Mono "or equivalents" | Exactly those two, **bundled as assets** | google_fonts runtime-fetch is already on the audit backlog; bundling closes it. |
+| Instrument Sans / IBM Plex Mono "or equivalents" | Exactly those two, **bundled as assets** | Inter is already bundled with runtime fetching disabled, so this is a straight family swap: add the two font families to pubspec, repoint `themes.dart`, and add a theme-level mono/data text-style token (none exists — without it every "mono" in the design silently falls back to the sans). |
+| Live inline conflict banner in the job form ("a warning, not a block") | **Keep the save-time conflict dialog, restyled**; extend the check to the edit flow (today it's add-only and first-occurrence-only) | The dialog is already non-blocking in outcome ("Schedule anyway"). A live banner means a debounced `findBusyEmployees` round-trip on every chip/time change plus a repo signature change (it returns employees, not the conflicting windows the banner copy quotes). Revisit after P2. |
 | Invite code always visible on the Team pending row | **Re-issue on view** — a "Show code" action mints a fresh code via `createEmployeeInvite`'s existing idempotent re-issue and displays it; the old code stops working | Storage stays sha256-only (`signupCodes/{hash}`); persisting plaintext would let any admin-session read harvest pending codes. Owner decision 2026-07-29. |
 | Invite **email** (template, deep-link button, store fallback) | **Deferred to its own project** — this program ships the code path only (entry screen, acceptance, Team row, resend/revoke); admins share codes out-of-band as today | No email infrastructure exists; provider choice (SendGrid vs Trigger-Email extension) is shared with the parked client-reminders project and deserves its own pass. Owner decision 2026-07-29. |
 | 6-character invite code, six entry boxes | **12 chars kept**, entry rendered as three groups of four boxes | Existing codes are Crockford base32 `XXXX-XXXX-XXXX` (~60 bits); 6 chars is 30 bits. Rate-limit + email binding would arguably cover it, but not worth weakening for aesthetics — overridable in the P4b plan. Hash normalization already strips dashes/case. |
@@ -93,36 +94,105 @@ per-kind haptic are unchanged. Dot colours: mint success · `#7FCBFF` info · `#
 
 **Hub restructure.** Hub tabs shrink to **Calendar · Clients · Team · Live map** (persistent
 `IndexedStack`). **History and Settings become pushed routes** alongside Dashboard, Day route,
-Time off, My details, client detail, employee detail. Handled consequences:
+Time off, My details, client detail, employee detail. Handled consequences (verified against the
+code 2026-07-29):
 
-- Feature tours: History and Settings lose their hub-tab tour scopes; their tours re-host on the
-  pushed screens (or retire for this pass — decide per-screen in the P1 plan). `tourStepsFor`
-  catalogs and key wiring updated for any moved/removed target.
-- `PrimaryScrollScope` re-checked for every simultaneously-mounted scrollable that remains.
-- FAB `heroTag`s stay unique per mounted surface (`addFab`, `todayFab`, `clientsAddFab`,
-  `employeesAddFab`, `liveMapRosterFab`, `liveMapRecenterFab` — renames tracked in the plan).
-- `HubTabRedirectRoute` mappings updated for the new tab set; Android back / iOS edge swipe still
-  return to Calendar.
+- **The `IndexedStack` index is currently the raw `AdaptiveDestination` enum ordinal**
+  (`hub_shell.dart` iterates `AdaptiveDestination.values`; `index: _current.index`). Shrinking to
+  4 tabs while `destinationRoute`/drawer nav/tour scopes still need `history`/`settings` members
+  requires an explicit hub-tab list + `indexOf` (or a split tab-vs-pushed enum) — the ordinal
+  coupling must go. `AppRoutes.history`/`.settings` stop calling `_hubRoute` and become plain
+  `AppPageRoute`s. `hub_shell_test.dart` selects `.settings`/`.history` and breaks; so does
+  `tour_definitions_test.dart`'s "every enum value has an admin tour" assertion.
+- **The Calendar pill needs a composite go-home helper, not `select()` alone**:
+  `closeEndDrawer()` → `HubShell.liveState.showCalendar()` → `popUntil` — with a root-safety guard,
+  because `popUntil(isFirst)` is wrong on the `_hubRoute` fallback branch where the shell is not
+  route #1. Two dispatch paths: `HubShellScope` on tab screens, static `HubShell.liveState` on
+  pushed screens (the Dashboard back button is the existing precedent).
+- **Feature tours on pushed routes need a new host gate.** `FeatureTourHost` gates on
+  `HubShellScope.currentOf`, which is null on a pushed route — the Settings/History tours would
+  silently never start (Settings is one of only two employee tours). Decision: add a
+  route-current gate mode (`ModalRoute.isCurrent`) and widen the scope/seen key beyond
+  `AdaptiveDestination`; keep both tours.
+- **Placing the header pair in `actions` on every screen kills Flutter's auto `EndDrawerButton`**
+  (four screens rely on it today) — every screen wires `openEndDrawer` explicitly and gains a
+  `GlobalKey<ScaffoldState>` where missing (7 of 9). Settings and the text-size sub-page have no
+  drawer at all today and get one. The new drawer header reads identity from live providers
+  (`currentUserNameProvider` / auth) — never feed it back through `select()`, which would nuke the
+  hub's screen cache mid-session.
+- New pushed screens (History, Settings, Time off, My details, detail pages) each get their own
+  `PrimaryScrollScope` — a pushed route sits above the tab scopes and would otherwise attach to
+  the root controller.
+- FAB `heroTag`s stay unique across tabs **and pushed routes** (pushed screens don't unmount the
+  hub). Current set: `addFab`, `todayFab`, `clientsAddFab`, `employeesAddFab`, `liveMapRosterFab`,
+  `liveMapRecenterFab`; History/Settings have none, so the restructure itself changes nothing.
+- Android back / iOS edge swipe still return to Calendar (`PopScope` + the hand-rolled edge swipe
+  in `hub_shell.dart`, which exempts the calendar tab because the calendar owns horizontal
+  swipes — see P2 month paging).
+- Dead code to remove with the rail: `AdaptiveShell`/`_RailEntry` only (the file also holds
+  `AdaptiveDestination`, `destinationRoute`, `HubTabSelector`, `HubShellScope`,
+  `navigateToDestination` — all load-bearing), plus `ResponsiveContext.isExpanded` and
+  `Breakpoints.expanded`, whose only consumer is the rail.
 - Stacking order per `02-navigation.md`: pushed page below status bar; sheets above; dropdown menu
   sheet above sheets; drawer above that; notice on top.
 
 ## P2 — Calendar
 
 - Fixed header block (never scrolls): mono `SCHEDULE` label, tappable month name + year + chevron →
-  **month/year picker** (not the prototype's tap-to-cycle), route icon button, hamburger.
+  the **existing `MonthYearPicker`** (already shipped — restyle only), route icon button, hamburger.
+  **The header is a custom widget outside `Scaffold.appBar`** — `AppTopBar`'s `PreferredSizeWidget`
+  contract can't host an animated week strip (static height per build; it would clip or jump), and
+  the design's white header block isn't a Material AppBar anyway.
 - Month grid: **42 cells always** (35 drops the end of months like August 2026), 2px gap, 46px
   cells, **32×32 day circle carries the selected fill** (not the cell), max-3 crew dots (5px)
-  coloured by who works that day, off-month cells blank and untappable.
-- Sticky collapse: grid is the first thing inside the scroll view; past 80px it unmounts and a week
+  coloured by who works that day, off-month cells blank and untappable. Replacing `table_calendar`
+  (blast radius: `app_calendar_view.dart`, two `isSameDay` imports, one test file, pubspec). The
+  custom grid must own what the package did:
+  - **horizontal month-swipe paging** (the hub's calendar-tab edge-swipe exemption assumes the
+    calendar owns horizontal drags);
+  - **locale-driven weekday headers** via `DateFormat` symbols — the design's hardcoded
+    `S M T W T F S` is wrong for fr_CA;
+  - **per-cell full-date `Semantics`** (the merged "date + N appointments" label is pinned by
+    `app_calendar_view_test.dart` — the only a11y coverage the grid has);
+  - **today from `currentDayProvider`**, never bare `DateTime.now()` — a grid that caches its
+    today index keeps yesterday circled past midnight (same for the Today pill's visibility).
+  - Crew dots need a new per-day **distinct-assignee** colour aggregation (derived beside the
+    existing `_dayIndex`) — today's dots are the first three *appointments* and any multi-crew job
+    renders grey (`colorFromMap` nulls on `employeeIds.length != 1`).
+- **Appointment fetch range widens from month ±7 to ±14 days** — a 42-cell grid shows up to 12
+  trailing days of the next month, which today's range would leave dotless.
+- Sticky collapse: grid is the first thing inside the scroll view (a structural change — the grid
+  is currently a non-scrolling sibling above the agenda list); past 80px it unmounts and a week
   strip (56px cells, 30×30 circles, one 4.5px dot) rises into the fixed header; a **150px spacer**
-  keeps scroll extent stable; re-expand arms past 44px and fires below 6px (anti-thrash).
+  keeps scroll extent stable; re-expand arms past 44px and fires below 6px (anti-thrash). Use an
+  explicit `ScrollController` on the agenda (it currently rides the tab's
+  `PrimaryScrollController`), and don't run collapse `setState`s while the tab is hidden
+  (`TickerMode` doesn't cover scroll listeners). Collapse applies to the portrait layout only —
+  the `isSplitLayout` month|agenda split keeps its two independent panes.
 - Agenda header: date title + mono `N JOBS` count.
-- **Appointment card** (single shared widget — agenda, history, client detail, employee detail,
-  day route, review sheet): white radius 15, 4px full-height crew bar, title + status chip row, mono
-  time range, 19px crew avatar + `"Crew · Client"` line (`Theo +1` for multi-crew). Cancelled =
-  strikethrough at 0.6 opacity. Keep the `IntrinsicHeight` constraint — title stays plain `Text`.
-- FAB (58×58, radius 20) + "Today" pill (popIn, only off-month). Status model unchanged: `overdue`
-  stays display-only and derived; `pending` renders as **"Scheduled"** (label change only, EN+FR).
+- **Appointment card** (single shared widget): white radius 15, 4px full-height crew bar (today
+  3px), title + status chip row, mono time range (en-dash; the merged semantics label and time
+  formatting change together), 19px crew avatar + `"Crew · Client"` line (`Theo +1` for
+  multi-crew; `clientName` is already denormalized on the record). **API change:** the card takes
+  a per-assignee `(name, color)` list instead of today's pre-resolved single colour + pre-joined
+  name string — 5 call sites (agenda, client job history, day route, dashboard ×2). **History's
+  `AppointmentTile` merges into the card**, porting `dimWhenCancelled` (strikethrough — currently
+  only the tile has it), `alwaysShowChip`, and reconciling both test suites. Cancelled =
+  strikethrough at 0.6 opacity. Keep the `IntrinsicHeight` constraint — title stays plain `Text`,
+  and no `LayoutBuilder`/`AutoSizeText`/`FittedBox` anywhere inside the card's row. The employee
+  detail `TODAY` panel and the P6 review sheet are new consumers, not restyles. (The iOS Live
+  Activity card mirrors this card's layout by hand — divergence is allowed but deliberate.)
+- **Detail sheet + job form restyle belong to P2** (new sheet chrome, mono when-line, action
+  tiles, info panel; form sections restyled in the form-sheet chrome). The busy-conflict UX keeps
+  the existing save-time dialog, restyled (see deviations) — and note the conflict check today is
+  add-flow-only and first-occurrence-only for repeats; extending it to the edit flow is in scope
+  for P2, the live inline banner is not.
+- FAB (58×58, radius 20) + "Today" pill (popIn, only off-month; today it's a never-unmounted FAB
+  hidden via scale/opacity — becomes a pill, keep the `find.byTooltip('Today')` test alive).
+  Status model unchanged: `overdue` stays display-only and derived. (`pending` → "Scheduled" is
+  **already shipped** — `status_pending` is "Scheduled"/"Planifié" in both ARBs; no work here.
+  The chip's fill moves from amber to the design's neutral grey — amber is reserved for time-off
+  Pending / employment Invited chips.)
 
 ## P3 — Clients (the flagged gap)
 
@@ -143,12 +213,33 @@ Time off, My details, client detail, employee detail. Handled consequences:
 still **never** emits `waveCustomerId`/`wave`/`jobCount`.
 
 **Archived hazard (the trap).** Existing docs lack the field and Firestore excludes docs missing a
-filter field — so **no `where('archived' == false)` anywhere**. The list page and search already
-match in Dart; archived filtering happens there too. Archived clients: hidden from the client list
-by default and from the appointment client picker; reachable via an "Archived" list filter; job
-history and past appointments untouched. `propagateClientEdits` behaviour unchanged (archived
-clients rarely get edits; if they do, propagation to future visits is correct anyway since
-archiving doesn't cancel anything).
+filter field — so **no `where('archived' == false)` anywhere**; filtering is Dart-side, and the
+test is always `!(archived ?? false)` (Wave-imported docs never carry the field). Verified against
+the code 2026-07-29, the filtering splits by surface:
+
+- **Search** matches in Dart already — one choke point (`matchClientDocs` in the repo, plus the
+  instant `_localFilter`/`ClientSearchPolicy.entryMatches` fallback). `searchClients` gains an
+  `includeArchived` flag because the appointment client picker shares it (via
+  `appointment_form_concerns.searchClients`, NOT `clientSearchProvider`).
+- **The paginated list does NOT match in Dart today** — and naive filtering there is a data-loss
+  bug: `clients_list_view.dart`'s `getNextPageKey` treats a page shorter than `_pageSize` as
+  end-of-list, so one archived doc in a page would permanently truncate the list. The page API
+  must carry the RAW server-page size separately from the filtered items (page object / over-fetch),
+  and the pagination cursor must stay the last **raw** doc — the `_pageBoundaryNames` legacy-
+  `businessName` cursor invariant depends on it.
+- **`getClientById` stays unfiltered** — editing an old appointment for an archived client must
+  still resolve its name/address.
+- The archive toggle routes through `ClientFormController.updateClient` so the search-cache
+  invalidation and `clientsRefreshProvider.bump()` both fire.
+
+Archived clients: hidden from the client list and the appointment picker; reachable via an
+"Archived" list filter; unarchive lives in the Edit sheet; job history and past appointments
+untouched. `propagateClientEdits` behaviour unchanged (it reads only name/phone/address and
+returns before any query when nothing relevant changed — an archive toggle costs zero reads).
+Wave: `importCustomers` merges (`{merge: true}`) so an import can't resurrect an archived client,
+and none of the new fields are in `mappedFieldsHash`, so archiving never enqueues a Wave sync;
+app-archived and Wave-archived stay independent (accepted). Archived clients still count in the
+dashboard "new clients" trend (they were new that month — accepted).
 
 **Delete** keeps its repository path and gains a confirm dialog; sits under Archive in the Edit
 sheet footer. Deleting orphans `clientName` on past appointments — the confirm copy says so.
@@ -189,12 +280,24 @@ rules-capped: `workingDays` (7 bools), `workStartMinutes`/`workEndMinutes`, `max
 (`workingDays`, hours, `onCall`, `emergencyContact`, `phone`) is admin-writable **and**
 self-service-writable (the P5 own-doc clause). The users-doc rules keep their four read clauses.
 
+**Names.** The invite + acceptance flows collect First/Last, but users docs have a single `name`
+and `watchAllUsers` orders by it (a doc missing `name` silently vanishes from the admin roster).
+So: add `firstName`/`lastName` fields AND **always keep writing the composed `name`** — never stop
+populating it. `EmployeeRecord.fromMap/toMap` need explicit wiring for every new field (`toMap` is
+currently test-only dead code; don't let a future `set()` call site erase fields — the live save
+path is a field-scoped `txn.update`, which is safe).
+
 **Screens.** Team list (40px colour avatar, `"<jobTitle> · <n> jobs today"`, Active/Invited chip);
-employee detail goes **read-only** (pushed on phones, pane under `isTwoPane`; profile card + Edit
-pill, info panel `COLOUR · PHONE · HOURS · ACCESS`, `TODAY` panel of their stops); **Edit person sheet** owns all editing — details, role
-chips, colour swatch grid (taken colours hidden, current selection always visible — matches
-`EmployeeColorGrid` behaviour today), availability (7 toggle cells + start/end + max jobs), ACCESS
-group (admin toggle + time-to-leave alerts), Disable account with the reassign-count caption.
+employee detail: **the read-only-detail + Edit-sheet split already exists today**
+(`employee_details_view` is read-only; editing is `EmployeeFormSheet`) — P4 restyles it and adds
+the new sections (pushed on phones, pane under `isTwoPane`; profile card + Edit pill, info panel
+`COLOUR · PHONE · HOURS · ACCESS`, `TODAY` panel of their stops — a new appointment-card
+consumer); **Edit person sheet** gains — details, role chips, colour swatch grid (taken colours
+hidden, current selection always visible — matches `EmployeeColorGrid` behaviour today; while
+here, fix the pre-existing quirk that `usedColors` comes from `watchEmployees()`, which filters to
+active — a **disabled** employee's colour isn't counted as taken and can be double-assigned),
+availability (7 toggle cells + start/end + max jobs), ACCESS group (admin toggle + time-to-leave
+alerts), Disable account with the reassign-count caption.
 **Invite sheet** restyled (first/last, work email, role chips, colour grid with "N colours left"
 caption, admin toggle off by default, amber invited note); the signup-code flow
 (`createEmployeeInvite` → copy dialog) is unchanged at this stage — P4b then adds the
@@ -220,13 +323,26 @@ your account? ask your admin" note) and sent (`riseIn`; expiry + signs-out-every
 `forgot_password_screen` flow underneath; `AuthFailure.isExpected` /
 `logger.authFailure` conventions unchanged.
 
-**Accept your invite — code entry.** Pushed from sign-in, or prefilled by deep link
-(`esproschedule://invite?code=...` — new route in `AppRoutes.onGenerateRoute`; the https
-store-fallback page ships with the deferred email project). Twelve mono boxes in three groups of
-four (deviation above), not case-sensitive (hash normalization already uppercases + strips
-dashes). CTA relabels "Enter the code" → "Continue" when full; a bad code turns every box red with
-the expiry explanation. `DON'T HAVE A CODE?` panel copy adjusted for the no-email reality (the
-admin reads it off the Team page).
+**Accept your invite — code entry.** Pushed from sign-in, or prefilled by deep link. Twelve mono
+boxes in three groups of four (deviation above), not case-sensitive (hash normalization already
+uppercases + strips dashes). CTA relabels "Enter the code" → "Continue" when full; a bad code
+turns every box red with the expiry explanation. `DON'T HAVE A CODE?` panel copy adjusted for the
+no-email reality (the admin reads it off the Team page).
+
+**Deep link — this is a delivery layer, not a route** (verified 2026-07-29: no URL ever reaches
+Dart today). `esproschedule://invite?code=...` needs ALL of: an **Android `intent-filter`** for
+the scheme (none exists — the manifest is MAIN/LAUNCHER only); an **iOS delivery path**
+(`FlutterDeepLinkingEnabled` is explicitly `false`, `AppDelegate` has no `open url` override, and
+the `home_widget` plugin's handler rejects any URL without a `homeWidget` query param); a **Dart
+URL listener/parser** (none exists — no app_links/uni_links); a `code` parameter + **named route**
+for `CreateAccountScreen` (today it's an anonymous `MaterialPageRoute` taking only
+`initialEmail`); and a **signed-out dispatch path** — the existing `_openAppointmentDeepLink`
+returns immediately when `currentUser == null` and then waits on a live `HubShell`, both of which
+an invite link must bypass (route to the code screen pre-auth instead). While in there: the three
+iOS URL producers (home-screen widget, Siri snapshot, Live Activity) emit
+`esproschedule://appointment?id=…` **without** the `homeWidget` param the plugin requires, so
+those taps likely do nothing today — verify on device and route them through the new delivery
+layer. The https store-fallback page still ships with the deferred email project.
 
 **Accept your invite — details.** Invite banner (who invited you, role, scope caption), first/last
 split row, phone, password with a 4-segment strength meter (client-side), then the combined
@@ -266,9 +382,15 @@ editable SCHEDULING panel; for technicians it is **hidden entirely**.
 
 **Rules.** A user may update **only** the self-service keys on their own doc —
 `affectedKeys().hasOnly(['phone', 'emergencyContact', 'workingDays', 'workStartMinutes',
-'workEndMinutes', 'onCall', 'updatedAt'])` under `uid == request.auth.uid` — scheduling fields
-(role, jobTitle, colour, maxJobsPerDay, status) stay admin-only. Nothing is ever auto-unassigned:
-availability changes notify (inline warning + P7 dashboard flag), a human moves the jobs.
+'workEndMinutes', 'onCall', 'updatedAt'])` under `resource.data.uid == request.auth.uid` —
+scheduling fields (role, jobTitle, colour, maxJobsPerDay, status) stay admin-only. Verified
+2026-07-29: no self-update clause exists today (clean add), the admin update clause is a
+denylist (`hasAny(['uid'])`) plus three per-field validators — new typed fields get the same
+opt-in `!('x' in keys()) || <check>` guards — and **`allow create` currently has zero field
+validation**, so the new caps must be applied to create as well (or creates stay the loophole).
+The two "only an admin can write" rule comments become wrong and must be updated. Nothing is ever
+auto-unassigned: availability changes notify (inline warning + P7 dashboard flag), a human moves
+the jobs.
 
 ## P6 — Time off (new feature)
 
@@ -298,6 +420,20 @@ updates status pending→approved / pending→declined, **decline requires a non
   the P6 plan).
 - **Pushes:** request-created (to admins) and decision (to the employee) ride the existing FCM
   pipeline in `notifications.js`, with per-recipient idempotency ledgers like the existing kinds.
+  Verified 2026-07-29, four concrete requirements: (1) `sendToEmployee` is single-recipient and
+  **no admin fan-out helper or `where('role')` query exists in functions/** — the request-created
+  push needs a new active-admins query and a ledger id keyed per admin docId (or one admin's claim
+  suppresses the rest); the role filter itself won't fight it — callers pass their own role set,
+  like the timed sweeps do. (2) New kinds MUST be added to the `_MESSAGES` table in **both** EN
+  and FR — an unregistered kind silently sends an empty-title/empty-body push, no error. (3) The
+  client's `_handlePushTap` ignores `kind` and unconditionally yanks to the Calendar tab — it must
+  branch on `data['kind']` so a time-off tap opens the board/My details instead. (4) The new
+  ledger collection needs the Admin-SDK-only rules deny block and an offset-0 TTL policy, like the
+  existing ledgers.
+- **Rules/query discipline:** the employee-read clause (`resource.data.employeeDocId ==
+  myDocId()`) is only provable for list queries whose WHERE carries it — every employee-side
+  `timeOff` query must filter `employeeDocId == <own docId>`, or Firestore rejects the whole query
+  (the users-collection lesson). Admin queries ride `isAdmin()` unconstrained.
 
 ## P7 — Dashboard + History
 
@@ -341,7 +477,14 @@ separately when it starts.
   new callables follow guard order auth → `assertAdmin` → shape → rate limit → work; no new client
   `runTransaction` call sites.
 - **Testing:** policy/domain logic as pure classes with `test()`; widget tests per the harness
-  requirements; jest for any function changes (pure logic extracted into plain modules).
+  requirements; jest for any function changes (pure logic extracted into plain modules). Each
+  project plan must enumerate the pinned suites it moves — known casualties: `hub_shell_test`
+  (selects settings/history tabs), `tour_definitions_test` (every-enum-value-has-a-tour +
+  settings-employee-tour assertions), `clients_screen_test` (in-pane inline edit survives
+  refresh), `client_detail_view_test` (drives the inline `_isEditing` toggle),
+  `appointment_card_test` + `appointment_tile_test` (merge), the calendar scale sweeps at 2×
+  French, `client_form_validator_test` (signature diverges for fast-New/full-Edit), and the Wave
+  mapper/worker hash tests if `toWaveCustomerInput` ever grows.
 
 ## Sequencing note
 
