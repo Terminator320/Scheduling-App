@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 /// Result of `EventDetailsController.save`. The widget switches on this to
 /// show a success or failure notice.
@@ -34,6 +35,20 @@ class EventDetailsSaved extends EventDetailsSaveOutcome {
 class EventDetailsFailed extends EventDetailsSaveOutcome {
   const EventDetailsFailed(this.error);
   final Object error;
+}
+
+/// The save found a scheduling clash. Not an error — the widget asks the user
+/// whether to push through, then calls `save(..., forceBusy: true)`.
+class EventDetailsBusyEmployees extends EventDetailsSaveOutcome {
+  const EventDetailsBusyEmployees({
+    required this.busyEmployees,
+    required this.start,
+    required this.end,
+  });
+
+  final List<EmployeeRecord> busyEmployees;
+  final DateTime start;
+  final DateTime end;
 }
 
 /// Result of the status setters. Sealed so call sites are forced to handle

@@ -404,6 +404,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     required List<EmployeeRecord> candidates,
     required DateTime start,
     required DateTime end,
+    String? excludeAppointmentId,
   }) async {
     if (candidates.isEmpty) return const [];
 
@@ -426,6 +427,8 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     final busyIds = <String>{};
     for (final snapshot in await Future.wait(queries)) {
       for (final doc in snapshot.docs) {
+        // An edit must not collide with the very appointment being edited.
+        if (doc.id == excludeAppointmentId) continue;
         final data = doc.data();
         // We filter out terminal visits here in Dart instead of in the query,
         // since Firestore won't let us combine another filter with arrayContainsAny.

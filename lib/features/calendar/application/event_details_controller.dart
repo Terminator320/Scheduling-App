@@ -306,6 +306,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     required String notes,
     required String materialsNeeded,
     bool applyToSeries = false,
+    bool forceBusy = false,
   }) async {
     // Mark this in-flight before the seed-settle await, so a double-tap can't
     // start a concurrent save.
@@ -354,6 +355,27 @@ class EventDetailsController extends Notifier<EventDetailsState>
     final newImages = state.newImages;
 
     try {
+      if (!forceBusy) {
+        final busy = await repo.findBusyEmployees(
+          candidates: state.selectedEmployees,
+          start: start,
+          end: end,
+          // Without this the job collides with itself and every one of its own
+          // assignees reports as busy.
+          excludeAppointmentId: id,
+        );
+        if (busy.isNotEmpty) {
+          // Not an error — hand the decision back to the user. The flag has to
+          // clear here or Save stays stuck after the dialog is dismissed.
+          if (ref.mounted) state = state.copyWith(isSaving: false);
+          return EventDetailsBusyEmployees(
+            busyEmployees: busy,
+            start: start,
+            end: end,
+          );
+        }
+      }
+
       final assignees = await _resolveAssignees(appointment);
       final updated = _buildUpdatedRecord(
         appointment,

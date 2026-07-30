@@ -16,9 +16,14 @@ Future<bool> showBusyConflictDialog(
     builder: (dialogCtx) {
       final theme = Theme.of(dialogCtx);
       final scheme = theme.colorScheme;
+      final statusColors = theme.statusColors;
       return Dialog(
+        insetPadding: const EdgeInsets.symmetric(
+          horizontal: 26,
+          vertical: AppSpacing.sp24,
+        ),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.r16),
+          borderRadius: BorderRadius.circular(AppRadius.rDialog),
         ),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.sp24),
@@ -30,12 +35,12 @@ Future<bool> showBusyConflictDialog(
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: scheme.tertiaryContainer,
+                  color: statusColors.warningContainer,
                   borderRadius: BorderRadius.circular(AppRadius.r12),
                 ),
                 child: Icon(
                   Icons.warning_amber_rounded,
-                  color: scheme.onTertiaryContainer,
+                  color: statusColors.onWarningContainer,
                   size: 22,
                 ),
               ),
@@ -48,12 +53,8 @@ Future<bool> showBusyConflictDialog(
               ),
               const SizedBox(height: AppSpacing.sp4),
               Text(
-                '${DateUtilsHelper.formatDate(start)} · '
-                '${DateUtilsHelper.formatTime(start)} – '
-                '${DateUtilsHelper.formatTime(end)}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+                DateUtilsHelper.formatWhenLine(start, end),
+                style: theme.monoType.data,
               ),
               const SizedBox(height: AppSpacing.sp16),
               Text(
@@ -74,7 +75,7 @@ Future<bool> showBusyConflictDialog(
                     child: Icon(
                       Icons.info_outline_rounded,
                       size: 14,
-                      color: scheme.onTertiaryContainer,
+                      color: statusColors.onWarningContainer,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sp8),
@@ -82,7 +83,7 @@ Future<bool> showBusyConflictDialog(
                     child: Text(
                       context.l10n.calendar_doubleBookingWarning,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onTertiaryContainer,
+                        color: statusColors.onWarningContainer,
                       ),
                     ),
                   ),
@@ -105,8 +106,6 @@ Future<bool> showBusyConflictDialog(
                     child: FilledButton(
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(double.infinity, 44),
-                        backgroundColor: scheme.tertiary,
-                        foregroundColor: scheme.onTertiary,
                       ),
                       onPressed: () => Navigator.pop(dialogCtx, true),
                       child: Text(context.l10n.calendar_scheduleAnyway),

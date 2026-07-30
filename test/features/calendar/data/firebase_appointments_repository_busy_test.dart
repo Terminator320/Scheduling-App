@@ -27,9 +27,9 @@ void main() {
   late _MockQuery query;
   late _MockQuerySnapshot snapshot;
 
-  _MockDocSnap doc(Map<String, dynamic> data) {
+  _MockDocSnap doc(Map<String, dynamic> data, {String id = 'appt'}) {
     final d = _MockDocSnap();
-    when(() => d.id).thenReturn('appt');
+    when(() => d.id).thenReturn(id);
     when(d.data).thenReturn(data);
     return d;
   }
@@ -128,4 +128,40 @@ void main() {
       expect(result.map((e) => e.id).toSet(), {'e0', 'e5', 'e30'});
     },
   );
+
+  test('excludes the appointment being edited from its own conflicts', () async {
+    // The only overlapping doc IS the one under edit — editing a job's notes
+    // must not report its own assignees as busy.
+    final ownDoc = doc({
+      'employeeIds': ['e0'],
+    }, id: 'a1');
+    when(() => snapshot.docs).thenReturn([ownDoc]);
+
+    final result = await repo().findBusyEmployees(
+      candidates: employees(1),
+      start: start,
+      end: end,
+      excludeAppointmentId: 'a1',
+    );
+
+    expect(result, isEmpty);
+  });
+
+  test('still reports a clash with a different appointment', () async {
+    final otherDoc = doc({
+      'employeeIds': ['e0'],
+    }, id: 'a2');
+    when(() => snapshot.docs).thenReturn([otherDoc]);
+
+    final result = await repo().findBusyEmployees(
+      candidates: employees(1),
+      start: start,
+      end: end,
+      excludeAppointmentId: 'a1',
+    );
+
+    // The exclusion is by doc id, so a sibling occurrence of the same series
+    // still surfaces.
+    expect(result.map((e) => e.id), ['e0']);
+  });
 }

@@ -79,9 +79,13 @@ abstract class AppointmentsRepository {
     AppointmentDateRange range,
   );
 
+  /// [excludeAppointmentId] drops one doc from the overlap scan — an edit must
+  /// not collide with the very appointment being edited. It excludes by doc id,
+  /// not by series, so a genuine clash with a sibling occurrence still surfaces.
   Future<List<EmployeeRecord>> findBusyEmployees({
     required List<EmployeeRecord> candidates,
     required DateTime start,
     required DateTime end,
+    String? excludeAppointmentId,
   });
 }
