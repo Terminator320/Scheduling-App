@@ -24,7 +24,6 @@ dependencies:
   cloud_functions: ^6.0.0
 
   # Calendar / dates / i18n
-  table_calendar: ^3.2.0
   intl: ^0.20.2
 
   # State management (Riverpod, manual providers — no codegen)
