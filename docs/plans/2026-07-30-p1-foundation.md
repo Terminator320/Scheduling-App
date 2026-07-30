@@ -1516,7 +1516,7 @@ The hub shrinks to four tabs; History and Settings become pushed routes; the nav
 
 > **Naming decision: the enum member stays `employees`; only the *label* becomes "Team".** Reasons, in weight order: (1) the persisted tour-seen key and the showcase scope name both derive from `.name`, so a rename forces either a legacy-name mapping or a one-time tour replay for zero user-visible benefit; (2) "employee" is the domain noun everywhere else (`lib/features/employees/`, `employeeIds`, `employeeDocId`, `watchEmployees()`, the rules helpers) — a partial rename creates a third name; (3) P4 rewrites this screen anyway, so a deep rename belongs there. A new l10n key `nav_team` carries the label; `common_employees` is untouched.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/core/navigation/app_destination_test.dart`:
 
@@ -1556,7 +1556,7 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 ```bash
 flutter test test/core/navigation/app_destination_test.dart
@@ -1564,7 +1564,7 @@ flutter test test/core/navigation/app_destination_test.dart
 
 Expected: FAIL — the library does not exist.
 
-- [ ] **Step 3: Create `lib/core/navigation/app_destination.dart`**
+- [x] **Step 3: Create `lib/core/navigation/app_destination.dart`**
 
 ```dart
 import 'package:scheduling/routes/app_routes.dart';
@@ -1658,7 +1658,7 @@ AppDestination? destinationByName(String name) {
 };
 ```
 
-- [ ] **Step 4: Create `lib/core/navigation/hub_shell_scope.dart`**
+- [x] **Step 4: Create `lib/core/navigation/hub_shell_scope.dart`**
 
 ```dart
 import 'package:flutter/material.dart';
@@ -1801,13 +1801,13 @@ void goHomeToCalendar(BuildContext context) {
 
 > **Why `selectAndReveal` is mandatory, not a nicety.** From a pushed stack two deep (Dashboard → History), a drawer tap on a hub row using the old `pushReplacementNamed` path replaces *History* with the redirect route, which selects the tab and removes itself — leaving **Dashboard on top**. The user asked for Clients and sees Dashboard. Collapse-then-select is the only shape correct at any stack depth. `HubShellScope.liveSelector` exists for the same reason: a pushed route cannot reach the scope by inheritance.
 
-- [ ] **Step 5: Delete the rail and its only breakpoint**
+- [x] **Step 5: Delete the rail and its only breakpoint**
 
 Delete `lib/core/layout/adaptive_shell.dart` entirely (`AdaptiveShell` and `_RailEntry` die; the four type/function members it also held now live in the two new files). In `lib/core/layout/breakpoints.dart` remove `static const double expanded = 1200;` and the `bool get isExpanded` getter — `AdaptiveShell` lines 185 and 187 were their only consumers in `lib/`, and `test/` has zero.
 
 **`isSplitLayout` survives** — it still gates `SettingsDrawer.endDrawerFor` (until Task C2 replaces that) and the calendar's month|agenda split. **`isTwoPane` survives untouched** — it gates list master-detail. Do not conflate them.
 
-- [ ] **Step 6: Repoint every importer**
+- [x] **Step 6: Repoint every importer**
 
 ```bash
 grep -rln "core/layout/adaptive_shell.dart" lib/ test/
@@ -1815,7 +1815,7 @@ grep -rln "core/layout/adaptive_shell.dart" lib/ test/
 
 Each file swaps to `package:scheduling/core/navigation/app_destination.dart` and/or `.../hub_shell_scope.dart`, and every `AdaptiveDestination.x` becomes `HubTab.x` or `PushedDestination.x`. The compiler finds the rest.
 
-- [ ] **Step 7: Run the tests**
+- [x] **Step 7: Run the tests**
 
 ```bash
 flutter test test/core/navigation/app_destination_test.dart
@@ -1824,7 +1824,7 @@ flutter analyze 2>&1 | grep -E "error -|warning -"
 
 Expected: the new test passes. Analyzer errors remain in `hub_shell.dart`, `app_routes.dart` and the tour files — those are Tasks B2–B4. **This task does not end green on its own**; it is the type-level half of an atomic change. Commit it anyway so the diff stays reviewable, and treat B1–B4 as one landing unit that must be green before Phase C.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add lib/core test/core
@@ -1843,7 +1843,7 @@ git commit -m "feat(p1): split AdaptiveDestination into HubTab and PushedDestina
 - Consumes: `HubTab`, `HubTabSelector`, `HubShellScope` (Task B1)
 - Produces: `HubShell({required bool isAdmin, required String employeeId, HubTab initialTab, String userName, String userEmail, Widget Function(HubTab)? screenBuilder})`, `HubShellState` implementing all three `HubTabSelector` methods, `HubShell.liveState`, `HubShellState.currentTab`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `test/routes/hub_shell_test.dart`:
 
@@ -1876,7 +1876,7 @@ Add to `test/routes/hub_shell_test.dart`:
   });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 ```bash
 flutter test test/routes/hub_shell_test.dart
@@ -1884,7 +1884,7 @@ flutter test test/routes/hub_shell_test.dart
 
 Expected: FAIL to compile — `HubTab`, `initialTab`, `currentTab` and `goHome` do not exist yet.
 
-- [ ] **Step 3: Retype the widget and state**
+- [x] **Step 3: Retype the widget and state**
 
 ```dart
 class HubShell extends StatefulWidget {
@@ -1928,7 +1928,7 @@ In `HubShellState`: `late HubTab _current = widget.initialTab;`, `late final Set
 
 `PopScope(canPop: _current == HubTab.calendar, ...)`, `showCalendar()`, `_handlePop` and the `_withBackSwipe` call-site exemption all repoint to `HubTab.calendar`. The `IndexedStack` becomes `for (final tab in HubTab.values)`.
 
-- [ ] **Step 4: Mirror the live selector and capture the shell's route**
+- [x] **Step 4: Mirror the live selector and capture the shell's route**
 
 ```dart
   @override
@@ -1958,7 +1958,7 @@ In `HubShellState`: `late HubTab _current = widget.initialTab;`, `late final Set
 
 > **`didChangeDependencies`, not `initState`.** `ModalRoute.of` calls `dependOnInheritedWidgetOfExactType`, which is a framework assert failure in `initState`. Re-runs are harmless — the shell's route identity is stable for its lifetime. The registered dependency costs one shell rebuild whenever a route is pushed or popped above it (its `isCurrent` flips); that is cheap because `build()` is backed by `_screenCache`.
 
-- [ ] **Step 5: Implement the three selector methods**
+- [x] **Step 5: Implement the three selector methods**
 
 ```dart
   @override
@@ -2001,14 +2001,14 @@ In `HubShellState`: `late HubTab _current = widget.initialTab;`, `late final Set
 
 > **Select before pop** so the revealed shell is already on the target tab — no flash of the previous one. `popUntil((r) => r == shellRoute)` cannot spin: `goHome` only runs on a live shell state, and that state lives *inside* the shell route, so the route is provably in the stack. **Never `popUntil((r) => r.isFirst)`** — on `_hubRoute`'s fallback branch the shell is not route #1, so that predicate pops the shell itself and strands the user below it.
 
-- [ ] **Step 6: Update the two breaking tests**
+- [x] **Step 6: Update the two breaking tests**
 
 `.settings` and `.history` are no longer selectable. In `test/routes/hub_shell_test.dart`, substitute remaining non-calendar tabs and retype the stub builder to `Widget Function(HubTab)`:
 
 - `'system back on a non-calendar tab returns to the calendar tab instead of popping the root route'` — `AdaptiveDestination.settings` → `HubTab.liveMap`; the `find.text('screen-settings')` expectation → `find.text('screen-liveMap')`; `currentDestination` → `currentTab`.
 - `'navigateToDestination inside the shell switches tabs without touching the navigator stack'` — `AdaptiveDestination.history` → `HubTab.employees`; `find.text('back-history')` → `find.text('back-employees')`.
 
-- [ ] **Step 7: Run the tests**
+- [x] **Step 7: Run the tests**
 
 ```bash
 flutter test test/routes/hub_shell_test.dart
@@ -2016,7 +2016,7 @@ flutter test test/routes/hub_shell_test.dart
 
 Expected: PASS, including the new `goHome` test.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add lib/routes/hub_shell.dart test/routes/hub_shell_test.dart
@@ -2034,7 +2034,7 @@ git commit -m "feat(p1): retype the hub shell to HubTab and add the go-home help
 - Consumes: `HubTab` (Task B1)
 - Produces: `AppRoutes.history` and `AppRoutes.settings` resolving to `AppPageRoute`
 
-- [ ] **Step 1: Convert both cases**
+- [x] **Step 1: Convert both cases**
 
 ```dart
       case history:
@@ -2062,13 +2062,13 @@ git commit -m "feat(p1): retype the hub shell to HubTab and add the go-home help
 
 Add the two screen imports to `app_routes.dart` (they leave `hub_shell.dart` in Task B2).
 
-- [ ] **Step 2: Retype `_hubRoute`**
+- [x] **Step 2: Retype `_hubRoute`**
 
 Its second positional parameter becomes `HubTab`; the fallback branch builds `HubShell(initialTab: tab, ...)`. The `employees`, `clients` and `liveMap` cases keep calling it with `HubTab.employees` etc.; `mainCalendar` is unchanged.
 
 > **Keep `_hubRoute` and `HubTabRedirectRoute`.** They shrink to three tab routes and look like dead code once the drawer stops pushing named hub routes, but the redirect behaviour is pinned by `hub_shell_test.dart` and remains the cold-start fallback for a named push with no live shell. Do not delete in P1.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 ```bash
 flutter analyze 2>&1 | grep -E "error -|warning -"
@@ -2077,7 +2077,7 @@ flutter test test/routes/
 
 Expected: analyzer clean for `lib/routes/`; remaining errors are confined to the tour files (Task B4).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add lib/routes/app_routes.dart
@@ -2103,7 +2103,7 @@ git commit -m "feat(p1): route History and Settings as pushed pages"
 
 **The fix:** the destination's own sealed type selects the gate mode. No explicit mode parameter, and *not* inferred from a null `HubShellScope` — a null scope is ambiguous, since it also describes a hub screen hosted standalone in a test, where the current "never start" behaviour must be preserved.
 
-- [ ] **Step 1: Rewrite the two breaking assertions**
+- [x] **Step 1: Rewrite the two breaking assertions**
 
 In `test/features/feature_tour/domain/tour_definitions_test.dart`. The old "every enum value has an admin tour" forcing function is genuinely dead now (`dayRoute` and `dashboard` mount no tour host), but the exhaustive sweep is kept so a *new* destination still forces an explicit decision:
 
@@ -2148,7 +2148,7 @@ In `test/features/feature_tour/domain/tour_definitions_test.dart`. The old "ever
   });
 ```
 
-- [ ] **Step 2: Run to confirm it fails**
+- [x] **Step 2: Run to confirm it fails**
 
 ```bash
 flutter test test/features/feature_tour/domain/tour_definitions_test.dart
@@ -2156,7 +2156,7 @@ flutter test test/features/feature_tour/domain/tour_definitions_test.dart
 
 Expected: FAIL to compile — `tourStepsFor` still takes `AdaptiveDestination`.
 
-- [ ] **Step 3: Widen the definitions and the seen store**
+- [x] **Step 3: Widen the definitions and the seen store**
 
 ```dart
 String tourScopeName(AppDestination destination) => 'tour_${destination.name}';
@@ -2202,7 +2202,7 @@ List<TourStepId> tourStepsFor(
 
 > **No SharedPreferences migration is needed — and that is by design, not luck.** The key stays `'tour_seen_tabs'` and the value space (`calendar, clients, employees, history, liveMap, settings`) is preserved *because* Task B1 kept the member name `employees` and both enums kept today's names. Any future member rename must either add a legacy-name mapping here or knowingly accept a one-time replay of that one tour. The uniqueness test added in B1 pins the invariant.
 
-- [ ] **Step 4: Add the sealed-type gate to `FeatureTourHost`**
+- [x] **Step 4: Add the sealed-type gate to `FeatureTourHost`**
 
 Rename the field `tab` → `destination` (type `AppDestination`) and add:
 
@@ -2241,7 +2241,7 @@ Rename the field `tab` → `destination` (type `AppDestination`) and add:
 >
 > **A modal sheet over a pushed screen** is a navigator route, so `isCurrent` flips false. Idle: the gate stays closed and the sheet-close flip provides the retry rebuild — no wedge. Mid-tour: the existing `_wasVisible && !visible && _tourRunning` branch dismisses and marks seen. That is **identical to today's mid-tour tab-switch policy**, deliberately inherited — state it in review so it is not "fixed" later.
 
-- [ ] **Step 5: Wait out the route entrance transition before measuring**
+- [x] **Step 5: Wait out the route entrance transition before measuring**
 
 Hub tabs never move, but a pushed Settings slides in over ~300 ms, and showcaseview measures target `GlobalKey`s when `startShowCase` runs. Without this, the first-ever Settings visit (a fresh install's employee tour) paints mis-placed cutouts. In `_start()`, after the `ready` await and before the post-frame callback:
 
@@ -2270,15 +2270,15 @@ Hub tabs never move, but a pushed Settings slides in over ~300 ms, and showcasev
   }
 ```
 
-- [ ] **Step 6: Rename the `TourShowcase` parameter**
+- [x] **Step 6: Rename the `TourShowcase` parameter**
 
 `TourShowcase`'s `tab` field becomes `final AppDestination destination;`, rippling to every step call site (~a dozen, all mechanical, all in screens this plan touches).
 
-- [ ] **Step 7: Add a route-mode host test**
+- [x] **Step 7: Add a route-mode host test**
 
 In `test/features/feature_tour/widgets/feature_tour_host_test.dart`, add a test that pumps a `FeatureTourHost(destination: PushedDestination.settings, ...)` inside a pushed `MaterialPageRoute`, pushes a second route on top, and asserts the tour does not start; then pops and asserts it does. The existing fake `HubTabSelector` must gain the two new methods (`selectAndReveal`, `goHome`).
 
-- [ ] **Step 8: Run the tests**
+- [x] **Step 8: Run the tests**
 
 ```bash
 flutter test test/features/feature_tour/
@@ -2288,7 +2288,7 @@ flutter test
 
 Expected: **the whole suite is green here** — B1–B4 land as one unit.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add lib/features/feature_tour test/features/feature_tour
@@ -2302,7 +2302,7 @@ git commit -m "feat(p1): gate feature tours by route when the destination is pus
 **Files:**
 - Modify: `lib/main.dart` (`_openAppointmentDeepLink`, line ~280)
 
-- [ ] **Step 1: Replace the pop**
+- [x] **Step 1: Replace the pop**
 
 ```dart
     // Collapse stacked routes to open the appointment over the shell.
@@ -2313,14 +2313,14 @@ replacing `_navigatorKey.currentState?.popUntil((route) => route.isFirst);`. The
 
 > **Why:** the existing line carries exactly the latent bug the program spec flagged — on `_hubRoute`'s fallback branch the shell is not route #1, so `popUntil(isFirst)` pops the shell itself and strands the user. The handler already holds the `HubShellState` from `_awaitLiveHub()`, so no new lookup is needed. One pre-existing gap is unchanged: neither the old line nor `goHome()` closes a drawer left open on a tab screen under a deep link.
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 ```bash
 flutter analyze 2>&1 | grep -E "error -|warning -"
 flutter test test/routes/ test/features/notifications/
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add lib/main.dart
