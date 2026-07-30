@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -37,7 +38,7 @@ class _ListInformationState extends State<ListInformation> {
   ClientRecord? _selectedClient;
 
   late final List<TourStepId> _tourSteps = tourStepsFor(
-    AdaptiveDestination.clients,
+    HubTab.clients,
     isAdmin: widget.isAdmin,
   );
   late final Map<TourStepId, GlobalKey> _tourKeys = {
@@ -50,7 +51,7 @@ class _ListInformationState extends State<ListInformation> {
     BorderRadius? targetBorderRadius,
   }) => TourShowcase(
     showcaseKey: _tourKeys[id]!,
-    tab: AdaptiveDestination.clients,
+    tab: HubTab.clients,
     id: id,
     index: _tourSteps.indexOf(id),
     count: _tourSteps.length,
@@ -79,7 +80,7 @@ class _ListInformationState extends State<ListInformation> {
 
   void _backToCalendar() => navigateToDestination(
     context,
-    AdaptiveDestination.calendar,
+    HubTab.calendar,
     isAdmin: widget.isAdmin,
     employeeId: widget.employeeId,
   );
@@ -97,7 +98,7 @@ class _ListInformationState extends State<ListInformation> {
       hintText: context.l10n.clients_searchByNameOrPhone,
     );
     return FeatureTourHost(
-      tab: AdaptiveDestination.clients,
+      tab: HubTab.clients,
       isAdmin: widget.isAdmin,
       stepKeys: _tourKeys,
       child: Scaffold(
@@ -108,7 +109,7 @@ class _ListInformationState extends State<ListInformation> {
           bottom: _tourSteps.contains(TourStepId.clientsSearch)
               ? TourShowcaseBar(
                   showcaseKey: _tourKeys[TourStepId.clientsSearch]!,
-                  tab: AdaptiveDestination.clients,
+                  tab: HubTab.clients,
                   id: TourStepId.clientsSearch,
                   index: _tourSteps.indexOf(TourStepId.clientsSearch),
                   count: _tourSteps.length,
@@ -135,32 +136,25 @@ class _ListInformationState extends State<ListInformation> {
               )
             : null,
         // Only the master list listens to the search controller, so typing rebuilds just the list.
-        body: AdaptiveShell(
-          currentDestination: AdaptiveDestination.clients,
-          isAdmin: widget.isAdmin,
-          employeeId: widget.employeeId,
-          child: MasterDetailScaffold(
-            master: ListenableBuilder(
-              listenable: _searchController,
-              builder: (context, _) => ClientsListView(
-                searchQuery: _searchController.text,
-                isAdmin: widget.isAdmin,
-                // Only highlight the selected row when the detail pane is shown (two-pane).
-                selectedClientId: context.isTwoPane
-                    ? _selectedClient?.id
-                    : null,
-                onClientTap: _onClientTap,
-              ),
+        body: MasterDetailScaffold(
+          master: ListenableBuilder(
+            listenable: _searchController,
+            builder: (context, _) => ClientsListView(
+              searchQuery: _searchController.text,
+              isAdmin: widget.isAdmin,
+              // Only highlight the selected row when the detail pane is shown (two-pane).
+              selectedClientId: context.isTwoPane ? _selectedClient?.id : null,
+              onClientTap: _onClientTap,
             ),
-            detail: _selectedClient != null
-                ? ClientDetailView(
-                    key: ValueKey(_selectedClient!.id),
-                    client: _selectedClient!,
-                    onDeleted: () => setState(() => _selectedClient = null),
-                  )
-                : null,
-            placeholder: _buildDetailPlaceholder(),
           ),
+          detail: _selectedClient != null
+              ? ClientDetailView(
+                  key: ValueKey(_selectedClient!.id),
+                  client: _selectedClient!,
+                  onDeleted: () => setState(() => _selectedClient = null),
+                )
+              : null,
+          placeholder: _buildDetailPlaceholder(),
         ),
       ),
     );

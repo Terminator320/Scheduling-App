@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/features/feature_tour/application/tour_seen_store.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
@@ -66,13 +67,13 @@ void main() {
     final key = GlobalKey();
     await tester.pumpWidget(
       harness(
-        current: AdaptiveDestination.calendar, // another tab is visible
-        tab: AdaptiveDestination.clients,
+        current: HubTab.calendar, // another tab is visible
+        tab: HubTab.clients,
         stepKeys: {TourStepId.clientsSearch: key},
         container: container,
         child: TourShowcase(
           showcaseKey: key,
-          tab: AdaptiveDestination.clients,
+          tab: HubTab.clients,
           id: TourStepId.clientsSearch,
           index: 0,
           count: 2,
@@ -85,7 +86,7 @@ void main() {
     expect(find.text('Find a client'), findsNothing);
     expect(
       container.read(tourSeenProvider),
-      isNot(contains(AdaptiveDestination.clients)),
+      isNot(contains(HubTab.clients)),
     );
   });
 
@@ -96,8 +97,8 @@ void main() {
     final container = newContainer();
     await tester.pumpWidget(
       harness(
-        current: AdaptiveDestination.clients,
-        tab: AdaptiveDestination.clients,
+        current: HubTab.clients,
+        tab: HubTab.clients,
         stepKeys: {TourStepId.clientsSearch: GlobalKey()}, // never attached
         container: container,
         child: const Text('no showcase targets here'),
@@ -107,7 +108,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(
       container.read(tourSeenProvider),
-      contains(AdaptiveDestination.clients),
+      contains(HubTab.clients),
     );
   });
 
@@ -120,8 +121,8 @@ void main() {
     final addKey = GlobalKey();
     await tester.pumpWidget(
       harness(
-        current: AdaptiveDestination.clients,
-        tab: AdaptiveDestination.clients,
+        current: HubTab.clients,
+        tab: HubTab.clients,
         stepKeys: {
           TourStepId.clientsSearch: searchKey,
           TourStepId.clientsAdd: addKey,
@@ -131,7 +132,7 @@ void main() {
           children: [
             TourShowcase(
               showcaseKey: searchKey,
-              tab: AdaptiveDestination.clients,
+              tab: HubTab.clients,
               id: TourStepId.clientsSearch,
               index: 0,
               count: 2,
@@ -139,7 +140,7 @@ void main() {
             ),
             TourShowcase(
               showcaseKey: addKey,
-              tab: AdaptiveDestination.clients,
+              tab: HubTab.clients,
               id: TourStepId.clientsAdd,
               index: 1,
               count: 2,
@@ -164,13 +165,13 @@ void main() {
     final key = GlobalKey();
     await tester.pumpWidget(
       harness(
-        current: AdaptiveDestination.clients,
-        tab: AdaptiveDestination.clients,
+        current: HubTab.clients,
+        tab: HubTab.clients,
         stepKeys: {TourStepId.clientsSearch: key},
         container: container,
         child: TourShowcase(
           showcaseKey: key,
-          tab: AdaptiveDestination.clients,
+          tab: HubTab.clients,
           id: TourStepId.clientsSearch,
           index: 0,
           count: 2,

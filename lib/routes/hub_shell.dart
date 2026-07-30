@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/adaptive/adaptive.dart';
-import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
@@ -17,7 +18,7 @@ class HubShell extends StatefulWidget {
   const HubShell({
     required this.isAdmin,
     required this.employeeId,
-    this.initialDestination = AdaptiveDestination.calendar,
+    this.initialDestination = HubTab.calendar,
     this.userName = '',
     this.userEmail = '',
     super.key,
@@ -98,7 +99,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
   /// Switch to calendar, preserving identity for deep-linked appointment sheets.
   void showCalendar() {
     select(
-      AdaptiveDestination.calendar,
+      HubTab.calendar,
       isAdmin: _isAdmin,
       employeeId: _employeeId,
     );
@@ -108,7 +109,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
     if (didPop) return;
     // System back on non-calendar tab → calendar (like the app bar).
     select(
-      AdaptiveDestination.calendar,
+      HubTab.calendar,
       isAdmin: _isAdmin,
       employeeId: _employeeId,
     );
@@ -152,12 +153,12 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
       shell: this,
       current: _current,
       child: PopScope(
-        canPop: _current == AdaptiveDestination.calendar,
+        canPop: _current == HubTab.calendar,
         onPopInvokedWithResult: _handlePop,
         child: IndexedStack(
           index: _current.index,
           children: [
-            for (final destination in AdaptiveDestination.values)
+            for (final destination in allDestinations)
               if (_built.contains(destination))
                 // Mute animations on hidden tabs, and pin viewInsets so they
                 // don't cause rebuild churn while hidden.
@@ -177,7 +178,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
                         curve: Curves.easeInOut,
                         // iOS edge-swipe for non-calendar tabs (calendar owns week-swipe).
                         child:
-                            destination == AdaptiveDestination.calendar ||
+                            destination == HubTab.calendar ||
                                 !context.isCupertino
                             ? _cachedScreenFor(destination)
                             : _withBackSwipe(_cachedScreenFor(destination)),
@@ -222,32 +223,32 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
     // Key on identity so in-place changes (e.g. admin upgrade) rebuild the screen.
     final key = ValueKey('hub-${destination.name}-$_isAdmin-$_employeeId');
     return switch (destination) {
-      AdaptiveDestination.calendar => MainCalendar(
+      HubTab.calendar => MainCalendar(
         key: key,
         isAdmin: _isAdmin,
         employeeId: _employeeId,
       ),
-      AdaptiveDestination.clients => ListInformation(
+      HubTab.clients => ListInformation(
         key: key,
         isAdmin: _isAdmin,
         employeeId: _employeeId,
       ),
-      AdaptiveDestination.employees => AddEmployeePage(
+      HubTab.employees => AddEmployeePage(
         key: key,
         isAdmin: _isAdmin,
         employeeId: _employeeId,
       ),
-      AdaptiveDestination.history => HistoryScreen(
+      PushedDestination.history => HistoryScreen(
         key: key,
         isAdmin: _isAdmin,
         employeeId: _employeeId,
       ),
-      AdaptiveDestination.liveMap => LiveMapScreen(
+      HubTab.liveMap => LiveMapScreen(
         key: key,
         isAdmin: _isAdmin,
         employeeId: _employeeId,
       ),
-      AdaptiveDestination.settings => SettingsScreen(
+      PushedDestination.settings => SettingsScreen(
         key: key,
         name: _userName,
         email: _userEmail,

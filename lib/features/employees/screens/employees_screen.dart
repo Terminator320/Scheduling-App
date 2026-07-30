@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -45,7 +46,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
   EmployeeRecord? _selectedEmployee;
 
   late final List<TourStepId> _tourSteps = tourStepsFor(
-    AdaptiveDestination.employees,
+    HubTab.employees,
     isAdmin: widget.isAdmin,
   );
   late final Map<TourStepId, GlobalKey> _tourKeys = {
@@ -58,7 +59,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     BorderRadius? targetBorderRadius,
   }) => TourShowcase(
     showcaseKey: _tourKeys[id]!,
-    tab: AdaptiveDestination.employees,
+    tab: HubTab.employees,
     id: id,
     index: _tourSteps.indexOf(id),
     count: _tourSteps.length,
@@ -151,14 +152,14 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
       compact: context.isLandscape,
       onBack: () => navigateToDestination(
         context,
-        AdaptiveDestination.calendar,
+        HubTab.calendar,
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
       ),
       bottom: _tourSteps.contains(TourStepId.employeesSearch)
           ? TourShowcaseBar(
               showcaseKey: _tourKeys[TourStepId.employeesSearch]!,
-              tab: AdaptiveDestination.employees,
+              tab: HubTab.employees,
               id: TourStepId.employeesSearch,
               index: _tourSteps.indexOf(TourStepId.employeesSearch),
               count: _tourSteps.length,
@@ -285,7 +286,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     });
     final selected = _liveSelectedEmployee();
     return FeatureTourHost(
-      tab: AdaptiveDestination.employees,
+      tab: HubTab.employees,
       isAdmin: widget.isAdmin,
       stepKeys: _tourKeys,
       child: Scaffold(
@@ -309,26 +310,20 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
               )
             : null,
         // Only the master list listens to the search controller, so typing rebuilds just the list.
-        body: AdaptiveShell(
-          currentDestination: AdaptiveDestination.employees,
-          isAdmin: widget.isAdmin,
-          employeeId: widget.employeeId,
-          child: MasterDetailScaffold(
-            master: ListenableBuilder(
-              listenable: _searchController,
-              builder: (context, _) => _buildMasterList(),
-            ),
-            detail: selected == null
-                ? null
-                : EmployeeDetailsView(
-                    key: ValueKey(selected.id),
-                    employee: selected,
-                    isCurrentUserAdmin: widget.isAdmin,
-                    onAction: (action) =>
-                        _handleEmployeeAction(action, selected),
-                  ),
-            placeholder: _buildDetailPlaceholder(),
+        body: MasterDetailScaffold(
+          master: ListenableBuilder(
+            listenable: _searchController,
+            builder: (context, _) => _buildMasterList(),
           ),
+          detail: selected == null
+              ? null
+              : EmployeeDetailsView(
+                  key: ValueKey(selected.id),
+                  employee: selected,
+                  isCurrentUserAdmin: widget.isAdmin,
+                  onAction: (action) => _handleEmployeeAction(action, selected),
+                ),
+          placeholder: _buildDetailPlaceholder(),
         ),
       ),
     );

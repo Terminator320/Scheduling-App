@@ -11,7 +11,8 @@ import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
-import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -81,7 +82,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   bool _isDeletingAccount = false;
 
   late final List<TourStepId> _tourSteps = tourStepsFor(
-    AdaptiveDestination.settings,
+    PushedDestination.settings,
     isAdmin: widget.role == 'admin',
   );
   late final Map<TourStepId, GlobalKey> _tourKeys = {
@@ -90,7 +91,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Widget _tourStep(TourStepId id, {required Widget child}) => TourShowcase(
     showcaseKey: _tourKeys[id]!,
-    tab: AdaptiveDestination.settings,
+    tab: PushedDestination.settings,
     id: id,
     index: _tourSteps.indexOf(id),
     count: _tourSteps.length,
@@ -325,7 +326,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   @override
   Widget build(BuildContext context) {
     return FeatureTourHost(
-      tab: AdaptiveDestination.settings,
+      tab: PushedDestination.settings,
       isAdmin: _isAdmin,
       stepKeys: _tourKeys,
       autoScroll: true,
@@ -337,22 +338,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               compact: context.isLandscape,
               onBack: () => navigateToDestination(
                 context,
-                AdaptiveDestination.calendar,
+                HubTab.calendar,
                 isAdmin: _isAdmin,
                 employeeId: widget.employeeId,
               ),
             ),
-            body: AdaptiveShell(
-              currentDestination: AdaptiveDestination.settings,
-              isAdmin: _isAdmin,
-              employeeId: widget.employeeId,
-              userName: _displayName,
-              userEmail: _email,
-              child: MasterDetailScaffold(
-                master: _buildMaster(),
-                detail: _buildDetail(),
-                placeholder: _buildDetailPlaceholder(),
-              ),
+            body: MasterDetailScaffold(
+              master: _buildMaster(),
+              detail: _buildDetail(),
+              placeholder: _buildDetailPlaceholder(),
             ),
           ),
           // Blocks the UI during the irreversible account deletion.

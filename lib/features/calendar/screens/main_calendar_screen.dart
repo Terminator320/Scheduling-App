@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
-import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -59,7 +60,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   String _lastLocale = '';
 
   late final List<TourStepId> _tourSteps = tourStepsFor(
-    AdaptiveDestination.calendar,
+    HubTab.calendar,
     isAdmin: widget.isAdmin,
   );
   late final Map<TourStepId, GlobalKey> _tourKeys = {
@@ -215,7 +216,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       if (!mounted) return;
       navigateToDestination(
         context,
-        AdaptiveDestination.calendar,
+        HubTab.calendar,
         isAdmin: true,
         employeeId: widget.employeeId,
       );
@@ -233,7 +234,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     BorderRadius? targetBorderRadius,
   }) => TourShowcase(
     showcaseKey: _tourKeys[id]!,
-    tab: AdaptiveDestination.calendar,
+    tab: HubTab.calendar,
     id: id,
     index: _tourSteps.indexOf(id),
     count: _tourSteps.length,
@@ -307,7 +308,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     final data = _prepareBuild(context);
 
     return FeatureTourHost(
-      tab: AdaptiveDestination.calendar,
+      tab: HubTab.calendar,
       isAdmin: widget.isAdmin,
       ready: !data.isLoading,
       stepKeys: _tourKeys,
@@ -338,29 +339,23 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           employeeId: widget.employeeId,
           userName: data.userName,
         ),
-        body: AdaptiveShell(
-          currentDestination: AdaptiveDestination.calendar,
-          isAdmin: widget.isAdmin,
-          employeeId: widget.employeeId,
-          userName: data.userName,
-          child: SafeArea(
-            child: Stack(
-              children: [
-                _content(
-                  isLoading: data.isLoading,
-                  colorMap: data.colorMap,
-                  nameMap: data.nameMap,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              _content(
+                isLoading: data.isLoading,
+                colorMap: data.colorMap,
+                nameMap: data.nameMap,
+              ),
+              Positioned(
+                bottom: AppSpacing.sp16,
+                left: AppSpacing.sp16,
+                child: _TodayFab(
+                  visible: _showTodayButton,
+                  onPressed: _goToToday,
                 ),
-                Positioned(
-                  bottom: AppSpacing.sp16,
-                  left: AppSpacing.sp16,
-                  child: _TodayFab(
-                    visible: _showTodayButton,
-                    onPressed: _goToToday,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

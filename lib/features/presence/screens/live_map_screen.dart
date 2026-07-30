@@ -8,7 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import 'package:scheduling/core/errors/error_cause.dart';
-import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -99,7 +100,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
   bool _mapTargetsRendered = false;
 
   late final List<TourStepId> _tourSteps = tourStepsFor(
-    AdaptiveDestination.liveMap,
+    HubTab.liveMap,
     isAdmin: widget.isAdmin,
   );
   late final Map<TourStepId, GlobalKey> _tourKeys = {
@@ -112,7 +113,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     BorderRadius? targetBorderRadius,
   }) => TourShowcase(
     showcaseKey: _tourKeys[id]!,
-    tab: AdaptiveDestination.liveMap,
+    tab: HubTab.liveMap,
     id: id,
     index: _tourSteps.indexOf(id),
     count: _tourSteps.length,
@@ -128,7 +129,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
 
   void _backToCalendar() => navigateToDestination(
     context,
-    AdaptiveDestination.calendar,
+    HubTab.calendar,
     isAdmin: widget.isAdmin,
     employeeId: widget.employeeId,
   );
@@ -154,7 +155,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     }
 
     return FeatureTourHost(
-      tab: AdaptiveDestination.liveMap,
+      tab: HubTab.liveMap,
       isAdmin: widget.isAdmin,
       ready: _mapTargetsRendered,
       stepKeys: _tourKeys,
@@ -169,12 +170,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
           isAdmin: widget.isAdmin,
           employeeId: widget.employeeId,
         ),
-        body: AdaptiveShell(
-          currentDestination: AdaptiveDestination.liveMap,
-          isAdmin: widget.isAdmin,
-          employeeId: widget.employeeId,
-          child: body,
-        ),
+        body: body,
       ),
     );
   }

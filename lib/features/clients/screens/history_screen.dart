@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/features/clients/widgets/views/appointment_history_view.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
@@ -32,7 +33,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   late final List<TourStepId> _tourSteps = tourStepsFor(
-    AdaptiveDestination.history,
+    PushedDestination.history,
     isAdmin: widget.isAdmin,
   );
   late final Map<TourStepId, GlobalKey> _tourKeys = {
@@ -47,7 +48,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   void _backToCalendar() => navigateToDestination(
     context,
-    AdaptiveDestination.calendar,
+    HubTab.calendar,
     isAdmin: widget.isAdmin,
     employeeId: widget.employeeId,
   );
@@ -60,7 +61,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       hintText: context.l10n.clients_searchByClientOrEmployee,
     );
     return FeatureTourHost(
-      tab: AdaptiveDestination.history,
+      tab: PushedDestination.history,
       isAdmin: widget.isAdmin,
       stepKeys: _tourKeys,
       child: Scaffold(
@@ -71,7 +72,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           bottom: _tourSteps.contains(TourStepId.historySearch)
               ? TourShowcaseBar(
                   showcaseKey: _tourKeys[TourStepId.historySearch]!,
-                  tab: AdaptiveDestination.history,
+                  tab: PushedDestination.history,
                   id: TourStepId.historySearch,
                   index: _tourSteps.indexOf(TourStepId.historySearch),
                   count: _tourSteps.length,
@@ -86,15 +87,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ),
         // The nav shell is built once; only the history view rebuilds per
         // keystroke, so typing doesn't rebuild the NavigationRail + chrome.
-        body: AdaptiveShell(
-          currentDestination: AdaptiveDestination.history,
-          isAdmin: widget.isAdmin,
-          employeeId: widget.employeeId,
-          child: ListenableBuilder(
-            listenable: _searchController,
-            builder: (context, _) =>
-                AppointmentHistoryView(searchQuery: _searchController.text),
-          ),
+        body: ListenableBuilder(
+          listenable: _searchController,
+          builder: (context, _) =>
+              AppointmentHistoryView(searchQuery: _searchController.text),
         ),
       ),
     );
