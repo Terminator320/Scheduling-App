@@ -12,7 +12,7 @@ void main() {
   });
 
   test('every canonical crew colour has a dark counterpart', () {
-    final dark = AppPalette.dark;
+    const dark = AppPalette.dark;
     for (final colour in AppColors.crewPalette) {
       expect(
         dark.crewOverride[colour.toARGB32()],

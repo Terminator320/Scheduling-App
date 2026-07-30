@@ -6,8 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:scheduling/core/theme/theme_notifier.dart';
-import 'package:scheduling/features/settings/screens/settings_screen.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
+import 'package:scheduling/features/settings/screens/settings_screen.dart';
 import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
 

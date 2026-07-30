@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/adaptive/adaptive.dart';
+import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/navigation/hub_shell_scope.dart';
-import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
 import 'package:scheduling/features/clients/screens/clients_screen.dart';

@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// SharedPreferences key: names of hub tabs whose tour has been seen.
@@ -25,10 +25,7 @@ class TourSeenController extends Notifier<Set<AppDestination>> {
       final names = prefs.getStringList(_keyTourSeenTabs) ?? const [];
       // Lookup-based, so a name that no longer maps to a destination is
       // dropped rather than resurrecting a dead tour.
-      state = {
-        for (final name in names)
-          if (destinationByName(name) case final destination?) destination,
-      };
+      state = {for (final name in names) ?destinationByName(name)};
     } catch (e, st) {
       // This is unawaited from build(), so on failure we just fall back to
       // treating the device like a fresh install.
