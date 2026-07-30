@@ -12,6 +12,7 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/adaptive_pickers.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
@@ -405,9 +406,10 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     for (final j in jobs) {
       numbers.add(_isOpen(j.status) ? ++open : null);
     }
+    final colorMap = ref.watch(employeeColorMapProvider);
+    final nameMap = ref.watch(employeeNameMapProvider);
     final empColor =
-        ref.watch(employeeColorMapProvider)[employeeId] ??
-        Theme.of(context).colorScheme.primary;
+        colorMap[employeeId] ?? Theme.of(context).colorScheme.primary;
 
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(
@@ -421,6 +423,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
         job: jobs[i],
         number: numbers[i],
         employeeColor: empColor,
+        crew: crewFor(jobs[i], colorMap: colorMap, nameMap: nameMap),
         showConnector: i < jobs.length - 1,
         navigateLabel: l10n.calendar_dayRouteNavigate,
         isAdmin: widget.isAdmin,
@@ -449,6 +452,7 @@ class _StopTile extends StatelessWidget {
     required this.job,
     required this.number,
     required this.employeeColor,
+    required this.crew,
     required this.showConnector,
     required this.navigateLabel,
     required this.isAdmin,
@@ -456,7 +460,10 @@ class _StopTile extends StatelessWidget {
 
   final AppointmentRecord job;
   final int? number;
+
+  /// The route's own employee — the rail badge, not the card's crew bar.
   final Color employeeColor;
+  final List<AppointmentCrew> crew;
   final bool showConnector;
   final String navigateLabel;
 
@@ -489,7 +496,7 @@ class _StopTile extends StatelessWidget {
                 opacity: isOpen ? 1 : 0.62,
                 child: AppointmentCard(
                   appointment: job,
-                  employeeColor: employeeColor,
+                  crew: crew,
                   onTap: () =>
                       showEventDetails(context, job, showActions: isAdmin),
                   footer: (isOpen && hasAddress)

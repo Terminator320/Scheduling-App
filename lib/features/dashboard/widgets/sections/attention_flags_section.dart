@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
-import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
-import 'package:scheduling/features/dashboard/domain/assignee_names.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
@@ -99,7 +98,6 @@ class _FlagGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -114,9 +112,11 @@ class _FlagGroup extends StatelessWidget {
           if (i > 0) const SizedBox(height: AppSpacing.sp8),
           AppointmentCard(
             appointment: appointments[i],
-            employeeColor:
-                colorFromMap(appointments[i], colorMap) ?? scheme.outline,
-            employeeName: resolveAssigneeNames(appointments[i], nameMap),
+            crew: crewFor(
+              appointments[i],
+              colorMap: colorMap,
+              nameMap: nameMap,
+            ),
             onTap: () => showEventDetails(
               context,
               appointments[i],
