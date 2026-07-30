@@ -179,15 +179,35 @@ tappable `InfoCardRow`s. Its **Contacts** list (`ClientContactsCards`) skips
 business contacts.
 
 The read-only **appointment** view (`details_view_body.dart`) follows the same
-shape: a `StatusChip` under the title (showing the time-derived `displayStatus`
+shape: a `StatusChip` beside the title (showing the time-derived `displayStatus`
 — In progress / Overdue — so the header matches the calendar card, while the
-mark-done/cancel/edit actions still gate on the real stored status), a Call /
-Directions quick-action row, and
-the client shown by **name only** in an `InfoCard` (phone and address are reached
-through the buttons, not repeated as rows), with any extra business contacts
-below via the same `ClientContactsCards`. Empty sections — notes, materials,
-employees, pictures — are omitted entirely rather than rendered as "None" rows,
-so a sparse appointment stays short.
+mark-done/cancel/edit actions still gate on the real stored status), one mono
+when-line from `DateUtilsHelper.formatWhenLine`, a Call / Directions
+quick-action row, and client / phone / address / notes together in a
+`KeyValuePanel` (the 70px mono key column; `InfoCard` is untouched because P3
+still owns it), with any extra business contacts below via the same
+`ClientContactsCards`. Empty sections — notes, materials, employees, pictures —
+are omitted entirely rather than rendered as "None" rows, so a sparse
+appointment stays short.
+
+### The calendar's single scroll (P2)
+
+Portrait renders the month grid and the day's agenda inside **one**
+`CustomScrollView`, which is what allows the grid to scroll away. Past
+`CalendarCollapse.collapseAt` (80px) the grid unmounts and a `CalendarWeekStrip`
+rises inside the fixed `CalendarHeaderBlock`; a derived spacer
+(`CalendarMonthGrid.heightFor − CalendarWeekStrip.heightFor`) holds the extent
+the grid vacated so the first card doesn't jump. Re-expansion **arms** below
+44px and **fires** below 6px — two stages, evaluated in one pass, so a
+`jumpTo(0)` still re-expands while a scroll that merely hovers the collapse
+threshold does not thrash.
+
+The agenda rows live in `AgendaSliverList`; `EventList` is now just the
+split-layout wrapper around it, so both hosts build identical rows.
+`AgendaHeader` is a separate widget because it carries the calendar tour's
+`calendarDayList` step and a showcase target must be a box, not a sliver.
+Collapse is **portrait-only** — the `isSplitLayout` month|agenda pane has two
+independent scroll panes and no room for a rising strip.
 
 ### Repeating Appointments
 

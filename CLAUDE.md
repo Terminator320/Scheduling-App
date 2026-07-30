@@ -70,7 +70,7 @@ iOS notes (Phase 0 of clean-architecture restructure):
 flutter pub get
 flutter run
 flutter analyze
-flutter analyze 2>&1 | grep -E "error -|warning -"   # filter to real issues (info lints are down to ~3)
+flutter analyze 2>&1 | grep -E "error -|warning -"   # the baseline is 0 issues — any lint you see is yours
 flutter test
 flutter test test/<path>.dart
 flutter test --plain-name "<name>"
@@ -330,6 +330,57 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   two sheets → duplicate client. Mix it into any new inline-add host rather than
   re-copying the flag.
 
+- **Calendar (rebuilt in P2, 2026-07-30):** `table_calendar` is **deleted**;
+  the month view is our own `CalendarMonthGrid` + `CalendarMonthPager`. It
+  always renders **42 cells / 6 rows** — a 35-cell grid drops the end of months
+  like August 2026 — with the week start from the locale
+  (`weekStartForLocale`). Off-month cells render a **faint day number AND their
+  crew dots** but stay untappable and out of the semantics tree: the design says
+  "blank, Ink 15, not tappable" while the program spec widened the fetch range
+  precisely so trailing days aren't dotless, and dots-plus-faint-number is what
+  reconciles the two (owner-confirmed). `today` always comes from
+  `currentDayProvider`, never `DateTime.now()`, or the circle sticks on
+  yesterday in an app left open across midnight.
+  **`AppointmentDateRange.visibleMonth` overscans ±14 days, not ±7** — that is
+  exact cover for a 42-cell grid, and narrowing it silently empties the
+  trailing cells' dots. The overscan is asymmetric in origin: max lead is 6 days,
+  max trail 14.
+  **Portrait is ONE `CustomScrollView`** holding the grid and the agenda, which
+  is what lets the grid scroll away. `CalendarCollapse` (`domain/collapse_state.dart`)
+  owns the thresholds — collapse past **80**, re-expansion **arms** below **44**
+  and **fires** below **6** — and both stages are evaluated in one pass so a
+  `jumpTo(0)` still re-expands. The vacated height is replaced by a **derived**
+  spacer (`gridHeight − stripHeight`), never the design's literal 150px: our
+  grid is taller and scales with text, so a literal jumps the list at the moment
+  of collapse. **Collapse is portrait-only** — `_splitCalendar` short-circuits
+  both the scroll listener and the strip, and the listener also ignores offsets
+  while another hub tab is showing (TickerMode does not cover scroll listeners).
+  The calendar is the **one screen with no `AppTopBar`** (see the frontend rule):
+  `CalendarHeaderBlock` replaces it, and therefore must set the system overlay
+  style itself via `AnnotatedRegion`, choosing icon brightness from the surface
+  colour rather than the theme brightness. Its title and controls **stack under
+  `context.isCompact`** — the Calendar pill's label overflows the row by ~138px
+  at 2× text otherwise.
+- **`AppointmentCard` is the ONE appointment card** — calendar agenda, day
+  route, client job history, both dashboard sections and the paginated history
+  list (`AppointmentTile` is deleted, along with `colorFromMap` and
+  `resolveAssigneeNames`). It takes `crew: List<AppointmentCrew>` from
+  `crewFor(appointment, colorMap:, nameMap:)`; without a `nameMap` that falls
+  back to the record's denormalized `employeeNames`, which is what the history
+  and client surfaces already showed. **The crew bar follows the FIRST
+  assignee** — the old per-appointment colour went grey for any multi-crew job —
+  and the crew line reads `Theo +1`. `alwaysShowChip` is **gone**, not ported
+  (every call site passed `true`); cancelled dims to **0.6**, not 0.75. The card
+  uses `IntrinsicHeight` to stretch the crew bar, so **nothing in its subtree may
+  use `LayoutBuilder`, `AutoSizeText` or `FittedBox`** — they cannot report
+  intrinsics.
+- **`findBusyEmployees` must exclude the appointment under edit.** Pass
+  `excludeAppointmentId` from any edit-flow conflict check or the job collides
+  with itself and reports every one of its own assignees as busy. The exclusion
+  is by **doc id, not by series**, so a genuine clash with a sibling occurrence
+  still surfaces. A clash returns the sealed `EventDetailsBusyEmployees` (not an
+  error) and **must clear `isSaving`** before returning, or Save stays stuck
+  once the dialog is dismissed.
 - **Navigation (`lib/core/navigation/`, restructured 2026-07-30):**
   `AppDestination` is a **sealed** family — `enum HubTab {calendar, clients,
   employees, liveMap}` (the four `IndexedStack` panes) and
