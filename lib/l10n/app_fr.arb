@@ -36,6 +36,8 @@
   "common_employees": "Employés",
   "common_clients": "Clients",
   "calendar_appointmentCount": "{count, plural, =1{1 rendez-vous} other{{count} rendez-vous}}",
+  "calendar_assignedLabel": "ASSIGNÉ",
+  "calendar_photosLabel": "PHOTOS",
   "calendar_crewPlusOthers": "{name} +{others}",
   "calendar_crewAndClient": "{crew} · {client}",
   "calendar_scheduleLabel": "HORAIRE",

@@ -9,17 +9,15 @@ import 'package:scheduling/features/calendar/application/event_details_controlle
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_action_bar.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_view_leaf_widgets.dart';
-import 'package:scheduling/features/calendar/widgets/views/details_view_widgets.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_contacts_cards.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/cards/info_card.dart';
+import 'package:scheduling/shared/widgets/cards/key_value_panel.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/quick_action_button.dart';
-import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
 class DetailsViewBody extends ConsumerWidget {
   const DetailsViewBody({
@@ -79,17 +77,11 @@ class DetailsViewBody extends ConsumerWidget {
           clientName: data.clientName,
           phone: data.phone,
           displayAddress: displayAddress,
+          notes: data.notes,
           onCall: onCall,
           onDirections: onDirections,
         ),
         ClientContactsCards(contacts: data.extraContacts, collapsible: true),
-        if (data.notes.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.sp16),
-          DetailsSectionRow(
-            label: context.l10n.calendar_notes,
-            value: data.notes,
-          ),
-        ],
         if (data.materials.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sp16),
           DetailsMaterialsRow(items: data.materials),
@@ -248,7 +240,7 @@ class _DetailsViewData {
   final List<ClientContact> extraContacts;
 }
 
-/// Quick-actions row plus the client info card (name/phone/address). The call
+/// Quick-actions row plus the client panel (name/phone/address/notes). The call
 /// and directions callbacks are resolved in the parent's `build`, where `ref`
 /// lives, and a null callback just hides that affordance.
 class _ClientSection extends StatelessWidget {
@@ -256,6 +248,7 @@ class _ClientSection extends StatelessWidget {
     required this.clientName,
     required this.phone,
     required this.displayAddress,
+    required this.notes,
     required this.onCall,
     required this.onDirections,
   });
@@ -263,6 +256,7 @@ class _ClientSection extends StatelessWidget {
   final String clientName;
   final String phone;
   final String displayAddress;
+  final String notes;
   final VoidCallback? onCall;
   final VoidCallback? onDirections;
 
@@ -290,30 +284,34 @@ class _ClientSection extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sp24),
         ],
-        SectionLabel(context.l10n.calendar_client),
-        const SizedBox(height: AppSpacing.sp8),
-        InfoCard(
+        // The mono key column labels the content, so this panel needs no
+        // SectionLabel above it.
+        KeyValuePanel(
           rows: [
-            InfoCardRow(
-              icon: Icons.person_outline,
-              text: clientName,
-              emphasize: true,
+            KeyValueRow(
+              label: context.l10n.calendar_client.toUpperCase(),
+              value: clientName,
             ),
             if (phone.isNotEmpty)
-              InfoCardRow(
-                icon: Icons.phone_outlined,
-                text: phone,
+              KeyValueRow(
+                label: context.l10n.clients_phone.toUpperCase(),
+                value: phone,
+                emphasize: true,
                 onTap: onCall,
-                trailingIcon: Icons.chevron_right,
               ),
             if (displayAddress.isNotEmpty)
-              InfoCardRow(
-                icon: Icons.location_on_outlined,
-                text: displayAddress,
+              KeyValueRow(
+                label: context.l10n.common_address.toUpperCase(),
+                value: displayAddress,
+                emphasize: true,
                 onTap: onDirections,
-                trailingIcon: Icons.open_in_new,
                 semanticLabel:
                     '$displayAddress, ${context.l10n.maps_openAddressWith}',
+              ),
+            if (notes.isNotEmpty)
+              KeyValueRow(
+                label: context.l10n.calendar_notes.toUpperCase(),
+                value: notes,
               ),
           ],
         ),

@@ -149,6 +149,14 @@
       }
     }
   },
+  "calendar_assignedLabel": "ASSIGNED",
+  "@calendar_assignedLabel": {
+    "description": "Mono all-caps label above the assignee panel in the appointment detail sheet. Already uppercase in source."
+  },
+  "calendar_photosLabel": "PHOTOS",
+  "@calendar_photosLabel": {
+    "description": "Mono all-caps label above the photo row in the appointment detail sheet. Already uppercase in source."
+  },
   "calendar_crewPlusOthers": "{name} +{others}",
   "@calendar_crewPlusOthers": {
     "description": "Crew line on an appointment card when more than one person is assigned, e.g. Theo +1.",

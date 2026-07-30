@@ -7,7 +7,7 @@ import 'package:scheduling/features/calendar/widgets/sheets/details_edit_sheet.d
 import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
 
 const _kSheetShape = RoundedRectangleBorder(
-  borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.r20)),
+  borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.rSheet)),
 );
 
 Future<AppointmentRecord?> showAddEventPopup(

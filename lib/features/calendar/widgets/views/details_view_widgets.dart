@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
-import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
 class DetailsSectionRow extends StatelessWidget {
   const DetailsSectionRow({
@@ -26,7 +25,10 @@ class DetailsSectionRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SectionLabel(label),
+        // Mono all-caps, matching the KeyValuePanel's key column — every label
+        // in this sheet is mono. SectionLabel stays as-is for the rest of the
+        // app, which P3/P4 restyle on their own schedule.
+        Text(label.toUpperCase(), style: theme.monoType.label),
         const SizedBox(height: AppSpacing.sp8),
         customValue ??
             Text(

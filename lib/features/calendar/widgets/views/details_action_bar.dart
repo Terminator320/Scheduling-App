@@ -28,8 +28,13 @@ class DetailsActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final compact = context.isCompact;
+    // The design's complete action is a filled GREEN button, so it reads as
+    // the success it is rather than as the generic secondary.
+    final successFill = theme.statusColors.success;
+    final onSuccessFill = contrastingForegroundFor(successFill);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -39,8 +44,11 @@ class DetailsActionBar extends StatelessWidget {
           FilledButton(
             style: FilledButton.styleFrom(
               minimumSize: const Size(double.infinity, 48),
-              backgroundColor: scheme.secondary,
-              foregroundColor: scheme.onSecondary,
+              backgroundColor: successFill,
+              foregroundColor: onSuccessFill,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.r16),
+              ),
             ),
             onPressed: isSaving ? null : onMarkDone,
             child: _ActionButtonContent(
@@ -48,7 +56,7 @@ class DetailsActionBar extends StatelessWidget {
               icon: BusyButtonIcon(
                 isBusy: isSaving,
                 icon: Icons.check,
-                color: scheme.onSecondary,
+                color: onSuccessFill,
               ),
               label: context.l10n.calendar_markAsDone,
             ),
