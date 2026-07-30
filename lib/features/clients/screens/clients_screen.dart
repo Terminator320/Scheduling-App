@@ -13,7 +13,7 @@ import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
 import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
-import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
+import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
@@ -117,8 +117,7 @@ class _ListInformationState extends State<ListInformation> {
                 )
               : searchBar,
         ),
-        endDrawer: SettingsDrawer.endDrawerFor(
-          context,
+        endDrawer: AppNavDrawer(
           isAdmin: widget.isAdmin,
           employeeId: widget.employeeId,
         ),

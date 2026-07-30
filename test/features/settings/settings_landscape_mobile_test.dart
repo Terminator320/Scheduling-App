@@ -7,7 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/features/settings/screens/settings_screen.dart';
-import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
+import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -49,7 +49,7 @@ void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
   testWidgets(
-    'settings drawer does not overflow on narrow landscape at 2x text',
+    'nav drawer does not overflow on narrow landscape at 2x text',
     (
       tester,
     ) async {
@@ -60,7 +60,7 @@ void main() {
 
       await tester.pumpWidget(
         _wrap(
-          const SettingsDrawer(
+          const AppNavDrawer(
             isAdmin: true,
             employeeId: 'e1',
             userName: 'George Alexander Vogas',

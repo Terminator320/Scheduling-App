@@ -14,7 +14,7 @@ import 'package:scheduling/features/dashboard/widgets/sections/dashboard_hero.da
 import 'package:scheduling/features/dashboard/widgets/sections/employee_workload_section.dart';
 import 'package:scheduling/features/dashboard/widgets/sections/upcoming_today_section.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
-import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
+import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/hub_shell.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
@@ -88,8 +88,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
         ],
       ),
-      endDrawer: SettingsDrawer.endDrawerFor(
-        context,
+      endDrawer: AppNavDrawer(
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
         userName: widget.userName,
