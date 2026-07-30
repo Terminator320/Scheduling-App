@@ -24,7 +24,7 @@ import 'package:scheduling/features/presence/widgets/live_map_overlays.dart';
 import 'package:scheduling/features/presence/widgets/staff_info_card.dart';
 import 'package:scheduling/features/presence/widgets/staff_marker_icon.dart';
 import 'package:scheduling/features/presence/widgets/staff_roster_sheet.dart';
-import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
+import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/centered_error_text.dart';
@@ -165,8 +165,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
           compact: context.isLandscape,
           onBack: _backToCalendar,
         ),
-        endDrawer: SettingsDrawer.endDrawerFor(
-          context,
+        endDrawer: AppNavDrawer(
           isAdmin: widget.isAdmin,
           employeeId: widget.employeeId,
         ),
