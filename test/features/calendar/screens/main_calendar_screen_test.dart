@@ -1,6 +1,8 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/theme/theme_notifier.dart';
@@ -9,6 +11,7 @@ import 'package:scheduling/features/auth/application/account_status_provider.dar
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
+import 'package:scheduling/features/calendar/widgets/views/calendar_header_block.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -87,7 +90,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
   }
 
-  testWidgets('renders Calendar AppBar title for an admin', (tester) async {
+  testWidgets('renders the fixed header block for an admin', (tester) async {
     await withPhoneViewport(tester);
     final day = DateTime(2026, 5, 16);
     await tester.pumpWidget(
@@ -99,8 +102,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Two now: the app-bar title and the header pair's go-home pill.
-    expect(find.text('Calendar'), findsNWidgets(2));
+    // The calendar is the one screen without an AppTopBar — its header block
+    // hosts the pair instead, so the only "Calendar" text is the go-home pill.
+    expect(find.byType(AppBar), findsNothing);
+    expect(find.byType(CalendarHeaderBlock), findsOneWidget);
+    expect(find.text('Calendar'), findsOneWidget);
+    expect(find.text('SCHEDULE'), findsOneWidget);
     expect(find.byType(AppHeaderPair), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -181,7 +188,31 @@ void main() {
     expect(opacity.opacity, 1);
   });
 
-  testWidgets('month bar pluralizes the selected day appointment count', (
+  testWidgets('tapping the header month opens the month and year picker', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value(const []),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final today = DateTime.now();
+    await tester.tap(find.text(DateFormat.MMMM().format(today)));
+    await tester.pumpAndSettle();
+
+    // Both wheels — every month and the whole year window, as before the
+    // header block replaced the app bar.
+    expect(find.byType(CupertinoPicker), findsNWidgets(2));
+    expect(find.text(DateFormat.y().format(today)), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('agenda header pluralizes the selected day job count', (
     tester,
   ) async {
     await withPhoneViewport(tester);
@@ -196,33 +227,59 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('1 appointment'), findsOneWidget);
-    expect(find.textContaining('1 appointments'), findsNothing);
+    expect(find.text('1 JOB'), findsOneWidget);
+    expect(find.textContaining('1 JOBS'), findsNothing);
   });
 
-  testWidgets('month bar reserves room for its labels at 2x text scale', (
+  testWidgets('the header block grows with text scale instead of clipping', (
     tester,
   ) async {
     await withPhoneViewport(tester);
+
+    // The block sizes to its content now that it is a plain Column child, so
+    // the property to pin is that it grows — the old PreferredSize had to
+    // reserve height up front or the labels clipped.
+    Future<double> headerHeight(double scale) async {
+      await tester.pumpWidget(
+        _wrap(
+          appointments: Stream.value(const []),
+          allUsers: Stream.value(const [_jane]),
+          repo: repo,
+          textScale: scale,
+        ),
+      );
+      await tester.pumpAndSettle();
+      return tester.getSize(find.byType(CalendarHeaderBlock)).height;
+    }
+
+    final atNormal = await headerHeight(1);
+    final atDouble = await headerHeight(2);
+
+    expect(atDouble, greaterThan(atNormal));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the split layout renders the agenda header in its own pane', (
+    tester,
+  ) async {
+    // Tablet width, so _content takes the month | agenda branch.
+    tester.view.physicalSize = const Size(1024 * 2, 768 * 2);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final today = DateTime.now();
     await tester.pumpWidget(
       _wrap(
-        appointments: Stream.value(const []),
+        appointments: Stream.value([_appointment(1, today)]),
         allUsers: Stream.value(const [_jane]),
         repo: repo,
-        textScale: 2,
       ),
     );
     await tester.pumpAndSettle();
 
-    final countLabel = find.text('0 appointments');
-    expect(countLabel, findsOneWidget);
-
-    // Reserved AppBar space below the toolbar must fit the scaled month-bar
-    // text plus 8px padding, or labels get clipped (portrait toolbar height is kToolbarHeight).
-    final appBarRect = tester.getRect(find.byType(AppBar));
-    final reservedBottomSpace = appBarRect.height - kToolbarHeight;
-    final textHeight = tester.getSize(countLabel).height;
-    expect(reservedBottomSpace, greaterThanOrEqualTo(textHeight + 8));
+    expect(find.byType(CalendarHeaderBlock), findsOneWidget);
+    expect(find.text('1 JOB'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -239,8 +296,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Two now: the app-bar title and the header pair's go-home pill.
-    expect(find.text('Calendar'), findsNWidgets(2));
+    // Only the header pair's go-home pill now that the app bar is gone.
+    expect(find.text('Calendar'), findsOneWidget);
     expect(find.byType(AppHeaderPair), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

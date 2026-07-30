@@ -24,7 +24,8 @@ class DateUtilsHelper {
     return format.format(date);
   }
 
-  /// "Tuesday, June 23" day-group header for the history list.
+  /// "Tuesday, June 23" day header — the history day groups and the calendar
+  /// agenda both render it.
   static String formatDayHeader(DateTime date) {
     final format = _dayHeaderFormats.putIfAbsent(
       _locale,
