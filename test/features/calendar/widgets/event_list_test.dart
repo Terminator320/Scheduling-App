@@ -9,7 +9,7 @@ import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 Widget _wrap({
-  required ValueNotifier<List<AppointmentRecord>> events,
+  required List<AppointmentRecord> events,
   required bool isAdmin,
   Map<String, String> nameMap = const {},
 }) => MaterialApp(
@@ -34,15 +34,14 @@ Widget _wrap({
 );
 
 void main() {
-  late ValueNotifier<List<AppointmentRecord>> events;
+  late List<AppointmentRecord> events;
 
   setUpAll(() async {
     await initializeDateFormatting('en_CA');
   });
 
   setUp(() {
-    events = ValueNotifier(const <AppointmentRecord>[]);
-    addTearDown(events.dispose);
+    events = const <AppointmentRecord>[];
   });
 
   testWidgets('admin empty state suggests tapping the add FAB', (tester) async {
@@ -81,7 +80,7 @@ void main() {
   });
 
   testWidgets('appointment card lists every assigned employee', (tester) async {
-    events.value = [
+    events = [
       AppointmentRecord(
         id: '1',
         title: 'Kitchen sink',

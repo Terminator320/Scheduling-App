@@ -12,6 +12,8 @@ import 'package:scheduling/features/calendar/application/appointments_providers.
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_header_block.dart';
+import 'package:scheduling/features/calendar/widgets/views/calendar_month_pager.dart';
+import 'package:scheduling/features/calendar/widgets/views/calendar_week_strip.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -257,6 +259,42 @@ void main() {
 
     expect(atDouble, greaterThan(atNormal));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('scrolling the agenda collapses the grid into the week strip', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    // Enough jobs that the single viewport actually scrolls.
+    final today = DateTime.now();
+    final many = [for (var i = 0; i < 14; i++) _appointment(i, today)];
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value(many),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CalendarMonthPager), findsOneWidget);
+    expect(find.byType(CalendarWeekStrip), findsNothing);
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+
+    // Past 80px the grid unmounts and the strip rises inside the header.
+    expect(find.byType(CalendarWeekStrip), findsOneWidget);
+    expect(find.byType(CalendarMonthPager), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    // Back to the top re-expands: the offset armed on the way up and fired
+    // below 6px.
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 600));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CalendarMonthPager), findsOneWidget);
+    expect(find.byType(CalendarWeekStrip), findsNothing);
   });
 
   testWidgets('the split layout renders the agenda header in its own pane', (

@@ -84,13 +84,35 @@ class CalendarHeaderBlock extends StatelessWidget {
                     controls,
                   ],
                 ),
-              ?weekStrip,
+              _WeekStripSlot(strip: weekStrip),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+/// Slides the week strip in from above as the month grid collapses, and takes
+/// no space at all while there is no strip.
+class _WeekStripSlot extends StatelessWidget {
+  const _WeekStripSlot({required this.strip});
+
+  final Widget? strip;
+
+  @override
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : AppMotion.riseInShort,
+    switchInCurve: AppMotion.emphasized,
+    transitionBuilder: (child, animation) => SizeTransition(
+      sizeFactor: animation,
+      alignment: Alignment.topCenter,
+      child: FadeTransition(opacity: animation, child: child),
+    ),
+    child: strip ?? const SizedBox.shrink(),
+  );
 }
 
 class _TitleColumn extends StatelessWidget {

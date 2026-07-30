@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
-import 'package:scheduling/features/calendar/utils/appointment_colors.dart';
-import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
-import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
-import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
-import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
-import 'package:scheduling/shared/widgets/primitives/fade_in_item.dart';
+import 'package:scheduling/features/calendar/widgets/views/agenda_sliver_list.dart';
 
+/// The agenda as a standalone scrolling pane, for hosts that are not the
+/// portrait calendar's single viewport — the split layout's right pane and the
+/// master-detail surfaces. The content itself lives in [AgendaSliverList], so
+/// both hosts build the same rows.
 class EventList extends StatelessWidget {
   const EventList({
     required this.events,
@@ -20,7 +17,8 @@ class EventList extends StatelessWidget {
     this.onAppointmentTap,
     this.selectedAppointmentId,
   });
-  final ValueNotifier<List<AppointmentRecord>> events;
+
+  final List<AppointmentRecord> events;
   final Map<String, String> nameMap;
   final Map<String, Color> colorMap;
   final bool isAdmin;
@@ -28,92 +26,20 @@ class EventList extends StatelessWidget {
   final void Function(AppointmentRecord appointment)? onAppointmentTap;
   final String? selectedAppointmentId;
 
-  Widget _buildSkeleton() {
-    return ListView(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sp16,
-        vertical: AppSpacing.sp8,
-      ),
-      children: const [
-        SkeletonAppointmentRow(),
-        SizedBox(height: AppSpacing.sp8),
-        SkeletonAppointmentRow(),
-        SizedBox(height: AppSpacing.sp8),
-        SkeletonAppointmentRow(),
-      ],
-    );
-  }
-
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return Expanded(
-      child: isLoading
-          ? _buildSkeleton()
-          : ValueListenableBuilder<List<AppointmentRecord>>(
-              valueListenable: events,
-              builder: (context, value, _) {
-                if (value.isEmpty) {
-                  return AppEmptyState(
-                    icon: Icons.event_outlined,
-                    title: context.l10n.common_noAppointmentsFound,
-                    // Only admins have the '+' FAB, so don't tell employees to tap a button that isn't there.
-                    body: isAdmin
-                        ? context.l10n.common_tapToScheduleAnAppointment
-                        : context.l10n.calendar_noAppointmentsForDay,
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sp4),
-                  itemCount: value.length,
-                  itemBuilder: (context, index) {
-                    final e = value[index];
-                    final accent = colorFromMap(e, colorMap) ?? scheme.outline;
-                    // Show every assigned employee, but drop any ids that
-                    // don't resolve to a name and skip blank names.
-                    final joinedNames = e.employeeIds
-                        .map((id) => nameMap[id])
-                        .whereType<String>()
-                        .where((name) => name.isNotEmpty)
-                        .join(', ');
-                    final employeeName = joinedNames.isEmpty
-                        ? null
-                        : joinedNames;
-
-                    return FadeInItem(
-                      key: ValueKey(e.id),
-                      index: index,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sp16,
-                          vertical: AppSpacing.sp4,
-                        ),
-                        child: AppointmentCard(
-                          appointment: e,
-                          employeeColor: accent,
-                          employeeName: employeeName,
-                          selected: selectedAppointmentId == e.id,
-                          onTap: () {
-                            if (onAppointmentTap != null) {
-                              onAppointmentTap!(e);
-                            } else {
-                              showEventDetails(
-                                context,
-                                e,
-                                showActions: isAdmin,
-                              );
-                            }
-                          },
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-    );
-  }
+  Widget build(BuildContext context) => Expanded(
+    child: CustomScrollView(
+      slivers: [
+        AgendaSliverList(
+          events: events,
+          nameMap: nameMap,
+          colorMap: colorMap,
+          isAdmin: isAdmin,
+          isLoading: isLoading,
+          onAppointmentTap: onAppointmentTap,
+          selectedAppointmentId: selectedAppointmentId,
+        ),
+      ],
+    ),
+  );
 }
