@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
+import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
-import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';

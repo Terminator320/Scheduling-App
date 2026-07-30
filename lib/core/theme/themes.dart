@@ -48,9 +48,12 @@ ThemeData? _darkThemeCache;
 ThemeData darkTheme() => _darkThemeCache ??= _buildDarkTheme();
 
 ThemeData _buildLightTheme() {
+  // onPrimary, onError and surface are left to ColorScheme.light's defaults,
+  // which already equal the tokens we want. `light_scheme_defaults_test.dart`
+  // pins them, so a framework change to those defaults fails a test instead of
+  // silently repainting the app.
   const cs = ColorScheme.light(
     primary: AppColors.blue,
-    onPrimary: Colors.white,
     primaryContainer: AppColors.blueTint,
     onPrimaryContainer: AppColors.blue,
     secondary: AppColors.green,
@@ -62,10 +65,8 @@ ThemeData _buildLightTheme() {
     tertiaryContainer: AppColors.amberFill,
     onTertiaryContainer: AppColors.amberText,
     error: AppColors.red,
-    onError: Colors.white,
     errorContainer: AppColors.redFill,
     onErrorContainer: AppColors.redText,
-    surface: AppColors.surface,
     onSurface: AppColors.ink,
     onSurfaceVariant: AppColors.ink60,
     outline: AppColors.hairline,

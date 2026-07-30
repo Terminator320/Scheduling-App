@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
+import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -15,7 +16,6 @@ import 'package:scheduling/features/dashboard/widgets/sections/employee_workload
 import 'package:scheduling/features/dashboard/widgets/sections/upcoming_today_section.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
-import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
