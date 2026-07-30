@@ -61,7 +61,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       hintText: context.l10n.clients_searchByClientOrEmployee,
     );
     return FeatureTourHost(
-      tab: PushedDestination.history,
+      destination: PushedDestination.history,
       isAdmin: widget.isAdmin,
       stepKeys: _tourKeys,
       child: Scaffold(
@@ -72,7 +72,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           bottom: _tourSteps.contains(TourStepId.historySearch)
               ? TourShowcaseBar(
                   showcaseKey: _tourKeys[TourStepId.historySearch]!,
-                  tab: PushedDestination.history,
+                  destination: PushedDestination.history,
                   id: TourStepId.historySearch,
                   index: _tourSteps.indexOf(TourStepId.historySearch),
                   count: _tourSteps.length,

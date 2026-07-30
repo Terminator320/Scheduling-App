@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
-import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -11,11 +10,11 @@ const _keyTourSeenTabs = 'tour_seen_tabs';
 
 /// Tracks which tours this device has already seen. Await `ready` before
 /// reading it, or a cold start can replay a tour that was already seen.
-class TourSeenController extends Notifier<Set<AdaptiveDestination>> {
+class TourSeenController extends Notifier<Set<AppDestination>> {
   late final Future<void> ready = _load();
 
   @override
-  Set<AdaptiveDestination> build() {
+  Set<AppDestination> build() {
     unawaited(ready);
     return const {};
   }
@@ -24,9 +23,11 @@ class TourSeenController extends Notifier<Set<AdaptiveDestination>> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final names = prefs.getStringList(_keyTourSeenTabs) ?? const [];
+      // Lookup-based, so a name that no longer maps to a destination is
+      // dropped rather than resurrecting a dead tour.
       state = {
-        for (final tab in allDestinations)
-          if (names.contains(tab.name)) tab,
+        for (final name in names)
+          if (destinationByName(name) case final destination?) destination,
       };
     } catch (e, st) {
       // This is unawaited from build(), so on failure we just fall back to
@@ -35,7 +36,7 @@ class TourSeenController extends Notifier<Set<AdaptiveDestination>> {
     }
   }
 
-  Future<void> markSeen(AdaptiveDestination tab) async {
+  Future<void> markSeen(AppDestination tab) async {
     state = {...state, tab};
     await _save();
   }
@@ -59,6 +60,6 @@ class TourSeenController extends Notifier<Set<AdaptiveDestination>> {
 }
 
 final tourSeenProvider =
-    NotifierProvider<TourSeenController, Set<AdaptiveDestination>>(
+    NotifierProvider<TourSeenController, Set<AppDestination>>(
       TourSeenController.new,
     );

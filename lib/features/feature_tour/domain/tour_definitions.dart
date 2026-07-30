@@ -1,18 +1,18 @@
 import 'package:scheduling/core/navigation/app_destination.dart';
-import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 
 /// The showcaseview scope name for a tab. Each tab needs its own scope
 /// because the hub's IndexedStack keeps every tab mounted — a shared scope
 /// would mix hidden tabs' targets into the visible tour.
-String tourScopeName(AdaptiveDestination tab) => 'tour_${tab.name}';
+String tourScopeName(AppDestination destination) => 'tour_${destination.name}';
 
-/// Ordered step catalog for a tab and role. Clients, Employees, History, and
-/// LiveMap are admin-only tabs, so their employee catalogs are empty.
+/// Ordered step catalog for a destination and role. Clients, Employees,
+/// History and LiveMap are admin-only, so their employee catalogs are empty.
+/// A destination that mounts no tour host returns an empty catalog.
 List<TourStepId> tourStepsFor(
-  AdaptiveDestination tab, {
+  AppDestination destination, {
   required bool isAdmin,
-}) => switch (tab) {
+}) => switch (destination) {
   HubTab.calendar => [
     TourStepId.calendarGrid,
     TourStepId.calendarDayList,
@@ -34,4 +34,6 @@ List<TourStepId> tourStepsFor(
     TourStepId.settingsNotifications,
     TourStepId.settingsReplay,
   ],
+  PushedDestination.dayRoute => const [],
+  PushedDestination.dashboard => const [],
 };

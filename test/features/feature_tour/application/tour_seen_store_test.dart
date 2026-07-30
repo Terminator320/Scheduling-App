@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
-import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/features/feature_tour/application/tour_seen_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
