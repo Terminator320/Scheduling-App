@@ -13,6 +13,7 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 
 class _MockEmployeesRepo extends Mock implements EmployeesRepository {}
 
@@ -98,7 +99,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Calendar'), findsOneWidget);
+    // Two now: the app-bar title and the header pair's go-home pill.
+    expect(find.text('Calendar'), findsNWidgets(2));
+    expect(find.byType(AppHeaderPair), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -176,7 +179,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Calendar'), findsOneWidget);
+    // Two now: the app-bar title and the header pair's go-home pill.
+    expect(find.text('Calendar'), findsNWidgets(2));
+    expect(find.byType(AppHeaderPair), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

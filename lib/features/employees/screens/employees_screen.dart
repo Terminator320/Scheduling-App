@@ -20,6 +20,7 @@ import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart'
 import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
@@ -156,6 +157,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
       ),
+      actions: const [AppHeaderPair()],
       bottom: _tourSteps.contains(TourStepId.employeesSearch)
           ? TourShowcaseBar(
               showcaseKey: _tourKeys[TourStepId.employeesSearch]!,

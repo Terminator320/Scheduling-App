@@ -25,7 +25,7 @@ Widget _wrap(Widget child, {double textScale = 1.0}) => ThemeNotifier(
 
 void main() {
   testWidgets('shows all 4 size options', (tester) async {
-    await tester.pumpWidget(_wrap(const TextSizeScreen()));
+    await tester.pumpWidget(_wrap(const TextSizeScreen(isAdmin: true, employeeId: 'e1')));
     expect(find.text('Small'), findsOneWidget);
     expect(find.text('Medium'), findsOneWidget);
     expect(find.text('Large'), findsOneWidget);
@@ -33,18 +33,18 @@ void main() {
   });
 
   testWidgets('shows Apply button', (tester) async {
-    await tester.pumpWidget(_wrap(const TextSizeScreen()));
+    await tester.pumpWidget(_wrap(const TextSizeScreen(isAdmin: true, employeeId: 'e1')));
     expect(find.text('Apply'), findsOneWidget);
   });
 
   testWidgets('Medium is selected by default when scale is 1.0', (tester) async {
-    await tester.pumpWidget(_wrap(const TextSizeScreen()));
+    await tester.pumpWidget(_wrap(const TextSizeScreen(isAdmin: true, employeeId: 'e1')));
     expect(find.text('Medium'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('tapping Small selects it (no exception)', (tester) async {
-    await tester.pumpWidget(_wrap(const TextSizeScreen()));
+    await tester.pumpWidget(_wrap(const TextSizeScreen(isAdmin: true, employeeId: 'e1')));
     await tester.tap(find.text('Small'));
     await tester.pump();
     expect(tester.takeException(), isNull);
@@ -65,7 +65,7 @@ void main() {
           GlobalWidgetsLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(body: TextSizeScreen()),
+        home: Scaffold(body: TextSizeScreen(isAdmin: true, employeeId: 'e1')),
       ),
     ));
     await tester.tap(find.text('Apply'));
@@ -80,7 +80,7 @@ void main() {
     tester.view.devicePixelRatio = 3;
     await tester.pumpWidget(MediaQuery(
       data: const MediaQueryData(textScaler: TextScaler.linear(2)),
-      child: _wrap(const TextSizeScreen()),
+      child: _wrap(const TextSizeScreen(isAdmin: true, employeeId: 'e1')),
     ));
     expect(tester.takeException(), isNull);
   });

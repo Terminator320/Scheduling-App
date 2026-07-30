@@ -26,6 +26,7 @@ import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
+import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/error_snack_bar.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -45,7 +46,6 @@ class MainCalendar extends ConsumerStatefulWidget {
 }
 
 class _MainCalendarState extends ConsumerState<MainCalendar> {
-  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   final ValueNotifier<List<AppointmentRecord>> _selectedEvents = ValueNotifier(
     [],
@@ -313,7 +313,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       ready: !data.isLoading,
       stepKeys: _tourKeys,
       child: Scaffold(
-        key: _scaffoldKey,
         appBar: AppTopBar(
           title: context.l10n.common_calendar,
           compact: context.isLandscape,
@@ -378,13 +377,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         ),
       ),
     ),
-    // In landscape / on tablets the nav rail replaces the drawer.
-    if (!context.isSplitLayout)
-      IconButton(
-        icon: Icon(Icons.menu, color: scheme.onPrimary),
-        tooltip: context.l10n.calendar_openMenuTooltip,
-        onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-      ),
+    const AppHeaderPair(),
   ];
 
   Widget? _addAppointmentFab(BuildContext context) {

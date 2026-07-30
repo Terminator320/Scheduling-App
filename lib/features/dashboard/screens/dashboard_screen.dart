@@ -15,8 +15,9 @@ import 'package:scheduling/features/dashboard/widgets/sections/employee_workload
 import 'package:scheduling/features/dashboard/widgets/sections/upcoming_today_section.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
+import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/routes/hub_shell.dart';
+import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/centered_error_text.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
@@ -42,11 +43,9 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   // Key for the end drawer, matching the pattern used by the hub screens.
-  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final stats = ref.watch(dashboardStatsProvider);
     ref.listen<AsyncValue<DashboardStats>>(dashboardStatsProvider, (
       previous,
@@ -69,24 +68,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     });
 
     return Scaffold(
-      key: _scaffoldKey,
       appBar: AppTopBar(
         title: context.l10n.dashboard_title,
         compact: context.isLandscape,
-        onBack: () {
-          // Return to calendar tab, then pop.
-          HubShell.liveState?.showCalendar();
-          Navigator.pop(context);
-        },
-        actions: [
-          // Split layout shows a nav rail instead, so there's no drawer to open here.
-          if (!context.isSplitLayout)
-            IconButton(
-              icon: Icon(Icons.menu, color: scheme.onPrimary),
-              tooltip: context.l10n.calendar_openMenuTooltip,
-              onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-            ),
-        ],
+        // A pushed route now, so back means back. The Calendar pill covers
+        // go-home.
+        onBack: () => Navigator.maybePop(context),
+        actions: const [AppHeaderPair()],
       ),
       endDrawer: AppNavDrawer(
         isAdmin: widget.isAdmin,
@@ -94,16 +82,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         userName: widget.userName,
         email: widget.email,
       ),
-      body: switch (stats) {
-        AsyncData(:final value) => _StatsList(
-          stats: value,
-          isAdmin: widget.isAdmin,
-        ),
-        AsyncError() => CenteredErrorText(
-          message: context.l10n.error_introLoadDashboard,
-        ),
-        _ => const _LoadingList(),
-      },
+      body: PrimaryScrollScope(
+        child: switch (stats) {
+          AsyncData(:final value) => _StatsList(
+            stats: value,
+            isAdmin: widget.isAdmin,
+          ),
+          AsyncError() => CenteredErrorText(
+            message: context.l10n.error_introLoadDashboard,
+          ),
+          _ => const _LoadingList(),
+        },
+      ),
     );
   }
 }

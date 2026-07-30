@@ -12,7 +12,6 @@ import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
-import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -44,8 +43,10 @@ import 'package:scheduling/features/settings/widgets/cards/settings_tiles.dart';
 import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dialog.dart';
 import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
 import 'package:scheduling/features/wave/widgets/wave_settings_section.dart';
+import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
+import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
@@ -159,7 +160,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     }
     await Navigator.push<void>(
       context,
-      MaterialPageRoute(builder: (_) => const TextSizeScreen()),
+      MaterialPageRoute(
+        builder: (_) => TextSizeScreen(
+          isAdmin: _isAdmin,
+          employeeId: widget.employeeId,
+        ),
+      ),
     );
     if (mounted) setState(() {});
   }
@@ -336,12 +342,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             appBar: AppTopBar(
               title: context.l10n.common_settings,
               compact: context.isLandscape,
-              onBack: () => navigateToDestination(
-                context,
-                HubTab.calendar,
-                isAdmin: _isAdmin,
-                employeeId: widget.employeeId,
-              ),
+              // A pushed route now, so back means back. The Calendar pill
+              // covers go-home.
+              onBack: () => Navigator.maybePop(context),
+              actions: const [AppHeaderPair()],
+            ),
+            endDrawer: AppNavDrawer(
+              isAdmin: _isAdmin,
+              employeeId: widget.employeeId,
+              userName: widget.name,
+              email: widget.email,
             ),
             body: MasterDetailScaffold(
               master: _buildMaster(),
