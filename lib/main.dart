@@ -273,8 +273,10 @@ class _PaulAppState extends ConsumerState<PaulApp> {
 
     final navContext = _navigatorKey.currentContext;
     if (navContext == null || !navContext.mounted) return;
-    // Collapse stacked routes to open appointment over calendar root.
-    _navigatorKey.currentState?.popUntil((route) => route.isFirst);
+    // Collapse stacked routes to open the appointment over the shell.
+    // Not popUntil(isFirst): on _hubRoute's fallback branch the shell is not
+    // route #1, so that predicate pops the shell itself.
+    shell.goHome();
 
     if (appointmentId.isEmpty) return;
     if (record == null) {
