@@ -48,8 +48,12 @@ struct Job: Codable, Hashable {
     /// Deep link into the app's calendar for this appointment. The Flutter
     /// side (home_widget `widgetClicked`) opens the detail sheet via the
     /// scheme registered in Info.plist (`CFBundleURLTypes`).
+    /// `homeWidget` is load-bearing: the home_widget plugin's `isWidgetUrl`
+    /// claims only URLs carrying that query item, and nothing else consumes
+    /// the scheme (`FlutterDeepLinkingEnabled` is false). Drop it only when
+    /// the P4b app_links dispatcher replaces the home_widget tap channel.
     var deepLink: URL? {
-        URL(string: "esproschedule://appointment?id=\(id)")
+        URL(string: "esproschedule://appointment?id=\(id)&homeWidget")
     }
 }
 
