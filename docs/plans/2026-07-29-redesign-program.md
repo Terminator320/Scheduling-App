@@ -105,10 +105,13 @@ code 2026-07-29):
   `AppPageRoute`s. `hub_shell_test.dart` selects `.settings`/`.history` and breaks; so does
   `tour_definitions_test.dart`'s "every enum value has an admin tour" assertion.
 - **The Calendar pill needs a composite go-home helper, not `select()` alone**:
-  `closeEndDrawer()` → `HubShell.liveState.showCalendar()` → `popUntil` — with a root-safety guard,
-  because `popUntil(isFirst)` is wrong on the `_hubRoute` fallback branch where the shell is not
-  route #1. Two dispatch paths: `HubShellScope` on tab screens, static `HubShell.liveState` on
-  pushed screens (the Dashboard back button is the existing precedent).
+  `closeEndDrawer()` → `HubShell.liveState.showCalendar()` → pop back to the shell. The pop
+  target is the **shell's own route**: `HubShellState` captures `ModalRoute.of(context)` and the
+  helper does `popUntil((r) => r == shellRoute)` — precise regardless of stack composition,
+  unlike `popUntil(isFirst)`, which is wrong on the `_hubRoute` fallback branch where the shell
+  is not route #1 (the existing appointment deep-link handler shares that latent assumption).
+  Two dispatch paths: `HubShellScope` on tab screens, static `HubShell.liveState` on pushed
+  screens (the Dashboard back button is the existing precedent).
 - **Feature tours on pushed routes need a new host gate.** `FeatureTourHost` gates on
   `HubShellScope.currentOf`, which is null on a pushed route — the Settings/History tours would
   silently never start (Settings is one of only two employee tours). Decision: add a
@@ -214,7 +217,12 @@ still **never** emits `waveCustomerId`/`wave`/`jobCount`.
 
 **Archived hazard (the trap).** Existing docs lack the field and Firestore excludes docs missing a
 filter field — so **no `where('archived' == false)` anywhere**; filtering is Dart-side, and the
-test is always `!(archived ?? false)` (Wave-imported docs never carry the field). Verified against
+test is always `!(archived ?? false)` (Wave-imported docs never carry the field). The
+backfill-then-where-filter alternative was considered and REJECTED: it needs a composite
+`(archived, name)` index, a one-shot mass write over every client doc, a patch to Wave
+`importCustomers` (Admin SDK bypasses rules, so rules can't enforce the field on that path), and
+permanent every-writer discipline — one missed writer silently hides clients again. Dart-side
+filtering contains the whole cost in the repository. Verified against
 the code 2026-07-29, the filtering splits by surface:
 
 - **Search** matches in Dart already — one choke point (`matchClientDocs` in the repo, plus the
@@ -263,11 +271,16 @@ edit sheet; action tiles **Call · Directions · Book job** (Book job opens the 
 info panel `PHONE · ADDRESS · MANAGER · BILLING` (empty rows omitted); `JOB HISTORY` panel via the
 existing `clientJobHistoryProvider`.
 
-**Job count.** Server-maintained `jobCount` on the client doc, updated by a small addition to the
-appointment write trigger (`FieldValue.increment` on create/delete/client-reassignment; idempotency
-consistent with the trigger's existing retry semantics — exact mechanics in the P3 plan). Feeds the
-list row's mono count and the archive caption ("keeps the N past jobs"). Rows render no count until
-the field exists (empty-omitted rule). A one-time backfill script counts existing appointments.
+**Job count.** Server-maintained `jobCount` on the client doc — but by **absolute recount, never
+`FieldValue.increment`**: the appointment write trigger runs `retry: true`, and a retried event
+would double-count an increment. Instead, on any appointment create/delete/`clientId` change the
+trigger runs a Firestore `count()` aggregate for the affected client(s) (both clients on a
+reassignment) and **sets** the value — idempotent by construction, same "absolute writes +
+`retry: true`" principle `propagateClientEdits` already documents, ~1 aggregate read per
+appointment write. This also makes the backfill lazy: a client's count self-heals on its next
+appointment write; rows render no count until the field exists (empty-omitted rule), and a
+one-time recount script is optional polish rather than a migration prerequisite. The archive
+caption ("keeps the N past jobs") reads the same field.
 
 ## P4 — Team
 
@@ -330,19 +343,23 @@ turns every box red with the expiry explanation. `DON'T HAVE A CODE?` panel copy
 no-email reality (the admin reads it off the Team page).
 
 **Deep link — this is a delivery layer, not a route** (verified 2026-07-29: no URL ever reaches
-Dart today). `esproschedule://invite?code=...` needs ALL of: an **Android `intent-filter`** for
-the scheme (none exists — the manifest is MAIN/LAUNCHER only); an **iOS delivery path**
-(`FlutterDeepLinkingEnabled` is explicitly `false`, `AppDelegate` has no `open url` override, and
-the `home_widget` plugin's handler rejects any URL without a `homeWidget` query param); a **Dart
-URL listener/parser** (none exists — no app_links/uni_links); a `code` parameter + **named route**
-for `CreateAccountScreen` (today it's an anonymous `MaterialPageRoute` taking only
-`initialEmail`); and a **signed-out dispatch path** — the existing `_openAppointmentDeepLink`
-returns immediately when `currentUser == null` and then waits on a live `HubShell`, both of which
-an invite link must bypass (route to the code screen pre-auth instead). While in there: the three
-iOS URL producers (home-screen widget, Siri snapshot, Live Activity) emit
-`esproschedule://appointment?id=…` **without** the `homeWidget` param the plugin requires, so
-those taps likely do nothing today — verify on device and route them through the new delivery
-layer. The https store-fallback page still ships with the deferred email project.
+Dart today — `FlutterDeepLinkingEnabled` is `false`, `AppDelegate` has no `open url` override,
+Android has no `intent-filter`, and the `home_widget` handler rejects any URL without a
+`homeWidget` query param). Delivery mechanism: the **`app_links` package** (SPM-vetted 2026-07-29
+— ships `ios/app_links/Package.swift`, latest 7.2.1) rather than hand-rolled native handlers. It
+provides the initial-link + stream API on both platforms; still required around it: the Android
+`intent-filter` for `esproschedule` in the manifest (the iOS scheme is already registered;
+`FlutterDeepLinkingEnabled` stays `false` — that's the correct setting *for* app_links), **one
+Dart dispatcher** on the app_links stream that routes by URI host (`invite` → code screen,
+`appointment` → the existing `_openAppointmentDeepLink`), a `code` parameter + **named route** for
+`CreateAccountScreen` (today an anonymous `MaterialPageRoute` taking only `initialEmail`), and a
+**signed-out path** — the invite branch must bypass the `currentUser == null` guard and the
+live-`HubShell` wait that gate the appointment branch. This also becomes the natural fix for the
+three iOS URL producers (home-screen widget, Siri snapshot, Live Activity) whose
+`esproschedule://appointment?id=…` taps likely do nothing today (no `homeWidget` param, so the
+`home_widget` plugin never claims them) — once the dispatcher exists they ride it and the
+`home_widget` tap channel can retire; coordinate with the separate verification task already
+running on that bug. The https store-fallback page still ships with the deferred email project.
 
 **Accept your invite — details.** Invite banner (who invited you, role, scope caption), first/last
 split row, phone, password with a 4-segment strength meter (client-side), then the combined
