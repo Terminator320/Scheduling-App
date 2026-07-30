@@ -97,24 +97,26 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
     // Cancelled visits stay editable — `showActions` is the only thing that
     // gates the edit form.
     final showEdit = state.isEditing && widget.showActions;
+    // The edit form owns its own sheet chrome (FormSheetFrame), so it replaces
+    // the read view's scroll shell rather than nesting inside it.
+    if (showEdit) {
+      return DetailsEditBody(
+        appointment: widget.appointment,
+        controllers: _ensureControllers(),
+        onSaved: _handleClose,
+        onClose: _handleClose,
+      );
+    }
     return DetailSheetListView(
       scrollController: widget.scrollController,
       showHandle: widget.showHandle,
       handleGap: AppSpacing.sp8,
       children: [
-        if (showEdit)
-          DetailsEditBody(
-            appointment: widget.appointment,
-            controllers: _ensureControllers(),
-            onSaved: _handleClose,
-            onClose: _handleClose,
-          )
-        else
-          DetailsViewBody(
-            appointment: widget.appointment,
-            showActions: widget.showActions,
-            onClose: _handleClose,
-          ),
+        DetailsViewBody(
+          appointment: widget.appointment,
+          showActions: widget.showActions,
+          onClose: _handleClose,
+        ),
       ],
     );
   }

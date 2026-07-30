@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -25,6 +24,7 @@ import 'package:scheduling/features/calendar/widgets/sheets/inline_add_client_ho
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/sheets/form_sheet_frame.dart';
 
 class DetailsEditBody extends ConsumerStatefulWidget {
   const DetailsEditBody({
@@ -71,7 +71,6 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final appointment = widget.appointment;
     final controllers = widget.controllers;
     final provider = eventDetailsControllerProvider(
@@ -82,18 +81,13 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     final allEmployees =
         ref.watch(employeesStreamProvider).asData?.value ?? const [];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return FormSheetFrame(
+      title: context.l10n.calendar_editAppointment,
+      primaryLabel: context.l10n.common_saveChanges,
+      isBusy: state.isSaving,
+      onPrimary: () => _save(context, ref),
+      onCancel: widget.onClose,
       children: [
-        // --- Header ---
-        Text(
-          context.l10n.calendar_editAppointment,
-          style: theme.textTheme.headlineLarge,
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        const Divider(height: 1),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Shared form fields ---
         AppointmentFormFields(
           controllers: controllers,
           allEmployees: allEmployees,
@@ -123,10 +117,9 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           photosSection: _EditPhotosSection(appointment: appointment),
         ),
         const SizedBox(height: AppSpacing.sp24),
-        // --- Actions ---
-        _ActionButtons(
+        // Destructive actions live in the footer, never in the bar.
+        _DeleteButton(
           isSaving: state.isSaving,
-          onSave: () => _save(context, ref),
           onDelete: () => _confirmDelete(context, ref),
         ),
       ],
@@ -343,40 +336,21 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
   }
 }
 
-class _ActionButtons extends StatelessWidget {
-  const _ActionButtons({
-    required this.isSaving,
-    required this.onSave,
-    required this.onDelete,
-  });
+class _DeleteButton extends StatelessWidget {
+  const _DeleteButton({required this.isSaving, required this.onDelete});
 
   final bool isSaving;
-  final VoidCallback onSave;
   final VoidCallback onDelete;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AnimatedLoadingButton(
-          label: context.l10n.common_saveChanges,
-          isLoading: isSaving,
-          onPressed: onSave,
-          height: 48,
-        ),
-        const SizedBox(height: AppSpacing.sp8),
-        OutlinedButton(
-          style: destructiveOutlinedButtonStyle(
-            context,
-            minimumSize: const Size(double.infinity, 48),
-          ),
-          onPressed: isSaving ? null : onDelete,
-          child: Text(context.l10n.calendar_deleteAppointment),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => OutlinedButton(
+    style: destructiveOutlinedButtonStyle(
+      context,
+      minimumSize: const Size(double.infinity, 48),
+    ),
+    onPressed: isSaving ? null : onDelete,
+    child: Text(context.l10n.calendar_deleteAppointment),
+  );
 }
 
 class _EditPhotosSection extends ConsumerWidget {

@@ -149,6 +149,22 @@
       }
     }
   },
+  "calendar_sectionTemplates": "TEMPLATES",
+  "@calendar_sectionTemplates": {
+    "description": "Mono all-caps section label above the job-template chips in the job form. Already uppercase in source."
+  },
+  "calendar_sectionWho": "WHO",
+  "@calendar_sectionWho": {
+    "description": "Mono all-caps section label above the service, client and assignee fields in the job form. Already uppercase in source."
+  },
+  "calendar_sectionSchedule": "SCHEDULE",
+  "@calendar_sectionSchedule": {
+    "description": "Mono all-caps section label above the date, time and repeat fields in the job form. Already uppercase in source."
+  },
+  "calendar_sectionDetails": "DETAILS",
+  "@calendar_sectionDetails": {
+    "description": "Mono all-caps section label above the address, notes and materials fields in the job form. Already uppercase in source."
+  },
   "calendar_repeatsEveryLabel": "REPEATS {interval}",
   "@calendar_repeatsEveryLabel": {
     "description": "Mono all-caps context label at the top of the repeat-scope dialog, e.g. REPEATS EVERY 2 WEEKS.",
@@ -445,6 +461,10 @@
   "clients_newClient": "New client",
   "@clients_newClient": {
     "description": "New client"
+  },
+  "common_save": "Save",
+  "@common_save": {
+    "description": "Primary verb in a form sheet's top bar, where the full 'Save Appointment' would not fit."
   },
   "common_saveChanges": "Save changes",
   "@common_saveChanges": {
