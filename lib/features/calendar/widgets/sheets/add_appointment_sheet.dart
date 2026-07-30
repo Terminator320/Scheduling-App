@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
-import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
@@ -18,7 +16,7 @@ import 'package:scheduling/features/calendar/widgets/sheets/inline_add_client_ho
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
+import 'package:scheduling/shared/widgets/sheets/form_sheet_frame.dart';
 
 class AddEventSheet extends ConsumerStatefulWidget {
   const AddEventSheet({super.key, this.initialDate});
@@ -186,12 +184,12 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     final allEmployees =
         ref.watch(employeesStreamProvider).asData?.value ?? const [];
 
-    return FormSheetScaffold(
+    return FormSheetFrame(
       title: context.l10n.calendar_newAppointment,
+      primaryLabel: context.l10n.common_save,
+      isBusy: state.isSubmitting,
+      onPrimary: _submit,
       children: [
-        const SizedBox(height: AppSpacing.sp16),
-        const Divider(height: 1),
-        const SizedBox(height: AppSpacing.sp16),
         AppointmentFormFields(
           controllers: _controllers,
           allEmployees: allEmployees,
@@ -225,13 +223,6 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
             onRemoveExisting: (_) {},
             onRemoveNew: _notifier.removeImage,
           ),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        AnimatedLoadingButton(
-          label: context.l10n.calendar_saveAppointment,
-          isLoading: state.isSubmitting,
-          onPressed: _submit,
-          height: 48,
         ),
       ],
     );

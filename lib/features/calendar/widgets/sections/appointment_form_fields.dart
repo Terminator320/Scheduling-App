@@ -16,8 +16,10 @@ import 'package:scheduling/features/clients/widgets/fields/client_search_field.d
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
+import 'package:scheduling/shared/widgets/fields/sheet_field_row.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
 /// The eight text controllers an appointment form drives. Shared between the add and edit flows so their field sets stay in sync.
@@ -177,8 +179,8 @@ class AppointmentFormFields extends StatelessWidget {
   List<Widget> _templatesSection(BuildContext context, AppLocalizations l10n) {
     if (onApplyTemplate == null) return const [];
     return [
-      formLabel(context, l10n.calendar_jobTemplatesLabel, optional: true),
-      const SizedBox(height: AppSpacing.sp4),
+      _SectionLabel(l10n.calendar_sectionTemplates),
+      const SizedBox(height: AppSpacing.sp8),
       Wrap(
         spacing: AppSpacing.sp8,
         runSpacing: AppSpacing.sp8,
@@ -196,6 +198,8 @@ class AppointmentFormFields extends StatelessWidget {
 
   /// Service title, client picker and employee picker.
   List<Widget> _whoSection(BuildContext context, AppLocalizations l10n) => [
+    _SectionLabel(l10n.calendar_sectionWho),
+    const SizedBox(height: AppSpacing.sp8),
     // --- Service title ---
     SheetFocusScroll(
       child: LabeledTextField(
@@ -243,63 +247,61 @@ class AppointmentFormFields extends StatelessWidget {
     final showStatus = editingStatus != null && onStatusChanged != null;
     final isNarrowPhone = context.isNarrowWidth;
 
-    final startTimeField = SheetFocusScroll(
-      child: LabeledTextField(
-        label: l10n.calendar_startTime,
-        hint: l10n.calendar_start,
-        controller: controllers.startTime,
-        required: true,
-        readOnly: true,
-        errorText: _err(context, 'startTime'),
-        onTap: onPickStartTime,
-      ),
+    // Dates and times are pickers, not text entry, so they render as panel rows
+    // rather than readOnly TextFields. Free-text fields keep LabeledTextField,
+    // which owns the error shake and the clear button.
+    final startRow = SheetFieldRow(
+      label: l10n.calendar_startTime,
+      value: controllers.startTime.text,
+      placeholder: l10n.calendar_start,
+      accent: true,
+      useMonoValue: true,
+      errorText: _err(context, 'startTime'),
+      onTap: onPickStartTime,
     );
-    final endTimeField = SheetFocusScroll(
-      child: LabeledTextField(
-        label: l10n.calendar_endTime,
-        hint: l10n.calendar_end,
-        controller: controllers.endTime,
-        required: true,
-        readOnly: true,
-        errorText: _err(context, 'endTime'),
-        onTap: onPickEndTime,
-      ),
+    final endRow = SheetFieldRow(
+      label: l10n.calendar_endTime,
+      value: controllers.endTime.text,
+      placeholder: l10n.calendar_end,
+      accent: true,
+      useMonoValue: true,
+      errorText: _err(context, 'endTime'),
+      onTap: onPickEndTime,
     );
 
     return [
-      // --- Date ---
-      SheetFocusScroll(
-        child: LabeledTextField(
-          label: l10n.calendar_date,
-          hint: l10n.calendar_selectDate,
-          controller: controllers.date,
-          required: true,
-          readOnly: true,
-          suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
-          errorText: _err(context, 'date'),
-          onTap: onPickDate,
-        ),
+      _SectionLabel(l10n.calendar_sectionSchedule),
+      const SizedBox(height: AppSpacing.sp8),
+      SheetPanel(
+        children: [
+          SheetFieldRow(
+            label: l10n.calendar_date,
+            value: controllers.date.text,
+            placeholder: l10n.calendar_selectDate,
+            accent: true,
+            useMonoValue: true,
+            errorText: _err(context, 'date'),
+            onTap: onPickDate,
+            trailing: const Icon(Icons.calendar_today_outlined, size: 18),
+          ),
+          // Start and end share one row until the screen is too narrow to
+          // read both.
+          if (isNarrowPhone) ...[
+            startRow,
+            endRow,
+          ] else
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: startRow),
+                  const VerticalDivider(width: 1),
+                  Expanded(child: endRow),
+                ],
+              ),
+            ),
+        ],
       ),
-      const SizedBox(height: AppSpacing.sp16),
-      // --- Start / end time ---
-      if (isNarrowPhone)
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            startTimeField,
-            const SizedBox(height: AppSpacing.sp16),
-            endTimeField,
-          ],
-        )
-      else
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: startTimeField),
-            const SizedBox(width: AppSpacing.sp12),
-            Expanded(child: endTimeField),
-          ],
-        ),
       const SizedBox(height: AppSpacing.sp16),
       // --- Status (edit flow only) ---
       if (showStatus) ...[
@@ -320,6 +322,8 @@ class AppointmentFormFields extends StatelessWidget {
 
   /// Address, notes, materials and the host-supplied photos slot.
   List<Widget> _detailsSection(BuildContext context, AppLocalizations l10n) => [
+    _SectionLabel(l10n.calendar_sectionDetails),
+    const SizedBox(height: AppSpacing.sp8),
     // --- Address ---
     AppointmentAddressField(
       selectedClient: selectedClient,
@@ -360,4 +364,16 @@ class AppointmentFormFields extends StatelessWidget {
     formLabel(context, l10n.calendar_pictures, optional: true),
     photosSection,
   ];
+}
+
+/// Mono all-caps section header inside the form sheet. The ARB values are
+/// already uppercase, matching the rest of the redesign's mono labels.
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) =>
+      Text(text, style: Theme.of(context).monoType.label);
 }

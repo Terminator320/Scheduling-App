@@ -6,7 +6,10 @@ import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
+import 'package:scheduling/shared/widgets/fields/sheet_field_row.dart';
 
 void main() {
   Future<AppointmentFormControllers> pumpAppointmentForm(
@@ -17,6 +20,7 @@ void main() {
     ValueChanged<ClientRecord>? onSelectClient,
     Future<ClientRecord?> Function(String initialName)? onRequestAddClient,
     ValueChanged<JobTemplate>? onApplyTemplate,
+    Map<String, AppointmentFormError> errors = const {},
   }) async {
     tester.view.physicalSize = Size(width, 740);
     tester.view.devicePixelRatio = 1.0;
@@ -56,7 +60,7 @@ void main() {
               selectedEmployees: const [],
               repeat: RepeatInterval.none,
               useCustomAddress: true,
-              errors: const {},
+              errors: errors,
               employeeLabel: 'Employee',
               employeeRequired: false,
               materialsHint: 'Materials',
@@ -104,7 +108,7 @@ void main() {
       onApplyTemplate: (t) => picked = t,
     );
 
-    expect(find.text('Common jobs'), findsOneWidget);
+    expect(find.text('TEMPLATES'), findsOneWidget);
     await tester.tap(find.text('Water heater'));
     await tester.pumpAndSettle();
     expect(picked, JobTemplate.waterHeater);
@@ -114,7 +118,7 @@ void main() {
     tester,
   ) async {
     await pumpAppointmentForm(tester, width: 400);
-    expect(find.text('Common jobs'), findsNothing);
+    expect(find.text('TEMPLATES'), findsNothing);
     expect(find.text('Water heater'), findsNothing);
   });
 
@@ -142,5 +146,33 @@ void main() {
     expect(selected.single.id, 'c-new');
     expect(controllers.clientSearch.text, 'New Guy');
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('renders the mono section labels', (tester) async {
+    await pumpAppointmentForm(tester, width: 400, onApplyTemplate: (_) {});
+
+    expect(find.text('TEMPLATES'), findsOneWidget);
+    expect(find.text('WHO'), findsOneWidget);
+    expect(find.text('SCHEDULE'), findsOneWidget);
+    expect(find.text('DETAILS'), findsOneWidget);
+  });
+
+  testWidgets('the date and time pickers render as panel rows', (tester) async {
+    await pumpAppointmentForm(tester, width: 400);
+
+    // Date, start and end — pickers, not text entry.
+    expect(find.byType(SheetFieldRow), findsNWidgets(3));
+    expect(find.byType(SheetPanel), findsOneWidget);
+  });
+
+  testWidgets('a picker row surfaces its validation error', (tester) async {
+    await pumpAppointmentForm(
+      tester,
+      width: 400,
+      errors: const {'date': AppointmentFormError.dateRequired},
+    );
+
+    // The row surfaces the validator's message inline, not a bare red border.
+    expect(find.text('Please select a date'), findsOneWidget);
   });
 }
