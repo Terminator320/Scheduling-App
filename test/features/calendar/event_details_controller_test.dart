@@ -107,6 +107,15 @@ void main() {
     ).thenAnswer((_) async {});
     when(() => appointments.deleteAppointment(any())).thenAnswer((_) async {});
     when(() => storage.deleteImages(any())).thenAnswer((_) async {});
+    // No clash by default; the conflict tests override this.
+    when(
+      () => appointments.findBusyEmployees(
+        candidates: any(named: 'candidates'),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+        excludeAppointmentId: any(named: 'excludeAppointmentId'),
+      ),
+    ).thenAnswer((_) async => const <EmployeeRecord>[]);
 
     container =
         ProviderContainer(
@@ -902,6 +911,78 @@ void main() {
       );
       expect(error, isNull);
       verify(() => appointments.deleteAppointment('appt-1')).called(1);
+    });
+  });
+
+  group('busy-employee conflict', () {
+    test('save returns the busy outcome and clears the saving flag', () async {
+      await waitForSeed();
+      when(
+        () => appointments.findBusyEmployees(
+          candidates: any(named: 'candidates'),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          excludeAppointmentId: any(named: 'excludeAppointmentId'),
+        ),
+      ).thenAnswer((_) async => const [_employeeA]);
+
+      final outcome = await readNotifier().save(
+        _appointment,
+        title: 'Job',
+        address: '',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      expect(outcome, isA<EventDetailsBusyEmployees>());
+      // The flag must clear or Save stays stuck once the dialog is dismissed.
+      expect(readState().isSaving, isFalse);
+      verifyNever(() => appointments.updateAppointment(any()));
+    });
+
+    test('excludes the appointment being edited from its own conflicts', () async {
+      await waitForSeed();
+
+      await readNotifier().save(
+        _appointment,
+        title: 'Job',
+        address: '',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      final captured = verify(
+        () => appointments.findBusyEmployees(
+          candidates: any(named: 'candidates'),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          excludeAppointmentId: captureAny(named: 'excludeAppointmentId'),
+        ),
+      ).captured.single;
+      expect(captured, 'appt-1');
+    });
+
+    test('forceBusy skips the conflict check and writes', () async {
+      await waitForSeed();
+
+      final outcome = await readNotifier().save(
+        _appointment,
+        title: 'Job',
+        address: '',
+        notes: '',
+        materialsNeeded: '',
+        forceBusy: true,
+      );
+
+      expect(outcome, isA<EventDetailsSaved>());
+      verifyNever(
+        () => appointments.findBusyEmployees(
+          candidates: any(named: 'candidates'),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          excludeAppointmentId: any(named: 'excludeAppointmentId'),
+        ),
+      );
     });
   });
 }

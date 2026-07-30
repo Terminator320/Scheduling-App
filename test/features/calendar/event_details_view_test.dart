@@ -73,6 +73,15 @@ void main() {
       employees.watchEmployees,
     ).thenAnswer((_) => Stream.value(const [_employeeA]));
     when(() => appointments.updateAppointment(any())).thenAnswer((_) async {});
+    // The edit flow now runs a conflict check before writing; no clash here.
+    when(
+      () => appointments.findBusyEmployees(
+        candidates: any(named: 'candidates'),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+        excludeAppointmentId: any(named: 'excludeAppointmentId'),
+      ),
+    ).thenAnswer((_) async => const <EmployeeRecord>[]);
   });
 
   // Tall viewport so the whole lazily-built edit form lays out without scrolling.

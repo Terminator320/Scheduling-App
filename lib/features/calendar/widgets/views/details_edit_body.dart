@@ -11,6 +11,7 @@ import 'package:scheduling/features/calendar/application/event_details_controlle
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/adaptive_pickers.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
+import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/series_scope_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
@@ -204,17 +205,35 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       applyToSeries = choice == SeriesScopeChoice.thisAndFuture;
     }
 
-    final outcome = await notifier.save(
-      appointment,
-      title: widget.controllers.title.text,
-      address: AddressParser.toCanonical(widget.controllers.address.text),
-      notes: widget.controllers.notes.text,
-      materialsNeeded: widget.controllers.materials.text,
-      applyToSeries: applyToSeries,
-    );
+    Future<EventDetailsSaveOutcome> attempt({bool forceBusy = false}) =>
+        notifier.save(
+          appointment,
+          title: widget.controllers.title.text,
+          address: AddressParser.toCanonical(widget.controllers.address.text),
+          notes: widget.controllers.notes.text,
+          materialsNeeded: widget.controllers.materials.text,
+          applyToSeries: applyToSeries,
+          forceBusy: forceBusy,
+        );
+
+    var outcome = await attempt();
     if (!context.mounted) return;
+    if (outcome is EventDetailsBusyEmployees) {
+      final confirmed = await showBusyConflictDialog(
+        context,
+        busyEmployees: outcome.busyEmployees,
+        start: outcome.start,
+        end: outcome.end,
+      );
+      if (!confirmed || !context.mounted) return;
+      outcome = await attempt(forceBusy: true);
+      if (!context.mounted) return;
+    }
     switch (outcome) {
       case EventDetailsInvalid():
+        return;
+      // Already resolved above; the dialog either forced a retry or bailed.
+      case EventDetailsBusyEmployees():
         return;
       case EventDetailsSaved(
         :final appointment,
