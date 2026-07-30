@@ -10,7 +10,7 @@ import 'package:scheduling/routes/hub_shell.dart';
 /// Stub hub screen: renders a marker per destination and a button that
 /// drives [navigateToDestination] from inside the shell, mirroring how the
 /// real screens' back chevrons and nav rail switch tabs.
-Widget _stubScreen(AdaptiveDestination destination) => Scaffold(
+Widget _stubScreen(HubTab destination) => Scaffold(
   body: Builder(
     builder: (context) => Column(
       children: [
@@ -50,19 +50,19 @@ void main() {
     (tester) async {
       await tester.pumpWidget(_app());
       _shellState(tester).select(
-        PushedDestination.settings,
+        HubTab.liveMap,
         isAdmin: true,
         employeeId: 'e1',
       );
       await tester.pump();
-      expect(find.text('screen-settings'), findsOneWidget);
+      expect(find.text('screen-liveMap'), findsOneWidget);
 
       // Android system back.
       await tester.binding.handlePopRoute();
       await tester.pump();
 
       expect(
-        _shellState(tester).currentDestination,
+        _shellState(tester).currentTab,
         HubTab.calendar,
       );
       expect(find.text('screen-calendar'), findsOneWidget);
@@ -106,7 +106,7 @@ void main() {
     await tester.pump();
 
     expect(
-      _shellState(tester).currentDestination,
+      _shellState(tester).currentTab,
       HubTab.liveMap,
     );
     expect(find.text('screen-liveMap'), findsOneWidget);
@@ -138,14 +138,14 @@ void main() {
     (tester) async {
       await tester.pumpWidget(_app());
       _shellState(tester).select(
-        PushedDestination.history,
+        HubTab.employees,
         isAdmin: true,
         employeeId: 'e1',
       );
       await tester.pump();
 
       // The stub's back button mirrors the hub screens' AppTopBar chevron.
-      await tester.tap(find.text('back-history'));
+      await tester.tap(find.text('back-employees'));
       await tester.pump();
 
       expect(find.text('screen-calendar'), findsOneWidget);
@@ -175,7 +175,7 @@ void main() {
 
       expect(find.byType(HubShell), findsOneWidget);
       expect(
-        _shellState(tester).currentDestination,
+        _shellState(tester).currentTab,
         HubTab.clients,
       );
       expect(find.text('screen-clients'), findsOneWidget);
@@ -188,8 +188,8 @@ void main() {
     'the screen cache reuses one instance per tab, so a plain tab switch '
     'does not rebuild an already-built screen',
     (tester) async {
-      final buildCounts = <AdaptiveDestination, int>{};
-      Widget countingBuilder(AdaptiveDestination destination) {
+      final buildCounts = <HubTab, int>{};
+      Widget countingBuilder(HubTab destination) {
         buildCounts[destination] = (buildCounts[destination] ?? 0) + 1;
         return Scaffold(body: Text('screen-${destination.name}'));
       }
@@ -230,8 +230,8 @@ void main() {
     'changing the identity args (an admin upgrade) invalidates the cache '
     'so the screen is rebuilt, while a same-identity reselect does not',
     (tester) async {
-      final buildCounts = <AdaptiveDestination, int>{};
-      Widget countingBuilder(AdaptiveDestination destination) {
+      final buildCounts = <HubTab, int>{};
+      Widget countingBuilder(HubTab destination) {
         buildCounts[destination] = (buildCounts[destination] ?? 0) + 1;
         return Scaffold(body: Text('screen-${destination.name}'));
       }
@@ -266,4 +266,45 @@ void main() {
       expect(buildCounts[HubTab.calendar], 2);
     },
   );
+
+  testWidgets('goHome pops back to the shell route and lands on calendar', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app());
+    _shellState(tester).select(
+      HubTab.clients,
+      isAdmin: true,
+      employeeId: 'e1',
+    );
+    await tester.pump();
+    expect(find.text('screen-clients'), findsOneWidget);
+
+    // Stack two routes above the shell.
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    unawaited(
+      navigator.push(
+        MaterialPageRoute<void>(
+          builder: (_) => const Scaffold(body: Text('pushed-one')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    unawaited(
+      navigator.push(
+        MaterialPageRoute<void>(
+          builder: (_) => const Scaffold(body: Text('pushed-two')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('pushed-two'), findsOneWidget);
+
+    HubShell.liveState!.goHome();
+    await tester.pumpAndSettle();
+
+    expect(find.text('pushed-one'), findsNothing);
+    expect(find.text('pushed-two'), findsNothing);
+    expect(find.text('screen-calendar'), findsOneWidget);
+    expect(HubShell.liveState!.currentTab, HubTab.calendar);
+  });
 }

@@ -7,18 +7,16 @@ import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
 import 'package:scheduling/features/clients/screens/clients_screen.dart';
-import 'package:scheduling/features/clients/screens/history_screen.dart';
 import 'package:scheduling/features/employees/screens/employees_screen.dart';
 import 'package:scheduling/features/presence/screens/live_map_screen.dart';
-import 'package:scheduling/features/settings/screens/settings_screen.dart';
 
-/// Post-login shell with six tab destinations, all kept alive in an
+/// Post-login shell with four tab destinations, all kept alive in an
 /// IndexedStack. Android back goes to calendar, unless we're already there.
 class HubShell extends StatefulWidget {
   const HubShell({
     required this.isAdmin,
     required this.employeeId,
-    this.initialDestination = HubTab.calendar,
+    this.initialTab = HubTab.calendar,
     this.userName = '',
     this.userEmail = '',
     super.key,
@@ -28,15 +26,15 @@ class HubShell extends StatefulWidget {
   final bool isAdmin;
   final String employeeId;
 
-  /// Initial tab (calendar on login, or another destination if deep-linked).
-  final AdaptiveDestination initialDestination;
+  /// Initial tab (calendar on login, or another tab if deep-linked).
+  final HubTab initialTab;
 
-  /// Initial identity shown on settings tab (sticky).
+  /// Initial identity carried into pushed destinations (sticky).
   final String userName;
   final String userEmail;
 
   /// Lets tests swap in stub screens instead of the real ones.
-  final Widget Function(AdaptiveDestination destination)? screenBuilder;
+  final Widget Function(HubTab tab)? screenBuilder;
 
   /// The most recently active shell — used to redirect hub-route pushes into
   /// tab switches.
@@ -53,33 +51,48 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
   late String _employeeId = widget.employeeId;
   late String _userName = widget.userName;
   late String _userEmail = widget.userEmail;
-  late AdaptiveDestination _current = widget.initialDestination;
+  late HubTab _current = widget.initialTab;
 
-  /// Destinations built so far (lazy-built, kept alive by IndexedStack).
-  late final Set<AdaptiveDestination> _built = {widget.initialDestination};
+  /// Tabs built so far (lazy-built, kept alive by IndexedStack).
+  late final Set<HubTab> _built = {widget.initialTab};
 
   /// The tab currently shown.
-  AdaptiveDestination get currentDestination => _current;
+  HubTab get currentTab => _current;
 
   /// The live role, used by deep links to gate admin-only edit/cancel/delete
   /// controls.
   bool get isAdmin => _isAdmin;
 
+  /// The shell's own route — [goHome]'s pop target. Null only in a bare test
+  /// harness with no enclosing route.
+  ModalRoute<dynamic>? _shellRoute;
+
   @override
   void initState() {
     super.initState();
     _live = this;
+    HubShellScope.liveSelector = this;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Not initState: ModalRoute.of registers an inherited dependency, which
+    // is an assert failure there. Re-runs are harmless — the shell's route
+    // identity is stable for its lifetime.
+    _shellRoute = ModalRoute.of(context);
   }
 
   @override
   void dispose() {
     if (_live == this) _live = null;
+    if (HubShellScope.liveSelector == this) HubShellScope.liveSelector = null;
     super.dispose();
   }
 
   @override
   void select(
-    AdaptiveDestination destination, {
+    HubTab tab, {
     required bool isAdmin,
     required String employeeId,
     String userName = '',
@@ -91,9 +104,50 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
       if (employeeId.isNotEmpty) _employeeId = employeeId;
       if (userName.isNotEmpty) _userName = userName;
       if (userEmail.isNotEmpty) _userEmail = userEmail;
-      _current = destination;
-      _built.add(destination);
+      _current = tab;
+      _built.add(tab);
     });
+  }
+
+  @override
+  void selectAndReveal(
+    HubTab tab, {
+    required bool isAdmin,
+    required String employeeId,
+    String userName = '',
+    String userEmail = '',
+  }) {
+    select(
+      tab,
+      isAdmin: isAdmin,
+      employeeId: employeeId,
+      userName: userName,
+      userEmail: userEmail,
+    );
+    _popToShell();
+  }
+
+  @override
+  void goHome() {
+    showCalendar();
+    _popToShell();
+  }
+
+  /// Select before pop, so the revealed shell is already on the target tab —
+  /// no flash of the previous one.
+  void _popToShell() {
+    if (!mounted) return;
+    final navigator = Navigator.maybeOf(context);
+    if (navigator == null) return;
+    final shellRoute = _shellRoute;
+    // Never popUntil(isFirst): on _hubRoute's fallback branch the shell is
+    // not route #1, so that predicate pops the shell itself. A null capture
+    // happens only in a bare harness, where the shell IS first.
+    navigator.popUntil(
+      shellRoute != null
+          ? (route) => route == shellRoute
+          : (route) => route.isFirst,
+    );
   }
 
   /// Switch to calendar, preserving identity for deep-linked appointment sheets.
@@ -158,7 +212,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
         child: IndexedStack(
           index: _current.index,
           children: [
-            for (final destination in allDestinations)
+            for (final destination in HubTab.values)
               if (_built.contains(destination))
                 // Mute animations on hidden tabs, and pin viewInsets so they
                 // don't cause rebuild churn while hidden.
@@ -196,7 +250,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
 
   /// Caches screens so unchanged tabs skip a rebuild — cleared whenever
   /// identity changes.
-  final Map<AdaptiveDestination, Widget> _screenCache = {};
+  final Map<HubTab, Widget> _screenCache = {};
   ({bool isAdmin, String employeeId, String userName, String userEmail})?
   _screenCacheIdentity;
 
@@ -214,15 +268,15 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
     }
   }
 
-  Widget _cachedScreenFor(AdaptiveDestination destination) =>
-      _screenCache.putIfAbsent(destination, () => _screenFor(destination));
+  Widget _cachedScreenFor(HubTab tab) =>
+      _screenCache.putIfAbsent(tab, () => _screenFor(tab));
 
-  Widget _screenFor(AdaptiveDestination destination) {
+  Widget _screenFor(HubTab tab) {
     final builder = widget.screenBuilder;
-    if (builder != null) return builder(destination);
+    if (builder != null) return builder(tab);
     // Key on identity so in-place changes (e.g. admin upgrade) rebuild the screen.
-    final key = ValueKey('hub-${destination.name}-$_isAdmin-$_employeeId');
-    return switch (destination) {
+    final key = ValueKey('hub-${tab.name}-$_isAdmin-$_employeeId');
+    return switch (tab) {
       HubTab.calendar => MainCalendar(
         key: key,
         isAdmin: _isAdmin,
@@ -238,21 +292,9 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
         isAdmin: _isAdmin,
         employeeId: _employeeId,
       ),
-      PushedDestination.history => HistoryScreen(
-        key: key,
-        isAdmin: _isAdmin,
-        employeeId: _employeeId,
-      ),
       HubTab.liveMap => LiveMapScreen(
         key: key,
         isAdmin: _isAdmin,
-        employeeId: _employeeId,
-      ),
-      PushedDestination.settings => SettingsScreen(
-        key: key,
-        name: _userName,
-        email: _userEmail,
-        role: _isAdmin ? 'admin' : 'employee',
         employeeId: _employeeId,
       ),
     };
@@ -294,7 +336,7 @@ class HubTabRedirectRoute extends PageRouteBuilder<void> {
          pageBuilder: (_, _, _) => const SizedBox.shrink(),
        );
 
-  final AdaptiveDestination destination;
+  final HubTab destination;
   final bool isAdmin;
   final String employeeId;
   final String userName;
@@ -322,7 +364,7 @@ class HubTabRedirectRoute extends PageRouteBuilder<void> {
           newRoute: MaterialPageRoute<void>(
             settings: settings,
             builder: (_) => HubShell(
-              initialDestination: destination,
+              initialTab: destination,
               isAdmin: isAdmin,
               employeeId: employeeId,
               userName: userName,
