@@ -330,11 +330,44 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   two sheets → duplicate client. Mix it into any new inline-add host rather than
   re-copying the flag.
 
-- **Feature tours (`lib/features/feature_tour/`, showcaseview 5.x):** each hub
-  tab registers its OWN showcaseview scope (`tourScopeName`) — the hub
+- **Navigation (`lib/core/navigation/`, restructured 2026-07-30):**
+  `AppDestination` is a **sealed** family — `enum HubTab {calendar, clients,
+  employees, liveMap}` (the four `IndexedStack` panes) and
+  `enum PushedDestination {dayRoute, history, dashboard, settings}` (plain
+  routes above the shell). The split makes `select(settings)` a **compile
+  error** instead of an `IndexedStack` range crash; that is the whole point —
+  never collapse it back to one enum plus a list or an `isHubTab` flag.
+  `implements Enum` keeps `.name`/`.values` on the union type, and `.name` is
+  load-bearing: it is the persisted `tour_seen_tabs` key AND the showcase scope
+  name, so **renaming a member silently replays or orphans a tour** (that is
+  why the member stayed `employees` while its label became "Team" via
+  `nav_team`). `navigateToDestination` is the one nav action; a hub tab reached
+  from a pushed route goes through `selectAndReveal` (collapse, then switch) —
+  the old `pushReplacementNamed` path left the wrong screen on top from a
+  2-deep stack. `goHomeToCalendar` is the canonical go-home gesture behind the
+  header's Calendar pill. **`_popToShell` targets the shell's captured
+  `ModalRoute`, never `isFirst`** — on `_hubRoute`'s fallback branch the shell
+  is not route #1, so `popUntil(isFirst)` pops the shell itself and strands the
+  user. The **nav rail, `AdaptiveShell`, `AdaptiveDestination`,
+  `Breakpoints.expanded` and `isExpanded` are all deleted**; `AppNavDrawer`
+  (right-anchored, from `drawerGroups(isAdmin:)`) is the nav surface at every
+  screen size, and `AppHeaderPair` sits in every `AppTopBar.actions`.
+  `_hubRoute` + `HubTabRedirectRoute` survive at three tab routes — they look
+  dead but remain the cold-start fallback and are pinned by `hub_shell_test`.
+
+- **Feature tours (`lib/features/feature_tour/`, showcaseview 5.x):** each
+  destination registers its OWN showcaseview scope (`tourScopeName`) — the hub
   IndexedStack keeps every tab mounted, so a shared scope would mix hidden
   tabs' targets into the visible tour. `FeatureTourHost` is the only start
-  path: it gates on `HubShellScope.currentOf` (hidden tabs never start),
+  path. **Its visibility gate is chosen by the destination's sealed type, not
+  by a null `HubShellScope`**: a `HubTab` gates on `HubShellScope.currentOf`,
+  a `PushedDestination` on `ModalRoute.of(context)?.isCurrent`. A null scope is
+  ambiguous — it also describes a hub screen hosted standalone in a test, where
+  "never start" must be preserved. Before this split, Settings and History
+  (now pushed routes) would have had `currentOf == null` and their tours would
+  have silently never started; Settings is one of only two employee tours.
+  Route mode also awaits `_routeTransitionSettled()` so showcase measures a
+  page that has finished sliding in. It
   awaits `tourSeenProvider.ready` before acting (the optimistic empty default
   would replay seen tours on cold start), and drops steps whose target isn't
   rendered via `isTargetRendered` — **never `GlobalKey.currentContext`: the

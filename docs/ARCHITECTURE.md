@@ -21,7 +21,8 @@ lib/
 │   ├── errors/                      Base Failure class + error_cause.dart (sanitized cause classifier + tagged notice composer)
 │   ├── images/                      Image picker (native resize/compress at pick time) + Firebase Storage upload service
 │   ├── launchers/                   external_uri_launcher.dart (launchExternalUri — the ONE launch+log+notice implementation; the others are thin wrappers over it) + phone_call_launcher.dart (launchPhoneCall — shared tel: dialer) + web_url_launcher.dart (launchWebUrl — external https: opener for the Settings privacy-policy link) + route_map_launcher.dart (launchGoogleMapsRoute — opens a prebuilt multi-stop directions URI); parallel AddressMapLauncher (keeps its own guard — it surfaces a sanctioned SnackBar, not a notice) / EmailComposeLauncher
-│   ├── layout/                      Responsive shell — AdaptiveShell (nav rail), MasterDetailScaffold, PrimaryScrollScope (per-pane PrimaryScrollController so simultaneously-alive primary scrollables don't share one — the app-wide Scrollbar needs one ScrollPosition per controller), breakpoints (context.isWide / isLandscape / isSplitLayout for the rail chrome; isTwoPane (shortestSide ≥ 600) for the list master-detail; isCompact / isNarrowWidth for small-phone & large-text row folding)
+│   ├── layout/                      Responsive shell — MasterDetailScaffold, PrimaryScrollScope (per-pane PrimaryScrollController so simultaneously-alive primary scrollables don't share one — the app-wide Scrollbar needs one ScrollPosition per controller), breakpoints (context.isWide / isLandscape / isSplitLayout for the calendar Split; isTwoPane (shortestSide ≥ 600) for the list master-detail; isCompact / isNarrowWidth for small-phone & large-text row folding)
+│   ├── navigation/                  Sealed AppDestination = HubTab (4 IndexedStack panes) + PushedDestination (plain routes); destinationRoute, navigateToDestination, goHomeToCalendar, HubShellScope
 │   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics) — `warn` records a non-fatal, `breadcrumb` only leaves a trail; `unhandled_error_severity.dart` gates the `fatal:` flag on main.dart's two global handlers so an unhandled `permission-denied` (auth teardown racing a live listener) is recorded, not filed as a crash
 │   ├── notices/                     In-app toast system: AppNotice types, NoticeService (stream), NoticeListener (widget)
 │   ├── notifications/               fcm_background_handler.dart — the top-level @pragma('vm:entry-point') isolate that rewrites the iOS widget from a content-available push while the app is closed; must stay dependency-light (no Firebase/Riverpod in that isolate)
@@ -312,21 +313,22 @@ and `AppBackButton` render their Cupertino variants on iOS.
 
 `AppRoutes.onGenerateRoute` is the single routing entry point. Pass typed argument classes via `Navigator.pushNamed(..., arguments: MyArgs(...))`. Screens do not navigate themselves — they receive args and call back via `Navigator.pop(context, result)`.
 
-Cross-destination navigation has a second SSOT in `adaptive_shell.dart`: `destinationRoute` maps an `AdaptiveDestination` to its `(route, typed args)`, and `navigateToDestination(context, destination, isAdmin:, employeeId:)` replaces the current route via it. Both the nav rail (`AdaptiveShell._onSelect`) and every hub screen's `AppTopBar(onBack:)` go through it, so the rail, the drawer, and the back arrows can't drift. All four hub screens (Clients, Employees, History, Settings) return to `AdaptiveDestination.calendar` this way. Auth screens and the Settings → Text-size sub-page are not hub screens and keep their own `Navigator.pop`.
+Cross-destination navigation has a second SSOT in `lib/core/navigation/`. `AppDestination` is a **sealed** family split into `HubTab` (`calendar`, `clients`, `employees`, `liveMap` — the four `IndexedStack` panes) and `PushedDestination` (`dayRoute`, `history`, `dashboard`, `settings` — plain routes above the shell). The split makes "select a non-tab" a compile error instead of an `IndexedStack` range crash; `implements Enum` keeps `.name`/`.values` working on the union type, which matters because `.name` is also the persisted tour-seen key and the showcase scope name.
+
+`destinationRoute` maps a destination to its `(route, typed args)`, and `navigateToDestination(context, destination, ...)` is the one nav action: a `HubTab` switches the tab (calling `selectAndReveal` to collapse any pushed stack first when invoked from a pushed route, via `HubShellScope.liveSelector`), while a `PushedDestination` pushes, deduped against the current route. `goHomeToCalendar(context)` is the canonical go-home gesture behind the header's Calendar pill — close the drawer, land on calendar, collapse everything above the shell. `HubShellState._popToShell` targets the shell's **captured** `ModalRoute`, never `isFirst`: on `_hubRoute`'s fallback branch the shell is not route #1.
+
+The **nav rail is gone** (deleted 2026-07-30). The right-anchored `AppNavDrawer` is the nav surface at every screen size, and `AppHeaderPair` (Calendar pill + hamburger) sits in every screen's `AppTopBar.actions`. Because the pair resolves its host via `Scaffold.of(context)`, no screen needs a `GlobalKey<ScaffoldState>`. Pushed screens' back buttons are plain `Navigator.maybePop` — back means back; the Calendar pill covers go-home.
 
 ### Responsive Layout
 
 `lib/core/layout/` adapts the UI to screen size **and orientation**. `Breakpoints`
-defines `tablet` (840), `tabletShortestSide` (600), and `expanded` (1200). The
-`context` extensions are `isWide` (`width >= 840`), `isExpanded` (`width >= 1200`),
+defines `tablet` (840) and `tabletShortestSide` (600). The
+`context` extensions are `isWide` (`width >= 840`),
 `isLandscape` (orientation), `isSplitLayout` (`isWide || isLandscape`), and
 `isTwoPane` (`MediaQuery.shortestSide >= 600`) — the last two drive two
-DIFFERENT chromes. `isSplitLayout` triggers the desktop-style rail chrome.
-On a portrait phone screens render single-column with a hamburger drawer; in
-landscape or on a tablet `AdaptiveShell` wraps them with a navigation rail over
-the `AdaptiveDestination` enum (`calendar`, `clients`, `employees`, `history`,
-`settings`) and the drawer is dropped (`SettingsDrawer.endDrawerFor` returns
-`null`, which also strips the app bar's auto hamburger). In that mode the
+DIFFERENT chromes. (`expanded`/`isExpanded` died with the nav rail, their only
+consumer.) **The drawer is now the nav surface at every size**, so
+`isSplitLayout` no longer gates any nav chrome — only the calendar's Split. In that mode the
 **calendar** renders a side-by-side Split (month grid | day agenda, details in a
 sheet — no detail pane), its month-row height adapting to the pane. The **list
 screens** gate their `MasterDetailScaffold` (list + detail side by side) on
