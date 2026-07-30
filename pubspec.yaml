@@ -57,7 +57,6 @@ dependencies:
   flutter_dotenv: ^6.0.1
 
   # UI
-  google_fonts: ^8.1.0
   flutter_animate: ^4.5.0
   flex_color_picker: ^3.8.0
   font_awesome_flutter: ^11.0.0
@@ -123,23 +122,7 @@ flutter:
     - dev/.env
     - assets/images/icon.png
 
-  # Bundled Inter so google_fonts resolves locally instead of fetching from
-  # the CDN on first launch (GoogleFonts.config.allowRuntimeFetching is false
-  # in main.dart). Weights match the GoogleFonts.inter* usages in
-  # lib/core/theme/themes.dart (400/500/600/700/800).
   fonts:
-    - family: Inter
-      fonts:
-        - asset: assets/fonts/Inter-Regular.ttf
-          weight: 400
-        - asset: assets/fonts/Inter-Medium.ttf
-          weight: 500
-        - asset: assets/fonts/Inter-SemiBold.ttf
-          weight: 600
-        - asset: assets/fonts/Inter-Bold.ttf
-          weight: 700
-        - asset: assets/fonts/Inter-ExtraBold.ttf
-          weight: 800
     - family: InstrumentSans
       fonts:
         - asset: assets/fonts/InstrumentSans-Regular.ttf
