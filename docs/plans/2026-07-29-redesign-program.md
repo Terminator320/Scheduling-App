@@ -3,15 +3,17 @@
 **Date:** 2026-07-29 · **Branch:** `redesgin` · **Status:** approved design, pre-implementation
 
 Source handoff: `C:\Users\GeorgeVogas\Downloads\Scheduling app navigation redesign\design_handoff_scheduling_app\`
-(docs `01`–`10`, clickable prototype `design/Scheduling App.dc.html`, screenshots partially stale —
-trust the prototype and the docs). The handoff is high-fidelity on visuals; every real gap is
+(docs `01`–`11`, clickable prototype `design/Scheduling App.dc.html`, screenshots partially stale —
+trust the prototype and the docs; `11-auth-and-invites.md` added 2026-07-29 after the first spec
+pass). The handoff is high-fidelity on visuals; every real gap is
 data-model or backend. This document is the program-level spec: what ships, in what order, and every
 decision made where the handoff and the codebase disagree. Each sub-project below gets its own
 implementation plan when its turn comes.
 
 ## Program decisions (settled with the owner)
 
-1. **Scope: everything, sequenced** — all seven projects plus the Wave invoice read path (P7b).
+1. **Scope: everything, sequenced** — all seven projects plus the Wave invoice read path (P7b)
+   and the auth + invites redesign (P4b, added with handoff doc 11).
 2. **Client fields: fast New, full Edit** — the New client sheet ships as designed (fast capture
    only); the Edit sheet is a superset keeping every existing field plus the new ones.
 3. **Archive AND delete** — Archive is the primary removal action; hard delete stays as a second
@@ -33,15 +35,24 @@ implementation plan when its turn comes.
 | Role-preview segmented control on My details | Not shipped | The handoff itself marks it review-only. Role comes from auth. |
 | `+ ADD` photo tile in the detail sheet for everyone | **Admin-only** | Assignee rules only allow `status`/`updatedAt` writes; an employee add would be `permission-denied`. |
 | Instrument Sans / IBM Plex Mono "or equivalents" | Exactly those two, **bundled as assets** | google_fonts runtime-fetch is already on the audit backlog; bundling closes it. |
+| Invite code always visible on the Team pending row | **Re-issue on view** — a "Show code" action mints a fresh code via `createEmployeeInvite`'s existing idempotent re-issue and displays it; the old code stops working | Storage stays sha256-only (`signupCodes/{hash}`); persisting plaintext would let any admin-session read harvest pending codes. Owner decision 2026-07-29. |
+| Invite **email** (template, deep-link button, store fallback) | **Deferred to its own project** — this program ships the code path only (entry screen, acceptance, Team row, resend/revoke); admins share codes out-of-band as today | No email infrastructure exists; provider choice (SendGrid vs Trigger-Email extension) is shared with the parked client-reminders project and deserves its own pass. Owner decision 2026-07-29. |
+| 6-character invite code, six entry boxes | **12 chars kept**, entry rendered as three groups of four boxes | Existing codes are Crockford base32 `XXXX-XXXX-XXXX` (~60 bits); 6 chars is 30 bits. Rate-limit + email binding would arguably cover it, but not worth weakening for aesthetics — overridable in the P4b plan. Hash normalization already strips dashes/case. |
+| "Two tries left before the account locks for 15 minutes" | Firebase-native throttling, no tries counter | Firebase Auth throttles opaquely and exposes no remaining-tries signal; a client-side counter would lie. The handoff itself leaves the locked-out state undesigned. |
+| "Keep me signed in" checkbox | Not shipped | Mobile Firebase sessions persist by default; the checkbox is a web pattern. |
+| "Use Face ID" sign-in button | Deferred (handoff stubs it) | Re-auth-via-biometric is platform wiring the build order already defers; distinct from the existing biometric app-lock, which stays. |
 
 ## Build order
 
 ```
-P1 foundation → P2 calendar → P3 clients → P4 team → P5 settings/my-details → P6 time off → P7 dashboard/history
-                                                                                P7b Wave invoices (parallel, unblocks P7 money sections)
+P1 foundation → P2 calendar → P3 clients → P4 team → P4b auth+invites → P5 settings/my-details → P6 time off → P7 dashboard/history
+                                                                          P7b Wave invoices (parallel, unblocks P7 money sections)
 ```
 
 P3/P4 model+rules work has no P1 dependency and may land early if de-risking is preferred.
+P4b sits after P4 (owner decision): auth already works so nothing is blocked, the pending-invite
+row lives on the Team screen, and the restyle needs P1's tokens — the handoff's "auth first"
+build-order step is greenfield logic that doesn't apply here.
 
 ---
 
@@ -186,7 +197,59 @@ chips, colour swatch grid (taken colours hidden, current selection always visibl
 group (admin toggle + time-to-leave alerts), Disable account with the reassign-count caption.
 **Invite sheet** restyled (first/last, work email, role chips, colour grid with "N colours left"
 caption, admin toggle off by default, amber invited note); the signup-code flow
-(`createEmployeeInvite` → copy dialog) is unchanged.
+(`createEmployeeInvite` → copy dialog) is unchanged at this stage — P4b then adds the
+pending-invite row lifecycle on top.
+
+## P4b — Auth + invites (handoff doc 11, added 2026-07-29)
+
+**Scope:** restyle the three auth surfaces, redesign the invite-acceptance flow, and land the
+pending-invite lifecycle on Team. **No email in this program** (see deviations); **no new stored
+entity** — doc 08's "Invites" table stays modelled by the existing invited `users` doc +
+`signupCodes/{sha256}` pair (revoke deletes them; accepted-at is activation).
+
+**Sign in.** Hero-gradient top block + floating card per §1: labelled bordered fields, Show/Hide
+password link (mono tracking shift), error state with red border + dot. `AuthScaffold`'s
+`AutofillGroup` + commit-on-success halves are kept. Below the card: "Invited by your employer?
+**Accept your invite**" → code entry. Face ID button, tries-counter copy, and "keep me signed in"
+per the deviations table. Sign-in logic (`findUserByUid` → route or sign out,
+`_retryOnAuthPropagation`) unchanged.
+
+**Reset password.** Two states per §2 — idle (email + Send reset link + the amber "no email on
+your account? ask your admin" note) and sent (`riseIn`; expiry + signs-out-everywhere facts; a
+`SENT` panel whose **Send it again** row relabels and greys once used). Existing
+`forgot_password_screen` flow underneath; `AuthFailure.isExpected` /
+`logger.authFailure` conventions unchanged.
+
+**Accept your invite — code entry.** Pushed from sign-in, or prefilled by deep link
+(`esproschedule://invite?code=...` — new route in `AppRoutes.onGenerateRoute`; the https
+store-fallback page ships with the deferred email project). Twelve mono boxes in three groups of
+four (deviation above), not case-sensitive (hash normalization already uppercases + strips
+dashes). CTA relabels "Enter the code" → "Continue" when full; a bad code turns every box red with
+the expiry explanation. `DON'T HAVE A CODE?` panel copy adjusted for the no-email reality (the
+admin reads it off the Team page).
+
+**Accept your invite — details.** Invite banner (who invited you, role, scope caption), first/last
+split row, phone, password with a 4-segment strength meter (client-side), then the combined
+**terms + location consent** checkbox gating Create account. Flow stays
+`signUpWithCode` → `redeemSignupCode`: the callable gains optional validated `firstName`,
+`lastName`, `phone` (each `requireString`-capped) and stamps `termsAcceptedAt` /
+`locationConsentAt` server timestamps on the users doc at activation — activation stays
+Admin-SDK-only, and the orphan-rollback, email-binding rate limit, and `code-email-mismatch`
+failure all survive unchanged. **Email is rendered locked with a "From invite" chip and is never
+editable** (watch-out 9). The code screen must pass the code forward so acceptance never re-asks.
+
+**Pending-invite row (Team, admin).** The invited person's row expands in place per §6: dashed
+`#C0CAD8` avatar with Ink 25 initials (no colour claimed yet), `INVITE CODE` block driven by
+**Show code** (re-issue on view — fresh code, 19px mono, Copy pill relabelling "Copied"), amber
+sent/expiry caption from the invite doc's timestamps, **Resend** (same re-issue path; relabels
+"Sent again just now" — copy adjusted until email exists, e.g. "New code ready"), and **Revoke** —
+a new `revokeInvite` callable (guard order auth → `assertAdmin` → shape → durable rate limit)
+that deletes the `signupCodes` doc and the still-`invited` users doc; refuses if the account is no
+longer `invited`. Expiry display needs `createEmployeeInvite` to also stamp `codeExpiresAt` on the
+invited users doc (admin-readable), since clients can never read `signupCodes`.
+
+**Not designed / explicitly out:** locked-out state, first-run tour, dark auth screens (palette
+rules from `09` apply), owner/company sign-up (web, out of scope).
 
 ## P5 — Settings + My details
 
