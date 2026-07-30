@@ -15,12 +15,16 @@ import 'package:scheduling/features/auth/application/account_status_provider.dar
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
+import 'package:scheduling/features/calendar/domain/collapse_state.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/fields/month_year_picker.dart';
+import 'package:scheduling/features/calendar/widgets/views/agenda_sliver_list.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_header_block.dart';
+import 'package:scheduling/features/calendar/widgets/views/calendar_month_grid.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_month_pager.dart';
+import 'package:scheduling/features/calendar/widgets/views/calendar_week_strip.dart';
 import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
@@ -47,9 +51,8 @@ class MainCalendar extends ConsumerStatefulWidget {
 }
 
 class _MainCalendarState extends ConsumerState<MainCalendar> {
-  final ValueNotifier<List<AppointmentRecord>> _selectedEvents = ValueNotifier(
-    [],
-  );
+  final _agendaController = ScrollController();
+  final _collapse = CalendarCollapse();
 
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
@@ -82,13 +85,25 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   void _initStreams() {
     _uploadNotifier = ref.read(photoUploadNotifierProvider);
     _uploadNotifier?.latestFailure.addListener(_onUploadFailure);
+    _agendaController.addListener(_onAgendaScroll);
   }
 
   @override
   void dispose() {
     _uploadNotifier?.latestFailure.removeListener(_onUploadFailure);
-    _selectedEvents.dispose();
+    _agendaController
+      ..removeListener(_onAgendaScroll)
+      ..dispose();
     super.dispose();
+  }
+
+  void _onAgendaScroll() {
+    if (!mounted || _splitCalendar) return;
+    // A hidden tab must not run collapse setStates — the hub keeps every tab
+    // mounted and TickerMode does not cover scroll listeners.
+    final tab = HubShellScope.currentOf(context);
+    if (tab != null && tab != HubTab.calendar) return;
+    if (_collapse.onOffset(_agendaController.offset)) setState(() {});
   }
 
   void _onUploadFailure() {
@@ -280,7 +295,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
     final selectedDay = _selectedDay ?? _focusedDay;
     final selectedEvents = _getEventsForDay(selectedDay);
-    _selectedEvents.value = selectedEvents;
 
     final locale = Localizations.localeOf(context).toString();
     if (locale != _lastLocale) {
@@ -334,6 +348,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
               yearLabel: data.yearLabel,
               onPickMonth: _pickMonth,
               routeButton: _dayRouteButton(context),
+              weekStrip: _weekStrip(data.today, data.colorMap),
             ),
             Expanded(
               // The header block reserves the status bar itself.
@@ -364,6 +379,29 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           ],
         ),
       ),
+    );
+  }
+
+  /// The collapsed week strip, or null while the month grid is on screen.
+  /// Collapse is portrait-only: the split layout's month pane has no room for a
+  /// rising strip and scrolls its two panes independently.
+  Widget? _weekStrip(DateTime today, Map<String, Color> colorMap) {
+    if (_splitCalendar || !_collapse.isCollapsed) return null;
+    final selectedDay = _selectedDay ?? _focusedDay;
+    return CalendarWeekStrip(
+      weekDays: weekOf(
+        selectedDay,
+        weekStart: weekStartForLocale(
+          Localizations.localeOf(context).toString(),
+        ),
+      ),
+      selectedDay: selectedDay,
+      today: today,
+      onDaySelected: _onDaySelected,
+      dotColorFor: (day) {
+        final colors = dayCrewColors(_getEventsForDay(day), colorMap, max: 1);
+        return colors.isEmpty ? null : colors.first;
+      },
     );
   }
 
@@ -459,16 +497,12 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     required String dayTitle,
     required String jobLabel,
   }) {
-    final agendaHeader = _AgendaHeader(dayTitle: dayTitle, jobLabel: jobLabel);
-    final eventList = _tourStep(
+    final events = _getEventsForDay(_selectedDay ?? _focusedDay);
+    // The header, not the list, carries the tour step: a showcase target must
+    // be a box widget and the portrait agenda is a sliver.
+    final agendaHeader = _tourStep(
       TourStepId.calendarDayList,
-      child: EventList(
-        events: _selectedEvents,
-        nameMap: nameMap,
-        colorMap: colorMap,
-        isLoading: isLoading,
-        isAdmin: widget.isAdmin,
-      ),
+      child: AgendaHeader(dayTitle: dayTitle, jobLabel: jobLabel),
     );
 
     if (_splitCalendar) {
@@ -491,50 +525,60 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           Expanded(
             flex: 9,
             child: PrimaryScrollScope(
-              child: Column(children: [agendaHeader, eventList]),
+              child: Column(
+                children: [
+                  agendaHeader,
+                  EventList(
+                    events: events,
+                    nameMap: nameMap,
+                    colorMap: colorMap,
+                    isLoading: isLoading,
+                    isAdmin: widget.isAdmin,
+                  ),
+                ],
+              ),
             ),
           ),
         ],
       );
     }
 
-    return Column(
-      children: [
-        _buildCalendar(colorMap, today),
-        const Divider(height: 1),
-        agendaHeader,
-        eventList,
+    // Portrait: the grid and the agenda share ONE viewport, which is what lets
+    // the grid scroll away and collapse into the header's week strip.
+    final gridHeight = CalendarMonthGrid.heightFor(context);
+    final stripHeight = CalendarWeekStrip.heightFor(context);
+    // The grid is always the taller of the two, but never emit a negative
+    // spacer if a future metric change inverts that.
+    final spacerHeight = gridHeight > stripHeight
+        ? gridHeight - stripHeight
+        : 0.0;
+
+    return CustomScrollView(
+      controller: _agendaController,
+      slivers: [
+        SliverToBoxAdapter(
+          child: _collapse.isCollapsed
+              // Holds the scroll extent the grid vacated, so the first card
+              // does not jump at the moment of collapse. (The design's literal
+              // 150px is tuned to a shorter mock grid than ours.)
+              ? SizedBox(height: spacerHeight)
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildCalendar(colorMap, today),
+                    const Divider(height: 1),
+                  ],
+                ),
+        ),
+        SliverToBoxAdapter(child: agendaHeader),
+        AgendaSliverList(
+          events: events,
+          nameMap: nameMap,
+          colorMap: colorMap,
+          isLoading: isLoading,
+          isAdmin: widget.isAdmin,
+        ),
       ],
-    );
-  }
-}
-
-/// The agenda's own header — the selected day's title and a mono job count.
-class _AgendaHeader extends StatelessWidget {
-  const _AgendaHeader({required this.dayTitle, required this.jobLabel});
-
-  final String dayTitle;
-  final String jobLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              dayTitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleLarge,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sp8),
-          Text(jobLabel, style: theme.monoType.data),
-        ],
-      ),
     );
   }
 }
