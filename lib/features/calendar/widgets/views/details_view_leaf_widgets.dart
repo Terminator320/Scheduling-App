@@ -71,88 +71,64 @@ class DetailsHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final title = Text(
+      appointment.title,
+      style: theme.textTheme.headlineLarge,
+    );
+    final chip = StatusChip(status: status);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp4),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            appointment.title,
-            style: compact
-                ? theme.textTheme.headlineSmall
-                : theme.textTheme.headlineLarge,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppSpacing.sp8),
-          StatusChip(status: status),
-          const SizedBox(height: AppSpacing.sp8),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 16,
-            runSpacing: 6,
-            children: [
-              _IconLabel(
-                icon: Icons.calendar_today_outlined,
-                text: DateUtilsHelper.formatDate(appointment.startTime),
-                scheme: scheme,
-                theme: theme,
-              ),
-              _IconLabel(
-                icon: Icons.access_time_outlined,
-                text:
-                    '${DateUtilsHelper.formatTime(appointment.startTime)}'
-                    ' – ${DateUtilsHelper.formatTime(appointment.endTime)}',
-                scheme: scheme,
-                theme: theme,
-              ),
-              if (appointment.repeat != RepeatInterval.none)
-                _IconLabel(
-                  icon: Icons.repeat,
-                  text: repeatIntervalLabel(context.l10n, appointment.repeat),
-                  scheme: scheme,
-                  theme: theme,
+          if (compact) ...[
+            title,
+            const SizedBox(height: AppSpacing.sp8),
+            chip,
+          ] else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: title),
+                const SizedBox(width: AppSpacing.sp12),
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.sp4),
+                  child: chip,
                 ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _IconLabel extends StatelessWidget {
-  const _IconLabel({
-    required this.icon,
-    required this.text,
-    required this.scheme,
-    required this.theme,
-  });
-
-  final IconData icon;
-  final String text;
-  final ColorScheme scheme;
-  final ThemeData theme;
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxWidth: MediaQuery.sizeOf(context).width * 0.8,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: scheme.onSurfaceVariant),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              text,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
+              ],
             ),
+          const SizedBox(height: AppSpacing.sp8),
+          // One mono line replaces the old calendar/clock icon rows.
+          Text(
+            DateUtilsHelper.formatWhenLine(
+              appointment.startTime,
+              appointment.endTime,
+            ),
+            style: theme.monoType.data,
           ),
+          if (appointment.repeat != RepeatInterval.none) ...[
+            const SizedBox(height: AppSpacing.sp4),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.repeat,
+                  size: 13,
+                  color: theme.palette.textTertiary,
+                ),
+                const SizedBox(width: AppSpacing.sp4),
+                Flexible(
+                  child: Text(
+                    repeatIntervalLabel(context.l10n, appointment.repeat),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.palette.textTertiary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -219,7 +195,7 @@ class DetailsEmployeesView extends ConsumerWidget {
       children: [
         const SizedBox(height: AppSpacing.sp16),
         DetailsSectionRow(
-          label: context.l10n.common_employees,
+          label: context.l10n.calendar_assignedLabel,
           value: '',
           customValue: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -267,7 +243,7 @@ class DetailsPhotosView extends ConsumerWidget {
       children: [
         const SizedBox(height: AppSpacing.sp16),
         DetailsSectionRow(
-          label: context.l10n.calendar_pictures,
+          label: context.l10n.calendar_photosLabel,
           value: '',
           customValue: PhotoPickerSection(
             existingImages: existingImages,

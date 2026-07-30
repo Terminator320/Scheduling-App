@@ -47,6 +47,21 @@ final _appointment = AppointmentRecord(
   status: 'booked',
 );
 
+final _appointmentWithNotes = AppointmentRecord(
+  id: 'appt-2',
+  title: 'Leak fix',
+  startTime: DateTime(2026, 5, 10, 9),
+  endTime: DateTime(2026, 5, 10, 10),
+  clientId: 'c1',
+  clientName: 'Existing Client',
+  clientPhone: '555-1111',
+  address: '1 First St',
+  employeeIds: const ['e1'],
+  employeeNames: const ['Alex'],
+  notes: 'Gate code 4821',
+  status: 'booked',
+);
+
 Widget _wrap(Widget child, {required List<Override> overrides}) {
   return ProviderScope(
     overrides: overrides,
@@ -61,6 +76,18 @@ Widget _wrap(Widget child, {required List<Override> overrides}) {
     ),
   );
 }
+
+List<Override> _overrides(
+  AppointmentsRepository appointments,
+  ClientsRepository clients,
+  EmployeesRepository employees,
+  PhotoUploadNotifier uploadNotifier,
+) => [
+  appointmentsRepositoryProvider.overrideWithValue(appointments),
+  clientsRepositoryProvider.overrideWithValue(clients),
+  employeesRepositoryProvider.overrideWithValue(employees),
+  photoUploadNotifierProvider.overrideWithValue(uploadNotifier),
+];
 
 void main() {
   late _MockAppointmentsRepo appointments;
@@ -159,4 +186,64 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('renders the mono when-line in place of the icon rows', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        DetailsViewBody(
+          appointment: _appointment,
+          showActions: true,
+          onClose: () {},
+        ),
+        overrides: _overrides(appointments, clients, employees, uploadNotifier),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // "SUN 10 MAY · 9:00 AM – 10:00 AM" — one mono line, middot and en-dash.
+    expect(find.textContaining('MAY'), findsOneWidget);
+    expect(find.textContaining(' · '), findsOneWidget);
+    expect(find.textContaining('–'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('omits the notes row entirely when there are no notes', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        DetailsViewBody(
+          appointment: _appointment,
+          showActions: true,
+          onClose: () {},
+        ),
+        overrides: _overrides(appointments, clients, employees, uploadNotifier),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Read-only bodies drop empty sections rather than showing a placeholder.
+    expect(find.text('NOTES'), findsNothing);
+  });
+
+  testWidgets('shows the notes row inside the panel when notes exist', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        DetailsViewBody(
+          appointment: _appointmentWithNotes,
+          showActions: true,
+          onClose: () {},
+        ),
+        overrides: _overrides(appointments, clients, employees, uploadNotifier),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('NOTES'), findsOneWidget);
+    expect(find.text('Gate code 4821'), findsOneWidget);
+  });
 }
