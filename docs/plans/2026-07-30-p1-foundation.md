@@ -45,7 +45,7 @@ No navigation changes. Each task compiles and passes tests on its own.
 
 > **Why IBM Plex Mono 700 is bundled** even though the program constraint said "Mono 500/600": the numeral ramp (dashboard hero, KPI value, section metric, sub-metric) is all `700`. Flutter does not synthesise bold — it falls back to the nearest bundled weight — so without the 700 file every dashboard numeral silently renders at 600. This is a deliberate amendment to the constraint, ~100 KB.
 
-- [ ] **Step 1: Download the seven static TTFs**
+- [x] **Step 1: Download the seven static TTFs**
 
 Both families are SIL Open Font License, freely bundleable. These exact URLs were verified 2026-07-30 (HTTP 200, valid TrueType, no `fvar` table). Run from the repo root:
 
@@ -65,7 +65,7 @@ Expected sizes (verified): InstrumentSans Regular 86,232 · Medium 86,924 · Sem
 
 > **Harmless metadata quirk, don't "fix" it.** The 500/600 files use legacy per-weight family naming (name ID 1 is "Instrument Sans Medium", not "Instrument Sans"). Flutter resolves fonts by the pubspec `family:`/`weight:` mapping, not the embedded name table, so this has no effect.
 
-- [ ] **Step 2: Verify every file is a real TTF, not an HTML error page**
+- [x] **Step 2: Verify every file is a real TTF, not an HTML error page**
 
 ```bash
 for f in assets/fonts/InstrumentSans-*.ttf assets/fonts/IBMPlexMono-*.ttf; do printf '%s ' "$f"; head -c 4 "$f" | od -An -tx1; done
@@ -77,7 +77,7 @@ Expected: every line shows `00 01 00 00` (TrueType) or `4f 54 54 4f` (OTTO). Any
 ls -l assets/fonts/
 ```
 
-- [ ] **Step 3: Append the two families to `pubspec.yaml`**
+- [x] **Step 3: Append the two families to `pubspec.yaml`**
 
 Leave the existing Inter block in place (it is deleted in Task A5). Add after it, at the same indent:
 
@@ -102,7 +102,7 @@ Leave the existing Inter block in place (it is deleted in Task A5). Add after it
           weight: 700
 ```
 
-- [ ] **Step 4: Verify the bundle resolves**
+- [x] **Step 4: Verify the bundle resolves**
 
 ```bash
 flutter pub get
@@ -116,7 +116,7 @@ flutter analyze 2>&1 | grep -E "error -|warning -"
 
 Expected: no output.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add assets/fonts pubspec.yaml
@@ -137,7 +137,7 @@ git commit -m "feat(p1): bundle Instrument Sans and IBM Plex Mono static weights
 
 > **Additive on purpose.** Every existing `AppColors.*` name keeps its current value in this task, so `themes.dart` and the five external call sites still compile untouched. Task A3 flips the theme onto the new names; Task A5 deletes the old ones. This ordering makes the value changes visible as call-site diffs instead of a silent in-place swap.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/core/theme/design_tokens_test.dart`:
 
@@ -198,7 +198,7 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 ```bash
 flutter test test/core/theme/design_tokens_test.dart
@@ -206,7 +206,7 @@ flutter test test/core/theme/design_tokens_test.dart
 
 Expected: FAIL — `AppColors.crewPalette`, `AppPalette`, `crewColorOf`, `avatarForegroundFor` are all undefined.
 
-- [ ] **Step 3: Add the font family constants and the new colour vocabulary**
+- [x] **Step 3: Add the font family constants and the new colour vocabulary**
 
 At the top of `lib/core/theme/design_tokens.dart`, above `AppColors`:
 
@@ -295,7 +295,7 @@ Add these to `AppColors` (keep every existing member for now):
 
 > **Crew slot 1 is `#005CC8`, the same blue as primary UI accents** — that employee's colour bar visually merges with buttons and selection. Cosmetic and inherited from the handoff's ordering; order affects only *new* picks, so reorder before P4 ships the invite sheet if the owner objects.
 
-- [ ] **Step 4: Add the dark crew override map and the two resolvers**
+- [x] **Step 4: Add the dark crew override map and the two resolvers**
 
 Below `AppColors`, still in `design_tokens.dart`:
 
@@ -348,7 +348,7 @@ Color avatarForegroundFor(ThemeData theme, Color background) {
 
 `contrastingForegroundFor` is **kept** — it becomes the light-path primitive inside `avatarForegroundFor` plus the fallback for genuinely theme-free contrast checks.
 
-- [ ] **Step 5: Add the `AppPalette` extension**
+- [x] **Step 5: Add the `AppPalette` extension**
 
 Everything Material's `ColorScheme` has no slot for lives here. One deliberately fat extension: the concerns straddle (`barTint` is chart *and* blue-tint; `noticeMint` is status *and* notice), and each split multiplies `copyWith`/`lerp` ceremony for no lookup benefit.
 
@@ -561,7 +561,7 @@ extension AppPaletteX on ThemeData {
 
 `lerpDouble` comes from `dart:ui` — add `import 'dart:ui' show lerpDouble;` at the top of the file if it is not already imported.
 
-- [ ] **Step 6: Add the `AppMonoType` extension**
+- [x] **Step 6: Add the `AppMonoType` extension**
 
 This is the answer to "how does a call site say *this number is mono data*": `Text(time, style: theme.monoType.data)`.
 
@@ -744,7 +744,7 @@ extension AppMonoTypeX on ThemeData {
 
 > **Tracking arithmetic.** Flutter's `letterSpacing` is logical pixels; the design gives `em`. Multiply: mono Label `+0.1em × 11px = +1.1`; hero numeral `−0.04em × 44px = −1.76`; group label `+0.11em × 10.5px = +1.155 ≈ 1.16`. **`height:` is the design's ratio verbatim** — "26px / 1.1" is `fontSize: 26, height: 1.1` (a 28.6 px line box).
 
-- [ ] **Step 7: Extend `AppStatusColors` with the three neutral fields**
+- [x] **Step 7: Extend `AppStatusColors` with the three neutral fields**
 
 Add to the field list, the constructor, both `static const`s, `copyWith`, and `lerp` (same mechanical pattern as the existing 13):
 
@@ -758,7 +758,7 @@ Values — `light`: `neutralContainer: AppColors.paper` (`#F1F4F9`), `onNeutralC
 
 Leave the existing 13 field *values* alone in this task — they are revalued in Task A3 together with the `ColorScheme` they sit beside.
 
-- [ ] **Step 8: Extend `AppCardStyle` with the shadow set**
+- [x] **Step 8: Extend `AppCardStyle` with the shadow set**
 
 Add eight fields beside the existing `shadow` / `border` / `iconChipAlpha`, wiring them through the constructor, both consts, `copyWith`, and `lerp` (use `BoxShadow.lerpList` for each, matching the existing pattern):
 
@@ -909,7 +909,7 @@ CSS alpha converts to a hex byte: `.05→0D`, `.07→12`, `.14→24`, `.3→4D`,
   );
 ```
 
-- [ ] **Step 9: Add role radii, density spacing, and the new motion tokens**
+- [x] **Step 9: Add role radii, density spacing, and the new motion tokens**
 
 Append to `AppRadius` (the numeric names keep their true values so they never lie; P2–P7 migrate call sites onto the role names):
 
@@ -955,7 +955,7 @@ Append to `AppMotion` and revalue `sheetStyle`:
   static const Duration noticeCycle = Duration(milliseconds: 2600);
 ```
 
-- [ ] **Step 10: Run the test to verify it passes**
+- [x] **Step 10: Run the test to verify it passes**
 
 ```bash
 flutter test test/core/theme/design_tokens_test.dart
@@ -963,7 +963,7 @@ flutter test test/core/theme/design_tokens_test.dart
 
 Expected: PASS, 5 tests.
 
-- [ ] **Step 11: Confirm nothing else regressed**
+- [x] **Step 11: Confirm nothing else regressed**
 
 ```bash
 flutter analyze 2>&1 | grep -E "error -|warning -"
@@ -972,7 +972,7 @@ flutter test
 
 Expected: no analyzer output; the full suite still green (this task added tokens, changed no rendering).
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add lib/core/theme/design_tokens.dart test/core/theme/design_tokens_test.dart
