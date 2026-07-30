@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
-import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/features/auth/screens/forgot_password_screen.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
 import 'package:scheduling/features/calendar/screens/day_route_screen.dart';
+import 'package:scheduling/features/clients/screens/history_screen.dart';
 import 'package:scheduling/features/dashboard/screens/dashboard_screen.dart';
+import 'package:scheduling/features/settings/screens/settings_screen.dart';
 import 'package:scheduling/routes/hub_shell.dart';
 
 class AppRoutes {
@@ -93,11 +94,12 @@ class AppRoutes {
 
       case history:
         final args = settings.arguments! as HistoryArgs;
-        return _hubRoute(
-          settings,
-          PushedDestination.history,
-          isAdmin: args.isAdmin,
-          employeeId: args.employeeId,
+        return AppPageRoute(
+          settings: settings,
+          builder: (_) => HistoryScreen(
+            isAdmin: args.isAdmin,
+            employeeId: args.employeeId,
+          ),
         );
 
       case liveMap:
@@ -112,13 +114,14 @@ class AppRoutes {
       case AppRoutes.settings:
         // Settings is only reachable post-login, so args are always present.
         final args = settings.arguments! as SettingsArgs;
-        return _hubRoute(
-          settings,
-          PushedDestination.settings,
-          isAdmin: args.role == 'admin',
-          employeeId: args.employeeId,
-          userName: args.name,
-          userEmail: args.email,
+        return AppPageRoute(
+          settings: settings,
+          builder: (_) => SettingsScreen(
+            name: args.name,
+            email: args.email,
+            role: args.role,
+            employeeId: args.employeeId,
+          ),
         );
 
       default:
@@ -130,7 +133,7 @@ class AppRoutes {
   /// shell is already live, otherwise opens a fresh one.
   static Route<dynamic> _hubRoute(
     RouteSettings routeSettings,
-    AdaptiveDestination destination, {
+    HubTab destination, {
     required bool isAdmin,
     required String employeeId,
     String userName = '',
@@ -149,7 +152,7 @@ class AppRoutes {
     return AppPageRoute(
       settings: routeSettings,
       builder: (_) => HubShell(
-        initialDestination: destination,
+        initialTab: destination,
         isAdmin: isAdmin,
         employeeId: employeeId,
         userName: userName,
