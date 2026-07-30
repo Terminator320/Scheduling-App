@@ -18,7 +18,10 @@ import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/route_url_builder.dart';
+import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
+import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
@@ -120,17 +123,27 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
         title: context.l10n.calendar_dayRouteTitle,
         onBack: () => Navigator.pop(context),
         compact: context.isLandscape,
+        actions: const [AppHeaderPair()],
+      ),
+      endDrawer: AppNavDrawer(
+        isAdmin: widget.isAdmin,
+        employeeId: widget.employeeId,
       ),
       bottomNavigationBar: _routeButton(data.stops),
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            _daySwitcher(),
-            if (widget.isAdmin && data.assigneeEntries.isNotEmpty)
-              _employeePicker(data.assigneeEntries, data.employeeId),
-            Expanded(child: _timeline(async, data.jobs, data.employeeId)),
-          ],
+      // A pushed route sits above the hub tabs' scopes, so it needs its own
+      // or it attaches to the root PrimaryScrollController alongside any
+      // other pushed route.
+      body: PrimaryScrollScope(
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              _daySwitcher(),
+              if (widget.isAdmin && data.assigneeEntries.isNotEmpty)
+                _employeePicker(data.assigneeEntries, data.employeeId),
+              Expanded(child: _timeline(async, data.jobs, data.employeeId)),
+            ],
+          ),
         ),
       ),
     );

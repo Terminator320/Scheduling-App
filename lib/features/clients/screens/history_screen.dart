@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/navigation/app_destination.dart';
-import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/features/clients/widgets/views/appointment_history_view.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
@@ -9,7 +8,9 @@ import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
 import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
+import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
 
@@ -46,12 +47,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
     super.dispose();
   }
 
-  void _backToCalendar() => navigateToDestination(
-    context,
-    HubTab.calendar,
-    isAdmin: widget.isAdmin,
-    employeeId: widget.employeeId,
-  );
+  // A pushed route now, so back means back. The Calendar pill covers
+  // go-home.
+  void _back() => Navigator.maybePop(context);
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +66,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
         appBar: AppTopBar(
           title: context.l10n.common_history,
           compact: context.isLandscape,
-          onBack: _backToCalendar,
+          onBack: _back,
+          actions: const [AppHeaderPair()],
           bottom: _tourSteps.contains(TourStepId.historySearch)
               ? TourShowcaseBar(
                   showcaseKey: _tourKeys[TourStepId.historySearch]!,
@@ -86,10 +85,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ),
         // The nav shell is built once; only the history view rebuilds per
         // keystroke, so typing doesn't rebuild the NavigationRail + chrome.
-        body: ListenableBuilder(
-          listenable: _searchController,
-          builder: (context, _) =>
-              AppointmentHistoryView(searchQuery: _searchController.text),
+        body: PrimaryScrollScope(
+          child: ListenableBuilder(
+            listenable: _searchController,
+            builder: (context, _) =>
+                AppointmentHistoryView(searchQuery: _searchController.text),
+          ),
         ),
       ),
     );

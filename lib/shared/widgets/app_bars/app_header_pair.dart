@@ -21,45 +21,6 @@ class AppHeaderPair extends StatelessWidget {
   );
 }
 
-/// Leading-slot back chevron for pushed routes.
-class AppHeaderBackButton extends StatelessWidget {
-  const AppHeaderBackButton({super.key, this.onTap});
-
-  /// Defaults to a plain pop — on a pushed route, back means back.
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Tooltip(
-      message: MaterialLocalizations.of(context).backButtonTooltip,
-      child: SizedBox(
-        width: _kTapTarget,
-        height: _kTapTarget,
-        child: Center(
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(AppRadius.rIcon),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: onTap ?? () => Navigator.maybePop(context),
-              child: SizedBox(
-                width: 36,
-                height: 36,
-                child: Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  size: 17,
-                  color: scheme.onPrimary,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _CalendarPill extends StatelessWidget {
   const _CalendarPill();
 
