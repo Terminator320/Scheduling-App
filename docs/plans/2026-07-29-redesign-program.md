@@ -342,10 +342,11 @@ uppercases + strips dashes). CTA relabels "Enter the code" → "Continue" when f
 turns every box red with the expiry explanation. `DON'T HAVE A CODE?` panel copy adjusted for the
 no-email reality (the admin reads it off the Team page).
 
-**Deep link — this is a delivery layer, not a route** (verified 2026-07-29: no URL ever reaches
-Dart today — `FlutterDeepLinkingEnabled` is `false`, `AppDelegate` has no `open url` override,
-Android has no `intent-filter`, and the `home_widget` handler rejects any URL without a
-`homeWidget` query param). Delivery mechanism: the **`app_links` package** (SPM-vetted 2026-07-29
+**Deep link — this is a delivery layer, not a route** (verified 2026-07-29: the only URLs that
+reach Dart are the widget/Live-Activity taps carrying the `homeWidget` query param, via the
+`home_widget` channel — `FlutterDeepLinkingEnabled` is `false`, `AppDelegate` has no `open url`
+override, Android has no `intent-filter`, and the `home_widget` handler rejects any URL without
+that param, so an invite link from mail/Safari reaches nothing today). Delivery mechanism: the **`app_links` package** (SPM-vetted 2026-07-29
 — ships `ios/app_links/Package.swift`, latest 7.2.1) rather than hand-rolled native handlers. It
 provides the initial-link + stream API on both platforms; still required around it: the Android
 `intent-filter` for `esproschedule` in the manifest (the iOS scheme is already registered;
@@ -354,12 +355,15 @@ Dart dispatcher** on the app_links stream that routes by URI host (`invite` → 
 `appointment` → the existing `_openAppointmentDeepLink`), a `code` parameter + **named route** for
 `CreateAccountScreen` (today an anonymous `MaterialPageRoute` taking only `initialEmail`), and a
 **signed-out path** — the invite branch must bypass the `currentUser == null` guard and the
-live-`HubShell` wait that gate the appointment branch. This also becomes the natural fix for the
-three iOS URL producers (home-screen widget, Siri snapshot, Live Activity) whose
-`esproschedule://appointment?id=…` taps likely do nothing today (no `homeWidget` param, so the
-`home_widget` plugin never claims them) — once the dispatcher exists they ride it and the
-`home_widget` tap channel can retire; coordinate with the separate verification task already
-running on that bug. The https store-fallback page still ships with the deferred email project.
+live-`HubShell` wait that gate the appointment branch. This also becomes the long-term fix for the
+three iOS URL producers (home-screen widget, Siri snapshot, Live Activity): the verification task
+confirmed the bug 2026-07-29 (their URLs carried no `homeWidget` param, so the `home_widget`
+plugin's `isWidgetUrl` never claimed them and taps were plain app launches) and applied the
+interim fix — the producers now append `&homeWidget` so taps ride the existing `home_widget`
+channel (Mac verification pending). Once the dispatcher exists they ride it instead, and the
+`home_widget` tap channel and the `homeWidget` param retire **together** — dropping the param
+while the channel is still the consumer re-breaks taps. The https store-fallback page still
+ships with the deferred email project.
 
 **Accept your invite — details.** Invite banner (who invited you, role, scope caption), first/last
 split row, phone, password with a 4-segment strength meter (client-side), then the combined
@@ -478,6 +482,46 @@ Unblocks the six dashboard money sections. Server-side only: scheduled function 
 collection readable by admins via a callable, mirroring the `waveGetConnection` pattern — the app
 never talks to Wave directly and no client-side reads of the raw collection. Scoped and specced
 separately when it starts.
+
+## Mobile-use requirements (added 2026-07-30)
+
+The handoff is a static 390×844 mock; these rules translate it to real devices. They bind every
+project, same weight as the invariants below.
+
+- **Touch targets: design sizes are visual, never the hit area.** The handoff specs 38×38 icon
+  buttons, 32×32 day circles, 30×30 week-strip circles, ~34px chips and pills — all below the
+  repo's 48×48 minimum. Ship the visual sizes, but pad every interactive element's tap region to
+  ≥48×48 (Material tap-target padding / `InkResponse` radius; for grid cells the *cell* — 46px ×
+  ~1/7 width — is the target and the circle is decoration; the handoff's own "list rows ≥48px
+  effective" shows the intent). Never shrink a hit area to match a mock.
+- **No hardcoded status-bar or home-indicator insets.** The handoff reserves a literal 62px top
+  and floats FABs/sheets 42px from the bottom. Real devices vary (Dynamic Island vs. SE vs.
+  Android cutouts; home indicator). Every fixed header uses `MediaQuery.paddingOf(context).top` /
+  `SafeArea`; every bottom-floating element adds `padding.bottom`. A literal 62 anywhere is a bug.
+- **Design px heights are 1.0-scale minimums.** 46px day cells, 56px week-strip cells, 38px
+  buttons, field rows — all clip at textScaler 2.0 if fixed. Heights derive from scaled text
+  (the month grid already derives row height from available space — keep that; the `AppSearchBar`
+  `textScaler:` lesson generalizes). The 0.8–2.0 sweep at 375×667 is the enforcement.
+- **Offline-first for field use.** The primary users are techs in trucks. Every NEW write surface
+  inherits the offline fail-fast pattern (`isOfflineProvider` check before the in-flight flag,
+  `SocketException('offline')` → `composeErrorNotice`): time-off request/approve/decline,
+  archive/unarchive, availability saves on My details, invite acceptance (show the offline notice,
+  never a spinner that hangs until reconnect). Reads on the new pushed screens keep serving from
+  the pinned Firestore persistence cache — no extra work, just don't break it.
+- **Scroll performance on the collapse.** The week-strip listener rebuilds ONLY on the
+  collapsed-flag transition (threshold crossing), never per scroll frame; the card `riseIn`
+  entrance plays on first build only, not on every scroll into view; both collapse to instant
+  under `disableAnimationsOf`.
+- **Keyboard ergonomics.** Code entry: `autocorrect: false`, `textCapitalization: characters`,
+  keyboard type visible-password-ish (no predictive bar garbage over code boxes). Phone fields:
+  `keyboardType: phone`. The fixed-92%-height form sheets keep keyboard-inset-aware scrolling so
+  the focused field is never under the keyboard (`FormSheetScaffold` already does this — preserve
+  it in the new chrome).
+- **App size: bundle only the weights the ramp uses** — Instrument Sans 400/500/600/700, IBM Plex
+  Mono 500/600 — not the full families.
+- **The handoff's thumb-reach decisions are load-bearing — don't "correct" them:** right-anchored
+  drawer, dropdown-menu *sheets* instead of floating menus, bottom form sheets, FAB bottom-right.
+  These exist for one-handed phone use; a future pass must not swap them for desktop idioms.
 
 ## Cross-cutting requirements
 
