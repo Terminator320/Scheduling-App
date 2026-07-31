@@ -612,6 +612,20 @@ and live since 2026-07-11. The dedicated support page wins.
 https://gvogas.github.io/es-pro-legal/
 ```
 
+**Accessibility URL** (optional, App Store Connect → App Accessibility →
+Accessibility Nutrition Labels → "Manage the accessibility URL"; shown on the
+product page on every device except Apple TV)
+```
+https://gvogas.github.io/es-pro-legal/accessibility.html
+```
+Source lives at `docs/legal/accessibility.html` — publish it to the
+`es-pro-legal` Pages repo beside `support.html`. It documents support for the
+nine nutrition-label features (VoiceOver, Voice Control, adjustable text size,
+dark interface, differentiate without colour alone, sufficient contrast,
+reduced motion, captions, audio descriptions) plus known limitations. **Keep it
+in sync with what you actually declare in the nutrition labels** — the two are
+read side by side on the product page.
+
 **Primary Category:** Business. **Secondary Category:** Productivity.
 
 **Copyright:** `2026 Plombier Eau Secours`
