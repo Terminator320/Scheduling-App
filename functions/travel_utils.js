@@ -632,6 +632,7 @@ async function runOnSiteFlipPass(deps) {
           employeeDocId: marker.employeeDocId,
           ctx: record ? {
             clientName: record.clientName,
+            title: record.title,
             address: _address(record),
             startTime: record.startTime,
             endTime: record.endTime,
@@ -648,6 +649,7 @@ async function runOnSiteFlipPass(deps) {
         employeeDocId: marker.employeeDocId,
         ctx: {
           clientName: record.clientName,
+          title: record.title,
           address: _address(record),
           startTime: record.startTime,
           endTime: record.endTime,

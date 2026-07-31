@@ -2,7 +2,7 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-07-27 by auditing the source against the app's call sites and
+refreshed 2026-07-31 by auditing the source against the app's call sites and
 the live deployment (the iOS Live Activity stack added behind
 `notifyAppointmentChanges` / `sendUpcomingJobReminders` — APNs secrets, direct
 HTTP/2 client; `purgeExpiredHistory`'s timeout corrected to the 1800s scheduled
@@ -70,6 +70,16 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   registry queries fail `FAILED_PRECONDITION` and the best-effort catch turns it
   into a silent no-op. Remaining gate is on-device verification. Runbook:
   `ios/ScheduleWidget/LIVE_ACTIVITY_README.md`.
+- **Pending deploy (1.38.0, 2026-07-31):** personal jobs and all-day blocks
+  change three functions' *behaviour* with no signature, trigger, guard or
+  secret change, so the export set stays at 21. `sendUpcomingJobReminders` —
+  `selectTravelCandidates` skips `isAllDay` records (a midnight start otherwise
+  fell inside the 90-min window at ~23:30 the night before and pushed a "time
+  to leave" for a block with nowhere to leave for); `sendOverdueJobPrompts` —
+  `selectOverdueCandidates` skips `isPersonal` records, the server mirror of
+  `AppointmentRecord.displayStatus`; and every push, digest and Live Activity
+  card now names a job `clientName → title → generic`, since a personal job has
+  no client. Nothing here needs a new index.
 - `backfillLegacyClientNames` (a one-time migration completed `2026-06-29`,
   `fixed: 0`) was removed from the codebase 2026-07-05 and is **no longer in the
   deployed set** (confirmed 2026-07-10) — it was pruned by a full

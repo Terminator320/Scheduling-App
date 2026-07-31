@@ -30,7 +30,8 @@ int monthGridRowCount(DateTime month, {required int weekStart}) =>
 /// DST transition can't shift a cell onto the wrong calendar day.
 List<DateTime> monthGridDays(DateTime month, {required int weekStart}) {
   final lead = _leadFor(month, weekStart);
-  final cells = 7 * monthGridRowCount(month, weekStart: weekStart);
+  // Same count monthGridRowCount gives, reusing the lead already in hand.
+  final cells = 7 * ((lead + _daysInMonth(month)) / 7).ceil();
   return [
     for (var i = 0; i < cells; i++)
       DateTime(month.year, month.month, 1 - lead + i),
@@ -46,14 +47,19 @@ List<DateTime> weekOf(DateTime day, {required int weekStart}) {
   ];
 }
 
+/// Cached per locale: resolving the week start builds a `DateFormat` just to
+/// read its symbols, and the grid, the pager and the week strip each ask for it
+/// on every calendar rebuild. The app ships two locales.
+final _weekStartCache = <String, int>{};
+
 /// The locale's first day of the week as a Sunday-based index.
 ///
 /// intl stores `FIRSTDAYOFWEEK` Monday-based (0 = Monday), so Sunday-first
 /// locales report 6.
-int weekStartForLocale(String locale) {
-  final symbols = DateFormat.yMMMM(locale).dateSymbols;
-  return (symbols.FIRSTDAYOFWEEK + 1) % 7;
-}
+int weekStartForLocale(String locale) => _weekStartCache.putIfAbsent(
+  locale,
+  () => (DateFormat.yMMMM(locale).dateSymbols.FIRSTDAYOFWEEK + 1) % 7,
+);
 
 /// Narrow weekday labels ordered from the locale's first day. Never hardcode
 /// `S M T W T F S` — it is wrong for fr_CA.

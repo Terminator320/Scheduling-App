@@ -233,6 +233,28 @@ void main() {
         ..exitEditing();
       expect(readState().isEditing, isFalse);
     });
+
+    test('turning Personal off also clears all-day', () {
+      // Regression: all-day is only offered on a personal job, so leaving the
+      // flag set converted the block into a midnight–23:59 CLIENT visit with
+      // neither the switch nor the time rows on screen to correct it. The
+      // travel sweep then skips that record forever.
+      final c = readNotifier()
+        ..setPersonal(value: true)
+        ..setAllDay(value: true);
+      expect(readState().isAllDay, isTrue);
+
+      c.setPersonal(value: false);
+      expect(readState().isAllDay, isFalse);
+    });
+
+    test('turning Personal on again does not resurrect all-day', () {
+      final c = readNotifier()..setPersonal(value: true);
+      expect(readState().isAllDay, isFalse);
+
+      c.setAllDay(value: true);
+      expect(readState().isAllDay, isTrue);
+    });
   });
 
   group('toggleEmployee', () {
@@ -940,27 +962,30 @@ void main() {
       verifyNever(() => appointments.updateAppointment(any()));
     });
 
-    test('excludes the appointment being edited from its own conflicts', () async {
-      await waitForSeed();
+    test(
+      'excludes the appointment being edited from its own conflicts',
+      () async {
+        await waitForSeed();
 
-      await readNotifier().save(
-        _appointment,
-        title: 'Job',
-        address: '',
-        notes: '',
-        materialsNeeded: '',
-      );
+        await readNotifier().save(
+          _appointment,
+          title: 'Job',
+          address: '',
+          notes: '',
+          materialsNeeded: '',
+        );
 
-      final captured = verify(
-        () => appointments.findBusyEmployees(
-          candidates: any(named: 'candidates'),
-          start: any(named: 'start'),
-          end: any(named: 'end'),
-          excludeAppointmentId: captureAny(named: 'excludeAppointmentId'),
-        ),
-      ).captured.single;
-      expect(captured, 'appt-1');
-    });
+        final captured = verify(
+          () => appointments.findBusyEmployees(
+            candidates: any(named: 'candidates'),
+            start: any(named: 'start'),
+            end: any(named: 'end'),
+            excludeAppointmentId: captureAny(named: 'excludeAppointmentId'),
+          ),
+        ).captured.single;
+        expect(captured, 'appt-1');
+      },
+    );
 
     test('forceBusy skips the conflict check and writes', () async {
       await waitForSeed();

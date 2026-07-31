@@ -21,10 +21,14 @@ class CalendarCollapse {
   /// only on a transition, never per gesture frame.
   bool onDragDelta(double dy) {
     // Reversing direction restarts the count, so a wobble on the way up can't
-    // bank travel toward the opposite transition.
-    if (_travel.sign != dy.sign) _travel = 0;
+    // bank travel toward the opposite transition. A dy of exactly 0 is not a
+    // reversal — a frame that moved purely sideways would otherwise throw away
+    // the travel banked so far and force the user to re-drag the full 24px.
+    if (dy != 0 && _travel.sign != dy.sign) _travel = 0;
     _travel += dy;
-    final wants = _collapsed ? _travel >= dragThreshold : _travel <= -dragThreshold;
+    final wants = _collapsed
+        ? _travel >= dragThreshold
+        : _travel <= -dragThreshold;
     if (!wants) return false;
     _collapsed = !_collapsed;
     _travel = 0;
@@ -36,9 +40,8 @@ class CalendarCollapse {
   void endDrag() => _travel = 0;
 
   /// The handle is also a button, for anyone not making a 24px drag.
-  bool toggle() {
+  void toggle() {
     _collapsed = !_collapsed;
     _travel = 0;
-    return true;
   }
 }

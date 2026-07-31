@@ -246,7 +246,9 @@ class AppointmentFormFields extends StatelessWidget {
         label: l10n.calendar_serviceTitle,
         // A personal block doesn't have to be named — left blank it saves as
         // "Personal", which is what the card and the off-screen mirrors read.
-        hint: isPersonal ? l10n.calendar_personal : l10n.calendar_eGPlumbingRepair,
+        hint: isPersonal
+            ? l10n.calendar_personal
+            : l10n.calendar_eGPlumbingRepair,
         controller: controllers.title,
         required: !isPersonal,
         optional: isPersonal,
@@ -295,24 +297,43 @@ class AppointmentFormFields extends StatelessWidget {
     // Dates and times are pickers, not text entry, so they render as panel rows
     // rather than readOnly TextFields. Free-text fields keep LabeledTextField,
     // which owns the error shake and the clear button.
-    final startRow = SheetFieldRow(
-      label: l10n.calendar_startTime,
-      value: controllers.startTime.text,
-      placeholder: l10n.calendar_start,
-      accent: true,
-      useMonoValue: true,
-      errorText: _err(context, 'startTime'),
-      onTap: onPickStartTime,
-    );
-    final endRow = SheetFieldRow(
-      label: l10n.calendar_endTime,
-      value: controllers.endTime.text,
-      placeholder: l10n.calendar_end,
-      accent: true,
-      useMonoValue: true,
-      errorText: _err(context, 'endTime'),
-      onTap: onPickEndTime,
-    );
+    //
+    // Built on demand: an all-day block has no times, and the rows are not
+    // constructed for one.
+    List<Widget> timeRows() {
+      final startRow = SheetFieldRow(
+        label: l10n.calendar_startTime,
+        value: controllers.startTime.text,
+        placeholder: l10n.calendar_start,
+        accent: true,
+        useMonoValue: true,
+        errorText: _err(context, 'startTime'),
+        onTap: onPickStartTime,
+      );
+      final endRow = SheetFieldRow(
+        label: l10n.calendar_endTime,
+        value: controllers.endTime.text,
+        placeholder: l10n.calendar_end,
+        accent: true,
+        useMonoValue: true,
+        errorText: _err(context, 'endTime'),
+        onTap: onPickEndTime,
+      );
+      // Start and end share one row until the screen is too narrow to read both.
+      if (isNarrowPhone) return [startRow, endRow];
+      return [
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: startRow),
+              const VerticalDivider(width: 1),
+              Expanded(child: endRow),
+            ],
+          ),
+        ),
+      ];
+    }
 
     return [
       _SectionLabel(l10n.calendar_sectionSchedule),
@@ -334,25 +355,8 @@ class AppointmentFormFields extends StatelessWidget {
             trailing: const Icon(Icons.calendar_today_outlined, size: 18),
           ),
           // An all-day block has no times to show — the date row is the whole
-          // schedule, and an empty child here would leave a stray divider.
-          // Start and end otherwise share one row until the screen is too
-          // narrow to read both.
-          if (isAllDay)
-            ...const <Widget>[]
-          else if (isNarrowPhone) ...[
-            startRow,
-            endRow,
-          ] else
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: startRow),
-                  const VerticalDivider(width: 1),
-                  Expanded(child: endRow),
-                ],
-              ),
-            ),
+          // schedule.
+          if (!isAllDay) ...timeRows(),
           // --- Repeat: same panel as the date and times, so everything about
           // when the job happens reads as one block. Not offered on a personal
           // job.
@@ -446,8 +450,10 @@ class _PersonalJobSwitch extends StatelessWidget {
 }
 
 /// Turns the block into a whole-day one. Personal jobs only — a client visit
-/// always has a time. Lives inside the schedule `SheetPanel`, so it carries the
-/// same 15/13 padding its sibling rows do rather than a ListTile's own.
+/// always has a time. Lives inside the schedule `SheetPanel`, so it takes the
+/// panel's horizontal inset; the vertical is tighter than a `SheetFieldRow`'s
+/// because a switch is taller than a label-over-value pair and the row would
+/// otherwise tower over the date row beneath it.
 class _AllDaySwitch extends StatelessWidget {
   const _AllDaySwitch({required this.value, required this.onChanged});
 

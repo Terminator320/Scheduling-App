@@ -61,9 +61,22 @@ function _timeOnly(value, locale) {
   return formatTimeOfDay(locale, value);
 }
 
+/**
+ * Who a card names the job after: the client, or — for a personal job, which
+ * has none — its title. Same fallback the pushes use in
+ * `notification_messages._who`; the card and the `leaveNow` push beside it must
+ * not call the same job two different things.
+ * @param {!Object} c Content-state input.
+ * @param {string} generic Localized "Client" placeholder.
+ * @return {string}
+ */
+function _who(c, generic) {
+  return (c.clientName || "").trim() || (c.title || "").trim() || generic;
+}
+
 const _STRINGS = {
   en: {
-    who: (c) => (c.clientName || "").trim() || "Client",
+    who: (c) => _who(c, "Client"),
     status: (phase) => phase === PHASE_ON_SITE ? "On site" : "On the way",
     leaveAt: (t) => `Leave at ${t}`,
     startsAt: (t) => `Starts at ${t}`,
@@ -81,7 +94,7 @@ const _STRINGS = {
     },
   },
   fr: {
-    who: (c) => (c.clientName || "").trim() || "un client",
+    who: (c) => _who(c, "un client"),
     status: (phase) => phase === PHASE_ON_SITE ? "Sur place" : "En route",
     leaveAt: (t) => `Départ à ${t}`,
     startsAt: (t) => `Débute à ${t}`,
@@ -136,8 +149,8 @@ function phaseFor({startTime, now}) {
  *   locale: (string|undefined)}} args
  * @return {!Object}
  */
-function buildContentState({clientName, address, startTime, endTime, leaveAt,
-  travelMinutes, phase, locale}) {
+function buildContentState({clientName, title, address, startTime, endTime,
+  leaveAt, travelMinutes, phase, locale}) {
   const loc = locale === "fr" ? "fr" : "en";
   const t = liveActivityStrings(loc);
   const onSite = phase === PHASE_ON_SITE;
@@ -156,7 +169,7 @@ function buildContentState({clientName, address, startTime, endTime, leaveAt,
     else timeLabel = leaveKnown ? t.leaveAt(timeText) : t.startsAt(timeText);
   }
   return {
-    clientName: (clientName || "").trim() || t.who({}),
+    clientName: t.who({clientName, title}),
     address: (address || "").trim(),
     startTime: toIsoUtc(startTime),
     endTime: toIsoUtc(endTime),

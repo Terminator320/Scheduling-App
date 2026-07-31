@@ -16,6 +16,7 @@ AppointmentFormInput _input({
   ClientRecord? client = _aClient,
   List<EmployeeRecord> employees = const [_anEmployee],
   bool isPersonal = false,
+  bool isAllDay = false,
 }) {
   return AppointmentFormInput(
     title: title,
@@ -25,6 +26,7 @@ AppointmentFormInput _input({
     client: client,
     selectedEmployees: employees,
     isPersonal: isPersonal,
+    isAllDay: isAllDay,
   );
 }
 
@@ -34,11 +36,40 @@ void main() {
       expect(AppointmentFormValidator.validate(_input()), isEmpty);
     });
 
+    test('an all-day block ignores stale times left over from before', () {
+      // Regression: times picked BEFORE all-day was switched on stay in state.
+      // An equal start/end pair used to re-raise endTimeMustBeAfterStart, so
+      // Save failed against time rows that were no longer on screen.
+      final errors = AppointmentFormValidator.validate(
+        _input(
+          isPersonal: true,
+          isAllDay: true,
+          client: null,
+          startTime: const TimeOfDay(hour: 9, minute: 0),
+          endTime: const TimeOfDay(hour: 9, minute: 0),
+        ),
+      );
+      expect(errors, isEmpty);
+    });
+
+    test('a timed job still rejects an end that is not after the start', () {
+      final errors = AppointmentFormValidator.validate(
+        _input(
+          startTime: const TimeOfDay(hour: 9, minute: 0),
+          endTime: const TimeOfDay(hour: 9, minute: 0),
+        ),
+      );
+      expect(errors['endTime'], AppointmentFormError.endTimeMustBeAfterStart);
+    });
+
     test('reports titleRequired on empty / whitespace title', () {
       for (final t in ['', '   ', '\t']) {
         final errors = AppointmentFormValidator.validate(_input(title: t));
-        expect(errors['title'], AppointmentFormError.titleRequired,
-            reason: 'title=${t.codeUnits}');
+        expect(
+          errors['title'],
+          AppointmentFormError.titleRequired,
+          reason: 'title=${t.codeUnits}',
+        );
       }
     });
 
@@ -72,8 +103,7 @@ void main() {
     });
 
     test('clientRequired when client is null', () {
-      final errors =
-          AppointmentFormValidator.validate(_input(client: null));
+      final errors = AppointmentFormValidator.validate(_input(client: null));
       expect(errors['client'], AppointmentFormError.clientRequired);
     });
 

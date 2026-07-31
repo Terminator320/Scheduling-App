@@ -10,9 +10,11 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
-/// Crew bands the colour bar splits into. Past this a band is too thin to
-/// read, so the rest of the crew is carried by the "+N" on the crew line.
-const int _kMaxBarSegments = 4;
+/// How much of the crew the card shows — both the bands the colour bar splits
+/// into and the avatars in the stack, deliberately the same number so the two
+/// always agree. Past this a band is too thin to read and the stack outgrows
+/// the meta line.
+const int _kMaxCrewShown = 4;
 
 /// The colour bar down the card's leading edge: a flat colour for one crew, a
 /// hard-stopped gradient of everyone's colours for more. Deliberately NOT grey
@@ -28,7 +30,9 @@ BoxDecoration _crewBarDecoration(ThemeData theme, List<Color> colors) {
       end: Alignment.bottomCenter,
       // Each colour twice against a shared stop, so the bands meet at a hard
       // edge instead of blending into mud.
-      colors: [for (final color in colors) ...[color, color]],
+      colors: [
+        for (final color in colors) ...[color, color],
+      ],
       stops: [
         for (var i = 0; i < colors.length; i++) ...[i * step, (i + 1) * step],
       ],
@@ -90,15 +94,13 @@ class AppointmentCard extends StatelessWidget {
         : '${DateUtilsHelper.formatTime(appointment.startTime)} – '
               '${DateUtilsHelper.formatTime(appointment.endTime)}';
 
-    // The bar follows the FIRST assignee: the crew line makes them the card's
-    // identity, and the old per-appointment colour went grey for any job with
-    // more than one person on it.
     // One band per crew member rather than the first assignee's colour alone:
     // a two-person job now reads as two-person at a glance, and nobody's colour
     // is thrown away. An assignee with no colour is skipped, not greyed.
     final barColors = [
-      for (final member in crew.take(_kMaxBarSegments))
-        if (member.color case final stored?) crewColorOf(theme, stored.toARGB32()),
+      for (final member in crew.take(_kMaxCrewShown))
+        if (member.color case final stored?)
+          crewColorOf(theme, stored.toARGB32()),
     ];
 
     // A personal job has no client, so it names itself in that slot rather
@@ -285,19 +287,22 @@ class _CrewAvatars extends StatelessWidget {
 
   final List<AppointmentCrew> crew;
 
-  /// Diameter of `AvatarSize.xs`, and how much of it the next one covers.
-  static const double _diameter = 20;
+  /// How much of each avatar the next one covers. The diameter comes from
+  /// [AvatarSize.xs] itself — the stack has to size itself by hand (no
+  /// `LayoutBuilder` under `IntrinsicHeight`), so a local copy would silently
+  /// drift if the avatar sizes ever changed.
   static const double _overlap = 6;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final shown = crew.take(_kMaxBarSegments).toList();
-    const step = _diameter - _overlap;
+    final shown = crew.take(_kMaxCrewShown).toList();
+    final diameter = AvatarSize.xs.diameter;
+    final step = diameter - _overlap;
 
     return SizedBox(
-      width: _diameter + (shown.length - 1) * step,
-      height: _diameter,
+      width: diameter + (shown.length - 1) * step,
+      height: diameter,
       child: Stack(
         clipBehavior: Clip.none,
         children: [

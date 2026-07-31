@@ -57,9 +57,8 @@ class CalendarMonthGrid extends StatelessWidget {
       math.max(20, MediaQuery.textScalerOf(context).scale(10) * 1.8);
 
   /// Total painted height for a grid of [rows] weeks, so the pager can bound
-  /// its `PageView` and the collapse can size its spacer. Rows vary by month,
-  /// so callers must pass the row count of the month they are sizing —
-  /// `monthGridRowCount(month, weekStart: weekStartForLocale(locale))`.
+  /// its `PageView`. Rows vary by month, so callers must pass the row count of
+  /// the month they are sizing — see [rowsFor].
   static double heightFor(BuildContext context, {required int rows}) =>
       _kGridPadding.vertical +
       _weekdayRowHeight(context) +
@@ -67,15 +66,15 @@ class CalendarMonthGrid extends StatelessWidget {
       rows * _cellHeight(context) +
       (rows - 1) * _kCellGap;
 
+  /// The ambient locale's week start. The one place the grid, the pager and the
+  /// week strip resolve it from a [BuildContext].
+  static int weekStartOf(BuildContext context) =>
+      weekStartForLocale(Localizations.localeOf(context).toString());
+
   /// The row count [month] needs, resolved against the ambient locale's week
   /// start. Convenience for the callers of [heightFor].
   static int rowsFor(BuildContext context, DateTime month) =>
-      monthGridRowCount(
-        month,
-        weekStart: weekStartForLocale(
-          Localizations.localeOf(context).toString(),
-        ),
-      );
+      monthGridRowCount(month, weekStart: weekStartOf(context));
 
   @override
   Widget build(BuildContext context) {

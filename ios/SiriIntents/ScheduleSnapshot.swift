@@ -82,16 +82,24 @@ struct ScheduleSnapshot: Codable {
     /// marked done. Cancelled visits are already excluded at build time.
     ///
     /// An all-day block is still eligible — it just never wins while a timed
-    /// visit remains. It starts at midnight, so it would otherwise be "next"
-    /// for the whole day and hide the real next visit; and by the same token
-    /// it stays upcoming until its 23:59 end, not its start.
+    /// visit remains *inside its own span*. It starts at midnight, so it would
+    /// otherwise be "next" for the whole day and hide the real next visit; and
+    /// by the same token it stays upcoming until its 23:59 end, not its start.
+    ///
+    /// The "prefer timed" test is scoped to the block's own span, matching the
+    /// widget's per-day `DaySchedule.nextJob`. Comparing against every timed
+    /// visit in the 7-day window instead would skip today's all-day block
+    /// entirely whenever *any* later day held a timed job — Siri would answer
+    /// with Thursday's visit while today's block went unmentioned.
     func nextAppointment(after now: Date = Date()) -> SnapshotAppointment? {
         let upcoming = days
             .flatMap { $0.appointments }
             .filter { !$0.isDone && ($0.allDay ? $0.end > now : $0.start > now) }
-        let timed = upcoming.filter { !$0.allDay }
-        let pool = timed.isEmpty ? upcoming : timed
-        return pool.min { $0.start < $1.start }
+        guard let earliest = upcoming.min(by: { $0.start < $1.start })
+        else { return nil }
+        guard earliest.allDay else { return earliest }
+        let timedWithin = upcoming.filter { !$0.allDay && $0.start < earliest.end }
+        return timedWithin.min { $0.start < $1.start } ?? earliest
     }
 
     static func load() -> ScheduleSnapshot? {

@@ -10,7 +10,7 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
-## [Unreleased]
+## [1.38.0+63] - 2026-07-31
 ### Added
 - **Personal jobs — time blocked off that isn't a client visit.** Flip
   **Personal** at the top of the booking form and the client and address fields
@@ -109,6 +109,17 @@ code; it increments by one on every store upload regardless of the semver part.
   the next job shown is the next *timed* one rather than the all-day block.
 - Siri called a personal job "an unnamed client". It now reads out the title you
   gave it, and says "all day" instead of a midnight start time.
+- The Lock Screen "time to leave" card called a personal job **"Client"** while
+  the notification beside it correctly named the job — the same trip, described
+  two different ways. The card now uses the same name.
+- Turning **Personal off** on an existing personal job left it stuck as an
+  all-day client visit: the All-day switch was gone, the start and end times
+  stayed hidden, and there was no way left to give the visit a time. It now
+  goes back to a normal timed visit.
+- Saving an all-day block could silently do nothing if you had picked times
+  before switching All-day on. Those leftover times are no longer checked.
+- Siri skipped today's all-day block whenever a timed visit existed later in
+  the week, and answered with that instead. It now reads out the block.
 
 ## [1.37.0+62] - 2026-07-27
 ### Changed

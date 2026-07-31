@@ -22,6 +22,7 @@ import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/fields/month_year_picker.dart';
 import 'package:scheduling/features/calendar/widgets/views/agenda_sliver_list.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_header_block.dart';
+import 'package:scheduling/features/calendar/widgets/views/calendar_month_grid.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_month_pager.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_week_strip.dart';
 import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
@@ -139,10 +140,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   // reading another day of the current month (owner call, 2026-07-30). [today]
   // comes from currentDayProvider, so it re-derives across midnight.
   //
-  // The month test is the other half of that: paging the grid moves
-  // `_focusedDay` and leaves `_selectedDay` behind, so swiping away from a
-  // selected today would otherwise hide the pill on exactly the screens that
-  // need it most.
+  // The month test is belt-and-braces: every paging path also selects the day
+  // it lands on, so the date test already covers a swipe away from today — but
+  // it keeps the pill honest for any future path that moves the grid alone.
   bool _showTodayButton(DateTime today) =>
       !isSameDate(_selectedDay ?? _focusedDay, today) ||
       !isInMonth(today, _focusedDay);
@@ -178,9 +178,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   /// first day — the strip's analogue of paging the month grid.
   void _pageWeek(int direction) {
     final from = _selectedDay ?? _focusedDay;
-    final weekStart = weekStartForLocale(
-      Localizations.localeOf(context).toString(),
-    );
+    final weekStart = CalendarMonthGrid.weekStartOf(context);
     final target = DateTime(from.year, from.month, from.day + 7 * direction);
     _onDaySelected(weekOf(target, weekStart: weekStart).first);
   }
@@ -437,9 +435,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       child: CalendarWeekStrip(
         weekDays: weekOf(
           selectedDay,
-          weekStart: weekStartForLocale(
-            Localizations.localeOf(context).toString(),
-          ),
+          weekStart: CalendarMonthGrid.weekStartOf(context),
         ),
         selectedDay: selectedDay,
         today: today,
@@ -628,9 +624,13 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         Expanded(
           child: CustomScrollView(
             controller: _agendaController,
-            // Bouncing, always-scrollable: the collapse fires past +48 and the
-            // re-expand past −48, so both gestures need a list that moves under
-            // the finger even when the day holds too few jobs to fill it.
+            // Its own controller, not the primary one: the grid above is a
+            // second scrollable on this route, and the app-wide Scrollbar
+            // rejects two positions on one controller.
+            //
+            // Bouncing and always-scrollable so a day with one job still gives
+            // under the finger — collapse is driven by the handle, not by this
+            // list, so the bounce is feel alone.
             physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics(),
             ),
@@ -693,7 +693,10 @@ class _CollapseHandle extends StatelessWidget {
               children: [
                 Align(
                   alignment: Alignment.bottomCenter,
-                  child: Divider(height: 1, color: theme.colorScheme.outlineVariant),
+                  child: Divider(
+                    height: 1,
+                    color: theme.colorScheme.outlineVariant,
+                  ),
                 ),
                 Container(
                   width: 36,
