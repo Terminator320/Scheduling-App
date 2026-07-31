@@ -74,6 +74,7 @@ class DetailsViewBody extends ConsumerWidget {
         const Divider(height: 1),
         const SizedBox(height: AppSpacing.sp16),
         _ClientSection(
+          isPersonal: appointment.isPersonal,
           clientName: data.clientName,
           phone: data.phone,
           displayAddress: displayAddress,
@@ -245,6 +246,7 @@ class _DetailsViewData {
 /// lives, and a null callback just hides that affordance.
 class _ClientSection extends StatelessWidget {
   const _ClientSection({
+    required this.isPersonal,
     required this.clientName,
     required this.phone,
     required this.displayAddress,
@@ -253,6 +255,9 @@ class _ClientSection extends StatelessWidget {
     required this.onDirections,
   });
 
+  /// A personal job has no client, so the client row names it as personal
+  /// instead of rendering an empty value.
+  final bool isPersonal;
   final String clientName;
   final String phone;
   final String displayAddress;
@@ -290,7 +295,7 @@ class _ClientSection extends StatelessWidget {
           rows: [
             KeyValueRow(
               label: context.l10n.calendar_client.toUpperCase(),
-              value: clientName,
+              value: isPersonal ? context.l10n.calendar_personal : clientName,
             ),
             if (phone.isNotEmpty)
               KeyValueRow(

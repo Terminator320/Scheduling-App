@@ -37,12 +37,21 @@ class DateUtilsHelper {
 
   /// The detail sheet's mono when-line: `TUE 4 AUG · 10:30 – 12:00`.
   /// Uppercased for the mono ramp; the locale supplies the day and month names.
-  static String formatWhenLine(DateTime start, DateTime end) {
+  ///
+  /// An all-day block passes its localized label as [allDayLabel] and gets
+  /// `TUE 4 AUG · ALL DAY` — its stored instants are a real midnight → 23:59
+  /// span, which would otherwise read as a suspiciously precise workday.
+  static String formatWhenLine(
+    DateTime start,
+    DateTime end, {
+    String? allDayLabel,
+  }) {
     final format = _whenLineFormats.putIfAbsent(
       _locale,
       () => DateFormat('EEE d MMM', _locale),
     );
     final day = format.format(start).toUpperCase();
+    if (allDayLabel != null) return '$day · ${allDayLabel.toUpperCase()}';
     return '$day · ${formatTime(start)} – ${formatTime(end)}';
   }
 }

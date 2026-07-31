@@ -224,6 +224,10 @@ function selectOverdueCandidates(records, now) {
   const floorMs = nowMs - OVERDUE_LOOKBACK_MS;
   return (records || []).filter((r) => {
     if (!OPEN_LIKE.has(String(r.status || "").toLowerCase())) return false;
+    // A personal block is not a job to finish — "job finished?" is the wrong
+    // question for a dentist appointment, and the app never shows one as
+    // overdue either (AppointmentRecord.displayStatus). Keep the two in sync.
+    if (r.isPersonal === true) return false;
     const ms = toMillis(r.endTime);
     return ms != null && ms <= nowMs && ms > floorMs;
   });
@@ -449,6 +453,9 @@ function _contextFor(kind, before, after) {
   const d = src || {};
   return {
     clientName: d.clientName,
+    // A personal job carries no client, so the message names it by title
+    // instead — same fallback the widget and the Siri intents already use.
+    title: d.title,
     startTime: d.startTime,
     address: d.address,
     repeat: d.repeat,

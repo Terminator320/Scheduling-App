@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_month_grid.dart';
 
 /// Month index anchored far enough back that no realistic booking underflows.
@@ -70,8 +71,18 @@ class _CalendarMonthPagerState extends State<CalendarMonthPager> {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: CalendarMonthGrid.heightFor(context),
+    // Months occupy 4–6 weeks, so the viewport height follows the month in
+    // view. It animates because `onPageChanged` fires mid-settle: a hard jump
+    // there would snap the agenda below by a whole row.
+    return AnimatedContainer(
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : AppMotion.riseInShort,
+      curve: AppMotion.emphasized,
+      height: CalendarMonthGrid.heightFor(
+        context,
+        rows: CalendarMonthGrid.rowsFor(context, widget.month),
+      ),
       child: PageView.builder(
         controller: _controller,
         onPageChanged: (page) {
@@ -84,13 +95,24 @@ class _CalendarMonthPagerState extends State<CalendarMonthPager> {
           }
           widget.onMonthChanged(month);
         },
-        itemBuilder: (context, page) => CalendarMonthGrid(
-          month: _monthForPage(page),
-          selectedDay: widget.selectedDay,
-          today: widget.today,
-          onDaySelected: widget.onDaySelected,
-          dotColorsFor: widget.dotColorsFor,
-          countFor: widget.countFor,
+        // Until the height settles on the new month, the page being dragged in
+        // may need one row more than the viewport has. Let it lay out at its
+        // natural height, pinned to the top, and clip the difference — a plain
+        // page would overflow for the length of the drag.
+        itemBuilder: (context, page) => ClipRect(
+          child: OverflowBox(
+            alignment: Alignment.topCenter,
+            minHeight: 0,
+            maxHeight: double.infinity,
+            child: CalendarMonthGrid(
+              month: _monthForPage(page),
+              selectedDay: widget.selectedDay,
+              today: widget.today,
+              onDaySelected: widget.onDaySelected,
+              dotColorsFor: widget.dotColorsFor,
+              countFor: widget.countFor,
+            ),
+          ),
         ),
       ),
     );

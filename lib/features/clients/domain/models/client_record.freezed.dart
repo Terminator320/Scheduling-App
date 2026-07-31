@@ -277,12 +277,9 @@ as String,
 /// @nodoc
 mixin _$ClientRecord {
 
- String get id; String get name; String get firstName; String get lastName; String get address; String get apt; String get city; String get province; String get country; String get postalCode; String get phone; String get mobile; String get email; List<ClientContact> get contacts; bool get noFixedAddress;// Server timestamp written by the repository / Wave import; read-only in
-// the app (dashboard new-clients trend). NEVER emitted by toMap.
- DateTime? get createdAt;// Wave projection (read-only): written exclusively by Cloud Functions via
-// the Admin SDK. The app reads them for a sync indicator and MUST NOT emit
-// them in toMap — firestore.rules rejects any client write that touches
-// `waveCustomerId` or `wave`.
+ String get id; String get name; String get firstName; String get lastName; String get address; String get apt; String get city; String get province; String get country; String get postalCode; String get phone; String get mobile; String get email; List<ClientContact> get contacts; bool get noFixedAddress;// Read-only server timestamp used for dashboard trends — never emitted in toMap.
+ DateTime? get createdAt;// Wave projection — read-only and function-owned, so it's omitted from toMap
+// per firestore.rules.
  String? get waveCustomerId; String get waveSyncState; String? get waveSyncError;
 /// Create a copy of ClientRecord
 /// with the given fields replaced by the non-null parameter values.
@@ -517,13 +514,10 @@ class _ClientRecord extends ClientRecord {
 }
 
 @override@JsonKey() final  bool noFixedAddress;
-// Server timestamp written by the repository / Wave import; read-only in
-// the app (dashboard new-clients trend). NEVER emitted by toMap.
+// Read-only server timestamp used for dashboard trends — never emitted in toMap.
 @override final  DateTime? createdAt;
-// Wave projection (read-only): written exclusively by Cloud Functions via
-// the Admin SDK. The app reads them for a sync indicator and MUST NOT emit
-// them in toMap — firestore.rules rejects any client write that touches
-// `waveCustomerId` or `wave`.
+// Wave projection — read-only and function-owned, so it's omitted from toMap
+// per firestore.rules.
 @override@JsonKey() final  String? waveCustomerId;
 @override@JsonKey() final  String waveSyncState;
 @override@JsonKey() final  String? waveSyncError;

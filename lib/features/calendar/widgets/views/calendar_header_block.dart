@@ -13,6 +13,7 @@ import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 class CalendarHeaderBlock extends StatelessWidget {
   const CalendarHeaderBlock({
     required this.monthLabel,
+    required this.monthLabelShort,
     required this.yearLabel,
     required this.onPickMonth,
     required this.routeButton,
@@ -21,6 +22,12 @@ class CalendarHeaderBlock extends StatelessWidget {
   });
 
   final String monthLabel;
+
+  /// The locale's abbreviated month, used when the full name doesn't fit the
+  /// row. Measured, not guessed from a text-scale threshold — the in-app XL
+  /// setting is exactly 1.4, which a `> 1.4` gate misses by a hair, and the
+  /// OS scaler and the locale's month lengths move independently anyway.
+  final String monthLabelShort;
   final String yearLabel;
   final VoidCallback onPickMonth;
 
@@ -47,6 +54,7 @@ class CalendarHeaderBlock extends StatelessWidget {
 
     final title = _TitleColumn(
       monthLabel: monthLabel,
+      monthLabelShort: monthLabelShort,
       yearLabel: yearLabel,
       onPickMonth: onPickMonth,
     );
@@ -118,13 +126,15 @@ class _WeekStripSlot extends StatelessWidget {
 class _TitleColumn extends StatelessWidget {
   const _TitleColumn({
     required this.monthLabel,
+    required this.monthLabelShort,
     required this.yearLabel,
     required this.onPickMonth,
   });
 
   final String monthLabel;
-  final String yearLabel;
+  final String monthLabelShort;
   final VoidCallback onPickMonth;
+  final String yearLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -140,6 +150,7 @@ class _TitleColumn extends StatelessWidget {
         const SizedBox(height: AppSpacing.sp4),
         _MonthRow(
           monthLabel: monthLabel,
+          monthLabelShort: monthLabelShort,
           yearLabel: yearLabel,
           onTap: onPickMonth,
         ),
@@ -156,65 +167,102 @@ class _Controls extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
-    children: [routeButton, const SizedBox(width: 6), const AppHeaderPair()],
+    children: [
+      routeButton,
+      const SizedBox(width: 6),
+      // No Calendar pill here — this IS the calendar.
+      const AppHeaderPair(showCalendarPill: false),
+    ],
   );
 }
 
 class _MonthRow extends StatelessWidget {
   const _MonthRow({
     required this.monthLabel,
+    required this.monthLabelShort,
     required this.yearLabel,
     required this.onTap,
   });
 
   final String monthLabel;
+  final String monthLabelShort;
   final String yearLabel;
   final VoidCallback onTap;
+
+  /// Width [text] would paint at, at the ambient text scale.
+  static double _widthOf(BuildContext context, String text, TextStyle? style) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    return painter.width;
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Semantics(
-      button: true,
-      label: '$monthLabel $yearLabel, ${context.l10n.calendar_selectDate}',
-      excludeSemantics: true,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.r8),
-        child: ConstrainedBox(
-          // 40 is the painted row; the header's own padding carries it past the
-          // 48px tap floor.
-          constraints: const BoxConstraints(minHeight: 40),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Flexible(
-                child: Text(
-                  monthLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.displayLarge,
-                ),
+    final monthStyle = theme.textTheme.displayLarge;
+    final yearStyle = theme.textTheme.titleMedium?.copyWith(
+      color: theme.palette.textTertiary,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Everything the month has to share the row with: the gap, the year,
+        // the gap before the chevron, and the chevron. Whatever is left is
+        // what the month name has to fit inside; if the full name doesn't, the
+        // abbreviation takes its place rather than ellipsizing "September"
+        // into a stub.
+        final reserved =
+            AppSpacing.sp8 + _widthOf(context, yearLabel, yearStyle) + 6 + 18;
+        final available = constraints.maxWidth - reserved;
+        final label =
+            !constraints.hasBoundedWidth ||
+                _widthOf(context, monthLabel, monthStyle) <= available
+            ? monthLabel
+            : monthLabelShort;
+
+        return Semantics(
+          button: true,
+          // Always the full month for a screen reader — it has no width limit.
+          label: '$monthLabel $yearLabel, ${context.l10n.calendar_selectDate}',
+          excludeSemantics: true,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(AppRadius.r8),
+            child: ConstrainedBox(
+              // 40 is the painted row; the header's own padding carries it
+              // past the 48px tap floor.
+              constraints: const BoxConstraints(minHeight: 40),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: monthStyle,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sp8),
+                  Text(yearLabel, style: yearStyle),
+                  const SizedBox(width: 6),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                    color: theme.palette.textTertiary,
+                  ),
+                ],
               ),
-              const SizedBox(width: AppSpacing.sp8),
-              Text(
-                yearLabel,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: theme.palette.textTertiary,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Icon(
-                Icons.keyboard_arrow_down_rounded,
-                size: 18,
-                color: theme.palette.textTertiary,
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

@@ -22,7 +22,6 @@ import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/fields/month_year_picker.dart';
 import 'package:scheduling/features/calendar/widgets/views/agenda_sliver_list.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_header_block.dart';
-import 'package:scheduling/features/calendar/widgets/views/calendar_month_grid.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_month_pager.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_week_strip.dart';
 import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
@@ -60,6 +59,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   PhotoUploadNotifier? _uploadNotifier;
   bool _upgradingToAdmin = false;
   late DateFormat _monthLabelFormat;
+  late DateFormat _monthShortLabelFormat;
   late DateFormat _yearLabelFormat;
   String _lastLocale = '';
 
@@ -78,32 +78,32 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   void initState() {
     super.initState();
     _selectedDay = _focusedDay;
-    _appointmentRange = AppointmentDateRange.visibleMonth(_focusedDay);
+    _appointmentRange = AppointmentDateRange.forCalendar(
+      focusedDay: _focusedDay,
+      selectedDay: _focusedDay,
+    );
     _initStreams();
   }
 
   void _initStreams() {
     _uploadNotifier = ref.read(photoUploadNotifierProvider);
     _uploadNotifier?.latestFailure.addListener(_onUploadFailure);
-    _agendaController.addListener(_onAgendaScroll);
   }
 
   @override
   void dispose() {
     _uploadNotifier?.latestFailure.removeListener(_onUploadFailure);
-    _agendaController
-      ..removeListener(_onAgendaScroll)
-      ..dispose();
+    _agendaController.dispose();
     super.dispose();
   }
 
-  void _onAgendaScroll() {
-    if (!mounted || _splitCalendar) return;
-    // A hidden tab must not run collapse setStates — the hub keeps every tab
-    // mounted and TickerMode does not cover scroll listeners.
-    final tab = HubShellScope.currentOf(context);
-    if (tab != null && tab != HubTab.calendar) return;
-    if (_collapse.onOffset(_agendaController.offset)) setState(() {});
+  void _onCollapseDrag(double dy) {
+    if (_collapse.onDragDelta(dy)) setState(() {});
+  }
+
+  void _toggleCollapse() {
+    _collapse.toggle();
+    setState(() {});
   }
 
   void _onUploadFailure() {
@@ -138,23 +138,51 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   // when the visible month differs, which left it hidden while the user was
   // reading another day of the current month (owner call, 2026-07-30). [today]
   // comes from currentDayProvider, so it re-derives across midnight.
+  //
+  // The month test is the other half of that: paging the grid moves
+  // `_focusedDay` and leaves `_selectedDay` behind, so swiping away from a
+  // selected today would otherwise hide the pill on exactly the screens that
+  // need it most.
   bool _showTodayButton(DateTime today) =>
-      !isSameDate(_selectedDay ?? _focusedDay, today);
+      !isSameDate(_selectedDay ?? _focusedDay, today) ||
+      !isInMonth(today, _focusedDay);
 
   void _goToToday(DateTime today) {
     setState(() {
       _focusedDay = today;
       _selectedDay = today;
-      _appointmentRange = AppointmentDateRange.visibleMonth(today);
+      _appointmentRange = AppointmentDateRange.forCalendar(
+        focusedDay: today,
+        selectedDay: today,
+      );
     });
   }
 
+  /// Paging to another month (by swipe or from the month picker) lands on that
+  /// month's first day and selects it, so the agenda below always describes the
+  /// grid above — [day] is already the 1st from both callers. Leaving the old
+  /// selection behind showed a day the grid wasn't even highlighting.
   void _setFocusedDay(DateTime day) {
-    final newRange = AppointmentDateRange.visibleMonth(day);
+    final newRange = AppointmentDateRange.forCalendar(
+      focusedDay: day,
+      selectedDay: day,
+    );
     setState(() {
       _focusedDay = day;
+      _selectedDay = day;
       if (newRange != _appointmentRange) _appointmentRange = newRange;
     });
+  }
+
+  /// Swiping the collapsed week strip moves one week and selects that week's
+  /// first day — the strip's analogue of paging the month grid.
+  void _pageWeek(int direction) {
+    final from = _selectedDay ?? _focusedDay;
+    final weekStart = weekStartForLocale(
+      Localizations.localeOf(context).toString(),
+    );
+    final target = DateTime(from.year, from.month, from.day + 7 * direction);
+    _onDaySelected(weekOf(target, weekStart: weekStart).first);
   }
 
   Map<DateTime, List<AppointmentRecord>>? _dayIndex;
@@ -190,7 +218,10 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
   void _onDaySelected(DateTime selectedDay) {
     if (isSameDate(_selectedDay ?? _focusedDay, selectedDay)) return;
-    final newRange = AppointmentDateRange.visibleMonth(selectedDay);
+    final newRange = AppointmentDateRange.forCalendar(
+      focusedDay: selectedDay,
+      selectedDay: selectedDay,
+    );
     setState(() {
       _selectedDay = selectedDay;
       _focusedDay = selectedDay;
@@ -273,6 +304,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     Map<String, String> nameMap,
     bool isLoading,
     String monthLabel,
+    String monthLabelShort,
     String yearLabel,
     String dayTitle,
     String jobLabel,
@@ -299,6 +331,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     final locale = Localizations.localeOf(context).toString();
     if (locale != _lastLocale) {
       _monthLabelFormat = DateFormat.MMMM(locale);
+      _monthShortLabelFormat = DateFormat.MMM(locale);
       _yearLabelFormat = DateFormat.y(locale);
       _lastLocale = locale;
     }
@@ -308,7 +341,11 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       colorMap: colorMap,
       nameMap: nameMap,
       isLoading: appointmentsAsync.isLoading,
+      // Both forms go to the header, which measures the row and picks — a
+      // text-scale threshold can't know how wide "September" is in this
+      // locale on this device.
       monthLabel: _monthLabelFormat.format(_focusedDay),
+      monthLabelShort: _monthShortLabelFormat.format(_focusedDay),
       yearLabel: _yearLabelFormat.format(_focusedDay),
       dayTitle: DateUtilsHelper.formatDayHeader(selectedDay),
       jobLabel: context.l10n.calendar_jobsCount(selectedEvents.length),
@@ -345,6 +382,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           children: [
             CalendarHeaderBlock(
               monthLabel: data.monthLabel,
+              monthLabelShort: data.monthLabelShort,
               yearLabel: data.yearLabel,
               onPickMonth: _pickMonth,
               routeButton: _dayRouteButton(context),
@@ -388,20 +426,29 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   Widget? _weekStrip(DateTime today, Map<String, Color> colorMap) {
     if (_splitCalendar || !_collapse.isCollapsed) return null;
     final selectedDay = _selectedDay ?? _focusedDay;
-    return CalendarWeekStrip(
-      weekDays: weekOf(
-        selectedDay,
-        weekStart: weekStartForLocale(
-          Localizations.localeOf(context).toString(),
-        ),
-      ),
-      selectedDay: selectedDay,
-      today: today,
-      onDaySelected: _onDaySelected,
-      dotColorFor: (day) {
-        final colors = dayCrewColors(_getEventsForDay(day), colorMap, max: 1);
-        return colors.isEmpty ? null : colors.first;
+    // Swipe the strip to page weeks, mirroring the month grid's pager. The
+    // taps inside still win — a horizontal drag recognizer doesn't claim them.
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (velocity == 0) return;
+        _pageWeek(velocity < 0 ? 1 : -1);
       },
+      child: CalendarWeekStrip(
+        weekDays: weekOf(
+          selectedDay,
+          weekStart: weekStartForLocale(
+            Localizations.localeOf(context).toString(),
+          ),
+        ),
+        selectedDay: selectedDay,
+        today: today,
+        onDaySelected: _onDaySelected,
+        dotColorFor: (day) {
+          final colors = dayCrewColors(_getEventsForDay(day), colorMap, max: 1);
+          return colors.isEmpty ? null : colors.first;
+        },
+      ),
     );
   }
 
@@ -543,42 +590,119 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       );
     }
 
-    // Portrait: the grid and the agenda share ONE viewport, which is what lets
-    // the grid scroll away and collapse into the header's week strip.
-    final gridHeight = CalendarMonthGrid.heightFor(context);
-    final stripHeight = CalendarWeekStrip.heightFor(context);
-    // The grid is always the taller of the two, but never emit a negative
-    // spacer if a future metric change inverts that.
-    final spacerHeight = gridHeight > stripHeight
-        ? gridHeight - stripHeight
-        : 0.0;
-
-    return CustomScrollView(
-      controller: _agendaController,
-      slivers: [
-        SliverToBoxAdapter(
-          child: _collapse.isCollapsed
-              // Holds the scroll extent the grid vacated, so the first card
-              // does not jump at the moment of collapse. (The design's literal
-              // 150px is tuned to a shorter mock grid than ours.)
-              ? SizedBox(height: spacerHeight)
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildCalendar(colorMap, today),
-                    const Divider(height: 1),
-                  ],
-                ),
+    // Portrait: the grid is FIXED above the agenda, and the jobs get their own
+    // viewport (owner call, 2026-07-31). Collapsing is then a deliberate drag
+    // on the jobs section rather than something that happens while reading down
+    // the day — and once collapsed, scrolling the jobs never moves the grid
+    // again. The old shared-viewport version needed a derived spacer to hold
+    // the extent the grid vacated; with two viewports there is no vacated
+    // extent to hold.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Flexible + a scroll view so the fixed grid yields instead of
+        // overflowing when the viewport is short (a small phone at a large
+        // text scale runs the column past the bottom by a pixel or two).
+        // At normal heights the scroll view shrink-wraps and nothing scrolls.
+        if (!_collapse.isCollapsed)
+          Flexible(
+            child: SingleChildScrollView(
+              child: _buildCalendar(colorMap, today),
+            ),
+          ),
+        // The line between the two sections IS the collapse control: drag it
+        // up to fold the grid into the header's week strip, down to bring it
+        // back. It stays put when collapsed so there is something to pull.
+        _CollapseHandle(
+          isCollapsed: _collapse.isCollapsed,
+          onDrag: _onCollapseDrag,
+          onDragEnd: _collapse.endDrag,
+          onToggle: _toggleCollapse,
         ),
-        SliverToBoxAdapter(child: agendaHeader),
-        AgendaSliverList(
-          events: events,
-          nameMap: nameMap,
-          colorMap: colorMap,
-          isLoading: isLoading,
-          isAdmin: widget.isAdmin,
+        agendaHeader,
+        Expanded(
+          child: CustomScrollView(
+            controller: _agendaController,
+            // Bouncing, always-scrollable: the collapse fires past +48 and the
+            // re-expand past −48, so both gestures need a list that moves under
+            // the finger even when the day holds too few jobs to fill it.
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            slivers: [
+              AgendaSliverList(
+                events: events,
+                nameMap: nameMap,
+                colorMap: colorMap,
+                isLoading: isLoading,
+                isAdmin: widget.isAdmin,
+              ),
+            ],
+          ),
         ),
       ],
+    );
+  }
+}
+
+/// The divider between the month grid and the day's jobs, doubling as the
+/// grab handle that collapses the grid. Painted as the same hairline the rest
+/// of the screen uses, inside a 20px tall target with a short grip so it reads
+/// as draggable; it is also a button, since a 24px drag is not a gesture
+/// everyone can make.
+class _CollapseHandle extends StatelessWidget {
+  const _CollapseHandle({
+    required this.isCollapsed,
+    required this.onDrag,
+    required this.onDragEnd,
+    required this.onToggle,
+  });
+
+  final bool isCollapsed;
+  final ValueChanged<double> onDrag;
+  final VoidCallback onDragEnd;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final label = isCollapsed
+        ? context.l10n.calendar_showCalendar
+        : context.l10n.calendar_hideCalendar;
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: label,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onVerticalDragUpdate: (details) => onDrag(details.delta.dy),
+          onVerticalDragEnd: (_) => onDragEnd(),
+          onVerticalDragCancel: onDragEnd,
+          onTap: onToggle,
+          child: SizedBox(
+            height: 20,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Divider(height: 1, color: theme.colorScheme.outlineVariant),
+                ),
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: theme.palette.textFaint,
+                    borderRadius: BorderRadius.circular(AppRadius.rFull),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

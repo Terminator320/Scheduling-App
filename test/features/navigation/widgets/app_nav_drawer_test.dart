@@ -54,6 +54,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the drop shadow sits outside the drawer, not over it', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(isAdmin: true));
+    await tester.tap(find.byTooltip('Open menu'));
+    await tester.pumpAndSettle();
+
+    // A BoxShadow blurs inward as well as outward, so a shadowed box INSIDE
+    // the drawer paints a dark haze across the drawer's own surface — which
+    // only shows against the light theme. It has to wrap the Drawer instead.
+    final shadowed = find.byWidgetPredicate(
+      (w) =>
+          w is DecoratedBox &&
+          (w.decoration as BoxDecoration).boxShadow?.isNotEmpty == true,
+    );
+    expect(
+      find.descendant(of: find.byType(Drawer), matching: shadowed),
+      findsNothing,
+    );
+    expect(
+      find.ancestor(of: find.byType(Drawer), matching: shadowed),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('an employee drawer hides the admin-only groups and rows', (
     tester,
   ) async {

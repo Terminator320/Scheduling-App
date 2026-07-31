@@ -21,6 +21,8 @@ class AppointmentFormInput {
     required this.endTime,
     required this.client,
     required this.selectedEmployees,
+    this.isPersonal = false,
+    this.isAllDay = false,
   });
 
   final String title;
@@ -29,6 +31,15 @@ class AppointmentFormInput {
   final TimeOfDay? endTime;
   final ClientRecord? client;
   final List<EmployeeRecord> selectedEmployees;
+
+  /// A personal job blocks time out for the crew instead of visiting a client,
+  /// so it carries no client, no address, and needn't be named. The assignees
+  /// are still required — they are who the block is for, and who can see it.
+  final bool isPersonal;
+
+  /// No time was put in, so the block owns the whole day and neither time is
+  /// required. Only reachable on a personal job.
+  final bool isAllDay;
 }
 
 class AppointmentFormValidator {
@@ -39,19 +50,23 @@ class AppointmentFormValidator {
   ) {
     final errors = <String, AppointmentFormError>{};
 
-    if (input.title.trim().isEmpty) {
+    // A personal block may go unnamed — it saves under a "Personal" title.
+    if (!input.isPersonal && input.title.trim().isEmpty) {
       errors['title'] = AppointmentFormError.titleRequired;
     }
     if (input.date == null) {
       errors['date'] = AppointmentFormError.dateRequired;
     }
-    if (input.startTime == null) {
+    // An all-day block has no times to validate — it runs midnight to 23:59.
+    if (!input.isAllDay && input.startTime == null) {
       errors['startTime'] = AppointmentFormError.startTimeRequired;
     }
 
-    if (input.endTime == null) {
+    if (!input.isAllDay && input.endTime == null) {
       errors['endTime'] = AppointmentFormError.endTimeRequired;
-    } else if (input.date != null && input.startTime != null) {
+    } else if (input.endTime != null &&
+        input.date != null &&
+        input.startTime != null) {
       final start = combineDateAndTime(input.date!, input.startTime!);
       final end = combineEndDateAndTime(
         input.date!,
@@ -63,7 +78,7 @@ class AppointmentFormValidator {
       }
     }
 
-    if (input.client == null) {
+    if (!input.isPersonal && input.client == null) {
       errors['client'] = AppointmentFormError.clientRequired;
     }
     if (input.selectedEmployees.isEmpty) {
@@ -73,6 +88,14 @@ class AppointmentFormValidator {
     return errors;
   }
 }
+
+/// The instants an all-day block spans. Real instants, not sentinels: every
+/// range query, `orderBy('startTime')` and overdue sweep in the app and on the
+/// server keeps treating it as an ordinary appointment.
+({DateTime start, DateTime end}) allDaySpan(DateTime date) => (
+  start: DateTime(date.year, date.month, date.day),
+  end: DateTime(date.year, date.month, date.day, 23, 59),
+);
 
 DateTime combineDateAndTime(DateTime date, TimeOfDay time) =>
     DateTime(date.year, date.month, date.day, time.hour, time.minute);

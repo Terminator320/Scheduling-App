@@ -8,18 +8,50 @@ void main() {
     await initializeDateFormatting('fr_CA');
   });
 
-  test('always returns 42 days', () {
+  test('renders whole weeks, and only the weeks the month occupies', () {
     for (var m = 1; m <= 12; m++) {
-      expect(monthGridDays(DateTime(2026, m), weekStart: 0), hasLength(42));
+      final month = DateTime(2026, m);
+      final days = monthGridDays(month, weekStart: 0);
+      final rows = monthGridRowCount(month, weekStart: 0);
+      expect(days, hasLength(7 * rows));
+      expect(rows, inInclusiveRange(4, monthGridMaxRows));
+      // Every day of the month is present …
+      expect(days.where((d) => d.month == m && d.year == 2026), hasLength(
+        DateTime(2026, m + 1, 0).day,
+      ));
+      // … and no trailing week is entirely outside it.
+      expect(
+        days.skip(7 * (rows - 1)).any((d) => isInMonth(d, month)),
+        isTrue,
+        reason: 'last row of month $m is all off-month',
+      );
     }
   });
 
   test('August 2026 keeps its last day — the 35-cell bug', () {
-    // 1 Aug 2026 is a Saturday: 6 lead cells + 31 days = 37 > 35.
+    // 1 Aug 2026 is a Saturday: 6 lead cells + 31 days = 37 > 35, so this is
+    // the month that still needs a sixth week.
     final days = monthGridDays(DateTime(2026, 8), weekStart: 0);
+    expect(monthGridRowCount(DateTime(2026, 8), weekStart: 0), 6);
     expect(days.first, DateTime(2026, 7, 26));
     expect(days.contains(DateTime(2026, 8, 31)), isTrue);
     expect(days.last, DateTime(2026, 9, 5));
+  });
+
+  test('February 2026 is exactly four weeks — no lead, no trail', () {
+    // 1 Feb 2026 is a Sunday and the month has 28 days.
+    expect(monthGridRowCount(DateTime(2026, 2), weekStart: 0), 4);
+    final days = monthGridDays(DateTime(2026, 2), weekStart: 0);
+    expect(days, hasLength(28));
+    expect(days.first, DateTime(2026, 2));
+    expect(days.last, DateTime(2026, 2, 28));
+  });
+
+  test('the week start changes how many weeks a month spans', () {
+    // 1 Mar 2026 is a Sunday: no lead cells Sunday-first, so its 31 days fit
+    // in 5 weeks; Monday-first pushes 6 lead cells in and needs a 6th.
+    expect(monthGridRowCount(DateTime(2026, 3), weekStart: 0), 5);
+    expect(monthGridRowCount(DateTime(2026, 3), weekStart: 1), 6);
   });
 
   test('a month starting on the week start has no lead cells', () {

@@ -97,6 +97,15 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           selectedEmployees: state.selectedEmployees,
           repeat: state.repeat,
           useCustomAddress: state.useCustomAddress,
+          isPersonal: state.isPersonal,
+          isAllDay: state.isAllDay,
+          onAllDayChanged: (value) => notifier.setAllDay(value: value),
+          // Offered only on a job that was already personal, so an ordinary
+          // client visit can't be converted mid-life (which would wipe its
+          // client and address).
+          onPersonalChanged: appointment.isPersonal
+              ? (value) => notifier.setPersonal(value: value)
+              : null,
           errors: state.errors,
           employeeLabel: context.l10n.calendar_assignedEmployee,
           employeeRequired: false,
@@ -241,10 +250,16 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       applyToSeries = choice == SeriesScopeChoice.thisAndFuture;
     }
 
+    // An unnamed personal block saves as "Personal" — same rule as the add
+    // flow, since the stored title is what every read surface falls back to.
+    final title = widget.controllers.title.text.trim().isEmpty && state.isPersonal
+        ? context.l10n.calendar_personal
+        : widget.controllers.title.text;
+
     Future<EventDetailsSaveOutcome> attempt({bool forceBusy = false}) =>
         notifier.save(
           appointment,
-          title: widget.controllers.title.text,
+          title: title,
           address: AddressParser.toCanonical(widget.controllers.address.text),
           notes: widget.controllers.notes.text,
           materialsNeeded: widget.controllers.materials.text,

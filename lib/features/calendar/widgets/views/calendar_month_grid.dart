@@ -17,8 +17,9 @@ const double _kDotGap = 3;
 const double _kDotRowHeight = _kDotSize + _kDotGap;
 const EdgeInsets _kGridPadding = EdgeInsets.fromLTRB(12, 10, 12, 14);
 
-/// One month's 42-cell grid. Stateless and provider-free: the screen supplies
-/// the per-day dot colours and counts through callbacks.
+/// One month's grid, sized to the weeks that month actually occupies (4–6).
+/// Stateless and provider-free: the screen supplies the per-day dot colours and
+/// counts through callbacks.
 class CalendarMonthGrid extends StatelessWidget {
   const CalendarMonthGrid({
     required this.month,
@@ -55,14 +56,26 @@ class CalendarMonthGrid extends StatelessWidget {
   static double _weekdayRowHeight(BuildContext context) =>
       math.max(20, MediaQuery.textScalerOf(context).scale(10) * 1.8);
 
-  /// Total painted height, so the pager can bound its `PageView` and the
-  /// collapse can size its spacer.
-  static double heightFor(BuildContext context) =>
+  /// Total painted height for a grid of [rows] weeks, so the pager can bound
+  /// its `PageView` and the collapse can size its spacer. Rows vary by month,
+  /// so callers must pass the row count of the month they are sizing —
+  /// `monthGridRowCount(month, weekStart: weekStartForLocale(locale))`.
+  static double heightFor(BuildContext context, {required int rows}) =>
       _kGridPadding.vertical +
       _weekdayRowHeight(context) +
       AppSpacing.sp4 +
-      6 * _cellHeight(context) +
-      5 * _kCellGap;
+      rows * _cellHeight(context) +
+      (rows - 1) * _kCellGap;
+
+  /// The row count [month] needs, resolved against the ambient locale's week
+  /// start. Convenience for the callers of [heightFor].
+  static int rowsFor(BuildContext context, DateTime month) =>
+      monthGridRowCount(
+        month,
+        weekStart: weekStartForLocale(
+          Localizations.localeOf(context).toString(),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +83,7 @@ class CalendarMonthGrid extends StatelessWidget {
     final weekStart = weekStartForLocale(locale);
     final labels = weekdayLabelsForLocale(locale);
     final days = monthGridDays(month, weekStart: weekStart);
+    final rows = days.length ~/ 7;
     final theme = Theme.of(context);
     final cellHeight = _cellHeight(context);
     final circleSize = _circleSize(context);
@@ -101,7 +115,7 @@ class CalendarMonthGrid extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.sp4),
-          for (var row = 0; row < 6; row++) ...[
+          for (var row = 0; row < rows; row++) ...[
             if (row > 0) const SizedBox(height: _kCellGap),
             SizedBox(
               height: cellHeight,

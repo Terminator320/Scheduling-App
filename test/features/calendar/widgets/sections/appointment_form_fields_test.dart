@@ -21,6 +21,11 @@ void main() {
     Future<ClientRecord?> Function(String initialName)? onRequestAddClient,
     ValueChanged<JobTemplate>? onApplyTemplate,
     Map<String, AppointmentFormError> errors = const {},
+    bool isPersonal = false,
+    ValueChanged<bool>? onPersonalChanged,
+    bool showPersonalSwitch = true,
+    bool isAllDay = false,
+    ValueChanged<bool>? onAllDayChanged,
   }) async {
     tester.view.physicalSize = Size(width, 740);
     tester.view.devicePixelRatio = 1.0;
@@ -60,6 +65,12 @@ void main() {
               selectedEmployees: const [],
               repeat: RepeatInterval.none,
               useCustomAddress: true,
+              isPersonal: isPersonal,
+              onPersonalChanged: showPersonalSwitch
+                  ? (onPersonalChanged ?? (_) {})
+                  : null,
+              isAllDay: isAllDay,
+              onAllDayChanged: onAllDayChanged ?? (_) {},
               errors: errors,
               employeeLabel: 'Employee',
               employeeRequired: false,
@@ -160,9 +171,99 @@ void main() {
   testWidgets('the date and time pickers render as panel rows', (tester) async {
     await pumpAppointmentForm(tester, width: 400);
 
-    // Date, start and end — pickers, not text entry.
-    expect(find.byType(SheetFieldRow), findsNWidgets(3));
+    // Date, start, end and repeat — pickers, not text entry, and all in the
+    // one schedule panel.
+    expect(find.byType(SheetFieldRow), findsNWidgets(4));
     expect(find.byType(SheetPanel), findsOneWidget);
+  });
+
+  testWidgets('a personal job hides the client picker and the address', (
+    tester,
+  ) async {
+    await pumpAppointmentForm(tester, width: 400, isPersonal: true);
+
+    expect(find.text('Personal job'), findsOneWidget);
+    expect(find.text('Client'), findsNothing);
+    expect(find.text('Address'), findsNothing);
+    // The rest of the form is untouched.
+    expect(find.text('WHO'), findsOneWidget);
+    expect(find.text('DETAILS'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('switching a job to personal clears the hidden fields', (
+    tester,
+  ) async {
+    final toggled = <bool>[];
+    final controllers = await pumpAppointmentForm(
+      tester,
+      width: 400,
+      clientQuery: 'Acme Ltd',
+      onPersonalChanged: toggled.add,
+    );
+    controllers.address.text = '9 Rue Test';
+
+    await tester.tap(find.byType(SwitchListTile).first);
+    await tester.pumpAndSettle();
+
+    expect(toggled, [true]);
+    // Neither field is visible any more, so neither may keep its value.
+    expect(controllers.clientSearch.text, isEmpty);
+    expect(controllers.address.text, isEmpty);
+  });
+
+  testWidgets('an all-day personal job drops the start and end rows', (
+    tester,
+  ) async {
+    await pumpAppointmentForm(
+      tester,
+      width: 400,
+      isPersonal: true,
+      isAllDay: true,
+    );
+
+    expect(find.text('All day'), findsOneWidget);
+    // Only the date row is left in the schedule panel.
+    expect(find.byType(SheetFieldRow), findsOneWidget);
+    expect(find.text('Start Time'), findsNothing);
+    expect(find.text('End Time'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the all-day switch is personal-only', (tester) async {
+    await pumpAppointmentForm(tester, width: 400);
+    expect(find.text('All day'), findsNothing);
+    expect(find.byType(SheetFieldRow), findsNWidgets(4));
+  });
+
+  testWidgets('a personal job drops the templates, repeat and job-site fields', (
+    tester,
+  ) async {
+    await pumpAppointmentForm(
+      tester,
+      width: 400,
+      isPersonal: true,
+      onApplyTemplate: (_) {},
+    );
+
+    expect(find.text('TEMPLATES'), findsNothing);
+    expect(find.text('Water heater'), findsNothing);
+    expect(find.text('Repeat'), findsNothing);
+    expect(find.text('Materials needed'), findsNothing);
+    expect(find.text('Pictures'), findsNothing);
+  });
+
+  testWidgets('the personal switch is hidden without a change callback', (
+    tester,
+  ) async {
+    // The edit flow passes null on a job that was never personal.
+    await pumpAppointmentForm(
+      tester,
+      width: 400,
+      showPersonalSwitch: false,
+    );
+    expect(find.text('Personal job'), findsNothing);
+    expect(find.text('Client'), findsOneWidget);
   });
 
   testWidgets('a picker row surfaces its validation error', (tester) async {

@@ -62,9 +62,20 @@ function _repeatLabel(raw, locale) {
   }
 }
 
+/**
+ * Who a push names the job after: the client, or — for a personal job, which
+ * has none — its title. Only a record with neither falls back to `generic`.
+ * @param {!Object} c Message context or appointment record.
+ * @param {string} generic Localized "Client" placeholder.
+ * @return {string}
+ */
+function _who(c, generic) {
+  return (c.clientName || "").trim() || (c.title || "").trim() || generic;
+}
+
 const _MESSAGES = {
   en: {
-    who: (c) => (c.clientName || "").trim() || "Client",
+    who: (c) => _who(c, "Client"),
     assigned: (c, who) => {
       const repeat = _repeatLabel(c.repeat, "en");
       return repeat ? {
@@ -110,7 +121,7 @@ const _MESSAGES = {
     }),
   },
   fr: {
-    who: (c) => (c.clientName || "").trim() || "un client",
+    who: (c) => _who(c, "un client"),
     assigned: (c, who) => {
       const repeat = _repeatLabel(c.repeat, "fr");
       return repeat ? {
@@ -188,9 +199,7 @@ function buildDigestMessage(jobs, locale) {
   );
   const n = sorted.length;
   const first = sorted[0];
-  const who = first ?
-    ((first.clientName || "").trim() || (fr ? "un client" : "Client")) :
-    "";
+  const who = first ? _who(first, fr ? "un client" : "Client") : "";
   const time = first ? _timeOnly(fr ? "fr" : "en", first.startTime) : "";
   if (fr) {
     const noun = n === 1 ? "visite" : "visites";

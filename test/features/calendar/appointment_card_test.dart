@@ -12,6 +12,7 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
+import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 const _blue = Color(0xFF005CC8);
 const _green = Color(0xFF0E9B6E);
@@ -73,10 +74,12 @@ void main() {
     expect(find.byType(StatusChip), findsOneWidget);
     // En-dash, per the design — not a hyphen.
     expect(find.textContaining('–'), findsOneWidget);
-    expect(find.textContaining('Theo · Marchetti Residence'), findsOneWidget);
+    // The crew is the avatar stack now, so the meta line is the client alone.
+    expect(find.text('Marchetti Residence'), findsOneWidget);
+    expect(find.byType(AppAvatar), findsOneWidget);
   });
 
-  testWidgets('multi-crew collapses to first name plus a count', (
+  testWidgets('every assignee gets an avatar, the text stays the client', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -91,7 +94,51 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('Theo +1'), findsOneWidget);
+    // One avatar per assignee — not just the first — and the client name
+    // keeps the whole of the text line.
+    expect(find.byType(AppAvatar), findsNWidgets(2));
+    expect(find.text('Marchetti Residence'), findsOneWidget);
+  });
+
+  testWidgets('the colour bar bands every crew member, never greys out', (
+    tester,
+  ) async {
+    BoxDecoration barOf(WidgetTester t) {
+      // The bar is the only fixed-width Container in the card's leading slot.
+      final containers = t
+          .widgetList<Container>(find.byType(Container))
+          .where((c) => c.constraints?.maxWidth == 4);
+      return containers.first.decoration! as BoxDecoration;
+    }
+
+    await tester.pumpWidget(
+      _wrap(AppointmentCard(appointment: _appt(), crew: _theo)),
+    );
+    await tester.pumpAndSettle();
+    // One assignee: a flat colour, no gradient.
+    expect(barOf(tester).gradient, isNull);
+    expect(barOf(tester).color, isNotNull);
+
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentCard(
+          appointment: _appt(),
+          crew: const [
+            AppointmentCrew(name: 'Theo Bell', color: _blue),
+            AppointmentCrew(name: 'Ana Ruiz', color: _green),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Two assignees: two hard-edged bands, not one grey one.
+    final gradient = barOf(tester).gradient! as LinearGradient;
+    expect(gradient.colors, hasLength(4));
+    expect(gradient.colors[0], gradient.colors[1]);
+    expect(gradient.colors[2], gradient.colors[3]);
+    expect(gradient.colors[0], isNot(gradient.colors[2]));
+    expect(gradient.stops, [0.0, 0.5, 0.5, 1.0]);
   });
 
   testWidgets('renders inside a ListView without an intrinsic-layout crash', (

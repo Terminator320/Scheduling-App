@@ -14,8 +14,8 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$EmployeeRecord {
 
- String get id; String get name; String get email; String get phone;// NOTE: legacy default (Material blue) for docs stored before the color
-// palette existed — changing it recolors those employees; keep as-is.
+ String get id; String get name; String get email; String get phone;// Legacy default (Material blue) for docs predating the color palette —
+// changing this recolors those employees.
  Color get color; String get role; String get status; String get uid;
 /// Create a copy of EmployeeRecord
 /// with the given fields replaced by the non-null parameter values.
@@ -222,8 +222,8 @@ class _EmployeeRecord extends EmployeeRecord {
 @override@JsonKey() final  String name;
 @override@JsonKey() final  String email;
 @override@JsonKey() final  String phone;
-// NOTE: legacy default (Material blue) for docs stored before the color
-// palette existed — changing it recolors those employees; keep as-is.
+// Legacy default (Material blue) for docs predating the color palette —
+// changing this recolors those employees.
 @override@JsonKey() final  Color color;
 @override@JsonKey() final  String role;
 @override@JsonKey() final  String status;

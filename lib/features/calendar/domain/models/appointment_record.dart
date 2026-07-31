@@ -22,6 +22,15 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     @Default('') String notes,
     @Default('') String materialsNeeded,
     @Default('pending') String status,
+    // A personal job — time blocked off for the crew rather than a visit to a
+    // client. Client and address are not collected for one, so every consumer
+    // that speaks a client name has to fall back to the title.
+    @Default(false) bool isPersonal,
+    // No time was put in, so the block owns the whole day. `startTime`/
+    // `endTime` are still real instants (midnight → 23:59) so every existing
+    // range query, sort and index keeps working — this flag only changes how
+    // the day is SHOWN.
+    @Default(false) bool isAllDay,
     @Default(RepeatInterval.none) RepeatInterval repeat,
     // Links the occurrences of one repeat series (the first visit's doc id).
     @Default('') String seriesId,
@@ -46,6 +55,8 @@ abstract class AppointmentRecord with _$AppointmentRecord {
       notes: (data['notes'] ?? '').toString(),
       materialsNeeded: (data['materialsNeeded'] ?? '').toString(),
       status: (data['status'] ?? 'pending').toString(),
+      isPersonal: data['isPersonal'] == true,
+      isAllDay: data['isAllDay'] == true,
       repeat: RepeatInterval.fromRaw((data['repeat'] ?? '').toString()),
       seriesId: (data['seriesId'] ?? '').toString(),
       createdAt: firestoreDateTime(data['createdAt']),
@@ -68,6 +79,8 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     'pictures': pictures.map((p) => p.toMap()).toList(),
     'materialsNeeded': materialsNeeded,
     'status': status,
+    'isPersonal': isPersonal,
+    'isAllDay': isAllDay,
     'repeat': repeat.raw,
     'seriesId': seriesId,
   };
@@ -76,6 +89,11 @@ abstract class AppointmentRecord with _$AppointmentRecord {
   String get displayStatus {
     final s = status.toLowerCase();
     if (s == 'done' || s == 'completed' || s == 'cancelled') return status;
+    // A personal block is not a job being worked: it stays on its stored
+    // status (which reads "Scheduled") instead of flipping to In Progress at
+    // its start and Overdue at its end. The server's overdue sweep skips these
+    // for the same reason — the two must agree.
+    if (isPersonal) return status;
     final now = DateTime.now();
     if (now.isAfter(endTime)) return 'overdue';
     if (now.isAfter(startTime)) return 'in_progress';
@@ -112,10 +130,40 @@ class AppointmentDateRange {
     );
   }
 
-  /// A 42-cell month grid shows up to 6 leading and 14 trailing days (the
-  /// worst case being a 28-day February that starts on the week start), so the
-  /// fetch has to reach further than the month itself or those cells render
-  /// dotless.
+  /// The window the calendar screen actually needs: the visible month's grid
+  /// **plus the selected day**, which the agenda below the grid is showing.
+  ///
+  /// Paging months moves [focusedDay] and leaves [selectedDay] behind, so a
+  /// month-only window stops covering the selected day after a swipe or two —
+  /// its jobs then drop out of the fetch and the agenda reports "0 jobs" for a
+  /// day that has some.
+  factory AppointmentDateRange.forCalendar({
+    required DateTime focusedDay,
+    required DateTime selectedDay,
+  }) {
+    final month = AppointmentDateRange.visibleMonth(focusedDay);
+    final dayStart = DateTime(
+      selectedDay.year,
+      selectedDay.month,
+      selectedDay.day,
+    );
+    // Exclusive upper bound, matching visibleMonth's.
+    final dayEnd = DateTime(
+      selectedDay.year,
+      selectedDay.month,
+      selectedDay.day + 1,
+    );
+    return AppointmentDateRange(
+      start: dayStart.isBefore(month.start) ? dayStart : month.start,
+      end: dayEnd.isAfter(month.end) ? dayEnd : month.end,
+    );
+  }
+
+  /// The month grid renders only the weeks the month occupies, so it shows at
+  /// most 6 leading and 6 trailing days — but the fetch keeps a wider ±14
+  /// window: it is a superset of every grid shape, and narrowing it buys one
+  /// query's worth of documents at the cost of dotless edge cells if the grid
+  /// ever grows a row back.
   static const Duration _gridOverscan = Duration(days: 14);
 
   final DateTime start;

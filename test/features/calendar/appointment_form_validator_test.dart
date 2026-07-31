@@ -15,6 +15,7 @@ AppointmentFormInput _input({
   TimeOfDay? endTime,
   ClientRecord? client = _aClient,
   List<EmployeeRecord> employees = const [_anEmployee],
+  bool isPersonal = false,
 }) {
   return AppointmentFormInput(
     title: title,
@@ -23,6 +24,7 @@ AppointmentFormInput _input({
     endTime: endTime ?? const TimeOfDay(hour: 11, minute: 0),
     client: client,
     selectedEmployees: employees,
+    isPersonal: isPersonal,
   );
 }
 
@@ -73,6 +75,21 @@ void main() {
       final errors =
           AppointmentFormValidator.validate(_input(client: null));
       expect(errors['client'], AppointmentFormError.clientRequired);
+    });
+
+    test('a personal job needs no client', () {
+      final errors = AppointmentFormValidator.validate(
+        _input(client: null, isPersonal: true),
+      );
+      expect(errors, isEmpty);
+    });
+
+    test('a personal job still needs its assignees', () {
+      final errors = AppointmentFormValidator.validate(
+        _input(client: null, employees: const [], isPersonal: true),
+      );
+      expect(errors['employees'], AppointmentFormError.employeesRequired);
+      expect(errors.containsKey('client'), isFalse);
     });
 
     test('employeesRequired when no employees selected', () {
