@@ -12,12 +12,19 @@ const double _kTapTarget = 48;
 /// Goes in `AppTopBar.actions`, which also suppresses Flutter's automatic
 /// [EndDrawerButton] — this pair is its replacement.
 class AppHeaderPair extends StatelessWidget {
-  const AppHeaderPair({super.key});
+  const AppHeaderPair({super.key, this.showCalendarPill = true});
+
+  /// False on the calendar itself: a go-home pill on the screen it goes home
+  /// to is dead weight. Every other screen keeps it.
+  final bool showCalendarPill;
 
   @override
-  Widget build(BuildContext context) => const Row(
+  Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
-    children: [_CalendarPill(), SizedBox(width: 6), _MenuButton()],
+    children: [
+      if (showCalendarPill) ...const [_CalendarPill(), SizedBox(width: 6)],
+      const _MenuButton(),
+    ],
   );
 }
 

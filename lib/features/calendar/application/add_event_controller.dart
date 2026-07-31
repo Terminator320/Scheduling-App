@@ -31,6 +31,8 @@ abstract class AddEventState
     @Default(<ClientRecord>[]) List<ClientRecord> clientResults,
     @Default(false) bool isSearchingClient,
     @Default(false) bool useCustomAddress,
+    @Default(false) bool isPersonal,
+    @Default(false) bool isAllDay,
     @Default(<EmployeeRecord>[]) List<EmployeeRecord> selectedEmployees,
     @Default(RepeatInterval.none) RepeatInterval repeat,
     @Default(<File>[]) List<File> selectedImages,
@@ -146,6 +148,40 @@ class AddEventController extends Notifier<AddEventState>
     state = state.copyWith(repeat: value);
   }
 
+  /// Turning this on drops any client already picked: the picker is hidden from
+  /// here on, so a retained client would be saved invisibly.
+  void setPersonal({required bool value}) {
+    state = state.copyWith(
+      isPersonal: value,
+      selectedClient: value ? null : state.selectedClient,
+      clientResults: value ? const [] : state.clientResults,
+      useCustomAddress: !value && state.useCustomAddress,
+      // The repeat picker is hidden for a personal job, so a value chosen
+      // before the switch was flipped would silently pre-book a whole series.
+      // Safe here because nothing is saved yet; the edit flow deliberately
+      // keeps its repeat, where clearing it would rewrite a live series.
+      repeat: value ? RepeatInterval.none : state.repeat,
+      // "No time put in" is the default for a personal block, so it starts
+      // all-day unless a time was already picked.
+      isAllDay:
+          value && state.selectedStartTime == null && state.selectedEndTime == null,
+      errors: withoutKey(
+        withoutKey(withoutKey(state.errors, 'client'), 'startTime'),
+        'endTime',
+      ),
+    );
+  }
+
+  void setAllDay({required bool value}) {
+    state = state.copyWith(
+      isAllDay: value,
+      errors: withoutKey(
+        withoutKey(state.errors, 'startTime'),
+        'endTime',
+      ),
+    );
+  }
+
   Future<AddEventSubmitOutcome> submit({
     required String title,
     required String address,
@@ -163,6 +199,8 @@ class AddEventController extends Notifier<AddEventState>
         endTime: state.selectedEndTime,
         client: state.selectedClient,
         selectedEmployees: state.selectedEmployees,
+        isPersonal: state.isPersonal,
+        isAllDay: state.isAllDay,
       ),
     );
     state = state.copyWith(errors: errors);
@@ -173,15 +211,18 @@ class AddEventController extends Notifier<AddEventState>
       return const AddEventFailed(SocketException('offline'));
     }
 
-    final start = combineDateAndTime(
-      state.selectedDate!,
-      state.selectedStartTime!,
-    );
-    final end = combineEndDateAndTime(
-      state.selectedDate!,
-      state.selectedEndTime!,
-      state.selectedStartTime,
-    );
+    final isAllDay = state.isAllDay;
+    final span = allDaySpan(state.selectedDate!);
+    final start = isAllDay
+        ? span.start
+        : combineDateAndTime(state.selectedDate!, state.selectedStartTime!);
+    final end = isAllDay
+        ? span.end
+        : combineEndDateAndTime(
+            state.selectedDate!,
+            state.selectedEndTime!,
+            state.selectedStartTime,
+          );
 
     final repo = ref.read(appointmentsRepositoryProvider);
     // Resolve these before any awaits, so we don't crash if the notifier gets disposed mid-await (Riverpod 3).
@@ -189,7 +230,9 @@ class AddEventController extends Notifier<AddEventState>
     final uploader = ref.read(appointmentImageUploadProvider);
     // Snapshot the state before the awaits, so it survives if the sheet gets dismissed mid-submit.
     final images = state.selectedImages;
-    final client = state.selectedClient!;
+    // Null for a personal job — the validator only demands a client otherwise.
+    final client = state.selectedClient;
+    final isPersonal = state.isPersonal;
     final selectedEmployees = state.selectedEmployees;
     final repeat = state.repeat;
 
@@ -221,10 +264,14 @@ class AddEventController extends Notifier<AddEventState>
         title: title.trim(),
         startTime: start,
         endTime: end,
-        clientId: client.id,
-        clientName: client.displayName,
-        clientPhone: client.phone,
-        address: address.trim(),
+        clientId: client?.id ?? '',
+        clientName: client?.displayName ?? '',
+        clientPhone: client?.phone ?? '',
+        // The address field is hidden for a personal job, so drop whatever the
+        // controller still holds rather than saving a stale one.
+        address: isPersonal ? '' : address.trim(),
+        isPersonal: isPersonal,
+        isAllDay: isAllDay,
         employeeIds: selectedEmployees.map((e) => e.id).toList(),
         employeeNames: selectedEmployees.map((e) => e.name).toList(),
         notes: notes.trim(),

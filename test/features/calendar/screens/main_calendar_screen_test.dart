@@ -7,9 +7,11 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_header_block.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_month_pager.dart';
@@ -105,10 +107,11 @@ void main() {
     await tester.pumpAndSettle();
 
     // The calendar is the one screen without an AppTopBar — its header block
-    // hosts the pair instead, so the only "Calendar" text is the go-home pill.
+    // hosts the pair instead, and that pair drops the go-home Calendar pill
+    // here, since this screen IS where the pill goes.
     expect(find.byType(AppBar), findsNothing);
     expect(find.byType(CalendarHeaderBlock), findsOneWidget);
-    expect(find.text('Calendar'), findsOneWidget);
+    expect(find.text('Calendar'), findsNothing);
     expect(find.text('SCHEDULE'), findsOneWidget);
     expect(find.byType(AppHeaderPair), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -190,6 +193,65 @@ void main() {
     expect(opacity.opacity, 1);
   });
 
+  testWidgets("paging a month selects that month's first day", (tester) async {
+    await withPhoneViewport(tester);
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value(const []),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(PageView), const Offset(-400, 0));
+    await tester.pumpAndSettle();
+
+    // The agenda names the selected day, so it is what proves the selection
+    // followed the swipe instead of being left behind in the old month.
+    final now = DateTime.now();
+    final next = DateTime(now.year, now.month + 1);
+    expect(
+      find.text(DateUtilsHelper.formatDayHeader(next)),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('swiping the collapsed week strip pages a week', (tester) async {
+    await withPhoneViewport(tester);
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value(const []),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byTooltip('Hide calendar'), const Offset(0, -60));
+    await tester.pumpAndSettle();
+    expect(find.byType(CalendarWeekStrip), findsOneWidget);
+
+    await tester.fling(
+      find.byType(CalendarWeekStrip),
+      const Offset(-300, 0),
+      1000,
+    );
+    await tester.pumpAndSettle();
+
+    // Next week's first day, in the locale's week order.
+    final today = DateTime.now();
+    final weekStart = weekStartForLocale('en_CA');
+    final expected = weekOf(
+      DateTime(today.year, today.month, today.day + 7),
+      weekStart: weekStart,
+    ).first;
+    expect(
+      find.text(DateUtilsHelper.formatDayHeader(expected)),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('tapping the header month opens the month and year picker', (
     tester,
   ) async {
@@ -261,11 +323,11 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('scrolling the agenda collapses the grid into the week strip', (
+  testWidgets('dragging the jobs up collapses the grid into the week strip', (
     tester,
   ) async {
     await withPhoneViewport(tester);
-    // Enough jobs that the single viewport actually scrolls.
+    // Enough jobs that the agenda's own viewport actually scrolls.
     final today = DateTime.now();
     final many = [for (var i = 0; i < 14; i++) _appointment(i, today)];
     await tester.pumpWidget(
@@ -280,17 +342,26 @@ void main() {
     expect(find.byType(CalendarMonthPager), findsOneWidget);
     expect(find.byType(CalendarWeekStrip), findsNothing);
 
+    // The line between the calendar and the jobs is the handle; the jobs' own
+    // scrolling deliberately does nothing to the grid.
+    final handle = find.byTooltip('Hide calendar');
+    expect(handle, findsOneWidget);
+
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
     await tester.pumpAndSettle();
+    expect(find.byType(CalendarMonthPager), findsOneWidget);
+    expect(find.byType(CalendarWeekStrip), findsNothing);
 
-    // Past 80px the grid unmounts and the strip rises inside the header.
+    await tester.drag(handle, const Offset(0, -60));
+    await tester.pumpAndSettle();
+
+    // Past 24px of drag the grid unmounts and the strip rises in the header.
     expect(find.byType(CalendarWeekStrip), findsOneWidget);
     expect(find.byType(CalendarMonthPager), findsNothing);
     expect(tester.takeException(), isNull);
 
-    // Back to the top re-expands: the offset armed on the way up and fired
-    // below 6px.
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, 600));
+    // Dragging the same handle back down brings the grid back.
+    await tester.drag(find.byTooltip('Show calendar'), const Offset(0, 60));
     await tester.pumpAndSettle();
 
     expect(find.byType(CalendarMonthPager), findsOneWidget);
@@ -340,8 +411,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Only the header pair's go-home pill now that the app bar is gone.
-    expect(find.text('Calendar'), findsOneWidget);
+    // No app bar, and no go-home pill on the calendar itself.
+    expect(find.text('Calendar'), findsNothing);
     expect(find.byType(AppHeaderPair), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

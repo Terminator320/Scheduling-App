@@ -34,6 +34,7 @@ void main() {
       _wrap(
         CalendarHeaderBlock(
           monthLabel: 'August',
+          monthLabelShort: 'Aug',
           yearLabel: '2026',
           onPickMonth: () => tapped++,
           routeButton: const SizedBox.shrink(),
@@ -57,6 +58,7 @@ void main() {
       _wrap(
         CalendarHeaderBlock(
           monthLabel: 'August',
+          monthLabelShort: 'Aug',
           yearLabel: '2026',
           onPickMonth: () {},
           routeButton: const SizedBox.shrink(),
@@ -75,6 +77,7 @@ void main() {
       _wrap(
         CalendarHeaderBlock(
           monthLabel: 'August',
+          monthLabelShort: 'Aug',
           yearLabel: '2026',
           onPickMonth: () {},
           routeButton: const SizedBox.shrink(),
@@ -88,11 +91,52 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a month name that does not fit falls back to its abbreviation', (
+    tester,
+  ) async {
+    // The label is chosen by MEASURING the row, not from a text-scale
+    // threshold: the in-app XL setting is exactly 1.4, which the old `> 1.4`
+    // gate missed by a hair, leaving "September" ellipsized into a stub.
+    // Asserted against viewport width rather than a specific scale, because
+    // the test font is much wider per glyph than the shipped one.
+    Future<void> pumpAt(double width) async {
+      tester.view.physicalSize = Size(width, 844);
+      tester.view.devicePixelRatio = 1;
+      await tester.pumpWidget(
+        _wrap(
+          CalendarHeaderBlock(
+            monthLabel: 'September',
+            monthLabelShort: 'Sep',
+            yearLabel: '2026',
+            onPickMonth: () {},
+            routeButton: const SizedBox.shrink(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await pumpAt(1400);
+    expect(find.text('September'), findsOneWidget);
+    expect(find.text('Sep'), findsNothing);
+
+    await pumpAt(360);
+    expect(find.text('Sep'), findsOneWidget);
+    expect(find.text('September'), findsNothing);
+    // The screen reader still gets the full month.
+    expect(find.bySemanticsLabel('September 2026, Select date'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('exposes the month row as one labelled button', (tester) async {
     await tester.pumpWidget(
       _wrap(
         CalendarHeaderBlock(
           monthLabel: 'August',
+          monthLabelShort: 'Aug',
           yearLabel: '2026',
           onPickMonth: () {},
           routeButton: const SizedBox.shrink(),

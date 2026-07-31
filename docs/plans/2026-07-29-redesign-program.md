@@ -46,9 +46,13 @@ implementation plan when its turn comes.
 ## Build order
 
 ```
-P1 foundation → P2 calendar → P3 clients → P4 team → P4b auth+invites → P5 settings/my-details → P6 time off → P7 dashboard/history
-                                                                          P7b Wave invoices (parallel, unblocks P7 money sections)
+P1 foundation → P2 calendar → [P2b hardware-pass changes] → P3 clients → P4 team → P4b auth+invites → P5 settings/my-details → P6 time off → P7 dashboard/history
+                                                                                       P7b Wave invoices (parallel, unblocks P7 money sections)
 ```
+
+**P1 and P2 are shipped, plus P2b** — the owner changes that came out of the
+first run on real hardware (2026-07-31). Several P2 bullets below were revised
+in place and are marked as such; the rest of P2b is its own section after P2.
 
 P3/P4 model+rules work has no P1 dependency and may land early if de-risking is preferred.
 P4b sits after P4 (owner decision): auth already works so nothing is blocked, the pending-invite
@@ -73,7 +77,9 @@ mono data style so call sites don't hand-build `GoogleFonts.ibmPlexMono(...)`.
 
 **Header pair.** One reusable widget: Calendar pill (blue-tint pill, 38px tall) + hamburger icon
 button (38×38, radius 12, blue tint), with a back-chevron variant for pushed pages. Replaces
-`AppTopBar`'s current action area on every screen. The Calendar pill routes through
+`AppTopBar`'s current action area on every screen — **except the calendar itself, which builds it
+with `showCalendarPill: false`** (revised 2026-07-31: a go-home pill on the screen it goes home to
+is dead weight). The Calendar pill routes through
 `HubTabSelector.select(AdaptiveDestination.calendar)` — clears pushed pages, closes sheets/drawer;
 no screen is a dead end. The Live map floats the pair top-right on white shadowed surfaces.
 
@@ -146,7 +152,10 @@ code 2026-07-29):
   **The header is a custom widget outside `Scaffold.appBar`** — `AppTopBar`'s `PreferredSizeWidget`
   contract can't host an animated week strip (static height per build; it would clip or jump), and
   the design's white header block isn't a Material AppBar anyway.
-- Month grid: **42 cells always** (35 drops the end of months like August 2026), 2px gap, 46px
+- Month grid: **only the weeks the month occupies — 4, 5 or 6 rows** (revised 2026-07-31; it
+  shipped as a fixed 42 cells, which trailed a week of nothing but off-month days. A fixed 5 is
+  wrong the other way and drops the end of months like August 2026, so the count must stay
+  derived), 2px gap, 46px
   cells, **32×32 day circle carries the selected fill** (not the cell), max-3 crew dots (5px)
   coloured by who works that day, off-month cells blank and untappable. Replacing `table_calendar`
   (blast radius: `app_calendar_view.dart`, two `isSameDay` imports, one test file, pubspec). The
@@ -162,21 +171,29 @@ code 2026-07-29):
   - Crew dots need a new per-day **distinct-assignee** colour aggregation (derived beside the
     existing `_dayIndex`) — today's dots are the first three *appointments* and any multi-crew job
     renders grey (`colorFromMap` nulls on `employeeIds.length != 1`).
-- **Appointment fetch range widens from month ±7 to ±14 days** — a 42-cell grid shows up to 12
-  trailing days of the next month, which today's range would leave dotless.
-- Sticky collapse: grid is the first thing inside the scroll view (a structural change — the grid
-  is currently a non-scrolling sibling above the agenda list); past 80px it unmounts and a week
-  strip (56px cells, 30×30 circles, one 4.5px dot) rises into the fixed header; a **150px spacer**
-  keeps scroll extent stable; re-expand arms past 44px and fires below 6px (anti-thrash). Use an
-  explicit `ScrollController` on the agenda (it currently rides the tab's
-  `PrimaryScrollController`), and don't run collapse `setState`s while the tab is hidden
-  (`TickerMode` doesn't cover scroll listeners). Collapse applies to the portrait layout only —
-  the `isSplitLayout` month|agenda split keeps its two independent panes.
+- **Appointment fetch range widens from month ±7 to ±14 days** — a 42-cell grid showed up to 12
+  trailing days of the next month, which the old range would leave dotless. (Revised 2026-07-31:
+  with a variable-row grid the true worst case is ±6, and ±14 is kept as a deliberate superset.
+  The range is also **unioned with the selected day** — `AppointmentDateRange.forCalendar` —
+  because paging months leaves the selection behind and its jobs then fall outside the fetch.)
+- Collapse (**revised 2026-07-31 — this is no longer a scroll-driven "sticky" collapse**): the
+  grid is FIXED above the agenda and the jobs get their own scroll view, so reading down the day
+  never moves the calendar. Collapsing is a deliberate **drag on the divider between the two**
+  (24px of travel, `CalendarCollapse.onDragDelta`; the handle is a tap-toggle too), and the grid
+  unmounts in favour of a week strip (56px cells, 30×30 circles, one 4.5px dot) in the fixed
+  header. **No spacer** — with two viewports there is no vacated scroll extent to hold, which
+  retires both the design's 150px and the derived `gridHeight − stripHeight` that replaced it.
+  There is likewise no scroll listener and no arm/fire hysteresis. Collapse applies to the
+  portrait layout only — the `isSplitLayout` month|agenda split keeps its two independent panes.
+  *(As shipped in P2 this was one `CustomScrollView`, collapsing past 80px with a 44/6 two-stage
+  re-arm; the owner reversed it after the first hardware pass.)*
 - Agenda header: date title + mono `N JOBS` count.
 - **Appointment card** (single shared widget): white radius 15, 4px full-height crew bar (today
   3px), title + status chip row, mono time range (en-dash; the merged semantics label and time
-  formatting change together), 19px crew avatar + `"Crew · Client"` line (`Theo +1` for
-  multi-crew; `clientName` is already denormalized on the record). **API change:** the card takes
+  formatting change together), then **an avatar per assignee followed by the client name**
+  (revised 2026-07-31 — it shipped as one avatar plus a `"Theo +1 · Client"` string; the crew is
+  now entirely visual and the client gets the whole text line. The bar bands every assignee's
+  colour to match. `clientName` is already denormalized on the record). **API change:** the card takes
   a per-assignee `(name, color)` list instead of today's pre-resolved single colour + pre-joined
   name string — 5 call sites (agenda, client job history, day route, dashboard ×2). **History's
   `AppointmentTile` merges into the card**, porting `dimWhenCancelled` (strikethrough — currently
@@ -196,6 +213,55 @@ code 2026-07-29):
   **already shipped** — `status_pending` is "Scheduled"/"Planifié" in both ARBs; no work here.
   The chip's fill moves from amber to the design's neutral grey — amber is reserved for time-off
   Pending / employment Invited chips.)
+
+## P2b — Owner changes from the first hardware pass (2026-07-31)
+
+P2 shipped, then ran on a real iPhone for the first time. These came out of that
+pass. They are **done and tested**, listed here so a later phase doesn't read the
+P2 spec above and "restore" something that was deliberately changed. Per-item
+rationale lives in `CLAUDE.md`; the device checks are in
+`2026-07-30-p1-p2-DEVICE-TEST.md`.
+
+**Calendar**
+- Month grid renders only the weeks the month occupies; the pager animates
+  between month heights and clips a taller page mid-drag.
+- Collapse became a drag on the divider (see the revised bullet above).
+- Paging a month — by swipe or from the picker — **selects that month's 1st**,
+  and swiping the collapsed week strip pages a week and selects its first day.
+  The agenda must always describe the grid above it.
+- The fetch window unions the visible month with the selected day
+  (`AppointmentDateRange.forCalendar`), which is what fixed "0 jobs" on a day
+  that had jobs after a few swipes.
+- The Today pill also shows when today's month is no longer the one on screen.
+- The header month name falls back to the locale's abbreviation **by
+  measurement**, not by a text-scale gate — the in-app XL setting is exactly
+  1.4, which the `isCompact` (`> 1.4`) gate missed entirely.
+- No Calendar pill in the calendar's own header.
+
+**Appointment card**
+- An avatar per assignee, then the client name; the colour bar bands every
+  assignee's colour.
+
+**Personal jobs (new feature, no prior plan)**
+- `isPersonal` on the record: time blocked off for the crew rather than a client
+  visit. Hides client, address, templates, repeat, materials and photos; the
+  title is optional and stores as "Personal"; assignees stay required.
+- `isAllDay` alongside it: no time entered means the block owns the day, stored
+  as a real midnight → 23:59 span so every range query and sweep still works,
+  and rendered as "All day".
+- A personal block never derives `in_progress`/`overdue` and is skipped by the
+  server's "job finished?" sweep — the two must stay in sync.
+- **Open gap:** the iOS widget, the Siri snapshot and the push text still speak
+  the stored midnight time for an all-day block. Threading `isAllDay` through
+  means touching the hand-mirrored Swift decoders — a candidate for a later
+  phase, not done here.
+
+**Form + chrome**
+- The schedule panel now holds all of *when*: all-day, date, start/end, repeat
+  (repeat became a `SheetFieldRow` + action sheet).
+- The shared address field regained its clear "×".
+- The drawer's drop shadow moved outside the drawer — inside, it hazed the
+  panel's own surface in light mode.
 
 ## P3 — Clients (the flagged gap)
 

@@ -190,17 +190,23 @@ still owns it), with any extra business contacts below via the same
 are omitted entirely rather than rendered as "None" rows, so a sparse
 appointment stays short.
 
-### The calendar's single scroll (P2)
+### The calendar's two scroll areas (P2, reworked 2026-07-31)
 
-Portrait renders the month grid and the day's agenda inside **one**
-`CustomScrollView`, which is what allows the grid to scroll away. Past
-`CalendarCollapse.collapseAt` (80px) the grid unmounts and a `CalendarWeekStrip`
-rises inside the fixed `CalendarHeaderBlock`; a derived spacer
-(`CalendarMonthGrid.heightFor − CalendarWeekStrip.heightFor`) holds the extent
-the grid vacated so the first card doesn't jump. Re-expansion **arms** below
-44px and **fires** below 6px — two stages, evaluated in one pass, so a
-`jumpTo(0)` still re-expands while a scroll that merely hovers the collapse
-threshold does not thrash.
+Portrait keeps the month grid **fixed** above the day's agenda, and the agenda
+owns its own `CustomScrollView`. Scrolling the jobs therefore never moves the
+calendar. Collapsing is a deliberate **drag on the divider between them**
+(`_CollapseHandle`, which is also a tap-toggle): `CalendarCollapse` accumulates
+drag deltas and flips past `dragThreshold` (24px), resetting on a direction
+reversal and on `endDrag` so two half-drags don't add up. The grid then unmounts
+and a `CalendarWeekStrip` rises inside the fixed `CalendarHeaderBlock`; swiping
+that strip pages a week and selects its first day.
+
+*(It shipped as ONE `CustomScrollView` with the grid as its first sliver,
+collapsing past an 80px scroll offset with a 44/6 two-stage re-arm and a derived
+`gridHeight − stripHeight` spacer holding the vacated extent. With two viewports
+nothing is vacated, so the spacer is gone with it.)* The fixed grid sits in a
+`Flexible` + `SingleChildScrollView` so a short viewport shrinks it rather than
+overflowing the column.
 
 The agenda rows live in `AgendaSliverList`; `EventList` is now just the
 split-layout wrapper around it, so both hosts build identical rows.
@@ -208,6 +214,33 @@ split-layout wrapper around it, so both hosts build identical rows.
 `calendarDayList` step and a showcase target must be a box, not a sliver.
 Collapse is **portrait-only** — the `isSplitLayout` month|agenda pane has two
 independent scroll panes and no room for a rising strip.
+
+### Personal jobs and all-day blocks (2026-07-31)
+
+Two booleans on `AppointmentRecord`. **`isPersonal`** marks time blocked off for
+the crew rather than a visit to a client: the form hides the client picker,
+address, template chips, repeat, materials and photos, `AppointmentFormValidator`
+stops requiring a client *or* a title (a blank one saves as "Personal"), and both
+save paths write the client fields and the address as empty strings — including
+when an existing job is converted, so a hidden field can't retain a value the UI
+no longer shows. The assignees stay required: they are who the block is for and,
+via `employeeIds`, who can see it. The switch is offered on the add form always
+and on the edit form **only for a job that is already personal**, so a client
+visit can't be converted mid-life.
+
+**`isAllDay`** rides alongside it — "no time entered" is the default for a
+personal block. It stores a **real** midnight → 23:59 span (`allDaySpan`), never
+a sentinel, so every range query, `orderBy('startTime')` and server sweep keeps
+treating it as an ordinary appointment; the flag only changes rendering, to
+"All day" on the card and the detail when-line.
+
+A personal block is not a job being worked: `displayStatus` returns its stored
+status (which reads "Scheduled") instead of deriving `in_progress`/`overdue`, and
+`selectOverdueCandidates` in `functions/notification_utils.js` skips it — the two
+must stay in sync. Everything that speaks a client name falls back to the title,
+including `_who` in `notification_messages.js`. **Known gap:** the iOS widget,
+the Siri snapshot and push text still speak the stored midnight time for an
+all-day block; they carry no `isAllDay` yet.
 
 ### Repeating Appointments
 
@@ -337,7 +370,7 @@ Cross-destination navigation has a second SSOT in `lib/core/navigation/`. `AppDe
 
 `destinationRoute` maps a destination to its `(route, typed args)`, and `navigateToDestination(context, destination, ...)` is the one nav action: a `HubTab` switches the tab (calling `selectAndReveal` to collapse any pushed stack first when invoked from a pushed route, via `HubShellScope.liveSelector`), while a `PushedDestination` pushes, deduped against the current route. `goHomeToCalendar(context)` is the canonical go-home gesture behind the header's Calendar pill — close the drawer, land on calendar, collapse everything above the shell. `HubShellState._popToShell` targets the shell's **captured** `ModalRoute`, never `isFirst`: on `_hubRoute`'s fallback branch the shell is not route #1.
 
-The **nav rail is gone** (deleted 2026-07-30). The right-anchored `AppNavDrawer` is the nav surface at every screen size, and `AppHeaderPair` (Calendar pill + hamburger) sits in every screen's `AppTopBar.actions`. Because the pair resolves its host via `Scaffold.of(context)`, no screen needs a `GlobalKey<ScaffoldState>`. Pushed screens' back buttons are plain `Navigator.maybePop` — back means back; the Calendar pill covers go-home.
+The **nav rail is gone** (deleted 2026-07-30). The right-anchored `AppNavDrawer` is the nav surface at every screen size, and `AppHeaderPair` (Calendar pill + hamburger) sits in every screen's `AppTopBar.actions` — the calendar builds it with `showCalendarPill: false`, since a go-home pill on the screen it goes home to is dead weight. Because the pair resolves its host via `Scaffold.of(context)`, no screen needs a `GlobalKey<ScaffoldState>`. Pushed screens' back buttons are plain `Navigator.maybePop` — back means back; the Calendar pill covers go-home.
 
 ### Responsive Layout
 

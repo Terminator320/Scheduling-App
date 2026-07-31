@@ -164,6 +164,15 @@ describe("selectOverdueCandidates", () => {
     expect(selectOverdueCandidates(
         [rec("ancient", -25 * HOUR, "pending")], NOW)).toEqual([]);
   });
+
+  test("drops a personal block — there is no job to finish", () => {
+    const personal = {...rec("personal", -10 * MIN, "pending"),
+      isPersonal: true};
+    expect(selectOverdueCandidates([personal], NOW)).toEqual([]);
+    // The same record without the flag is still a candidate.
+    expect(selectOverdueCandidates(
+        [rec("personal", -10 * MIN, "pending")], NOW)).toHaveLength(1);
+  });
 });
 
 describe("tomorrowWindowToronto", () => {
@@ -219,6 +228,21 @@ describe("buildNotificationMessage", () => {
     );
     expect(withAddr.body).toContain("123 Main St");
     expect(noAddr.body).not.toContain("123 Main St");
+  });
+
+  test("a personal job is named by its title, not 'Client'", () => {
+    const personal = {
+      clientName: "",
+      title: "Dentist",
+      startTime: ctx.startTime,
+    };
+    expect(buildNotificationMessage("assigned", personal, "en").body)
+        .toContain("Dentist");
+    expect(buildNotificationMessage("assigned", personal, "fr").body)
+        .toContain("Dentist");
+    expect(buildDigestMessage([personal], "en").body).toContain("Dentist");
+    expect(buildDigestMessage([personal], "en").body)
+        .not.toContain("Client");
   });
 
   test("blank client name falls back", () => {

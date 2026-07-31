@@ -218,6 +218,45 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   Edit/Cancel/Delete affordances, which the rules then reject with an opaque
   `permission-denied`. Pass the caller's resolved role; never re-add a `true`
   default. (Rules remain the real gate — this is defense-in-depth plus UX.)
+- **Personal jobs (`isPersonal`, added 2026-07-31) carry no client and no
+  address.** The switch at the top of the form's WHO section is on BOTH the add
+  and edit flows (unlike the template chips), because the flag is stored and
+  has to be reversible. Turning it on hides the client picker and the address
+  field, clears their controllers, and drops `clientRequired` from
+  `AppointmentFormValidator` — **the assignees stay required**, they are who the
+  block is for and who can see it. Both save paths write `clientId`/
+  `clientName`/`clientPhone`/`address` as **empty strings**, including when an
+  existing client visit is converted, so a hidden field can never keep a stale
+  value the UI no longer shows. Everything that speaks a client name falls back
+  to the **title**: the card and the detail row say "Personal"
+  (`calendar_personal`), the widget and Siri decoders already fell back to
+  `title`, and `_who` in `functions/notification_messages.js` now does too
+  (`_contextFor` therefore has to keep passing `title` through). `propagateClientEdits` can't touch these — it
+  queries by `clientId`, which is empty. Also dropped from a personal job: the
+  template chips, the repeat picker, materials and photos. The **title is
+  optional** there and an unnamed one saves as "Personal" — substituted in the
+  widget layer (both sheets), which is where `l10n` lives. The edit form shows
+  the switch **only when the job is already personal** (`onPersonalChanged: null`
+  otherwise), so an ordinary client visit can't be converted mid-life. Turning
+  it on clears the hidden text controllers and, in the ADD flow only, resets
+  `repeat` — the edit flow keeps its repeat, where clearing it would rewrite a
+  live series.
+- **An all-day block (`isAllDay`) stores real instants**, midnight → 23:59, so
+  every range query, `orderBy('startTime')` and sweep keeps working unchanged —
+  the flag only changes how it is SHOWN (`allDaySpan` builds the pair). Offered
+  on personal jobs only, ON by default when no time has been picked, and it
+  hides the start/end rows. The switch is the schedule `SheetPanel`'s first
+  row — **that panel holds the whole of "when": all-day, date, start/end and
+  the repeat rule**, which is a `SheetFieldRow` + `showAdaptiveActionSheet`
+  rather than the standalone dropdown it used to be (owner call, 2026-07-31). `AppointmentCard` and the detail when-line render
+  "All day" instead of "12:00 AM – 11:59 PM". A personal job also **never
+  derives `in_progress`/`overdue`**: `displayStatus` returns its stored status
+  (which reads "Scheduled"), and `selectOverdueCandidates` in
+  `functions/notification_utils.js` skips `isPersonal` records for the same
+  reason — "job finished?" is the wrong question for a dentist appointment.
+  Keep those two in sync. **Known gap:** the iOS widget, the Siri snapshot and
+  the push text still speak the stored midnight time for an all-day block —
+  they carry no `isAllDay` yet.
 - **Job templates are display-only quick-fill, NEVER stored.** `JobTemplate`
   (`calendar/domain/models/job_template.dart`) backs the one-tap chips on the
   **add** flow only (`onApplyTemplate`, null on edit); picking one just seeds the
@@ -332,44 +371,78 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
 
 - **Calendar (rebuilt in P2, 2026-07-30):** `table_calendar` is **deleted**;
   the month view is our own `CalendarMonthGrid` + `CalendarMonthPager`. It
-  always renders **42 cells / 6 rows** — a 35-cell grid drops the end of months
-  like August 2026 — with the week start from the locale
-  (`weekStartForLocale`). Off-month cells render a **faint day number AND their
+  renders **only the weeks the month actually occupies** — 4, 5 or 6 rows from
+  `monthGridRowCount` (owner call, 2026-07-31: a fixed 6 trailed a week of
+  nothing but off-month cells). A fixed **5** is still wrong the other way and
+  drops the end of months like August 2026, so the row count must stay derived,
+  never a constant. Week start comes from the locale (`weekStartForLocale`).
+  Because rows vary, `CalendarMonthGrid.heightFor` takes a **required `rows`**
+  (use `rowsFor(context, month)`), the pager animates its viewport to the month
+  in view, and each page is wrapped in `ClipRect` + top-aligned `OverflowBox`
+  so a taller month being dragged in doesn't overflow before the height
+  settles. Off-month cells render a **faint day number AND their
   crew dots** but stay untappable and out of the semantics tree: the design says
   "blank, Ink 15, not tappable" while the program spec widened the fetch range
   precisely so trailing days aren't dotless, and dots-plus-faint-number is what
   reconciles the two (owner-confirmed). `today` always comes from
   `currentDayProvider`, never `DateTime.now()`, or the circle sticks on
   yesterday in an app left open across midnight.
-  **`AppointmentDateRange.visibleMonth` overscans ±14 days, not ±7** — that is
-  exact cover for a 42-cell grid, and narrowing it silently empties the
-  trailing cells' dots. The overscan is asymmetric in origin: max lead is 6 days,
-  max trail 14.
-  **Portrait is ONE `CustomScrollView`** holding the grid and the agenda, which
-  is what lets the grid scroll away. `CalendarCollapse` (`domain/collapse_state.dart`)
-  owns the thresholds — collapse past **80**, re-expansion **arms** below **44**
-  and **fires** below **6** — and both stages are evaluated in one pass so a
-  `jumpTo(0)` still re-expands. The vacated height is replaced by a **derived**
-  spacer (`gridHeight − stripHeight`), never the design's literal 150px: our
-  grid is taller and scales with text, so a literal jumps the list at the moment
-  of collapse. **Collapse is portrait-only** — `_splitCalendar` short-circuits
-  both the scroll listener and the strip, and the listener also ignores offsets
-  while another hub tab is showing (TickerMode does not cover scroll listeners).
+  **`AppointmentDateRange.visibleMonth` overscans ±14 days, not ±7.** With the
+  variable-row grid the true worst case is ±6, so ±14 is now a deliberate
+  superset — keep it rather than tuning it to the current row rule, or a future
+  grid change silently empties the edge cells' dots.
+  **Portrait is TWO scroll areas** (owner call, 2026-07-31): the grid is FIXED
+  above the agenda, and the jobs have their own `CustomScrollView`, so reading
+  down the day never moves the calendar. Collapse is a **drag on the divider
+  between them** — `_CollapseHandle`, which is also a tap-toggle and carries the
+  Hide/Show calendar tooltip that the widget tests find it by.
+  `CalendarCollapse` (`domain/collapse_state.dart`) accumulates drag deltas past
+  **24px**, resetting on a direction reversal and on `endDrag` so two half-drags
+  don't add up. The old shared-viewport version needed a derived
+  `gridHeight − stripHeight` spacer to hold the extent the grid vacated; with two
+  viewports there is no vacated extent, and the spacer is gone. The fixed grid
+  sits in a `Flexible` + `SingleChildScrollView` so a short viewport shrinks it
+  instead of overflowing the column (it shrink-wraps at normal heights).
+  **Collapse is portrait-only** — `_splitCalendar` short-circuits the strip.
+  **Paging selects.** A month swipe (or the month picker) lands on the 1st and
+  SELECTS it, and a swipe on the collapsed week strip pages one week and selects
+  that week's first day — the agenda must always describe the grid above it.
+  That is also why the fetch window is `AppointmentDateRange.forCalendar`
+  (month grid ∪ selected day) rather than the month alone: any path that leaves
+  a selection outside the visible month drops its jobs from the fetch, and the
+  agenda then reports "0 jobs" for a day that has some.
   The calendar is the **one screen with no `AppTopBar`** (see the frontend rule):
   `CalendarHeaderBlock` replaces it, and therefore must set the system overlay
   style itself via `AnnotatedRegion`, choosing icon brightness from the surface
   colour rather than the theme brightness. Its title and controls **stack under
-  `context.isCompact`** — the Calendar pill's label overflows the row by ~138px
-  at 2× text otherwise.
+  `context.isCompact`**. The month name itself is **measured, not gated**: the
+  screen passes both `monthLabel` and `monthLabelShort` (`DateFormat.MMMM` /
+  `.MMM`) and `_MonthRow` lays out the row, subtracts the year + chevron, and
+  takes the abbreviation when the full name won't fit. Don't "simplify" that
+  back to a text-scale threshold — the in-app XL setting is **exactly 1.4**, so
+  the `isCompact` gate (`> 1.4`) missed it entirely, and the OS scaler, the
+  device width and the locale's month lengths all move independently. The
+  semantics label always speaks the full month. Note the widget test asserts
+  against **viewport width**, not a scale: the test font is far wider per glyph
+  than the shipped one.
 - **`AppointmentCard` is the ONE appointment card** — calendar agenda, day
   route, client job history, both dashboard sections and the paginated history
   list (`AppointmentTile` is deleted, along with `colorFromMap` and
   `resolveAssigneeNames`). It takes `crew: List<AppointmentCrew>` from
   `crewFor(appointment, colorMap:, nameMap:)`; without a `nameMap` that falls
   back to the record's denormalized `employeeNames`, which is what the history
-  and client surfaces already showed. **The crew bar follows the FIRST
-  assignee** — the old per-appointment colour went grey for any multi-crew job —
-  and the crew line reads `Theo +1`. `alwaysShowChip` is **gone**, not ported
+  and client surfaces already showed. **The crew bar bands EVERY assignee**
+  (`_crewBarDecoration`, up to `_kMaxBarSegments` = 4): a flat colour for one,
+  a hard-stopped `LinearGradient` of each crew colour for more (owner call,
+  2026-07-31 — it followed the first assignee alone before that, and the
+  pre-redesign grey-for-multi-crew is doubly wrong: grey reads as
+  *unassigned*). Only a job with no crew at all is `textFaint`. The meta line
+  is an **overlapped avatar stack — one avatar per assignee — followed by the
+  client name** (owner call, 2026-07-31; it was a single avatar plus the text
+  `Theo +1 · Client`, and `calendar_crewAndClient` is deleted). `_CrewAvatars`
+  computes its own width rather than laying out, because of the
+  `IntrinsicHeight` rule below; `_crewLabel`/`calendar_crewPlusOthers` survive
+  only as the fallback text for a record with no client name to show. `alwaysShowChip` is **gone**, not ported
   (every call site passed `true`); cancelled dims to **0.6**, not 0.75. The card
   uses `IntrinsicHeight` to stretch the crew bar, so **nothing in its subtree may
   use `LayoutBuilder`, `AutoSizeText` or `FittedBox`** — they cannot report
@@ -402,7 +475,10 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   user. The **nav rail, `AdaptiveShell`, `AdaptiveDestination`,
   `Breakpoints.expanded` and `isExpanded` are all deleted**; `AppNavDrawer`
   (right-anchored, from `drawerGroups(isAdmin:)`) is the nav surface at every
-  screen size, and `AppHeaderPair` sits in every `AppTopBar.actions`.
+  screen size, and `AppHeaderPair` sits in every `AppTopBar.actions` — on the
+  **calendar only** it is built with `showCalendarPill: false` (a go-home pill
+  on the screen it goes home to is dead weight; owner call 2026-07-31), so that
+  header carries the day-route button and the hamburger alone.
   `_hubRoute` + `HubTabRedirectRoute` survive at three tab routes — they look
   dead but remain the cold-start fallback and are pinned by `hub_shell_test`.
 

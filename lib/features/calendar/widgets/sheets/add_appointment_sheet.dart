@@ -128,9 +128,15 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
   }
 
   Future<void> _submit() async {
+    // An unnamed personal block saves as "Personal" — the stored title is what
+    // the card, the widget, Siri and the push text all read.
+    final title = _controllers.title.text.trim().isEmpty
+        ? (ref.read(_provider).isPersonal ? context.l10n.calendar_personal : '')
+        : _controllers.title.text;
+
     Future<AddEventSubmitOutcome> attempt({bool forceBusy = false}) =>
         _notifier.submit(
-          title: _controllers.title.text,
+          title: title,
           address: AddressParser.toCanonical(_controllers.address.text),
           notes: _controllers.notes.text,
           materialsNeeded: _controllers.materials.text,
@@ -199,6 +205,10 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
           selectedEmployees: state.selectedEmployees,
           repeat: state.repeat,
           useCustomAddress: state.useCustomAddress,
+          isPersonal: state.isPersonal,
+          onPersonalChanged: (value) => _notifier.setPersonal(value: value),
+          isAllDay: state.isAllDay,
+          onAllDayChanged: (value) => _notifier.setAllDay(value: value),
           errors: state.errors,
           employeeLabel: context.l10n.calendar_assignEmployee,
           employeeRequired: true,

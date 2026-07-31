@@ -157,6 +157,30 @@
   "@calendar_sectionWho": {
     "description": "Mono all-caps section label above the service, client and assignee fields in the job form. Already uppercase in source."
   },
+  "calendar_personalJob": "Personal job",
+  "@calendar_personalJob": {
+    "description": "Switch in the job form that marks the job as personal time for the crew rather than a client visit."
+  },
+  "calendar_personalJobHint": "Time blocked off — no client or address needed.",
+  "@calendar_personalJobHint": {
+    "description": "Subtitle under the personal-job switch, explaining that it hides the client and address fields."
+  },
+  "calendar_hideCalendar": "Hide calendar",
+  "@calendar_hideCalendar": {
+    "description": "Handle between the month grid and the day's jobs — drag or tap it up to fold the grid away."
+  },
+  "calendar_showCalendar": "Show calendar",
+  "@calendar_showCalendar": {
+    "description": "Same handle once the grid is folded away — drag or tap it to bring the grid back."
+  },
+  "calendar_allDay": "All day",
+  "@calendar_allDay": {
+    "description": "Switch in the job form, and the label shown in place of a time range on a job that runs the whole day."
+  },
+  "calendar_personal": "Personal",
+  "@calendar_personal": {
+    "description": "Short label shown on a job card and in the job detail view in place of a client name, when the job is personal."
+  },
   "calendar_sectionSchedule": "SCHEDULE",
   "@calendar_sectionSchedule": {
     "description": "Mono all-caps section label above the date, time and repeat fields in the job form. Already uppercase in source."
@@ -233,18 +257,6 @@
       },
       "others": {
         "type": "int"
-      }
-    }
-  },
-  "calendar_crewAndClient": "{crew} · {client}",
-  "@calendar_crewAndClient": {
-    "description": "Appointment card's third line: the crew label, a middot, then the client name.",
-    "placeholders": {
-      "crew": {
-        "type": "String"
-      },
-      "client": {
-        "type": "String"
       }
     }
   },

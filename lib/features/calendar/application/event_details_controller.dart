@@ -55,6 +55,8 @@ abstract class EventDetailsState
     @Default(<ClientRecord>[]) List<ClientRecord> clientResults,
     @Default(false) bool isSearchingClient,
     @Default(false) bool useCustomAddress,
+    @Default(false) bool isPersonal,
+    @Default(false) bool isAllDay,
     // Set when the user explicitly removes the client, so we don't fall back to a placeholder.
     @Default(false) bool clientCleared,
     @Default(<String, AppointmentFormError>{})
@@ -83,6 +85,8 @@ class EventDetailsController extends Notifier<EventDetailsState>
       editingStatus: AppointmentStatus.storedRaw(appointment.status),
       repeat: appointment.repeat,
       savedRepeat: appointment.repeat,
+      isPersonal: appointment.isPersonal,
+      isAllDay: appointment.isAllDay,
       // Seeded synchronously to avoid a race with the async load below — employee
       // visibility depends on employeeIds being set right away.
       selectedEmployees: _assigneesFromRecord(appointment),
@@ -183,12 +187,34 @@ class EventDetailsController extends Notifier<EventDetailsState>
     );
   }
 
+  void setAllDay({required bool value}) {
+    state = state.copyWith(
+      isAllDay: value,
+      errors: withoutKey(withoutKey(state.errors, 'startTime'), 'endTime'),
+    );
+  }
+
   void setStatus(String status) {
     state = state.copyWith(editingStatus: status);
   }
 
   void selectRepeat(RepeatInterval value) {
     state = state.copyWith(repeat: value);
+  }
+
+  /// Flipping this on drops the client the same way the add flow does — the
+  /// picker is hidden from here on, and `clientCleared` keeps `save()` from
+  /// falling back to the stored one.
+  void setPersonal({required bool value}) {
+    state = state.copyWith(
+      isPersonal: value,
+      selectedClient: value ? null : state.selectedClient,
+      client: value ? null : state.client,
+      clientCleared: value || state.clientCleared,
+      clientResults: value ? const [] : state.clientResults,
+      useCustomAddress: !value && state.useCustomAddress,
+      errors: withoutKey(state.errors, 'client'),
+    );
   }
 
   // --- AppointmentFormConcerns adapters ---
@@ -340,15 +366,17 @@ class EventDetailsController extends Notifier<EventDetailsState>
       );
     }
 
-    final start = combineDateAndTime(
-      state.selectedDate,
-      state.selectedStartTime,
-    );
-    final end = combineEndDateAndTime(
-      state.selectedDate,
-      state.selectedEndTime,
-      state.selectedStartTime,
-    );
+    final span = allDaySpan(state.selectedDate);
+    final start = state.isAllDay
+        ? span.start
+        : combineDateAndTime(state.selectedDate, state.selectedStartTime);
+    final end = state.isAllDay
+        ? span.end
+        : combineEndDateAndTime(
+            state.selectedDate,
+            state.selectedEndTime,
+            state.selectedStartTime,
+          );
 
     // Snapshot the photo state before writing, so it survives the sheet being dismissed.
     final removedImages = state.removedExistingImages;
@@ -450,11 +478,12 @@ class EventDetailsController extends Notifier<EventDetailsState>
     await _seedFuture;
     if (!ref.mounted) return const EventDetailsInvalid();
 
-    final clientForValidation =
-        state.selectedClient ??
-        (!state.clientCleared && appointment.clientId.trim().isNotEmpty
-            ? state.client ?? placeholderClient(appointment)
-            : null);
+    final clientForValidation = state.isPersonal
+        ? null
+        : state.selectedClient ??
+              (!state.clientCleared && appointment.clientId.trim().isNotEmpty
+                  ? state.client ?? placeholderClient(appointment)
+                  : null);
 
     final errors = AppointmentFormValidator.validate(
       AppointmentFormInput(
@@ -464,6 +493,8 @@ class EventDetailsController extends Notifier<EventDetailsState>
         endTime: state.selectedEndTime,
         client: clientForValidation,
         selectedEmployees: state.selectedEmployees,
+        isPersonal: state.isPersonal,
+        isAllDay: state.isAllDay,
       ),
     );
     state = state.copyWith(errors: errors);
@@ -486,16 +517,26 @@ class EventDetailsController extends Notifier<EventDetailsState>
     required DateTime end,
     required ({List<String> ids, List<String> names}) assignees,
   }) {
-    final pickedClient = state.selectedClient;
+    final isPersonal = state.isPersonal;
+    // A personal job carries no client and no address — including when an
+    // existing client visit is converted into one, so the stored copies are
+    // cleared rather than left behind on a job that no longer shows them.
+    final pickedClient = isPersonal ? null : state.selectedClient;
     return AppointmentRecord(
       id: id,
       title: title.trim(),
       startTime: start,
       endTime: end,
-      clientId: pickedClient?.id ?? appointment.clientId,
-      clientName: pickedClient?.displayName ?? appointment.clientName,
-      clientPhone: pickedClient?.phone ?? appointment.clientPhone,
-      address: address.trim(),
+      clientId: isPersonal ? '' : pickedClient?.id ?? appointment.clientId,
+      clientName: isPersonal
+          ? ''
+          : pickedClient?.displayName ?? appointment.clientName,
+      clientPhone: isPersonal
+          ? ''
+          : pickedClient?.phone ?? appointment.clientPhone,
+      address: isPersonal ? '' : address.trim(),
+      isPersonal: isPersonal,
+      isAllDay: state.isAllDay,
       employeeIds: assignees.ids,
       employeeNames: assignees.names,
       notes: notes.trim(),

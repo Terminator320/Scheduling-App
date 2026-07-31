@@ -145,14 +145,14 @@ void main() {
       expect(range.end, DateTime(2026, 6, 15));
     });
 
-    test('covers the maximum trail a 42-cell grid can show', () {
-      // February 2026 starts on a Sunday: 0 lead cells and 28 days, so the
-      // grid runs a full 14 days into March — the worst trailing case.
+    test('covers well past the maximum trail the grid can show', () {
+      // The grid renders only the weeks the month occupies, so the real worst
+      // trail is 6 days; the ±14 window is a deliberate superset.
       final range = AppointmentDateRange.visibleMonth(DateTime(2026, 2, 10));
-      expect(range.end.isAfter(DateTime(2026, 3, 14)), isTrue);
+      expect(range.end.isAfter(DateTime(2026, 3, 7)), isTrue);
     });
 
-    test('covers the maximum lead a 42-cell grid can show', () {
+    test('covers the maximum lead the grid can show', () {
       // 1 Aug 2026 is a Saturday: 6 lead cells reach back to 26 July.
       final range = AppointmentDateRange.visibleMonth(DateTime(2026, 8, 4));
       expect(range.start.isBefore(DateTime(2026, 7, 26)), isTrue);
@@ -163,6 +163,36 @@ void main() {
       final b = AppointmentDateRange.visibleMonth(DateTime(2026, 5, 30));
       expect(a, equals(b));
       expect(a.hashCode, equals(b.hashCode));
+    });
+  });
+
+  group('AppointmentDateRange.forCalendar', () {
+    test('matches the month window while the selection is inside it', () {
+      final range = AppointmentDateRange.forCalendar(
+        focusedDay: DateTime(2026, 5, 9),
+        selectedDay: DateTime(2026, 5, 20),
+      );
+      expect(range, AppointmentDateRange.visibleMonth(DateTime(2026, 5, 9)));
+    });
+
+    test('stretches back to a selection left behind by paging forward', () {
+      // Paged three months on from a day picked in May: a month-only window
+      // stops covering 20 May, and the agenda then reports "0 jobs" for it.
+      final range = AppointmentDateRange.forCalendar(
+        focusedDay: DateTime(2026, 8),
+        selectedDay: DateTime(2026, 5, 20),
+      );
+      expect(range.start, DateTime(2026, 5, 20));
+      expect(range.end, DateTime(2026, 9, 15));
+    });
+
+    test('stretches forward to a selection left behind by paging back', () {
+      final range = AppointmentDateRange.forCalendar(
+        focusedDay: DateTime(2026, 2),
+        selectedDay: DateTime(2026, 5, 20),
+      );
+      expect(range.start, DateTime(2026, 1, 18));
+      expect(range.end, DateTime(2026, 5, 21));
     });
   });
 

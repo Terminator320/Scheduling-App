@@ -1,23 +1,38 @@
 import 'package:intl/intl.dart';
 
-/// Cells in the redesign's month grid. Six rows, always — a 35-cell grid drops
-/// the end of months like August 2026 (31 days starting Saturday).
-const int monthGridCellCount = 42;
+/// The most rows any month can need: 6 lead cells + 31 days spills into a
+/// sixth week (August 2026 is the case — 31 days starting Saturday). Used to
+/// bound layout, never to pad a shorter month with an empty trailing week.
+const int monthGridMaxRows = 6;
 
 /// Dart's [DateTime.weekday] is Monday=1..Sunday=7; the grid works in
 /// Sunday=0..Saturday=6, matching intl's weekday-symbol arrays.
 int _sundayBased(DateTime day) => day.weekday % 7;
 
-/// The 42 days the grid renders for [month], starting at [weekStart]
-/// (0 = Sunday … 6 = Saturday).
+int _leadFor(DateTime month, int weekStart) =>
+    (_sundayBased(DateTime(month.year, month.month)) - weekStart + 7) % 7;
+
+/// Days in [month]. `day 0` of the next month is the last day of this one.
+int _daysInMonth(DateTime month) =>
+    DateTime(month.year, month.month + 1, 0).day;
+
+/// Weeks [month] actually occupies at [weekStart] — 4, 5, or 6. The grid renders
+/// exactly these; a fixed 6 would trail an all-off-month week, and a fixed 5
+/// would drop the end of months like August 2026.
+int monthGridRowCount(DateTime month, {required int weekStart}) =>
+    ((_leadFor(month, weekStart) + _daysInMonth(month)) / 7).ceil();
+
+/// The days the grid renders for [month], starting at [weekStart]
+/// (0 = Sunday … 6 = Saturday). Length is a multiple of 7 —
+/// `7 * monthGridRowCount(...)`.
 ///
 /// Built with `DateTime(y, m, d + i)` rather than `add(Duration(days: 1))` so a
 /// DST transition can't shift a cell onto the wrong calendar day.
 List<DateTime> monthGridDays(DateTime month, {required int weekStart}) {
-  final first = DateTime(month.year, month.month);
-  final lead = (_sundayBased(first) - weekStart + 7) % 7;
+  final lead = _leadFor(month, weekStart);
+  final cells = 7 * monthGridRowCount(month, weekStart: weekStart);
   return [
-    for (var i = 0; i < monthGridCellCount; i++)
+    for (var i = 0; i < cells; i++)
       DateTime(month.year, month.month, 1 - lead + i),
   ];
 }

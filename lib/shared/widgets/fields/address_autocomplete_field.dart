@@ -11,6 +11,7 @@ import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/features/maps/domain/models/address_suggestion.dart';
 import 'package:scheduling/features/maps/domain/places_repository.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/fields/clear_text_button.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:uuid/uuid.dart';
 
@@ -135,6 +136,24 @@ class _AddressAutocompleteFieldState
     }
   }
 
+  /// The clear button empties the controller itself; this tears down the
+  /// lookup that was running for the text it wiped. `onChanged` has to be
+  /// called by hand — a programmatic `controller.clear()` never fires the
+  /// field's own, so the host would keep the address it can no longer see.
+  void _onCleared() {
+    _debounce.cancel();
+    // Discards a response already in flight for the old query.
+    _requestId++;
+    _lastFetched = '';
+    _lastTypedApt = '';
+    widget.onChanged?.call('');
+    setState(() {
+      _suggestions = [];
+      _isLoading = false;
+      _serviceError = null;
+    });
+  }
+
   Future<void> _selectSuggestion(AddressSuggestion s) async {
     // Invalidate any pending debounce/in-flight request so a late response can't resurface suggestions.
     _debounce.cancel();
@@ -199,15 +218,23 @@ class _AddressAutocompleteFieldState
           maxLength: TextLimits.appointmentAddress,
           errorText: widget.errorText,
           onChanged: _onTextChanged,
+          // The custom suffix used to cost this field the clear "x" every
+          // other text field gets. ClearTextButton's placeholder slot is
+          // exactly this case: the pin while empty, the x once there is an
+          // address to wipe.
           suffixIcon: _isLoading
               ? const Padding(
                   padding: EdgeInsets.all(AppSpacing.sp12),
                   child: AdaptiveProgressIndicator(size: 16),
                 )
-              : Icon(
-                  Icons.location_on_outlined,
-                  size: 18,
-                  color: scheme.onSurfaceVariant,
+              : ClearTextButton(
+                  controller: widget.controller,
+                  onCleared: _onCleared,
+                  placeholder: Icon(
+                    Icons.location_on_outlined,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
         ),
         if (_suggestions.isNotEmpty)

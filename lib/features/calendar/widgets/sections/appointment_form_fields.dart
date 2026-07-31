@@ -69,6 +69,9 @@ class AppointmentFormFields extends StatelessWidget {
     required this.selectedEmployees,
     required this.repeat,
     required this.useCustomAddress,
+    required this.isPersonal,
+    required this.isAllDay,
+    required this.onAllDayChanged,
     required this.errors,
     required this.employeeLabel,
     required this.employeeRequired,
@@ -88,6 +91,7 @@ class AppointmentFormFields extends StatelessWidget {
     this.onStatusChanged,
     this.onRequestAddClient,
     this.onApplyTemplate,
+    this.onPersonalChanged,
   });
 
   final AppointmentFormControllers controllers;
@@ -98,6 +102,18 @@ class AppointmentFormFields extends StatelessWidget {
   final List<EmployeeRecord> selectedEmployees;
   final RepeatInterval repeat;
   final bool useCustomAddress;
+
+  /// Personal job: time blocked off for the crew rather than a client visit.
+  /// Hides the client picker, address, materials, photos, repeat and the
+  /// template chips, and drops the client and title from validation.
+  final bool isPersonal;
+
+  /// No time was put in, so the block owns the whole day: the start/end rows
+  /// are hidden and the record saves midnight → 23:59. Only offered on a
+  /// personal job, and on by default there.
+  final bool isAllDay;
+  final ValueChanged<bool> onAllDayChanged;
+
   final Map<String, AppointmentFormError> errors;
   final String employeeLabel;
   final bool employeeRequired;
@@ -124,6 +140,11 @@ class AppointmentFormFields extends StatelessWidget {
   /// Add flow only — renders one-tap job-template chips above the title. Null hides the chips, which is how the edit flow uses this.
   final ValueChanged<JobTemplate>? onApplyTemplate;
 
+  /// Renders the personal-job switch. Null hides it: the edit flow only offers
+  /// it on a job that is ALREADY personal, so an ordinary client visit can't be
+  /// turned into one halfway through its life.
+  final ValueChanged<bool>? onPersonalChanged;
+
   String? _err(BuildContext context, String field) {
     final key = errors[field];
     return key == null ? null : appointmentFormErrorText(context, key);
@@ -147,6 +168,19 @@ class AppointmentFormFields extends StatelessWidget {
     );
     if (created == null) return;
     _selectClient(created);
+  }
+
+  void _setPersonal(bool value) {
+    // Clear the text fields the switch hides, so nothing stale is left in a
+    // controller the user can no longer see. Photos are deliberately NOT
+    // cleared here — dropping already-uploaded images off a flick of a switch
+    // is destructive and can't be undone from this form.
+    if (value) {
+      controllers.clientSearch.clear();
+      controllers.address.clear();
+      controllers.materials.clear();
+    }
+    onPersonalChanged!(value);
   }
 
   void _switchToCustomAddress() {
@@ -175,9 +209,10 @@ class AppointmentFormFields extends StatelessWidget {
     );
   }
 
-  /// Quick-fill job-template chips — add flow only.
+  /// Quick-fill job-template chips — add flow only, and never on a personal
+  /// job: every template names a plumbing service.
   List<Widget> _templatesSection(BuildContext context, AppLocalizations l10n) {
-    if (onApplyTemplate == null) return const [];
+    if (onApplyTemplate == null || isPersonal) return const [];
     return [
       _SectionLabel(l10n.calendar_sectionTemplates),
       const SizedBox(height: AppSpacing.sp8),
@@ -196,17 +231,25 @@ class AppointmentFormFields extends StatelessWidget {
     ];
   }
 
-  /// Service title, client picker and employee picker.
+  /// Service title, the personal-job switch, client picker and employee picker.
   List<Widget> _whoSection(BuildContext context, AppLocalizations l10n) => [
     _SectionLabel(l10n.calendar_sectionWho),
     const SizedBox(height: AppSpacing.sp8),
+    // --- Personal job ---
+    if (onPersonalChanged != null) ...[
+      _PersonalJobSwitch(value: isPersonal, onChanged: _setPersonal),
+      const SizedBox(height: AppSpacing.sp16),
+    ],
     // --- Service title ---
     SheetFocusScroll(
       child: LabeledTextField(
         label: l10n.calendar_serviceTitle,
-        hint: l10n.calendar_eGPlumbingRepair,
+        // A personal block doesn't have to be named — left blank it saves as
+        // "Personal", which is what the card and the off-screen mirrors read.
+        hint: isPersonal ? l10n.calendar_personal : l10n.calendar_eGPlumbingRepair,
         controller: controllers.title,
-        required: true,
+        required: !isPersonal,
+        optional: isPersonal,
         textCapitalization: TextCapitalization.sentences,
         textInputAction: TextInputAction.next,
         maxLength: TextLimits.appointmentTitle,
@@ -214,22 +257,24 @@ class AppointmentFormFields extends StatelessWidget {
       ),
     ),
     const SizedBox(height: AppSpacing.sp16),
-    // --- Client ---
-    formLabel(context, l10n.calendar_client, required: true),
-    SheetFocusScroll(
-      child: ClientSearchField(
-        controller: controllers.clientSearch,
-        selectedClient: selectedClient,
-        results: clientResults,
-        isSearching: isSearchingClient,
-        onChanged: onSearchClients,
-        onSelect: _selectClient,
-        onClear: _clearClient,
-        errorText: _err(context, 'client'),
-        onAddNew: onRequestAddClient == null ? null : _addNewClient,
+    // --- Client (a personal job has none) ---
+    if (!isPersonal) ...[
+      formLabel(context, l10n.calendar_client, required: true),
+      SheetFocusScroll(
+        child: ClientSearchField(
+          controller: controllers.clientSearch,
+          selectedClient: selectedClient,
+          results: clientResults,
+          isSearching: isSearchingClient,
+          onChanged: onSearchClients,
+          onSelect: _selectClient,
+          onClear: _clearClient,
+          errorText: _err(context, 'client'),
+          onAddNew: onRequestAddClient == null ? null : _addNewClient,
+        ),
       ),
-    ),
-    const SizedBox(height: AppSpacing.sp16),
+      const SizedBox(height: AppSpacing.sp16),
+    ],
     // --- Employees ---
     formLabel(context, employeeLabel, required: employeeRequired),
     const SizedBox(height: AppSpacing.sp4),
@@ -274,6 +319,10 @@ class AppointmentFormFields extends StatelessWidget {
       const SizedBox(height: AppSpacing.sp8),
       SheetPanel(
         children: [
+          // --- All day (personal jobs only) — first row of the panel, since
+          // it decides whether the time rows below it exist at all.
+          if (isPersonal)
+            _AllDaySwitch(value: isAllDay, onChanged: onAllDayChanged),
           SheetFieldRow(
             label: l10n.calendar_date,
             value: controllers.date.text,
@@ -284,9 +333,13 @@ class AppointmentFormFields extends StatelessWidget {
             onTap: onPickDate,
             trailing: const Icon(Icons.calendar_today_outlined, size: 18),
           ),
-          // Start and end share one row until the screen is too narrow to
-          // read both.
-          if (isNarrowPhone) ...[
+          // An all-day block has no times to show — the date row is the whole
+          // schedule, and an empty child here would leave a stray divider.
+          // Start and end otherwise share one row until the screen is too
+          // narrow to read both.
+          if (isAllDay)
+            ...const <Widget>[]
+          else if (isNarrowPhone) ...[
             startRow,
             endRow,
           ] else
@@ -300,6 +353,11 @@ class AppointmentFormFields extends StatelessWidget {
                 ],
               ),
             ),
+          // --- Repeat: same panel as the date and times, so everything about
+          // when the job happens reads as one block. Not offered on a personal
+          // job.
+          if (!isPersonal)
+            RepeatIntervalPicker(current: repeat, onChanged: onSelectRepeat),
         ],
       ),
       const SizedBox(height: AppSpacing.sp16),
@@ -313,10 +371,6 @@ class AppointmentFormFields extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.sp16),
       ],
-      // --- Repeat ---
-      formLabel(context, l10n.calendar_repeat, optional: true),
-      RepeatIntervalPicker(current: repeat, onChanged: onSelectRepeat),
-      const SizedBox(height: AppSpacing.sp16),
     ];
   }
 
@@ -324,15 +378,17 @@ class AppointmentFormFields extends StatelessWidget {
   List<Widget> _detailsSection(BuildContext context, AppLocalizations l10n) => [
     _SectionLabel(l10n.calendar_sectionDetails),
     const SizedBox(height: AppSpacing.sp8),
-    // --- Address ---
-    AppointmentAddressField(
-      selectedClient: selectedClient,
-      useCustomAddress: useCustomAddress,
-      addressController: controllers.address,
-      onSwitchToCustom: _switchToCustomAddress,
-      onUseClientAddress: _useClientAddress,
-    ),
-    const SizedBox(height: AppSpacing.sp16),
+    // --- Address (a personal job has none) ---
+    if (!isPersonal) ...[
+      AppointmentAddressField(
+        selectedClient: selectedClient,
+        useCustomAddress: useCustomAddress,
+        addressController: controllers.address,
+        onSwitchToCustom: _switchToCustomAddress,
+        onUseClientAddress: _useClientAddress,
+      ),
+      const SizedBox(height: AppSpacing.sp16),
+    ],
     // --- Notes ---
     SheetFocusScroll(
       child: LabeledTextField(
@@ -347,23 +403,87 @@ class AppointmentFormFields extends StatelessWidget {
       ),
     ),
     const SizedBox(height: AppSpacing.sp16),
-    // --- Materials ---
-    SheetFocusScroll(
-      child: LabeledTextField(
-        label: l10n.calendar_materialsNeeded,
-        hint: materialsHint,
-        controller: controllers.materials,
-        optional: true,
-        textCapitalization: TextCapitalization.sentences,
-        maxLines: 2,
-        maxLength: TextLimits.appointmentMaterials,
+    // --- Materials and photos (job-site fields; a personal block has none) ---
+    if (!isPersonal) ...[
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: l10n.calendar_materialsNeeded,
+          hint: materialsHint,
+          controller: controllers.materials,
+          optional: true,
+          textCapitalization: TextCapitalization.sentences,
+          maxLines: 2,
+          maxLength: TextLimits.appointmentMaterials,
+        ),
       ),
-    ),
-    const SizedBox(height: AppSpacing.sp16),
-    // --- Photos ---
-    formLabel(context, l10n.calendar_pictures, optional: true),
-    photosSection,
+      const SizedBox(height: AppSpacing.sp16),
+      formLabel(context, l10n.calendar_pictures, optional: true),
+      photosSection,
+    ],
   ];
+}
+
+/// Marks the job as personal time rather than a client visit. Mirrors the
+/// client form's "no fixed address" switch, which gates a field the same way.
+class _PersonalJobSwitch extends StatelessWidget {
+  const _PersonalJobSwitch({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    type: MaterialType.transparency,
+    child: SwitchListTile.adaptive(
+      contentPadding: EdgeInsets.zero,
+      title: Text(context.l10n.calendar_personalJob),
+      subtitle: Text(context.l10n.calendar_personalJobHint),
+      value: value,
+      activeTrackColor: Theme.of(context).colorScheme.primary,
+      onChanged: onChanged,
+    ),
+  );
+}
+
+/// Turns the block into a whole-day one. Personal jobs only — a client visit
+/// always has a time. Lives inside the schedule `SheetPanel`, so it carries the
+/// same 15/13 padding its sibling rows do rather than a ListTile's own.
+class _AllDaySwitch extends StatelessWidget {
+  const _AllDaySwitch({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: () => onChanged(!value),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(15, 9, 13, 9),
+          child: Row(
+            children: [
+              // No explanatory subtitle — "All day" says it.
+              Expanded(
+                child: Text(
+                  context.l10n.calendar_allDay,
+                  style: theme.textTheme.titleSmall,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sp8),
+              Switch.adaptive(
+                value: value,
+                activeTrackColor: theme.colorScheme.primary,
+                onChanged: onChanged,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Mono all-caps section header inside the form sheet. The ARB values are

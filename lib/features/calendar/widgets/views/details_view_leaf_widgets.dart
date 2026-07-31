@@ -104,6 +104,9 @@ class DetailsHeader extends StatelessWidget {
             DateUtilsHelper.formatWhenLine(
               appointment.startTime,
               appointment.endTime,
+              allDayLabel: appointment.isAllDay
+                  ? context.l10n.calendar_allDay
+                  : null,
             ),
             style: theme.monoType.data,
           ),

@@ -10,6 +10,32 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
+/// Crew bands the colour bar splits into. Past this a band is too thin to
+/// read, so the rest of the crew is carried by the "+N" on the crew line.
+const int _kMaxBarSegments = 4;
+
+/// The colour bar down the card's leading edge: a flat colour for one crew, a
+/// hard-stopped gradient of everyone's colours for more. Deliberately NOT grey
+/// for a multi-crew job — grey reads as "unassigned" and throws away the one
+/// thing the bar is for (owner call, 2026-07-31).
+BoxDecoration _crewBarDecoration(ThemeData theme, List<Color> colors) {
+  if (colors.isEmpty) return BoxDecoration(color: theme.palette.textFaint);
+  if (colors.length == 1) return BoxDecoration(color: colors.first);
+  final step = 1 / colors.length;
+  return BoxDecoration(
+    gradient: LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      // Each colour twice against a shared stop, so the bands meet at a hard
+      // edge instead of blending into mud.
+      colors: [for (final color in colors) ...[color, color]],
+      stops: [
+        for (var i = 0; i < colors.length; i++) ...[i * step, (i + 1) * step],
+      ],
+    ),
+  );
+}
+
 /// The app's core component: one appointment, everywhere it appears — the
 /// calendar agenda, the day route, client job history, the dashboard, and the
 /// history list (which used to have its own `AppointmentTile`).
@@ -57,25 +83,33 @@ class AppointmentCard extends StatelessWidget {
     final status = AppointmentStatus.fromRaw(appointment.displayStatus);
     final isCancelled = dimWhenCancelled && status.isCancelled;
 
-    final timeLabel =
-        '${DateUtilsHelper.formatTime(appointment.startTime)} – '
-        '${DateUtilsHelper.formatTime(appointment.endTime)}';
+    // An all-day block stores a real midnight → 23:59 span, so it would read
+    // as "12:00 AM – 11:59 PM" without this.
+    final timeLabel = appointment.isAllDay
+        ? context.l10n.calendar_allDay
+        : '${DateUtilsHelper.formatTime(appointment.startTime)} – '
+              '${DateUtilsHelper.formatTime(appointment.endTime)}';
 
     // The bar follows the FIRST assignee: the crew line makes them the card's
     // identity, and the old per-appointment colour went grey for any job with
     // more than one person on it.
-    final storedBar = crew.isEmpty ? null : crew.first.color;
-    final barColor = storedBar == null
-        ? theme.palette.textFaint
-        : crewColorOf(theme, storedBar.toARGB32());
+    // One band per crew member rather than the first assignee's colour alone:
+    // a two-person job now reads as two-person at a glance, and nobody's colour
+    // is thrown away. An assignee with no colour is skipped, not greyed.
+    final barColors = [
+      for (final member in crew.take(_kMaxBarSegments))
+        if (member.color case final stored?) crewColorOf(theme, stored.toARGB32()),
+    ];
 
-    final client = (clientName ?? appointment.clientName).trim();
-    final crewLabel = _crewLabel(context);
-    final metaLine = crewLabel == null
-        ? client
-        : client.isEmpty
-        ? crewLabel
-        : context.l10n.calendar_crewAndClient(crewLabel, client);
+    // A personal job has no client, so it names itself in that slot rather
+    // than leaving the meta line as the crew alone.
+    final client = appointment.isPersonal
+        ? context.l10n.calendar_personal
+        : (clientName ?? appointment.clientName).trim();
+    // The crew is now the avatar stack, so the meta text is the client alone.
+    // A job with no client to name (an unassigned legacy record) falls back to
+    // the crew names rather than leaving the line blank.
+    final metaLine = client.isNotEmpty ? client : (_crewLabel(context) ?? '');
 
     final semanticsLabel = [
       appointment.title,
@@ -108,7 +142,10 @@ class AppointmentCard extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Container(width: emphasizeToday ? 3 : 4, color: barColor),
+                      Container(
+                        width: emphasizeToday ? 3 : 4,
+                        decoration: _crewBarDecoration(theme, barColors),
+                      ),
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
@@ -239,6 +276,58 @@ class _TitleRow extends StatelessWidget {
   }
 }
 
+/// Every assignee's avatar, overlapped into a stack. Overlapping rather than
+/// spacing them keeps a four-person job from eating the client's name; the
+/// stack's width is computed rather than laid out, because the card's
+/// `IntrinsicHeight` forbids a `LayoutBuilder` anywhere in this subtree.
+class _CrewAvatars extends StatelessWidget {
+  const _CrewAvatars({required this.crew});
+
+  final List<AppointmentCrew> crew;
+
+  /// Diameter of `AvatarSize.xs`, and how much of it the next one covers.
+  static const double _diameter = 20;
+  static const double _overlap = 6;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final shown = crew.take(_kMaxBarSegments).toList();
+    const step = _diameter - _overlap;
+
+    return SizedBox(
+      width: _diameter + (shown.length - 1) * step,
+      height: _diameter,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Painted right-to-left so each avatar overlaps the one after it,
+          // which is what makes the stack read as a stack.
+          for (var i = shown.length - 1; i >= 0; i--)
+            Positioned(
+              left: i * step,
+              child: Container(
+                // A hairline of the card's own colour keeps two adjacent crew
+                // colours from bleeding into one shape.
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: scheme.surface, width: 1.5),
+                ),
+                // AppAvatar resolves crewColorOf/avatarForegroundFor itself,
+                // so the STORED colour goes straight through.
+                child: AppAvatar(
+                  name: shown[i].name,
+                  color: shown[i].color,
+                  size: AvatarSize.xs,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CrewRow extends StatelessWidget {
   const _CrewRow({
     required this.crew,
@@ -256,13 +345,7 @@ class _CrewRow extends StatelessWidget {
     return Row(
       children: [
         if (crew.isNotEmpty) ...[
-          // AppAvatar resolves crewColorOf/avatarForegroundFor itself, so the
-          // STORED colour goes straight through.
-          AppAvatar(
-            name: crew.first.name,
-            color: crew.first.color,
-            size: AvatarSize.xs,
-          ),
+          _CrewAvatars(crew: crew),
           const SizedBox(width: AppSpacing.sp8),
         ],
         Expanded(

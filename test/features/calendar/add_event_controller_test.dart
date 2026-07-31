@@ -279,6 +279,66 @@ void main() {
       );
     });
 
+    test('a personal job saves with no client, no address, all day', () async {
+      final c = readNotifier()
+        ..selectDate(DateTime(2026, 5, 10))
+        ..selectClient(_aClient)
+        ..setPersonal(value: true)
+        ..toggleEmployee(_employeeA);
+
+      // No times were picked, so the block runs the whole day.
+      expect(readState().isAllDay, isTrue);
+      expect(readState().selectedClient, isNull);
+
+      final outcome = await c.submit(
+        title: 'Dentist',
+        // Whatever the (now hidden) address field still holds is dropped.
+        address: '999 Maple',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      expect(outcome, isA<AddEventSubmitted>());
+      final saved = (outcome as AddEventSubmitted).appointment;
+      expect(saved.isPersonal, isTrue);
+      expect(saved.isAllDay, isTrue);
+      expect(saved.clientId, isEmpty);
+      expect(saved.clientName, isEmpty);
+      expect(saved.address, isEmpty);
+      expect(saved.startTime, DateTime(2026, 5, 10));
+      expect(saved.endTime, DateTime(2026, 5, 10, 23, 59));
+      expect(saved.status, 'pending');
+    });
+
+    test('a personal job with times keeps them', () async {
+      final c = readNotifier()
+        ..selectDate(DateTime(2026, 5, 10))
+        ..selectStartTime(const TimeOfDay(hour: 9, minute: 0))
+        ..setPersonal(value: true)
+        ..toggleEmployee(_employeeA);
+
+      // A time was already picked, so it does not silently become all-day.
+      expect(readState().isAllDay, isFalse);
+
+      final outcome = await c.submit(
+        title: 'Dentist',
+        address: '',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      final saved = (outcome as AddEventSubmitted).appointment;
+      expect(saved.isAllDay, isFalse);
+      expect(saved.startTime, DateTime(2026, 5, 10, 9));
+    });
+
+    test('turning a draft personal clears a chosen repeat', () async {
+      readNotifier()
+        ..selectRepeat(RepeatInterval.oneYear)
+        ..setPersonal(value: true);
+      expect(readState().repeat, RepeatInterval.none);
+    });
+
     test('skips busy check on forceBusy and writes the appointment', () async {
       when(
         () => appointments.findBusyEmployees(
