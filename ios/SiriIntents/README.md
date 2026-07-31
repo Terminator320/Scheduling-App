@@ -113,7 +113,18 @@ Run the app once while signed in (that writes the snapshot), then ask Siri:
   as their own reviewed increment — not as drift.
 - `ScheduleSnapshot.swift` is hand-mirrored with `buildScheduleSnapshot` in
   `lib/features/siri/domain/schedule_snapshot.dart`. Change one, change both,
-  and bump `version` on either side of a schema change.
+  and bump `version` on either side of a schema change. **Currently v2**
+  (`supportedVersion` here, `scheduleSnapshotVersion` there) — a snapshot
+  stamped with anything else is rejected outright, so the first launch after a
+  bump answers "Open ES Pro to sync your schedule." once, until the app
+  rewrites the payload. New fields land as optionals so a stale payload still
+  decodes far enough to hit that version gate rather than failing mid-decode.
 - The snapshot stays readable while the device is locked, so it carries only the
-  fields the intents speak (client name, times, address, status) plus the doc
-  `id` Phase-4 writes target. Don't widen it casually.
+  fields the intents speak (client name, title, times, address, status,
+  `isAllDay`) plus the doc `id` Phase-4 writes target. Don't widen it casually.
+- All spoken text lives in `SiriStrings`. `who(_:article:)` is the single
+  client → title → placeholder resolver (a personal job has no client), and
+  `timePhrase(_:)` is the single start-time-or-"all day" resolver. Route new
+  phrasing through those two rather than reaching for `clientName` or `time(_:)`
+  at a new call site — an all-day block stores a real midnight start, so a raw
+  `time(appointment.start)` reads it out as 12:00 a.m.

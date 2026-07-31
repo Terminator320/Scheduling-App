@@ -36,6 +36,8 @@ Building for iOS requires a Mac — see [docs/IOS_MAC_BUILD.md](docs/IOS_MAC_BUI
 ### Appointment Scheduling
 A full-featured monthly calendar lets administrators plan, assign, and manage service appointments. Each appointment captures everything needed in the field: client details, service address, assigned employees, time window, materials required, internal notes, and status. Administrators have a complete view of all scheduled work; employees see only the appointments assigned to them.
 
+Not every entry on the calendar is a client visit. A **personal job** blocks out time for the crew itself — an appointment, a day off, a training morning — with no client and no address, and can cover a whole day rather than a time window. It still names who the time belongs to, so it shows up on their schedule and counts against their availability, and the system knows not to treat it as work in progress: it is never chased for completion and never triggers a "time to leave" alert.
+
 ### Admin Dashboard
 A single overview screen gives administrators the day at a glance: today's visits broken down by status, how many are still unassigned, each employee's workload for today and the week, an eight-week trend of completed versus cancelled jobs and new clients, the busiest weekday, and an attention list flagging jobs starting soon or already running overdue.
 

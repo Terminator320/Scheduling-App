@@ -210,6 +210,12 @@ function decideOrigin({presence, employeeAppointments, candidate, now}) {
  * Filters appointment records to travel-reminder candidates: pending-like and
  * starting within (now, now + TRAVEL_WINDOW_MS]. `in_progress` is excluded
  * (visit already started). Pure — unit-testable.
+ *
+ * All-day blocks are skipped: they store a real midnight start, so the sweep
+ * would fire a "time to leave" push around 23:30 the night before for a block
+ * that has no departure time at all. A *timed* personal job keeps its reminder
+ * — that one is genuinely useful. Same class of skip as `isPersonal` in
+ * `selectOverdueCandidates` (notification_utils.js).
  * @param {!Array<!Object>} records
  * @param {(Date|number)} now
  * @return {!Array<!Object>}
@@ -219,6 +225,7 @@ function selectTravelCandidates(records, now) {
   const cutoff = nowMs + TRAVEL_WINDOW_MS;
   return (records || []).filter((r) => {
     if (!PENDING_LIKE.has(String(r.status || "").toLowerCase())) return false;
+    if (r.isAllDay === true) return false;
     const ms = toMillis(r.startTime);
     return ms != null && ms > nowMs && ms <= cutoff;
   });
@@ -424,6 +431,9 @@ async function resolveReminderForAssignee(deps, args) {
   const kind = travelSeconds == null ? "reminder" : "leaveNow";
   const ctx = {
     clientName: c.clientName,
+    // A personal job has no client, so the message names it by title —
+    // same fallback `_contextFor` uses for the change-driven pushes.
+    title: c.title,
     startTime: c.startTime,
     endTime: c.endTime,
     address: c.address,

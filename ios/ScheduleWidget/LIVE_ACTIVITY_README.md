@@ -140,6 +140,14 @@ directly (`functions/apns_client.js`).
 Until a deploy carries them into the functions, every Live Activity path no-ops
 and the plain `leaveNow` push behaves exactly as it does today.
 
+**All-day blocks never get a card, by construction** (2026-07-31). The card is
+started off the `leaveNow` sweep, and `selectTravelCandidates`
+(`functions/travel_utils.js`) now skips `isAllDay` records — a block stored
+midnight → 23:59 has no departure time to count down to, and before the skip it
+entered the 90-minute window at ~23:30 the night before. A *timed* personal job
+is an ordinary candidate and still gets both the push and the card. So "no card
+for an all-day block" is the expected result, not a regression to chase.
+
 ## Device verification (real iPhone — the Simulator is meaningless here)
 
 Live Activities do not meaningfully run in the Simulator. Run each on a real

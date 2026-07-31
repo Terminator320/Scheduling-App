@@ -27,9 +27,9 @@ Mac can go straight there.
 
 ## 0. Before the first launch (do these in order)
 
-- [ ] **0.1 — Pull the branch.**
+- [x] **0.1 — Pull the branch.**
       `git fetch && git checkout redesgin && git pull` → HEAD should be `d4b487f`.
-- [ ] **0.2 — Copy the two gitignored files across.** Neither is in git:
+- [x] **0.2 — Copy the two gitignored files across.** Neither is in git:
       - `dev/.env` — 8 keys. Bundled as an asset; **the app will not start without it.**
       - `ios/GoogleService-Info.plist` — note it lives at the **`ios/` root, NOT `ios/Runner/`.**
 - [ ] **0.3 — Do NOT run `flutterfire configure`.** It rewrites
@@ -113,6 +113,10 @@ FlutterError.onError = (details) {
 - [ ] **2.2 — Off-month cells.** Look at the leading/trailing greyed days.
       Expect: faint day number **and crew dots if someone works that day**, but
       tapping does nothing. This is deliberate — see handoff deviation #5.
+- [ ] **2.2b — Dots on the selected day.** Tap a day that has crew dots under it.
+      Expect: **the dots stay put** under the filled circle (changed 2026-07-31 —
+      they used to disappear on selection, which hid the crew for the one day you
+      were actually looking at). Check today's circle too, and an off-month day.
 - [ ] **2.3 — Swipe between months.** Swipe left, then right, several times fast.
       Expect: smooth paging, no crash. Paging **selects the 1st of the month you
       land on** and the agenda below follows it (changed 2026-07-31 — the
@@ -280,9 +284,50 @@ existed when this runbook was written.
       block: expect it to name the block by its **title**, not "Client".
       *(Server-side; needs the functions deployed.)*
 
-**Known gap, not a bug:** the iOS home-screen widget, the Siri snapshot and the
-push text still speak the stored midnight time for an all-day block — they carry
-no `isAllDay` yet.
+### 6c. All-day off the calendar screen (widget / Siri / push)
+
+An all-day block stores a real midnight → 23:59 span, so every surface that
+*speaks* the schedule rather than showing it had to learn the flag. All four are
+now threaded; these checks are what proves it on hardware.
+
+**Needs the functions redeployed** (`functions,firestore:rules,firestore:indexes,storage`)
+for anything server-side, and a **rebuilt** app for the Swift decoders.
+
+- [ ] **6c.1 — Widget, today.** Make an all-day block for **today**, then look at
+      the home-screen widget.
+      Expect: the block is listed under **today** and reads **"All day"**.
+      **This is the regression to watch:** before the fix it vanished from today
+      (its midnight start was already past) and showed up only under *tomorrow*.
+- [ ] **6c.2 — Widget, "up next".** With an all-day block **and** a later timed
+      job on the same day, check the small widget.
+      Expect: the **timed** job is the one shown as next — the all-day block is
+      listed but never wins the "up next" slot. With only the all-day block left,
+      it does show.
+- [ ] **6c.3 — No 23:30 push.** Create an all-day block for **tomorrow** and
+      leave the phone alone through the evening.
+      Expect: **no "time to leave" / "upcoming job" push** around 23:30 tonight.
+      That push was the one real bug here. A *timed* personal job (e.g. dentist
+      at 2pm) must still get its reminder — worth confirming separately.
+- [ ] **6c.4 — Assignment push text.** Trigger an assignment/reschedule push for
+      an all-day block.
+      Expect: the body reads the **date only** — "Vacation · Wed, Jul 8". Never
+      "Wed, Jul 8, 12:00 a.m.".
+- [ ] **6c.5 — Nightly digest.** If you can reach the 18:00 digest with an
+      all-day block first on tomorrow's list:
+      Expect: "First: Vacation · all day." — no clock time.
+- [ ] **6c.6 — Siri: today's schedule.** "Hey Siri, what's my schedule today?"
+      with an all-day block on it.
+      Expect: it reads **"all day, <title>"**, not a midnight time, and names the
+      block by its **title** — *not* "unnamed client". (The snapshot gained
+      `title` in v2 for exactly this.)
+- [ ] **6c.7 — Siri: next appointment.** With an all-day block and a later timed
+      job: expect the **timed** one is announced as next.
+- [ ] **6c.8 — Siri after upgrading.** First launch after installing this build,
+      Siri may answer **"Open ES Pro to sync your schedule."** once — the
+      snapshot schema went 1 → 2 and the old payload is rejected until the app
+      rewrites it. Open the app, then ask again.
+      Expect: it answers normally the second time. If it keeps saying that, the
+      version constants have drifted — report it.
 
 ## 7. The two dialogs (P2)
 
@@ -319,12 +364,12 @@ Switch to dark (Settings, or system) and re-check:
 
 ## 9. Large text (2×) and landscape
 
-- [ ] **9.1 — Set text size to max** (iOS Settings → Display → Text Size, or
+- [x] **9.1 — Set text size to max** (iOS Settings → Display → Text Size, or
       Accessibility for the larger range).
-- [ ] **9.2 — Calendar header at 2×.** Expect: the month title and the
+- [x] **9.2 — Calendar header at 2×.** Expect: the month title and the
       route/menu controls **stack onto two rows**. No yellow-black overflow
       stripes. (Unstacked, this overflowed by 138px.)
-- [ ] **9.2b — The month name at large text.** Set the app's own text size to
+- [x] **9.2b — The month name at large text.** Set the app's own text size to
       **XL** (Settings → Text size), on a long month — September, or any month
       in French. (New 2026-07-31.)
       Expect: the header shows the **abbreviation** ("Sep"), not "Septemb…".
@@ -352,10 +397,10 @@ Switch to dark (Settings, or system) and re-check:
 
 ## 10. Device-only paths (no test coverage — look carefully)
 
-- [ ] **10.1 — Camera capture.** Job form → photos → Camera. Take a shot.
+- [x] **10.1 — Camera capture.** Job form → photos → Camera. Take a shot.
       Expect: permission prompt first time, image lands in the strip.
-- [ ] **10.2 — Gallery pick.** Expect: OS photo picker, no permission prompt.
-- [ ] **10.3 — Photo upload survives backgrounding.** Add photos, save, background
+- [x] **10.2 — Gallery pick.** Expect: OS photo picker, no permission prompt.
+- [x] **10.3 — Photo upload survives backgrounding.** Add photos, save, background
       the app immediately, return.
       Expect: upload completes or retries; no duplicate photos on the job.
 - [ ] **10.4 — Notification deep link.** Trigger a push (assign yourself a job

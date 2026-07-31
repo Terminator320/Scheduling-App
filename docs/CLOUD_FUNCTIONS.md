@@ -264,7 +264,12 @@ and unassigned — ends the card server-side from the appointment write trigger
 Every 5 min (Toronto). **Travel-aware "time to leave" sweep**
 (`runTravelAwareReminderSweep`): queries `status in [pending, confirmed]`
 (legacy alias) with `startTime` in `(now, now+90min]` on the existing
-`(status, startTime)` index. Per (job, assignee) it picks a departure origin —
+`(status, startTime)` index. **`selectTravelCandidates` skips `isAllDay`
+records** — an all-day block stores a real midnight start, so it entered the
+90-min window at ~23:30 the night before and fired a "time to leave" push for
+something with no departure time. A *timed* personal job still gets its
+reminder; only the all-day case is excluded (mirrors the `isPersonal` skip in
+`selectOverdueCandidates`). Per (job, assignee) it picks a departure origin —
 an intervening job's address → a fresh background-GPS presence doc
 (`updatedAt` ≤ 25 min) → a recently-ended job's address (≤ 4 h) → none — via one
 per-employee context query (`(employeeIds CONTAINS, endTime ASC, startTime ASC)`

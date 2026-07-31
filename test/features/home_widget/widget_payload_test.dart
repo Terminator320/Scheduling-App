@@ -12,6 +12,7 @@ AppointmentRecord _appt({
   DateTime? end,
   String status = 'pending',
   String clientName = 'Client',
+  bool isAllDay = false,
 }) => AppointmentRecord(
   id: id,
   title: 'Job $id',
@@ -19,6 +20,7 @@ AppointmentRecord _appt({
   startTime: start,
   endTime: end ?? start.add(const Duration(hours: 1)),
   status: status,
+  isAllDay: isAllDay,
 );
 
 String _iso(DateTime d) => d.toUtc().toIso8601String();
@@ -37,6 +39,24 @@ void main() {
       final today = payload['todayJobs'] as List;
       expect(today.map((j) => (j as Map)['id']), ['soon', 'later']);
       expect(payload['tomorrowJobs'] as List, hasLength(1));
+    });
+
+    test('an all-day block stays in today until its 23:59 end', () {
+      // It starts at midnight, so a start-time test would have dropped it
+      // from today the moment the day began.
+      final payload = buildWidgetPayload([
+        _appt(
+          id: 'vacation',
+          start: DateTime(2026, 7, 8),
+          end: DateTime(2026, 7, 8, 23, 59),
+          isAllDay: true,
+        ),
+      ], _now);
+
+      final today = payload['todayJobs'] as List;
+      expect(today.map((j) => (j as Map)['id']), ['vacation']);
+      expect((today.single as Map)['isAllDay'], isTrue);
+      expect(payload['rolloverAt'], isNull);
     });
 
     test('each job carries its appointment id for the widget deep-link', () {

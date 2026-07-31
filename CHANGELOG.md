@@ -11,13 +11,31 @@ The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
 ## [Unreleased]
+### Added
+- **Personal jobs — time blocked off that isn't a client visit.** Flip
+  **Personal** at the top of the booking form and the client and address fields
+  step aside; a doctor's appointment, a day off or a training morning no longer
+  has to be dressed up as a fake client. You still pick who it's for — they're
+  who the time belongs to, and the only people who can see it. The title is
+  optional, and an unnamed block simply reads "Personal". Templates, repeats,
+  materials and photos are left out, since none of them apply.
+  A job has to be personal from the start: the switch isn't offered when editing
+  an ordinary visit, so a real client job can't have its client wiped by accident.
+- **All-day blocks.** Leave the times off a personal job and it covers the whole
+  day. The card reads **"All day"** instead of "12:00 AM – 11:59 PM", and it
+  stays that way everywhere the schedule turns up — the home-screen widget, Siri
+  and the notifications you get. A personal block also stays **"Scheduled"**
+  rather than turning itself into "In Progress" or "Overdue", and you won't be
+  nudged to mark it finished. Nobody needs to close out a dentist appointment.
+
 ### Changed
 - **A new look, and a new way to get around.** The app has been redesigned from
   the ground up: new colours, new typography, and a full dark theme that was
   built alongside the light one rather than bolted on. Every screen now carries
   the same two controls in its header — a **Calendar** button that takes you
   straight home from wherever you are, and a menu button that opens the new
-  navigation drawer.
+  navigation drawer. (The calendar's own header carries just the menu; a
+  go-home button on the screen it goes home to would be dead weight.)
 - **The navigation drawer replaces the old side rail.** It slides in from the
   right on every device and screen size, and groups destinations by when you'd
   actually reach for them — Today, People, The Business, and Account — instead
@@ -28,18 +46,23 @@ code; it increments by one on every store upload regardless of the semver part.
   always-loaded tabs. History, Dashboard, Day route and Settings now open as
   regular screens you can back out of, which also means the back arrow finally
   behaves like a back arrow everywhere.
-- **The calendar is one continuous screen.** The month grid and the day's jobs
-  now scroll together: keep scrolling and the grid folds away into a compact
-  week strip that stays pinned under the month name, so you can read a long day
-  without losing your place in the week. Scroll back to the top and the full
-  month returns. The month itself now always shows six full weeks, which fixes
-  months whose last days used to fall off the bottom, and swiping left or right
-  moves between months. In landscape and on tablets the month and the day sit
-  side by side as before.
+- **The calendar and the day's jobs scroll separately.** Reading down a long day
+  no longer drags the month around with it. To make more room, **drag the line
+  between the two** — or just tap it — and the month folds into a compact week
+  strip; drag it back down for the full month. Swiping left or right moves
+  between months, and swiping the week strip moves a week at a time; either way
+  the day list below follows what you landed on. In landscape and on tablets the
+  month and the day sit side by side as before.
+- **The month shows only the weeks it actually contains** — four, five or six —
+  instead of always padding out to six. Short months no longer trail a blank
+  week, and long ones no longer lose their last days off the bottom.
 - **Every job now looks the same everywhere.** One card design is used on the
   calendar, the day route, a client's job history, the dashboard and the
-  history list. Each card carries a colour bar for whoever is on the job, the
-  time range, and the crew as "Theo +1" rather than a long list of names.
+  history list. Each card shows **an initials badge for every person on the
+  job**, in their own colour, followed by the client's name — replacing the old
+  "Theo +1". Its colour bar is **striped with each of their colours** rather
+  than showing only the first person's, so a two-crew job reads as two crews at
+  a glance.
 - **The job details sheet has been rebuilt.** The date and time are one clear
   line, and the client, phone, address and notes sit in a single panel where
   the phone and address are tappable. Empty sections are simply left out.
@@ -47,7 +70,11 @@ code; it increments by one on every store upload regardless of the semver part.
 - **Booking forms have a proper header bar.** Cancel, the title and Save now sit
   in a fixed bar at the top, so Save is always reachable — you no longer have to
   scroll to the bottom of a long form to find it. Fields are grouped under
-  Templates, Who, Schedule and Details.
+  Templates, Who, Schedule and Details, and **Schedule now holds all of "when"**
+  in one place: all-day, the date, the start and end times, and how often the
+  job repeats.
+- **The address field has a clear button.** Tap the × to empty it in one go
+  instead of holding backspace.
 - **Editing a job now warns you about double-booking**, the same way creating
   one already did — and it no longer mistakes the job you're editing for a
   clash with itself.
@@ -68,6 +95,20 @@ code; it increments by one on every store upload regardless of the semver part.
 - The Settings and History guided tours never appeared. They do now.
 - The employee detail screen could clip its content at the largest text sizes on
   a narrow phone.
+- After swiping a few months away, a day with jobs on it could report **"0 jobs"**.
+- The **Today** button now appears as soon as you swipe to a different month,
+  not only after picking a different day.
+- The navigation drawer had a grey haze washed across it in light mode, which
+  made it hard to read.
+- The month name in the calendar header didn't shorten to "Sep" at the largest
+  text sizes, so it ran into the year beside it.
+- An all-day block sent a **"time to leave" notification at around 11:30 the
+  night before**. There's nowhere to leave for, so it no longer does.
+- An all-day block was missing from **today** on the home-screen widget — it
+  showed up only under tomorrow, then disappeared. It's now listed all day, and
+  the next job shown is the next *timed* one rather than the all-day block.
+- Siri called a personal job "an unnamed client". It now reads out the title you
+  gave it, and says "all day" instead of a midnight start time.
 
 ## [1.37.0+62] - 2026-07-27
 ### Changed

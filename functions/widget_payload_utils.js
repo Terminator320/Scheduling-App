@@ -75,6 +75,8 @@ function serializeWidgetJob(r) {
     title: String(r.title == null ? "" : r.title),
     address: String(r.address == null ? "" : r.address),
     status: String(r.status == null ? "pending" : r.status),
+    // The widget speaks "All day" instead of the stored midnight–23:59 pair.
+    isAllDay: r.isAllDay === true,
   };
 }
 
@@ -133,8 +135,18 @@ function buildWidgetPayload(records, now, locale) {
   const todayAll = (records || [])
       .filter((r) => inRange(r, startTodayMs, startTomorrowMs));
   const todayIncomplete = todayAll.filter((r) => !isTerminalStatus(r.status));
+  // "Still ahead of you today". An all-day block starts at midnight, so a
+  // start-time test would drop it from today the moment the day began — it
+  // stays listed until its 23:59 end passes.
+  const stillAhead = (r) => {
+    if (r.isAllDay === true) {
+      const end = toMillis(r.endTime);
+      return end == null || end > nowMs;
+    }
+    return toMillis(r.startTime) > nowMs;
+  };
   const todayJobs = todayIncomplete
-      .filter((r) => toMillis(r.startTime) > nowMs)
+      .filter(stillAhead)
       .sort(sortByStart);
   const tomorrowJobs = (records || [])
       .filter((r) =>

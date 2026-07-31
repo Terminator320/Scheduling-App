@@ -157,7 +157,10 @@ code 2026-07-29):
   wrong the other way and drops the end of months like August 2026, so the count must stay
   derived), 2px gap, 46px
   cells, **32×32 day circle carries the selected fill** (not the cell), max-3 crew dots (5px)
-  coloured by who works that day, off-month cells blank and untappable. Replacing `table_calendar`
+  coloured by who works that day, off-month cells blank and untappable. (Revised 2026-07-31: the
+  dots render on **every** cell that has crew — off-month, today, and the selected day. Because
+  the fill is on the circle and not the cell, the dot row below it stays legible, and hiding it
+  on selection blanked the crew for the one day the user was looking at.) Replacing `table_calendar`
   (blast radius: `app_calendar_view.dart`, two `isSameDay` imports, one test file, pubspec). The
   custom grid must own what the package did:
   - **horizontal month-swipe paging** (the hub's calendar-tab edge-swipe exemption assumes the
@@ -251,10 +254,23 @@ rationale lives in `CLAUDE.md`; the device checks are in
   and rendered as "All day".
 - A personal block never derives `in_progress`/`overdue` and is skipped by the
   server's "job finished?" sweep — the two must stay in sync.
-- **Open gap:** the iOS widget, the Siri snapshot and the push text still speak
-  the stored midnight time for an all-day block. Threading `isAllDay` through
-  means touching the hand-mirrored Swift decoders — a candidate for a later
-  phase, not done here.
+- **Off-screen mirrors — closed 2026-07-31**, in the same pass. `isAllDay` now
+  reaches all four:
+  - **Reminder sweep**: `selectTravelCandidates` skips all-day records. This was
+    the only *bug* of the four — the midnight start put the block inside the
+    90-min window at ~23:30 the night before, firing a "time to leave" push for
+    something with no departure time. A timed personal job keeps its reminder.
+  - **Push + digest text**: the date alone, never "12:00 a.m.".
+  - **Widget**: the flag is in the job JSON in both hand-mirrored builders and
+    the Swift decoder (`Bool?`, so older payloads still parse); "All day"
+    replaces the time. Two extra fixes fell out: the *today* filter was
+    start-time based, so an all-day block was dropped from today entirely and
+    surfaced only under tomorrow; and `nextJob` would have let a midnight block
+    own "up next" all day.
+  - **Siri**: snapshot schema **v2** — `isAllDay` plus `title`, since a personal
+    job has no client and the snapshot had no title to fall back on, so Siri
+    said "unnamed client". Version bumped on both sides.
+  - Swift is Mac-only verification: widget row, and the Siri phrases.
 
 **Form + chrome**
 - The schedule panel now holds all of *when*: all-day, date, start/end, repeat

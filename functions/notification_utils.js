@@ -457,6 +457,9 @@ function _contextFor(kind, before, after) {
     // instead — same fallback the widget and the Siri intents already use.
     title: d.title,
     startTime: d.startTime,
+    // An all-day block stores a midnight start; the message speaks the date
+    // alone rather than "12:00 a.m.".
+    isAllDay: d.isAllDay === true,
     address: d.address,
     repeat: d.repeat,
   };

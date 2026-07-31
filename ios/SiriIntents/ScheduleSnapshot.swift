@@ -18,7 +18,7 @@ private let snapshotKey = "schedule_snapshot"
 
 /// Schema version this decoder understands. A snapshot stamped with anything
 /// else is rejected outright, rather than risk a mis-decode.
-private let supportedVersion = 1
+private let supportedVersion = 2
 
 struct SnapshotAppointment: Codable, Hashable {
     // Non-optional on purpose: the Dart builder drops records without a doc id,
@@ -27,11 +27,19 @@ struct SnapshotAppointment: Codable, Hashable {
     let startMillis: Double
     let endMillis: Double
     let clientName: String
+    // v2. Optional so a stale v1 snapshot still decodes far enough to be
+    // rejected by the version gate rather than failing mid-decode.
+    let title: String?
     let address: String
     let status: String
+    let isAllDay: Bool?
 
     var start: Date { Date(timeIntervalSince1970: startMillis / 1000) }
     var end: Date { Date(timeIntervalSince1970: endMillis / 1000) }
+
+    /// True for an all-day block, which stores a real midnight–23:59 span but
+    /// must never be read out as a clock time.
+    var allDay: Bool { isAllDay == true }
 
     var isDone: Bool {
         let s = status.lowercased()
@@ -72,11 +80,18 @@ struct ScheduleSnapshot: Codable {
 
     /// Earliest upcoming visit across the whole window that hasn't been
     /// marked done. Cancelled visits are already excluded at build time.
+    ///
+    /// An all-day block is still eligible — it just never wins while a timed
+    /// visit remains. It starts at midnight, so it would otherwise be "next"
+    /// for the whole day and hide the real next visit; and by the same token
+    /// it stays upcoming until its 23:59 end, not its start.
     func nextAppointment(after now: Date = Date()) -> SnapshotAppointment? {
-        days
+        let upcoming = days
             .flatMap { $0.appointments }
-            .filter { $0.start > now && !$0.isDone }
-            .min { $0.start < $1.start }
+            .filter { !$0.isDone && ($0.allDay ? $0.end > now : $0.start > now) }
+        let timed = upcoming.filter { !$0.allDay }
+        let pool = timed.isEmpty ? upcoming : timed
+        return pool.min { $0.start < $1.start }
     }
 
     static func load() -> ScheduleSnapshot? {

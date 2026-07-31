@@ -254,9 +254,32 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   (which reads "Scheduled"), and `selectOverdueCandidates` in
   `functions/notification_utils.js` skips `isPersonal` records for the same
   reason — "job finished?" is the wrong question for a dentist appointment.
-  Keep those two in sync. **Known gap:** the iOS widget, the Siri snapshot and
-  the push text still speak the stored midnight time for an all-day block —
-  they carry no `isAllDay` yet.
+  Keep those two in sync. **`isAllDay` is threaded through all four off-screen
+  mirrors** (2026-07-31), and each one needs it for a different reason:
+  - **Reminder sweep** — `selectTravelCandidates` (`functions/travel_utils.js`)
+    skips all-day records. Without it the midnight start put the block inside
+    the 90-min window at ~23:30 the night before and fired a "time to leave"
+    push for something that has no departure time. A *timed* personal job keeps
+    its reminder; only the all-day skip is new.
+  - **Push/digest text** — `_contextFor` carries `isAllDay`, and
+    `notification_messages.js` renders the date alone ("Wed, Jul 8") instead of
+    "Wed, Jul 8, 12:00 a.m."; `_whoAt` joins with "·" rather than "at"/"à",
+    since there is no clock time to sit after the preposition.
+  - **Home-screen widget** — `isAllDay` is in the job JSON in BOTH hand-mirrored
+    builders (`widget_sync_service.dart`, `widget_payload_utils.js`) and the
+    Swift `Job` decodes it as `Bool?` so a pre-existing payload still parses.
+    `timeLabel` says "All day". **The "today" filter is `endTime`-based for an
+    all-day block** — the old `startTime.isAfter(now)` test dropped it from
+    today from 00:00 onward, so it appeared only under *tomorrow* and then
+    vanished. `DaySchedule.nextJob` prefers a timed job, falling back to the
+    all-day one, or a midnight block owns "up next" all day.
+  - **Siri snapshot** — schema **v2** (`scheduleSnapshotVersion`, matched by
+    `supportedVersion` in `ScheduleSnapshot.swift`): adds `isAllDay` AND
+    `title`, since a personal job has no client and the snapshot previously had
+    no title to fall back to, so Siri said "unnamed client". `SiriStrings.who`
+    is now the single client→title→placeholder resolver and `timePhrase` speaks
+    "all day"; `nextAppointment` applies the same prefer-timed rule as the
+    widget, and treats an all-day block as upcoming until its 23:59 end.
 - **Job templates are display-only quick-fill, NEVER stored.** `JobTemplate`
   (`calendar/domain/models/job_template.dart`) backs the one-tap chips on the
   **add** flow only (`onApplyTemplate`, null on edit); picking one just seeds the
@@ -384,7 +407,12 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   crew dots** but stay untappable and out of the semantics tree: the design says
   "blank, Ink 15, not tappable" while the program spec widened the fetch range
   precisely so trailing days aren't dotless, and dots-plus-faint-number is what
-  reconciles the two (owner-confirmed). `today` always comes from
+  reconciles the two (owner-confirmed). **The crew dots also survive selection**
+  (owner call, 2026-07-31): the selection circle fills the day number only and
+  the dot row sits below it on the plain cell background, so suppressing them
+  there made the day being looked at the one day whose crew was invisible.
+  Every cell that has crew shows it — off-month, selected, today, all of them.
+  `today` always comes from
   `currentDayProvider`, never `DateTime.now()`, or the circle sticks on
   yesterday in an app left open across midnight.
   **`AppointmentDateRange.visibleMonth` overscans ±14 days, not ±7.** With the
@@ -400,9 +428,14 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   **24px**, resetting on a direction reversal and on `endDrag` so two half-drags
   don't add up. The old shared-viewport version needed a derived
   `gridHeight − stripHeight` spacer to hold the extent the grid vacated; with two
-  viewports there is no vacated extent, and the spacer is gone. The fixed grid
-  sits in a `Flexible` + `SingleChildScrollView` so a short viewport shrinks it
-  instead of overflowing the column (it shrink-wraps at normal heights).
+  viewports there is no vacated extent, and the spacer is gone. **The grid does
+  not scroll at all** (owner call, 2026-07-31): it sits in a `Flexible` +
+  `SingleChildScrollView` whose physics are `NeverScrollableScrollPhysics`, so
+  the viewport is pure overflow protection — a short viewport (small phone,
+  large text scale) shrinks the grid instead of running the column past the
+  bottom, and at normal heights it shrink-wraps and is inert. The handle is the
+  ONLY thing that moves the grid; don't restore scrollable physics to "fix" a
+  clipped month.
   **Collapse is portrait-only** — `_splitCalendar` short-circuits the strip.
   **Paging selects.** A month swipe (or the month picker) lands on the 1st and
   SELECTS it, and a swipe on the collapsed week strip pages one week and selects

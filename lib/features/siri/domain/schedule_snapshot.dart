@@ -3,7 +3,9 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 /// Schema version; bump only alongside Swift `ScheduleSnapshot` decoder.
-const scheduleSnapshotVersion = 1;
+/// v2 added `title` and `isAllDay` for personal jobs, which carry no client
+/// and may span the whole day.
+const scheduleSnapshotVersion = 2;
 
 /// Days carried beyond today; Phase-2 date queries ("what's my schedule
 /// Friday?") resolve against these buckets, and anything further out gets
@@ -21,8 +23,14 @@ Map<String, dynamic> _appointment(AppointmentRecord a) => {
   'startMillis': a.startTime.millisecondsSinceEpoch,
   'endMillis': a.endTime.millisecondsSinceEpoch,
   'clientName': a.clientName,
+  // A personal job has no client, so Siri names it by title instead — the
+  // same fallback the widget and the push text already use.
+  'title': a.title,
   'address': a.address,
   'status': AppointmentStatus.storedRaw(a.status),
+  // An all-day block stores a real midnight–23:59 span; Siri says "all day"
+  // rather than reading those two clock times out.
+  'isAllDay': a.isAllDay,
 };
 
 String _dayKey(DateTime day) =>

@@ -32,6 +32,8 @@ Map<String, dynamic> _job(AppointmentRecord a) => {
   'title': a.title,
   'address': a.address,
   'status': a.status,
+  // The widget speaks "All day" instead of the stored midnight–23:59 pair.
+  'isAllDay': a.isAllDay,
 };
 
 /// How long after the last job of the day is finished the widget keeps showing
@@ -61,9 +63,14 @@ Map<String, dynamic> buildWidgetPayload(
   final todayIncomplete = todayAll
       .where((a) => !statusOf(a).isTerminal)
       .toList();
-  final todayJobs =
-      todayIncomplete.where((a) => a.startTime.isAfter(now)).toList()
-        ..sort((x, y) => x.startTime.compareTo(y.startTime));
+  // "Still ahead of you today". An all-day block starts at midnight, so a
+  // start-time test would drop it from today the moment the day began — it
+  // stays listed until its 23:59 end passes.
+  bool stillAhead(AppointmentRecord a) =>
+      a.isAllDay ? a.endTime.isAfter(now) : a.startTime.isAfter(now);
+
+  final todayJobs = todayIncomplete.where(stillAhead).toList()
+    ..sort((x, y) => x.startTime.compareTo(y.startTime));
   final tomorrowJobs =
       appointments
           .where(
