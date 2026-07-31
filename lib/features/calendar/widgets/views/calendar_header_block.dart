@@ -189,7 +189,9 @@ class _MonthRow extends StatelessWidget {
   final String yearLabel;
   final VoidCallback onTap;
 
-  /// Width [text] would paint at, at the ambient text scale.
+  /// Width [text] would paint at, at the ambient text scale. The painter owns a
+  /// native paragraph, so it is disposed rather than left for the finalizer —
+  /// this runs on every calendar rebuild.
   static double _widthOf(BuildContext context, String text, TextStyle? style) {
     final painter = TextPainter(
       text: TextSpan(text: text, style: style),
@@ -197,7 +199,9 @@ class _MonthRow extends StatelessWidget {
       textScaler: MediaQuery.textScalerOf(context),
       maxLines: 1,
     )..layout();
-    return painter.width;
+    final width = painter.width;
+    painter.dispose();
+    return width;
   }
 
   @override

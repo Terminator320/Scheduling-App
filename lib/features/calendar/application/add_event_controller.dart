@@ -164,7 +164,9 @@ class AddEventController extends Notifier<AddEventState>
       // "No time put in" is the default for a personal block, so it starts
       // all-day unless a time was already picked.
       isAllDay:
-          value && state.selectedStartTime == null && state.selectedEndTime == null,
+          value &&
+          state.selectedStartTime == null &&
+          state.selectedEndTime == null,
       errors: withoutKey(
         withoutKey(withoutKey(state.errors, 'client'), 'startTime'),
         'endTime',
@@ -211,18 +213,12 @@ class AddEventController extends Notifier<AddEventState>
       return const AddEventFailed(SocketException('offline'));
     }
 
-    final isAllDay = state.isAllDay;
-    final span = allDaySpan(state.selectedDate!);
-    final start = isAllDay
-        ? span.start
-        : combineDateAndTime(state.selectedDate!, state.selectedStartTime!);
-    final end = isAllDay
-        ? span.end
-        : combineEndDateAndTime(
-            state.selectedDate!,
-            state.selectedEndTime!,
-            state.selectedStartTime,
-          );
+    final (:start, :end) = appointmentSpan(
+      date: state.selectedDate!,
+      isAllDay: state.isAllDay,
+      startTime: state.selectedStartTime,
+      endTime: state.selectedEndTime,
+    );
 
     final repo = ref.read(appointmentsRepositoryProvider);
     // Resolve these before any awaits, so we don't crash if the notifier gets disposed mid-await (Riverpod 3).
@@ -271,7 +267,7 @@ class AddEventController extends Notifier<AddEventState>
         // controller still holds rather than saving a stale one.
         address: isPersonal ? '' : address.trim(),
         isPersonal: isPersonal,
-        isAllDay: isAllDay,
+        isAllDay: state.isAllDay,
         employeeIds: selectedEmployees.map((e) => e.id).toList(),
         employeeNames: selectedEmployees.map((e) => e.name).toList(),
         notes: notes.trim(),

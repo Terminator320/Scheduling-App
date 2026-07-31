@@ -114,6 +114,21 @@ describe("buildContentState", () => {
     expect(buildContentState({...base, clientName: "", locale: "fr"})
         .clientName).toBe("un client");
   });
+  test("a personal job's card is named by title, not 'Client'", () => {
+    // A TIMED personal job is still a travel candidate, so a leaveNow push and
+    // this card fire for the same event — they must not call it two different
+    // things. The push resolves clientName -> title -> generic; so does this.
+    expect(buildContentState({
+      ...base, clientName: "", title: "Dentist", locale: "en",
+    }).clientName).toBe("Dentist");
+    expect(buildContentState({
+      ...base, clientName: "", title: "Dentiste", locale: "fr",
+    }).clientName).toBe("Dentiste");
+  });
+  test("a real client still wins over the title", () => {
+    expect(buildContentState({...base, title: "Ignored", locale: "en"})
+        .clientName).toBe("Acme Plumbing");
+  });
   test("a missing leaveAt never labels the start as a departure time", () => {
     // Regression: this used to render "Leave at 8:00 a.m." off `startTime`,
     // i.e. the appointment's own start presented as the leave time — which

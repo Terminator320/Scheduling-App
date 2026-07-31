@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart' show TimeOfDay;
 
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
@@ -64,9 +65,14 @@ class AppointmentFormValidator {
 
     if (!input.isAllDay && input.endTime == null) {
       errors['endTime'] = AppointmentFormError.endTimeRequired;
-    } else if (input.endTime != null &&
+    } else if (!input.isAllDay &&
+        input.endTime != null &&
         input.date != null &&
         input.startTime != null) {
+      // The `!isAllDay` guard is load-bearing: times picked BEFORE all-day was
+      // switched on stay in state, so without it a stale equal start/end
+      // re-raises endTimeMustBeAfterStart against rows that are no longer on
+      // screen — Save then fails with nothing to fix.
       final start = combineDateAndTime(input.date!, input.startTime!);
       final end = combineEndDateAndTime(
         input.date!,
@@ -93,9 +99,28 @@ class AppointmentFormValidator {
 /// range query, `orderBy('startTime')` and overdue sweep in the app and on the
 /// server keeps treating it as an ordinary appointment.
 ({DateTime start, DateTime end}) allDaySpan(DateTime date) => (
-  start: DateTime(date.year, date.month, date.day),
+  start: date.dateOnly,
   end: DateTime(date.year, date.month, date.day, 23, 59),
 );
+
+/// The instants a form's schedule fields resolve to. The one place the
+/// all-day convention is chosen over picked times — both save paths route
+/// through it, so the two can't drift on what "all day" stores.
+///
+/// [startTime] and [endTime] are required unless [isAllDay]; the validator has
+/// already rejected an empty pair by the time a save gets here.
+({DateTime start, DateTime end}) appointmentSpan({
+  required DateTime date,
+  required bool isAllDay,
+  TimeOfDay? startTime,
+  TimeOfDay? endTime,
+}) {
+  if (isAllDay) return allDaySpan(date);
+  return (
+    start: combineDateAndTime(date, startTime!),
+    end: combineEndDateAndTime(date, endTime!, startTime),
+  );
+}
 
 DateTime combineDateAndTime(DateTime date, TimeOfDay time) =>
     DateTime(date.year, date.month, date.day, time.hour, time.minute);

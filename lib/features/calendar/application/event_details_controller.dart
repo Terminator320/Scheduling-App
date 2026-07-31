@@ -213,6 +213,11 @@ class EventDetailsController extends Notifier<EventDetailsState>
       clientCleared: value || state.clientCleared,
       clientResults: value ? const [] : state.clientResults,
       useCustomAddress: !value && state.useCustomAddress,
+      // All-day is offered on personal jobs only, so turning Personal off has
+      // to drop it too. Left set, the job saves as a midnight–23:59 CLIENT
+      // visit with no switch and no time rows on screen to correct it — an
+      // unrepairable record the travel sweep then skips.
+      isAllDay: value && state.isAllDay,
       errors: withoutKey(state.errors, 'client'),
     );
   }
@@ -366,17 +371,12 @@ class EventDetailsController extends Notifier<EventDetailsState>
       );
     }
 
-    final span = allDaySpan(state.selectedDate);
-    final start = state.isAllDay
-        ? span.start
-        : combineDateAndTime(state.selectedDate, state.selectedStartTime);
-    final end = state.isAllDay
-        ? span.end
-        : combineEndDateAndTime(
-            state.selectedDate,
-            state.selectedEndTime,
-            state.selectedStartTime,
-          );
+    final (:start, :end) = appointmentSpan(
+      date: state.selectedDate,
+      isAllDay: state.isAllDay,
+      startTime: state.selectedStartTime,
+      endTime: state.selectedEndTime,
+    );
 
     // Snapshot the photo state before writing, so it survives the sheet being dismissed.
     final removedImages = state.removedExistingImages;

@@ -544,6 +544,7 @@ async function endCardOnTerminal(id, before, after, deps, now) {
         employeeDocId,
         ctx: {
           clientName: src.clientName,
+          title: src.title,
           address: src.address,
           startTime: src.startTime,
           endTime: src.endTime,
@@ -614,6 +615,7 @@ async function handleAppointmentWrite(id, before, after, deps) {
         employeeDocId,
         ctx: {
           clientName: ctx.clientName,
+          title: ctx.title,
           address: ctx.address,
           startTime: ctx.startTime,
           endTime: ((after || before) || {}).endTime,

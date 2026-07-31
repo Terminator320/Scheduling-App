@@ -1,5 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
@@ -142,11 +143,7 @@ class AppointmentDateRange {
     required DateTime selectedDay,
   }) {
     final month = AppointmentDateRange.visibleMonth(focusedDay);
-    final dayStart = DateTime(
-      selectedDay.year,
-      selectedDay.month,
-      selectedDay.day,
-    );
+    final dayStart = selectedDay.dateOnly;
     // Exclusive upper bound, matching visibleMonth's.
     final dayEnd = DateTime(
       selectedDay.year,

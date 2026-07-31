@@ -180,6 +180,8 @@ async function _sendToRow(deps, row, payload, label) {
 function _stateFor(row, ctx, nowDate) {
   return buildContentState({
     clientName: ctx.clientName,
+    // Carried so a personal job's card names it by title rather than "Client".
+    title: ctx.title,
     address: ctx.address,
     startTime: ctx.startTime,
     endTime: ctx.endTime,

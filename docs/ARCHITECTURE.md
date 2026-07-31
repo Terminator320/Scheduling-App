@@ -240,8 +240,19 @@ treating it as an ordinary appointment; the flag only changes rendering, to
 A personal block is not a job being worked: `displayStatus` returns its stored
 status (which reads "Scheduled") instead of deriving `in_progress`/`overdue`, and
 `selectOverdueCandidates` in `functions/notification_utils.js` skips it — the two
-must stay in sync. Everything that speaks a client name falls back to the title,
-including `_who` in `notification_messages.js`.
+must stay in sync. Everything that speaks a client name falls back to the title:
+`_who` in `notification_messages.js`, the matching `_who` in
+`live_activity_utils.js`, and `SiriStrings.who`. The two JS resolvers describe
+the same job at the same moment — a *timed* personal job is still a travel
+candidate, so its `leaveNow` push and its Lock Screen card fire together — so
+`title` has to reach the card too: every `ctx` handed to
+`startLiveActivity`/`updateLiveActivity`/`endLiveActivity` carries it, and
+`_stateFor` passes it into `buildContentState`. Drop it from one `ctx` and that
+card silently reverts to "Client".
+
+Both save paths resolve their instants through the one `appointmentSpan(...)`
+helper beside `allDaySpan`, so the midnight → 23:59 convention has a single
+owner rather than a copy in each controller.
 
 **Off-screen mirrors.** Because the stored span is real, an all-day block would
 otherwise leak its midnight time everywhere the schedule is spoken rather than
@@ -747,7 +758,7 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (1056 test cases as of 2026-07-27; `functions` adds 667 jest
+Run: `flutter test` (1202 test cases as of 2026-07-31; `functions` adds 676 jest
 tests in `functions/__tests__/` — the parallel `functions/test/` directory was
 merged away). `flutter analyze` reports **0 errors, 0 warnings, and 0 info
 lints** — see Analysis & Linting below; see

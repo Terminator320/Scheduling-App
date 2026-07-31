@@ -50,9 +50,9 @@ void main() {
   });
 
   test('tapping the handle toggles it without a drag', () {
-    final collapse = CalendarCollapse();
-    expect(collapse.toggle(), isTrue);
+    final collapse = CalendarCollapse()..toggle();
     expect(collapse.isCollapsed, isTrue);
+
     collapse.toggle();
     expect(collapse.isCollapsed, isFalse);
   });
