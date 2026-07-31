@@ -600,13 +600,18 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Flexible + a scroll view so the fixed grid yields instead of
-        // overflowing when the viewport is short (a small phone at a large
-        // text scale runs the column past the bottom by a pixel or two).
-        // At normal heights the scroll view shrink-wraps and nothing scrolls.
+        // The grid does NOT scroll (owner call, 2026-07-31) — the handle below
+        // is the only way to move it, so a stray drag on the month can't slide
+        // it under the header. `NeverScrollableScrollPhysics` keeps the
+        // viewport purely as overflow protection: `Flexible` lets the grid
+        // yield instead of running the column past the bottom on a small phone
+        // at a large text scale. At normal heights it shrink-wraps and this is
+        // inert. Don't swap the physics back in to "fix" a clipped month —
+        // that would restore the scroll the owner asked to remove.
         if (!_collapse.isCollapsed)
           Flexible(
             child: SingleChildScrollView(
+              physics: const NeverScrollableScrollPhysics(),
               child: _buildCalendar(colorMap, today),
             ),
           ),

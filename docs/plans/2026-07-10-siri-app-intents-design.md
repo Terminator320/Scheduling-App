@@ -136,7 +136,7 @@ Written by Flutter via `home_widget` (`HomeWidget.setAppGroupId(...)` +
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "generatedAt": 1791234567890,
   "role": "employee",
   "days": [
@@ -148,8 +148,10 @@ Written by Flutter via `home_widget` (`HomeWidget.setAppGroupId(...)` +
           "startMillis": 1791234567890,
           "endMillis": 1791238167890,
           "clientName": "…",
+          "title": "…",
           "address": "…",
-          "status": "pending"
+          "status": "pending",
+          "isAllDay": false
         }
       ]
     }
@@ -157,13 +159,27 @@ Written by Flutter via `home_widget` (`HomeWidget.setAppGroupId(...)` +
 }
 ```
 
+**v2 (2026-07-31)** added `title` and `isAllDay` for personal jobs. A personal
+job carries no client, so without `title` Siri said "an unnamed client"; an
+all-day block stores a real midnight → 23:59 span, so without the flag Siri read
+its start out as 12:00 a.m. `SiriStrings.who(_:article:)` and
+`timePhrase(_:)` are the two resolvers that consume them — new phrasing goes
+through those rather than touching `clientName` or `time(_:)` directly. The
+version is stamped in `schedule_snapshot.dart` and gated in
+`ScheduleSnapshot.swift`; bump both together, and expect one "Open ES Pro to
+sync your schedule" answer on the first launch after a bump, until the app
+rewrites the payload.
+
 - Window: today + next 7 days, device-local day boundaries. The 7-day span is
   exactly what **Phase 2 date queries** read — "Friday" resolves to that day's
   bucket; a date past the window answers "I only have your schedule for the next
   7 days." No schema change is needed for Phase 2.
 - **Cancelled appointments excluded** at build time. Today's count/list =
   everything else; "next appointment" = earliest `startMillis > now` whose
-  status is not `done`.
+  status is not `done` — except that an **all-day block never wins "next" while
+  a timed visit remains** (it starts at midnight, so it would own the slot all
+  day and hide the real next visit), and it counts as upcoming until its
+  `endMillis`, not its start.
 - Each appointment carries its **doc id** (`id`, added for Phase 4) so a write
   action can target the exact Firestore document the user named by voice; unused
   by the read intents.

@@ -225,7 +225,12 @@ class CalendarDayCell extends StatelessWidget {
         ),
         SizedBox(
           height: _kDotRowHeight,
-          child: isSelected || dotColors.isEmpty
+          // Kept on the selected day too (owner call, 2026-07-31). The
+          // selection circle only fills the number; the dot row sits below it
+          // on the plain cell background, so the crew colours stay legible —
+          // and hiding them made the day you were looking at the one day whose
+          // crew you couldn't see.
+          child: dotColors.isEmpty
               ? null
               : Padding(
                   padding: const EdgeInsets.only(top: _kDotGap),

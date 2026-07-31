@@ -18,28 +18,33 @@ const {
 } = require("./time_utils");
 
 /**
- * Localized "Wed, Jul 8, 2:00 p.m." style datetime.
+ * Localized "Wed, Jul 8, 2:00 p.m." style datetime. An all-day block stores a
+ * real midnight start, so speaking its clock time ("Wed, Jul 8, 12:00 a.m.")
+ * would be actively wrong — the date alone is the whole of what it means.
  * @param {string} locale
  * @param {*} startTime
+ * @param {boolean=} allDay
  * @return {string}
  */
-function _dateTime(locale, startTime) {
+function _dateTime(locale, startTime, allDay) {
+  const time = allDay ? {} : {hour: "numeric", minute: "2-digit"};
   return formatBusinessTime(locale, startTime, {
     weekday: "short",
     month: "short",
     day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+    ...time,
   });
 }
 
 /**
- * Localized time only.
+ * Localized time only, or the all-day phrase in place of a clock time.
  * @param {string} locale
  * @param {*} startTime
+ * @param {boolean=} allDay
  * @return {string}
  */
-function _timeOnly(locale, startTime) {
+function _timeOnly(locale, startTime, allDay) {
+  if (allDay) return locale === "fr" ? "toute la journée" : "all day";
   return formatTimeOfDay(locale, startTime);
 }
 
@@ -73,6 +78,40 @@ function _who(c, generic) {
   return (c.clientName || "").trim() || (c.title || "").trim() || generic;
 }
 
+/**
+ * `_dateTime` for a message context — all-day aware.
+ * @param {string} locale
+ * @param {!Object} c
+ * @return {string}
+ */
+function _when(locale, c) {
+  return _dateTime(locale, c.startTime, c.isAllDay === true);
+}
+
+/**
+ * `_timeOnly` for a message context — all-day aware.
+ * @param {string} locale
+ * @param {!Object} c
+ * @return {string}
+ */
+function _at(locale, c) {
+  return _timeOnly(locale, c.startTime, c.isAllDay === true);
+}
+
+/**
+ * "Marchetti at 2:00 p.m." / "Dentist · all day" — an all-day block has no
+ * clock time to sit after "at", so it joins with a separator instead.
+ * @param {string} locale
+ * @param {!Object} c
+ * @param {string} who
+ * @return {string}
+ */
+function _whoAt(locale, c, who) {
+  const time = _at(locale, c);
+  if (c.isAllDay === true) return `${who} · ${time}`;
+  return locale === "fr" ? `${who} à ${time}` : `${who} at ${time}`;
+}
+
 const _MESSAGES = {
   en: {
     who: (c) => _who(c, "Client"),
@@ -80,27 +119,27 @@ const _MESSAGES = {
       const repeat = _repeatLabel(c.repeat, "en");
       return repeat ? {
         title: "New repeating job assigned",
-        body: `${who} · ${_dateTime("en", c.startTime)} · repeats ${repeat}`,
+        body: `${who} · ${_when("en", c)} · repeats ${repeat}`,
       } : {
         title: "New job assigned",
-        body: `${who} · ${_dateTime("en", c.startTime)}`,
+        body: `${who} · ${_when("en", c)}`,
       };
     },
     rescheduled: (c, who) => ({
       title: "Job rescheduled",
-      body: `${who} · now ${_dateTime("en", c.startTime)}`,
+      body: `${who} · now ${_when("en", c)}`,
     }),
     cancelled: (c, who) => ({
       title: "Job cancelled",
-      body: `${who} · ${_dateTime("en", c.startTime)}`,
+      body: `${who} · ${_when("en", c)}`,
     }),
     removed: (c, who) => ({
       title: "Removed from a job",
-      body: `${who} · ${_dateTime("en", c.startTime)}`,
+      body: `${who} · ${_when("en", c)}`,
     }),
     reminder: (c, who) => {
       const addr = (c.address || "").trim();
-      const base = `${who} at ${_timeOnly("en", c.startTime)}`;
+      const base = _whoAt("en", c, who);
       return {
         title: "Upcoming job",
         body: addr ? `${base} · ${addr}` : base,
@@ -110,7 +149,7 @@ const _MESSAGES = {
       const addr = (c.address || "").trim();
       const drive = `About ${c.travelMinutes} min drive`;
       return {
-        title: `Time to leave — ${who} at ${_timeOnly("en", c.startTime)}`,
+        title: `Time to leave — ${_whoAt("en", c, who)}`,
         body: addr ? `${drive} · ${addr}` : drive,
       };
     },
@@ -126,27 +165,27 @@ const _MESSAGES = {
       const repeat = _repeatLabel(c.repeat, "fr");
       return repeat ? {
         title: "Nouvelle visite récurrente",
-        body: `${who} · ${_dateTime("fr", c.startTime)} · se répète ${repeat}`,
+        body: `${who} · ${_when("fr", c)} · se répète ${repeat}`,
       } : {
         title: "Nouvelle visite assignée",
-        body: `${who} · ${_dateTime("fr", c.startTime)}`,
+        body: `${who} · ${_when("fr", c)}`,
       };
     },
     rescheduled: (c, who) => ({
       title: "Visite reportée",
-      body: `${who} · maintenant ${_dateTime("fr", c.startTime)}`,
+      body: `${who} · maintenant ${_when("fr", c)}`,
     }),
     cancelled: (c, who) => ({
       title: "Visite annulée",
-      body: `${who} · ${_dateTime("fr", c.startTime)}`,
+      body: `${who} · ${_when("fr", c)}`,
     }),
     removed: (c, who) => ({
       title: "Retiré d'une visite",
-      body: `${who} · ${_dateTime("fr", c.startTime)}`,
+      body: `${who} · ${_when("fr", c)}`,
     }),
     reminder: (c, who) => {
       const addr = (c.address || "").trim();
-      const base = `${who} à ${_timeOnly("fr", c.startTime)}`;
+      const base = _whoAt("fr", c, who);
       return {
         title: "Visite à venir",
         body: addr ? `${base} · ${addr}` : base,
@@ -156,8 +195,8 @@ const _MESSAGES = {
       const addr = (c.address || "").trim();
       const drive = `Environ ${c.travelMinutes} min de route`;
       return {
-        title: `C'est l'heure de partir — ${who} à ` +
-            `${_timeOnly("fr", c.startTime)}`,
+        title: "C'est l'heure de partir — " +
+            `${_whoAt("fr", c, who)}`,
         body: addr ? `${drive} · ${addr}` : drive,
       };
     },
@@ -199,14 +238,15 @@ function buildDigestMessage(jobs, locale) {
   );
   const n = sorted.length;
   const first = sorted[0];
-  const who = first ? _who(first, fr ? "un client" : "Client") : "";
-  const time = first ? _timeOnly(fr ? "fr" : "en", first.startTime) : "";
+  const loc = fr ? "fr" : "en";
+  const lead = first ?
+      _whoAt(loc, first, _who(first, fr ? "un client" : "Client")) : "";
   if (fr) {
     const noun = n === 1 ? "visite" : "visites";
     return {
       title: "Votre horaire de demain",
       body: first ?
-        `Vous avez ${n} ${noun} demain. Première : ${who} à ${time}.` :
+        `Vous avez ${n} ${noun} demain. Première : ${lead}.` :
         "Vous avez des visites demain.",
     };
   }
@@ -214,7 +254,7 @@ function buildDigestMessage(jobs, locale) {
   return {
     title: "Tomorrow's schedule",
     body: first ?
-      `You have ${n} ${noun} tomorrow. First: ${who} at ${time}.` :
+      `You have ${n} ${noun} tomorrow. First: ${lead}.` :
       "You have jobs tomorrow.",
   };
 }

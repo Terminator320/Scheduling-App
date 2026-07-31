@@ -240,6 +240,16 @@ describe("selectTravelCandidates", () => {
     );
     expect(got.map((r) => r.id).sort()).toEqual(["edge90", "in20", "legacy"]);
   });
+
+  test("skips all-day blocks — a midnight start would push at ~23:30", () => {
+    const allDay = {...rec("allDay", 20 * MIN), isAllDay: true};
+    const timedPersonal = {
+      ...rec("dentist", 20 * MIN), isPersonal: true,
+    };
+    const got = selectTravelCandidates([allDay, timedPersonal], NOW);
+    // A timed personal job keeps its reminder; only the all-day block is out.
+    expect(got.map((r) => r.id)).toEqual(["dentist"]);
+  });
 });
 
 describe("computeLeadMinutes", () => {

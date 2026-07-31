@@ -39,6 +39,14 @@ struct Job: Codable, Hashable {
     let title: String
     let address: String
     let status: String
+    // Optional so a payload written before all-day blocks existed still
+    // decodes — a missing key would fail the whole `Job` otherwise. Read it
+    // through `allDay`, never directly.
+    let isAllDay: Bool?
+
+    /// True for an all-day block, which stores a real midnight–23:59 span but
+    /// must never be spoken as a clock time.
+    var allDay: Bool { isAllDay == true }
 
     var start: Date? {
         isoWithMillis.date(from: startTime)
@@ -105,7 +113,10 @@ struct DaySchedule {
     let isTomorrow: Bool
     let jobs: [Job]
 
-    var nextJob: Job? { jobs.first }
+    /// An all-day block is listed, but it is never "next" while a timed job
+    /// remains — it starts at midnight, so it would otherwise own the
+    /// "up next" slot all day and hide the real next visit.
+    var nextJob: Job? { jobs.first(where: { !$0.allDay }) ?? jobs.first }
     var count: Int { jobs.count }
 
     static let empty = DaySchedule(
@@ -180,6 +191,7 @@ private func moreLabel(_ n: Int, french: Bool, tomorrow: Bool) -> String {
 }
 
 private func timeLabel(_ job: Job, french: Bool) -> String {
+    if job.allDay { return french ? "Toute la journée" : "All day" }
     guard let start = job.start else { return "" }
     let fmt = DateFormatter()
     fmt.locale = Locale(identifier: french ? "fr_CA" : "en_CA")
@@ -250,6 +262,9 @@ struct SmallView: View {
                     .font(.subheadline).bold()
                     .foregroundColor(Color(red: 0.08, green: 0.4, blue: 0.75))
                     .lineLimit(1)
+                    // "Toute la journée" is long for the small widget's
+                    // width; shrink rather than truncate it.
+                    .minimumScaleFactor(0.8)
                 if !next.address.isEmpty {
                     Text(next.address).font(.caption2)
                         .foregroundColor(.secondary).lineLimit(1)

@@ -61,14 +61,14 @@ lib/
     ├── dashboard/                   Admin dashboard — pure stat reducers (DashboardAggregator) over one 8-week appointments range → hero/workload/trends/attention sections + fl_chart WeeklyBarChart
     ├── employees/                   Employee roster — colours, roles, disable/enable
     ├── feature_tour/                In-app guided tours (showcaseview 5.x) — one FeatureTourHost per hub tab registers its own scope and auto-starts once per tab (device-local tourSeenProvider / SharedPreferences); tourStepsFor is the pure role-aware step catalog, screens wire per-step GlobalKeys and pass ready:false while their body is a loading placeholder; Settings "Replay app tour" row is the only reset
-    ├── home_widget/                 iOS home-screen schedule widget — WidgetSyncService writes a two-day payload (todayJobs + tomorrowJobs + on-device rolloverAt) into the App Group (home_widget); mirrors functions/widget_payload_utils.js; Android no-op
+    ├── home_widget/                 iOS home-screen schedule widget — WidgetSyncService writes a two-day payload (todayJobs + tomorrowJobs + on-device rolloverAt) into the App Group (home_widget); mirrors functions/widget_payload_utils.js; the today bucket is endTime-based for isAllDay records and nextJob prefers a timed job; Android no-op
     ├── live_activity/               iOS "time to leave" Lock Screen / Dynamic Island card — LiveActivityRegistrationController upserts the device push-to-start token + one update token per live card into users/{docId}/liveActivityTokens; canHostCards() is the single capability probe; liveActivityEnabledProvider is the device-local opt-out whose Settings toggle must also unregister(). Cards are push-STARTED by functions/live_activity_dispatch.js; Android no-op
     ├── maps/                        Google Places address autocomplete, reverse-geocode (staff-map coords → address), and map launcher (callables admin-gated); route_url_builder (multi-stop Google Maps directions URL, 9-waypoint cap)
     ├── notifications/               FCM push client — PushRegistrationController (token upsert for active employees/admins, resync-coalesced), FcmTokenRepository, push_notification_service, notificationAuthStatusProvider (Settings recovery row); core/notifications/fcm_background_handler rewrites the widget from a push while the app is closed
     ├── presence/                    Live-location tracking + admin live staff map — PresenceSyncController owns a foreground-only geolocator stream (250 m / 2-min throttle + 10-min heartbeat, throttle clock rolls back on a failed write) for active employees/admins — the `location` UIBackgroundModes entry was removed 2026-07-27 after an App Store 2.5.4 rejection, so iOS suspends the stream on background; never re-add it, PresenceRepository writes users/{docId}/presence/location (self-only); OS permission is the only switch. Admin-only live_map_screen joins collectionGroup('presence') to watchAllUsers() via LiveMapAggregator (pure reducers, presenceStaleAfter == PRESENCE_STALE_MINUTES) → google_maps_flutter markers; staff_roster_sheet lists everyone sharing location nearest-first (LiveMapAggregator.sortedByProximity/distanceMeters/cityFromAddress — all pure)
     ├── onboarding/                  First-launch intro carousel (OnboardingGate = app home) + onboardingSeen gate
     ├── settings/                    Theme, text scale, language, app version, biometric app-lock toggle, notification-permission recovery row, Live job card switch (iOS-only, hidden where unsupported)
-    ├── siri/                        Siri App Intents snapshot — ScheduleSnapshotService writes a today+7d payload under the App Group key `schedule_snapshot` (nothing renders it); buildScheduleSnapshot is hand-mirrored with ios/SiriIntents/ScheduleSnapshot.swift; payload is field-limited because the App Group reads while locked
+    ├── siri/                        Siri App Intents snapshot — ScheduleSnapshotService writes a today+7d payload under the App Group key `schedule_snapshot` (nothing renders it); buildScheduleSnapshot is hand-mirrored with ios/SiriIntents/ScheduleSnapshot.swift (schema v2 — bump scheduleSnapshotVersion and supportedVersion together); payload is field-limited because the App Group reads while locked
     ├── splash/                      Auth resolution on cold start (screen + routing logic)
     └── wave/                        Wave Accounting integration — read-only connection status + per-client sync badge + auto-import cadence picker (all writes are Cloud-Function-owned)
 ```
@@ -204,9 +204,12 @@ that strip pages a week and selects its first day.
 *(It shipped as ONE `CustomScrollView` with the grid as its first sliver,
 collapsing past an 80px scroll offset with a 44/6 two-stage re-arm and a derived
 `gridHeight − stripHeight` spacer holding the vacated extent. With two viewports
-nothing is vacated, so the spacer is gone with it.)* The fixed grid sits in a
-`Flexible` + `SingleChildScrollView` so a short viewport shrinks it rather than
-overflowing the column.
+nothing is vacated, so the spacer is gone with it.)* **The grid itself never
+scrolls.** It sits in a `Flexible` + `SingleChildScrollView` pinned to
+`NeverScrollableScrollPhysics`, which makes the viewport pure overflow
+protection: a short one (small phone at a large text scale) shrinks the grid
+rather than running the column past the bottom, and at normal heights it
+shrink-wraps and does nothing. The handle is the only control that moves it.
 
 The agenda rows live in `AgendaSliverList`; `EventList` is now just the
 split-layout wrapper around it, so both hosts build identical rows.
@@ -238,9 +241,22 @@ A personal block is not a job being worked: `displayStatus` returns its stored
 status (which reads "Scheduled") instead of deriving `in_progress`/`overdue`, and
 `selectOverdueCandidates` in `functions/notification_utils.js` skips it — the two
 must stay in sync. Everything that speaks a client name falls back to the title,
-including `_who` in `notification_messages.js`. **Known gap:** the iOS widget,
-the Siri snapshot and push text still speak the stored midnight time for an
-all-day block; they carry no `isAllDay` yet.
+including `_who` in `notification_messages.js`.
+
+**Off-screen mirrors.** Because the stored span is real, an all-day block would
+otherwise leak its midnight time everywhere the schedule is spoken rather than
+shown, so `isAllDay` is threaded through all four mirrors:
+
+| Mirror | What the flag changes |
+| --- | --- |
+| Reminder sweep (`travel_utils.js`) | `selectTravelCandidates` skips all-day records. The midnight start otherwise landed inside the 90-min window at ~23:30 the night before and fired a "time to leave" push for a block with no departure time. A *timed* personal job keeps its reminder. |
+| Push + digest text (`notification_messages.js`) | The date alone ("Wed, Jul 8"), never "Wed, Jul 8, 12:00 a.m."; `_whoAt` joins with "·" instead of "at"/"à". |
+| Home-screen widget | `isAllDay` in the job JSON in both hand-mirrored builders and the Swift decoder (`Bool?`, so older payloads still parse); `timeLabel` reads "All day". The *today* filter is `endTime`-based for an all-day block — the old start-time test dropped it from today from 00:00 onward. `nextJob` prefers a timed job so a midnight block doesn't own "up next" all day. |
+| Siri snapshot (**v2**) | Adds `isAllDay` **and** `title` — a personal job has no client and the snapshot carried no title, so Siri said "unnamed client". `SiriStrings.who` is the single client→title→placeholder resolver; `timePhrase` speaks "all day"; `nextAppointment` applies the same prefer-timed rule and treats a block as upcoming until its 23:59 end. |
+
+The version constant is stamped in `schedule_snapshot.dart` and gated in
+`ScheduleSnapshot.swift` — bump both together or the extension rejects the
+snapshot outright and answers "Open ES Pro to sync your schedule."
 
 ### Repeating Appointments
 

@@ -42,6 +42,20 @@ describe("buildWidgetPayload", () => {
     expect(payload.rolloverAt).toBeNull();
   });
 
+  test("an all-day block stays in today until its 23:59 end", () => {
+    // Midnight → 23:59 Toronto on 2026-07-08 — the start is already past by
+    // NOW, so a start-time test would drop it from today entirely.
+    const allDay = appt("vacation", "2026-07-08T04:00:00.000Z", {
+      endTime: at("2026-07-09T03:59:00.000Z"),
+      isAllDay: true,
+    });
+    const payload = buildWidgetPayload([allDay], NOW);
+    expect(payload.todayJobs.map((j) => j.id)).toEqual(["vacation"]);
+    expect(payload.todayJobs[0].isAllDay).toBe(true);
+    // Still open, so no rollover.
+    expect(payload.rolloverAt).toBeNull();
+  });
+
   test("each job carries its id and a …Z startTime for the deep link", () => {
     const payload = buildWidgetPayload([
       appt("soon", "2026-07-08T18:00:00.000Z"),
@@ -112,8 +126,14 @@ describe("serializeWidgetJob", () => {
           title: "",
           address: "",
           status: "pending",
+          isAllDay: false,
         });
       });
+
+  test("isAllDay is emitted as a real boolean, never null", () => {
+    expect(serializeWidgetJob({id: "a1", isAllDay: true}).isAllDay).toBe(true);
+    expect(serializeWidgetJob({id: "a1"}).isAllDay).toBe(false);
+  });
 });
 
 describe("isTerminalStatus", () => {

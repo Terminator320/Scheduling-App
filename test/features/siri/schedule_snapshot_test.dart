@@ -179,9 +179,31 @@ void main() {
         'startMillis': start.millisecondsSinceEpoch,
         'endMillis': start.add(const Duration(hours: 1)).millisecondsSinceEpoch,
         'clientName': 'Ada',
+        'title': '',
         'address': '14 Elm St',
         'status': 'pending',
+        'isAllDay': false,
       });
+    });
+
+    test('a personal all-day block carries its title and the flag', () {
+      // No client, midnight → 23:59: Siri names it by title and says
+      // "all day" rather than reading two clock times out.
+      final snapshot = build([
+        AppointmentRecord(
+          id: 'p1',
+          title: 'Vacation',
+          startTime: DateTime(2026, 7, 19),
+          endTime: DateTime(2026, 7, 19, 23, 59),
+          isPersonal: true,
+          isAllDay: true,
+        ),
+      ]);
+
+      final appointment = _appointmentsOn(snapshot, '2026-07-19').single;
+      expect(appointment['clientName'], '');
+      expect(appointment['title'], 'Vacation');
+      expect(appointment['isAllDay'], isTrue);
     });
   });
 }

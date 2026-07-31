@@ -106,13 +106,31 @@ enum SiriStrings {
             : "\(scope) \(n) appointments today:"
     }
 
+    /// Who a visit is named after: the client, or — for a personal job, which
+    /// has none — its title. Mirrors `_who` in notification_messages.js and
+    /// the widget's `clientName.isEmpty ? title` fallback.
+    static func who(
+        _ appointment: SnapshotAppointment, article: Bool = false
+    ) -> String {
+        let name = appointment.clientName.isEmpty
+            ? (appointment.title ?? "").trimmingCharacters(in: .whitespaces)
+            : appointment.clientName
+        if !name.isEmpty { return name }
+        if french { return article ? "un client sans nom" : "client sans nom" }
+        return article ? "an unnamed client" : "unnamed client"
+    }
+
+    /// The spoken "when" of a visit — its start time, or the all-day phrase.
+    static func timePhrase(_ appointment: SnapshotAppointment) -> String {
+        if appointment.allDay {
+            return french ? "toute la journée" : "all day"
+        }
+        return time(appointment.start)
+    }
+
     /// One spoken line per visit — time plus who it's for.
     static func scheduleLine(_ appointment: SnapshotAppointment) -> String {
-        let at = time(appointment.start)
-        let who = appointment.clientName.isEmpty
-            ? (french ? "client sans nom" : "unnamed client")
-            : appointment.clientName
-        return "\(at), \(who)"
+        "\(timePhrase(appointment)), \(who(appointment))"
     }
 
     // MARK: - Day schedule (Phase 2 — specific day)
@@ -166,20 +184,21 @@ enum SiriStrings {
     }
 
     static func next(_ appointment: SnapshotAppointment) -> String {
-        let who = appointment.clientName.isEmpty
-            ? (french ? "un client sans nom" : "an unnamed client")
-            : appointment.clientName
+        let whom = who(appointment, article: true)
         let sameDay = Calendar.current.isDateInToday(appointment.start)
-        let when = sameDay
-            ? (french
-                ? "aujourd'hui à \(time(appointment.start))"
-                : "today at \(time(appointment.start))")
+        let day = sameDay
+            ? (french ? "aujourd'hui" : "today")
+            : weekday(appointment.start)
+        // An all-day block has no clock time to sit after "at"/"à", so the
+        // phrase joins with a comma instead: "today, all day".
+        let when = appointment.allDay
+            ? "\(day), \(timePhrase(appointment))"
             : (french
-                ? "\(weekday(appointment.start)) à \(time(appointment.start))"
-                : "\(weekday(appointment.start)) at \(time(appointment.start))")
+                ? "\(day) à \(timePhrase(appointment))"
+                : "\(day) at \(timePhrase(appointment))")
         var line = french
-            ? "Votre prochain rendez-vous est \(when) avec \(who)."
-            : "Your next appointment is \(when) with \(who)."
+            ? "Votre prochain rendez-vous est \(when) avec \(whom)."
+            : "Your next appointment is \(when) with \(whom)."
         if !appointment.address.isEmpty {
             line += french
                 ? " Adresse : \(appointment.address)."
@@ -234,10 +253,14 @@ enum SiriStrings {
     static func nth(
         _ appointment: SnapshotAppointment, position: Int, admin: Bool
     ) -> String {
-        let at = time(appointment.start)
-        let who = appointment.clientName.isEmpty
-            ? (french ? "un client sans nom" : "an unnamed client")
-            : appointment.clientName
+        // "à 14 h 00" / "at 2:00 PM", or "toute la journée" / "all day" —
+        // an all-day block takes no preposition.
+        let at = appointment.allDay
+            ? timePhrase(appointment)
+            : (french
+                ? "à \(timePhrase(appointment))"
+                : "at \(timePhrase(appointment))")
+        let whom = who(appointment, article: true)
         let idx = position - 1
         var line: String
         if french {
@@ -252,7 +275,7 @@ enum SiriStrings {
                     ? "Le rendez-vous numéro \(position) de l'équipe"
                     : "Votre rendez-vous numéro \(position)"
             }
-            line = "\(subject) aujourd'hui est à \(at) avec \(who)."
+            line = "\(subject) aujourd'hui est \(at) avec \(whom)."
             if !appointment.address.isEmpty {
                 line += " Adresse : \(appointment.address)."
             }
@@ -268,7 +291,7 @@ enum SiriStrings {
                     ? "The team's appointment number \(position)"
                     : "Your appointment number \(position)"
             }
-            line = "\(subject) today is at \(at) with \(who)."
+            line = "\(subject) today is \(at) with \(whom)."
             if !appointment.address.isEmpty {
                 line += " Address: \(appointment.address)."
             }

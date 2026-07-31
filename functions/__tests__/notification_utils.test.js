@@ -245,6 +245,24 @@ describe("buildNotificationMessage", () => {
         .not.toContain("Client");
   });
 
+  test("an all-day block speaks the date, never 12:00 a.m.", () => {
+    const allDay = {
+      clientName: "",
+      title: "Vacation",
+      // Midnight Toronto on Wed 2026-07-08.
+      startTime: new Date("2026-07-08T04:00:00Z"),
+      isAllDay: true,
+    };
+    const en = buildNotificationMessage("assigned", allDay, "en");
+    expect(en.body).toBe("Vacation · Wed, Jul 8");
+    expect(en.body).not.toMatch(/12:00/);
+    const fr = buildNotificationMessage("cancelled", allDay, "fr");
+    expect(fr.body).not.toMatch(/00:00|0 h/);
+    // A timed job is unchanged.
+    expect(buildNotificationMessage("assigned", ctx, "en").body)
+        .toContain("2:30");
+  });
+
   test("blank client name falls back", () => {
     const en = buildNotificationMessage(
         "assigned",
@@ -325,6 +343,19 @@ describe("buildDigestMessage", () => {
   test("singular noun for one job", () => {
     const en = buildDigestMessage([jobs[0]], "en");
     expect(en.body).toContain("1 job tomorrow");
+  });
+
+  test("an all-day first job reads 'all day', not a clock time", () => {
+    const allDay = {
+      clientName: "",
+      title: "Vacation",
+      startTime: new Date("2026-07-09T04:00:00Z"),
+      isAllDay: true,
+    };
+    expect(buildDigestMessage([allDay], "en").body)
+        .toContain("First: Vacation · all day.");
+    expect(buildDigestMessage([allDay], "fr").body)
+        .toContain("Première : Vacation · toute la journée.");
   });
 });
 

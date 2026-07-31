@@ -128,6 +128,37 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the selected day keeps its crew dots', (tester) async {
+    // The selection circle fills the number only; the dot row sits below it,
+    // so hiding the dots on the selected day made the day you were actually
+    // looking at the one day whose crew you couldn't see.
+    Finder dotsOn(String key) => find.descendant(
+      of: find.byKey(ValueKey(key)),
+      matching: find.byWidgetPredicate(
+        (w) => w is Container && w.constraints?.maxWidth == 5,
+      ),
+    );
+
+    // Day 16 is both the dotted day and the default selection.
+    await tester.pumpWidget(
+      _wrap(_grid(dots: const [Colors.teal, Colors.orange])),
+    );
+    await tester.pumpAndSettle();
+    expect(dotsOn('calendar-day-2026-05-16'), findsNWidgets(2));
+
+    // Same two dots when the selection moves off it.
+    await tester.pumpWidget(
+      _wrap(
+        _grid(
+          dots: const [Colors.teal, Colors.orange],
+          selectedDay: DateTime(2026, 5, 17),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(dotsOn('calendar-day-2026-05-16'), findsNWidgets(2));
+  });
+
   testWidgets('survives a 2.0 text scale without overflowing', (tester) async {
     tester.view.physicalSize = const Size(375, 667);
     tester.view.devicePixelRatio = 1;
