@@ -4,6 +4,7 @@ import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
@@ -67,7 +68,11 @@ class _ListInformationState extends State<ListInformation> {
   }
 
   Future<void> _onAddClient() async {
-    await showAddClientSheet(context);
+    final result = await showAddClientSheet(context);
+    if (result == null || result.next != AddClientNext.bookJob) return;
+    if (!mounted) return;
+    // Sequential, never stacked — the add-client sheet has already popped.
+    await showAddEventPopup(context, initialClient: result.client);
   }
 
   Future<void> _onClientTap(ClientRecord client) async {
