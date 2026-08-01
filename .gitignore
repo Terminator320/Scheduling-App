@@ -18,6 +18,8 @@ node_modules/
 
 # Local-only project instructions
 CLAUDE.md
+!ios/CLAUDE.md
+!functions/CLAUDE.md
 TODO.md
 skills-lock.json
 
