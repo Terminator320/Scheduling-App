@@ -148,22 +148,44 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     );
   }
 
-  // This can't scroll itself — the first-page indicator lands inside ISP's
-  // SliverFillRemaining, and a nested scrollable (ListView) there would throw an
-  // intrinsic-dimension error.
-  Widget _skeleton() => const Padding(
-    padding: EdgeInsets.all(AppSpacing.sp16),
+  // A skeleton row is fixed-height whatever the text scale — SkeletonListTile is
+  // all fixed boxes — so how many fit is arithmetic: a 56px tile plus its own 8px
+  // bottom margin, with another sp8 between rows.
+  static const double _skeletonRowExtent = 64;
+  static const int _skeletonMaxRows = 4;
+
+  Widget _skeletonRows(int rows) => Padding(
+    padding: const EdgeInsets.all(AppSpacing.sp16),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SkeletonListTile(),
-        SizedBox(height: AppSpacing.sp8),
-        SkeletonListTile(),
-        SizedBox(height: AppSpacing.sp8),
-        SkeletonListTile(),
-        SizedBox(height: AppSpacing.sp8),
-        SkeletonListTile(),
+        for (var i = 0; i < rows; i++) ...[
+          if (i > 0) const SizedBox(height: AppSpacing.sp8),
+          const SkeletonListTile(),
+        ],
       ],
+    ),
+  );
+
+  // The first-page indicator lands inside ISP's SliverFillRemaining, which asks
+  // its child for intrinsic dimensions — so this one can neither scroll (a nested
+  // ListView throws) nor measure (LayoutBuilder can't report intrinsics either).
+  // It is laid out against the sliver's own extent, so a fixed count can't clip.
+  Widget _skeleton() => _skeletonRows(_skeletonMaxRows);
+
+  // The search and type paths instead hand the skeleton the whole body of a tight
+  // Expanded, which the keyboard shortens well below four rows' worth — no sliver
+  // above it here, so the row count can follow the height.
+  Widget _fittedSkeleton() => LayoutBuilder(
+    builder: (context, constraints) => ClipRect(
+      child: _skeletonRows(
+        constraints.maxHeight.isFinite
+            ? ((constraints.maxHeight - AppSpacing.sp16 * 2 + AppSpacing.sp8) /
+                      (_skeletonRowExtent + AppSpacing.sp8))
+                  .floor()
+                  .clamp(1, _skeletonMaxRows)
+            : _skeletonMaxRows,
+      ),
     ),
   );
 
@@ -210,7 +232,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
 
     if (_committedQuery != query) {
       // Still typing — show instant local results (skeleton if none yet).
-      return local.isEmpty ? _skeleton() : _resultsList(local);
+      return local.isEmpty ? _fittedSkeleton() : _resultsList(local);
     }
 
     return ref
@@ -219,7 +241,8 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
           data: (results) => results.isEmpty
               ? _emptyState(query: query)
               : _resultsList(results),
-          loading: () => local.isEmpty ? _skeleton() : _resultsList(local),
+          loading: () =>
+              local.isEmpty ? _fittedSkeleton() : _resultsList(local),
           // A failed search must not look like "no such client" — show an
           // error when the instant local fallback is also empty, not the empty state.
           error: (e, _) =>
@@ -267,7 +290,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
                 ? _typeEmptyState(type: type, query: query)
                 : _resultsList(items);
           },
-          loading: _skeleton,
+          loading: _fittedSkeleton,
           error: (e, _) => _errorState(
             e,
             onRetry: () => ref.invalidate(clientsByTypeProvider(type)),
