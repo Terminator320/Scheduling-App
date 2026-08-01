@@ -15,10 +15,12 @@ const invites = require("./invites");
 const maintenance = require("./maintenance");
 const waveCallables = require("./wave/callables");
 const clientPropagation = require("./client_propagation");
+const clientJobCount = require("./client_job_count");
 const notifications = require("./notifications");
 
 exports.syncUsersByUid = bridge.syncUsersByUid;
 exports.propagateClientEdits = clientPropagation.propagateClientEdits;
+exports.recountClientJobs = clientJobCount.recountClientJobs;
 exports.placesAutocomplete = places.placesAutocomplete;
 exports.placesGetDetails = places.placesGetDetails;
 exports.placesReverseGeocode = places.placesReverseGeocode;
