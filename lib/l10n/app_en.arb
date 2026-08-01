@@ -2215,5 +2215,77 @@
   "common_add": "Add",
   "@common_add": {
     "description": "Primary verb on the new-client sheet bar"
+  },
+  "clients_sectionClient": "CLIENT",
+  "@clients_sectionClient": {
+    "description": "Mono section header above the client identity fields"
+  },
+  "clients_sectionContact": "CONTACT",
+  "@clients_sectionContact": {
+    "description": "Mono section header above the client contact fields"
+  },
+  "clients_sectionBilling": "BILLING",
+  "@clients_sectionBilling": {
+    "description": "Mono section header above the client billing fields"
+  },
+  "clients_since": "SINCE",
+  "@clients_since": {
+    "description": "Read-only key for the date the client was first added"
+  },
+  "clients_tags": "Tags",
+  "@clients_tags": {
+    "description": "Label for the client tags field"
+  },
+  "clients_addTag": "Add a tag",
+  "@clients_addTag": {
+    "description": "Label for the field that appends a new client tag"
+  },
+  "clients_jobsCountLabel": "JOBS",
+  "@clients_jobsCountLabel": {
+    "description": "Mono micro-label under the job count on a client row"
+  },
+  "clients_onSiteManager": "On-site manager",
+  "@clients_onSiteManager": {
+    "description": "Label for the client's on-site contact person"
+  },
+  "clients_billingTerms": "Billing terms",
+  "@clients_billingTerms": {
+    "description": "Label for the client's billing terms field"
+  },
+  "clients_billingTermsHint": "Net 30, deposit on booking…",
+  "@clients_billingTermsHint": {
+    "description": "Placeholder for the billing terms field"
+  },
+  "clients_autoInvoice": "Invoice automatically",
+  "@clients_autoInvoice": {
+    "description": "Toggle that enables automatic invoicing for this client"
+  },
+  "clients_manager": "MANAGER",
+  "@clients_manager": {
+    "description": "Info-panel key for the client's on-site manager"
+  },
+  "clients_phoneKey": "PHONE",
+  "@clients_phoneKey": {
+    "description": "Info-panel key for the client phone number"
+  },
+  "clients_addressKey": "ADDRESS",
+  "@clients_addressKey": {
+    "description": "Info-panel key for the client address"
+  },
+  "clients_billingKey": "BILLING",
+  "@clients_billingKey": {
+    "description": "Info-panel key for the client billing summary"
+  },
+  "clients_emailKey": "EMAIL",
+  "@clients_emailKey": {
+    "description": "Info-panel key for the client email address"
+  },
+  "clients_bookJob": "Book job",
+  "@clients_bookJob": {
+    "description": "Action tile that opens the new-appointment sheet for this client"
+  },
+  "clients_editClientPill": "Edit client",
+  "@clients_editClientPill": {
+    "description": "Pill above the client detail that opens the edit sheet"
   }
 }
