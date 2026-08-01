@@ -1,7 +1,9 @@
 // TODO(george): remove this whole file before App Store submission (#pre-ship)
 /// Temporary affordances that exist only to make manual testing bearable. Each
-/// one is a deliberate hole in shipping behaviour, so they live together in one
-/// file that can be deleted outright rather than hunted for.
+/// one is a deliberate hole in shipping behaviour, so the *flags* live together
+/// here as the single entry point. Removing one is still a multi-site sweep —
+/// grep `#pre-ship` and follow the checklist in
+/// `docs/plans/redesign-subdocs/2026-08-01-p3-HANDOFF.md` §5b.
 library;
 
 import 'package:flutter/foundation.dart';

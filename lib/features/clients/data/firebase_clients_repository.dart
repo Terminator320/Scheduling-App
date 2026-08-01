@@ -47,9 +47,10 @@ class FirebaseClientsRepository implements ClientsRepository {
   }
 
   // For local writes we patch the written doc into the scan window directly, so
-  // search can recompute without an extra read. Adds and edits come here;
-  // the testing-only delete evicts via _evictFromWindow instead.
-  void _applyLocalWrite(String id, Map<String, dynamic> data) {
+  // search can recompute without an extra read. A null [data] means the doc is
+  // gone (the testing-only delete) and is dropped rather than re-appended — one
+  // owner for the whole window/cache-invalidation contract.
+  void _patchWindow(String id, {Map<String, dynamic>? data}) {
     final window = _scanWindow;
     if (window != null && _isFresh(window.fetchedAt)) {
       final docs = [
@@ -57,7 +58,7 @@ class FirebaseClientsRepository implements ClientsRepository {
           if (doc.id != id) doc,
         // Where it lands in the window doesn't matter — matching happens per-doc, and the
         // final order comes from the relevance sort anyway.
-        (id: id, data: data),
+        if (data != null) (id: id, data: data),
       ];
       _scanWindow = _CachedClientScanWindow(docs, window.fetchedAt);
     } else {
@@ -120,7 +121,7 @@ class FirebaseClientsRepository implements ClientsRepository {
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
-    _applyLocalWrite(docRef.id, map);
+    _patchWindow(docRef.id, data: map);
     return client.copyWith(id: docRef.id);
   }
 
@@ -131,30 +132,16 @@ class FirebaseClientsRepository implements ClientsRepository {
       ...map,
       'updatedAt': FieldValue.serverTimestamp(),
     });
-    _applyLocalWrite(client.id, map);
+    _patchWindow(client.id, data: map);
   }
 
   // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
   @override
   Future<void> deleteClient(String id) async {
     await _clients.doc(id).delete();
-    _evictFromWindow(id);
-  }
-
-  /// Drops a deleted doc out of the cached scan window so search and the filters
-  /// stop returning it without paying for a fresh read.
-  // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
-  void _evictFromWindow(String id) {
-    final window = _scanWindow;
-    if (window != null && _isFresh(window.fetchedAt)) {
-      _scanWindow = _CachedClientScanWindow([
-        for (final doc in window.docs)
-          if (doc.id != id) doc,
-      ], window.fetchedAt);
-    } else {
-      _scanWindow = null;
-    }
-    _searchCache.clear();
+    // Drops the doc out of the cached window so search and the filters stop
+    // returning it without paying for a fresh read.
+    _patchWindow(id);
   }
 
   @override
@@ -162,14 +149,19 @@ class FirebaseClientsRepository implements ClientsRepository {
     if (type == ClientType.unset) return const [];
     final window = await _clientScanWindow();
     if (window == null) return const [];
-    return [
+    // Sort key comes from displayName (so legacy business-only docs still order
+    // by their businessName fallback) but is computed once per record rather
+    // than twice per comparison.
+    final matches = [
       for (final doc in window.docs)
         if (ClientType.fromRaw(doc.data['type']?.toString()) == type)
           ClientRecord.fromMap(doc.id, doc.data),
-    ]..sort(
-      (a, b) =>
-          a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
-    );
+    ];
+    final keyed = [
+      for (final record in matches)
+        (sortKey: record.displayName.toLowerCase(), record: record),
+    ]..sort((a, b) => a.sortKey.compareTo(b.sortKey));
+    return [for (final entry in keyed) entry.record];
   }
 
   @override

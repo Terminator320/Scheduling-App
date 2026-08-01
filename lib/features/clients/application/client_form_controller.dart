@@ -42,8 +42,10 @@ class ClientDeleteFailed extends ClientDeleteOutcome {
 /// Write orchestration shared by the add/edit/detail views. Handles the
 /// repository write, the list refresh, and a best-effort phone-contact sync.
 ///
-/// State is the Save spinner flag. Clients are never deleted (owner decision
-/// 2026-08-01), so there is no delete outcome and no second busy flag.
+/// State is the Save spinner flag. Shipping clients are never deleted (owner
+/// decision 2026-08-01); the only delete is the debug-gated testing affordance
+/// (`lib/core/testing_flags.dart`), which reuses that same flag rather than
+/// adding a second one.
 class ClientFormController extends Notifier<bool> {
   @override
   bool build() => false;

@@ -227,6 +227,21 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
         );
   }
 
+  // Pre-normalized index over the type-filtered list, memoized on the list
+  // identity for the same reason _loadedSearchIndex is — this view rebuilds on
+  // every keystroke, and re-indexing the whole filtered slice each time is the
+  // expensive half of matching.
+  List<ClientRecord>? _typeIndexSource;
+  List<ClientSearchEntry> _typeIndex = const [];
+
+  List<ClientSearchEntry> _typeSearchIndex(List<ClientRecord> all) {
+    if (!identical(all, _typeIndexSource)) {
+      _typeIndexSource = all;
+      _typeIndex = [for (final client in all) ClientSearchPolicy.index(client)];
+    }
+    return _typeIndex;
+  }
+
   // A type filter is a bounded, already-in-memory list, so searching within it
   // is the shared local matcher rather than a second server query.
   Widget _buildTypeResults(ClientType type) {
@@ -235,12 +250,18 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
         .watch(clientsByTypeProvider(type))
         .when(
           data: (all) {
+            final q = ClientSearchPolicy.normalize(query);
+            final qDigits = ClientSearchPolicy.digitsOnly(query);
             final items = query.isEmpty
                 ? all
                 : [
-                    for (final client in all)
-                      if (ClientSearchPolicy.matchesClient(client, query))
-                        client,
+                    for (final entry in _typeSearchIndex(all))
+                      if (ClientSearchPolicy.entryMatches(
+                        entry,
+                        queryText: q,
+                        queryDigits: qDigits,
+                      ))
+                        entry.client,
                   ];
             return items.isEmpty
                 ? _typeEmptyState(type: type, query: query)

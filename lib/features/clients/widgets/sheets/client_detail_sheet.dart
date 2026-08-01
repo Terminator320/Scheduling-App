@@ -37,6 +37,8 @@ class ClientDetailSheet extends StatelessWidget {
           client: client,
           scrollController: scrollController,
           showHandle: true,
+          // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
+          onDeleted: () => Navigator.pop(sheetContext),
         );
       },
     );

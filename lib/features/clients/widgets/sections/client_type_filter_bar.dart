@@ -25,25 +25,26 @@ class ClientTypeFilterBar extends StatelessWidget {
     final l10n = context.l10n;
     return Semantics(
       label: l10n.clients_filterByType,
+      // The options are a fixed three, so this scrolls (for long labels at large
+      // text scale) without paying for a lazy sliver viewport.
       child: SizedBox(
         height: 48,
-        child: ListView.separated(
+        child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp16),
-          itemCount: ClientType.pickable.length,
-          separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sp8),
-          itemBuilder: (context, index) {
-            final type = ClientType.pickable[index];
-            return Center(
-              child: FilterChip(
-                label: Text(clientTypeLabel(l10n, type)),
-                selected: selected == type,
-                showCheckmark: false,
-                onSelected: (isSelected) =>
-                    onChanged(isSelected ? type : null),
-              ),
-            );
-          },
+          child: Row(
+            spacing: AppSpacing.sp8,
+            children: [
+              for (final type in ClientType.pickable)
+                FilterChip(
+                  label: Text(clientTypeLabel(l10n, type)),
+                  selected: selected == type,
+                  showCheckmark: false,
+                  onSelected: (isSelected) =>
+                      onChanged(isSelected ? type : null),
+                ),
+            ],
+          ),
         ),
       ),
     );

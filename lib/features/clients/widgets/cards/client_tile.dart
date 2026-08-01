@@ -7,6 +7,7 @@ import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.d
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/list_item_tile.dart';
+import 'package:scheduling/shared/widgets/feedback/status_pill.dart';
 
 class ClientTile extends StatelessWidget {
   const ClientTile({
@@ -67,26 +68,12 @@ class _TypeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = theme.palette.primaryAccent;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(AppRadius.r8),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sp8,
-          vertical: 3,
-        ),
-        child: Text(
-          clientTypeLabel(context.l10n, type),
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: color,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
+    final color = Theme.of(context).palette.primaryAccent;
+    return StatusPill(
+      label: clientTypeLabel(context.l10n, type),
+      background: color.withValues(alpha: 0.10),
+      foreground: color,
+      radius: AppRadius.r8,
     );
   }
 }
