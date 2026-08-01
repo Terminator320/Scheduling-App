@@ -294,7 +294,6 @@ service cloud.firestore {
         && (!('onSiteManager' in data) || (data.onSiteManager is string && data.onSiteManager.size() <= 200))
         && (!('billingTerms' in data) || (data.billingTerms is string && data.billingTerms.size() <= 200))
         && (!('autoInvoice' in data) || data.autoInvoice is bool)
-        && (!('archived' in data) || data.archived is bool)
         && (!('noFixedAddress' in data) || data.noFixedAddress is bool);
     }
 
@@ -317,7 +316,10 @@ service cloud.firestore {
         && !request.resource.data.diff(resource.data)
              .affectedKeys()
              .hasAny(['waveCustomerId', 'wave', 'jobCount']);
-      allow delete: if isAdmin();
+      // Clients are never deleted (owner decision 2026-08-01). Deleting one
+      // orphaned its past appointments, which keep a denormalized clientName but
+      // lose the link, so the app has no delete path and neither does this rule.
+      // The Admin SDK bypasses rules, so support/console cleanup is unaffected.
     }
 
     // ── wave (Wave Accounting connection metadata) ────────────────────────────

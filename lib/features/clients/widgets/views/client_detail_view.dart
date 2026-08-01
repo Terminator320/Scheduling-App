@@ -1,22 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scheduling/core/errors/error_cause.dart';
-import 'package:scheduling/core/layout/breakpoints.dart';
-import 'package:scheduling/core/notices/notice_service.dart';
-import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/clients/application/client_form_controller.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/views/client_edit_form.dart';
 import 'package:scheduling/features/clients/widgets/views/client_view_body.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
-import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-/// Toggles between the read-only view and the editable form, and owns the delete
-/// flow for both modes.
+/// Toggles between the read-only view and the editable form.
 class ClientDetailView extends ConsumerStatefulWidget {
   const ClientDetailView({
     required this.client,
@@ -24,18 +16,12 @@ class ClientDetailView extends ConsumerStatefulWidget {
     this.scrollController,
     this.showHandle = false,
     this.bottomPadding = 24,
-    this.onDeleted,
   });
 
   final ClientRecord client;
   final ScrollController? scrollController;
   final bool showHandle;
   final double bottomPadding;
-
-  /// Called after a successful delete, so a host that keeps this view mounted (the
-  /// split-layout detail pane) can clear the now-deleted selection. In sheet mode this
-  /// isn't needed — the sheet just pops itself instead.
-  final VoidCallback? onDeleted;
 
   @override
   ConsumerState<ClientDetailView> createState() => _ClientDetailViewState();
@@ -51,53 +37,9 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
     _client = widget.client;
   }
 
-  Future<void> _confirmDelete() async {
-    final clientName = _client.displayName.isNotEmpty
-        ? _client.displayName
-        : context.l10n.clients_thisClient;
-
-    final shouldDelete = await showConfirmDialog(
-      context,
-      title: context.l10n.clients_deleteClient,
-      message:
-          '${context.l10n.clients_areYouSureYouWantToDelete} $clientName? ${context.l10n.clients_thisCannotBeUndone}',
-      confirmLabel: context.l10n.common_delete,
-    );
-
-    if (!shouldDelete || !mounted) return;
-
-    final notices = ref.read(noticeServiceProvider);
-    final outcome = await ref
-        .read(clientFormControllerProvider.notifier)
-        .deleteClient(_client.id);
-    if (!mounted) return;
-    switch (outcome) {
-      case ClientDeleted():
-        notices.success(context.l10n.clients_clientDeletedSuccessfully);
-        // If scrollController is set, we're in a bottom sheet, so close it. Otherwise
-        // we're in the split layout, so ask the host to clear its pane instead.
-
-        if (widget.scrollController != null) {
-          Navigator.pop(context);
-        } else {
-          widget.onDeleted?.call();
-        }
-      case ClientDeleteFailed(:final error):
-        notices.error(
-          composeErrorNotice(
-            context,
-            intro: context.l10n.error_introDeleteClient,
-            tag: 'CLI-DEL',
-            error: error,
-          ),
-        );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDeleting = ref.watch(clientFormControllerProvider).isDeleting;
 
     return DetailSheetListView(
       scrollController: widget.scrollController,
@@ -117,8 +59,6 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
         if (_isEditing)
           ClientEditForm(
             client: _client,
-            isDeleting: isDeleting,
-            onDelete: isDeleting ? null : _confirmDelete,
             onSaved: (updated) => setState(() {
               _client = updated;
               _isEditing = false;
@@ -127,11 +67,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
         else ...[
           ClientDetailViewBody(client: _client),
           const SizedBox(height: AppSpacing.sp24),
-          _ViewActions(
-            isDeleting: isDeleting,
-            onEdit: isDeleting ? null : () => setState(() => _isEditing = true),
-            onDelete: isDeleting ? null : _confirmDelete,
-          ),
+          _ViewActions(onEdit: () => setState(() => _isEditing = true)),
         ],
       ],
     );
@@ -179,54 +115,17 @@ class _ViewHeader extends StatelessWidget {
 }
 
 class _ViewActions extends StatelessWidget {
-  const _ViewActions({
-    required this.isDeleting,
-    required this.onEdit,
-    required this.onDelete,
-  });
+  const _ViewActions({required this.onEdit});
 
-  final bool isDeleting;
   final VoidCallback? onEdit;
-  final VoidCallback? onDelete;
 
   @override
-  Widget build(BuildContext context) {
-    final compact = context.isCompact;
-
-    final editButton = FilledButton.icon(
+  Widget build(BuildContext context) => SizedBox(
+    width: double.infinity,
+    child: FilledButton.icon(
       onPressed: onEdit,
       icon: const Icon(Icons.edit_outlined, size: 18),
       label: Text(context.l10n.common_edit),
-    );
-    final deleteButton = OutlinedButton.icon(
-      style: destructiveOutlinedButtonStyle(context),
-      onPressed: onDelete,
-      icon: BusyButtonIcon(
-        isBusy: isDeleting,
-        icon: Icons.delete_outline,
-      ),
-      label: Text(
-        isDeleting ? context.l10n.clients_deleting : context.l10n.common_delete,
-      ),
-    );
-
-    if (compact) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          editButton,
-          const SizedBox(height: AppSpacing.sp12),
-          deleteButton,
-        ],
-      );
-    }
-
-    return Row(
-      children: [
-        Expanded(child: editButton),
-        const SizedBox(width: AppSpacing.sp12),
-        Expanded(child: deleteButton),
-      ],
-    );
-  }
+    ),
+  );
 }

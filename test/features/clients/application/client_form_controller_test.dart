@@ -66,8 +66,6 @@ void main() {
   ClientFormController notifier() =>
       container.read(clientFormControllerProvider.notifier);
 
-  ClientFormActivity activity() => container.read(clientFormControllerProvider);
-
   int refreshCount() => container.read(clientsRefreshProvider);
 
   group('addClient', () {
@@ -86,7 +84,7 @@ void main() {
       expect(refreshCount(), 1);
       // Resets on success — the detail pane keeps this shared provider alive
       // after the sheet pops, so a lingering isSaving would disable add/edit forms all session.
-      expect(activity().isSaving, isFalse);
+      expect(container.read(clientFormControllerProvider), isFalse);
     });
 
     test('reports the failure without bumping the refresh', () async {
@@ -96,7 +94,7 @@ void main() {
 
       expect(outcome, isA<ClientSaveFailed>());
       expect(refreshCount(), 0);
-      expect(activity().isSaving, isFalse);
+      expect(container.read(clientFormControllerProvider), isFalse);
     });
 
     test('offline fails fast without touching the repo', () async {
@@ -120,7 +118,7 @@ void main() {
       verify(() => repo.updateClient(_client)).called(1);
       verify(() => linkStore.contactIdFor('c1')).called(1);
       expect(refreshCount(), 1);
-      expect(activity().isSaving, isFalse);
+      expect(container.read(clientFormControllerProvider), isFalse);
     });
 
     test('a failing contact-link lookup never fails the save', () async {
@@ -143,7 +141,7 @@ void main() {
       expect(outcome, isA<ClientSaveFailed>());
       expect(refreshCount(), 0);
       verifyNever(() => linkStore.contactIdFor(any()));
-      expect(activity().isSaving, isFalse);
+      expect(container.read(clientFormControllerProvider), isFalse);
     });
 
     test('offline fails fast without touching the repo', () async {
@@ -154,43 +152,6 @@ void main() {
       verifyNever(() => repo.updateClient(any()));
       verifyNever(() => linkStore.contactIdFor(any()));
       expect(refreshCount(), 0);
-    });
-  });
-
-  group('deleteClient', () {
-    test('deletes, unlinks the phone contact and bumps the refresh', () async {
-      when(() => repo.deleteClient(any())).thenAnswer((_) async {});
-
-      final outcome = await notifier().deleteClient('c1');
-
-      expect(outcome, isA<ClientDeleted>());
-      verify(() => repo.deleteClient('c1')).called(1);
-      verify(() => linkStore.unlink('c1')).called(1);
-      expect(refreshCount(), 1);
-      expect(activity().isDeleting, isFalse);
-    });
-
-    test('a failing unlink never fails the delete', () async {
-      when(() => repo.deleteClient(any())).thenAnswer((_) async {});
-      when(
-        () => linkStore.unlink(any()),
-      ).thenAnswer((_) async => throw Exception('prefs flake'));
-
-      final outcome = await notifier().deleteClient('c1');
-
-      expect(outcome, isA<ClientDeleted>());
-      expect(refreshCount(), 1);
-    });
-
-    test('reports the failure without bumping the refresh', () async {
-      when(() => repo.deleteClient(any())).thenThrow(Exception('offline'));
-
-      final outcome = await notifier().deleteClient('c1');
-
-      expect(outcome, isA<ClientDeleteFailed>());
-      expect(refreshCount(), 0);
-      verifyNever(() => linkStore.unlink(any()));
-      expect(activity().isDeleting, isFalse);
     });
   });
 }
