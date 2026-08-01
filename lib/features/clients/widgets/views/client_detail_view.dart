@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+
+import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/widgets/sheets/edit_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/views/client_view_body.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -57,60 +61,128 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
       showHandle: widget.showHandle,
       bottomPadding: widget.bottomPadding,
       children: [
-        _ViewHeader(client: _client),
+        _ProfileCard(client: _client, onEdit: _openEdit),
         const SizedBox(height: AppSpacing.sp16),
-        _EditPill(onEdit: _openEdit),
-        const SizedBox(height: AppSpacing.sp16),
-        const Divider(height: 1),
-        const SizedBox(height: AppSpacing.sp24),
         ClientDetailViewBody(client: _client, onBookJob: _bookJob),
       ],
     );
   }
 }
 
-class _ViewHeader extends StatelessWidget {
-  const _ViewHeader({required this.client});
+/// Avatar, name, a `<type> · since <Mon YYYY>` line, and the Edit pill — one
+/// card, as the approved design draws it. The pill lives inside the card rather
+/// than floating above it.
+class _ProfileCard extends StatelessWidget {
+  const _ProfileCard({required this.client, required this.onEdit});
 
   final ClientRecord client;
+  final VoidCallback onEdit;
+
+  /// "Property mgmt · since Apr 2023" — either half is dropped when absent,
+  /// so a typeless client with no createdAt renders no line at all.
+  String _subtitle(BuildContext context) {
+    final l10n = context.l10n;
+    final parts = <String>[
+      if (client.type != ClientType.unset) clientTypeLabel(l10n, client.type),
+      if (client.createdAt != null)
+        l10n.clients_sinceDate(
+          // Locale-aware month+year: "Apr 2023" / "avr. 2023".
+          DateFormat.yMMM(
+            Localizations.localeOf(context).toString(),
+          ).format(client.createdAt!),
+        ),
+    ];
+    return parts.join(' · ');
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final subtitle = _subtitle(context);
+    // Shown only when it says something the name doesn't already — a business
+    // with a named individual on file.
     final fullName = [
       client.firstName,
       client.lastName,
     ].where((part) => part.trim().isNotEmpty).join(' ').trim();
     final showPersonName = fullName.isNotEmpty && fullName != client.name;
-    return Column(
+
+    final identity = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        AppAvatar(name: client.displayName, size: AvatarSize.lg),
-        const SizedBox(height: AppSpacing.sp12),
         Text(
           client.displayName,
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.w700,
           ),
-          textAlign: TextAlign.center,
         ),
+        if (subtitle.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(
+            subtitle,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.palette.textTertiary,
+            ),
+          ),
+        ],
         if (showPersonName) ...[
           const SizedBox(height: 3),
           Text(
             fullName,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
+              color: theme.palette.textTertiary,
             ),
-            textAlign: TextAlign.center,
           ),
         ],
       ],
     );
+
+    final pill = _EditPill(onEdit: onEdit);
+
+    return DecoratedBox(
+      decoration: appCardDecoration(
+        theme,
+        radius: AppRadius.r16,
+        color: theme.colorScheme.surfaceContainerLowest,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sp16),
+        // The row holds an avatar, two-to-three text lines and a pill, so it
+        // folds rather than overflow once text is scaled up.
+        child: context.isCompact
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      AppAvatar(name: client.displayName, size: AvatarSize.lg),
+                      const SizedBox(width: AppSpacing.sp12),
+                      Expanded(child: identity),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sp12),
+                  Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: pill,
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  AppAvatar(name: client.displayName, size: AvatarSize.lg),
+                  const SizedBox(width: AppSpacing.sp12),
+                  Expanded(child: identity),
+                  const SizedBox(width: AppSpacing.sp8),
+                  pill,
+                ],
+              ),
+      ),
+    );
   }
 }
 
-/// Right-aligned Edit pill. It sits with the profile header rather than
-/// floating above it, and it is the only affordance here — clients are never
+/// Tinted Edit pill. The only affordance on this surface — clients are never
 /// archived or deleted (owner decision 2026-08-01).
 class _EditPill extends StatelessWidget {
   const _EditPill({required this.onEdit});
@@ -120,24 +192,22 @@ class _EditPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Align(
-      alignment: AlignmentDirectional.centerEnd,
-      child: TextButton(
-        style: TextButton.styleFrom(
-          backgroundColor: theme.palette.primaryAccent.withValues(alpha: 0.10),
-          foregroundColor: theme.palette.primaryAccent,
-          padding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: AppSpacing.sp8,
-          ),
-          minimumSize: const Size(0, 48),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.r12),
-          ),
+    return TextButton(
+      style: TextButton.styleFrom(
+        backgroundColor: theme.palette.primaryAccent.withValues(alpha: 0.10),
+        foregroundColor: theme.palette.primaryAccent,
+        padding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: AppSpacing.sp8,
         ),
-        onPressed: onEdit,
-        child: Text(context.l10n.clients_editClientPill),
+        // Design draws this smaller, but a tap target stays >= 48.
+        minimumSize: const Size(0, 48),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.r12),
+        ),
       ),
+      onPressed: onEdit,
+      child: Text(context.l10n.common_edit),
     );
   }
 }

@@ -10,6 +10,7 @@ import 'package:scheduling/features/clients/application/appointment_history_prov
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/widgets/sheets/edit_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/views/client_detail_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -85,7 +86,7 @@ Future<void> _pumpInEditMode(
   addTearDown(tester.view.reset);
   await tester.pumpWidget(_wrap(repo, client));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Edit client'));
+  await tester.tap(find.text('Edit'));
   await tester.pumpAndSettle();
 }
 
@@ -173,7 +174,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.widgetWithText(InkWell, 'Save'), findsOneWidget);
+      // It is a labelled row below the info panel now, not a tile.
+      expect(find.text('Save to contacts'), findsOneWidget);
       expect(find.widgetWithText(InkWell, 'Call'), findsNothing);
       expect(find.widgetWithText(InkWell, 'Directions'), findsNothing);
       expect(tester.takeException(), isNull);
@@ -332,5 +334,62 @@ void main() {
 
     // Clients are never removed (owner decision 2026-08-01).
     expect(find.text('Delete'), findsNothing);
+  });
+
+  testWidgets('the profile card states the type and the month joined', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        ClientRecord(
+          id: 'c1',
+          name: 'Gestion Beauchemin',
+          type: ClientType.propertyManagement,
+          createdAt: DateTime(2023, 4, 2),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Gestion Beauchemin'), findsOneWidget);
+    expect(find.text('Property mgmt · since Apr 2023'), findsOneWidget);
+    expect(find.text('Edit'), findsOneWidget);
+  });
+
+  testWidgets('the profile card drops the half it has no data for', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        ClientRecord(id: 'c1', name: 'Acme', createdAt: DateTime(2023, 4, 2)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // No type on this record, so the line is the join fragment alone.
+    expect(find.text('since Apr 2023'), findsOneWidget);
+  });
+
+  testWidgets('a typeless client with no createdAt renders no subtitle line', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(repo, const ClientRecord(id: 'c1', name: 'Acme')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('since'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }

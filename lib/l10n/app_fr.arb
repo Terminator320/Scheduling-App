@@ -178,7 +178,7 @@
   "clients_jobHistory": "Historique des travaux",
   "clients_noPastJobs": "Aucun rendez-vous",
   "clients_directions": "Itinéraire",
-  "clients_saveToContacts": "Enregistrer",
+  "clients_saveToContacts": "Enregistrer aux contacts",
   "clients_savedToContacts": "Enregistré dans les contacts",
   "clients_emailWith": "Écrire avec",
   "clients_defaultMailApp": "Application par défaut",
@@ -518,5 +518,5 @@
   "clients_billingKey": "FACTURATION",
   "clients_emailKey": "COURRIEL",
   "clients_bookJob": "Réserver",
-  "clients_editClientPill": "Modifier"
+  "clients_sinceDate": "depuis {date}"
 }
