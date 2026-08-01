@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +13,7 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 
 class _MockClientsRepo extends Mock implements ClientsRepository {}
 
@@ -25,7 +28,13 @@ Widget _wrap(
   ClientsRepository repo, {
   String searchQuery = '',
   ClientType? selectedType,
+  double? height,
 }) {
+  final view = ClientsListView(
+    searchQuery: searchQuery,
+    isAdmin: true,
+    selectedType: selectedType,
+  );
   return ProviderScope(
     overrides: [clientsRepositoryProvider.overrideWithValue(repo)],
     child: ThemeNotifier(
@@ -39,11 +48,14 @@ Widget _wrap(
         supportedLocales: AppLocalizations.supportedLocales,
         theme: lightTheme(),
         home: Scaffold(
-          body: ClientsListView(
-            searchQuery: searchQuery,
-            isAdmin: true,
-            selectedType: selectedType,
-          ),
+          body: height == null
+              ? view
+              // The keyboard-shortened box the master-detail Expanded hands the
+              // view while a search is open.
+              : Align(
+                  alignment: Alignment.topCenter,
+                  child: SizedBox(height: height, child: view),
+                ),
         ),
       ),
     ),
@@ -187,6 +199,28 @@ void main() {
     expect(find.textContaining('Marc'), findsNothing);
     // Matched locally against the bounded list, not via a second server query.
     verifyNever(() => repo.searchClients(any()));
+  });
+
+  testWidgets('the search skeleton fits a keyboard-shortened body', (
+    tester,
+  ) async {
+    // A search that never resolves, so the view sits on the loading skeleton.
+    when(
+      () => repo.searchClients(any()),
+    ).thenAnswer((_) => Completer<List<ClientRecord>>().future);
+
+    await tester.pumpWidget(_wrap(repo, height: 257.2));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      _wrap(repo, searchQuery: 'sophie', height: 257.2),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+
+    // Four fixed rows are 280px and overflowed this box by 23px; the row count
+    // has to follow the height, since the skeleton can't scroll itself.
+    expect(find.byType(SkeletonListTile), findsNWidgets(3));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('an empty type result shows the type empty state', (
