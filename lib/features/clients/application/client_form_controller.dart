@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
@@ -25,50 +24,14 @@ class ClientSaveFailed extends ClientSaveOutcome {
   final Object error;
 }
 
-/// Outcome of a client delete.
-sealed class ClientDeleteOutcome {
-  const ClientDeleteOutcome();
-}
-
-class ClientDeleted extends ClientDeleteOutcome {
-  const ClientDeleted();
-}
-
-class ClientDeleteFailed extends ClientDeleteOutcome {
-  const ClientDeleteFailed(this.error);
-  final Object error;
-}
-
-/// Busy flags for the client forms driving Save spinner and Delete button state.
-@immutable
-class ClientFormActivity {
-  const ClientFormActivity({this.isSaving = false, this.isDeleting = false});
-
-  final bool isSaving;
-  final bool isDeleting;
-
-  ClientFormActivity copyWith({bool? isSaving, bool? isDeleting}) {
-    return ClientFormActivity(
-      isSaving: isSaving ?? this.isSaving,
-      isDeleting: isDeleting ?? this.isDeleting,
-    );
-  }
-
+/// Write orchestration shared by the add/edit/detail views. Handles the
+/// repository write, the list refresh, and a best-effort phone-contact sync.
+///
+/// State is the Save spinner flag. Clients are never deleted (owner decision
+/// 2026-08-01), so there is no delete outcome and no second busy flag.
+class ClientFormController extends Notifier<bool> {
   @override
-  bool operator ==(Object other) =>
-      other is ClientFormActivity &&
-      other.isSaving == isSaving &&
-      other.isDeleting == isDeleting;
-
-  @override
-  int get hashCode => Object.hash(isSaving, isDeleting);
-}
-
-/// CRUD orchestration shared by the add/edit/detail views. Handles the repository
-/// write, the list refresh, and a best-effort phone-contact sync.
-class ClientFormController extends Notifier<ClientFormActivity> {
-  @override
-  ClientFormActivity build() => const ClientFormActivity();
+  bool build() => false;
 
   /// Persists a new client. State resets in the `finally` block because this provider
   /// is shared with the detail pane in the split layout.
@@ -83,7 +46,7 @@ class ClientFormController extends Notifier<ClientFormActivity> {
     final repo = ref.read(clientsRepositoryProvider);
     final refresh = ref.read(clientsRefreshProvider.notifier);
     final logger = ref.read(loggerProvider);
-    state = state.copyWith(isSaving: true);
+    state = true;
     try {
       final saved = await repo.addClient(client);
       refresh.bump();
@@ -92,7 +55,7 @@ class ClientFormController extends Notifier<ClientFormActivity> {
       logger.warn('CLI-ADD addClient failed', e, st);
       return ClientSaveFailed(e);
     } finally {
-      if (ref.mounted) state = state.copyWith(isSaving: false);
+      if (ref.mounted) state = false;
     }
   }
 
@@ -107,7 +70,7 @@ class ClientFormController extends Notifier<ClientFormActivity> {
     final refresh = ref.read(clientsRefreshProvider.notifier);
     final logger = ref.read(loggerProvider);
     final linkStore = ref.read(contactLinkStoreProvider);
-    state = state.copyWith(isSaving: true);
+    state = true;
     try {
       await repo.updateClient(client);
       refresh.bump();
@@ -121,37 +84,13 @@ class ClientFormController extends Notifier<ClientFormActivity> {
       logger.warn('CLI-SAVE updateClient failed', e, st);
       return ClientSaveFailed(e);
     } finally {
-      if (ref.mounted) state = state.copyWith(isSaving: false);
-    }
-  }
-
-  /// Deletes client, drops device-local phone-contact link (best-effort), and bumps list refresh.
-  Future<ClientDeleteOutcome> deleteClient(String clientId) async {
-    // Resolved before first await.
-    final repo = ref.read(clientsRepositoryProvider);
-    final refresh = ref.read(clientsRefreshProvider.notifier);
-    final logger = ref.read(loggerProvider);
-    final linkStore = ref.read(contactLinkStoreProvider);
-    state = state.copyWith(isDeleting: true);
-    try {
-      await repo.deleteClient(clientId);
-      try {
-        await linkStore.unlink(clientId);
-      } catch (e, st) {
-        logger.warn('CLI-DEL contact unlink failed', e, st);
-      }
-      refresh.bump();
-      if (ref.mounted) state = state.copyWith(isDeleting: false);
-      return const ClientDeleted();
-    } catch (e, st) {
-      logger.warn('CLI-DEL deleteClient failed', e, st);
-      if (ref.mounted) state = state.copyWith(isDeleting: false);
-      return ClientDeleteFailed(e);
+      if (ref.mounted) state = false;
     }
   }
 }
 
+/// True while a client add or edit is in flight.
 final clientFormControllerProvider =
-    NotifierProvider.autoDispose<ClientFormController, ClientFormActivity>(
+    NotifierProvider.autoDispose<ClientFormController, bool>(
       ClientFormController.new,
     );

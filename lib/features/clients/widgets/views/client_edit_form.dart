@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
-import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/clients/application/client_form_controller.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -20,15 +19,11 @@ import 'package:scheduling/shared/widgets/primitives/entity_form_header.dart';
 class ClientEditForm extends ConsumerStatefulWidget {
   const ClientEditForm({
     required this.client,
-    required this.isDeleting,
-    required this.onDelete,
     required this.onSaved,
     super.key,
   });
 
   final ClientRecord client;
-  final bool isDeleting;
-  final VoidCallback? onDelete;
   final ValueChanged<ClientRecord> onSaved;
 
   @override
@@ -123,7 +118,7 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
   Future<void> _save() async {
     // Guards against a double-tap firing two concurrent writes (mirrors
     // AddClientSheet) — the Save button disables while the save is in flight.
-    if (ref.read(clientFormControllerProvider).isSaving) return;
+    if (ref.read(clientFormControllerProvider)) return;
     final name = _nameController.text.trim();
     final firstName = _firstNameController.text.trim();
     final lastName = _lastNameController.text.trim();
@@ -262,8 +257,7 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
         const SizedBox(height: AppSpacing.sp24),
         _EditActions(
           onSave: _save,
-          onDelete: widget.onDelete,
-          isSaving: ref.watch(clientFormControllerProvider).isSaving,
+          isSaving: ref.watch(clientFormControllerProvider),
         ),
       ],
     );
@@ -271,38 +265,19 @@ class _ClientEditFormState extends ConsumerState<ClientEditForm>
 }
 
 class _EditActions extends StatelessWidget {
-  const _EditActions({
-    required this.onSave,
-    required this.onDelete,
-    required this.isSaving,
-  });
+  const _EditActions({required this.onSave, required this.isSaving});
 
   final VoidCallback onSave;
-  final VoidCallback? onDelete;
   final bool isSaving;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        FilledButton(
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(double.infinity, 46),
-          ),
-          onPressed: isSaving ? null : onSave,
-          child: Text(context.l10n.common_saveChanges),
-        ),
-        const SizedBox(height: AppSpacing.sp8),
-        OutlinedButton(
-          style: destructiveOutlinedButtonStyle(
-            context,
-            minimumSize: const Size(double.infinity, 44),
-          ),
-          onPressed: onDelete,
-          child: Text(context.l10n.common_delete),
-        ),
-      ],
+    return FilledButton(
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(double.infinity, 46),
+      ),
+      onPressed: isSaving ? null : onSave,
+      child: Text(context.l10n.common_saveChanges),
     );
   }
 }

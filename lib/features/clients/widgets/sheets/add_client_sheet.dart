@@ -176,7 +176,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
 
   @override
   Widget build(BuildContext context) {
-    final isSaving = ref.watch(clientFormControllerProvider).isSaving;
+    final isSaving = ref.watch(clientFormControllerProvider);
     return FormSheetScaffold(
       title: context.l10n.clients_newClient,
       children: [

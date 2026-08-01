@@ -9,8 +9,6 @@ abstract class ClientsRepository {
 
   Future<void> updateClient(ClientRecord client);
 
-  Future<void> deleteClient(String id);
-
   Future<List<ClientRecord>> searchClients(String query);
 
   /// Fetches the next page of clients, newest first. Pass the previous page's last item

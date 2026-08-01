@@ -120,15 +120,6 @@ void main() {
     });
   });
 
-  group('deleteClient', () {
-    test('deletes the correct document', () async {
-      await repo().deleteClient('c42');
-
-      verify(() => collection.doc('c42')).called(1);
-      verify(() => docRef.delete()).called(1);
-    });
-  });
-
   group('fetchClientsPage', () {
     test('first page orders by name + doc id without a cursor', () async {
       await repo().fetchClientsPage(limit: 50);
@@ -241,25 +232,6 @@ void main() {
 
       verify(() => query.get()).called(2);
     });
-
-    test(
-      'deleting a client drops it from search without re-reading the window',
-      () async {
-        final docs = [
-          doc('c1', {'name': 'John Smith'}),
-        ];
-        when(() => snapshot.docs).thenReturn(docs);
-
-        final r = repo();
-        expect((await r.searchClients('John')).map((c) => c.id), ['c1']);
-
-        await r.deleteClient('c1');
-
-        expect(await r.searchClients('John'), isEmpty);
-        // The write patched the in-memory window — no second Firestore read.
-        verify(() => query.get()).called(1);
-      },
-    );
 
     test(
       'updating a client is reflected in search without re-reading the window',

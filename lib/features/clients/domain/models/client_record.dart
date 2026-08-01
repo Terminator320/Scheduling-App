@@ -53,7 +53,6 @@ abstract class ClientRecord with _$ClientRecord {
     @Default('') String onSiteManager,
     @Default('') String billingTerms,
     @Default(false) bool autoInvoice,
-    @Default(false) bool archived,
     // Function-owned absolute recount — never emitted in toMap, and null until
     // the trigger has written it once.
     @Default(null) int? jobCount,
@@ -104,7 +103,6 @@ abstract class ClientRecord with _$ClientRecord {
       onSiteManager: (data['onSiteManager'] ?? '').toString(),
       billingTerms: (data['billingTerms'] ?? '').toString(),
       autoInvoice: (data['autoInvoice'] as bool?) ?? false,
-      archived: (data['archived'] as bool?) ?? false,
       jobCount: (data['jobCount'] as num?)?.toInt(),
       createdAt: firestoreDateTime(data['createdAt']),
       waveCustomerId: data['waveCustomerId']?.toString(),
@@ -136,8 +134,6 @@ abstract class ClientRecord with _$ClientRecord {
     'onSiteManager': onSiteManager.trim(),
     'billingTerms': billingTerms.trim(),
     'autoInvoice': autoInvoice,
-    // Emitted so a pre-P3 doc self-heals to `archived: false` on its first edit.
-    'archived': archived,
   };
 
   String get displayName => name;

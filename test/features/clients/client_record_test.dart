@@ -216,7 +216,6 @@ void main() {
         'onSiteManager': 'Dana',
         'billingTerms': 'Net 30',
         'autoInvoice': true,
-        'archived': true,
         'jobCount': 7,
       });
 
@@ -226,7 +225,6 @@ void main() {
       expect(record.onSiteManager, 'Dana');
       expect(record.billingTerms, 'Net 30');
       expect(record.autoInvoice, isTrue);
-      expect(record.archived, isTrue);
       expect(record.jobCount, 7);
     });
 
@@ -239,8 +237,6 @@ void main() {
       expect(record.onSiteManager, '');
       expect(record.billingTerms, '');
       expect(record.autoInvoice, isFalse);
-      // Absent means not archived — the Dart-side filter is `!(archived ?? false)`.
-      expect(record.archived, isFalse);
       expect(record.jobCount, isNull);
     });
 
@@ -262,7 +258,6 @@ void main() {
         onSiteManager: 'Dana',
         billingTerms: 'Net 15',
         autoInvoice: true,
-        archived: true,
       ).toMap();
 
       expect(map['type'], 'property_mgmt');
@@ -271,7 +266,6 @@ void main() {
       expect(map['onSiteManager'], 'Dana');
       expect(map['billingTerms'], 'Net 15');
       expect(map['autoInvoice'], true);
-      expect(map['archived'], true);
     });
 
     test('toMap never emits the function-owned fields', () {
@@ -285,12 +279,6 @@ void main() {
       expect(map.containsKey('jobCount'), isFalse);
       expect(map.containsKey('waveCustomerId'), isFalse);
       expect(map.containsKey('wave'), isFalse);
-    });
-
-    test('toMap self-heals archived on an older doc', () {
-      final map = ClientRecord.fromMap('c6', {'name': 'Old'}).toMap();
-
-      expect(map['archived'], false);
     });
   });
 }

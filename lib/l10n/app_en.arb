@@ -285,7 +285,9 @@
   "@calendar_dayRouteOpenInMaps": {
     "description": "Label of the pinned bottom button opening the remaining stops as a multi-stop route; count is the number of launched stops",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "calendar_dayRouteNavigate": "Navigate",
@@ -493,30 +495,6 @@
   "common_saveChanges": "Save changes",
   "@common_saveChanges": {
     "description": "Save changes"
-  },
-  "clients_deleting": "Deleting...",
-  "@clients_deleting": {
-    "description": "Deleting..."
-  },
-  "clients_deleteClient": "Delete client?",
-  "@clients_deleteClient": {
-    "description": "Delete client?"
-  },
-  "clients_areYouSureYouWantToDelete": "Are you sure you want to delete",
-  "@clients_areYouSureYouWantToDelete": {
-    "description": "Are you sure you want to delete"
-  },
-  "clients_thisCannotBeUndone": "This cannot be undone.",
-  "@clients_thisCannotBeUndone": {
-    "description": "This cannot be undone."
-  },
-  "clients_clientDeletedSuccessfully": "Client deleted successfully.",
-  "@clients_clientDeletedSuccessfully": {
-    "description": "Client deleted successfully."
-  },
-  "clients_thisClient": "this client",
-  "@clients_thisClient": {
-    "description": "this client"
   },
   "clients_additionalBusinessContacts": "Additional contacts",
   "@clients_additionalBusinessContacts": {
@@ -1554,53 +1532,97 @@
   "@error_noticeWithCause": {
     "description": "Error-notice template: operation intro, sanitized cause, short tag matching the Crashlytics log label",
     "placeholders": {
-      "intro": {"type": "String"},
-      "cause": {"type": "String"},
-      "tag": {"type": "String"}
+      "intro": {
+        "type": "String"
+      },
+      "cause": {
+        "type": "String"
+      },
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "error_causeOffline": "you appear to be offline",
-  "@error_causeOffline": {"description": "Sanitized error cause: network/offline"},
+  "@error_causeOffline": {
+    "description": "Sanitized error cause: network/offline"
+  },
   "error_causePermissionDenied": "you don't have permission to do this",
-  "@error_causePermissionDenied": {"description": "Sanitized error cause: permission denied"},
+  "@error_causePermissionDenied": {
+    "description": "Sanitized error cause: permission denied"
+  },
   "error_causeNotFound": "it no longer exists",
-  "@error_causeNotFound": {"description": "Sanitized error cause: document not found"},
+  "@error_causeNotFound": {
+    "description": "Sanitized error cause: document not found"
+  },
   "error_causeUnknown": "something went wrong",
-  "@error_causeUnknown": {"description": "Sanitized error cause: fallback"},
+  "@error_causeUnknown": {
+    "description": "Sanitized error cause: fallback"
+  },
   "error_introDeleteEmployee": "Couldn't delete the employee",
-  "@error_introDeleteEmployee": {"description": "Error intro for EMP-DEL"},
+  "@error_introDeleteEmployee": {
+    "description": "Error intro for EMP-DEL"
+  },
   "error_introChangeEmployeeStatus": "Couldn't update the employee's account status",
-  "@error_introChangeEmployeeStatus": {"description": "Error intro for EMP-STATUS"},
+  "@error_introChangeEmployeeStatus": {
+    "description": "Error intro for EMP-STATUS"
+  },
   "error_introSaveEmployee": "Couldn't save the employee",
-  "@error_introSaveEmployee": {"description": "Error intro for EMP-CREATE (covers create and edit)"},
+  "@error_introSaveEmployee": {
+    "description": "Error intro for EMP-CREATE (covers create and edit)"
+  },
   "error_introCreateAppointment": "Couldn't create the appointment",
-  "@error_introCreateAppointment": {"description": "Error intro for APPT-CREATE"},
+  "@error_introCreateAppointment": {
+    "description": "Error intro for APPT-CREATE"
+  },
   "error_introSaveAppointment": "Couldn't save the appointment changes",
-  "@error_introSaveAppointment": {"description": "Error intro for APPT-SAVE"},
+  "@error_introSaveAppointment": {
+    "description": "Error intro for APPT-SAVE"
+  },
   "error_introUpdateAppointmentStatus": "Couldn't update the appointment status",
-  "@error_introUpdateAppointmentStatus": {"description": "Error intro for APPT-STATUS (mark done / cancel)"},
+  "@error_introUpdateAppointmentStatus": {
+    "description": "Error intro for APPT-STATUS (mark done / cancel)"
+  },
   "error_introDeleteAppointment": "Couldn't delete the appointment",
-  "@error_introDeleteAppointment": {"description": "Error intro for APPT-DEL"},
+  "@error_introDeleteAppointment": {
+    "description": "Error intro for APPT-DEL"
+  },
   "error_introLoadAppointments": "Couldn't load appointments",
-  "@error_introLoadAppointments": {"description": "Error intro for APPT-LOAD"},
+  "@error_introLoadAppointments": {
+    "description": "Error intro for APPT-LOAD"
+  },
   "error_introDeleteAccount": "Couldn't delete your account",
-  "@error_introDeleteAccount": {"description": "Error intro for ACCT-DEL"},
+  "@error_introDeleteAccount": {
+    "description": "Error intro for ACCT-DEL"
+  },
   "error_introAddClient": "Couldn't add the client",
-  "@error_introAddClient": {"description": "Error intro for CLI-ADD"},
+  "@error_introAddClient": {
+    "description": "Error intro for CLI-ADD"
+  },
   "error_introSaveClient": "Couldn't save the client changes",
-  "@error_introSaveClient": {"description": "Error intro for CLI-SAVE"},
-  "error_introDeleteClient": "Couldn't delete the client",
-  "@error_introDeleteClient": {"description": "Error intro for CLI-DEL"},
+  "@error_introSaveClient": {
+    "description": "Error intro for CLI-SAVE"
+  },
   "error_introLoadHistory": "Couldn't load the appointment history",
-  "@error_introLoadHistory": {"description": "Error intro for HIST-LOAD"},
+  "@error_introLoadHistory": {
+    "description": "Error intro for HIST-LOAD"
+  },
   "error_introLoadClients": "Couldn't load clients",
-  "@error_introLoadClients": {"description": "Error intro for CLI-LIST"},
+  "@error_introLoadClients": {
+    "description": "Error intro for CLI-LIST"
+  },
   "error_thatCodeIsntValidAskYourAdmin": "That code isn't valid. Ask your admin for a new one.",
-  "@error_thatCodeIsntValidAskYourAdmin": { "description": "Shown when a signup code is wrong or already used." },
+  "@error_thatCodeIsntValidAskYourAdmin": {
+    "description": "Shown when a signup code is wrong or already used."
+  },
   "error_thatCodeHasExpiredAskYourAdmin": "That code has expired. Ask your admin for a new one.",
-  "@error_thatCodeHasExpiredAskYourAdmin": { "description": "Shown when a signup code is past its expiry." },
+  "@error_thatCodeHasExpiredAskYourAdmin": {
+    "description": "Shown when a signup code is past its expiry."
+  },
   "error_thatCodeWasIssuedForADifferentEmail": "That code was issued for a different email. Sign up using the exact email your admin invited.",
-  "@error_thatCodeWasIssuedForADifferentEmail": { "description": "Shown when a valid signup code is redeemed with an email that doesn't match the invite." },
+  "@error_thatCodeWasIssuedForADifferentEmail": {
+    "description": "Shown when a valid signup code is redeemed with an email that doesn't match the invite."
+  },
   "wave_errorAuthInvalid": "Wave connection token is missing or has been revoked. Please reconnect.",
   "@wave_errorAuthInvalid": {
     "description": "WaveAuthInvalid failure: the Wave access token is missing or revoked"
@@ -1837,166 +1859,325 @@
     }
   },
   "error_introLoadDashboard": "Couldn't load the dashboard",
-  "@error_introLoadDashboard": {"description": "Error intro for DASH-LOAD"},
+  "@error_introLoadDashboard": {
+    "description": "Error intro for DASH-LOAD"
+  },
   "common_share": "Share",
-  "@common_share": {"description": "Tooltip/label for the share action in the full-screen photo viewer"},
+  "@common_share": {
+    "description": "Tooltip/label for the share action in the full-screen photo viewer"
+  },
   "calendar_savePhoto": "Save to Photos",
-  "@calendar_savePhoto": {"description": "Tooltip/label for saving the current appointment photo to the device photo library"},
+  "@calendar_savePhoto": {
+    "description": "Tooltip/label for saving the current appointment photo to the device photo library"
+  },
   "calendar_photoSavedToPhotos": "Saved to Photos",
-  "@calendar_photoSavedToPhotos": {"description": "Success notice after saving an appointment photo to the device photo library"},
+  "@calendar_photoSavedToPhotos": {
+    "description": "Success notice after saving an appointment photo to the device photo library"
+  },
   "calendar_couldNotSavePhoto": "Couldn't save the photo. Please try again.",
-  "@calendar_couldNotSavePhoto": {"description": "Error notice when saving an appointment photo to the photo library fails"},
+  "@calendar_couldNotSavePhoto": {
+    "description": "Error notice when saving an appointment photo to the photo library fails"
+  },
   "calendar_photoLibraryAccessNeeded": "Photo access is off. Enable it in Settings to save photos.",
-  "@calendar_photoLibraryAccessNeeded": {"description": "Error notice when the OS denies photo-library add access while saving a photo"},
+  "@calendar_photoLibraryAccessNeeded": {
+    "description": "Error notice when the OS denies photo-library add access while saving a photo"
+  },
   "common_liveMap": "Live map",
-  "@common_liveMap": {"description": "Label for the button/nav entry that opens the admin live staff location map"},
+  "@common_liveMap": {
+    "description": "Label for the button/nav entry that opens the admin live staff location map"
+  },
   "liveMap_title": "Staff map",
-  "@liveMap_title": {"description": "App bar title for the admin live staff location map screen"},
+  "@liveMap_title": {
+    "description": "App bar title for the admin live staff location map screen"
+  },
   "liveMap_emptyState": "No one is sharing their location right now",
-  "@liveMap_emptyState": {"description": "Empty state message when no active employees have a live location to show"},
+  "@liveMap_emptyState": {
+    "description": "Empty state message when no active employees have a live location to show"
+  },
   "liveMap_lastUpdatedJustNow": "Just now",
-  "@liveMap_lastUpdatedJustNow": {"description": "Relative timestamp label for a staff location update that just happened"},
+  "@liveMap_lastUpdatedJustNow": {
+    "description": "Relative timestamp label for a staff location update that just happened"
+  },
   "liveMap_lastUpdatedMinutesAgo": "{minutes, plural, =1{1 min ago} other{{minutes} min ago}}",
   "@liveMap_lastUpdatedMinutesAgo": {
     "description": "Relative timestamp label for a staff location update, in minutes",
     "placeholders": {
-      "minutes": {"type": "int"}
+      "minutes": {
+        "type": "int"
+      }
     }
   },
   "liveMap_lastUpdatedHoursAgo": "{hours, plural, =1{1 hr ago} other{{hours} hrs ago}}",
   "@liveMap_lastUpdatedHoursAgo": {
     "description": "Relative timestamp label for a staff location update, in hours",
     "placeholders": {
-      "hours": {"type": "int"}
+      "hours": {
+        "type": "int"
+      }
     }
   },
   "liveMap_offlineLastSeen": "Offline — last seen {ago}",
   "@liveMap_offlineLastSeen": {
     "description": "Status label for an employee whose location is stale/offline, with a relative last-seen time",
     "placeholders": {
-      "ago": {"type": "String"}
+      "ago": {
+        "type": "String"
+      }
     }
   },
   "liveMap_resolvingAddress": "Finding address…",
-  "@liveMap_resolvingAddress": {"description": "Placeholder shown while reverse-geocoding a staff pin's coordinates into an address"},
+  "@liveMap_resolvingAddress": {
+    "description": "Placeholder shown while reverse-geocoding a staff pin's coordinates into an address"
+  },
   "liveMap_openInMaps": "Open in Maps",
-  "@liveMap_openInMaps": {"description": "Button label to open a selected staff pin's location in the device map app"},
+  "@liveMap_openInMaps": {
+    "description": "Button label to open a selected staff pin's location in the device map app"
+  },
   "liveMap_trafficToggle": "Traffic",
-  "@liveMap_trafficToggle": {"description": "Toggle label for showing live traffic overlay on the staff map"},
+  "@liveMap_trafficToggle": {
+    "description": "Toggle label for showing live traffic overlay on the staff map"
+  },
   "liveMap_satelliteToggle": "Satellite",
-  "@liveMap_satelliteToggle": {"description": "Toggle label for switching the staff map to satellite view"},
+  "@liveMap_satelliteToggle": {
+    "description": "Toggle label for switching the staff map to satellite view"
+  },
   "liveMap_recenter": "Recenter map",
-  "@liveMap_recenter": {"description": "Accessibility label / tooltip for the button that recenters the staff map on all staff pins"},
+  "@liveMap_recenter": {
+    "description": "Accessibility label / tooltip for the button that recenters the staff map on all staff pins"
+  },
   "liveMap_rosterButton": "Show staff list",
-  "@liveMap_rosterButton": {"description": "Tooltip / accessibility label for the button that opens the bottom sheet listing every staff member on the map"},
+  "@liveMap_rosterButton": {
+    "description": "Tooltip / accessibility label for the button that opens the bottom sheet listing every staff member on the map"
+  },
   "liveMap_rosterTitle": "Staff",
-  "@liveMap_rosterTitle": {"description": "Title of the bottom sheet that lists every staff member currently sharing their location"},
+  "@liveMap_rosterTitle": {
+    "description": "Title of the bottom sheet that lists every staff member currently sharing their location"
+  },
   "liveMap_rosterCount": "{count, plural, =1{1 sharing} other{{count} sharing}}",
-  "@liveMap_rosterCount": {"description": "Subtitle showing how many staff are currently sharing their location", "placeholders": {"count": {"type": "int"}}},
+  "@liveMap_rosterCount": {
+    "description": "Subtitle showing how many staff are currently sharing their location",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "liveMap_you": "You",
-  "@liveMap_you": {"description": "Badge marking the admin's own row in the staff roster list"},
+  "@liveMap_you": {
+    "description": "Badge marking the admin's own row in the staff roster list"
+  },
   "liveMap_locatingCity": "Locating…",
-  "@liveMap_locatingCity": {"description": "Placeholder shown in a roster row while the staff member's city is being resolved"},
+  "@liveMap_locatingCity": {
+    "description": "Placeholder shown in a roster row while the staff member's city is being resolved"
+  },
   "liveMap_noLocation": "No location",
-  "@liveMap_noLocation": {"description": "Shown in a roster row when the staff member's position can't be resolved to a place (reverse-geocode returned nothing usable)"},
+  "@liveMap_noLocation": {
+    "description": "Shown in a roster row when the staff member's position can't be resolved to a place (reverse-geocode returned nothing usable)"
+  },
   "liveMap_distanceKm": "{value} km",
-  "@liveMap_distanceKm": {"description": "Distance from the viewing admin to a staff member, in kilometres (value already locale-formatted, e.g. 2.4)", "placeholders": {"value": {"type": "String"}}},
+  "@liveMap_distanceKm": {
+    "description": "Distance from the viewing admin to a staff member, in kilometres (value already locale-formatted, e.g. 2.4)",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
   "liveMap_distanceMeters": "{value} m",
-  "@liveMap_distanceMeters": {"description": "Distance from the viewing admin to a staff member, in metres (value already locale-formatted, e.g. 450)", "placeholders": {"value": {"type": "String"}}},
+  "@liveMap_distanceMeters": {
+    "description": "Distance from the viewing admin to a staff member, in metres (value already locale-formatted, e.g. 450)",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
   "error_introLoadLiveMap": "Couldn't load the staff map",
-  "@error_introLoadLiveMap": {"description": "Error intro for LIVEMAP-LOAD"},
+  "@error_introLoadLiveMap": {
+    "description": "Error intro for LIVEMAP-LOAD"
+  },
   "tour_next": "Next",
-  "@tour_next": {"description": "Advance button on a feature-tour tooltip"},
+  "@tour_next": {
+    "description": "Advance button on a feature-tour tooltip"
+  },
   "tour_skip": "Skip",
-  "@tour_skip": {"description": "Dismiss button ending a feature tour early"},
+  "@tour_skip": {
+    "description": "Dismiss button ending a feature tour early"
+  },
   "tour_stepCounter": "{current} of {total}",
   "@tour_stepCounter": {
     "description": "Position indicator on a feature-tour tooltip",
     "placeholders": {
-      "current": {"type": "int"},
-      "total": {"type": "int"}
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "tour_calendarGridTitle": "Your month at a glance",
-  "@tour_calendarGridTitle": {"description": "Tour step title: calendar month grid"},
+  "@tour_calendarGridTitle": {
+    "description": "Tour step title: calendar month grid"
+  },
   "tour_calendarGridDesc": "Days with a dot have booked jobs. Tap a day to see its schedule below.",
-  "@tour_calendarGridDesc": {"description": "Tour step description: calendar month grid"},
+  "@tour_calendarGridDesc": {
+    "description": "Tour step description: calendar month grid"
+  },
   "tour_calendarDayListTitle": "The day's schedule",
-  "@tour_calendarDayListTitle": {"description": "Tour step title: selected day's job list"},
+  "@tour_calendarDayListTitle": {
+    "description": "Tour step title: selected day's job list"
+  },
   "tour_calendarDayListDesc": "Jobs for the selected day. Tap one to open its details and photos.",
-  "@tour_calendarDayListDesc": {"description": "Tour step description: selected day's job list"},
+  "@tour_calendarDayListDesc": {
+    "description": "Tour step description: selected day's job list"
+  },
   "tour_calendarAddTitle": "Book a job",
-  "@tour_calendarAddTitle": {"description": "Tour step title: add-appointment FAB (admin)"},
+  "@tour_calendarAddTitle": {
+    "description": "Tour step title: add-appointment FAB (admin)"
+  },
   "tour_calendarAddDesc": "Tap + to create an appointment, pick the client, and assign your team.",
-  "@tour_calendarAddDesc": {"description": "Tour step description: add-appointment FAB (admin)"},
+  "@tour_calendarAddDesc": {
+    "description": "Tour step description: add-appointment FAB (admin)"
+  },
   "tour_calendarDayRouteTitle": "Day route",
-  "@tour_calendarDayRouteTitle": {"description": "Tour step title: day-route app bar action"},
+  "@tour_calendarDayRouteTitle": {
+    "description": "Tour step title: day-route app bar action"
+  },
   "tour_calendarDayRouteDesc": "Open the day's jobs as one driving route in Google Maps.",
-  "@tour_calendarDayRouteDesc": {"description": "Tour step description: day-route app bar action"},
+  "@tour_calendarDayRouteDesc": {
+    "description": "Tour step description: day-route app bar action"
+  },
   "tour_clientsSearchTitle": "Find a client",
-  "@tour_clientsSearchTitle": {"description": "Tour step title: clients search bar"},
+  "@tour_clientsSearchTitle": {
+    "description": "Tour step title: clients search bar"
+  },
   "tour_clientsSearchDesc": "Search by name, phone, or address — results update as you type.",
-  "@tour_clientsSearchDesc": {"description": "Tour step description: clients search bar"},
+  "@tour_clientsSearchDesc": {
+    "description": "Tour step description: clients search bar"
+  },
   "tour_clientsAddTitle": "Add a client",
-  "@tour_clientsAddTitle": {"description": "Tour step title: add-client FAB"},
+  "@tour_clientsAddTitle": {
+    "description": "Tour step title: add-client FAB"
+  },
   "tour_clientsAddDesc": "Create a new client file. You can also add one while booking an appointment.",
-  "@tour_clientsAddDesc": {"description": "Tour step description: add-client FAB"},
+  "@tour_clientsAddDesc": {
+    "description": "Tour step description: add-client FAB"
+  },
   "tour_employeesSearchTitle": "Find a team member",
-  "@tour_employeesSearchTitle": {"description": "Tour step title: employees search bar"},
+  "@tour_employeesSearchTitle": {
+    "description": "Tour step title: employees search bar"
+  },
   "tour_employeesSearchDesc": "Search your staff by name or email.",
-  "@tour_employeesSearchDesc": {"description": "Tour step description: employees search bar"},
+  "@tour_employeesSearchDesc": {
+    "description": "Tour step description: employees search bar"
+  },
   "tour_employeesAddTitle": "Invite an employee",
-  "@tour_employeesAddTitle": {"description": "Tour step title: invite-employee FAB"},
+  "@tour_employeesAddTitle": {
+    "description": "Tour step title: invite-employee FAB"
+  },
   "tour_employeesAddDesc": "Create an invite with a one-time signup code to share with your new team member.",
-  "@tour_employeesAddDesc": {"description": "Tour step description: invite-employee FAB"},
+  "@tour_employeesAddDesc": {
+    "description": "Tour step description: invite-employee FAB"
+  },
   "tour_historySearchTitle": "Search past jobs",
-  "@tour_historySearchTitle": {"description": "Tour step title: history search bar"},
+  "@tour_historySearchTitle": {
+    "description": "Tour step title: history search bar"
+  },
   "tour_historySearchDesc": "Completed and cancelled visits live here — search by client or employee, and filter by year.",
-  "@tour_historySearchDesc": {"description": "Tour step description: history search bar"},
+  "@tour_historySearchDesc": {
+    "description": "Tour step description: history search bar"
+  },
   "tour_liveMapRosterTitle": "Staff roster",
-  "@tour_liveMapRosterTitle": {"description": "Tour step title: live-map roster FAB"},
+  "@tour_liveMapRosterTitle": {
+    "description": "Tour step title: live-map roster FAB"
+  },
   "tour_liveMapRosterDesc": "See everyone sharing their location, sorted by distance from you.",
-  "@tour_liveMapRosterDesc": {"description": "Tour step description: live-map roster FAB"},
+  "@tour_liveMapRosterDesc": {
+    "description": "Tour step description: live-map roster FAB"
+  },
   "tour_liveMapRecenterTitle": "Recenter",
-  "@tour_liveMapRecenterTitle": {"description": "Tour step title: live-map recenter FAB"},
+  "@tour_liveMapRecenterTitle": {
+    "description": "Tour step title: live-map recenter FAB"
+  },
   "tour_liveMapRecenterDesc": "Bring the map back to your team after panning around.",
-  "@tour_liveMapRecenterDesc": {"description": "Tour step description: live-map recenter FAB"},
+  "@tour_liveMapRecenterDesc": {
+    "description": "Tour step description: live-map recenter FAB"
+  },
   "tour_settingsAppearanceTitle": "Make it yours",
-  "@tour_settingsAppearanceTitle": {"description": "Tour step title: settings appearance card"},
+  "@tour_settingsAppearanceTitle": {
+    "description": "Tour step title: settings appearance card"
+  },
   "tour_settingsAppearanceDesc": "Switch dark mode, text size, and language here.",
-  "@tour_settingsAppearanceDesc": {"description": "Tour step description: settings appearance card"},
+  "@tour_settingsAppearanceDesc": {
+    "description": "Tour step description: settings appearance card"
+  },
   "tour_settingsNotificationsTitle": "Notifications",
-  "@tour_settingsNotificationsTitle": {"description": "Tour step title: settings notifications card"},
+  "@tour_settingsNotificationsTitle": {
+    "description": "Tour step title: settings notifications card"
+  },
   "tour_settingsNotificationsDesc": "Check push permission and the on-the-road Live Activity card here.",
-  "@tour_settingsNotificationsDesc": {"description": "Tour step description: settings notifications card"},
+  "@tour_settingsNotificationsDesc": {
+    "description": "Tour step description: settings notifications card"
+  },
   "tour_settingsReplayTitle": "Replay this tour",
-  "@tour_settingsReplayTitle": {"description": "Tour step title: replay-tour settings row"},
+  "@tour_settingsReplayTitle": {
+    "description": "Tour step title: replay-tour settings row"
+  },
   "tour_settingsReplayDesc": "Tap here any time to see these tips again on every screen.",
-  "@tour_settingsReplayDesc": {"description": "Tour step description: replay-tour settings row"},
+  "@tour_settingsReplayDesc": {
+    "description": "Tour step description: replay-tour settings row"
+  },
   "settings_help": "Help",
-  "@settings_help": {"description": "Settings section header for help/tour actions"},
+  "@settings_help": {
+    "description": "Settings section header for help/tour actions"
+  },
   "settings_replayTour": "Replay app tour",
-  "@settings_replayTour": {"description": "Settings row that resets all feature-tour seen flags"},
+  "@settings_replayTour": {
+    "description": "Settings row that resets all feature-tour seen flags"
+  },
   "settings_replayTourDone": "Tour tips will show again.",
-  "@settings_replayTourDone": {"description": "Success notice after resetting the feature tours"},
+  "@settings_replayTourDone": {
+    "description": "Success notice after resetting the feature tours"
+  },
   "nav_goToCalendar": "Calendar",
-  "@nav_goToCalendar": {"description": "Header pill that returns to the calendar tab and collapses any pushed screens"},
+  "@nav_goToCalendar": {
+    "description": "Header pill that returns to the calendar tab and collapses any pushed screens"
+  },
   "nav_openMenu": "Open menu",
-  "@nav_openMenu": {"description": "Header button that opens the right-anchored navigation drawer"},
+  "@nav_openMenu": {
+    "description": "Header button that opens the right-anchored navigation drawer"
+  },
   "nav_team": "Team",
-  "@nav_team": {"description": "Navigation label for the employees destination"},
+  "@nav_team": {
+    "description": "Navigation label for the employees destination"
+  },
   "nav_dayRoute": "Day route",
-  "@nav_dayRoute": {"description": "Navigation label for the day-route map destination"},
+  "@nav_dayRoute": {
+    "description": "Navigation label for the day-route map destination"
+  },
   "nav_dashboard": "Dashboard",
-  "@nav_dashboard": {"description": "Navigation label for the admin dashboard destination"},
+  "@nav_dashboard": {
+    "description": "Navigation label for the admin dashboard destination"
+  },
   "nav_myDetails": "My details",
-  "@nav_myDetails": {"description": "Navigation label for the signed-in user's own profile destination"},
+  "@nav_myDetails": {
+    "description": "Navigation label for the signed-in user's own profile destination"
+  },
   "nav_groupToday": "TODAY",
-  "@nav_groupToday": {"description": "Drawer group heading for destinations used during today's work; stored uppercase"},
+  "@nav_groupToday": {
+    "description": "Drawer group heading for destinations used during today's work; stored uppercase"
+  },
   "nav_groupPeople": "PEOPLE",
-  "@nav_groupPeople": {"description": "Drawer group heading for staff and client destinations; stored uppercase"},
+  "@nav_groupPeople": {
+    "description": "Drawer group heading for staff and client destinations; stored uppercase"
+  },
   "nav_groupBusiness": "THE BUSINESS",
-  "@nav_groupBusiness": {"description": "Drawer group heading for business-wide reporting destinations; stored uppercase"},
+  "@nav_groupBusiness": {
+    "description": "Drawer group heading for business-wide reporting destinations; stored uppercase"
+  },
   "nav_groupAccount": "ACCOUNT",
-  "@nav_groupAccount": {"description": "Drawer group heading for the signed-in user's own account destinations; stored uppercase"}
+  "@nav_groupAccount": {
+    "description": "Drawer group heading for the signed-in user's own account destinations; stored uppercase"
+  }
 }

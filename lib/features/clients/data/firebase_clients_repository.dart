@@ -45,9 +45,10 @@ class FirebaseClientsRepository implements ClientsRepository {
     _searchCache[key] = _CachedClientSearch(results, _clock());
   }
 
-  // For local writes we patch the written doc into (or out of) the scan window directly,
-  // so search can recompute without an extra read.
-  void _applyLocalWrite(String id, Map<String, dynamic>? data) {
+  // For local writes we patch the written doc into the scan window directly, so
+  // search can recompute without an extra read. Only adds and edits reach here —
+  // clients are never deleted, so there is no removal case.
+  void _applyLocalWrite(String id, Map<String, dynamic> data) {
     final window = _scanWindow;
     if (window != null && _isFresh(window.fetchedAt)) {
       final docs = [
@@ -55,7 +56,7 @@ class FirebaseClientsRepository implements ClientsRepository {
           if (doc.id != id) doc,
         // Where it lands in the window doesn't matter — matching happens per-doc, and the
         // final order comes from the relevance sort anyway.
-        if (data != null) (id: id, data: data),
+        (id: id, data: data),
       ];
       _scanWindow = _CachedClientScanWindow(docs, window.fetchedAt);
     } else {
@@ -130,12 +131,6 @@ class FirebaseClientsRepository implements ClientsRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     });
     _applyLocalWrite(client.id, map);
-  }
-
-  @override
-  Future<void> deleteClient(String id) async {
-    await _clients.doc(id).delete();
-    _applyLocalWrite(id, null);
   }
 
   @override
