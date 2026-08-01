@@ -36,3 +36,20 @@ final clientSearchProvider = FutureProvider.autoDispose
       final repo = ref.watch(clientsRepositoryProvider);
       return repo.searchClients(query);
     });
+
+/// Every tag in use, for the clients list's filter row. Empty until an admin
+/// tags someone, so the row costs nothing on a fresh install.
+final clientTagsProvider = FutureProvider.autoDispose<List<String>>((
+  ref,
+) async {
+  // Re-reads after any client write, so a newly added tag shows up.
+  ref.watch(clientsRefreshProvider);
+  return ref.watch(clientsRepositoryProvider).fetchClientTags();
+});
+
+/// Clients carrying one tag. AutoDispose frees it as soon as the tag is cleared.
+final clientsByTagProvider = FutureProvider.autoDispose
+    .family<List<ClientRecord>, String>((ref, tag) async {
+      ref.watch(clientsRefreshProvider);
+      return ref.watch(clientsRepositoryProvider).fetchClientsByTag(tag);
+    });

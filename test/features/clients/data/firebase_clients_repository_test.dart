@@ -286,4 +286,90 @@ void main() {
       expect(results.map((c) => c.id), ['c2', 'c3', 'c1']);
     });
   });
+
+  group('tag filtering', () {
+    test('fetchClientTags returns distinct tags, case-insensitively sorted',
+        () async {
+      final docs = [
+        doc('c1', {'name': 'A', 'tags': ['vip', 'net30']}),
+        doc('c2', {'name': 'B', 'tags': ['Net30', 'vip']}),
+        doc('c3', {'name': 'C'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      final tags = await repo().fetchClientTags();
+
+      // 'Net30' and 'net30' are distinct stored values; both survive, ordered
+      // case-insensitively so the chip row reads alphabetically.
+      expect(tags, ['Net30', 'net30', 'vip']);
+    });
+
+    test('fetchClientTags ignores blank and non-string entries', () async {
+      final docs = [
+        doc('c1', {'name': 'A', 'tags': ['vip', '', '  ', 42, null]}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      expect(await repo().fetchClientTags(), ['vip']);
+    });
+
+    test('fetchClientTags is empty when nobody is tagged', () async {
+      final docs = [
+        doc('c1', {'name': 'A'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      expect(await repo().fetchClientTags(), isEmpty);
+    });
+
+    test('fetchClientsByTag returns only that tag, name-sorted', () async {
+      final docs = [
+        doc('c1', {'name': 'Zeta', 'tags': ['vip']}),
+        doc('c2', {'name': 'Untagged'}),
+        doc('c3', {'name': 'Alpha', 'tags': ['vip', 'net30']}),
+        doc('c4', {'name': 'Other', 'tags': ['net30']}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      final tagged = await repo().fetchClientsByTag('vip');
+
+      expect(tagged.map((c) => c.name), ['Alpha', 'Zeta']);
+    });
+
+    test('fetchClientsByTag matches the stored spelling exactly', () async {
+      final docs = [
+        doc('c1', {'name': 'A', 'tags': ['VIP']}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      // The chip row only ever offers stored spellings, so an exact match is
+      // what keeps 'VIP' and 'vip' the two separate labels the admin typed.
+      expect(await repo().fetchClientsByTag('vip'), isEmpty);
+      expect((await repo().fetchClientsByTag('VIP')).single.name, 'A');
+    });
+
+    test('a blank tag reads nothing rather than everything', () async {
+      final docs = [
+        doc('c1', {'name': 'A', 'tags': ['vip']}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      expect(await repo().fetchClientsByTag('  '), isEmpty);
+    });
+
+    test('tags and by-tag share the search scan window (one read)', () async {
+      final docs = [
+        doc('c1', {'name': 'A', 'tags': ['vip']}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      final r = repo();
+      await r.fetchClientTags();
+      await r.fetchClientsByTag('vip');
+      await r.searchClients('A');
+
+      // The filter row costs no extra Firestore read inside the cache TTL.
+      verify(() => query.get()).called(1);
+    });
+  });
 }

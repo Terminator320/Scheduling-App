@@ -518,5 +518,8 @@
   "clients_billingKey": "FACTURATION",
   "clients_emailKey": "COURRIEL",
   "clients_bookJob": "Réserver",
-  "clients_sinceDate": "depuis {date}"
+  "clients_sinceDate": "depuis {date}",
+  "clients_filterByTag": "Filtrer les clients par étiquette",
+  "clients_noClientsTagged": "Aucun client avec l’étiquette {tag}",
+  "clients_taggedClientsHint": "Les étiquettes s’ajoutent dans la fiche du client."
 }

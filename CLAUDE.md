@@ -425,6 +425,19 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   truncates the list permanently — so it would have to come back with a page
   object carrying the raw page size and a raw cursor. The Admin SDK bypasses
   rules, so console/support cleanup is unaffected.
+- **The clients tag filter is a SEPARATE bounded read, never a filter over the
+  paginated list.** `fetchClientsByTag` / `fetchClientTags` scan the same cached
+  1000-doc window `searchClients` uses, so the chip row and its results cost no
+  extra Firestore read inside the 2-minute TTL and need no composite index.
+  Routing it through `fetchClientsPage` instead would filter a server page in
+  Dart, shortening a page the server actually filled — which is exactly what
+  stops `ClientsListView` paging early and hides every client below the first
+  non-matching one. The window bound is the same one search already lives with:
+  past ~1000 clients the filter sees a prefix, not the whole roster. Tag
+  matching is **exact and case-sensitive** (the chip row only ever offers stored
+  spellings), and `fetchClientTags` breaks a case-insensitive sort tie with a
+  case-sensitive compare so "Net30"/"net30" get a stable order rather than one
+  that depends on scan order.
 - **`jobCount` is recomputed absolutely, never incremented.** `recountClientJobs`
   (`functions/client_job_count.js`) runs `retry: true`, so a retried event would
   double-count a `FieldValue.increment`; it runs a `count()` aggregate and SETS
