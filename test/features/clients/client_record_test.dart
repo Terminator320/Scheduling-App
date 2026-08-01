@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
 
 void main() {
   group('ClientRecord', () {
@@ -202,6 +203,94 @@ void main() {
       );
       final restored = ClientContact.fromMap(original.toMap());
       expect(restored, equals(original));
+    });
+  });
+
+  group('ClientRecord P3 fields', () {
+    test('fromMap reads every new field', () {
+      final record = ClientRecord.fromMap('c1', {
+        'name': 'Acme',
+        'type': 'commercial',
+        'tags': ['vip', 'net30'],
+        'accessNotes': 'Gate code 1234',
+        'onSiteManager': 'Dana',
+        'billingTerms': 'Net 30',
+        'autoInvoice': true,
+        'archived': true,
+        'jobCount': 7,
+      });
+
+      expect(record.type, ClientType.commercial);
+      expect(record.tags, ['vip', 'net30']);
+      expect(record.accessNotes, 'Gate code 1234');
+      expect(record.onSiteManager, 'Dana');
+      expect(record.billingTerms, 'Net 30');
+      expect(record.autoInvoice, isTrue);
+      expect(record.archived, isTrue);
+      expect(record.jobCount, 7);
+    });
+
+    test('a legacy doc with none of the new fields defaults safely', () {
+      final record = ClientRecord.fromMap('c2', {'name': 'Old'});
+
+      expect(record.type, ClientType.unset);
+      expect(record.tags, isEmpty);
+      expect(record.accessNotes, '');
+      expect(record.onSiteManager, '');
+      expect(record.billingTerms, '');
+      expect(record.autoInvoice, isFalse);
+      // Absent means not archived — the Dart-side filter is `!(archived ?? false)`.
+      expect(record.archived, isFalse);
+      expect(record.jobCount, isNull);
+    });
+
+    test('tags drops non-string and blank entries', () {
+      final record = ClientRecord.fromMap('c3', {
+        'tags': ['vip', 42, '', '  ', 'net30'],
+      });
+
+      expect(record.tags, ['vip', 'net30']);
+    });
+
+    test('toMap emits the user-owned new fields', () {
+      final map = const ClientRecord(
+        id: 'c4',
+        name: 'Acme',
+        type: ClientType.propertyManagement,
+        tags: ['vip'],
+        accessNotes: 'Side door',
+        onSiteManager: 'Dana',
+        billingTerms: 'Net 15',
+        autoInvoice: true,
+        archived: true,
+      ).toMap();
+
+      expect(map['type'], 'property_mgmt');
+      expect(map['tags'], ['vip']);
+      expect(map['accessNotes'], 'Side door');
+      expect(map['onSiteManager'], 'Dana');
+      expect(map['billingTerms'], 'Net 15');
+      expect(map['autoInvoice'], true);
+      expect(map['archived'], true);
+    });
+
+    test('toMap never emits the function-owned fields', () {
+      final map = const ClientRecord(
+        id: 'c5',
+        name: 'Acme',
+        jobCount: 9,
+        waveCustomerId: 'wave-1',
+      ).toMap();
+
+      expect(map.containsKey('jobCount'), isFalse);
+      expect(map.containsKey('waveCustomerId'), isFalse);
+      expect(map.containsKey('wave'), isFalse);
+    });
+
+    test('toMap self-heals archived on an older doc', () {
+      final map = ClientRecord.fromMap('c6', {'name': 'Old'}).toMap();
+
+      expect(map['archived'], false);
     });
   });
 }

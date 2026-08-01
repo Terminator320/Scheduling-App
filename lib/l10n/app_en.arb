@@ -474,6 +474,18 @@
   "@clients_newClient": {
     "description": "New client"
   },
+  "clients_typeResidential": "Residential",
+  "@clients_typeResidential": {
+    "description": "Client type chip for a private home"
+  },
+  "clients_typeCommercial": "Commercial",
+  "@clients_typeCommercial": {
+    "description": "Client type chip for a business customer"
+  },
+  "clients_typePropertyManagement": "Property mgmt",
+  "@clients_typePropertyManagement": {
+    "description": "Client type chip for a property-management company"
+  },
   "common_save": "Save",
   "@common_save": {
     "description": "Primary verb in a form sheet's top bar, where the full 'Save Appointment' would not fit."

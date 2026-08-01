@@ -1,6 +1,7 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'package:scheduling/core/utils/firestore_parsing.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
 
 part 'client_record.freezed.dart';
 
@@ -46,6 +47,16 @@ abstract class ClientRecord with _$ClientRecord {
     @Default('') String email,
     @Default(<ClientContact>[]) List<ClientContact> contacts,
     @Default(false) bool noFixedAddress,
+    @Default(ClientType.unset) ClientType type,
+    @Default(<String>[]) List<String> tags,
+    @Default('') String accessNotes,
+    @Default('') String onSiteManager,
+    @Default('') String billingTerms,
+    @Default(false) bool autoInvoice,
+    @Default(false) bool archived,
+    // Function-owned absolute recount — never emitted in toMap, and null until
+    // the trigger has written it once.
+    @Default(null) int? jobCount,
     // Read-only server timestamp used for dashboard trends — never emitted in toMap.
     DateTime? createdAt,
     // Wave projection — read-only and function-owned, so it's omitted from toMap
@@ -84,6 +95,17 @@ abstract class ClientRecord with _$ClientRecord {
           .map((c) => ClientContact.fromMap(Map<String, dynamic>.from(c)))
           .toList(),
       noFixedAddress: (data['noFixedAddress'] as bool?) ?? false,
+      type: ClientType.fromRaw(data['type']?.toString()),
+      tags: [
+        for (final tag in (data['tags'] as List?) ?? const [])
+          if (tag is String && tag.trim().isNotEmpty) tag.trim(),
+      ],
+      accessNotes: (data['accessNotes'] ?? '').toString(),
+      onSiteManager: (data['onSiteManager'] ?? '').toString(),
+      billingTerms: (data['billingTerms'] ?? '').toString(),
+      autoInvoice: (data['autoInvoice'] as bool?) ?? false,
+      archived: (data['archived'] as bool?) ?? false,
+      jobCount: (data['jobCount'] as num?)?.toInt(),
       createdAt: firestoreDateTime(data['createdAt']),
       waveCustomerId: data['waveCustomerId']?.toString(),
       waveSyncState: (wave?['syncState'] ?? '').toString(),
@@ -91,8 +113,8 @@ abstract class ClientRecord with _$ClientRecord {
     );
   }
 
-  /// User-owned fields only. `waveCustomerId`/`wave` are function-owned and get rejected
-  /// by the update rule, so they're left out here.
+  /// User-owned fields only. `waveCustomerId`/`wave`/`jobCount` are function-owned
+  /// and get rejected by the update rule, so they're left out here.
   Map<String, dynamic> toMap() => {
     'name': name.trim(),
     'firstName': firstName.trim(),
@@ -108,6 +130,14 @@ abstract class ClientRecord with _$ClientRecord {
     'email': email.trim(),
     'contacts': contacts.map((c) => c.toMap()).toList(),
     'noFixedAddress': noFixedAddress,
+    'type': type.raw,
+    'tags': tags,
+    'accessNotes': accessNotes.trim(),
+    'onSiteManager': onSiteManager.trim(),
+    'billingTerms': billingTerms.trim(),
+    'autoInvoice': autoInvoice,
+    // Emitted so a pre-P3 doc self-heals to `archived: false` on its first edit.
+    'archived': archived,
   };
 
   String get displayName => name;
