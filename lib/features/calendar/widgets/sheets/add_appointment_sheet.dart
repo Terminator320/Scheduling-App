@@ -13,15 +13,20 @@ import 'package:scheduling/features/calendar/widgets/sections/appointment_form_f
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/inline_add_client_host.dart';
+import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/sheets/form_sheet_frame.dart';
 
 class AddEventSheet extends ConsumerStatefulWidget {
-  const AddEventSheet({super.key, this.initialDate});
+  const AddEventSheet({super.key, this.initialDate, this.initialClient});
 
   final DateTime? initialDate;
+
+  /// Pre-seeds the client, for "Add and book a job" and the client detail's
+  /// Book job tile.
+  final ClientRecord? initialClient;
 
   @override
   ConsumerState<AddEventSheet> createState() => _AddEventSheetState();
@@ -50,6 +55,16 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     final initialDate = widget.initialDate;
     if (initialDate != null) {
       _controllers.date.text = DateUtilsHelper.formatDate(initialDate);
+    }
+    final client = widget.initialClient;
+    if (client != null) {
+      _controllers.clientSearch.text = client.displayName;
+      // Deferred: the controller is a family provider that must be built before
+      // the first read, and selectClient also settles the address field.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _notifier.selectClient(client);
+      });
     }
   }
 

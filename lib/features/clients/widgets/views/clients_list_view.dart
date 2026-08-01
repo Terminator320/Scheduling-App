@@ -5,6 +5,7 @@ import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
+import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
@@ -99,7 +100,11 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
   }
 
   Future<void> _onAddClient() async {
-    await showAddClientSheet(context);
+    final result = await showAddClientSheet(context);
+    if (result == null || result.next != AddClientNext.bookJob) return;
+    if (!mounted) return;
+    // Sequential, never stacked — the add-client sheet has already popped.
+    await showAddEventPopup(context, initialClient: result.client);
   }
 
   Future<void> _openClient(ClientRecord client) async {
