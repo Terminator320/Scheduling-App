@@ -36,8 +36,9 @@ class ClientDetailView extends ConsumerStatefulWidget {
   final bool showHandle;
   final double bottomPadding;
 
-  /// Lets a host that keeps this view mounted (the two-pane detail) clear its
-  /// now-dangling selection after the testing delete.
+  /// How the host dismisses this view once its record is gone — the sheet pops
+  /// itself, the two-pane detail clears its selection. The host decides, since
+  /// only it knows how it is presented.
   // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
   final VoidCallback? onDeleted;
 
@@ -56,8 +57,8 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
 
   Future<void> _openEdit() async {
     final updated = await showEditClientSheet(context, _client);
-    // Null means cancelled. Clients are never removed, so this view always has
-    // a record to keep showing.
+    // Null means cancelled. Editing never removes the record, so this view
+    // always has one to keep showing.
     if (!mounted || updated == null) return;
     setState(() => _client = updated);
   }
@@ -71,7 +72,9 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
           'Permanently deletes ${_client.displayName}. Past appointments keep '
           'the name but stop linking to them. This action is debug-only and '
           'must not ship.',
-      confirmLabel: 'Delete',
+      // The dialog's Cancel comes from l10n, so this reuses the existing key
+      // rather than sitting in English beside a translated button.
+      confirmLabel: context.l10n.common_delete,
     );
     if (!ok || !mounted) return;
 
@@ -83,17 +86,14 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
     switch (outcome) {
       case ClientDeleted():
         notices.success('Client deleted.');
-        // Sheet host pops itself; the two-pane host clears its selection.
-        if (widget.scrollController != null) {
-          Navigator.pop(context);
-        } else {
-          widget.onDeleted?.call();
-        }
+        widget.onDeleted?.call();
       case ClientDeleteFailed(:final error):
         notices.error(
           composeErrorNotice(
             context,
-            intro: context.l10n.error_introDeleteClient,
+            // Debug-only affordance, so this string stays inline with the other
+            // five rather than adding an ARB key that has to be swept later.
+            intro: "Couldn't delete the client",
             tag: 'CLI-DEL',
             error: error,
           ),
@@ -248,8 +248,8 @@ class _ProfileCard extends StatelessWidget {
   }
 }
 
-/// Tinted Edit pill. The only affordance on this surface — clients are never
-/// archived or deleted (owner decision 2026-08-01).
+/// Tinted Edit pill. The only shipping affordance on this surface — clients are
+/// never archived or deleted (owner decision 2026-08-01).
 class _EditPill extends StatelessWidget {
   const _EditPill({required this.onEdit});
 

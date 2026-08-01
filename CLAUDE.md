@@ -350,15 +350,21 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   `toMap` DOES emit is type/length-capped by `isValidClientData` in
   `firestore.rules` (name/business/first/last/phone/mobile/email plus the
   address family, a bounded `contacts` array, and the P3 additions
-  `type`/`tags`/`accessNotes`/`onSiteManager`/`billingTerms`/`autoInvoice`) —
+  `type`/`accessNotes`/`onSiteManager`/`billingTerms`/`autoInvoice`) —
   add the matching rule cap when you add a new client field, or the write passes
   the app but a rules tightening later rejects it.
 - **A client is never removed — no delete, no archive** (owner decision
   2026-08-01, which withdrew a shipped delete). Deleting one orphaned its past
   appointments: they keep the denormalized `clientName` but lose the `clientId`
-  link, so history silently detaches. `ClientsRepository` therefore has no
-  `deleteClient`, `clients` has no `allow delete` rule, and the edit sheet's
-  footer holds no destructive action. Archive was evaluated as the safe
+  link, so history silently detaches. The edit sheet's footer therefore holds no
+  destructive action. **The one exception is temporary and must not ship:** a
+  debug-gated testing delete (`kShowTestingDeleteClient` in
+  `lib/core/testing_flags.dart`) reopens both `ClientsRepository.deleteClient`
+  and `allow delete` on `/clients` so junk test data can be cleared. Rules are
+  not build-aware, so that hole IS open in production once deployed — remove
+  both together via the checklist in
+  `docs/plans/redesign-subdocs/2026-08-01-p3-HANDOFF.md` §5b (grep `#pre-ship`)
+  before submission. Archive was evaluated as the safe
   alternative and also dropped — it would have forced every archived-doc filter
   into Dart (pre-existing and Wave-imported docs have no such field, and
   Firestore excludes docs missing a filter field), which in turn forces
@@ -369,19 +375,19 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   truncates the list permanently — so it would have to come back with a page
   object carrying the raw page size and a raw cursor. The Admin SDK bypasses
   rules, so console/support cleanup is unaffected.
-- **The clients tag filter is a SEPARATE bounded read, never a filter over the
-  paginated list.** `fetchClientsByTag` / `fetchClientTags` scan the same cached
-  1000-doc window `searchClients` uses, so the chip row and its results cost no
-  extra Firestore read inside the 2-minute TTL and need no composite index.
+- **The clients type filter is a SEPARATE bounded read, never a filter over the
+  paginated list.** `fetchClientsByType` scans the same cached 1000-doc window
+  `searchClients` uses, so the chip row and its results cost no extra Firestore
+  read inside the 2-minute TTL and need no composite index.
   Routing it through `fetchClientsPage` instead would filter a server page in
   Dart, shortening a page the server actually filled — which is exactly what
   stops `ClientsListView` paging early and hides every client below the first
   non-matching one. The window bound is the same one search already lives with:
-  past ~1000 clients the filter sees a prefix, not the whole roster. Tag
-  matching is **exact and case-sensitive** (the chip row only ever offers stored
-  spellings), and `fetchClientTags` breaks a case-insensitive sort tie with a
-  case-sensitive compare so "Net30"/"net30" get a stable order rather than one
-  that depends on scan order.
+  past ~1000 clients the filter sees a prefix, not the whole roster. The chips
+  offer the fixed `ClientType.pickable` set, so there is no vocabulary to
+  discover and no spelling to reconcile — searching *within* an active filter
+  runs in Dart over that same bounded list via `ClientSearchPolicy`, indexed
+  once per result set rather than per keystroke.
 - **`jobCount` is recomputed absolutely, never incremented.** `recountClientJobs`
   (`functions/client_job_count.js`) runs `retry: true`, so a retried event would
   double-count a `FieldValue.increment`; it runs a `count()` aggregate and SETS

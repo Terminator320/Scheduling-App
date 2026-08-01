@@ -2204,7 +2204,7 @@
   "@clients_accessNotesHint": {
     "description": "Placeholder for the site access notes field"
   },
-  "clients_newClientCaption": "Billing terms and tags can wait — you can add them any time.",
+  "clients_newClientCaption": "Billing terms and access notes can wait — you can add them any time.",
   "@clients_newClientCaption": {
     "description": "Caption at the foot of the fast new-client sheet"
   },
@@ -2303,9 +2303,5 @@
   "clients_typeFilterHint": "A client’s type is set on their edit sheet.",
   "@clients_typeFilterHint": {
     "description": "Empty state body pointing at where the client type is set"
-  },
-  "error_introDeleteClient": "Couldn't delete the client",
-  "@error_introDeleteClient": {
-    "description": "Error intro for CLI-DEL (testing-only delete)"
   }
 }

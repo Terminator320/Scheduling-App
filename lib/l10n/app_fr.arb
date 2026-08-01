@@ -498,7 +498,7 @@
   "clients_nameOrBusiness": "Nom ou entreprise",
   "clients_accessNotes": "Notes d'accès",
   "clients_accessNotesHint": "Code de porte, stationnement, quelle entrée",
-  "clients_newClientCaption": "Les conditions de facturation et les étiquettes peuvent attendre.",
+  "clients_newClientCaption": "Les conditions de facturation et les notes d’accès peuvent attendre.",
   "clients_addAndBookAJob": "Ajouter et réserver",
   "common_add": "Ajouter",
   "clients_sectionClient": "CLIENT",
@@ -519,6 +519,5 @@
   "clients_sinceDate": "depuis {date}",
   "clients_filterByType": "Filtrer les clients par type",
   "clients_noClientsOfType": "Aucun client {type}",
-  "clients_typeFilterHint": "Le type d’un client se choisit dans sa fiche.",
-  "error_introDeleteClient": "Impossible de supprimer le client"
+  "clients_typeFilterHint": "Le type d’un client se choisit dans sa fiche."
 }

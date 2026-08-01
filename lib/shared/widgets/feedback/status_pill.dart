@@ -9,11 +9,16 @@ class StatusPill extends StatelessWidget {
     required this.background,
     required this.foreground,
     super.key,
+    this.radius = AppRadius.rFull,
   });
 
   final String label;
   final Color background;
   final Color foreground;
+
+  /// Corner radius. Fully rounded for status chips; the client-type pill on the
+  /// list tile uses the softer [AppRadius.r8] the design draws it with.
+  final double radius;
 
   static const double _maxLabelScale = 1.3;
 
@@ -31,7 +36,7 @@ class StatusPill extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(AppRadius.rFull),
+        borderRadius: BorderRadius.circular(radius),
       ),
       child: Text(
         label,
