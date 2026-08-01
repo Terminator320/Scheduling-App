@@ -491,5 +491,14 @@
   "nav_groupToday": "AUJOURD'HUI",
   "nav_groupPeople": "PERSONNES",
   "nav_groupBusiness": "L'ENTREPRISE",
-  "nav_groupAccount": "COMPTE"
+  "nav_groupAccount": "COMPTE",
+  "clients_sectionWho": "QUI",
+  "clients_sectionReachThem": "COORDONNÉES",
+  "clients_sectionSite": "ADRESSE",
+  "clients_nameOrBusiness": "Nom ou entreprise",
+  "clients_accessNotes": "Notes d'accès",
+  "clients_accessNotesHint": "Code de porte, stationnement, quelle entrée",
+  "clients_newClientCaption": "Les conditions de facturation et les étiquettes peuvent attendre.",
+  "clients_addAndBookAJob": "Ajouter et réserver",
+  "common_add": "Ajouter"
 }

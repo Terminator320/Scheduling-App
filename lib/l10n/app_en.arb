@@ -2179,5 +2179,41 @@
   "nav_groupAccount": "ACCOUNT",
   "@nav_groupAccount": {
     "description": "Drawer group heading for the signed-in user's own account destinations; stored uppercase"
+  },
+  "clients_sectionWho": "WHO",
+  "@clients_sectionWho": {
+    "description": "Mono section header above the client name and type"
+  },
+  "clients_sectionReachThem": "REACH THEM",
+  "@clients_sectionReachThem": {
+    "description": "Mono section header above the client phone and email"
+  },
+  "clients_sectionSite": "SITE",
+  "@clients_sectionSite": {
+    "description": "Mono section header above the client address and access notes"
+  },
+  "clients_nameOrBusiness": "Name or business",
+  "@clients_nameOrBusiness": {
+    "description": "Label for the single client name field on the new-client sheet"
+  },
+  "clients_accessNotes": "Access notes",
+  "@clients_accessNotes": {
+    "description": "Label for the site access notes field"
+  },
+  "clients_accessNotesHint": "Gate code, parking, which door",
+  "@clients_accessNotesHint": {
+    "description": "Placeholder for the site access notes field"
+  },
+  "clients_newClientCaption": "Billing terms and tags can wait — you can add them any time.",
+  "@clients_newClientCaption": {
+    "description": "Caption at the foot of the fast new-client sheet"
+  },
+  "clients_addAndBookAJob": "Add and book a job",
+  "@clients_addAndBookAJob": {
+    "description": "Secondary button that saves the client then opens the new-appointment sheet"
+  },
+  "common_add": "Add",
+  "@common_add": {
+    "description": "Primary verb on the new-client sheet bar"
   }
 }
