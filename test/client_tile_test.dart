@@ -6,12 +6,12 @@ import 'package:scheduling/features/clients/widgets/cards/client_tile.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 ClientRecord _fakeClient({String phone = '514-555-0101'}) => ClientRecord(
-      id: 'c1',
-      name: 'Sarah Johnson',
-      address: '123 Main St',
-      phone: phone,
-      contacts: [],
-    );
+  id: 'c1',
+  name: 'Sarah Johnson',
+  address: '123 Main St',
+  phone: phone,
+  contacts: [],
+);
 
 Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
 
@@ -21,9 +21,13 @@ void main() {
     expect(find.textContaining('Sarah'), findsOneWidget);
   });
 
-  testWidgets('shows phone number', (tester) async {
+  testWidgets('subtitles on the address, not the phone', (tester) async {
+    // P3: the address identifies the job site at a glance, so it wins the
+    // subtitle whenever there is one. The phone-only fallback is covered in
+    // test/features/clients/widgets/cards/client_tile_test.dart.
     await tester.pumpWidget(_wrap(ClientTile(client: _fakeClient())));
-    expect(find.text('514-555-0101'), findsOneWidget);
+    expect(find.text('123 Main St'), findsOneWidget);
+    expect(find.text('514-555-0101'), findsNothing);
   });
 
   testWidgets('shows AppAvatar', (tester) async {
@@ -33,9 +37,11 @@ void main() {
 
   testWidgets('calls onOpen when tapped', (tester) async {
     var tapped = false;
-    await tester.pumpWidget(_wrap(
-      ClientTile(client: _fakeClient(), onOpen: () async => tapped = true),
-    ));
+    await tester.pumpWidget(
+      _wrap(
+        ClientTile(client: _fakeClient(), onOpen: () async => tapped = true),
+      ),
+    );
     await tester.tap(find.byType(ClientTile));
     await tester.pump();
     expect(tapped, isTrue);
@@ -46,10 +52,12 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     tester.view.physicalSize = const Size(260 * 3, 200 * 3);
     tester.view.devicePixelRatio = 3;
-    await tester.pumpWidget(MediaQuery(
-      data: const MediaQueryData(textScaler: TextScaler.linear(2)),
-      child: _wrap(ClientTile(client: _fakeClient())),
-    ));
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+        child: _wrap(ClientTile(client: _fakeClient())),
+      ),
+    );
     expect(tester.takeException(), isNull);
   });
 }
