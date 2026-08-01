@@ -85,7 +85,7 @@ Future<void> _pumpInEditMode(
   addTearDown(tester.view.reset);
   await tester.pumpWidget(_wrap(repo, client));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Edit'));
+  await tester.tap(find.text('Edit client'));
   await tester.pumpAndSettle();
 }
 
@@ -227,5 +227,110 @@ void main() {
             as ClientRecord;
     expect(saved.contacts, isEmpty);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('renders the three action tiles', (tester) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        const ClientRecord(
+          id: 'c1',
+          name: 'Acme',
+          phone: '5145551234',
+          address: '12 Main St',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Call'), findsOneWidget);
+    expect(find.text('Directions'), findsOneWidget);
+    expect(find.text('Book job'), findsOneWidget);
+  });
+
+  testWidgets('omits empty info rows instead of showing placeholders', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        const ClientRecord(id: 'c1', name: 'Acme', phone: '5145551234'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('PHONE'), findsOneWidget);
+    // No address, manager or billing on this record — those keys must not render.
+    expect(find.text('ADDRESS'), findsNothing);
+    expect(find.text('MANAGER'), findsNothing);
+    expect(find.text('BILLING'), findsNothing);
+    expect(find.textContaining('None'), findsNothing);
+  });
+
+  testWidgets('renders the manager and billing rows when present', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        const ClientRecord(
+          id: 'c1',
+          name: 'Acme',
+          onSiteManager: 'Dana',
+          billingTerms: 'Net 30',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('MANAGER'), findsOneWidget);
+    expect(find.text('Dana'), findsOneWidget);
+    expect(find.text('BILLING'), findsOneWidget);
+    expect(find.text('Net 30'), findsOneWidget);
+  });
+
+  testWidgets('auto-invoice joins the billing line', (tester) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        const ClientRecord(
+          id: 'c1',
+          name: 'Acme',
+          billingTerms: 'Net 30',
+          autoInvoice: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Net 30 · Invoice automatically'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the detail offers no delete action', (tester) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(repo, const ClientRecord(id: 'c1', name: 'Acme')),
+    );
+    await tester.pumpAndSettle();
+
+    // Clients are never removed (owner decision 2026-08-01).
+    expect(find.text('Delete'), findsNothing);
   });
 }

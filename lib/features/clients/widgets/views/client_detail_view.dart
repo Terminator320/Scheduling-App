@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/sheets/edit_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/views/client_view_body.dart';
@@ -45,6 +46,10 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
     setState(() => _client = updated);
   }
 
+  Future<void> _bookJob() async {
+    await showAddEventPopup(context, initialClient: _client);
+  }
+
   @override
   Widget build(BuildContext context) {
     return DetailSheetListView(
@@ -53,12 +58,12 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
       bottomPadding: widget.bottomPadding,
       children: [
         _ViewHeader(client: _client),
-        const SizedBox(height: AppSpacing.sp24),
+        const SizedBox(height: AppSpacing.sp16),
+        _EditPill(onEdit: _openEdit),
+        const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
         const SizedBox(height: AppSpacing.sp24),
-        ClientDetailViewBody(client: _client),
-        const SizedBox(height: AppSpacing.sp24),
-        _ViewActions(onEdit: _openEdit),
+        ClientDetailViewBody(client: _client, onBookJob: _bookJob),
       ],
     );
   }
@@ -104,18 +109,35 @@ class _ViewHeader extends StatelessWidget {
   }
 }
 
-class _ViewActions extends StatelessWidget {
-  const _ViewActions({required this.onEdit});
+/// Right-aligned Edit pill. It sits with the profile header rather than
+/// floating above it, and it is the only affordance here — clients are never
+/// archived or deleted (owner decision 2026-08-01).
+class _EditPill extends StatelessWidget {
+  const _EditPill({required this.onEdit});
 
-  final VoidCallback? onEdit;
+  final VoidCallback onEdit;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: double.infinity,
-    child: FilledButton.icon(
-      onPressed: onEdit,
-      icon: const Icon(Icons.edit_outlined, size: 18),
-      label: Text(context.l10n.common_edit),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Align(
+      alignment: AlignmentDirectional.centerEnd,
+      child: TextButton(
+        style: TextButton.styleFrom(
+          backgroundColor: theme.palette.primaryAccent.withValues(alpha: 0.10),
+          foregroundColor: theme.palette.primaryAccent,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: AppSpacing.sp8,
+          ),
+          minimumSize: const Size(0, 48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.r12),
+          ),
+        ),
+        onPressed: onEdit,
+        child: Text(context.l10n.clients_editClientPill),
+      ),
+    );
+  }
 }
