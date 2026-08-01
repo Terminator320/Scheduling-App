@@ -519,5 +519,11 @@
   "clients_sinceDate": "depuis {date}",
   "clients_filterByType": "Filtrer les clients par type",
   "clients_noClientsOfType": "Aucun client {type}",
-  "clients_typeFilterHint": "Le type d’un client se choisit dans sa fiche."
+  "clients_typeFilterHint": "Le type d’un client se choisit dans sa fiche.",
+  "employees_jobTitleLeadTech": "Chef technicien",
+  "employees_jobTitleTechnician": "Technicien",
+  "employees_jobTitleApprentice": "Apprenti",
+  "employees_jobTitleDispatcher": "Répartiteur",
+  "employees_everyDay": "Tous les jours",
+  "employees_noWorkingDays": "Aucun jour de travail défini"
 }

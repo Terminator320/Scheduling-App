@@ -1,0 +1,21 @@
+/// Placeholder used only when a record has no name at all. Never an empty
+/// string: `watchAllUsers` orders by `name` and Firestore excludes documents
+/// missing the orderBy field, so an unnamed user would silently vanish from the
+/// admin roster.
+const String kUnnamedEmployee = '—';
+
+/// The single place `users.name` is built. Every write path routes through it —
+/// P4 adds first/last names but never stops populating the composed `name`.
+String composeEmployeeName({
+  required String firstName,
+  required String lastName,
+  required String fallback,
+}) {
+  final composed = [
+    firstName.trim(),
+    lastName.trim(),
+  ].where((part) => part.isNotEmpty).join(' ');
+  if (composed.isNotEmpty) return composed;
+  final stored = fallback.trim();
+  return stored.isNotEmpty ? stored : kUnnamedEmployee;
+}

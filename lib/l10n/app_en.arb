@@ -2303,5 +2303,29 @@
   "clients_typeFilterHint": "A client’s type is set on their edit sheet.",
   "@clients_typeFilterHint": {
     "description": "Empty state body pointing at where the client type is set"
+  },
+  "employees_jobTitleLeadTech": "Lead tech",
+  "@employees_jobTitleLeadTech": {
+    "description": "Job title chip: senior technician who leads a crew"
+  },
+  "employees_jobTitleTechnician": "Technician",
+  "@employees_jobTitleTechnician": {
+    "description": "Job title chip: standard field technician"
+  },
+  "employees_jobTitleApprentice": "Apprentice",
+  "@employees_jobTitleApprentice": {
+    "description": "Job title chip: technician in training"
+  },
+  "employees_jobTitleDispatcher": "Dispatcher",
+  "@employees_jobTitleDispatcher": {
+    "description": "Job title chip: office staff who assigns jobs"
+  },
+  "employees_everyDay": "Every day",
+  "@employees_everyDay": {
+    "description": "Working-days summary when all seven days are worked"
+  },
+  "employees_noWorkingDays": "No working days set",
+  "@employees_noWorkingDays": {
+    "description": "Working-days summary when no day is marked as worked"
   }
 }

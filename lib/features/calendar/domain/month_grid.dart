@@ -70,6 +70,14 @@ List<String> weekdayLabelsForLocale(String locale) {
   return [for (var i = 0; i < 7; i++) symbols.NARROWWEEKDAYS[(start + i) % 7]];
 }
 
+/// Abbreviated weekday labels, Sunday-indexed (NOT rotated — callers that need
+/// display order rotate themselves). The narrow twin above is right for a
+/// seven-cell grid; this one is for prose, where "M, W, F" is unreadable.
+List<String> weekdayAbbreviationsForLocale(String locale) {
+  final symbols = DateFormat.yMMMM(locale).dateSymbols;
+  return [for (var i = 0; i < 7; i++) symbols.SHORTWEEKDAYS[i]];
+}
+
 bool isSameDate(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
 

@@ -23,5 +23,7 @@ class TextLimits {
   static const int clientOnSiteManager = 200;
   static const int clientBillingTerms = 200;
 
+  static const int employeeEmergencyContact = 200;
+
   static const int signupCode = 32;
 }

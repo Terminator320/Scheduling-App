@@ -137,6 +137,64 @@ service cloud.firestore {
         return s in ['active', 'disabled', 'invited'];
       }
 
+      // P4 field guards. NOTE the deliberate asymmetry: `name`, `email` and
+      // `phone` are capped at the widest value a shipped write path can already
+      // have produced (createEmployeeInvite allows phone up to 40 while
+      // TextLimits.phone is 32), NOT at the client-side limit. A cap tighter
+      // than an existing stored value would make that doc permanently
+      // un-updatable — including by deactivateEmployee.
+      function isValidJobTitle(t) {
+        return t is string
+          && t in ['', 'lead_tech', 'technician', 'apprentice', 'dispatcher'];
+      }
+      function isBoundedString(v, maxLen) {
+        return v is string && v.size() <= maxLen;
+      }
+      function isMinuteOfDay(v) {
+        return v is int && v >= 0 && v <= 1440;
+      }
+
+      // Rules cannot iterate a list, so the element type is not provable here —
+      // the length and list-ness are the enforceable half, and every write path
+      // builds the list from seven bools.
+      function isValidWorkingDays(v) {
+        return v is list && v.size() == 7;
+      }
+
+      function isValidUserData(d) {
+        return (!('name' in d.keys()) || isBoundedString(d.name, 200))
+          && (!('firstName' in d.keys()) || isBoundedString(d.firstName, 200))
+          && (!('lastName' in d.keys()) || isBoundedString(d.lastName, 200))
+          && (!('email' in d.keys()) || isBoundedString(d.email, 320))
+          && (!('phone' in d.keys()) || isBoundedString(d.phone, 40))
+          && (!('emergencyContact' in d.keys())
+              || isBoundedString(d.emergencyContact, 200))
+          && (!('jobTitle' in d.keys()) || isValidJobTitle(d.jobTitle))
+          && (!('workingDays' in d.keys()) || isValidWorkingDays(d.workingDays))
+          && (!('workStartMinutes' in d.keys())
+              || isMinuteOfDay(d.workStartMinutes))
+          && (!('workEndMinutes' in d.keys())
+              || isMinuteOfDay(d.workEndMinutes))
+          && (!('maxJobsPerDay' in d.keys())
+              || (d.maxJobsPerDay is int
+                  && d.maxJobsPerDay >= 0
+                  && d.maxJobsPerDay <= 50))
+          && (!('onCall' in d.keys()) || d.onCall is bool)
+          && (!('colorValue' in d.keys()) || isValidColorValue(d.colorValue))
+          && (!('role' in d.keys()) || isValidRole(d.role))
+          && (!('status' in d.keys()) || isValidUserStatus(d.status));
+      }
+
+      // Built for P5's own-doc self-service clause, which is the only thing that
+      // will ever call it. P4 keeps `allow update` admin-only: there is no
+      // self-service UI yet, so opening the write early would widen the surface
+      // for nothing. P5 adds `|| (isSelf() && isAvailabilityOnlyChange())`.
+      function isAvailabilityOnlyChange() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['workingDays', 'workStartMinutes', 'workEndMinutes',
+                    'onCall', 'emergencyContact', 'phone', 'updatedAt']);
+      }
+
       // Only an admin can update. Invite activation happens server-side via
       // redeemSignupCode, so there's no client self-activation path. `uid` links this
       // doc to an Auth account and clients can never change it — rewriting it could
@@ -145,12 +203,7 @@ service cloud.firestore {
             && !request.resource.data.diff(resource.data)
                  .affectedKeys()
                  .hasAny(['uid'])
-            && (!('colorValue' in request.resource.data.keys())
-                || isValidColorValue(request.resource.data.colorValue))
-            && (!('role' in request.resource.data.keys())
-                || isValidRole(request.resource.data.role))
-            && (!('status' in request.resource.data.keys())
-                || isValidUserStatus(request.resource.data.status));
+            && isValidUserData(request.resource.data);
 
       // FCM device tokens — a user can only read or write their own, and writes are
       // shape-constrained so nobody can plant a token under a spoofed identity.
