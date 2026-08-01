@@ -42,6 +42,8 @@ implementation plan when its turn comes.
 | "Two tries left before the account locks for 15 minutes" | Firebase-native throttling, no tries counter | Firebase Auth throttles opaquely and exposes no remaining-tries signal; a client-side counter would lie. The handoff itself leaves the locked-out state undesigned. |
 | "Keep me signed in" checkbox | Not shipped | Mobile Firebase sessions persist by default; the checkbox is a web pattern. |
 | "Use Face ID" sign-in button | Deferred (handoff stubs it) | Re-auth-via-biometric is platform wiring the build order already defers; distinct from the existing biometric app-lock, which stays. |
+| Archive a client instead of deleting; an Archived list filter | **Neither shipped — and the existing delete is withdrawn.** A client can no longer be removed at all | Owner decision 2026-08-01. Delete orphaned history (past appointments keep the denormalized `clientName` but lose the `clientId` link); archive was the safe alternative but bought a lot of machinery — filtering archived docs has to happen in Dart (pre-existing and Wave-imported docs lack the field, and Firestore excludes docs missing a filter field), which forces `fetchClientsPage` off a plain `List` onto a page object carrying the raw page size and cursor, or one archived doc in a full page truncates the list permanently. With neither feature, pagination stays exactly as it was. Accepted cost: the clients list and the booking picker grow monotonically. |
+| `searchClients` gains an `includeArchived` flag | Not shipped | Follows from the row above — there is nothing to include. |
 
 ## Build order
 
@@ -50,7 +52,7 @@ P1 foundation → P2 calendar → [P2b hardware-pass changes] → P3 clients →
                                                                                        P7b Wave invoices (parallel, unblocks P7 money sections)
 ```
 
-**P1 and P2 are shipped, plus P2b** — the owner changes that came out of the
+**P1, P2 and P3 are shipped, plus P2b** — the owner changes that came out of the
 first run on real hardware (2026-07-31). Several P2 bullets below were revised
 in place and are marked as such; the rest of P2b is its own section after P2.
 
