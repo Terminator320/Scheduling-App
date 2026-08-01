@@ -288,6 +288,13 @@ service cloud.firestore {
         // it's admin-only. The real fix is a per-field TextLimits cap in the contacts
         // editor, not tightening this array-length number.
         && (!('contacts' in data) || (data.contacts is list && data.contacts.size() <= 50))
+        && (!('type' in data) || (data.type is string && data.type.size() <= 32))
+        && (!('tags' in data) || (data.tags is list && data.tags.size() <= 10))
+        && (!('accessNotes' in data) || (data.accessNotes is string && data.accessNotes.size() <= 500))
+        && (!('onSiteManager' in data) || (data.onSiteManager is string && data.onSiteManager.size() <= 200))
+        && (!('billingTerms' in data) || (data.billingTerms is string && data.billingTerms.size() <= 200))
+        && (!('autoInvoice' in data) || data.autoInvoice is bool)
+        && (!('archived' in data) || data.archived is bool)
         && (!('noFixedAddress' in data) || data.noFixedAddress is bool);
     }
 
@@ -296,17 +303,20 @@ service cloud.firestore {
       // `waveCustomerId` and `wave` are written only by Cloud Functions via the
       // Admin SDK, which bypasses these rules entirely. The client app should never
       // touch these fields, so we reject any create that includes them.
+      // `jobCount` is likewise function-owned — recountClientJobs writes it as an
+      // absolute count() aggregate, so a client write must never touch it.
       allow create: if isAdmin()
         && isValidClientData(request.resource.data)
         && !('waveCustomerId' in request.resource.data.keys())
-        && !('wave' in request.resource.data.keys());
+        && !('wave' in request.resource.data.keys())
+        && !('jobCount' in request.resource.data.keys());
       // On updates we only reject if the client is trying to change or add the Wave
       // fields — an update that leaves them alone has no affected keys, so it's fine.
       allow update: if isAdmin()
         && isValidClientData(request.resource.data)
         && !request.resource.data.diff(resource.data)
              .affectedKeys()
-             .hasAny(['waveCustomerId', 'wave']);
+             .hasAny(['waveCustomerId', 'wave', 'jobCount']);
       allow delete: if isAdmin();
     }
 
