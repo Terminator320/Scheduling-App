@@ -211,7 +211,6 @@ void main() {
       final record = ClientRecord.fromMap('c1', {
         'name': 'Acme',
         'type': 'commercial',
-        'tags': ['vip', 'net30'],
         'accessNotes': 'Gate code 1234',
         'onSiteManager': 'Dana',
         'billingTerms': 'Net 30',
@@ -220,7 +219,6 @@ void main() {
       });
 
       expect(record.type, ClientType.commercial);
-      expect(record.tags, ['vip', 'net30']);
       expect(record.accessNotes, 'Gate code 1234');
       expect(record.onSiteManager, 'Dana');
       expect(record.billingTerms, 'Net 30');
@@ -232,7 +230,6 @@ void main() {
       final record = ClientRecord.fromMap('c2', {'name': 'Old'});
 
       expect(record.type, ClientType.unset);
-      expect(record.tags, isEmpty);
       expect(record.accessNotes, '');
       expect(record.onSiteManager, '');
       expect(record.billingTerms, '');
@@ -240,20 +237,11 @@ void main() {
       expect(record.jobCount, isNull);
     });
 
-    test('tags drops non-string and blank entries', () {
-      final record = ClientRecord.fromMap('c3', {
-        'tags': ['vip', 42, '', '  ', 'net30'],
-      });
-
-      expect(record.tags, ['vip', 'net30']);
-    });
-
     test('toMap emits the user-owned new fields', () {
       final map = const ClientRecord(
         id: 'c4',
         name: 'Acme',
         type: ClientType.propertyManagement,
-        tags: ['vip'],
         accessNotes: 'Side door',
         onSiteManager: 'Dana',
         billingTerms: 'Net 15',
@@ -261,7 +249,6 @@ void main() {
       ).toMap();
 
       expect(map['type'], 'property_mgmt');
-      expect(map['tags'], ['vip']);
       expect(map['accessNotes'], 'Side door');
       expect(map['onSiteManager'], 'Dana');
       expect(map['billingTerms'], 'Net 15');

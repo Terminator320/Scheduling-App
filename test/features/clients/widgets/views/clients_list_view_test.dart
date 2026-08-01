@@ -8,6 +8,7 @@ import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -23,7 +24,7 @@ const _sophie = ClientRecord(
 Widget _wrap(
   ClientsRepository repo, {
   String searchQuery = '',
-  String? selectedTag,
+  ClientType? selectedType,
 }) {
   return ProviderScope(
     overrides: [clientsRepositoryProvider.overrideWithValue(repo)],
@@ -41,7 +42,7 @@ Widget _wrap(
           body: ClientsListView(
             searchQuery: searchQuery,
             isAdmin: true,
-            selectedTag: selectedTag,
+            selectedType: selectedType,
           ),
         ),
       ),
@@ -52,6 +53,9 @@ Widget _wrap(
 void main() {
   late _MockClientsRepo repo;
 
+  // mocktail needs a concrete instance before any(<ClientType>) is usable.
+  setUpAll(() => registerFallbackValue(ClientType.unset));
+
   setUp(() {
     repo = _MockClientsRepo();
     when(
@@ -60,9 +64,8 @@ void main() {
         limit: any(named: 'limit'),
       ),
     ).thenAnswer((_) async => const []);
-    when(() => repo.fetchClientTags()).thenAnswer((_) async => const []);
     when(
-      () => repo.fetchClientsByTag(any()),
+      () => repo.fetchClientsByType(any()),
     ).thenAnswer((_) async => const []);
   });
 
@@ -122,26 +125,30 @@ void main() {
     },
   );
 
-  testWidgets('the tag filter renders only that tag’s clients', (
+  testWidgets('the type filter renders only that type of client', (
     tester,
   ) async {
-    when(() => repo.fetchClientsByTag('vip')).thenAnswer(
+    when(() => repo.fetchClientsByType(ClientType.commercial)).thenAnswer(
       (_) async => const [
-        ClientRecord(id: 'v1', name: 'Tagged Client', tags: ['vip']),
+        ClientRecord(
+          id: 'v1',
+          name: 'Commercial Client',
+          type: ClientType.commercial,
+        ),
       ],
     );
 
-    await tester.pumpWidget(_wrap(repo, selectedTag: 'vip'));
+    await tester.pumpWidget(_wrap(repo, selectedType: ClientType.commercial));
     await tester.pumpAndSettle();
 
-    expect(find.text('Tagged Client'), findsOneWidget);
+    expect(find.text('Commercial Client'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the tag filter never touches the paginated list', (
+  testWidgets('the type filter never touches the paginated list', (
     tester,
   ) async {
-    await tester.pumpWidget(_wrap(repo, selectedTag: 'vip'));
+    await tester.pumpWidget(_wrap(repo, selectedType: ClientType.commercial));
     await tester.pumpAndSettle();
 
     // It is a separate bounded read. Filtering the paginated list in Dart would
@@ -152,21 +159,27 @@ void main() {
         limit: any(named: 'limit'),
       ),
     );
-    verify(() => repo.fetchClientsByTag('vip')).called(1);
+    verify(() => repo.fetchClientsByType(ClientType.commercial)).called(1);
   });
 
-  testWidgets('searching within a tag filters that tag’s clients', (
-    tester,
-  ) async {
-    when(() => repo.fetchClientsByTag('vip')).thenAnswer(
+  testWidgets('searching within a type filters that type', (tester) async {
+    when(() => repo.fetchClientsByType(ClientType.commercial)).thenAnswer(
       (_) async => const [
-        ClientRecord(id: 'v1', name: 'Sophie Tremblay', tags: ['vip']),
-        ClientRecord(id: 'v2', name: 'Marc Gagnon', tags: ['vip']),
+        ClientRecord(
+          id: 'v1',
+          name: 'Sophie Tremblay',
+          type: ClientType.commercial,
+        ),
+        ClientRecord(
+          id: 'v2',
+          name: 'Marc Gagnon',
+          type: ClientType.commercial,
+        ),
       ],
     );
 
     await tester.pumpWidget(
-      _wrap(repo, selectedTag: 'vip', searchQuery: 'sophie'),
+      _wrap(repo, selectedType: ClientType.commercial, searchQuery: 'sophie'),
     );
     await tester.pumpAndSettle();
 
@@ -176,12 +189,12 @@ void main() {
     verifyNever(() => repo.searchClients(any()));
   });
 
-  testWidgets('an empty tag result shows the tagged-clients empty state', (
+  testWidgets('an empty type result shows the type empty state', (
     tester,
   ) async {
-    await tester.pumpWidget(_wrap(repo, selectedTag: 'vip'));
+    await tester.pumpWidget(_wrap(repo, selectedType: ClientType.commercial));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('No clients tagged'), findsOneWidget);
+    expect(find.textContaining('No Commercial clients'), findsOneWidget);
   });
 }

@@ -8,9 +8,6 @@ import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/list_item_tile.dart';
 
-/// How many of a client's tags the row shows beside its type chip.
-const _kMaxTagsShown = 2;
-
 class ClientTile extends StatelessWidget {
   const ClientTile({
     required this.client,
@@ -44,7 +41,7 @@ class ClientTile extends StatelessWidget {
         ? AddressParser.canonicalToDisplay(client.address)
         : client.phone;
     final count = client.jobCount;
-    final hasChips = client.type != ClientType.unset || client.tags.isNotEmpty;
+    final hasType = client.type != ClientType.unset;
 
     // No explicit label needed — ListItemTile's InkWell already exposes button
     // semantics and reads out the visible name and subtitle.
@@ -52,7 +49,7 @@ class ClientTile extends StatelessWidget {
       avatarName: client.displayName,
       title: client.displayName,
       subtitle: subtitle,
-      subtitleExtra: hasChips ? _ClientChips(client: client) : null,
+      subtitleExtra: hasType ? _TypeChip(type: client.type) : null,
       selected: selected,
       onTap: () => _open(context),
       // Null until the recount trigger has run for this client — an unknown
@@ -62,40 +59,16 @@ class ClientTile extends StatelessWidget {
   }
 }
 
-/// Type first, then up to [_kMaxTagsShown] tags.
-class _ClientChips extends StatelessWidget {
-  const _ClientChips({required this.client});
+/// The client's type, as a tinted pill under the address.
+class _TypeChip extends StatelessWidget {
+  const _TypeChip({required this.type});
 
-  final ClientRecord client;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    return Wrap(
-      spacing: AppSpacing.sp4,
-      runSpacing: AppSpacing.sp4,
-      children: [
-        if (client.type != ClientType.unset)
-          _Chip(label: clientTypeLabel(l10n, client.type), accent: true),
-        for (final tag in client.tags.take(_kMaxTagsShown))
-          _Chip(label: tag, accent: false),
-      ],
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({required this.label, required this.accent});
-
-  final String label;
-  final bool accent;
+  final ClientType type;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = accent
-        ? theme.palette.primaryAccent
-        : theme.palette.textTertiary;
+    final color = theme.palette.primaryAccent;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.10),
@@ -107,7 +80,7 @@ class _Chip extends StatelessWidget {
           vertical: 3,
         ),
         child: Text(
-          label,
+          clientTypeLabel(context.l10n, type),
           style: theme.textTheme.labelSmall?.copyWith(
             color: color,
             fontWeight: FontWeight.w600,

@@ -207,7 +207,6 @@ void main() {
         phone: '5145550000',
         noFixedAddress: true,
         type: ClientType.commercial,
-        tags: ['vip'],
         onSiteManager: 'Dana',
         billingTerms: 'Net 30',
         autoInvoice: true,
@@ -219,31 +218,9 @@ void main() {
 
     final saved = _savedFrom(repo);
     expect(saved.type, ClientType.commercial);
-    expect(saved.tags, ['vip']);
     expect(saved.onSiteManager, 'Dana');
     expect(saved.billingTerms, 'Net 30');
     expect(saved.autoInvoice, isTrue);
-  });
-
-  testWidgets('a tag can be added and is saved', (tester) async {
-    await _pump(
-      tester,
-      repo,
-      const ClientRecord(
-        id: 'c1',
-        name: 'Acme',
-        phone: '5145550000',
-        noFixedAddress: true,
-      ),
-    );
-
-    await tester.enterText(_fieldFor('Add a tag'), 'net30');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
-
-    expect(_savedFrom(repo).tags, ['net30']);
   });
 
   testWidgets('an empty name blocks the save', (tester) async {

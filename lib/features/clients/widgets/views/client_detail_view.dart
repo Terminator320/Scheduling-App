@@ -2,14 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
+import 'package:scheduling/core/notices/notice_service.dart';
+import 'package:scheduling/core/testing_flags.dart';
+import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
+import 'package:scheduling/features/clients/application/client_form_controller.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/widgets/sheets/edit_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/views/client_view_body.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
@@ -22,12 +28,18 @@ class ClientDetailView extends ConsumerStatefulWidget {
     this.scrollController,
     this.showHandle = false,
     this.bottomPadding = 24,
+    this.onDeleted,
   });
 
   final ClientRecord client;
   final ScrollController? scrollController;
   final bool showHandle;
   final double bottomPadding;
+
+  /// Lets a host that keeps this view mounted (the two-pane detail) clear its
+  /// now-dangling selection after the testing delete.
+  // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
+  final VoidCallback? onDeleted;
 
   @override
   ConsumerState<ClientDetailView> createState() => _ClientDetailViewState();
@@ -50,6 +62,45 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
     setState(() => _client = updated);
   }
 
+  // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
+  Future<void> _confirmTestingDelete() async {
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Delete client? (testing only)',
+      message:
+          'Permanently deletes ${_client.displayName}. Past appointments keep '
+          'the name but stop linking to them. This action is debug-only and '
+          'must not ship.',
+      confirmLabel: 'Delete',
+    );
+    if (!ok || !mounted) return;
+
+    final notices = ref.read(noticeServiceProvider);
+    final outcome = await ref
+        .read(clientFormControllerProvider.notifier)
+        .deleteClient(_client.id);
+    if (!mounted) return;
+    switch (outcome) {
+      case ClientDeleted():
+        notices.success('Client deleted.');
+        // Sheet host pops itself; the two-pane host clears its selection.
+        if (widget.scrollController != null) {
+          Navigator.pop(context);
+        } else {
+          widget.onDeleted?.call();
+        }
+      case ClientDeleteFailed(:final error):
+        notices.error(
+          composeErrorNotice(
+            context,
+            intro: context.l10n.error_introDeleteClient,
+            tag: 'CLI-DEL',
+            error: error,
+          ),
+        );
+    }
+  }
+
   Future<void> _bookJob() async {
     await showAddEventPopup(context, initialClient: _client);
   }
@@ -64,6 +115,21 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
         _ProfileCard(client: _client, onEdit: _openEdit),
         const SizedBox(height: AppSpacing.sp16),
         ClientDetailViewBody(client: _client, onBookJob: _bookJob),
+        // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
+        if (kShowTestingDeleteClient) ...[
+          const SizedBox(height: AppSpacing.sp24),
+          OutlinedButton.icon(
+            style: destructiveOutlinedButtonStyle(
+              context,
+              minimumSize: const Size(double.infinity, 48),
+            ),
+            onPressed: ref.watch(clientFormControllerProvider)
+                ? null
+                : _confirmTestingDelete,
+            icon: const Icon(Icons.delete_outline, size: 18),
+            label: const Text('Delete client (testing)'),
+          ),
+        ],
       ],
     );
   }

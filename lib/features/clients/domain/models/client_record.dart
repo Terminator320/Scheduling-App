@@ -48,7 +48,6 @@ abstract class ClientRecord with _$ClientRecord {
     @Default(<ClientContact>[]) List<ClientContact> contacts,
     @Default(false) bool noFixedAddress,
     @Default(ClientType.unset) ClientType type,
-    @Default(<String>[]) List<String> tags,
     @Default('') String accessNotes,
     @Default('') String onSiteManager,
     @Default('') String billingTerms,
@@ -95,10 +94,6 @@ abstract class ClientRecord with _$ClientRecord {
           .toList(),
       noFixedAddress: (data['noFixedAddress'] as bool?) ?? false,
       type: ClientType.fromRaw(data['type']?.toString()),
-      tags: [
-        for (final tag in (data['tags'] as List?) ?? const [])
-          if (tag is String && tag.trim().isNotEmpty) tag.trim(),
-      ],
       accessNotes: (data['accessNotes'] ?? '').toString(),
       onSiteManager: (data['onSiteManager'] ?? '').toString(),
       billingTerms: (data['billingTerms'] ?? '').toString(),
@@ -129,7 +124,6 @@ abstract class ClientRecord with _$ClientRecord {
     'contacts': contacts.map((c) => c.toMap()).toList(),
     'noFixedAddress': noFixedAddress,
     'type': type.raw,
-    'tags': tags,
     'accessNotes': accessNotes.trim(),
     'onSiteManager': onSiteManager.trim(),
     'billingTerms': billingTerms.trim(),

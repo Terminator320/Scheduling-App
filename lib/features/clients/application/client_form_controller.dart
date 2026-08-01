@@ -24,6 +24,21 @@ class ClientSaveFailed extends ClientSaveOutcome {
   final Object error;
 }
 
+/// Outcome of the testing-only client delete.
+// TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
+sealed class ClientDeleteOutcome {
+  const ClientDeleteOutcome();
+}
+
+class ClientDeleted extends ClientDeleteOutcome {
+  const ClientDeleted();
+}
+
+class ClientDeleteFailed extends ClientDeleteOutcome {
+  const ClientDeleteFailed(this.error);
+  final Object error;
+}
+
 /// Write orchestration shared by the add/edit/detail views. Handles the
 /// repository write, the list refresh, and a best-effort phone-contact sync.
 ///
@@ -87,9 +102,36 @@ class ClientFormController extends Notifier<bool> {
       if (ref.mounted) state = false;
     }
   }
+
+  /// Deletes a client and drops its device-local phone-contact link. Shipping
+  /// behaviour never removes a client — see lib/core/testing_flags.dart.
+  // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
+  Future<ClientDeleteOutcome> deleteClient(String clientId) async {
+    // Resolved before the first await (see addClient).
+    final repo = ref.read(clientsRepositoryProvider);
+    final refresh = ref.read(clientsRefreshProvider.notifier);
+    final logger = ref.read(loggerProvider);
+    final linkStore = ref.read(contactLinkStoreProvider);
+    state = true;
+    try {
+      await repo.deleteClient(clientId);
+      try {
+        await linkStore.unlink(clientId);
+      } catch (e, st) {
+        logger.warn('CLI-DEL contact unlink failed', e, st);
+      }
+      refresh.bump();
+      return const ClientDeleted();
+    } catch (e, st) {
+      logger.warn('CLI-DEL deleteClient failed', e, st);
+      return ClientDeleteFailed(e);
+    } finally {
+      if (ref.mounted) state = false;
+    }
+  }
 }
 
-/// True while a client add or edit is in flight.
+/// True while a client add, edit or delete is in flight.
 final clientFormControllerProvider =
     NotifierProvider.autoDispose<ClientFormController, bool>(
       ClientFormController.new,

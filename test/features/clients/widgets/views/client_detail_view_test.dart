@@ -323,7 +323,7 @@ void main() {
     );
   });
 
-  testWidgets('the detail offers no delete action', (tester) async {
+  testWidgets('the only delete is the debug-gated testing one', (tester) async {
     tester.view.physicalSize = const Size(800, 2600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -332,8 +332,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Clients are never removed (owner decision 2026-08-01).
-    expect(find.text('Delete'), findsNothing);
+    // Shipping behaviour never removes a client (owner decision 2026-08-01).
+    // Tests run in debug, so the testing-only affordance IS rendered here — it
+    // is gated by kShowTestingDeleteClient and labelled as such, and it must
+    // stay the ONLY delete entry point on this surface.
+    expect(find.text('Delete client (testing)'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Delete'), findsNothing);
   });
 
   testWidgets('the profile card states the type and the month joined', (

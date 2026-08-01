@@ -7,6 +7,7 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/features/clients/data/firebase_clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
 
 class _MockFirestore extends Mock implements FirebaseFirestore {}
 
@@ -287,88 +288,98 @@ void main() {
     });
   });
 
-  group('tag filtering', () {
-    test('fetchClientTags returns distinct tags, case-insensitively sorted',
-        () async {
+  group('type filtering', () {
+    test('fetchClientsByType returns only that type, name-sorted', () async {
       final docs = [
-        doc('c1', {'name': 'A', 'tags': ['vip', 'net30']}),
-        doc('c2', {'name': 'B', 'tags': ['Net30', 'vip']}),
-        doc('c3', {'name': 'C'}),
+        doc('c1', {'name': 'Zeta', 'type': 'commercial'}),
+        doc('c2', {'name': 'Untyped'}),
+        doc('c3', {'name': 'Alpha', 'type': 'commercial'}),
+        doc('c4', {'name': 'Other', 'type': 'residential'}),
       ];
       when(() => snapshot.docs).thenReturn(docs);
 
-      final tags = await repo().fetchClientTags();
+      final typed = await repo().fetchClientsByType(ClientType.commercial);
 
-      // 'Net30' and 'net30' are distinct stored values; both survive, ordered
-      // case-insensitively so the chip row reads alphabetically.
-      expect(tags, ['Net30', 'net30', 'vip']);
+      expect(typed.map((c) => c.name), ['Alpha', 'Zeta']);
     });
 
-    test('fetchClientTags ignores blank and non-string entries', () async {
+    test('a doc with no type is in no type filter', () async {
       final docs = [
-        doc('c1', {'name': 'A', 'tags': ['vip', '', '  ', 42, null]}),
+        doc('c1', {'name': 'Legacy'}),
       ];
       when(() => snapshot.docs).thenReturn(docs);
 
-      expect(await repo().fetchClientTags(), ['vip']);
+      for (final type in ClientType.pickable) {
+        expect(await repo().fetchClientsByType(type), isEmpty);
+      }
     });
 
-    test('fetchClientTags is empty when nobody is tagged', () async {
+    test('an unknown stored type falls into no filter', () async {
       final docs = [
-        doc('c1', {'name': 'A'}),
+        doc('c1', {'name': 'Odd', 'type': 'industrial'}),
       ];
       when(() => snapshot.docs).thenReturn(docs);
 
-      expect(await repo().fetchClientTags(), isEmpty);
+      for (final type in ClientType.pickable) {
+        expect(await repo().fetchClientsByType(type), isEmpty);
+      }
     });
 
-    test('fetchClientsByTag returns only that tag, name-sorted', () async {
+    test('filtering on unset reads nothing rather than everything', () async {
       final docs = [
-        doc('c1', {'name': 'Zeta', 'tags': ['vip']}),
-        doc('c2', {'name': 'Untagged'}),
-        doc('c3', {'name': 'Alpha', 'tags': ['vip', 'net30']}),
-        doc('c4', {'name': 'Other', 'tags': ['net30']}),
+        doc('c1', {'name': 'A', 'type': 'commercial'}),
+        doc('c2', {'name': 'B'}),
       ];
       when(() => snapshot.docs).thenReturn(docs);
 
-      final tagged = await repo().fetchClientsByTag('vip');
-
-      expect(tagged.map((c) => c.name), ['Alpha', 'Zeta']);
+      expect(await repo().fetchClientsByType(ClientType.unset), isEmpty);
     });
 
-    test('fetchClientsByTag matches the stored spelling exactly', () async {
+    test('property mgmt maps from its stored raw value', () async {
       final docs = [
-        doc('c1', {'name': 'A', 'tags': ['VIP']}),
+        doc('c1', {'name': 'Gestion', 'type': 'property_mgmt'}),
       ];
       when(() => snapshot.docs).thenReturn(docs);
 
-      // The chip row only ever offers stored spellings, so an exact match is
-      // what keeps 'VIP' and 'vip' the two separate labels the admin typed.
-      expect(await repo().fetchClientsByTag('vip'), isEmpty);
-      expect((await repo().fetchClientsByTag('VIP')).single.name, 'A');
+      final typed = await repo().fetchClientsByType(
+        ClientType.propertyManagement,
+      );
+
+      expect(typed.single.name, 'Gestion');
     });
 
-    test('a blank tag reads nothing rather than everything', () async {
+    test('the type filter shares the search scan window (one read)', () async {
       final docs = [
-        doc('c1', {'name': 'A', 'tags': ['vip']}),
-      ];
-      when(() => snapshot.docs).thenReturn(docs);
-
-      expect(await repo().fetchClientsByTag('  '), isEmpty);
-    });
-
-    test('tags and by-tag share the search scan window (one read)', () async {
-      final docs = [
-        doc('c1', {'name': 'A', 'tags': ['vip']}),
+        doc('c1', {'name': 'A', 'type': 'commercial'}),
       ];
       when(() => snapshot.docs).thenReturn(docs);
 
       final r = repo();
-      await r.fetchClientTags();
-      await r.fetchClientsByTag('vip');
+      await r.fetchClientsByType(ClientType.commercial);
+      await r.fetchClientsByType(ClientType.residential);
       await r.searchClients('A');
 
-      // The filter row costs no extra Firestore read inside the cache TTL.
+      // The filter costs no extra Firestore read inside the cache TTL.
+      verify(() => query.get()).called(1);
+    });
+  });
+
+  group('deleteClient (testing-only)', () {
+    test('deletes the doc and drops it from the cached window', () async {
+      final docs = [
+        doc('c1', {'name': 'Junk'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      final r = repo();
+      expect((await r.searchClients('Junk')).map((c) => c.id), ['c1']);
+
+      await r.deleteClient('c1');
+
+      verify(() => collection.doc('c1')).called(1);
+      verify(() => docRef.delete()).called(1);
+      // Evicted in memory, so search stops returning it with no second read.
+      expect(await r.searchClients('Junk'), isEmpty);
       verify(() => query.get()).called(1);
     });
   });

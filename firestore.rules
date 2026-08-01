@@ -289,7 +289,6 @@ service cloud.firestore {
         // editor, not tightening this array-length number.
         && (!('contacts' in data) || (data.contacts is list && data.contacts.size() <= 50))
         && (!('type' in data) || (data.type is string && data.type.size() <= 32))
-        && (!('tags' in data) || (data.tags is list && data.tags.size() <= 10))
         && (!('accessNotes' in data) || (data.accessNotes is string && data.accessNotes.size() <= 500))
         && (!('onSiteManager' in data) || (data.onSiteManager is string && data.onSiteManager.size() <= 200))
         && (!('billingTerms' in data) || (data.billingTerms is string && data.billingTerms.size() <= 200))
@@ -316,10 +315,15 @@ service cloud.firestore {
         && !request.resource.data.diff(resource.data)
              .affectedKeys()
              .hasAny(['waveCustomerId', 'wave', 'jobCount']);
-      // Clients are never deleted (owner decision 2026-08-01). Deleting one
-      // orphaned its past appointments, which keep a denormalized clientName but
-      // lose the link, so the app has no delete path and neither does this rule.
-      // The Admin SDK bypasses rules, so support/console cleanup is unaffected.
+      // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
+      // Clients are never deleted in shipping behaviour (owner decision
+      // 2026-08-01) — deleting one orphans its past appointments, which keep a
+      // denormalized clientName but lose the link. This rule exists ONLY so the
+      // debug-gated testing delete works; rules are not build-aware, so it is
+      // open in production for as long as it is here. Delete it together with
+      // lib/core/testing_flags.dart. (The Admin SDK bypasses rules, so
+      // support/console cleanup never needed this.)
+      allow delete: if isAdmin();
     }
 
     // ── wave (Wave Accounting connection metadata) ────────────────────────────

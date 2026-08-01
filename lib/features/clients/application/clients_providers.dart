@@ -4,6 +4,7 @@ import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/clients/data/firebase_clients_repository.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 
 final clientsRepositoryProvider = Provider<ClientsRepository>((ref) {
@@ -37,19 +38,10 @@ final clientSearchProvider = FutureProvider.autoDispose
       return repo.searchClients(query);
     });
 
-/// Every tag in use, for the clients list's filter row. Empty until an admin
-/// tags someone, so the row costs nothing on a fresh install.
-final clientTagsProvider = FutureProvider.autoDispose<List<String>>((
-  ref,
-) async {
-  // Re-reads after any client write, so a newly added tag shows up.
-  ref.watch(clientsRefreshProvider);
-  return ref.watch(clientsRepositoryProvider).fetchClientTags();
-});
-
-/// Clients carrying one tag. AutoDispose frees it as soon as the tag is cleared.
-final clientsByTagProvider = FutureProvider.autoDispose
-    .family<List<ClientRecord>, String>((ref, tag) async {
+/// Clients of one type, for the list's filter row. AutoDispose frees it as soon
+/// as the filter is cleared.
+final clientsByTypeProvider = FutureProvider.autoDispose
+    .family<List<ClientRecord>, ClientType>((ref, type) async {
       ref.watch(clientsRefreshProvider);
-      return ref.watch(clientsRepositoryProvider).fetchClientsByTag(tag);
+      return ref.watch(clientsRepositoryProvider).fetchClientsByType(type);
     });
