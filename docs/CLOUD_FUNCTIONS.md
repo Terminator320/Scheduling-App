@@ -26,8 +26,9 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 
 ## Deployment status
 
-- **21 functions defined** in code; **all 21 deployed** — verified live against
-  `schedulingapp-88727` on 2026-07-18 (v2, Node.js 24, 256 MB; `us-central1`
+- **22 functions defined** in code; **21 deployed** — verified live against
+  `schedulingapp-88727` on 2026-07-18. `recountClientJobs` (P3, 2026-08-01) is
+  NOT yet deployed; no client job count renders until it is. (v2, Node.js 24, 256 MB; `us-central1`
   except `validateUploadedImage` in `us-east1`). The 2026-07-18 deploy shipped
   `placesReverseGeocode`, the travel-aware `sendUpcomingJobReminders` rebuild,
   and the codebase-audit fixes (overdue-sweep ordering, bounded travel-context
@@ -101,6 +102,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `waveImportCustomers` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN` | App Check ✓ · admin · durable 5/hr · 300s |
 | `syncUsersByUid` | trigger | `onDocumentWritten users/{id}` | `bridge.js` | any `users` doc write | — | `retry: true` |
 | `propagateClientEdits` | trigger | `onDocumentUpdated clients/{id}` | `client_propagation.js` | any `clients` doc edit | — | `retry: true` |
+| `recountClientJobs` | trigger | `onDocumentWritten appointments/{id}` | `client_job_count.js` | a write that changes `clientId` | — | `retry: true` |
 | `waveUpsertCustomer` | trigger | `onDocumentWritten clients/{id}` | `wave/callables.js` | any `clients` doc write | — | `retry: true` |
 | `validateUploadedImage` | trigger | `onObjectFinalized` (Storage) | `maintenance.js` | `appointments/*/images/*` upload | — | region `us-east1` |
 | `notifyAppointmentChanges` | trigger | `onDocumentWritten appointments/{id}` | `notifications.js` | any appointment write | `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | no `retry` (dupe push worse than missed) |
@@ -367,6 +369,19 @@ appointment's stored address equals the client's *previous* address (a differing
 one is treated as a per-appointment custom address). Requires the composite index
 `(clientId ASC, startTime ASC)` on `appointments`. `retry: true` — writes are
 absolute values. **Deployed** (verified live 2026-07-10).
+
+### `recountClientJobs` — `client_job_count.js`
+`appointments/{id}` write trigger that maintains the denormalized `jobCount` on
+the client doc. Recomputes with a `count()` aggregate and writes the value
+**absolutely** — never `FieldValue.increment`, because `retry: true` means a
+retried event would double-count. Fires only when `clientId` actually changes
+(create, delete, reassignment), so an ordinary title or time edit costs zero
+reads; personal jobs carry no `clientId` and are skipped. Writes with `update()`
+rather than `set({merge: true})` so a client removed out-of-band is never
+resurrected as a count-only stub, and swallows Firestore `NOT_FOUND` for the same
+case. The pure `clientsToRecount(before, after)` is exported for jest. Served by
+the automatic single-field index on `clientId` — no composite index needed.
+**NOT yet deployed** (added 2026-08-01); no job count renders until it is.
 
 ## Wave Accounting
 

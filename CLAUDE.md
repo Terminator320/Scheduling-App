@@ -401,12 +401,46 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   visible/searchable — keep them indefinitely; never strip them. (A doc missing
   `name` entirely is excluded by the list/search `orderBy('name')`; the fallback
   only rescues docs whose `name` is present-but-empty.) `toMap` must NEVER emit
-  `waveCustomerId`/`wave`; those are function-owned and `firestore.rules` rejects
-  any client write that touches them. Every field `toMap` DOES emit is
-  type/length-capped by `isValidClientData` in `firestore.rules` (name/business/
-  first/last/phone/mobile/email plus the address family and a bounded `contacts`
-  array) — add the matching rule cap when you add a new client field, or the
-  write passes the app but a rules tightening later rejects it.
+  `waveCustomerId`/`wave`/`jobCount`; those are function-owned and
+  `firestore.rules` rejects any client write that touches them. Every field
+  `toMap` DOES emit is type/length-capped by `isValidClientData` in
+  `firestore.rules` (name/business/first/last/phone/mobile/email plus the
+  address family, a bounded `contacts` array, and the P3 additions
+  `type`/`tags`/`accessNotes`/`onSiteManager`/`billingTerms`/`autoInvoice`) —
+  add the matching rule cap when you add a new client field, or the write passes
+  the app but a rules tightening later rejects it.
+- **A client is never removed — no delete, no archive** (owner decision
+  2026-08-01, which withdrew a shipped delete). Deleting one orphaned its past
+  appointments: they keep the denormalized `clientName` but lose the `clientId`
+  link, so history silently detaches. `ClientsRepository` therefore has no
+  `deleteClient`, `clients` has no `allow delete` rule, and the edit sheet's
+  footer holds no destructive action. Archive was evaluated as the safe
+  alternative and also dropped — it would have forced every archived-doc filter
+  into Dart (pre-existing and Wave-imported docs have no such field, and
+  Firestore excludes docs missing a filter field), which in turn forces
+  `fetchClientsPage` to stop returning a plain `List`. It returns one today, and
+  the list's `items.length < pageSize` end-of-list test is correct **only**
+  because nothing filters the page after the server returns it. Reintroducing
+  any post-query filter breaks that test — one filtered-out doc in a full page
+  truncates the list permanently — so it would have to come back with a page
+  object carrying the raw page size and a raw cursor. The Admin SDK bypasses
+  rules, so console/support cleanup is unaffected.
+- **`jobCount` is recomputed absolutely, never incremented.** `recountClientJobs`
+  (`functions/client_job_count.js`) runs `retry: true`, so a retried event would
+  double-count a `FieldValue.increment`; it runs a `count()` aggregate and SETS
+  the value. It fires only when `clientId` actually changes (create, delete,
+  reassignment) — an ordinary title or time edit costs zero reads — and writes
+  with `update()`, not `set({merge: true})`, so a client removed out-of-band is
+  never resurrected as a count-only stub. Backfill is lazy: a client's count
+  self-heals on its next appointment write, and a row renders nothing (never
+  `0`) until the field exists.
+- **`mobile` is no longer editable and self-heals into `phone`.** The edit sheet
+  dropped the second phone field (owner change 5), so `EditClientSheet._save`
+  promotes a stored `mobile` into `phone` when `phone` is empty and clears
+  `mobile` either way, on every save. Without that, a stored number would sit on
+  the doc forever — invisible, uneditable, still matched by `matchClientDocs`
+  (which reads `mobile`) and still in the Wave payload. There is no migration
+  script and none is needed; the fleet heals as clients are edited.
 - **Inline add-client while booking:** `ClientsRepository.addClient` returns the
   created `ClientRecord` with its generated Firestore doc id (NOT `void`) — the
   appointment form's "Add new client" flow links the appointment to that id.
@@ -714,13 +748,14 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
 ## Cloud Functions
 
 Functions live in `functions/` (project `schedulingapp-88727`, region
-`us-central1`). `index.js` is now a thin wiring surface that re-exports all 21
+`us-central1`). `index.js` is now a thin wiring surface that re-exports all 22
 functions under their original names — the implementations are split into
 domain modules: `security.js` (shared callable guards — `assertPayloadShape`,
 `requireString`, `requireNumberInRange` (finite number in `[min,max]`; rejects
 `NaN`/`Infinity`), `readSessionToken`, `enforceDurableRateLimit`, `assertAdmin`),
 `bridge.js` (`syncUsersByUid`), `client_propagation.js`
-(`propagateClientEdits`), `places.js`, `account.js`, `invites.js`
+(`propagateClientEdits`), `client_job_count.js` (`recountClientJobs`, backed by
+the pure `clientsToRecount`), `places.js`, `account.js`, `invites.js`
 (invited-employee signup codes — `createEmployeeInvite` + `redeemSignupCode`,
 backed by pure helpers in `signup_code_utils.js`), `maintenance.js`
 (image validation + history purge; the pure JPEG/PNG magic-byte check lives in
