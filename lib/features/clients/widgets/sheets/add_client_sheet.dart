@@ -1,25 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scheduling/core/animations/animated_loading_button.dart';
+
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/sheet_focus.dart';
+import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/application/client_form_controller.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/policies/client_form_validator.dart';
 import 'package:scheduling/features/clients/widgets/client_form_state.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_address_section.dart';
-import 'package:scheduling/features/clients/widgets/sections/additional_contacts_section.dart';
-import 'package:scheduling/features/clients/widgets/sections/client_personal_fields_section.dart';
+import 'package:scheduling/features/clients/widgets/fields/client_type_chips.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
+import 'package:scheduling/shared/widgets/sheets/form_sheet_frame.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-/// Opens the add-client sheet. Resolves to the created client, with its Firestore id
-/// set, or null if the sheet was dismissed.
-Future<ClientRecord?> showAddClientSheet(
+/// What the admin asked to do after the client was created.
+enum AddClientNext { none, bookJob }
+
+/// What [showAddClientSheet] resolves to: the created client plus the follow-up
+/// action.
+typedef AddClientResult = ({ClientRecord client, AddClientNext next});
+
+/// Opens the add-client sheet. Resolves to the created client and the follow-up
+/// action, or null if the sheet was dismissed.
+Future<AddClientResult?> showAddClientSheet(
   BuildContext context, {
   String? initialName,
   bool settleFocus = false,
@@ -28,7 +38,7 @@ Future<ClientRecord?> showAddClientSheet(
     await SheetFocus.settleBeforeSheet();
     if (!context.mounted) return null;
   }
-  final created = await showAppBottomSheet<ClientRecord>(
+  final created = await showAppBottomSheet<AddClientResult>(
     context,
     builder: (_) => AddClientSheet(initialName: initialName),
   );
@@ -49,20 +59,25 @@ class AddClientSheet extends ConsumerStatefulWidget {
   ConsumerState<AddClientSheet> createState() => _AddClientSheetState();
 }
 
+// ClientFormState supplies `noFixedAddress`, `setNoFixedAddress`, `errors` and
+// `clearError`. Additional contacts are deliberately NOT offered here — New
+// stays one fast screen and extra contacts are added on the next edit.
 class _AddClientSheetState extends ConsumerState<AddClientSheet>
     with ClientFormState<AddClientSheet> {
   final _nameController = TextEditingController();
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _mobileController = TextEditingController();
   final _emailController = TextEditingController();
+  final _accessNotesController = TextEditingController();
   final _addressController = TextEditingController();
+  final _aptController = TextEditingController();
   final _cityController = TextEditingController();
   final _provinceController = TextEditingController();
-  final _countryController = TextEditingController();
   final _postalCodeController = TextEditingController();
-  final _aptController = TextEditingController();
+  final _countryController = TextEditingController();
+
+  ClientType _type = ClientType.unset;
 
   @override
   void initState() {
@@ -72,94 +87,87 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _firstNameController.dispose();
-    _lastNameController.dispose();
-    _phoneController.dispose();
-    _mobileController.dispose();
-    _emailController.dispose();
-    _addressController.dispose();
-    _cityController.dispose();
-    _provinceController.dispose();
-    _countryController.dispose();
-    _postalCodeController.dispose();
-    _aptController.dispose();
-    disposeAdditionalContacts();
+    for (final controller in [
+      _nameController,
+      _firstNameController,
+      _lastNameController,
+      _phoneController,
+      _emailController,
+      _accessNotesController,
+      _addressController,
+      _aptController,
+      _cityController,
+      _provinceController,
+      _postalCodeController,
+      _countryController,
+    ]) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
-  List<ClientContact> _buildContacts() => [
-    for (final contact in additionalContacts)
-      if (!contact.isEmpty) contact.toContact(),
-  ];
+  // Prefers the explicit apt field over an apt embedded in the street text —
+  // identical to the edit form's helper.
+  String _buildFullAddress() {
+    final parsed = AddressParser.splitApt(_addressController.text);
+    final street = (parsed?.street ?? _addressController.text).trim();
+    final apt = _aptController.text.trim().isNotEmpty
+        ? _aptController.text.trim()
+        : (parsed?.apt ?? '').trim();
+    return AddressParser.combineAptAndStreet(street, apt);
+  }
 
-  Future<void> _save() async {
-    final name = _nameController.text.trim();
-    final firstName = _firstNameController.text.trim();
-    final lastName = _lastNameController.text.trim();
-    final phone = _phoneController.text.trim();
-    final mobile = _mobileController.text.trim();
-    final email = _emailController.text.trim();
-    final address = _addressController.text.trim();
+  ClientRecord _draft() => ClientRecord(
+    id: '',
+    name: _nameController.text.trim(),
+    firstName: _firstNameController.text.trim(),
+    lastName: _lastNameController.text.trim(),
+    phone: _phoneController.text.trim(),
+    email: _emailController.text.trim(),
+    address: noFixedAddress ? '' : _buildFullAddress(),
+    apt: noFixedAddress ? '' : _aptController.text.trim(),
+    city: noFixedAddress ? '' : _cityController.text.trim(),
+    province: noFixedAddress ? '' : _provinceController.text.trim(),
+    postalCode: noFixedAddress ? '' : _postalCodeController.text.trim(),
+    country: noFixedAddress ? '' : _countryController.text.trim(),
+    noFixedAddress: noFixedAddress,
+    accessNotes: _accessNotesController.text.trim(),
+    type: _type,
+  );
 
+  Future<void> _save({required AddClientNext next}) async {
+    // The EXISTING validator, not a fast-capture variant: address is required
+    // unless noFixedAddress is on, which is what makes that toggle meaningful.
+    // Fields this sheet doesn't render are passed empty and validate clean.
     final nextErrors = ClientFormValidator.validate(
       l10n: context.l10n,
-      name: name,
-      firstName: firstName,
-      lastName: lastName,
-      phone: phone,
-      mobile: mobile,
-      email: email,
-      address: address,
-      additionalContacts: [
-        for (final contact in additionalContacts) contact.toContact(),
-      ],
+      name: _nameController.text.trim(),
+      firstName: _firstNameController.text.trim(),
+      lastName: _lastNameController.text.trim(),
+      phone: _phoneController.text.trim(),
+      mobile: '',
+      email: _emailController.text.trim(),
+      address: _addressController.text.trim(),
+      additionalContacts: const [],
       noFixedAddress: noFixedAddress,
     );
-
     setState(() {
       errors
         ..clear()
         ..addAll(nextErrors);
     });
-
     if (errors.values.any((e) => e != null)) return;
-
-    final parsedAddress = AddressParser.splitApt(_addressController.text);
-    final street = (parsedAddress?.street ?? _addressController.text).trim();
-    final apt = _aptController.text.trim().isNotEmpty
-        ? _aptController.text.trim()
-        : (parsedAddress?.apt ?? '').trim();
-    final fullAddress = AddressParser.combineAptAndStreet(street, apt);
-
-    final newClient = ClientRecord(
-      id: '',
-      name: name,
-      firstName: firstName,
-      lastName: lastName,
-      phone: phone,
-      mobile: mobile,
-      email: email,
-      address: noFixedAddress ? '' : fullAddress,
-      apt: noFixedAddress ? '' : apt,
-      city: noFixedAddress ? '' : _cityController.text.trim(),
-      province: noFixedAddress ? '' : _provinceController.text.trim(),
-      country: noFixedAddress ? '' : _countryController.text.trim(),
-      postalCode: noFixedAddress ? '' : _postalCodeController.text.trim(),
-      contacts: _buildContacts(),
-      noFixedAddress: noFixedAddress,
-    );
 
     final outcome = await ref
         .read(clientFormControllerProvider.notifier)
-        .addClient(newClient);
+        .addClient(_draft());
     if (!mounted) return;
     switch (outcome) {
       case ClientSaved(:final client):
         ref
             .read(noticeServiceProvider)
             .success(context.l10n.common_clientAdded);
-        Navigator.pop(context, client);
+        Navigator.pop(context, (client: client, next: next));
       case ClientSaveFailed(:final error):
         ref
             .read(noticeServiceProvider)
@@ -176,41 +184,117 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
     final isSaving = ref.watch(clientFormControllerProvider);
-    return FormSheetScaffold(
-      title: context.l10n.clients_newClient,
+
+    return FormSheetFrame(
+      title: l10n.clients_newClient,
+      primaryLabel: l10n.common_add,
+      heightFactor: 0.88,
+      isBusy: isSaving,
+      onPrimary: () => _save(next: AddClientNext.none),
       children: [
-        const SizedBox(height: AppSpacing.sp24),
-        const Divider(height: 1),
-        const SizedBox(height: AppSpacing.sp24),
-        ClientPersonalFieldsSection(
-          nameController: _nameController,
-          firstNameController: _firstNameController,
-          lastNameController: _lastNameController,
-          phoneController: _phoneController,
-          mobileController: _mobileController,
-          emailController: _emailController,
-          nameError: errors['name'],
-          emailError: errors['email'],
-          onClearError: clearError,
-        ),
+        _SectionLabel(l10n.clients_sectionWho),
         const SizedBox(height: AppSpacing.sp8),
-        AdditionalContactsSection(
-          contacts: additionalContacts,
-          errors: errors,
-          onAddContact: addAdditionalContact,
-          onRemoveContact: removeAdditionalContact,
-          onClearError: clearError,
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: l10n.clients_nameOrBusiness,
+            controller: _nameController,
+            required: true,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.name],
+            maxLength: TextLimits.personName,
+            errorText: errors['name'],
+            // LabeledTextField has no `onCleared` — its built-in ClearTextButton
+            // routes through onChanged(''), so clearing the error here covers
+            // both typing and the clear "x".
+            onChanged: (_) => clearError('name'),
+          ),
         ),
+        const SizedBox(height: AppSpacing.sp16),
+        // Owner change 6: always rendered, both optional. The type chips never
+        // swap these in or out.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: SheetFocusScroll(
+                child: LabeledTextField(
+                  label: l10n.clients_firstName,
+                  controller: _firstNameController,
+                  optional: true,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.givenName],
+                  maxLength: TextLimits.firstName,
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sp12),
+            Expanded(
+              child: SheetFocusScroll(
+                child: LabeledTextField(
+                  label: l10n.clients_lastName,
+                  controller: _lastNameController,
+                  optional: true,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.familyName],
+                  maxLength: TextLimits.lastName,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sp12),
+        ClientTypeChips(
+          value: _type,
+          onChanged: (next) => setState(() => _type = next),
+        ),
+        const SizedBox(height: AppSpacing.sp24),
+
+        _SectionLabel(l10n.clients_sectionReachThem),
+        const SizedBox(height: AppSpacing.sp8),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: l10n.clients_phone,
+            controller: _phoneController,
+            optional: true,
+            keyboard: TextInputType.phone,
+            textInputAction: TextInputAction.next,
+            maxLength: TextLimits.phone,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: l10n.common_email,
+            controller: _emailController,
+            optional: true,
+            keyboard: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            maxLength: TextLimits.email,
+            errorText: errors['email'],
+            onChanged: (_) => clearError('email'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp24),
+
+        // SITE keeps the full address block, because the appointment form's
+        // inline add-client path opens this same sheet and the booking needs a
+        // split address there.
+        _SectionLabel(l10n.clients_sectionSite),
         const SizedBox(height: AppSpacing.sp8),
         Material(
           type: MaterialType.transparency,
           child: SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
-            title: Text(context.l10n.clients_noFixedAddress),
-            subtitle: Text(context.l10n.clients_noFixedAddressHint),
+            title: Text(l10n.clients_noFixedAddress),
+            subtitle: Text(l10n.clients_noFixedAddressHint),
             value: noFixedAddress,
-            activeTrackColor: Theme.of(context).colorScheme.primary,
+            activeTrackColor: theme.colorScheme.primary,
             onChanged: (value) => setNoFixedAddress(value: value),
           ),
         ),
@@ -228,51 +312,46 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
             onAddressErrorCleared: () => clearError('address'),
           ),
         ],
+        const SizedBox(height: AppSpacing.sp16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: l10n.clients_accessNotes,
+            hint: l10n.clients_accessNotesHint,
+            controller: _accessNotesController,
+            optional: true,
+            maxLines: 2,
+            textCapitalization: TextCapitalization.sentences,
+            maxLength: TextLimits.clientAccessNotes,
+          ),
+        ),
         const SizedBox(height: AppSpacing.sp24),
-        _AddClientActions(
-          isSaving: isSaving,
-          onCancel: isSaving ? null : () => Navigator.pop(context),
-          onSave: isSaving ? null : _save,
+
+        Text(
+          l10n.clients_newClientCaption,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.palette.textTertiary,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, 48),
+          ),
+          onPressed: isSaving ? null : () => _save(next: AddClientNext.bookJob),
+          child: Text(l10n.clients_addAndBookAJob),
         ),
       ],
     );
   }
 }
 
-class _AddClientActions extends StatelessWidget {
-  const _AddClientActions({
-    required this.isSaving,
-    required this.onCancel,
-    required this.onSave,
-  });
+/// Mono all-caps section header — mirrors the appointment form's own.
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
 
-  final bool isSaving;
-  final VoidCallback? onCancel;
-  final VoidCallback? onSave;
+  final String text;
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 46),
-            ),
-            onPressed: onCancel,
-            child: Text(context.l10n.common_cancel),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sp12),
-        Expanded(
-          child: AnimatedLoadingButton(
-            label: context.l10n.clients_saveClient,
-            isLoading: isSaving,
-            onPressed: onSave,
-            height: 46,
-          ),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) =>
+      Text(text, style: Theme.of(context).monoType.label);
 }

@@ -13,11 +13,14 @@ mixin InlineAddClientHost<T extends StatefulWidget> on State<T> {
     if (_addingClient) return null;
     _addingClient = true;
     try {
-      return await showAddClientSheet(
+      // The booking form only wants the client — "Add and book a job" is
+      // meaningless here, since a booking is already in progress.
+      final result = await showAddClientSheet(
         context,
         initialName: name,
         settleFocus: true,
       );
+      return result?.client;
     } finally {
       if (mounted) _addingClient = false;
     }
