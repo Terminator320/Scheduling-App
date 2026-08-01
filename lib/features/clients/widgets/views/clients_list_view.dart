@@ -22,12 +22,17 @@ class ClientsListView extends ConsumerStatefulWidget {
     required this.searchQuery,
     required this.isAdmin,
     super.key,
+    this.selectedTag,
     this.onClientTap,
     this.selectedClientId,
   });
 
   final String searchQuery;
   final bool isAdmin;
+
+  /// When set, the list shows only clients carrying this tag, read as one
+  /// bounded query rather than filtered out of the paginated list.
+  final String? selectedTag;
   final void Function(ClientRecord client)? onClientTap;
   final String? selectedClientId;
 
@@ -221,6 +226,44 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
         );
   }
 
+  // A tag filter is a bounded, already-in-memory list, so searching within it is
+  // the shared local matcher rather than a second server query.
+  Widget _buildTagResults(String tag) {
+    final query = widget.searchQuery.trim();
+    return ref
+        .watch(clientsByTagProvider(tag))
+        .when(
+          data: (all) {
+            final items = query.isEmpty
+                ? all
+                : [
+                    for (final client in all)
+                      if (ClientSearchPolicy.matchesClient(client, query))
+                        client,
+                  ];
+            return items.isEmpty
+                ? _tagEmptyState(tag: tag, query: query)
+                : _resultsList(items);
+          },
+          loading: _skeleton,
+          error: (e, _) => _errorState(
+            e,
+            onRetry: () => ref.invalidate(clientsByTagProvider(tag)),
+          ),
+        );
+  }
+
+  Widget _tagEmptyState({required String tag, required String query}) =>
+      AppEmptyState(
+        icon: Icons.sell_outlined,
+        title: query.isEmpty
+            ? context.l10n.clients_noClientsTagged(tag)
+            : '${context.l10n.clients_noClientsMatch} "$query"',
+        body: query.isEmpty
+            ? context.l10n.clients_taggedClientsHint
+            : context.l10n.common_tryADifferentSearchTerm,
+      );
+
   // Retry re-runs the failed search by invalidating its provider instance;
   // this rebuild is already watching it, so it refetches immediately.
   Widget _searchError(Object error, String query) => _errorState(
@@ -252,6 +295,9 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
   @override
   Widget build(BuildContext context) {
     ref.listen(clientsRefreshProvider, (_, _) => _pagingController.refresh());
+
+    final tag = widget.selectedTag;
+    if (tag != null) return _buildTagResults(tag);
 
     final query = widget.searchQuery.trim();
     if (query.isNotEmpty) return _buildSearchResults(query);

@@ -20,7 +20,11 @@ const _sophie = ClientRecord(
   email: 'sophie@example.com',
 );
 
-Widget _wrap(ClientsRepository repo, {String searchQuery = ''}) {
+Widget _wrap(
+  ClientsRepository repo, {
+  String searchQuery = '',
+  String? selectedTag,
+}) {
   return ProviderScope(
     overrides: [clientsRepositoryProvider.overrideWithValue(repo)],
     child: ThemeNotifier(
@@ -34,7 +38,11 @@ Widget _wrap(ClientsRepository repo, {String searchQuery = ''}) {
         supportedLocales: AppLocalizations.supportedLocales,
         theme: lightTheme(),
         home: Scaffold(
-          body: ClientsListView(searchQuery: searchQuery, isAdmin: true),
+          body: ClientsListView(
+            searchQuery: searchQuery,
+            isAdmin: true,
+            selectedTag: selectedTag,
+          ),
         ),
       ),
     ),
@@ -51,6 +59,10 @@ void main() {
         after: any(named: 'after'),
         limit: any(named: 'limit'),
       ),
+    ).thenAnswer((_) async => const []);
+    when(() => repo.fetchClientTags()).thenAnswer((_) async => const []);
+    when(
+      () => repo.fetchClientsByTag(any()),
     ).thenAnswer((_) async => const []);
   });
 
@@ -109,4 +121,67 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('the tag filter renders only that tag’s clients', (
+    tester,
+  ) async {
+    when(() => repo.fetchClientsByTag('vip')).thenAnswer(
+      (_) async => const [
+        ClientRecord(id: 'v1', name: 'Tagged Client', tags: ['vip']),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(repo, selectedTag: 'vip'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tagged Client'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the tag filter never touches the paginated list', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(repo, selectedTag: 'vip'));
+    await tester.pumpAndSettle();
+
+    // It is a separate bounded read. Filtering the paginated list in Dart would
+    // shorten a full server page and stop paging early.
+    verifyNever(
+      () => repo.fetchClientsPage(
+        after: any(named: 'after'),
+        limit: any(named: 'limit'),
+      ),
+    );
+    verify(() => repo.fetchClientsByTag('vip')).called(1);
+  });
+
+  testWidgets('searching within a tag filters that tag’s clients', (
+    tester,
+  ) async {
+    when(() => repo.fetchClientsByTag('vip')).thenAnswer(
+      (_) async => const [
+        ClientRecord(id: 'v1', name: 'Sophie Tremblay', tags: ['vip']),
+        ClientRecord(id: 'v2', name: 'Marc Gagnon', tags: ['vip']),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _wrap(repo, selectedTag: 'vip', searchQuery: 'sophie'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Sophie'), findsOneWidget);
+    expect(find.textContaining('Marc'), findsNothing);
+    // Matched locally against the bounded list, not via a second server query.
+    verifyNever(() => repo.searchClients(any()));
+  });
+
+  testWidgets('an empty tag result shows the tagged-clients empty state', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(repo, selectedTag: 'vip'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('No clients tagged'), findsOneWidget);
+  });
 }

@@ -2293,5 +2293,23 @@
         "example": "Apr 2023"
       }
     }
+  },
+  "clients_filterByTag": "Filter clients by tag",
+  "@clients_filterByTag": {
+    "description": "Accessibility label for the tag filter chip row above the clients list"
+  },
+  "clients_noClientsTagged": "No clients tagged {tag}",
+  "@clients_noClientsTagged": {
+    "description": "Empty state title when a tag filter matches nobody",
+    "placeholders": {
+      "tag": {
+        "type": "String",
+        "example": "vip"
+      }
+    }
+  },
+  "clients_taggedClientsHint": "Tags are added on a client’s edit sheet.",
+  "@clients_taggedClientsHint": {
+    "description": "Empty state body pointing at where tags are set"
   }
 }

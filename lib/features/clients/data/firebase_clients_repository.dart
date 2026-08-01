@@ -134,6 +134,49 @@ class FirebaseClientsRepository implements ClientsRepository {
   }
 
   @override
+  Future<List<String>> fetchClientTags() async {
+    final window = await _clientScanWindow();
+    if (window == null) return const [];
+    final tags = <String>{};
+    for (final doc in window.docs) {
+      for (final tag in (doc.data['tags'] as List?) ?? const []) {
+        if (tag is String && tag.trim().isNotEmpty) tags.add(tag.trim());
+      }
+    }
+    return tags.toList()..sort((a, b) {
+      // Case-insensitive so the row reads alphabetically, then a
+      // case-sensitive tiebreak so "Net30" and "net30" get a stable order
+      // instead of one that depends on which doc was scanned first.
+      final byLabel = a.toLowerCase().compareTo(b.toLowerCase());
+      return byLabel != 0 ? byLabel : a.compareTo(b);
+    });
+  }
+
+  @override
+  Future<List<ClientRecord>> fetchClientsByTag(String tag) async {
+    final wanted = tag.trim();
+    if (wanted.isEmpty) return const [];
+    final window = await _clientScanWindow();
+    if (window == null) return const [];
+    return [
+      for (final doc in window.docs)
+        if (_hasTag(doc.data, wanted)) ClientRecord.fromMap(doc.id, doc.data),
+    ]..sort(
+      (a, b) =>
+          a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
+    );
+  }
+
+  /// Exact, case-sensitive match — tags are typed once and then picked from the
+  /// filter row, so the stored spelling is the only one that can be selected.
+  static bool _hasTag(Map<String, dynamic> data, String tag) {
+    for (final raw in (data['tags'] as List?) ?? const []) {
+      if (raw is String && raw.trim() == tag) return true;
+    }
+    return false;
+  }
+
+  @override
   Future<List<ClientRecord>> searchClients(String query) async {
     final q = query.trim();
     if (!ClientSearchPolicy.shouldSearch(q)) return [];

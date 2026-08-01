@@ -6,6 +6,7 @@ import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/widgets/sections/client_tag_filter_bar.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
 import 'package:scheduling/features/clients/widgets/views/client_detail_view.dart';
@@ -38,6 +39,7 @@ class ListInformation extends StatefulWidget {
 class _ListInformationState extends State<ListInformation> {
   final TextEditingController _searchController = TextEditingController();
   ClientRecord? _selectedClient;
+  String? _selectedTag;
 
   late final List<TourStepId> _tourSteps = tourStepsFor(
     HubTab.clients,
@@ -143,15 +145,28 @@ class _ListInformationState extends State<ListInformation> {
             : null,
         // Only the master list listens to the search controller, so typing rebuilds just the list.
         body: MasterDetailScaffold(
-          master: ListenableBuilder(
-            listenable: _searchController,
-            builder: (context, _) => ClientsListView(
-              searchQuery: _searchController.text,
-              isAdmin: widget.isAdmin,
-              // Only highlight the selected row when the detail pane is shown (two-pane).
-              selectedClientId: context.isTwoPane ? _selectedClient?.id : null,
-              onClientTap: _onClientTap,
-            ),
+          master: Column(
+            children: [
+              ClientTagFilterBar(
+                selected: _selectedTag,
+                onChanged: (next) => setState(() => _selectedTag = next),
+              ),
+              Expanded(
+                child: ListenableBuilder(
+                  listenable: _searchController,
+                  builder: (context, _) => ClientsListView(
+                    searchQuery: _searchController.text,
+                    isAdmin: widget.isAdmin,
+                    selectedTag: _selectedTag,
+                    // Only highlight the selected row when the detail pane is shown (two-pane).
+                    selectedClientId: context.isTwoPane
+                        ? _selectedClient?.id
+                        : null,
+                    onClientTap: _onClientTap,
+                  ),
+                ),
+              ),
+            ],
           ),
           detail: _selectedClient != null
               ? ClientDetailView(

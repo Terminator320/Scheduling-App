@@ -21,4 +21,18 @@ abstract class ClientsRepository {
   /// One-shot fetch of clients created since [since], used for dashboard trends. Legacy
   /// docs without `createdAt` (old imports) are excluded.
   Future<List<ClientRecord>> fetchClientsCreatedSince(DateTime since);
+
+  /// Every distinct tag in use, sorted, for the clients list's filter row.
+  ///
+  /// Read from the same bounded, cached window `searchClients` scans, so the
+  /// filter row costs no extra read inside the TTL.
+  Future<List<String>> fetchClientTags();
+
+  /// Clients carrying [tag], name-sorted, from that same window.
+  ///
+  /// A SEPARATE bounded read, deliberately not a filter over `fetchClientsPage`:
+  /// filtering a server page in Dart shortens a page the server actually filled,
+  /// which stops the paginated list early. See the "never removed" invariant in
+  /// CLAUDE.md for the full reasoning.
+  Future<List<ClientRecord>> fetchClientsByTag(String tag);
 }
