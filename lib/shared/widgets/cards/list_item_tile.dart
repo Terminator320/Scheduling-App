@@ -11,6 +11,7 @@ class ListItemTile extends StatelessWidget {
     required this.title,
     super.key,
     this.subtitle,
+    this.subtitleExtra,
     this.avatarColor,
     this.trailing,
     this.onTap,
@@ -21,6 +22,10 @@ class ListItemTile extends StatelessWidget {
   final String avatarName;
   final String title;
   final String? subtitle;
+
+  /// An extra line below [subtitle] — a chip row, a badge strip. The [subtitle]
+  /// slot itself is single-line by contract, so anything taller goes here.
+  final Widget? subtitleExtra;
   final Color? avatarColor;
   final Widget? trailing;
   final VoidCallback? onTap;
@@ -70,6 +75,10 @@ class ListItemTile extends StatelessWidget {
                           color: scheme.onSurfaceVariant,
                         ),
                       ),
+                    ],
+                    if (subtitleExtra != null) ...[
+                      const SizedBox(height: AppSpacing.sp8),
+                      subtitleExtra!,
                     ],
                     if (compact && trailing != null) ...[
                       const SizedBox(height: AppSpacing.sp8),
