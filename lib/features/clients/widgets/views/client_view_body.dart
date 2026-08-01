@@ -11,33 +11,33 @@ import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/features/wave/widgets/wave_sync_badge.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/cards/info_card.dart';
+import 'package:scheduling/shared/widgets/cards/key_value_panel.dart';
 import 'package:scheduling/shared/widgets/primitives/quick_action_button.dart';
-import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
-/// Read-only display of a ClientRecord — a quick-action row, a contact-info card, and
-/// an additional-contacts section.
+/// Read-only display of a ClientRecord — three action tiles, a keyed info panel
+/// and an additional-contacts section.
 class ClientDetailViewBody extends ConsumerWidget {
-  const ClientDetailViewBody({required this.client, super.key});
+  const ClientDetailViewBody({
+    required this.client,
+    required this.onBookJob,
+    super.key,
+  });
 
   final ClientRecord client;
+
+  /// Opens the new-appointment sheet seeded with this client. Supplied by the
+  /// host, which owns the navigator context.
+  final VoidCallback onBookJob;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final hasPhone = client.phone.isNotEmpty;
-    final hasMobile = client.mobile.isNotEmpty;
     final hasEmail = client.email.isNotEmpty;
     final hasAddress = client.address.isNotEmpty;
-    // The person's name is already shown once in the header, so it's deliberately not
-    // repeated as a contact row here.
-    final hasContactInfo = hasPhone || hasMobile || hasEmail || hasAddress;
 
     // Handlers built here (where `ref` lives) so widgets stay presentational.
     final onCall = hasPhone
         ? () => launchPhoneCall(context, ref, client.phone)
-        : null;
-    final onMobile = hasMobile
-        ? () => launchPhoneCall(context, ref, client.mobile)
         : null;
     final onEmail = hasEmail
         ? () => EmailComposeLauncher.showEmailChoices(
@@ -56,14 +56,57 @@ class ClientDetailViewBody extends ConsumerWidget {
     void onSaveToContacts() => saveClientToPhoneContacts(context, ref, client);
 
     // `contacts` holds only the extra contacts — the customer's own details already
-    // live in the header and the contact-info card.
+    // live in the header and the info panel.
     final extraContacts = client.contacts;
 
     final hasSyncBadge = client.waveSyncState.isNotEmpty;
 
+    final billingLine = [
+      client.billingTerms,
+      if (client.autoInvoice) context.l10n.clients_autoInvoice,
+    ].where((v) => v.trim().isNotEmpty).join(' · ');
+
+    // Empty rows are omitted entirely — read-only detail bodies never render
+    // "None" placeholders.
+    final infoRows = <KeyValueRow>[
+      if (hasPhone)
+        KeyValueRow(
+          label: context.l10n.clients_phoneKey,
+          value: client.phone,
+          onTap: onCall,
+          emphasize: true,
+        ),
+      if (hasEmail)
+        KeyValueRow(
+          label: context.l10n.clients_emailKey,
+          value: client.email,
+          onTap: onEmail,
+          emphasize: true,
+        ),
+      if (hasAddress)
+        KeyValueRow(
+          label: context.l10n.clients_addressKey,
+          value: AddressParser.canonicalToDisplay(client.address),
+          onTap: onDirections,
+          emphasize: true,
+          semanticLabel:
+              '${AddressParser.canonicalToDisplay(client.address)}, '
+              '${context.l10n.maps_openAddressWith}',
+        ),
+      if (client.onSiteManager.trim().isNotEmpty)
+        KeyValueRow(
+          label: context.l10n.clients_manager,
+          value: client.onSiteManager,
+        ),
+      if (billingLine.isNotEmpty)
+        KeyValueRow(label: context.l10n.clients_billingKey, value: billingLine),
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Exactly three tiles by design. Save-to-contacts moves below the panel
+        // rather than competing for a tile slot.
         QuickActionsRow(
           buttons: [
             if (onCall != null)
@@ -72,12 +115,6 @@ class ClientDetailViewBody extends ConsumerWidget {
                 label: context.l10n.clients_call,
                 onTap: onCall,
               ),
-            if (onEmail != null)
-              QuickActionButton(
-                icon: Icons.email_outlined,
-                label: context.l10n.common_email,
-                onTap: onEmail,
-              ),
             if (onDirections != null)
               QuickActionButton(
                 icon: Icons.directions_outlined,
@@ -85,52 +122,25 @@ class ClientDetailViewBody extends ConsumerWidget {
                 onTap: onDirections,
               ),
             QuickActionButton(
-              icon: Icons.person_add_alt_1_outlined,
-              label: context.l10n.clients_saveToContacts,
-              onTap: onSaveToContacts,
+              icon: Icons.event_available_outlined,
+              label: context.l10n.clients_bookJob,
+              onTap: onBookJob,
             ),
           ],
         ),
-        if (hasContactInfo) ...[
+        if (infoRows.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sp24),
-          SectionLabel(context.l10n.clients_contactInfo),
-          const SizedBox(height: AppSpacing.sp8),
-          InfoCard(
-            rows: [
-              if (hasPhone)
-                InfoCardRow(
-                  icon: Icons.phone_outlined,
-                  text: client.phone,
-                  onTap: onCall,
-                  trailingIcon: Icons.chevron_right,
-                ),
-              if (hasMobile)
-                InfoCardRow(
-                  icon: Icons.smartphone_outlined,
-                  text: client.mobile,
-                  onTap: onMobile,
-                  trailingIcon: Icons.chevron_right,
-                ),
-              if (hasEmail)
-                InfoCardRow(
-                  icon: Icons.email_outlined,
-                  text: client.email,
-                  onTap: onEmail,
-                  trailingIcon: Icons.chevron_right,
-                ),
-              if (hasAddress)
-                InfoCardRow(
-                  icon: Icons.location_on_outlined,
-                  text: AddressParser.canonicalToDisplay(client.address),
-                  onTap: onDirections,
-                  trailingIcon: Icons.open_in_new,
-                  semanticLabel:
-                      '${AddressParser.canonicalToDisplay(client.address)}, '
-                      '${context.l10n.maps_openAddressWith}',
-                ),
-            ],
-          ),
+          KeyValuePanel(rows: infoRows),
         ],
+        const SizedBox(height: AppSpacing.sp16),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: TextButton.icon(
+            onPressed: onSaveToContacts,
+            icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
+            label: Text(context.l10n.clients_saveToContacts),
+          ),
+        ),
         ClientContactsCards(contacts: extraContacts),
         const SizedBox(height: AppSpacing.sp24),
         ClientJobHistorySection(clientId: client.id),

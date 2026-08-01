@@ -178,7 +178,7 @@ void main() {
       // Select Alice into the split-layout detail pane, then edit her phone.
       await tester.tap(find.text('Alice Brown'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Edit'));
+      await tester.tap(find.text('Edit client'));
       await tester.pumpAndSettle();
 
       await tester.enterText(_phoneEditField().first, '555-9999');
