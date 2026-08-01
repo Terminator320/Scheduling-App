@@ -788,9 +788,9 @@
   "@clients_directions": {
     "description": "Quick-action button that opens the client's address in a map app"
   },
-  "clients_saveToContacts": "Save",
+  "clients_saveToContacts": "Save to contacts",
   "@clients_saveToContacts": {
-    "description": "Quick-action button that saves the client to the phone's contacts"
+    "description": "Button below the client info panel that exports the client to the phone address book. Names the destination because it is a standalone row now, not a tile beside Call/Directions where \"Save\" was clear."
   },
   "clients_savedToContacts": "Saved to contacts",
   "@clients_savedToContacts": {
@@ -2284,8 +2284,14 @@
   "@clients_bookJob": {
     "description": "Action tile that opens the new-appointment sheet for this client"
   },
-  "clients_editClientPill": "Edit client",
-  "@clients_editClientPill": {
-    "description": "Pill above the client detail that opens the edit sheet"
+  "clients_sinceDate": "since {date}",
+  "@clients_sinceDate": {
+    "description": "Client profile-card line fragment: the month and year the client was added",
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "Apr 2023"
+      }
+    }
   }
 }
