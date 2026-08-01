@@ -22,10 +22,6 @@ class TextLimits {
   static const int clientAccessNotes = 500;
   static const int clientOnSiteManager = 200;
   static const int clientBillingTerms = 200;
-  static const int clientTag = 32;
-
-  /// Matches the `tags` array cap in `isValidClientData`.
-  static const int clientTagCount = 10;
 
   static const int signupCode = 32;
 }

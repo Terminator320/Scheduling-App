@@ -8,6 +8,7 @@ import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_tile.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
@@ -22,7 +23,7 @@ class ClientsListView extends ConsumerStatefulWidget {
     required this.searchQuery,
     required this.isAdmin,
     super.key,
-    this.selectedTag,
+    this.selectedType,
     this.onClientTap,
     this.selectedClientId,
   });
@@ -30,9 +31,9 @@ class ClientsListView extends ConsumerStatefulWidget {
   final String searchQuery;
   final bool isAdmin;
 
-  /// When set, the list shows only clients carrying this tag, read as one
-  /// bounded query rather than filtered out of the paginated list.
-  final String? selectedTag;
+  /// When set, the list shows only clients of this type, read as one bounded
+  /// query rather than filtered out of the paginated list.
+  final ClientType? selectedType;
   final void Function(ClientRecord client)? onClientTap;
   final String? selectedClientId;
 
@@ -226,12 +227,12 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
         );
   }
 
-  // A tag filter is a bounded, already-in-memory list, so searching within it is
-  // the shared local matcher rather than a second server query.
-  Widget _buildTagResults(String tag) {
+  // A type filter is a bounded, already-in-memory list, so searching within it
+  // is the shared local matcher rather than a second server query.
+  Widget _buildTypeResults(ClientType type) {
     final query = widget.searchQuery.trim();
     return ref
-        .watch(clientsByTagProvider(tag))
+        .watch(clientsByTypeProvider(type))
         .when(
           data: (all) {
             final items = query.isEmpty
@@ -242,25 +243,27 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
                         client,
                   ];
             return items.isEmpty
-                ? _tagEmptyState(tag: tag, query: query)
+                ? _typeEmptyState(type: type, query: query)
                 : _resultsList(items);
           },
           loading: _skeleton,
           error: (e, _) => _errorState(
             e,
-            onRetry: () => ref.invalidate(clientsByTagProvider(tag)),
+            onRetry: () => ref.invalidate(clientsByTypeProvider(type)),
           ),
         );
   }
 
-  Widget _tagEmptyState({required String tag, required String query}) =>
+  Widget _typeEmptyState({required ClientType type, required String query}) =>
       AppEmptyState(
-        icon: Icons.sell_outlined,
+        icon: Icons.filter_list_off_outlined,
         title: query.isEmpty
-            ? context.l10n.clients_noClientsTagged(tag)
+            ? context.l10n.clients_noClientsOfType(
+                clientTypeLabel(context.l10n, type),
+              )
             : '${context.l10n.clients_noClientsMatch} "$query"',
         body: query.isEmpty
-            ? context.l10n.clients_taggedClientsHint
+            ? context.l10n.clients_typeFilterHint
             : context.l10n.common_tryADifferentSearchTerm,
       );
 
@@ -296,8 +299,8 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
   Widget build(BuildContext context) {
     ref.listen(clientsRefreshProvider, (_, _) => _pagingController.refresh());
 
-    final tag = widget.selectedTag;
-    if (tag != null) return _buildTagResults(tag);
+    final type = widget.selectedType;
+    if (type != null) return _buildTypeResults(type);
 
     final query = widget.searchQuery.trim();
     if (query.isNotEmpty) return _buildSearchResults(query);

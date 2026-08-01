@@ -62,10 +62,8 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
   late final TextEditingController _provinceController;
   late final TextEditingController _countryController;
   late final TextEditingController _postalCodeController;
-  final _tagDraftController = TextEditingController();
 
   late ClientType _type;
-  late List<String> _tags;
   late bool _autoInvoice;
 
   @override
@@ -106,7 +104,6 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
     }
     noFixedAddress = c.noFixedAddress;
     _type = c.type;
-    _tags = [...c.tags];
     _autoInvoice = c.autoInvoice;
   }
 
@@ -127,7 +124,6 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
       _provinceController,
       _countryController,
       _postalCodeController,
-      _tagDraftController,
     ]) {
       controller.dispose();
     }
@@ -149,17 +145,6 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
     for (final contact in additionalContacts)
       if (!contact.isEmpty) contact.toContact(),
   ];
-
-  void _addTag(String raw) {
-    final tag = raw.trim();
-    if (tag.isEmpty ||
-        _tags.contains(tag) ||
-        _tags.length >= TextLimits.clientTagCount) {
-      return;
-    }
-    setState(() => _tags = [..._tags, tag]);
-    _tagDraftController.clear();
-  }
 
   Future<void> _save() async {
     // Guards against a double-tap firing two concurrent writes.
@@ -214,7 +199,6 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
       contacts: _buildContacts(),
       noFixedAddress: noFixedAddress,
       type: _type,
-      tags: _tags,
       accessNotes: _accessNotesController.text.trim(),
       onSiteManager: _onSiteManagerController.text.trim(),
       billingTerms: _billingTermsController.text.trim(),
@@ -320,37 +304,6 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
                 useMonoValue: true,
               ),
             ],
-          ),
-        ],
-        const SizedBox(height: AppSpacing.sp16),
-        Text(l10n.clients_tags, style: theme.textTheme.labelLarge),
-        const SizedBox(height: AppSpacing.sp8),
-        if (_tags.isNotEmpty)
-          Wrap(
-            spacing: AppSpacing.sp8,
-            runSpacing: AppSpacing.sp8,
-            children: [
-              for (final tag in _tags)
-                InputChip(
-                  label: Text(tag),
-                  onDeleted: () =>
-                      setState(() => _tags = [..._tags]..remove(tag)),
-                ),
-            ],
-          ),
-        if (_tags.length < TextLimits.clientTagCount) ...[
-          const SizedBox(height: AppSpacing.sp8),
-          SheetFocusScroll(
-            child: LabeledTextField(
-              label: l10n.clients_addTag,
-              controller: _tagDraftController,
-              optional: true,
-              textInputAction: TextInputAction.done,
-              // Matches the per-tag cap; the array cap is the `if` above and the
-              // `tags.size() <= 10` clause in isValidClientData.
-              maxLength: TextLimits.clientTag,
-              onSubmitted: _addTag,
-            ),
           ),
         ],
         const SizedBox(height: AppSpacing.sp24),

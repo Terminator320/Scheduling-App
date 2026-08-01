@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show compute;
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 
 class FirebaseClientsRepository implements ClientsRepository {
@@ -46,8 +47,8 @@ class FirebaseClientsRepository implements ClientsRepository {
   }
 
   // For local writes we patch the written doc into the scan window directly, so
-  // search can recompute without an extra read. Only adds and edits reach here —
-  // clients are never deleted, so there is no removal case.
+  // search can recompute without an extra read. Adds and edits come here;
+  // the testing-only delete evicts via _evictFromWindow instead.
   void _applyLocalWrite(String id, Map<String, dynamic> data) {
     final window = _scanWindow;
     if (window != null && _isFresh(window.fetchedAt)) {
@@ -133,47 +134,42 @@ class FirebaseClientsRepository implements ClientsRepository {
     _applyLocalWrite(client.id, map);
   }
 
+  // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
   @override
-  Future<List<String>> fetchClientTags() async {
-    final window = await _clientScanWindow();
-    if (window == null) return const [];
-    final tags = <String>{};
-    for (final doc in window.docs) {
-      for (final tag in (doc.data['tags'] as List?) ?? const []) {
-        if (tag is String && tag.trim().isNotEmpty) tags.add(tag.trim());
-      }
+  Future<void> deleteClient(String id) async {
+    await _clients.doc(id).delete();
+    _evictFromWindow(id);
+  }
+
+  /// Drops a deleted doc out of the cached scan window so search and the filters
+  /// stop returning it without paying for a fresh read.
+  // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
+  void _evictFromWindow(String id) {
+    final window = _scanWindow;
+    if (window != null && _isFresh(window.fetchedAt)) {
+      _scanWindow = _CachedClientScanWindow([
+        for (final doc in window.docs)
+          if (doc.id != id) doc,
+      ], window.fetchedAt);
+    } else {
+      _scanWindow = null;
     }
-    return tags.toList()..sort((a, b) {
-      // Case-insensitive so the row reads alphabetically, then a
-      // case-sensitive tiebreak so "Net30" and "net30" get a stable order
-      // instead of one that depends on which doc was scanned first.
-      final byLabel = a.toLowerCase().compareTo(b.toLowerCase());
-      return byLabel != 0 ? byLabel : a.compareTo(b);
-    });
+    _searchCache.clear();
   }
 
   @override
-  Future<List<ClientRecord>> fetchClientsByTag(String tag) async {
-    final wanted = tag.trim();
-    if (wanted.isEmpty) return const [];
+  Future<List<ClientRecord>> fetchClientsByType(ClientType type) async {
+    if (type == ClientType.unset) return const [];
     final window = await _clientScanWindow();
     if (window == null) return const [];
     return [
       for (final doc in window.docs)
-        if (_hasTag(doc.data, wanted)) ClientRecord.fromMap(doc.id, doc.data),
+        if (ClientType.fromRaw(doc.data['type']?.toString()) == type)
+          ClientRecord.fromMap(doc.id, doc.data),
     ]..sort(
       (a, b) =>
           a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
     );
-  }
-
-  /// Exact, case-sensitive match — tags are typed once and then picked from the
-  /// filter row, so the stored spelling is the only one that can be selected.
-  static bool _hasTag(Map<String, dynamic> data, String tag) {
-    for (final raw in (data['tags'] as List?) ?? const []) {
-      if (raw is String && raw.trim() == tag) return true;
-    }
-    return false;
   }
 
   @override

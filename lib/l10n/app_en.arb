@@ -2232,14 +2232,6 @@
   "@clients_since": {
     "description": "Read-only key for the date the client was first added"
   },
-  "clients_tags": "Tags",
-  "@clients_tags": {
-    "description": "Label for the client tags field"
-  },
-  "clients_addTag": "Add a tag",
-  "@clients_addTag": {
-    "description": "Label for the field that appends a new client tag"
-  },
   "clients_jobsCountLabel": "JOBS",
   "@clients_jobsCountLabel": {
     "description": "Mono micro-label under the job count on a client row"
@@ -2294,22 +2286,26 @@
       }
     }
   },
-  "clients_filterByTag": "Filter clients by tag",
-  "@clients_filterByTag": {
-    "description": "Accessibility label for the tag filter chip row above the clients list"
+  "clients_filterByType": "Filter clients by type",
+  "@clients_filterByType": {
+    "description": "Accessibility label for the type filter chip row above the clients list"
   },
-  "clients_noClientsTagged": "No clients tagged {tag}",
-  "@clients_noClientsTagged": {
-    "description": "Empty state title when a tag filter matches nobody",
+  "clients_noClientsOfType": "No {type} clients",
+  "@clients_noClientsOfType": {
+    "description": "Empty state title when a client-type filter matches nobody",
     "placeholders": {
-      "tag": {
+      "type": {
         "type": "String",
-        "example": "vip"
+        "example": "Commercial"
       }
     }
   },
-  "clients_taggedClientsHint": "Tags are added on a client’s edit sheet.",
-  "@clients_taggedClientsHint": {
-    "description": "Empty state body pointing at where tags are set"
+  "clients_typeFilterHint": "A client’s type is set on their edit sheet.",
+  "@clients_typeFilterHint": {
+    "description": "Empty state body pointing at where the client type is set"
+  },
+  "error_introDeleteClient": "Couldn't delete the client",
+  "@error_introDeleteClient": {
+    "description": "Error intro for CLI-DEL (testing-only delete)"
   }
 }

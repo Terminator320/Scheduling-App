@@ -73,50 +73,29 @@ void main() {
     expect(find.text('JOBS'), findsNothing);
   });
 
-  testWidgets('renders the type chip and its tags', (tester) async {
+  testWidgets('renders the type chip', (tester) async {
     await tester.pumpWidget(
       _harness(
         const ClientRecord(
           id: 'c1',
           name: 'Acme',
           type: ClientType.commercial,
-          tags: ['vip', 'net30'],
         ),
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Commercial'), findsOneWidget);
-    expect(find.text('vip'), findsOneWidget);
-    expect(find.text('net30'), findsOneWidget);
   });
 
-  testWidgets('caps the tag chips at two', (tester) async {
-    await tester.pumpWidget(
-      _harness(
-        const ClientRecord(
-          id: 'c1',
-          name: 'Acme',
-          tags: ['one', 'two', 'three'],
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('one'), findsOneWidget);
-    expect(find.text('two'), findsOneWidget);
-    expect(find.text('three'), findsNothing);
-  });
-
-  testWidgets('a client with no type or tags renders no chip row', (
-    tester,
-  ) async {
+  testWidgets('a typeless client renders no chip', (tester) async {
     await tester.pumpWidget(
       _harness(const ClientRecord(id: 'c1', name: 'Acme', jobCount: 3)),
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(Wrap), findsNothing);
+    expect(find.text('Commercial'), findsNothing);
+    expect(find.text('Residential'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }
