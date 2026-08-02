@@ -72,12 +72,16 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('offers the invite route under the card', (tester) async {
+  testWidgets('offers no invite route — employees just sign in', (
+    tester,
+  ) async {
     await tester.pumpWidget(_wrap(auth, repo));
     await tester.pumpAndSettle();
 
-    expect(find.text('Invited by your employer?'), findsOneWidget);
-    expect(find.text('Accept your invite'), findsOneWidget);
+    // The acceptance-code flow is retired: an admin creates the account and
+    // hands over a password, so there is nothing to "accept" here.
+    expect(find.text('Invited by your employer?'), findsNothing);
+    expect(find.text('Accept your invite'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

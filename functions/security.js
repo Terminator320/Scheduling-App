@@ -112,8 +112,8 @@ function readSessionToken(data) {
  * within `windowMs`. Counters live in `rateLimits/*`, which firestore.rules
  * denies to all clients.
  * @param {string} route stable endpoint identifier (part of the doc key).
- * @param {string} key per-caller limiter key — usually the Auth uid, but the
- *   token email for redeemSignupCode (a failed signup re-mints the uid).
+ * @param {string} key per-caller limiter key — usually the Auth uid, but any
+ *   stable per-caller identifier a route needs (see `keyKind`).
  * @param {number} max max attempts per window.
  * @param {number} windowMs window length in milliseconds.
  * @param {string} [keyKind] label for `key` ("uid" | "email"), purely for log

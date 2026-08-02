@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
-import 'package:scheduling/features/auth/screens/accept_invite_code_screen.dart';
-import 'package:scheduling/features/auth/screens/accept_invite_details_screen.dart';
+import 'package:scheduling/features/auth/screens/account_setup_screen.dart';
 import 'package:scheduling/features/auth/screens/forgot_password_screen.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
 import 'package:scheduling/features/calendar/screens/day_route_screen.dart';
 import 'package:scheduling/features/clients/screens/history_screen.dart';
 import 'package:scheduling/features/dashboard/screens/dashboard_screen.dart';
-import 'package:scheduling/features/employees/domain/models/invite_preview.dart';
 import 'package:scheduling/features/settings/screens/my_details_screen.dart';
 import 'package:scheduling/features/settings/screens/settings_screen.dart';
 import 'package:scheduling/routes/hub_shell.dart';
@@ -17,8 +15,7 @@ class AppRoutes {
 
   static const String login = '/login';
   static const String forgotPassword = '/forgot-password';
-  static const String acceptInviteCode = '/accept-invite/code';
-  static const String acceptInviteDetails = '/accept-invite/details';
+  static const String accountSetup = '/account-setup';
   static const String mainCalendar = '/calendar';
   static const String employees = '/employees';
   static const String clients = '/clients';
@@ -45,25 +42,15 @@ class AppRoutes {
               ForgotPasswordScreen(initialEmail: args?.initialEmail),
         );
 
-      case acceptInviteCode:
-        // Args are optional: the sign-in prompt pushes it bare, the deep-link
-        // dispatcher pushes it with a code to prefill.
-        final args = settings.arguments as AcceptInviteCodeArgs?;
+      case accountSetup:
+        // Args are optional: sign-in and splash both route here for an
+        // `invited` account, seeding whatever name halves the admin typed.
+        final args = settings.arguments as AccountSetupArgs?;
         return AppPageRoute(
           settings: settings,
-          builder: (_) =>
-              AcceptInviteCodeScreen(initialCode: args?.initialCode ?? ''),
-        );
-
-      case acceptInviteDetails:
-        // Only ever reached from the code screen, which has already resolved
-        // the preview — there is no way to build this screen without one.
-        final args = settings.arguments! as AcceptInviteDetailsArgs;
-        return AppPageRoute(
-          settings: settings,
-          builder: (_) => AcceptInviteDetailsScreen(
-            code: args.code,
-            preview: args.preview,
+          builder: (_) => AccountSetupScreen(
+            firstName: args?.firstName ?? '',
+            lastName: args?.lastName ?? '',
           ),
         );
 
@@ -223,19 +210,13 @@ class ForgotPasswordArgs {
   final String? initialEmail;
 }
 
-class AcceptInviteCodeArgs {
-  const AcceptInviteCodeArgs({this.initialCode = ''});
+class AccountSetupArgs {
+  const AccountSetupArgs({this.firstName = '', this.lastName = ''});
 
-  /// Prefills the boxes. Never persisted — it rides the navigator stack only.
-  final String initialCode;
-}
-
-class AcceptInviteDetailsArgs {
-  const AcceptInviteDetailsArgs({required this.code, required this.preview});
-
-  /// Already normalized, so the details screen never re-asks for it.
-  final String code;
-  final InvitePreview preview;
+  /// Whatever the admin already typed, so the person confirms rather than
+  /// retypes. Both are optional — the fields are still required on the screen.
+  final String firstName;
+  final String lastName;
 }
 
 class MainCalendarArgs {

@@ -12,6 +12,30 @@
   "@auth_confirmPassword": {
     "description": "Confirm Password"
   },
+  "auth_setUpYourAccountTitle": "Set up your account",
+  "@auth_setUpYourAccountTitle": {
+    "description": "Title of the first-run account setup screen"
+  },
+  "auth_setUpYourAccountBody": "Your admin created this account with a temporary password. Choose your own password below — the temporary one stops working once you finish.",
+  "@auth_setUpYourAccountBody": {
+    "description": "Explains why setup is required: the admin set a temporary password"
+  },
+  "auth_newPassword": "New password",
+  "@auth_newPassword": {
+    "description": "Label of the password field on the account setup screen"
+  },
+  "auth_finishSetup": "Finish setup",
+  "@auth_finishSetup": {
+    "description": "Primary button on the account setup screen"
+  },
+  "auth_signedInAs": "SIGNED IN",
+  "@auth_signedInAs": {
+    "description": "Mono chip beside the locked email on the setup screen"
+  },
+  "auth_accountReadySignInAgain": "Your account is ready. Sign in with your new password.",
+  "@auth_accountReadySignInAgain": {
+    "description": "Success banner when the profile is not readable yet after setup"
+  },
   "auth_signIn": "Sign In",
   "@auth_signIn": {
     "description": "Sign In"
@@ -921,6 +945,22 @@
     "description": "No account found with this email"
   },
   "error_somethingWentWrongPleaseTryAgain": "Something went wrong, please try again",
+  "error_thatAccountIsNoLongerPending": "That account is no longer pending — the person may have already set it up.",
+  "@error_thatAccountIsNoLongerPending": {
+    "description": "Shown when deleteEmployeeAccount refuses because the person completed setup first"
+  },
+  "error_yourAccountIsAlreadySetUp": "Your account is already set up. Sign in with your new password.",
+  "@error_yourAccountIsAlreadySetUp": {
+    "description": "Shown when completeEmployeeSetup refuses because the account is already active"
+  },
+  "error_noAccountRecordContactAdmin": "We couldn't find your employee record. Ask your admin to check your account.",
+  "@error_noAccountRecordContactAdmin": {
+    "description": "Shown when the signed-in uid resolves to no users doc during setup"
+  },
+  "error_sessionExpiredSignInAgain": "Your session expired. Sign in again to finish setting up.",
+  "@error_sessionExpiredSignInAgain": {
+    "description": "Shown when the credential goes stale mid-setup and the person must sign in again"
+  },
   "@error_somethingWentWrongPleaseTryAgain": {
     "description": "Something went wrong, please try again"
   },
@@ -939,10 +979,6 @@
   "error_anAccountWithThisEmailAlreadyExistsSignInOrContactAdmin": "An account already exists for this email. Sign in instead, or ask your admin to reset your invitation if you can't access it.",
   "@error_anAccountWithThisEmailAlreadyExistsSignInOrContactAdmin": {
     "description": "Register-screen variant of the email-already-in-use error: includes guidance to sign in or contact admin for a reset."
-  },
-  "error_accountCreationIncompleteContactAdmin": "Account creation didn't finish cleanly. An incomplete sign-in entry may exist for this email — please ask your admin to clear it and re-send your invitation, then try again.",
-  "@error_accountCreationIncompleteContactAdmin": {
-    "description": "Shown when the Auth account was created but the post-register rollback failed, leaving an orphan Auth user with no Firestore invite."
   },
   "validation_passwordIsTooWeakUseAtLeast6Characters": "Password is too weak. Use at least 6 characters",
   "@validation_passwordIsTooWeakUseAtLeast6Characters": {
@@ -1511,25 +1547,9 @@
   "@error_introLoadClients": {
     "description": "Error intro for CLI-LIST"
   },
-  "error_introRevokeInvite": "Couldn't revoke the invite",
-  "@error_introRevokeInvite": {
-    "description": "Error intro for EMP-REVOKE"
-  },
-  "error_thatInviteIsNoLongerPending": "That invite is no longer pending — it may have already been used or revoked.",
-  "@error_thatInviteIsNoLongerPending": {
-    "description": "Shown when revokeInvite is refused because the invite was redeemed or already revoked"
-  },
-  "error_thatCodeIsntValidAskYourAdmin": "That code isn't valid. Ask your admin for a new one.",
-  "@error_thatCodeIsntValidAskYourAdmin": {
-    "description": "Shown when a signup code is wrong or already used."
-  },
-  "error_thatCodeHasExpiredAskYourAdmin": "That code has expired. Ask your admin for a new one.",
-  "@error_thatCodeHasExpiredAskYourAdmin": {
-    "description": "Shown when a signup code is past its expiry."
-  },
-  "error_thatCodeWasIssuedForADifferentEmail": "That code was issued for a different email. Sign up using the exact email your admin invited.",
-  "@error_thatCodeWasIssuedForADifferentEmail": {
-    "description": "Shown when a valid signup code is redeemed with an email that doesn't match the invite."
+  "error_introRemoveAccount": "Couldn't remove the account",
+  "@error_introRemoveAccount": {
+    "description": "Error intro when deleting a never-used employee account fails"
   },
   "wave_errorAuthInvalid": "Wave connection token is missing or has been revoked. Please reconnect.",
   "@wave_errorAuthInvalid": {
@@ -2456,6 +2476,10 @@
   "@auth_dontHaveACodeBody": {
     "description": "Body copy of the help panel below the code boxes"
   },
+  "auth_pasteCode": "PASTE",
+  "@auth_pasteCode": {
+    "description": "Mono link above the code boxes that pastes the clipboard into them"
+  },
   "auth_signupCodeSemantics": "Signup code, {count} of 12 characters entered",
   "@auth_signupCodeSemantics": {
     "description": "Screen-reader label for the twelve signup-code boxes, which are one logical field",
@@ -2552,6 +2576,60 @@
   "employees_revokeInvite": "Revoke invite",
   "@employees_revokeInvite": {
     "description": "Destructive action on the pending-invite row that deletes the invite"
+  },
+  "employees_accountCreatedTitle": "Account created",
+  "@employees_accountCreatedTitle": {
+    "description": "Title of the dialog shown after an admin creates an employee account"
+  },
+  "employees_shareTheseWith": "Give {name} these to sign in with.",
+  "@employees_shareTheseWith": {
+    "description": "Body of the new-account dialog, naming the person",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Zoé"
+      }
+    }
+  },
+  "employees_temporaryPassword": "TEMPORARY PASSWORD",
+  "@employees_temporaryPassword": {
+    "description": "Mono label above the starting password"
+  },
+  "employees_theyWillChooseTheirOwnPassword": "They'll choose their own password the first time they sign in.",
+  "@employees_theyWillChooseTheirOwnPassword": {
+    "description": "Caption explaining the password is replaced at first sign-in"
+  },
+  "employees_copyBoth": "Copy both",
+  "@employees_copyBoth": {
+    "description": "Copies the email and password together"
+  },
+  "employees_signInDetails": "SIGN-IN DETAILS",
+  "@employees_signInDetails": {
+    "description": "Mono section label on the expanded pending-account row"
+  },
+  "employees_hasNotSignedInYet": "Hasn't signed in yet",
+  "@employees_hasNotSignedInYet": {
+    "description": "Status line on a roster row for an account that has never been set up"
+  },
+  "employees_resetPassword": "Reset password",
+  "@employees_resetPassword": {
+    "description": "Action that re-issues the temporary password"
+  },
+  "employees_passwordReset": "Password reset",
+  "@employees_passwordReset": {
+    "description": "Relabel of the reset action once it has run"
+  },
+  "employees_removeAccount": "Remove account",
+  "@employees_removeAccount": {
+    "description": "Destructive action that deletes a never-used account"
+  },
+  "employees_removeAccountConfirmBody": "This deletes the account entirely. It only works because they have never signed in.",
+  "@employees_removeAccountConfirmBody": {
+    "description": "Confirm body for removing a never-used account"
+  },
+  "employees_newPasswordIssued": "New temporary password — the previous one no longer works",
+  "@employees_newPasswordIssued": {
+    "description": "Caption under the credentials stating the password was just re-issued"
   },
   "employees_revokeInviteConfirmBody": "The code stops working right away and this person disappears from your team list.",
   "@employees_revokeInviteConfirmBody": {

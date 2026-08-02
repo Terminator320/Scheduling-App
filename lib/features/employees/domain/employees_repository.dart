@@ -1,6 +1,6 @@
 import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
-import 'package:scheduling/features/employees/domain/models/invite_preview.dart';
+import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 
 abstract class EmployeesRepository {
   Stream<List<EmployeeRecord>> watchAllUsers();
@@ -9,8 +9,15 @@ abstract class EmployeesRepository {
 
   Stream<List<EmployeeRecord>> watchAssignableUsers();
 
-  /// Creates an invite and returns the one-time signup code to show the admin.
-  Future<String> createEmployeeInvite({
+  /// Creates the employee's Firebase Auth account and their `users` doc, and
+  /// returns the credentials to read out to them.
+  ///
+  /// Re-running this for someone who hasn't set up yet is the supported
+  /// "they never signed in / they lost the password" path: it refreshes their
+  /// editable fields and resets the password back to the shared default. It
+  /// throws `EmployeesFailureEmailAlreadyExists` once they HAVE set up, so it
+  /// can never reset a password someone chose.
+  Future<NewAccountCredentials> createEmployeeAccount({
     required String name,
     required String firstName,
     required String lastName,
@@ -21,20 +28,21 @@ abstract class EmployeesRepository {
     required bool isAdmin,
   });
 
-  /// Deletes a still-pending invite and its signup code.
+  /// Deletes an employee account that has never been set up — both the `users`
+  /// doc and the Firebase Auth account.
   ///
-  /// Throws `EmployeesFailureInviteNoLongerPending` when the server refuses
-  /// because the invite was redeemed or revoked in the meantime.
-  Future<void> revokeInvite(String inviteDocId);
+  /// Throws `EmployeesFailureAccountNoLongerPending` when the server refuses
+  /// because the person completed setup in the meantime. There is no delete
+  /// for a set-up account: disable is the only removal.
+  Future<void> deleteEmployeeAccount(String docId);
 
-  /// Resolves what an unredeemed [code] was issued for, so the acceptance
-  /// screen can show the invited email without the holder having an account.
-  Future<InvitePreview> previewInvite(String code);
-
-  /// Redeems a signup code and activates the invite, carrying the acceptance
-  /// profile and consent flags the server stamps onto the users doc.
-  Future<void> redeemSignupCode(
-    String code, {
+  /// Activates the signed-in user's own account, carrying the setup profile
+  /// and consent flags the server stamps onto the users doc.
+  ///
+  /// Call this only AFTER the password has actually been changed — the server
+  /// cannot see the password, so the order is what makes "you must replace the
+  /// default" true.
+  Future<void> completeEmployeeSetup({
     String firstName,
     String lastName,
     String phone,

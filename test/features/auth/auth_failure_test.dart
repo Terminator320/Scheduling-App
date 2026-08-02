@@ -26,22 +26,22 @@ void main() {
     return msg;
   }
 
-  testWidgets('invalid signup code message', (t) async {
+  testWidgets('already-set-up message', (t) async {
     expect(
-      await messageFor(t, const AuthFailureInvalidSignupCode()),
-      contains("isn't valid"),
+      await messageFor(t, const AuthFailureSetupAlreadyComplete()),
+      contains('already set up'),
     );
   });
-  testWidgets('expired signup code message', (t) async {
+  testWidgets('missing account record message', (t) async {
     expect(
-      await messageFor(t, const AuthFailureSignupCodeExpired()),
+      await messageFor(t, const AuthFailureNoAccountRecord()),
+      contains('employee record'),
+    );
+  });
+  testWidgets('expired session message', (t) async {
+    expect(
+      await messageFor(t, const AuthFailureSessionExpired()),
       contains('expired'),
-    );
-  });
-  testWidgets('email-mismatch signup code message', (t) async {
-    expect(
-      await messageFor(t, const AuthFailureSignupEmailMismatch()),
-      contains('different email'),
     );
   });
 
@@ -58,9 +58,8 @@ void main() {
         AuthFailureWeakPassword(),
         AuthFailureRequiresRecentLogin(),
         AuthFailureNotAuthorized(),
-        AuthFailureInvalidSignupCode(),
-        AuthFailureSignupCodeExpired(),
-        AuthFailureSignupEmailMismatch(),
+        AuthFailureSetupAlreadyComplete(),
+        AuthFailureSessionExpired(),
       ]) {
         expect(failure.isExpected, isTrue, reason: '${failure.runtimeType}');
       }
@@ -71,7 +70,7 @@ void main() {
         AuthFailureOperationNotAllowed(),
         AuthFailurePermissionDenied(),
         AuthFailureUnknown(),
-        AuthFailureAccountCreationIncomplete(),
+        AuthFailureNoAccountRecord(),
       ]) {
         expect(failure.isExpected, isFalse, reason: '${failure.runtimeType}');
       }

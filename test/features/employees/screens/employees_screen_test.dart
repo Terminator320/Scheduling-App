@@ -11,6 +11,7 @@ import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 import 'package:scheduling/features/employees/screens/employees_screen.dart';
 import 'package:scheduling/features/employees/widgets/cards/employee_card.dart';
 import 'package:scheduling/features/employees/widgets/cards/employee_profile_card.dart';
@@ -282,7 +283,7 @@ void main() {
       // Expanding the row re-issues, so the callable has to answer.
       final repo = _MockEmployeesRepo();
       when(
-        () => repo.createEmployeeInvite(
+        () => repo.createEmployeeAccount(
           name: any(named: 'name'),
           firstName: any(named: 'firstName'),
           lastName: any(named: 'lastName'),
@@ -292,7 +293,13 @@ void main() {
           jobTitle: any(named: 'jobTitle'),
           isAdmin: any(named: 'isAdmin'),
         ),
-      ).thenAnswer((_) async => 'K7Q2-9MZ4-XR8T');
+      ).thenAnswer(
+      (_) async => const NewAccountCredentials(
+        email: 'zoe@example.com',
+        password: 'Welcome123!',
+        docId: 'inv1',
+      ),
+    );
 
       await tester.pumpWidget(
         _wrap(
@@ -310,7 +317,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
 
       // In-place expansion, and no detail pane claimed the row.
-      expect(find.text('INVITE CODE'), findsOneWidget);
+      expect(find.text('SIGN-IN DETAILS'), findsOneWidget);
       expect(find.byType(EmployeeProfileCard), findsNothing);
       expect(tester.takeException(), isNull);
     },

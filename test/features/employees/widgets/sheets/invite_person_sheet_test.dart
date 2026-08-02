@@ -9,6 +9,7 @@ import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 import 'package:scheduling/features/employees/widgets/sheets/invite_person_sheet.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -20,7 +21,7 @@ void main() {
   setUp(() {
     repo = _MockRepo();
     when(
-      () => repo.createEmployeeInvite(
+      () => repo.createEmployeeAccount(
         name: any(named: 'name'),
         firstName: any(named: 'firstName'),
         lastName: any(named: 'lastName'),
@@ -30,7 +31,13 @@ void main() {
         jobTitle: any(named: 'jobTitle'),
         isAdmin: any(named: 'isAdmin'),
       ),
-    ).thenAnswer((_) async => 'K7Q2-9MZ4-XR8T');
+    ).thenAnswer(
+      (_) async => const NewAccountCredentials(
+        email: 'zoe@example.com',
+        password: 'Welcome123!',
+        docId: 'inv1',
+      ),
+    );
   });
 
   /// Builds the whole lazy form at once so a below-the-fold row is findable.
@@ -91,7 +98,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     verify(
-      () => repo.createEmployeeInvite(
+      () => repo.createEmployeeAccount(
         name: 'Theo Roy',
         firstName: 'Theo',
         lastName: 'Roy',
@@ -115,7 +122,7 @@ void main() {
     expect(adminSwitch.value, isFalse);
   });
 
-  testWidgets('shows the signup code dialog on success', (tester) async {
+  testWidgets('shows the credentials dialog on success', (tester) async {
     useTallViewport(tester);
     await tester.pumpWidget(wrap());
     await tester.pumpAndSettle();
@@ -125,7 +132,9 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('K7Q2-9MZ4-XR8T'), findsOneWidget);
+    // Both halves: the password alone loses which account it opens.
+    expect(find.text('zoe@example.com'), findsOneWidget);
+    expect(find.text('Welcome123!'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -133,7 +142,7 @@ void main() {
     tester,
   ) async {
     when(
-      () => repo.createEmployeeInvite(
+      () => repo.createEmployeeAccount(
         name: any(named: 'name'),
         firstName: any(named: 'firstName'),
         lastName: any(named: 'lastName'),
@@ -173,7 +182,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     final captured = verify(
-      () => repo.createEmployeeInvite(
+      () => repo.createEmployeeAccount(
         name: any(named: 'name'),
         firstName: any(named: 'firstName'),
         lastName: any(named: 'lastName'),

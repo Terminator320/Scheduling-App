@@ -6,7 +6,7 @@ import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
-import 'package:scheduling/features/employees/domain/models/invite_preview.dart';
+import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
 
@@ -76,7 +76,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }
 
   @override
-  Future<String> createEmployeeInvite({
+  Future<NewAccountCredentials> createEmployeeAccount({
     required String name,
     required String firstName,
     required String lastName,
@@ -89,7 +89,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     try {
       final res = await _functions
           .httpsCallable(
-            'createEmployeeInvite',
+            'createEmployeeAccount',
             options: HttpsCallableOptions(timeout: _callableTimeout),
           )
           .call<dynamic>({
@@ -103,11 +103,12 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
             'isAdmin': isAdmin,
           });
       final data = (res.data as Map?)?.cast<String, dynamic>();
-      final code = data?['code'] as String?;
-      if (code == null || code.isEmpty) {
-        throw const EmployeesFailureUnknown();
-      }
-      return code;
+      if (data == null) throw const EmployeesFailureUnknown();
+      final credentials = NewAccountCredentials.fromMap(data);
+      // A blank half is unusable to the admin and would render an empty
+      // credential dialog — fail loudly instead of showing nothing.
+      if (!credentials.isComplete) throw const EmployeesFailureUnknown();
+      return credentials;
     } on FirebaseFunctionsException catch (e) {
       if (e.message == 'email-exists') {
         throw const EmployeesFailureEmailAlreadyExists();
@@ -117,45 +118,25 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }
 
   @override
-  Future<void> revokeInvite(String inviteDocId) async {
+  Future<void> deleteEmployeeAccount(String docId) async {
     try {
       await _functions
           .httpsCallable(
-            'revokeInvite',
+            'deleteEmployeeAccount',
             options: HttpsCallableOptions(timeout: _callableTimeout),
           )
-          .call<dynamic>({'inviteDocId': inviteDocId});
+          .call<dynamic>({'docId': docId});
     } on FirebaseFunctionsException catch (e) {
-      if (e.message == 'invite-not-pending' ||
-          e.message == 'invite-not-found') {
-        throw const EmployeesFailureInviteNoLongerPending();
+      if (e.message == 'account-not-pending' ||
+          e.message == 'account-not-found') {
+        throw const EmployeesFailureAccountNoLongerPending();
       }
       rethrow;
     }
   }
 
   @override
-  Future<InvitePreview> previewInvite(String code) async {
-    // No error mapping here — a thrown FirebaseFunctionsException propagates
-    // raw, exactly like redeemSignupCode below. The auth layer's
-    // AuthService.previewInvite is the one that knows the callable's error
-    // vocabulary and maps it to AuthFailure.
-    final res = await _functions
-        .httpsCallable(
-          'previewInvite',
-          options: HttpsCallableOptions(timeout: _callableTimeout),
-        )
-        .call<dynamic>({'code': code});
-    // Loose cast first — a callable's nested map arrives as
-    // Map<dynamic, dynamic> on Android.
-    final data = (res.data as Map?)?.cast<String, dynamic>();
-    if (data == null) throw const EmployeesFailureUnknown();
-    return InvitePreview.fromMap(data);
-  }
-
-  @override
-  Future<void> redeemSignupCode(
-    String code, {
+  Future<void> completeEmployeeSetup({
     String firstName = '',
     String lastName = '',
     String phone = '',
@@ -164,14 +145,13 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }) async {
     await _functions
         .httpsCallable(
-          'redeemSignupCode',
+          'completeEmployeeSetup',
           options: HttpsCallableOptions(timeout: _callableTimeout),
         )
-        // All six keys, always: the server reads the strings leniently
+        // All five keys, always: the server reads the strings leniently
         // (empty == absent) and the flags as `=== true`, so a conditional
         // payload shape would be a second thing to test for no benefit.
         .call<dynamic>({
-          'code': code,
           'firstName': firstName,
           'lastName': lastName,
           'phone': phone,

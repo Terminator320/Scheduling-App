@@ -319,7 +319,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
                 error: error,
               ),
             );
-      case EmployeeInvited():
+      case EmployeeAccountCreated():
         // Unreachable from the edit path; the sealed family forces the branch.
         break;
     }

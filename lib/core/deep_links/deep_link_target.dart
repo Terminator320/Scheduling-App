@@ -10,14 +10,6 @@ class AppointmentLink extends DeepLinkTarget {
   final String id;
 }
 
-/// `esproschedule://invite?code=...` — prefills the invite code screen. The
-/// code is a credential: it rides the navigator args and is never logged.
-class InviteLink extends DeepLinkTarget {
-  const InviteLink(this.code);
-
-  final String code;
-}
-
 /// Nothing to do — a foreign scheme, an unknown host, or a URL the
 /// `home_widget` channel already owns.
 class IgnoredLink extends DeepLinkTarget {
@@ -32,9 +24,12 @@ DeepLinkTarget classifyDeepLink(Uri uri) {
   // retire together (ios/CLAUDE.md). Handling them here too would open the
   // appointment sheet twice per tap — both plugins observe the same openURL.
   if (uri.queryParameters.containsKey('homeWidget')) return const IgnoredLink();
+  // `invite` was the acceptance-code entry point. Employees now sign in
+  // normally with credentials their admin gives them, so there is no code for
+  // a URL to carry — an old invite link falls through to IgnoredLink rather
+  // than opening a screen that no longer exists.
   return switch (uri.host) {
     'appointment' => AppointmentLink(uri.queryParameters['id']?.trim() ?? ''),
-    'invite' => InviteLink(uri.queryParameters['code']?.trim() ?? ''),
     _ => const IgnoredLink(),
   };
 }

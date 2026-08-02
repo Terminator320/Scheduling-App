@@ -32,11 +32,6 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     // NOTE: emergencyContact/emergencyPhone are NOT here — they live in
     // users/{docId}/private/emergency so rules can gate them to the admin and
     // the person themselves. See EmergencyContact.
-    // Function-owned and read-only — stamped by createEmployeeInvite and
-    // cleared by redeemSignupCode. NEVER emitted in toMap: firestore.rules
-    // rejects any client update whose diff touches codeExpiresAt, so a
-    // whole-record write carrying it would be a permission-denied grenade.
-    DateTime? codeExpiresAt,
     // Server timestamp, same read-only contract as ClientRecord.createdAt.
     DateTime? createdAt,
   }) = _EmployeeRecord;
@@ -70,13 +65,12 @@ abstract class EmployeeRecord with _$EmployeeRecord {
           (data['workEndMinutes'] as num?)?.toInt() ?? kDefaultWorkEndMinutes,
       maxJobsPerDay: (data['maxJobsPerDay'] as num?)?.toInt() ?? 0,
       onCall: data['onCall'] == true,
-      codeExpiresAt: firestoreDateTime(data['codeExpiresAt']),
       createdAt: firestoreDateTime(data['createdAt']),
     );
   }
 
-  /// Editable fields only. `codeExpiresAt` and `createdAt` are function-owned
-  /// and deliberately absent — see their declarations.
+  /// Editable fields only. `createdAt` is function-owned and deliberately
+  /// absent — see its declaration.
   ///
   /// `uid` and `status` are absent for the same reason: `uid` is on the
   /// `/users` update denylist in `firestore.rules`, and `status` belongs to
@@ -101,4 +95,12 @@ abstract class EmployeeRecord with _$EmployeeRecord {
   bool get isAdmin => role == 'admin';
   bool get isActive => status == 'active';
   bool get isDisabled => status == 'disabled';
+
+  /// The account exists with a real `uid` but setup has never been completed —
+  /// the person is still on the password their admin handed them.
+  ///
+  /// This is the one non-active status the auth gates route rather than sign
+  /// out, so it is an EXACT match: an empty or unknown status must keep
+  /// falling through to the sign-out branch, exactly as `isDisabled` does.
+  bool get isInvited => status == 'invited';
 }

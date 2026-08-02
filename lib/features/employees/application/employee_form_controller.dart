@@ -9,6 +9,7 @@ import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 
 /// Outcome of an employee save, whether an invite or an edit — the form maps
 /// this to a notice, an error, or a navigation action.
@@ -21,14 +22,15 @@ class EmployeeUpdated extends EmployeeSaveOutcome {
   const EmployeeUpdated();
 }
 
-/// The invite was created. [code] is the one-time signup code to show the
-/// admin once.
-class EmployeeInvited extends EmployeeSaveOutcome {
-  const EmployeeInvited(this.code);
-  final String code;
+/// The account was created (or re-provisioned). [credentials] are what the
+/// admin reads out — the email and the starting password the server set.
+class EmployeeAccountCreated extends EmployeeSaveOutcome {
+  const EmployeeAccountCreated(this.credentials);
+  final NewAccountCredentials credentials;
 }
 
-/// The invite email is already taken — a field error, not a notice.
+/// The email already belongs to an account that has finished setup — a field
+/// error, not a notice.
 class EmployeeEmailInUse extends EmployeeSaveOutcome {
   const EmployeeEmailInUse(this.failure);
   final EmployeesFailureEmailAlreadyExists failure;
@@ -54,16 +56,16 @@ class EmployeeStatusChangeFailed extends EmployeeStatusOutcome {
 }
 
 /// Outcome of revoking a pending invite.
-sealed class InviteRevokeOutcome {
-  const InviteRevokeOutcome();
+sealed class AccountDeleteOutcome {
+  const AccountDeleteOutcome();
 }
 
-class InviteRevoked extends InviteRevokeOutcome {
-  const InviteRevoked();
+class AccountDeleted extends AccountDeleteOutcome {
+  const AccountDeleted();
 }
 
-class InviteRevokeFailed extends InviteRevokeOutcome {
-  const InviteRevokeFailed(this.error);
+class AccountDeleteFailed extends AccountDeleteOutcome {
+  const AccountDeleteFailed(this.error);
   final Object error;
 }
 
@@ -112,17 +114,17 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
   @override
   EmployeeFormActivity build() => const EmployeeFormActivity();
 
-  /// Creates an invite. The one-time signup code rides back on the outcome
-  /// so the caller can show it to the admin.
+  /// Creates the employee's account. The credentials ride back on the outcome
+  /// so the caller can show them to the admin.
   ///
-  /// Takes the whole record on purpose. The server's re-issue branch UPDATES
-  /// the invited doc's editable fields with whatever it is handed, so a call
-  /// site that omits one silently wipes it — passing a record makes that
-  /// omission unexpressible instead of merely documented.
-  Future<EmployeeSaveOutcome> inviteEmployee(EmployeeRecord employee) {
+  /// Takes the whole record on purpose. The server's re-provision branch
+  /// UPDATES the pending doc's editable fields with whatever it is handed, so
+  /// a call site that omits one silently wipes it — passing a record makes
+  /// that omission unexpressible instead of merely documented.
+  Future<EmployeeSaveOutcome> createAccount(EmployeeRecord employee) {
     return _save(
-      (repo) async => EmployeeInvited(
-        await repo.createEmployeeInvite(
+      (repo) async => EmployeeAccountCreated(
+        await repo.createEmployeeAccount(
           name: employee.name,
           firstName: employee.firstName,
           lastName: employee.lastName,
@@ -208,22 +210,23 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
     }
   }
 
-  /// Deletes a pending invite and its signup code.
+  /// Deletes an account that has never been set up — the users doc and the
+  /// Firebase Auth account both.
   ///
-  /// A server refusal (someone redeemed the code while the admin was looking
+  /// A server refusal (the person finished setup while the admin was looking
   /// at the row) is a *failed* outcome, not a silent success — the live stream
   /// will have flipped the row to Active by the time the notice lands.
-  Future<InviteRevokeOutcome> revokeInvite(String inviteDocId) async {
+  Future<AccountDeleteOutcome> deleteAccount(String docId) async {
     // Resolved before the first await — see _save.
     final repo = ref.read(employeesRepositoryProvider);
     final logger = ref.read(loggerProvider);
     state = state.copyWith(isRevoking: true);
     try {
-      await repo.revokeInvite(inviteDocId);
-      return const InviteRevoked();
+      await repo.deleteEmployeeAccount(docId);
+      return const AccountDeleted();
     } catch (e, st) {
-      logger.warn('EMP-REVOKE revokeInvite failed', e, st);
-      return InviteRevokeFailed(e);
+      logger.warn('EMP-DELETE deleteEmployeeAccount failed', e, st);
+      return AccountDeleteFailed(e);
     } finally {
       if (ref.mounted) state = state.copyWith(isRevoking: false);
     }
