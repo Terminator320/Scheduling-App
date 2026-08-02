@@ -11,6 +11,7 @@ import 'package:scheduling/core/utils/sheet_focus.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/widgets/cards/employee_card.dart';
+import 'package:scheduling/features/employees/widgets/sheets/edit_person_sheet.dart';
 import 'package:scheduling/features/employees/widgets/sheets/employee_details_sheet.dart';
 import 'package:scheduling/features/employees/widgets/sheets/employee_form_sheet.dart';
 import 'package:scheduling/features/employees/widgets/views/employee_details_view.dart';
@@ -92,23 +93,34 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         ref.read(allUsersStreamProvider).asData?.value ?? const [];
     final usedColors = _usedColors(employees, excludeId: employee?.id);
 
+    // The edit sheet announces its own success notice and returns the saved
+    // record; the invite sheet still returns a bool.
+    if (employee != null) {
+      final saved = await showEditPersonSheet(
+        context,
+        employee,
+        usedColors: usedColors,
+      );
+      if (!mounted) return;
+      await SheetFocus.unfocusAfterSheet();
+      if (!mounted) return;
+      if (saved != null) setState(() => _selectedEmployee = saved);
+      return;
+    }
+
     final result = await showAppBottomSheet<Object?>(
       context,
-      builder: (_) =>
-          EmployeeFormSheet(employee: employee, usedColors: usedColors),
+      builder: (_) => EmployeeFormSheet(usedColors: usedColors),
     );
 
     if (!mounted) return;
     await SheetFocus.unfocusAfterSheet();
     if (!mounted) return;
 
-    final notices = ref.read(noticeServiceProvider);
     if (result == true) {
-      notices.success(
-        employee == null
-            ? context.l10n.employees_employeeAddedSuccessfully
-            : context.l10n.employees_employeeUpdatedSuccessfully,
-      );
+      ref
+          .read(noticeServiceProvider)
+          .success(context.l10n.employees_employeeAddedSuccessfully);
     }
   }
 
@@ -137,7 +149,9 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     if (!mounted) return;
     await SheetFocus.unfocusAfterSheet();
     if (!mounted) return;
-    if (result is String) _handleEmployeeAction(result, employee);
+    // Edit is the only action the detail sheet can raise: disable/enable moved
+    // into the edit sheet (which announces its own notice) and delete is gone.
+    if (result == 'edit') await _openEmployeeSheet(employee: employee);
   }
 
   void _clearSearch() {
@@ -265,18 +279,6 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     icon: Icons.badge_outlined,
     message: context.l10n.employees_selectAnEmployeeToViewDetails,
   );
-
-  void _handleEmployeeAction(String action, EmployeeRecord employee) {
-    final notices = ref.read(noticeServiceProvider);
-    switch (action) {
-      case 'edit':
-        _openEmployeeSheet(employee: employee);
-      case 'disabled':
-        notices.success(context.l10n.employees_employeeDisabledSuccessfully);
-      case 'enabled':
-        notices.success(context.l10n.employees_employeeEnabledSuccessfully);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {

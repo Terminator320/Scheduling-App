@@ -79,6 +79,21 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }
 
   @override
+  Future<int> countFutureAssignments(String employeeId) async {
+    // Served by the existing (employeeIds CONTAINS, startTime ASC) composite
+    // index — no firestore.indexes.json change.
+    final snapshot = await _appointments
+        .where('employeeIds', arrayContains: employeeId)
+        .where(
+          'startTime',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime.now()),
+        )
+        .count()
+        .get();
+    return snapshot.count ?? 0;
+  }
+
+  @override
   Future<void> addAppointment(AppointmentRecord appointment) =>
       addAppointments([appointment]);
 
