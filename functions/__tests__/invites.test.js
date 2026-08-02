@@ -18,9 +18,13 @@ const EXPIRES = new Date("2026-08-01T00:00:00Z");
 
 const FIELDS = {
   name: "New Employee",
+  firstName: "New",
+  lastName: "Employee",
   email: "new@company.test",
   phone: "514-555-0100",
   colorValue: "4280391411",
+  jobTitle: "technician",
+  isAdmin: false,
 };
 
 /**
@@ -210,8 +214,12 @@ describe("performCreateInvite — re-issue for a pending invite", () => {
     expect(update.ref.id).toBe("invite-1");
     expect(update.data).toEqual({
       name: FIELDS.name,
+      firstName: FIELDS.firstName,
+      lastName: FIELDS.lastName,
       phone: FIELDS.phone,
       colorValue: FIELDS.colorValue,
+      jobTitle: FIELDS.jobTitle,
+      role: "employee",
       updatedAt: TS,
     });
 
@@ -228,4 +236,43 @@ describe("performCreateInvite — re-issue for a pending invite", () => {
         expect(ops.filter((o) => o.op === "get").map((o) => o.target))
             .toEqual(["usersByEmail", "priorCodesByInvite"]);
       });
+
+  test("re-issuing refreshes the P4 fields too", async () => {
+    const {db, ops} = fakeDb({existingUser: existing(), priorCodes: []});
+    await performCreateInvite(
+        db, {...FIELDS, jobTitle: "dispatcher", isAdmin: true}, optsBag);
+
+    const update = ops.find((o) => o.op === "update");
+    expect(update.data.jobTitle).toBe("dispatcher");
+    expect(update.data.role).toBe("admin");
+    expect(update.data.firstName).toBe("New");
+  });
+});
+
+describe("performCreateInvite — P4 fields", () => {
+  test("writes jobTitle, names and the admin role on a new invite",
+      async () => {
+        const {db, ops} = fakeDb();
+        const outcome = await performCreateInvite(
+            db, {...FIELDS, jobTitle: "lead_tech", isAdmin: true}, optsBag);
+
+        expect(outcome.ok).toBe(true);
+        const inviteSet = ops.find(
+            (o) => o.op === "set" && o.ref._kind === "newUserRef");
+        expect(inviteSet.data.jobTitle).toBe("lead_tech");
+        expect(inviteSet.data.firstName).toBe("New");
+        expect(inviteSet.data.lastName).toBe("Employee");
+        expect(inviteSet.data.role).toBe("admin");
+        expect(inviteSet.data.status).toBe("invited");
+        expect(inviteSet.data.uid).toBe("");
+      });
+
+  test("defaults role to employee when isAdmin is false", async () => {
+    const {db, ops} = fakeDb();
+    await performCreateInvite(db, {...FIELDS, isAdmin: false}, optsBag);
+
+    const inviteSet = ops.find(
+        (o) => o.op === "set" && o.ref._kind === "newUserRef");
+    expect(inviteSet.data.role).toBe("employee");
+  });
 });

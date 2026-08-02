@@ -10,21 +10,26 @@ abstract class EmployeesRepository {
   /// Creates an invite and returns the one-time signup code to show the admin.
   Future<String> createEmployeeInvite({
     required String name,
+    required String firstName,
+    required String lastName,
     required String email,
     required String phone,
     required String colorValue,
+    required String jobTitle,
+    required bool isAdmin,
   });
 
   /// Redeems a signup code and activates the invite.
   Future<void> redeemSignupCode(String code);
 
+  /// Persists the editable fields of [employee] onto `users/{docId}`.
+  ///
+  /// The repository builds a field-scoped allowlist from the record — `uid` is
+  /// rules-forbidden and `status` belongs to deactivate/reactivate, so neither
+  /// is ever in the update map no matter what the record carries.
   Future<void> updateEmployee({
     required String docId,
-    required String name,
-    required String email,
-    required String phone,
-    required String colorValue,
-    bool? isAdmin,
+    required EmployeeRecord employee,
   });
 
   Future<void> deleteEmployee(String docId);

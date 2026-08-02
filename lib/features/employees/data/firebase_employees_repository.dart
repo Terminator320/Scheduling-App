@@ -5,6 +5,8 @@ import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
+import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
 
 /// Shared bound on every `users` stream to prevent unbounded snapshots.
 const _userStreamLimit = 500;
@@ -72,9 +74,13 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   @override
   Future<String> createEmployeeInvite({
     required String name,
+    required String firstName,
+    required String lastName,
     required String email,
     required String phone,
     required String colorValue,
+    required String jobTitle,
+    required bool isAdmin,
   }) async {
     try {
       final res = await _functions
@@ -84,9 +90,13 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
           )
           .call<dynamic>({
             'name': name.trim(),
+            'firstName': firstName.trim(),
+            'lastName': lastName.trim(),
             'email': email.trim().toLowerCase(),
             'phone': phone.trim(),
             'colorValue': colorValue,
+            'jobTitle': jobTitle,
+            'isAdmin': isAdmin,
           });
       final data = (res.data as Map?)?.cast<String, dynamic>();
       final code = data?['code'] as String?;
@@ -115,13 +125,9 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   @override
   Future<void> updateEmployee({
     required String docId,
-    required String name,
-    required String email,
-    required String phone,
-    required String colorValue,
-    bool? isAdmin,
+    required EmployeeRecord employee,
   }) async {
-    final normalizedEmail = email.trim().toLowerCase();
+    final normalizedEmail = employee.email.trim().toLowerCase();
 
     // Check uniqueness up front. This isn't atomic, but the server-side
     // invite flow is the real authority here.
@@ -142,17 +148,30 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
         ? normalizedEmail
         : (await _users.doc(docId).get()).data()?['email'] as String?;
 
+    // Field-scoped allowlist. `uid` is rejected by firestore.rules and `status`
+    // belongs to deactivate/reactivate — neither may appear here regardless of
+    // what the record carries.
     final updateData = <String, dynamic>{
-      'name': name.trim(),
+      'name': composeEmployeeName(
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        fallback: employee.name,
+      ),
+      'firstName': employee.firstName.trim(),
+      'lastName': employee.lastName.trim(),
       'email': normalizedEmail,
-      'phone': phone.trim(),
-      'colorValue': colorValue,
+      'phone': employee.phone.trim(),
+      'colorValue': employee.color.toARGB32().toString(),
+      'role': employee.role,
+      'jobTitle': employee.jobTitle.raw,
+      'workingDays': normalizeWorkingDays(employee.workingDays),
+      'workStartMinutes': employee.workStartMinutes,
+      'workEndMinutes': employee.workEndMinutes,
+      'maxJobsPerDay': employee.maxJobsPerDay,
+      'onCall': employee.onCall,
+      'emergencyContact': employee.emergencyContact.trim(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
-
-    if (isAdmin != null) {
-      updateData['role'] = isAdmin ? 'admin' : 'employee';
-    }
 
     // This is the best client-side hardening we can do: commit inside a
     // transaction that re-reads the doc and aborts if the email changed

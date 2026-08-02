@@ -41,9 +41,13 @@ void main() {
     when(
       () => mockRepo.createEmployeeInvite(
         name: any(named: 'name'),
+        firstName: any(named: 'firstName'),
+        lastName: any(named: 'lastName'),
         email: any(named: 'email'),
         phone: any(named: 'phone'),
         colorValue: any(named: 'colorValue'),
+        jobTitle: any(named: 'jobTitle'),
+        isAdmin: any(named: 'isAdmin'),
       ),
     ).thenAnswer((_) async => 'K7Q2-9MZ4-XR8T');
   });

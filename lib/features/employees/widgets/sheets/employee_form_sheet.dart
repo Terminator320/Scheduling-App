@@ -112,20 +112,27 @@ class _EmployeeFormSheetState extends ConsumerState<EmployeeFormSheet> {
     final phone = _phoneController.text.trim();
     final colorValue = _selectedColor.toString();
 
+    // copyWith off the loaded record, not a fresh one: this sheet has no
+    // availability UI, so the P4 fields must round-trip untouched.
     final outcome = _isEdit
         ? await controller.updateEmployee(
-            docId: widget.employee!.id,
-            name: name,
-            email: email,
-            phone: phone,
-            colorValue: colorValue,
-            isAdmin: _isAdmin,
+            widget.employee!.copyWith(
+              name: name,
+              email: email,
+              phone: phone,
+              color: Color(_selectedColor),
+              role: _isAdmin ? 'admin' : 'employee',
+            ),
           )
         : await controller.inviteEmployee(
             name: name,
+            firstName: '',
+            lastName: '',
             email: email,
             phone: phone,
             colorValue: colorValue,
+            jobTitle: '',
+            isAdmin: _isAdmin,
           );
     if (!mounted) return;
 

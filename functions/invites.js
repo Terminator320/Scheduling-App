@@ -20,6 +20,12 @@ const REDEEM_RATE_WINDOW_MS = 15 * 60 * 1000;
 const INVITE_RATE_MAX = 20;
 const INVITE_RATE_WINDOW_MS = 60 * 60 * 1000;
 
+// Mirrors JobTitle.raw (lib/features/employees/domain/models/job_title.dart)
+// and the rules' isValidJobTitle allowlist.
+const JOB_TITLES = [
+  "", "lead_tech", "technician", "apprentice", "dispatcher",
+];
+
 // Optional trimmed string with a length + control-char guard. Phone may be
 // empty and requireString rejects empty, so we read it leniently here.
 /**
@@ -48,7 +54,8 @@ const APP_CHECK = {enforceAppCheck: true};
  * concurrent redeemSignupCode.
  *
  * @param {!Object} db Firestore instance.
- * @param {{name: string, email: string, phone: string, colorValue: string}}
+ * @param {{name: string, firstName: string, lastName: string, email: string,
+ *   phone: string, colorValue: string, jobTitle: string, isAdmin: boolean}}
  *   fields Validated invite fields (email already lowercased).
  * @param {{code: string, expiresAt: !Date, serverTimestamp: !Function}} opts
  *   The pre-generated one-time code, its expiry, and a serverTimestamp
@@ -57,8 +64,11 @@ const APP_CHECK = {enforceAppCheck: true};
  *   means the email belongs to a claimed (non-invited) account.
  */
 async function performCreateInvite(db, fields, opts) {
-  const {name, email, phone, colorValue} = fields;
+  const {
+    name, firstName, lastName, email, phone, colorValue, jobTitle, isAdmin,
+  } = fields;
   const {code, expiresAt, serverTimestamp} = opts;
+  const role = isAdmin ? "admin" : "employee";
   const codeRef = db.collection("signupCodes").doc(hashSignupCode(code));
 
   return db.runTransaction(async (tx) => {
@@ -82,7 +92,7 @@ async function performCreateInvite(db, fields, opts) {
       // the re-issue path.
       prior.forEach((d) => tx.delete(d.ref));
       tx.update(existing.ref, {
-        name, phone, colorValue,
+        name, firstName, lastName, phone, colorValue, jobTitle, role,
         updatedAt: serverTimestamp(),
       });
       tx.set(codeRef, {
@@ -94,8 +104,8 @@ async function performCreateInvite(db, fields, opts) {
 
     const inviteRef = db.collection("users").doc();
     tx.set(inviteRef, {
-      name, email, phone, colorValue,
-      role: "employee", status: "invited", uid: "",
+      name, firstName, lastName, email, phone, colorValue, jobTitle, role,
+      status: "invited", uid: "",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -114,17 +124,27 @@ const createEmployeeInvite = onCall(APP_CHECK, async (req) => {
   await assertAdmin(req.auth.uid);
   // Validate the payload before consuming a rate-limit slot so malformed
   // submissions can't lock out a legitimate admin for an hour.
-  assertPayloadShape(req.data,
-      new Set(["name", "email", "phone", "colorValue"]));
+  assertPayloadShape(req.data, new Set([
+    "name", "firstName", "lastName", "email", "phone", "colorValue",
+    "jobTitle", "isAdmin",
+  ]));
   const name = requireString(req.data, "name", 100);
+  const firstName = optionalString(req.data, "firstName", 100);
+  const lastName = optionalString(req.data, "lastName", 100);
   const email = requireString(req.data, "email", 254).toLowerCase();
   const phone = optionalString(req.data, "phone", 40);
   const colorValue = requireString(req.data, "colorValue", 40);
+  const jobTitle = optionalString(req.data, "jobTitle", 40);
+  const isAdmin = req.data.isAdmin === true;
   // Mirrors the rules' colorValue guard (firestore.rules isValidUserData) —
   // this Admin SDK write bypasses rules, so it's the one path that could
   // otherwise seed a value they'd reject.
   if (!/^-?[0-9]+$/.test(colorValue)) {
     throw new HttpsError("invalid-argument", "invalid-colorValue");
+  }
+  // Same reasoning for jobTitle: the allowlist here IS the enforcement.
+  if (!JOB_TITLES.includes(jobTitle)) {
+    throw new HttpsError("invalid-argument", "invalid-jobTitle");
   }
   await enforceDurableRateLimit(
       "createEmployeeInvite", req.auth.uid, INVITE_RATE_MAX,
@@ -138,7 +158,7 @@ const createEmployeeInvite = onCall(APP_CHECK, async (req) => {
 
   const outcome = await performCreateInvite(
       db,
-      {name, email, phone, colorValue},
+      {name, firstName, lastName, email, phone, colorValue, jobTitle, isAdmin},
       {code, expiresAt, serverTimestamp: () => FieldValue.serverTimestamp()},
   );
   if (!outcome.ok) {
