@@ -95,6 +95,11 @@ dependencies:
   saver_gallery: ^5.1.0
   showcaseview: ^5.1.0
 
+  # Inbound deep links (ships ios/app_links/Package.swift — SPM-safe).
+  # FlutterDeepLinkingEnabled stays false: Flutter's own handler would consume
+  # the URL before this plugin sees it.
+  app_links: ^7.2.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
