@@ -27,12 +27,14 @@ String formatPhoneNumber(String value) {
     ..write(digits.substring(0, digits.length.clamp(0, 3)));
   if (digits.length < 4) return buffer.toString();
 
-  buffer.write(') ');
-  buffer.write(digits.substring(3, digits.length.clamp(0, 6)));
+  buffer
+    ..write(') ')
+    ..write(digits.substring(3, digits.length.clamp(0, 6)));
   if (digits.length < 7) return buffer.toString();
 
-  buffer.write('-');
-  buffer.write(digits.substring(6, digits.length.clamp(0, 10)));
+  buffer
+    ..write('-')
+    ..write(digits.substring(6, digits.length.clamp(0, 10)));
   if (digits.length > 10) buffer.write(' ${digits.substring(10)}');
   return buffer.toString();
 }
