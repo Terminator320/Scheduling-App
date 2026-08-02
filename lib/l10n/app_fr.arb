@@ -533,6 +533,8 @@
   "employees_onCall": "De garde",
   "employees_jobsPerDay": "{count, plural, =1{1 tâche} other{{count} tâches}}",
   "common_yes": "Oui",
+  "employees_invitePerson": "Inviter une personne",
+  "employees_invitedNote": "Cette personne apparaîtra comme Invitée jusqu'à son inscription avec le code que vous lui remettez.",
   "employees_editPerson": "Modifier la personne",
   "employees_sectionDetails": "DÉTAILS",
   "employees_sectionRole": "RÔLE",
