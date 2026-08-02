@@ -421,6 +421,57 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   two sheets → duplicate client. Mix it into any new inline-add host rather than
   re-copying the flag.
 
+- **`users.name` is composed, never abandoned.** P4 added `firstName`/`lastName`,
+  but `watchAllUsers()` orders by `name` and Firestore **excludes docs missing
+  the orderBy field**, so a user whose `name` went empty vanishes from the admin
+  roster. Every write path builds it through `composeEmployeeName`
+  (`employees/domain/policies/employee_name_policy.dart`), which falls back to
+  the stored name and then to `'—'` — it can never return `''`. The edit sheet
+  seeds First from the whole stored `name` when both halves are empty, so a
+  legacy single-name doc round-trips unchanged.
+- **`jobTitle` is not `role`.** `role` stays the ACCESS flag
+  (`admin`/`employee`) and is what `firestore.rules` gates on; `jobTitle`
+  (Lead tech · Technician · Apprentice · Dispatcher) is what someone does on
+  site and gates nothing. `JobTitleChips` therefore has no side effect on the
+  ACCESS toggle — conflating them would make picking "Dispatcher" silently
+  grant or revoke admin.
+- **`workingDays` is Sunday-indexed** (`[0]` = Sunday), matching
+  `weekStartForLocale` and `weekdayLabelsForLocale`, which both read intl's
+  Sunday-indexed `NARROWWEEKDAYS`. Storing Monday-first would put a `% 7`
+  conversion at every read and write, and one missed conversion shifts a whole
+  roster by a day. Display order comes from `orderedWorkingDays`, whose cells
+  carry their own `storedIndex` — a widget must write back through that, never
+  through the visual position. `formatWorkingDays` (the detail page's DAYS row)
+  takes its `labels` **Sunday-indexed and unrotated** (`weekdayAbbreviationsForLocale`),
+  because it indexes them by `storedIndex`; passing a display-ordered list
+  silently mislabels every day.
+- **A user-doc rules cap must not be tighter than the widest value a shipped
+  write path can produce.** `createEmployeeInvite` accepts `phone` up to 40
+  chars while `TextLimits.phone` is 32, so `isValidUserData` caps phone at
+  **40** — a cap of 32 would make every invite-created doc with a longer phone
+  permanently un-updatable, including by `deactivateEmployee`. Rules caps mirror
+  the *server* limit; the client caps with `TextLimits`.
+- **An employee is never deleted — disable is the only removal** (owner decision
+  2026-08-02, which withdrew a shipped delete). Deleting the `users` doc
+  orphaned every past appointment's `employeeIds` link: the visit keeps the
+  denormalized `employeeNames` and loses the crew colour and the person.
+  `syncUsersByUid` already does strictly more on disable — it disables the Auth
+  account, calls `revokeRefreshTokens`, and purges `presence/location`,
+  `fcmTokens`, every `liveActivityTokens` row and the `liveActivityCards`
+  marker. `allow delete` is withdrawn from `/users`; the Admin SDK bypasses
+  rules, so console cleanup is unaffected.
+- **A disabled or invited employee's colour is TAKEN.** `usedColors` reads
+  `allUsersStreamProvider`, never `employeesStreamProvider` — the latter filters
+  to `status == 'active'`, so a disabled employee's colour was offered again and
+  two people ended up the same hue, which is what the appointment bar and the
+  calendar dots key on.
+- **`isAvailabilityOnlyChange()` in `firestore.rules` has no caller yet.** It
+  exists for P5's own-doc self-service clause; `allow update` on `/users` is
+  still admin-only. Don't delete it as dead rules code, and don't wire it before
+  the My-details UI ships. A deploy prints `Unused function` plus two
+  `Invalid variable name` warnings for it — all three are artifacts of it being
+  uncalled and disappear once P5 wires it up.
+
 - **Calendar (rebuilt in P2, 2026-07-30):** `table_calendar` is **deleted**;
   the month view is our own `CalendarMonthGrid` + `CalendarMonthPager`. It
   renders **only the weeks the month actually occupies** — 4, 5 or 6 rows from
@@ -638,6 +689,12 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   `orderBy`, so newest-first is sorted in Dart over the bounded window. Don't add
   a server `orderBy('startTime')`, or it needs a `(clientId, startTime)`
   composite index.
+- **The team roster's "jobs today" count is ONE listener, not one per row.**
+  `employeeJobsTodayProvider` reduces a single `appointmentsInRangeProvider` over
+  today's range into a `Map<String,int>`; every row reads the map. The range
+  comes from `todayRangeProvider`, which watches `currentDayProvider` — never
+  `DateTime.now()`, or the counts stick on yesterday in an app left open across
+  midnight. Cancelled visits don't count.
 - Per-keystroke search debounces through `Debouncer` (`lib/core/utils/debouncer.dart`,
   own one per State, `dispose()` it). `SettingsSaveDebouncer` is the async-action
   variant — don't add a third raw `Timer`.

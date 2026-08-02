@@ -20,6 +20,7 @@ import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/fields/sheet_field_row.dart';
+import 'package:scheduling/shared/widgets/primitives/mono_section_label.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
 /// The eight text controllers an appointment form drives. Shared between the add and edit flows so their field sets stay in sync.
@@ -214,7 +215,7 @@ class AppointmentFormFields extends StatelessWidget {
   List<Widget> _templatesSection(BuildContext context, AppLocalizations l10n) {
     if (onApplyTemplate == null || isPersonal) return const [];
     return [
-      _SectionLabel(l10n.calendar_sectionTemplates),
+      MonoSectionLabel(l10n.calendar_sectionTemplates),
       const SizedBox(height: AppSpacing.sp8),
       Wrap(
         spacing: AppSpacing.sp8,
@@ -233,7 +234,7 @@ class AppointmentFormFields extends StatelessWidget {
 
   /// Service title, the personal-job switch, client picker and employee picker.
   List<Widget> _whoSection(BuildContext context, AppLocalizations l10n) => [
-    _SectionLabel(l10n.calendar_sectionWho),
+    MonoSectionLabel(l10n.calendar_sectionWho),
     const SizedBox(height: AppSpacing.sp8),
     // --- Personal job ---
     if (onPersonalChanged != null) ...[
@@ -336,7 +337,7 @@ class AppointmentFormFields extends StatelessWidget {
     }
 
     return [
-      _SectionLabel(l10n.calendar_sectionSchedule),
+      MonoSectionLabel(l10n.calendar_sectionSchedule),
       const SizedBox(height: AppSpacing.sp8),
       SheetPanel(
         children: [
@@ -380,7 +381,7 @@ class AppointmentFormFields extends StatelessWidget {
 
   /// Address, notes, materials and the host-supplied photos slot.
   List<Widget> _detailsSection(BuildContext context, AppLocalizations l10n) => [
-    _SectionLabel(l10n.calendar_sectionDetails),
+    MonoSectionLabel(l10n.calendar_sectionDetails),
     const SizedBox(height: AppSpacing.sp8),
     // --- Address (a personal job has none) ---
     if (!isPersonal) ...[
@@ -490,16 +491,4 @@ class _AllDaySwitch extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Mono all-caps section header inside the form sheet. The ARB values are
-/// already uppercase, matching the rest of the redesign's mono labels.
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) =>
-      Text(text, style: Theme.of(context).monoType.label);
 }
