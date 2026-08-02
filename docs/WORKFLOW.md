@@ -232,7 +232,8 @@ dated-feeling part of the current design and the safest thing to overhaul.
 `AppointmentTile` · `StatusChip` / `UserStatusChip` · `AppAvatar` ·
 `AppSearchBar` · `AppEmptyState` · `SkeletonLoader` · `InfoCard` + `InfoCardRow` ·
 `QuickActionsRow` + `QuickActionButton` · `ListItemTile` · `LabeledTextField`
-(built-in error shake) · `DetailSheetListView` · `FormSheetScaffold` ·
+(built-in error shake) · `DetailSheetListView` · `FormSheetFrame` +
+`SheetHeaderBar` ·
 `showConfirmDialog` · `BusyButtonIcon` · `AnimatedLoadingButton` · `SectionLabel` ·
 `BrandMark`.
 
