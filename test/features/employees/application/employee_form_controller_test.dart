@@ -184,4 +184,37 @@ void main() {
       expect(activity().isTogglingStatus, isFalse);
     });
   });
+
+  group('revokeInvite', () {
+    test('reports revoked and clears the busy flag', () async {
+      when(() => repo.revokeInvite(any())).thenAnswer((_) async {});
+
+      final outcome = await notifier().revokeInvite('invite-1');
+
+      expect(outcome, isA<InviteRevoked>());
+      verify(() => repo.revokeInvite('invite-1')).called(1);
+      expect(activity().isRevoking, isFalse);
+    });
+
+    test('a server refusal is a failed outcome carrying the error', () async {
+      const refusal = EmployeesFailureInviteNoLongerPending();
+      when(() => repo.revokeInvite(any())).thenThrow(refusal);
+
+      final outcome = await notifier().revokeInvite('invite-1');
+
+      expect(outcome, isA<InviteRevokeFailed>());
+      expect((outcome as InviteRevokeFailed).error, refusal);
+      expect(activity().isRevoking, isFalse);
+    });
+
+    test('reports other failures with the original error', () async {
+      final boom = Exception('offline');
+      when(() => repo.revokeInvite(any())).thenThrow(boom);
+
+      final outcome = await notifier().revokeInvite('invite-1');
+
+      expect((outcome as InviteRevokeFailed).error, boom);
+      expect(activity().isRevoking, isFalse);
+    });
+  });
 }

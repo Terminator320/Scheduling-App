@@ -371,6 +371,8 @@
   "error_introSaveClient": "Impossible d’enregistrer les modifications du client",
   "error_introLoadHistory": "Impossible de charger l’historique des rendez-vous",
   "error_introLoadClients": "Impossible de charger les clients",
+  "error_introRevokeInvite": "Impossible de révoquer l’invitation",
+  "error_thatInviteIsNoLongerPending": "Cette invitation n’est plus en attente — elle a peut-être déjà été utilisée ou révoquée.",
   "error_thatCodeIsntValidAskYourAdmin": "Ce code n'est pas valide. Demandez-en un nouveau à votre administrateur.",
   "error_thatCodeHasExpiredAskYourAdmin": "Ce code a expiré. Demandez-en un nouveau à votre administrateur.",
   "error_thatCodeWasIssuedForADifferentEmail": "Ce code a été émis pour une autre adresse courriel. Inscrivez-vous avec l'adresse exacte invitée par votre administrateur.",

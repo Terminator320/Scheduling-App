@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
 
@@ -30,6 +31,13 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     @Default(false) bool onCall,
     @Default('') String emergencyContact,
     @Default('') String emergencyPhone,
+    // Function-owned and read-only — stamped by createEmployeeInvite and
+    // cleared by redeemSignupCode. NEVER emitted in toMap: firestore.rules
+    // rejects any client update whose diff touches codeExpiresAt, so a
+    // whole-record write carrying it would be a permission-denied grenade.
+    DateTime? codeExpiresAt,
+    // Server timestamp, same read-only contract as ClientRecord.createdAt.
+    DateTime? createdAt,
   }) = _EmployeeRecord;
   const EmployeeRecord._();
 
@@ -63,9 +71,13 @@ abstract class EmployeeRecord with _$EmployeeRecord {
       onCall: data['onCall'] == true,
       emergencyContact: (data['emergencyContact'] ?? '').toString(),
       emergencyPhone: (data['emergencyPhone'] ?? '').toString(),
+      codeExpiresAt: firestoreDateTime(data['codeExpiresAt']),
+      createdAt: firestoreDateTime(data['createdAt']),
     );
   }
 
+  /// Editable fields only. `codeExpiresAt` and `createdAt` are function-owned
+  /// and deliberately absent — see their declarations.
   Map<String, dynamic> toMap() => {
     'name': name,
     'firstName': firstName,

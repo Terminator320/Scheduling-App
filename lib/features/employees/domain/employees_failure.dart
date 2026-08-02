@@ -15,6 +15,19 @@ class EmployeesFailureEmailAlreadyExists extends EmployeesFailure {
       context.l10n.error_anEmployeeWithThisEmailAlreadyExists;
 }
 
+/// `revokeInvite` refused: the invite was redeemed or already revoked between
+/// the roster row rendering and the tap. Both server rejections
+/// (`invite-not-pending`, `invite-not-found`) collapse here — the admin needs
+/// the same thing said either way, and the live stream has already dropped or
+/// flipped the row.
+class EmployeesFailureInviteNoLongerPending extends EmployeesFailure {
+  const EmployeesFailureInviteNoLongerPending();
+
+  @override
+  String toLocalizedMessage(BuildContext context) =>
+      context.l10n.error_thatInviteIsNoLongerPending;
+}
+
 class EmployeesFailureUnknown extends EmployeesFailure {
   const EmployeesFailureUnknown();
 

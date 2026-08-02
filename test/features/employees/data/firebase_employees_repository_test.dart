@@ -207,30 +207,194 @@ void main() {
     );
   });
 
+  /// Stubs [name] to a callable returning [data] and hands back the mock so
+  /// the payload can be captured.
+  _MockHttpsCallable stubCallable(String name, {Object? data}) {
+    final callable = _MockHttpsCallable();
+    final result = _MockHttpsCallableResult();
+    when(
+      () => functions.httpsCallable(
+        any(that: equals(name)),
+        options: any(named: 'options'),
+      ),
+    ).thenReturn(callable);
+    when(() => result.data).thenReturn(data);
+    when(
+      () => callable.call<dynamic>(any<Object?>()),
+    ).thenAnswer((_) async => result);
+    return callable;
+  }
+
+  _MockHttpsCallable stubFailingCallable(
+    String name,
+    FirebaseFunctionsException error,
+  ) {
+    final callable = _MockHttpsCallable();
+    when(
+      () => functions.httpsCallable(
+        any(that: equals(name)),
+        options: any(named: 'options'),
+      ),
+    ).thenReturn(callable);
+    when(() => callable.call<dynamic>(any<Object?>())).thenThrow(error);
+    return callable;
+  }
+
+  /// captureAny() returns Map<Object, Object?>, so the direct generic cast
+  /// throws at runtime — go through Map first.
+  Map<String, dynamic> capturedPayload(_MockHttpsCallable callable) {
+    final captured = verify(
+      () => callable.call<dynamic>(captureAny<Object?>()),
+    ).captured.single;
+    return (captured as Map).cast<String, dynamic>();
+  }
+
   group('redeemSignupCode', () {
-    test('forwards the code to the callable', () async {
-      final callable = _MockHttpsCallable();
-      final result = _MockHttpsCallableResult();
-      when(
-        () => functions.httpsCallable(
-          any(that: equals('redeemSignupCode')),
-          options: any(named: 'options'),
+    test('sends all six keys, defaulting the profile to empty', () async {
+      final callable = stubCallable(
+        'redeemSignupCode',
+        data: {'role': 'employee', 'name': 'A'},
+      );
+
+      await repo().redeemSignupCode('K7Q2-9MZ4-XR8T');
+
+      final payload = capturedPayload(callable);
+      expect(payload['code'], 'K7Q2-9MZ4-XR8T');
+      expect(payload['firstName'], '');
+      expect(payload['lastName'], '');
+      expect(payload['phone'], '');
+      expect(payload['termsAccepted'], isFalse);
+      expect(payload['locationConsent'], isFalse);
+    });
+
+    test('carries the acceptance profile and consent flags', () async {
+      final callable = stubCallable(
+        'redeemSignupCode',
+        data: {'role': 'admin', 'name': 'Theo Roy'},
+      );
+
+      await repo().redeemSignupCode(
+        'K7Q29MZ4XR8T',
+        firstName: 'Theo',
+        lastName: 'Roy',
+        phone: '(514) 555-1234',
+        termsAccepted: true,
+        locationConsent: true,
+      );
+
+      final payload = capturedPayload(callable);
+      expect(payload['firstName'], 'Theo');
+      expect(payload['lastName'], 'Roy');
+      expect(payload['phone'], '(514) 555-1234');
+      expect(payload['termsAccepted'], isTrue);
+      expect(payload['locationConsent'], isTrue);
+    });
+  });
+
+  group('revokeInvite', () {
+    test('sends the invite doc id', () async {
+      final callable = stubCallable('revokeInvite', data: {'ok': true});
+
+      await repo().revokeInvite('invite-doc-1');
+
+      expect(capturedPayload(callable)['inviteDocId'], 'invite-doc-1');
+    });
+
+    test('maps invite-not-pending to the typed failure', () async {
+      stubFailingCallable(
+        'revokeInvite',
+        FirebaseFunctionsException(
+          message: 'invite-not-pending',
+          code: 'failed-precondition',
         ),
-      ).thenReturn(callable);
-      when(() => result.data).thenReturn({'role': 'employee', 'name': 'A'});
-      when(
-        () => callable.call<dynamic>(any<Object?>()),
-      ).thenAnswer((_) async => result);
+      );
 
-      final repo = FirebaseEmployeesRepository(firestore, functions: functions);
-      await repo.redeemSignupCode('K7Q2-9MZ4-XR8T');
+      await expectLater(
+        repo().revokeInvite('invite-doc-1'),
+        throwsA(isA<EmployeesFailureInviteNoLongerPending>()),
+      );
+    });
 
-      final captured = verify(
-        () => callable.call<dynamic>(captureAny<Object?>()),
-      ).captured.single;
+    test('maps invite-not-found to the same typed failure', () async {
+      stubFailingCallable(
+        'revokeInvite',
+        FirebaseFunctionsException(
+          message: 'invite-not-found',
+          code: 'not-found',
+        ),
+      );
+
+      await expectLater(
+        repo().revokeInvite('invite-doc-1'),
+        throwsA(isA<EmployeesFailureInviteNoLongerPending>()),
+      );
+    });
+
+    test('rethrows anything else untouched', () async {
+      stubFailingCallable(
+        'revokeInvite',
+        FirebaseFunctionsException(
+          message: 'boom',
+          code: 'permission-denied',
+        ),
+      );
+
+      await expectLater(
+        repo().revokeInvite('invite-doc-1'),
+        throwsA(isA<FirebaseFunctionsException>()),
+      );
+    });
+  });
+
+  group('previewInvite', () {
+    test('decodes a Map<dynamic, dynamic> callable response', () async {
+      // The shape the plugin actually returns on Android.
+      final callable = stubCallable(
+        'previewInvite',
+        data: <dynamic, dynamic>{
+          'email': 'theo@example.com',
+          'firstName': 'Theo',
+          'lastName': 'Roy',
+          'role': 'employee',
+          'expiresAtMs': 1786000000000,
+        },
+      );
+
+      final preview = await repo().previewInvite('K7Q2-9MZ4-XR8T');
+
+      expect(preview.email, 'theo@example.com');
+      expect(preview.firstName, 'Theo');
+      expect(preview.role, 'employee');
       expect(
-        (captured as Map).cast<String, dynamic>()['code'],
-        'K7Q2-9MZ4-XR8T',
+        preview.expiresAt,
+        DateTime.fromMillisecondsSinceEpoch(1786000000000),
+      );
+      expect(capturedPayload(callable)['code'], 'K7Q2-9MZ4-XR8T');
+    });
+
+    test('rethrows a FirebaseFunctionsException untouched', () async {
+      // No error mapping here — that's AuthService.previewInvite's job, the
+      // same split as redeemSignupCode/signUpWithCode above.
+      stubFailingCallable(
+        'previewInvite',
+        FirebaseFunctionsException(
+          message: 'code-expired',
+          code: 'failed-precondition',
+        ),
+      );
+
+      await expectLater(
+        repo().previewInvite('K7Q29MZ4XR8T'),
+        throwsA(isA<FirebaseFunctionsException>()),
+      );
+    });
+
+    test('a null payload surfaces EmployeesFailureUnknown', () async {
+      stubCallable('previewInvite');
+
+      await expectLater(
+        repo().previewInvite('K7Q29MZ4XR8T'),
+        throwsA(isA<EmployeesFailureUnknown>()),
       );
     });
   });

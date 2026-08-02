@@ -5,11 +5,14 @@ import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/invite_preview.dart';
 import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
 
 /// Shared bound on every `users` stream to prevent unbounded snapshots.
 const _userStreamLimit = 500;
+
+const _callableTimeout = Duration(seconds: 20);
 
 class FirebaseEmployeesRepository implements EmployeesRepository {
   FirebaseEmployeesRepository(
@@ -86,7 +89,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       final res = await _functions
           .httpsCallable(
             'createEmployeeInvite',
-            options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+            options: HttpsCallableOptions(timeout: _callableTimeout),
           )
           .call<dynamic>({
             'name': name.trim(),
@@ -113,13 +116,67 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }
 
   @override
-  Future<void> redeemSignupCode(String code) async {
+  Future<void> revokeInvite(String inviteDocId) async {
+    try {
+      await _functions
+          .httpsCallable(
+            'revokeInvite',
+            options: HttpsCallableOptions(timeout: _callableTimeout),
+          )
+          .call<dynamic>({'inviteDocId': inviteDocId});
+    } on FirebaseFunctionsException catch (e) {
+      if (e.message == 'invite-not-pending' ||
+          e.message == 'invite-not-found') {
+        throw const EmployeesFailureInviteNoLongerPending();
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<InvitePreview> previewInvite(String code) async {
+    // No error mapping here — a thrown FirebaseFunctionsException propagates
+    // raw, exactly like redeemSignupCode below. The auth layer's
+    // AuthService.previewInvite is the one that knows the callable's error
+    // vocabulary and maps it to AuthFailure.
+    final res = await _functions
+        .httpsCallable(
+          'previewInvite',
+          options: HttpsCallableOptions(timeout: _callableTimeout),
+        )
+        .call<dynamic>({'code': code});
+    // Loose cast first — a callable's nested map arrives as
+    // Map<dynamic, dynamic> on Android.
+    final data = (res.data as Map?)?.cast<String, dynamic>();
+    if (data == null) throw const EmployeesFailureUnknown();
+    return InvitePreview.fromMap(data);
+  }
+
+  @override
+  Future<void> redeemSignupCode(
+    String code, {
+    String firstName = '',
+    String lastName = '',
+    String phone = '',
+    bool termsAccepted = false,
+    bool locationConsent = false,
+  }) async {
     await _functions
         .httpsCallable(
           'redeemSignupCode',
-          options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+          options: HttpsCallableOptions(timeout: _callableTimeout),
         )
-        .call<dynamic>({'code': code});
+        // All six keys, always: the server reads the strings leniently
+        // (empty == absent) and the flags as `=== true`, so a conditional
+        // payload shape would be a second thing to test for no benefit.
+        .call<dynamic>({
+          'code': code,
+          'firstName': firstName,
+          'lastName': lastName,
+          'phone': phone,
+          'termsAccepted': termsAccepted,
+          'locationConsent': locationConsent,
+        });
   }
 
   @override

@@ -10,6 +10,7 @@ import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/invite_preview.dart';
 
 /// App-wide [AuthService], wired through providers for testability.
 final authServiceProvider = Provider<AuthService>(
@@ -67,10 +68,20 @@ class AuthService {
 
   /// Handles invited-employee signup — registers or adopts the account,
   /// redeems the signup code, and rolls back the Auth user if redemption fails.
+  ///
+  /// The acceptance profile and the two consent flags ride through to
+  /// `redeemSignupCode`, which stamps them onto the invited users doc inside
+  /// the activation transaction. They default to empty/false so the pre-P4b
+  /// call shape still compiles and still activates.
   Future<void> signUpWithCode({
     required String email,
     required String password,
     required String code,
+    String firstName = '',
+    String lastName = '',
+    String phone = '',
+    bool termsAccepted = false,
+    bool locationConsent = false,
   }) async {
     final normalizedEmail = email.trim().toLowerCase();
     UserCredential credential;
@@ -84,7 +95,14 @@ class AuthService {
     }
 
     try {
-      await _employees.redeemSignupCode(code.trim());
+      await _employees.redeemSignupCode(
+        code.trim(),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phone: phone.trim(),
+        termsAccepted: termsAccepted,
+        locationConsent: locationConsent,
+      );
     } catch (e, st) {
       final failure = _mapRedemptionError(e);
       // A wrong or expired code is the user mistyping, not a defect — keep the
@@ -106,6 +124,20 @@ class AuthService {
         await _signOutQuietly();
       }
       throw failure;
+    }
+  }
+
+  /// Resolves what an unredeemed signup [code] was issued for, before the
+  /// holder has an account — mirrors [signUpWithCode]'s error mapping via
+  /// [_mapRedemptionError]. The tables match: every case that mapper handles
+  /// can come back from `previewInvite` too, except `code-email-mismatch`,
+  /// which never will — that callable is unauthenticated, so there's no
+  /// caller email yet for the server to compare it against.
+  Future<InvitePreview> previewInvite(String code) async {
+    try {
+      return await _employees.previewInvite(code.trim());
+    } catch (e) {
+      throw _mapRedemptionError(e);
     }
   }
 
