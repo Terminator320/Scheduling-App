@@ -161,4 +161,58 @@ void main() {
       expect(restored.emergencyContact, 'Marie');
     });
   });
+
+  group('server-owned read-only fields', () {
+    test('fromMap reads codeExpiresAt and createdAt', () {
+      final expiry = DateTime(2026, 8, 16, 9, 30);
+      final created = DateTime(2026, 8, 2, 14);
+      final record = EmployeeRecord.fromMap('e1', {
+        'name': 'Theo Roy',
+        'status': 'invited',
+        'codeExpiresAt': expiry,
+        'createdAt': created,
+      });
+
+      expect(record.codeExpiresAt, expiry);
+      expect(record.createdAt, created);
+    });
+
+    test('both are null when absent', () {
+      final record = EmployeeRecord.fromMap('e1', const {'name': 'Theo'});
+
+      expect(record.codeExpiresAt, isNull);
+      expect(record.createdAt, isNull);
+    });
+
+    test('toMap emits neither — they are function-owned', () {
+      final record = EmployeeRecord(
+        id: 'e1',
+        name: 'Theo Roy',
+        codeExpiresAt: DateTime(2026, 8, 16),
+        createdAt: DateTime(2026, 8, 2),
+      );
+
+      final map = record.toMap();
+
+      // firestore.rules rejects any client update whose diff touches
+      // codeExpiresAt, so emitting it would make a whole-record write a
+      // permission-denied grenade.
+      expect(map.containsKey('codeExpiresAt'), isFalse);
+      expect(map.containsKey('createdAt'), isFalse);
+    });
+
+    test('a toMap round-trip drops them rather than corrupting them', () {
+      final record = EmployeeRecord(
+        id: 'e1',
+        name: 'Theo Roy',
+        codeExpiresAt: DateTime(2026, 8, 16),
+        createdAt: DateTime(2026, 8, 2),
+      );
+
+      final restored = EmployeeRecord.fromMap('e1', record.toMap());
+
+      expect(restored.codeExpiresAt, isNull);
+      expect(restored.createdAt, isNull);
+    });
+  });
 }

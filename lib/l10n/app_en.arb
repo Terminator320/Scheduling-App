@@ -1595,6 +1595,14 @@
   "@error_introLoadClients": {
     "description": "Error intro for CLI-LIST"
   },
+  "error_introRevokeInvite": "Couldn't revoke the invite",
+  "@error_introRevokeInvite": {
+    "description": "Error intro for EMP-REVOKE"
+  },
+  "error_thatInviteIsNoLongerPending": "That invite is no longer pending — it may have already been used or revoked.",
+  "@error_thatInviteIsNoLongerPending": {
+    "description": "Shown when revokeInvite is refused because the invite was redeemed or already revoked"
+  },
   "error_thatCodeIsntValidAskYourAdmin": "That code isn't valid. Ask your admin for a new one.",
   "@error_thatCodeIsntValidAskYourAdmin": {
     "description": "Shown when a signup code is wrong or already used."

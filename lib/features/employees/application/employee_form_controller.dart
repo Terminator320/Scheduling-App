@@ -50,6 +50,20 @@ class EmployeeStatusChangeFailed extends EmployeeStatusOutcome {
   final Object error;
 }
 
+/// Outcome of revoking a pending invite.
+sealed class InviteRevokeOutcome {
+  const InviteRevokeOutcome();
+}
+
+class InviteRevoked extends InviteRevokeOutcome {
+  const InviteRevoked();
+}
+
+class InviteRevokeFailed extends InviteRevokeOutcome {
+  const InviteRevokeFailed(this.error);
+  final Object error;
+}
+
 /// Busy flags for the employee form/detail surfaces — these drive the Save
 /// button and the status button spinners.
 @immutable
@@ -57,15 +71,22 @@ class EmployeeFormActivity {
   const EmployeeFormActivity({
     this.isSaving = false,
     this.isTogglingStatus = false,
+    this.isRevoking = false,
   });
 
   final bool isSaving;
   final bool isTogglingStatus;
+  final bool isRevoking;
 
-  EmployeeFormActivity copyWith({bool? isSaving, bool? isTogglingStatus}) {
+  EmployeeFormActivity copyWith({
+    bool? isSaving,
+    bool? isTogglingStatus,
+    bool? isRevoking,
+  }) {
     return EmployeeFormActivity(
       isSaving: isSaving ?? this.isSaving,
       isTogglingStatus: isTogglingStatus ?? this.isTogglingStatus,
+      isRevoking: isRevoking ?? this.isRevoking,
     );
   }
 
@@ -73,10 +94,11 @@ class EmployeeFormActivity {
   bool operator ==(Object other) =>
       other is EmployeeFormActivity &&
       other.isSaving == isSaving &&
-      other.isTogglingStatus == isTogglingStatus;
+      other.isTogglingStatus == isTogglingStatus &&
+      other.isRevoking == isRevoking;
 
   @override
-  int get hashCode => Object.hash(isSaving, isTogglingStatus);
+  int get hashCode => Object.hash(isSaving, isTogglingStatus, isRevoking);
 }
 
 /// Handles employee create/update/status, shared by the form sheet and the
@@ -166,6 +188,27 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
       return EmployeeStatusChangeFailed(e);
     } finally {
       if (ref.mounted) state = state.copyWith(isTogglingStatus: false);
+    }
+  }
+
+  /// Deletes a pending invite and its signup code.
+  ///
+  /// A server refusal (someone redeemed the code while the admin was looking
+  /// at the row) is a *failed* outcome, not a silent success — the live stream
+  /// will have flipped the row to Active by the time the notice lands.
+  Future<InviteRevokeOutcome> revokeInvite(String inviteDocId) async {
+    // Resolved before the first await — see _save.
+    final repo = ref.read(employeesRepositoryProvider);
+    final logger = ref.read(loggerProvider);
+    state = state.copyWith(isRevoking: true);
+    try {
+      await repo.revokeInvite(inviteDocId);
+      return const InviteRevoked();
+    } catch (e, st) {
+      logger.warn('EMP-REVOKE revokeInvite failed', e, st);
+      return InviteRevokeFailed(e);
+    } finally {
+      if (ref.mounted) state = state.copyWith(isRevoking: false);
     }
   }
 }

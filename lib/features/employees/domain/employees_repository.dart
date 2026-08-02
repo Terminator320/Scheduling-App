@@ -1,4 +1,5 @@
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/invite_preview.dart';
 
 abstract class EmployeesRepository {
   Stream<List<EmployeeRecord>> watchAllUsers();
@@ -19,8 +20,26 @@ abstract class EmployeesRepository {
     required bool isAdmin,
   });
 
-  /// Redeems a signup code and activates the invite.
-  Future<void> redeemSignupCode(String code);
+  /// Deletes a still-pending invite and its signup code.
+  ///
+  /// Throws `EmployeesFailureInviteNoLongerPending` when the server refuses
+  /// because the invite was redeemed or revoked in the meantime.
+  Future<void> revokeInvite(String inviteDocId);
+
+  /// Resolves what an unredeemed [code] was issued for, so the acceptance
+  /// screen can show the invited email without the holder having an account.
+  Future<InvitePreview> previewInvite(String code);
+
+  /// Redeems a signup code and activates the invite, carrying the acceptance
+  /// profile and consent flags the server stamps onto the users doc.
+  Future<void> redeemSignupCode(
+    String code, {
+    String firstName,
+    String lastName,
+    String phone,
+    bool termsAccepted,
+    bool locationConsent,
+  });
 
   /// Persists the editable fields of [employee] onto `users/{docId}`.
   ///
