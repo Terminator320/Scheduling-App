@@ -2313,6 +2313,59 @@
       }
     }
   },
+  "employees_today": "Today",
+  "@employees_today": {
+    "description": "Section label above the employee's jobs booked for today"
+  },
+  "employees_noJobsToday": "No jobs today",
+  "@employees_noJobsToday": {
+    "description": "Empty state inside the TODAY panel on the employee detail"
+  },
+  "employees_hoursKey": "HOURS",
+  "@employees_hoursKey": {
+    "description": "Info panel key: the employee's daily working hours"
+  },
+  "employees_daysKey": "DAYS",
+  "@employees_daysKey": {
+    "description": "Info panel key: which days of the week the employee works"
+  },
+  "employees_accessKey": "ACCESS",
+  "@employees_accessKey": {
+    "description": "Info panel key: whether the account is admin or employee"
+  },
+  "employees_phoneKey": "PHONE",
+  "@employees_phoneKey": {
+    "description": "Info panel key: the employee's phone number"
+  },
+  "employees_emailKey": "EMAIL",
+  "@employees_emailKey": {
+    "description": "Info panel key: the employee's email address"
+  },
+  "employees_maxPerDayKey": "MAX/DAY",
+  "@employees_maxPerDayKey": {
+    "description": "Info panel key: the most jobs this person takes in a day"
+  },
+  "employees_emergencyKey": "EMERGENCY",
+  "@employees_emergencyKey": {
+    "description": "Info panel key: the employee's emergency contact"
+  },
+  "employees_onCall": "On call",
+  "@employees_onCall": {
+    "description": "Chip and switch label: this person takes emergency calls"
+  },
+  "employees_jobsPerDay": "{count, plural, =1{1 job} other{{count} jobs}}",
+  "@employees_jobsPerDay": {
+    "description": "A cap on how many jobs this person takes per day",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "common_yes": "Yes",
+  "@common_yes": {
+    "description": "Affirmative value in a read-only detail row"
+  },
   "employees_everyDay": "Every day",
   "@employees_everyDay": {
     "description": "Working-days summary when all seven days are worked"

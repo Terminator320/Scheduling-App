@@ -521,6 +521,18 @@
   "employees_jobTitleApprentice": "Apprenti",
   "employees_jobTitleDispatcher": "Répartiteur",
   "employees_jobsToday": "{count, plural, =1{1 tâche aujourd'hui} other{{count} tâches aujourd'hui}}",
+  "employees_today": "Aujourd'hui",
+  "employees_noJobsToday": "Aucune tâche aujourd'hui",
+  "employees_hoursKey": "HEURES",
+  "employees_daysKey": "JOURS",
+  "employees_accessKey": "ACCÈS",
+  "employees_phoneKey": "TÉLÉPHONE",
+  "employees_emailKey": "COURRIEL",
+  "employees_maxPerDayKey": "MAX/JOUR",
+  "employees_emergencyKey": "URGENCE",
+  "employees_onCall": "De garde",
+  "employees_jobsPerDay": "{count, plural, =1{1 tâche} other{{count} tâches}}",
+  "common_yes": "Oui",
   "employees_everyDay": "Tous les jours",
   "employees_noWorkingDays": "Aucun jour de travail défini"
 }
