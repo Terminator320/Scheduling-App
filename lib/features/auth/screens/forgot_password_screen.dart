@@ -29,6 +29,7 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
 
   bool _isLoading = false;
   bool _emailSent = false;
+  bool _resentOnce = false;
   String? _emailError;
   String _errorMessage = '';
   int _restartTick = 0;
@@ -85,18 +86,18 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
       if (systemError != null) {
         _errorMessage = systemError;
       } else {
+        // Only the first send re-keys the switcher — a resend relabels the
+        // panel in place instead of cross-fading the whole card again.
+        if (!_emailSent) _restartTick++;
         _emailSent = true;
-        _restartTick++;
       }
     });
   }
 
-  void _resendEmail() {
-    setState(() {
-      _emailSent = false;
-      _errorMessage = '';
-      _restartTick++;
-    });
+  Future<void> _resendEmail() async {
+    if (_resentOnce || _isLoading) return;
+    setState(() => _resentOnce = true);
+    await _sendResetEmail();
   }
 
   void _backToSignIn() {
@@ -106,6 +107,16 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return AuthScaffold(
+      // The sent state is a flat card that stands on its own — no hero.
+      hero: _emailSent
+          ? null
+          : AuthHero(
+              title: context.l10n.auth_forgotYourPassword,
+              subtitle: context
+                  .l10n
+                  .auth_enterYourAccountEmailAndWeLlSendYouALinkToResetYourPassword,
+              thin: true,
+            ),
       child: AuthFormSwitcher(
         child: _emailSent
             ? _buildSuccess(key: ValueKey('success_$_restartTick'))
@@ -123,14 +134,8 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
       key: key,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        AuthBrandHeader(
-          title: context.l10n.auth_forgotYourPassword,
-          subtitle: context
-              .l10n
-              .auth_enterYourAccountEmailAndWeLlSendYouALinkToResetYourPassword,
-        ),
-        const SizedBox(height: AppSpacing.sp32),
         AuthEmailField(
+          label: context.l10n.common_email,
           controller: _emailController,
           enabled: !_isLoading,
           errorText: _emailError,
@@ -149,13 +154,15 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
         AuthBanner(
           message: _errorMessage.isEmpty ? null : _errorMessage,
         ),
+        const SizedBox(height: AppSpacing.sp16),
+        _WarningNote(message: context.l10n.auth_noEmailOnAccountNote),
         const SizedBox(height: AppSpacing.sp24),
         AnimatedLoadingButton(
           label: context.l10n.auth_sendResetEmail,
           isLoading: _isLoading,
           onPressed: _sendResetEmail,
         ),
-        const SizedBox(height: AppSpacing.sp16),
+        const SizedBox(height: AppSpacing.sp8),
         Center(
           child: TextButton(
             onPressed: _isLoading ? null : _backToSignIn,
@@ -171,74 +178,216 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
 
   Widget _buildSuccess({required Key key}) {
     final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
     final scheme = theme.colorScheme;
 
-    return Column(
+    return Container(
       key: key,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Center(
-          child: AuthIconBadge(
-            icon: Icons.mark_email_read_rounded,
-            background: theme.statusColors.successContainer,
-            foreground: theme.statusColors.success,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        AuthHeaderText(
-          title: context.l10n.auth_checkYourInbox,
-          subtitle: context
-              .l10n
-              .auth_ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent,
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.sp12),
-          decoration: BoxDecoration(
-            color: theme.statusColors.successContainer,
-            borderRadius: BorderRadius.circular(AppRadius.r8),
-            border: Border.all(
-              color: theme.statusColors.success.withValues(alpha: 0.4),
+      padding: const EdgeInsets.all(AppSpacing.sp24),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(AppRadius.r20),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: AuthIconBadge(
+              icon: Icons.mark_email_read_rounded,
+              background: theme.statusColors.successContainer,
+              foreground: theme.statusColors.success,
             ),
           ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.check_circle_outline,
-                color: theme.statusColors.success,
-                size: 16,
+          const SizedBox(height: AppSpacing.sp24),
+          AuthHeaderText(
+            title: context.l10n.auth_checkYourInbox,
+            subtitle: context
+                .l10n
+                .auth_ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent,
+          ),
+          const SizedBox(height: AppSpacing.sp24),
+          _FactPanel(
+            facts: [
+              (
+                icon: Icons.schedule_rounded,
+                text: context.l10n.auth_resetExpiryFact,
               ),
-              const SizedBox(width: AppSpacing.sp8),
-              Expanded(
-                child: Text(
-                  context
-                      .l10n
-                      .auth_theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: theme.statusColors.onSuccessContainer,
-                  ),
-                ),
+              (
+                icon: Icons.devices_rounded,
+                text: context.l10n.auth_resetSignsOutFact,
               ),
             ],
           ),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        AnimatedLoadingButton(
-          label: context.l10n.auth_backToSignIn,
-          onPressed: _backToSignIn,
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        Center(
-          child: TextButton(
-            onPressed: _resendEmail,
+          AuthBanner(
+            message: _errorMessage.isEmpty ? null : _errorMessage,
+          ),
+          const SizedBox(height: AppSpacing.sp16),
+          _SentPanel(
+            resent: _resentOnce,
+            busy: _isLoading,
+            onResend: _resendEmail,
+          ),
+          const SizedBox(height: AppSpacing.sp24),
+          AnimatedLoadingButton(
+            label: context.l10n.auth_backToSignIn,
+            onPressed: _backToSignIn,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Amber attention note — warning tokens, never the success palette.
+class _WarningNote extends StatelessWidget {
+  const _WarningNote({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final status = theme.statusColors;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sp12),
+      decoration: BoxDecoration(
+        color: status.warningContainer,
+        borderRadius: BorderRadius.circular(AppRadius.r8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, color: status.warning, size: 16),
+          const SizedBox(width: AppSpacing.sp8),
+          Expanded(
             child: Text(
-              context.l10n.auth_didnTReceiveTheEmailTryAgain,
-              style: textTheme.bodySmall?.copyWith(color: scheme.primary),
+              message,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: status.onWarningContainer,
+              ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The two things worth knowing about a reset link, as a divided list.
+class _FactPanel extends StatelessWidget {
+  const _FactPanel({required this.facts});
+
+  final List<({IconData icon, String text})> facts;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < facts.length; i++) ...[
+            if (i > 0)
+              Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.sp12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    facts[i].icon,
+                    size: 16,
+                    color: theme.palette.textTertiary,
+                  ),
+                  const SizedBox(width: AppSpacing.sp8),
+                  Expanded(
+                    child: Text(
+                      facts[i].text,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.palette.textBody,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Bordered SENT panel holding the one in-place resend. Firebase throttles the
+/// rest, so the row relabels and greys after a single use rather than counting.
+class _SentPanel extends StatelessWidget {
+  const _SentPanel({
+    required this.resent,
+    required this.busy,
+    required this.onResend,
+  });
+
+  final bool resent;
+  final bool busy;
+  final VoidCallback onResend;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final palette = theme.palette;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.sp16),
+      decoration: BoxDecoration(
+        color: resent ? palette.lockedPanel : null,
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+        border: Border.all(
+          color: resent ? palette.lockedPanelBorder : scheme.outlineVariant,
         ),
-      ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            context.l10n.auth_resetSentPanelTitle,
+            style: theme.monoType.label,
+          ),
+          const SizedBox(height: AppSpacing.sp8),
+          if (resent)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.check_rounded,
+                  size: 16,
+                  color: palette.textMuted,
+                ),
+                const SizedBox(width: AppSpacing.sp8),
+                Expanded(
+                  child: Text(
+                    context.l10n.auth_sentAgainJustNow,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: palette.textMuted,
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton(
+                onPressed: busy ? null : onResend,
+                child: Text(context.l10n.auth_sendItAgain),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

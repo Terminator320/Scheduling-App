@@ -9,6 +9,7 @@ import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -68,6 +69,31 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(TextField), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('offers the invite route under the card', (tester) async {
+    await tester.pumpWidget(_wrap(auth, repo));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Invited by your employer?'), findsOneWidget);
+    expect(find.text('Accept your invite'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows the dotted error row under each invalid field', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(auth, repo));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AuthFieldError), findsNothing);
+
+    await tester.tap(find.byType(FilledButton).first);
+    await tester.pumpAndSettle();
+
+    // Email and password both trip their validator, so both render the row.
+    expect(find.byType(AuthFieldError), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 
