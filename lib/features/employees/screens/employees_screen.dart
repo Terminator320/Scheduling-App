@@ -11,6 +11,7 @@ import 'package:scheduling/core/utils/sheet_focus.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/widgets/cards/employee_card.dart';
+import 'package:scheduling/features/employees/widgets/cards/pending_invite_tile.dart';
 import 'package:scheduling/features/employees/widgets/sheets/edit_person_sheet.dart';
 import 'package:scheduling/features/employees/widgets/sheets/employee_details_sheet.dart';
 import 'package:scheduling/features/employees/widgets/sheets/invite_person_sheet.dart';
@@ -25,6 +26,7 @@ import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
+import 'package:scheduling/shared/widgets/feedback/user_status_chip.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
 import 'package:scheduling/shared/widgets/primitives/fade_in_item.dart';
 import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
@@ -121,7 +123,14 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     setState(() => _selectedEmployee = updated);
   }
 
+  static bool _isInvited(EmployeeRecord employee) =>
+      UserStatus.fromRaw(employee.status) == UserStatus.invited;
+
   Future<void> _onEmployeeTap(EmployeeRecord employee) async {
+    // An invited person expands in place inside PendingInviteTile — there is
+    // no detail page worth opening, and the sheet's actions all assume an
+    // account that exists.
+    if (_isInvited(employee)) return;
     _clearSearch();
     await Future<void>.delayed(const Duration(milliseconds: 80));
     if (!mounted) return;
@@ -245,13 +254,16 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
             return FadeInItem(
               key: ValueKey(employee.id),
               index: index,
-              child: EmployeeCard(
-                employee: employee,
-                // Only highlight when the detail pane is actually shown (two-pane).
-                selected:
-                    context.isTwoPane && _selectedEmployee?.id == employee.id,
-                onTap: () => _onEmployeeTap(employee),
-              ),
+              child: _isInvited(employee)
+                  ? PendingInviteTile(employee: employee)
+                  : EmployeeCard(
+                      employee: employee,
+                      // Only highlight when the detail pane is actually shown (two-pane).
+                      selected:
+                          context.isTwoPane &&
+                          _selectedEmployee?.id == employee.id,
+                      onTap: () => _onEmployeeTap(employee),
+                    ),
             );
           },
         );

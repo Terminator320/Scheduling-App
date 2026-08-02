@@ -2591,5 +2591,42 @@
   "auth_passwordStrengthStrong": "Strong",
   "@auth_passwordStrengthStrong": {
     "description": "Highest band of the password strength meter"
+  },
+  "employees_inviteCodeKey": "INVITE CODE",
+  "@employees_inviteCodeKey": {
+    "description": "Mono uppercase section label above the signup code on an expanded pending-invite row"
+  },
+  "employees_showCode": "Show code",
+  "@employees_showCode": {
+    "description": "Button on the pending-invite row that fetches a fresh signup code when the reveal did not land"
+  },
+  "employees_resendCode": "Resend code",
+  "@employees_resendCode": {
+    "description": "Button on the pending-invite row that issues a fresh signup code"
+  },
+  "employees_newCodeReady": "New code ready",
+  "@employees_newCodeReady": {
+    "description": "Relabel of the Resend button on the pending-invite row after a fresh code was issued"
+  },
+  "employees_newCodeExpiresOn": "New code · expires {date}",
+  "@employees_newCodeExpiresOn": {
+    "description": "Amber caption under the signup code: the code shown is newly issued and dies on this date",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "employees_newCodeIssued": "New code — the previous one no longer works",
+  "@employees_newCodeIssued": {
+    "description": "Caption under the signup code when no expiry is stamped on the invite yet"
+  },
+  "employees_revokeInvite": "Revoke invite",
+  "@employees_revokeInvite": {
+    "description": "Destructive action on the pending-invite row that deletes the invite"
+  },
+  "employees_revokeInviteConfirmBody": "The code stops working right away and this person disappears from your team list.",
+  "@employees_revokeInviteConfirmBody": {
+    "description": "Body of the confirm dialog shown before revoking a pending invite"
   }
 }
