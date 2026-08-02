@@ -19,6 +19,7 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/fields/sheet_field_row.dart';
+import 'package:scheduling/shared/widgets/primitives/mono_section_label.dart';
 import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
 import 'package:scheduling/shared/widgets/sheets/form_sheet_frame.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
@@ -242,7 +243,7 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
       isBusy: isSaving,
       onPrimary: _save,
       children: [
-        _SectionLabel(l10n.clients_sectionClient),
+        MonoSectionLabel(l10n.clients_sectionClient),
         const SizedBox(height: AppSpacing.sp8),
         SheetFocusScroll(
           child: LabeledTextField(
@@ -310,7 +311,7 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
 
         // Owner change 5: one phone, no mobile field. A stored mobile is folded
         // into phone by _save rather than left stranded on the doc.
-        _SectionLabel(l10n.clients_sectionContact),
+        MonoSectionLabel(l10n.clients_sectionContact),
         const SizedBox(height: AppSpacing.sp8),
         SheetFocusScroll(
           child: LabeledTextField(
@@ -356,7 +357,7 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
         ),
         const SizedBox(height: AppSpacing.sp16),
 
-        _SectionLabel(l10n.clients_sectionSite),
+        MonoSectionLabel(l10n.clients_sectionSite),
         const SizedBox(height: AppSpacing.sp8),
         Material(
           type: MaterialType.transparency,
@@ -397,7 +398,7 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
         ),
         const SizedBox(height: AppSpacing.sp24),
 
-        _SectionLabel(l10n.clients_sectionBilling),
+        MonoSectionLabel(l10n.clients_sectionBilling),
         const SizedBox(height: AppSpacing.sp8),
         SheetFocusScroll(
           child: LabeledTextField(
@@ -426,15 +427,4 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
       ],
     );
   }
-}
-
-/// Mono all-caps section header — mirrors the appointment form's own.
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) =>
-      Text(text, style: Theme.of(context).monoType.label);
 }
