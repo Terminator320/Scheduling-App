@@ -13,6 +13,7 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/screens/employees_screen.dart';
+import 'package:scheduling/features/employees/widgets/cards/employee_profile_card.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 class _MockEmployeesRepo extends Mock implements EmployeesRepository {}
@@ -149,17 +150,38 @@ void main() {
       await tester.pumpWidget(_wrap(employees: users.make));
       await tester.pumpAndSettle();
 
-      // Open the disabled employee in the split-layout detail pane.
+      // Open the disabled employee in the split-layout detail pane. The pane's
+      // status chip is what reflects the record now that Disable/Enable has
+      // moved to the edit sheet — and it reads the rendered record directly,
+      // which is a tighter check on the stale snapshot than a button label.
       await tester.tap(find.text('Jane Doe'));
       await tester.pumpAndSettle();
-      expect(find.text('Enable employee'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(EmployeeProfileCard),
+          matching: find.text('Disabled'),
+        ),
+        findsOneWidget,
+      );
 
       // Another admin re-enables her elsewhere; the live stream emits active.
       users.emit(const [_activeJane]);
       await tester.pumpAndSettle();
 
-      expect(find.text('Disable employee'), findsOneWidget);
-      expect(find.text('Enable employee'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(EmployeeProfileCard),
+          matching: find.text('Active'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(EmployeeProfileCard),
+          matching: find.text('Disabled'),
+        ),
+        findsNothing,
+      );
       expect(tester.takeException(), isNull);
     },
   );
@@ -177,61 +199,16 @@ void main() {
 
       await tester.tap(find.text('Jane Doe'));
       await tester.pumpAndSettle();
-      expect(find.text('Enable employee'), findsOneWidget);
+      expect(find.byType(EmployeeProfileCard), findsOneWidget);
 
       // The employee is deleted (e.g. by another admin) — the live list drops
       // them entirely.
       users.emit(const []);
       await tester.pumpAndSettle();
 
-      // No ghost detail pane with live Enable/Disable/Delete actions.
-      expect(find.text('Enable employee'), findsNothing);
-      expect(find.text('Disable employee'), findsNothing);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets(
-    'tapping Enable in the split-layout detail pane flips the employee to '
-    'active (the reported re-enable flow)',
-    (tester) async {
-      _useWideViewport(tester);
-      final users = _seededUsers(const [_disabledJane]);
-      addTearDown(users.controller.close);
-
-      final repo = _MockEmployeesRepo();
-      // Re-enabling writes status active; mirror that onto the live stream the
-      // way Firestore's listener would, so the detail pane can reconcile.
-      when(
-        () => repo.reactivateEmployee('e1'),
-      ).thenAnswer((_) async => users.emit(const [_activeJane]));
-
-      await tester.pumpWidget(
-        _wrap(
-          employees: users.make,
-          overrides: [employeesRepositoryProvider.overrideWithValue(repo)],
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Jane Doe'));
-      await tester.pumpAndSettle();
-
-      // Tap the pane's Enable button, then confirm in the dialog (both carry
-      // the "Enable employee" label, so scope the second tap to the dialog).
-      await tester.tap(find.widgetWithText(FilledButton, 'Enable employee'));
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.descendant(
-          of: find.byType(AlertDialog),
-          matching: find.widgetWithText(FilledButton, 'Enable employee'),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      verify(() => repo.reactivateEmployee('e1')).called(1);
-      expect(find.text('Disable employee'), findsOneWidget);
-      expect(find.text('Enable employee'), findsNothing);
+      // No ghost detail pane still offering actions against a gone record.
+      expect(find.byType(EmployeeProfileCard), findsNothing);
+      expect(find.text('Edit'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

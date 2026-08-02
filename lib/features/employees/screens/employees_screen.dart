@@ -323,7 +323,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
                   key: ValueKey(selected.id),
                   employee: selected,
                   isCurrentUserAdmin: widget.isAdmin,
-                  onAction: (action) => _handleEmployeeAction(action, selected),
+                  onEdit: () => _openEmployeeSheet(employee: selected),
                 ),
           placeholder: _buildDetailPlaceholder(),
         ),
