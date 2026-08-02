@@ -184,25 +184,4 @@ void main() {
       expect(activity().isTogglingStatus, isFalse);
     });
   });
-
-  group('deleteEmployee', () {
-    test('deletes and stays busy so the host can pop the surface', () async {
-      when(() => repo.deleteEmployee(any())).thenAnswer((_) async {});
-
-      final outcome = await notifier().deleteEmployee('e1');
-
-      expect(outcome, isA<EmployeeDeleted>());
-      verify(() => repo.deleteEmployee('e1')).called(1);
-      expect(activity().isDeleting, isTrue);
-    });
-
-    test('reports failures and resets the busy flag', () async {
-      when(() => repo.deleteEmployee(any())).thenThrow(Exception('boom'));
-
-      final outcome = await notifier().deleteEmployee('e1');
-
-      expect(outcome, isA<EmployeeDeleteFailed>());
-      expect(activity().isDeleting, isFalse);
-    });
-  });
 }

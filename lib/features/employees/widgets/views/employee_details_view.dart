@@ -39,35 +39,6 @@ class EmployeeDetailsView extends ConsumerStatefulWidget {
 }
 
 class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
-  Future<void> _confirmDelete() async {
-    final confirmed = await showConfirmDialog(
-      context,
-      title: context.l10n.employees_deleteEmployee,
-      message: context.l10n.employees_areYouSureYouWantToDeleteThisEmployee,
-      confirmLabel: context.l10n.common_delete,
-    );
-    if (!mounted || !confirmed) return;
-    final outcome = await ref
-        .read(employeeFormControllerProvider.notifier)
-        .deleteEmployee(widget.employee.id);
-    if (!mounted) return;
-    switch (outcome) {
-      case EmployeeDeleted():
-        widget.onAction('deleted');
-      case EmployeeDeleteFailed(:final error):
-        ref
-            .read(noticeServiceProvider)
-            .error(
-              composeErrorNotice(
-                context,
-                intro: context.l10n.error_introDeleteEmployee,
-                tag: 'EMP-DEL',
-                error: error,
-              ),
-            );
-    }
-  }
-
   Future<void> _confirmDisable() async {
     final isDisabled = widget.employee.isDisabled;
     final actionLabel = isDisabled
@@ -177,11 +148,9 @@ class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
         _ActionButtons(
           isCurrentUserAdmin: widget.isCurrentUserAdmin,
           isDisabled: isDisabled,
-          isDeleting: activity.isDeleting,
           isDisabling: activity.isTogglingStatus,
           onEdit: () => widget.onAction('edit'),
           onToggleStatus: _confirmDisable,
-          onDelete: _confirmDelete,
         ),
       ],
     );
@@ -236,26 +205,23 @@ class _ColorRow extends StatelessWidget {
   }
 }
 
-/// The action stack for the detail view — Edit, an admin-only
-/// Disable/Enable, and Delete.
+/// The action stack for the detail view — Edit and an admin-only
+/// Disable/Enable. There is no Delete: removing a users doc orphans every past
+/// appointment's `employeeIds` link (owner decision, 2026-08-02).
 class _ActionButtons extends StatelessWidget {
   const _ActionButtons({
     required this.isCurrentUserAdmin,
     required this.isDisabled,
-    required this.isDeleting,
     required this.isDisabling,
     required this.onEdit,
     required this.onToggleStatus,
-    required this.onDelete,
   });
 
   final bool isCurrentUserAdmin;
   final bool isDisabled;
-  final bool isDeleting;
   final bool isDisabling;
   final VoidCallback onEdit;
   final VoidCallback onToggleStatus;
-  final VoidCallback onDelete;
 
   static const _fullWidthButton = Size(double.infinity, 48);
 
@@ -297,22 +263,6 @@ class _ActionButtons extends StatelessWidget {
             ),
           ),
         ],
-        const SizedBox(height: AppSpacing.sp8),
-        OutlinedButton.icon(
-          onPressed: isDeleting ? null : onDelete,
-          icon: BusyButtonIcon(
-            isBusy: isDeleting,
-            icon: Icons.delete_outline,
-            spinnerSize: 16,
-            color: theme.colorScheme.error,
-          ),
-          label: Text(context.l10n.employees_deleteEmployee),
-          style: OutlinedButton.styleFrom(
-            minimumSize: _fullWidthButton,
-            foregroundColor: theme.colorScheme.error,
-            side: BorderSide(color: theme.colorScheme.error),
-          ),
-        ),
       ],
     );
   }

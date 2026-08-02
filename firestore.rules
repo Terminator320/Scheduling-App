@@ -119,7 +119,13 @@ service cloud.firestore {
             && resource.data.status == 'invited'
             && resource.data.email == request.auth.token.email);
 
-      allow create, delete: if isAdmin();
+      // Delete withdrawn 2026-08-02 (P4): removing a users doc orphans every
+      // past appointment's employeeIds link — the visit keeps the denormalized
+      // employeeNames and loses the crew colour and the person. Disable is the
+      // shipping action and does strictly more (syncUsersByUid disables the Auth
+      // account, revokes tokens, and purges presence/FCM/LiveActivity rows).
+      // The Admin SDK bypasses rules, so console cleanup is unaffected.
+      allow create: if isAdmin();
 
       // Rejects a colorValue write that isn't a valid integer string — otherwise a bad
       // value could sneak through and the client would silently fall back to the

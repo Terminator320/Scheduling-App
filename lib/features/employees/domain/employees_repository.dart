@@ -32,8 +32,6 @@ abstract class EmployeesRepository {
     required EmployeeRecord employee,
   });
 
-  Future<void> deleteEmployee(String docId);
-
   Future<UserUidMatch?> findUserByUid(String uid);
 
   Future<void> deactivateEmployee(String docId);
