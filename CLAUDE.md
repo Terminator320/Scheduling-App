@@ -11,6 +11,9 @@ Play-release work (keystore, Data Safety, Play Integrity).
 iOS notes live in `ios/CLAUDE.md` (loads when working under `ios/`) — SPM-only
 (there is no Podfile and never will be), iOS 18.0 deployment floor, App Attest,
 the Crashlytics dSYM run-script phases, and the `homeWidget` deep-link param.
+Since P4b a real `app_links` dispatcher exists (`lib/core/deep_links/`), but the
+`homeWidget` param and the `home_widget` tap channel are **both still live** and
+retire together — the dispatcher skips those URIs rather than replacing them.
 **Do NOT re-run `flutterfire configure`** — `lib/firebase_options.dart` already
 builds the iOS options from `dev/.env`; re-running it rewrites the file into the
 literal-values style and breaks the env-based setup.
@@ -306,11 +309,23 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
 - **Invited-employee signup (one-time codes):** the admin's "Invite" calls the
   `createEmployeeInvite` callable, which creates the `invited` `users` doc and a
   `signupCodes/{sha256(code)}` doc and returns the **plaintext code once** (shown
-  in a copy dialog for the admin to share out-of-band). The employee signs up
-  with email + password + code via `AuthService.signUpWithCode`, which registers
+  in a copy dialog for the admin to share out-of-band, or read off the expanded
+  pending-invite row on Team). The employee accepts through the **two-screen
+  flow** (P4b, 2026-08-02) — `accept_invite_code_screen.dart` (twelve mono boxes
+  over ONE hidden `TextField`; Continue calls `previewInvite`, which is what
+  lets the screen say *expired* vs *invalid* before the user invents a
+  password) → `accept_invite_details_screen.dart` (the invite email rendered
+  **locked** from the preview, names, phone, password, and one combined
+  terms + location-consent checkbox gating the CTA).
+  **`create_account_screen.dart` is DELETED** — it is superseded by those two,
+  and `AuthCodeField` went with it. The screen then signs up with email +
+  password + code via `AuthService.signUpWithCode`, which registers
   then calls `redeemSignupCode`; that callable validates server-side (14-day
   expiry; token email must equal the invite email) and **activates the account
-  atomically** (`uid` + `status:'active'`, code consumed). `redeemSignupCode` is
+  atomically** (`uid` + `status:'active'`, code consumed). The redeem payload
+  also carries the acceptance profile (`firstName`, `lastName`, `phone`) and the
+  two consent flags, so activation stamps them in the same transaction — see the
+  function-owned-fields invariant below. `redeemSignupCode` is
   rate-limited **by token email**, not caller uid — a failed signup deletes +
   re-registers to mint a fresh uid, which would reset a uid-keyed cap. On redeem
   failure `signUpWithCode` **rolls back the just-created Auth user** (re-auth
@@ -325,8 +340,75 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   is idempotent for a still-`invited` email (re-issues a fresh code; the separate
   `regenerateSignupCode` callable was dropped); an active account errors
   `email-exists`. Sign-in (`login_screen.dart`) just
-  `findUserByUid` → route or sign out (no activation step). Design:
-  `docs/archive/INVITED_SIGNUP_REDESIGN.md`.
+  `findUserByUid` → route or sign out (no activation step); its bottom prompt
+  ("Invited by your employer? / **Accept your invite**") is the in-app entry to
+  the acceptance flow, and a deep link is the other. Design:
+  `docs/archive/INVITED_SIGNUP_REDESIGN.md`, `docs/plans/redesign-subdocs/2026-08-02-p4b-HANDOFF.md`.
+- **A displayed signup code is a CREDENTIAL — state-only, never logged, never
+  persisted.** It lives in widget/controller state and on the navigator's route
+  args, and dies with the surface. It is never passed to `logger.*` (both auth
+  catch sites log through `logger.authFailure`, whose breadcrumb carries only
+  the label and `failure.runtimeType`), never interpolated into a notice or an
+  error message, and never written to SharedPreferences or secure storage. The
+  clipboard copy on the pending-invite row is the ONE sanctioned egress — it is
+  the feature. The server stores sha256 only.
+- **The deep-link dispatcher is the single `app_links` consumer, and it MUST
+  skip any URI carrying the `homeWidget` query param.** `classifyDeepLink`
+  (`core/deep_links/deep_link_target.dart`) returns `IgnoredLink` for it, with
+  or without a value. That skip is load-bearing, not tidy: once `app_links` is
+  listening, BOTH plugins observe the same `openURL`, so without it every
+  widget, Live-Activity and Siri tap opens the appointment sheet **twice**. The
+  param and the `home_widget` tap channel retire **together, later** (see
+  `ios/CLAUDE.md`) — dropping either one alone re-breaks widget taps. On iOS,
+  `FlutterDeepLinkingEnabled` stays **false**: that is the correct setting *for*
+  `app_links`, since Flutter's own handler would otherwise consume the URL
+  first. **The invite branch pushes only once `/login` is the top route** —
+  `SplashScreen` routes with `pushReplacementNamed`, which replaces the
+  *topmost* route, so an invite screen pushed too early is replaced by splash's
+  own navigation. `awaitLoginRoute` polls `TopRouteObserver` and **returns a
+  bool**; a timeout must NOT push anyway, or it reintroduces exactly the race
+  the wait exists to close. **`TopRouteObserver` deliberately has no `didRemove`
+  override** — `pushNamedAndRemoveUntil` (the account-disabled path) pushes
+  *before* it removes, so overriding it would overwrite the just-pushed name
+  with a route no longer on the stack. A signed-in user tapping an invite link
+  gets an **info notice only** — never an auto-sign-out; a URL any web page can
+  launch must not be able to tear down a session.
+- **`codeExpiresAt` / `termsAcceptedAt` / `locationConsentAt` are
+  function-owned `users` fields.** They are on the `/users` update **denylist**
+  in `firestore.rules` beside `uid` (same posture as `jobCount`/`wave` on
+  clients), so a compromised admin session can't forge a consent record or a
+  fake expiry; `EmployeeRecord.toMap()` must never emit them, or a future
+  whole-record `set()` becomes an opaque `permission-denied`.
+  `performCreateInvite` stamps `codeExpiresAt` on **both** branches (fresh and
+  re-issue) because clients can never read `signupCodes` and the Team row needs
+  the instant somewhere it can read; `redeemSignupCode` **deletes** it at
+  activation — the field describes a *pending* code and is junk on an active
+  doc. The consent stamps are written **only when the payload flags are
+  actually `true`**: the previously-shipped acceptance screen sends just `code`,
+  and stamping unconditionally would mint a legally-flavoured consent record for
+  someone who never saw the checkbox.
+- **`codeExpiresAt` is admin-readable by construction — no read-rule change was
+  needed or wanted.** Of the four `/users` read clauses, only clause 1
+  (`isAdmin()`) reaches an invited doc: clause 2 requires
+  `status == 'active'`, clause 3 needs `resource.data.uid == request.auth.uid`
+  and an invited doc has `uid: ""`, and clause 4 requires
+  `email_verified == true`, which a password signup never has. So an ordinary
+  employee cannot see a pending invite or its expiry, and no clause ever exposes
+  the code itself (that lives only in `signupCodes`, denied to all clients).
+  Don't "open up" a clause to make an invite readable to its own claimant.
+- **Invite re-issue REFRESHES the invited doc's editable fields — every
+  re-issue call site must pass the stored record's CURRENT values.**
+  `performCreateInvite`'s re-issue branch *updates*
+  `name`/`firstName`/`lastName`/`phone`/`colorValue`/`jobTitle`/`role` with
+  whatever it is handed, so calling it with blanks silently wipes the invited
+  person's phone and job title. `PendingInviteTile` threads every argument off
+  `widget.employee`, pinned by a test with no `any()` matchers on the wipeable
+  fields. This is a trap, not a design — it bites Show code and Resend equally.
+  The matching UX consequence: **expanding the row IS the re-issue**, so the
+  caption under the code states the code is new *unconditionally*, and the
+  fetched code is cached in the tile's State keyed by the invite doc id, so
+  collapse → re-expand cannot re-mint (it would burn the admin's shared 20/hour
+  `createEmployeeInvite` budget and silently rotate the code every time).
 - **`watchEmployees()`** now filters `status == 'active'` — it no longer returns invited or
   disabled users. Use `watchAllUsers()` (admin-only) if all statuses are needed.
   All three `users` streams are bounded by the shared `_userStreamLimit` (500)

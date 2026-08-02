@@ -12,6 +12,7 @@ import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
 import 'package:scheduling/features/employees/widgets/cards/employee_card.dart';
+import 'package:scheduling/features/employees/widgets/cards/pending_invite_tile.dart';
 import 'package:scheduling/features/employees/widgets/sheets/edit_person_sheet.dart';
 import 'package:scheduling/features/employees/widgets/sheets/invite_person_sheet.dart';
 import 'package:scheduling/features/employees/widgets/views/employee_details_view.dart';
@@ -34,39 +35,52 @@ const _employee = EmployeeRecord(
   emergencyContact: 'Marie 514-555-0199',
 );
 
+final _invited = EmployeeRecord(
+  id: 'inv1',
+  name: 'Zoé Roy',
+  firstName: 'Zoé',
+  lastName: 'Roy',
+  email: 'zoe@example.com',
+  phone: '(514) 555-1234',
+  status: 'invited',
+  jobTitle: JobTitle.technician,
+  codeExpiresAt: DateTime(2026, 8, 16),
+);
+
 /// 375x667 is the reference phone; the sweep runs the redesigned Team surfaces
 /// across the text scales the app itself offers (the in-app XL setting is
 /// exactly 1.4) plus the OS extreme.
 const _scales = [0.8, 1.0, 1.4, 2.0];
 
-Widget _wrap(Widget child, double scale) => ProviderScope(
-  overrides: [
-    employeesRepositoryProvider.overrideWithValue(_MockRepo()),
-    isOfflineProvider.overrideWithValue(false),
-    employeeJobsTodayProvider.overrideWithValue(const {'e1': 3}),
-    employeeTodayJobsProvider('e1').overrideWithValue(const []),
-    futureAssignmentCountProvider('e1').overrideWith((_) async => 2),
-  ],
-  child: ThemeNotifier(
-    themeMode: ThemeMode.light,
-    toggleTheme: () {},
-    textScale: scale,
-    setTextScale: (_) {},
-    setLanguage: (_) {},
-    child: MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      theme: lightTheme(),
-      builder: (context, inner) => MediaQuery(
-        data: MediaQuery.of(
-          context,
-        ).copyWith(textScaler: TextScaler.linear(scale)),
-        child: inner ?? const SizedBox.shrink(),
+Widget _wrap(Widget child, double scale, {EmployeesRepository? repo}) =>
+    ProviderScope(
+      overrides: [
+        employeesRepositoryProvider.overrideWithValue(repo ?? _MockRepo()),
+        isOfflineProvider.overrideWithValue(false),
+        employeeJobsTodayProvider.overrideWithValue(const {'e1': 3}),
+        employeeTodayJobsProvider('e1').overrideWithValue(const []),
+        futureAssignmentCountProvider('e1').overrideWith((_) async => 2),
+      ],
+      child: ThemeNotifier(
+        themeMode: ThemeMode.light,
+        toggleTheme: () {},
+        textScale: scale,
+        setTextScale: (_) {},
+        setLanguage: (_) {},
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: lightTheme(),
+          builder: (context, inner) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: TextScaler.linear(scale)),
+            child: inner ?? const SizedBox.shrink(),
+          ),
+          home: Scaffold(body: child),
+        ),
       ),
-      home: Scaffold(body: child),
-    ),
-  ),
-);
+    );
 
 void main() {
   setUpAll(() {
@@ -80,6 +94,8 @@ void main() {
     // not build their lower half, so they sweep tall enough to lay all of it
     // out at once. The roster row and the detail view fit the reference phone.
     bool tall = false,
+    EmployeesRepository? repo,
+    Future<void> Function(WidgetTester tester)? after,
   }) async {
     for (final scale in _scales) {
       tester.view.physicalSize = tall
@@ -88,8 +104,9 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
 
-      await tester.pumpWidget(_wrap(build(), scale));
+      await tester.pumpWidget(_wrap(build(), scale, repo: repo));
       await tester.pumpAndSettle();
+      if (after != null) await after(tester);
 
       expect(
         tester.takeException(),
@@ -127,5 +144,46 @@ void main() {
 
   testWidgets('invite sheet survives every text scale', (tester) async {
     await sweep(tester, () => const InvitePersonSheet(), tall: true);
+  });
+
+  // The densest new layout in the project: the revealed 19px mono code and its
+  // Copy pill on one line, then two equal-width bordered actions. The roster
+  // hosts the tile inside a scrollable, so this sweep does too — vertical
+  // extent is the list's problem, horizontal overflow is the tile's.
+  testWidgets('the expanded pending-invite row survives every text scale', (
+    tester,
+  ) async {
+    final repo = _MockRepo();
+    when(
+      () => repo.createEmployeeInvite(
+        name: any(named: 'name'),
+        firstName: any(named: 'firstName'),
+        lastName: any(named: 'lastName'),
+        email: any(named: 'email'),
+        phone: any(named: 'phone'),
+        colorValue: any(named: 'colorValue'),
+        jobTitle: any(named: 'jobTitle'),
+        isAdmin: any(named: 'isAdmin'),
+      ),
+    ).thenAnswer((_) async => 'K7Q2-9MZ4-XR8T');
+
+    await sweep(
+      tester,
+      // A fresh key per scale: pumpWidget reuses the State otherwise, so the
+      // second tap would collapse an already-expanded row instead of opening
+      // it.
+      () => SingleChildScrollView(
+        child: PendingInviteTile(key: UniqueKey(), employee: _invited),
+      ),
+      repo: repo,
+      after: (tester) async {
+        await tester.tap(find.text('Zoé Roy'));
+        // The revealed code sits in a SelectableText whose cursor never
+        // settles, so pump a fixed span rather than settling.
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.text('K7Q2-9MZ4-XR8T'), findsOneWidget);
+      },
+    );
   });
 }

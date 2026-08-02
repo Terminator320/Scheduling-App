@@ -26,9 +26,14 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 
 ## Deployment status
 
-- **22 functions defined** in code; **21 deployed** — verified live against
+- **24 functions defined** in code; **21 deployed** — verified live against
   `schedulingapp-88727` on 2026-07-18. `recountClientJobs` (P3, 2026-08-01) is
-  NOT yet deployed; no client job count renders until it is. (v2, Node.js 24, 256 MB; `us-central1`
+  NOT yet deployed; no client job count renders until it is. `revokeInvite` and
+  `previewInvite` (P4b, 2026-08-02) are likewise NOT yet deployed — and that
+  deploy is **ordering-sensitive**: it also carries the widened
+  `redeemSignupCode` payload allowlist, and the live callable's allowlist is
+  still `Set(["code"])` and rejects unexpected keys, so a build carrying the
+  P4b client fails **every** invite acceptance until it lands. (v2, Node.js 24, 256 MB; `us-central1`
   except `validateUploadedImage` in `us-east1`). The 2026-07-18 deploy shipped
   `placesReverseGeocode`, the travel-aware `sendUpcomingJobReminders` rebuild,
   and the codebase-audit fixes (overdue-sweep ordering, bounded travel-context
@@ -96,6 +101,8 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `deleteAccount` | callable | `onCall` | `account.js` | `account_deletion_service.dart` | — | App Check ✓ · reauth ≤5min · durable 5/15min |
 | `createEmployeeInvite` | callable | `onCall` | `invites.js` | `firebase_employees_repository.dart` | — | App Check ✓ · admin · durable 20/hr·uid |
 | `redeemSignupCode` | callable | `onCall` | `invites.js` | `firebase_employees_repository.dart`, `auth_service.dart` | — | App Check ✓ · durable 5/15min·**email** |
+| `revokeInvite` | callable | `onCall` | `invites.js` | `firebase_employees_repository.dart` (pending-invite row) | — | App Check ✓ · admin · durable 20/hr·uid |
+| `previewInvite` | callable | `onCall` | `invites.js` | `firebase_employees_repository.dart` → `auth_service.dart` (invite code screen) | — | App Check ✓ · **unauthenticated** · durable 10/15min·**code hash** |
 | `waveBootstrap` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN`, `WAVE_BUSINESS_NAME` | App Check ✓ · admin · durable 10/hr |
 | `waveGetConnection` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings mount) | — | App Check ✓ · admin |
 | `waveSetImportSchedule` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings cadence picker) | — | App Check ✓ · admin |
@@ -147,7 +154,65 @@ invite email) and **activates the account atomically** (`uid` + `status:'active'
 code consumed). A valid code whose token email ≠ invite email returns a distinct
 `code-email-mismatch`. Rate-limited 5 per 15 min **by token email**, not caller
 uid — a failed signup mints a fresh uid, which would reset a uid-keyed cap.
-Both invite callables share `APP_CHECK = {enforceAppCheck: true}`.
+Every invite callable shares `APP_CHECK = {enforceAppCheck: true}`.
+
+**Widened by P4b (2026-08-02, not yet deployed):** the payload allowlist grew
+from `Set(["code"])` to also accept `firstName`, `lastName`, `phone`,
+`termsAccepted` and `locationConsent`, so the acceptance screen's profile rides
+the activation. The activation patch is built by the pure `buildActivationPatch`
+— it deletes `codeExpiresAt`, stamps `termsAcceptedAt`/`locationConsentAt`
+**only when the flags are actually sent** (the previously-shipped client sends
+just `code`, and a consent record for someone who never saw the checkbox would
+be false), and never writes an empty `name` (`watchAllUsers` orders by `name`
+and Firestore excludes docs missing the orderBy field). The old `{code}` payload
+still activates unchanged — the widening is a superset, which is why the deploy
+is safe in the backend-first direction only.
+
+### `revokeInvite` — `invites.js`
+Admin-only. Cancels a pending invite: one Firestore transaction deletes every
+`signupCodes` doc pointing at the invite (`where("inviteDocId", "==", …)`, a
+single-field auto-index) and then the `invited` `users` doc itself. **The
+transaction is what closes the revoke-vs-redeem race** — both flows transact
+over the same two docs, so a redeem that commits first flips `status` to
+`active` and this refuses with `failed-precondition / invite-not-pending`
+rather than deleting a just-activated account; a missing doc is
+`not-found / invite-not-found`. The transactional core is exported as
+`performRevokeInvite(db, inviteDocId)` for jest, mirroring
+`performCreateInvite`. Guard order is the standard one — auth → `assertAdmin` →
+`assertPayloadShape`/`requireString` → `enforceDurableRateLimit` (its own route
+key, 20/hr per admin uid) → work. An id containing `/` is rejected up front,
+because `.doc()` throws synchronously on it and would surface as an opaque
+`internal`. No rules change: the deletes are Admin SDK, and `allow delete` on
+`/users` stays withdrawn. The revoked row simply vanishes from the roster —
+the live stream drops it, and there is no tombstone state.
+
+### `previewInvite` — `invites.js`
+**The ONLY unauthenticated callable in this codebase.** Resolves a signup code
+to `{email, firstName, lastName, role, expiresAtMs}` so the acceptance flow can
+render the invited address **locked** ("From invite") and can honestly
+distinguish an *expired* code from an *invalid* one before the user invents a
+password. It has to be unauthenticated because the caller is accepting an
+invite and **has no account yet** — there is no uid to guard on and none to key
+a rate limit by; storage is sha256-only and `firestore.rules` denies all client
+access to `signupCodes`, so a code alone cannot resolve an email client-side.
+
+What stands in for the auth guard, in guard order:
+1. **App Check enforcement** (`enforceAppCheck: true`) — the endpoint only
+   answers genuine app builds.
+2. **`assertPayloadShape(req.data, new Set(["code"]))`** + `requireString`
+   (32-char cap, control-char reject) — validated before the limiter, so a
+   burst of malformed submissions can't exhaust a legitimate caller's window.
+3. **A durable rate limit keyed by the code hash**, 10 per 15 min. A caller
+   varying codes gets a fresh key each time, which is acceptable: at ~60 bits
+   of Crockford-base32 entropy online enumeration is not a real attack.
+
+Disclosing the invited email to someone already holding a valid code adds
+nothing an attacker didn't have — the code **is** the bearer credential for
+exactly that account. The response returns only the fields the details screen
+renders: never the doc id, the phone, or the colour. The code is never logged.
+Validity is judged by the shared pure `validateInvitePending` (the same helper
+`validateRedemption` builds on), so preview and redeem can never drift on what
+"pending" means.
 
 ## Maps / Places proxies
 

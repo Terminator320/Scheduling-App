@@ -3,7 +3,7 @@
 Loaded when working under `functions/`. Root context: `../CLAUDE.md`.
 
 Functions live in `functions/` (project `schedulingapp-88727`, region
-`us-central1`). `index.js` is now a thin wiring surface that re-exports all 22
+`us-central1`). `index.js` is now a thin wiring surface that re-exports all 24
 functions under their original names — the implementations are split into
 domain modules: `security.js` (shared callable guards — `assertPayloadShape`,
 `requireString`, `requireNumberInRange` (finite number in `[min,max]`; rejects
@@ -11,8 +11,17 @@ domain modules: `security.js` (shared callable guards — `assertPayloadShape`,
 `bridge.js` (`syncUsersByUid`), `client_propagation.js`
 (`propagateClientEdits`), `client_job_count.js` (`recountClientJobs`, backed by
 the pure `clientsToRecount`), `places.js`, `account.js`, `invites.js`
-(invited-employee signup codes — `createEmployeeInvite` + `redeemSignupCode`,
-backed by pure helpers in `signup_code_utils.js`), `maintenance.js`
+(the whole invite lifecycle — `createEmployeeInvite`, `redeemSignupCode`,
+`revokeInvite` (P4b: one transaction deleting the `signupCodes` doc and the
+still-`invited` `users` doc, refusing `invite-not-pending` if a redeem beat it)
+and `previewInvite` (P4b: the **only unauthenticated callable in the
+codebase** — the caller is accepting an invite and has no account yet, so App
+Check, `assertPayloadShape` and a per-code-hash durable limiter stand in for
+the identity guard; it resolves a code to the invited email the acceptance
+screen renders locked), backed by pure helpers in `signup_code_utils.js` —
+`validateInvitePending` is the shared pending half so preview and redeem can't
+drift, and `validateRedemption` layers the email-mismatch check on top of it,
+**checked before expiry**), `maintenance.js`
 (image validation + history purge; the pure JPEG/PNG magic-byte check lives in
 `image_magic.js`), `notifications.js` (FCM push triggers, backed by
 `notification_utils.js` and — for the travel-time reminder sweep —

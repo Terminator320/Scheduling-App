@@ -18,11 +18,12 @@ lib/
 │   ├── animations/                  Shared animation widgets (FadeInItem, TapScale, AnimatedLoadingButton, AnimatedFormFieldWrapper — transition-only field shake)
 │   ├── connectivity/                App-wide connectivity — connectivity_providers.dart + offline_banner.dart (OfflineBanner shown when the device drops offline; connectivity_plus)
 │   ├── constants/                   app_urls.dart — external URL constants (e.g. the Settings privacy-policy link)
+│   ├── deep_links/                  The one app_links consumer — deep_link_target.dart (pure classifyDeepLink(Uri) → sealed DeepLinkTarget: InviteLink / AppointmentLink / IgnoredLink) + deep_link_dispatcher.dart (initial link + stream, onError-guarded; routes by target). IgnoredLink covers any URI carrying `homeWidget` — both plugins observe the same openURL, so without that skip every widget/Live-Activity/Siri tap would open twice. The invite branch waits for /login via TopRouteObserver before pushing, and a live session gets an info notice, never an auto-sign-out
 │   ├── errors/                      Base Failure class + error_cause.dart (sanitized cause classifier + tagged notice composer)
 │   ├── images/                      Image picker (native resize/compress at pick time) + Firebase Storage upload service
 │   ├── launchers/                   external_uri_launcher.dart (launchExternalUri — the ONE launch+log+notice implementation; the others are thin wrappers over it) + phone_call_launcher.dart (launchPhoneCall — shared tel: dialer) + web_url_launcher.dart (launchWebUrl — external https: opener for the Settings privacy-policy link) + route_map_launcher.dart (launchGoogleMapsRoute — opens a prebuilt multi-stop directions URI); parallel AddressMapLauncher (keeps its own guard — it surfaces a sanctioned SnackBar, not a notice) / EmailComposeLauncher
 │   ├── layout/                      Responsive shell — MasterDetailScaffold, PrimaryScrollScope (per-pane PrimaryScrollController so simultaneously-alive primary scrollables don't share one — the app-wide Scrollbar needs one ScrollPosition per controller), breakpoints (context.isWide / isLandscape / isSplitLayout for the calendar Split; isTwoPane (shortestSide ≥ 600) for the list master-detail; isCompact / isNarrowWidth for small-phone & large-text row folding)
-│   ├── navigation/                  Sealed AppDestination = HubTab (4 IndexedStack panes) + PushedDestination (plain routes); destinationRoute, navigateToDestination, goHomeToCalendar, HubShellScope
+│   ├── navigation/                  Sealed AppDestination = HubTab (4 IndexedStack panes) + PushedDestination (plain routes); destinationRoute, navigateToDestination, goHomeToCalendar, HubShellScope; top_route_observer.dart (TopRouteObserver on MaterialApp.navigatorObservers — records the navigator's current top route name so the deep-link dispatcher can wait for /login instead of racing splash's pushReplacementNamed; deliberately no didRemove override, since pushNamedAndRemoveUntil pushes before it removes)
 │   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics) — `warn` records a non-fatal, `breadcrumb` only leaves a trail; `unhandled_error_severity.dart` gates the `fatal:` flag on main.dart's two global handlers so an unhandled `permission-denied` (auth teardown racing a live listener) is recorded, not filed as a crash
 │   ├── notices/                     In-app toast system: AppNotice types, NoticeService (stream), NoticeListener (widget)
 │   ├── notifications/               fcm_background_handler.dart — the top-level @pragma('vm:entry-point') isolate that rewrites the iOS widget from a content-available push while the app is closed; must stay dependency-light (no Firebase/Riverpod in that isolate)
@@ -55,11 +56,11 @@ lib/
 │   └── .gen/                        Auto-generated app_localizations*.dart (gitignored); regenerate with `flutter gen-l10n`
 │
 └── features/
-    ├── auth/                        Sign-in, account creation, password reset, account-status monitoring; activeUserIdentityProvider resolves (role, docId) for the off-screen schedule mirrors (widget + Siri) — null wipes them
+    ├── auth/                        Sign-in, invite acceptance, password reset, account-status monitoring; activeUserIdentityProvider resolves (role, docId) for the off-screen schedule mirrors (widget + Siri) — null wipes them. Restyled in P4b (2026-08-02) onto the hero-gradient + lifted-card chrome in AuthScaffold. Acceptance is TWO screens: accept_invite_code_screen (CodeEntryBoxes — twelve bordered mono boxes painted over ONE hidden TextField, so paste/backspace/focus have a single owner; Continue calls previewInvite, which is what distinguishes an expired code from an invalid one before the user invents a password) → accept_invite_details_screen (locked "From invite" email panel, stacked first/last, phone, password + PasswordStrengthMeter ABOVE the surviving PasswordRequirementsChecklist, one combined terms + location-consent checkbox gating the CTA). **create_account_screen.dart and AuthCodeField are DELETED**; signup_code_policy.dart is the client mirror of the server's hash normalization
     ├── calendar/                    Appointments — creation, editing, viewing, repeating series, image uploads (offline-durable via PendingUploadStore), day_route_screen (a day's stops numbered in start order, day picker + employee switcher → multi-stop maps handoff); JobTemplate quick-fill chips seed title/duration on the add form (display-only, never stored)
     ├── clients/                     Client management — CRUD, contacts, appointment history; client detail shows a Job history section (ClientJobHistorySection → fetchClientHistory, clientId-only single-field query sorted in Dart)
     ├── dashboard/                   Admin dashboard — pure stat reducers (DashboardAggregator) over one 8-week appointments range → hero/workload/trends/attention sections + fl_chart WeeklyBarChart
-    ├── employees/                   Team roster + person detail (rebuilt in P4, 2026-08-02). The user doc carries firstName/lastName, jobTitle (JobTitle enum — NOT the access role), a Sunday-indexed workingDays[7] + work start/end minutes, maxJobsPerDay (0 = no cap), onCall, and the emergencyContact/emergencyPhone pair (their own section on both the edit sheet and the detail view, apart from hours and access); `name` is always recomposed through composeEmployeeName so it can never go empty (watchAllUsers orders by it). Roster row shows "<jobTitle> · <n> jobs today" from ONE day-range listener reduced in Dart (employeeJobsTodayProvider), never a query per row. Detail = EmployeeProfileCard (avatar-as-colour-swatch + status/on-call chips + Edit pill) → Call/Email quick actions → KeyValuePanel → EmployeeTodaySection (AppointmentCards, renders "No jobs today" rather than omitting). EmployeeFormSheet split into InvitePersonSheet + EditPersonSheet on FormSheetFrame; disable/enable lives in the edit sheet footer with a future-assignment count caption. **There is no delete** — disable is the only removal (owner decision 2026-08-02).
+    ├── employees/                   Team roster + person detail (rebuilt in P4, 2026-08-02). The user doc carries firstName/lastName, jobTitle (JobTitle enum — NOT the access role), a Sunday-indexed workingDays[7] + work start/end minutes, maxJobsPerDay (0 = no cap), onCall, and the emergencyContact/emergencyPhone pair (their own section on both the edit sheet and the detail view, apart from hours and access); `name` is always recomposed through composeEmployeeName so it can never go empty (watchAllUsers orders by it). Roster row shows "<jobTitle> · <n> jobs today" from ONE day-range listener reduced in Dart (employeeJobsTodayProvider), never a query per row. Detail = EmployeeProfileCard (avatar-as-colour-swatch + status/on-call chips + Edit pill) → Call/Email quick actions → KeyValuePanel → EmployeeTodaySection (AppointmentCards, renders "No jobs today" rather than omitting). EmployeeFormSheet split into InvitePersonSheet + EditPersonSheet on FormSheetFrame; disable/enable lives in the edit sheet footer with a future-assignment count caption. **There is no delete** — disable is the only removal (owner decision 2026-08-02). An **invited** person's row is a PendingInviteTile instead (P4b): a dashed avatar and in-place expansion rather than a detail sheet, revealing the INVITE CODE block (Copy pill), the always-"new code" caption, and Resend / Revoke. **Expanding IS a re-issue**, so the fetched code is cached per invite doc id for the row's lifetime and every re-issue argument comes from the stored record; revoking deletes the doc and the live stream drops the row.
     ├── feature_tour/                In-app guided tours (showcaseview 5.x) — one FeatureTourHost per hub tab registers its own scope and auto-starts once per tab (device-local tourSeenProvider / SharedPreferences); tourStepsFor is the pure role-aware step catalog, screens wire per-step GlobalKeys and pass ready:false while their body is a loading placeholder; Settings "Replay app tour" row is the only reset
     ├── home_widget/                 iOS home-screen schedule widget — WidgetSyncService writes a two-day payload (todayJobs + tomorrowJobs + on-device rolloverAt) into the App Group (home_widget); mirrors functions/widget_payload_utils.js; the today bucket is endTime-based for isAllDay records and nextJob prefers a timed job; Android no-op
     ├── live_activity/               iOS "time to leave" Lock Screen / Dynamic Island card — LiveActivityRegistrationController upserts the device push-to-start token + one update token per live card into users/{docId}/liveActivityTokens; canHostCards() is the single capability probe; liveActivityEnabledProvider is the device-local opt-out whose Settings toggle must also unregister(). Cards are push-STARTED by functions/live_activity_dispatch.js; Android no-op
@@ -486,7 +487,7 @@ These must not be broken:
 
 6. **All Firestore writes go through service/repository classes.** Never call `FirebaseFirestore.instance` from UI widgets.
 
-7. **Cloud Function endpoints are rate-limited and input-validated.** Auth-sensitive callables (`deleteAccount`, `redeemSignupCode`) cap callers at 5 attempts / 15 min via the Firestore-backed `enforceDurableRateLimit` (counters in `rateLimits/*`, denied to all clients); the admin-only `createEmployeeInvite` is capped per admin uid (20 / hour) as defense-in-depth against a compromised session mass-minting invites. Every callable runs `assertPayloadShape` (rejects non-object, >4 KB, or unexpected-key payloads) and validates string fields (trim, length cap, control-char reject) before use. These shared guards live in `functions/security.js`; `functions/index.js` is thin wiring that re-exports each function from its domain module.
+7. **Cloud Function endpoints are rate-limited and input-validated.** Auth-sensitive callables (`deleteAccount`, `redeemSignupCode`) cap callers at 5 attempts / 15 min via the Firestore-backed `enforceDurableRateLimit` (counters in `rateLimits/*`, denied to all clients); the admin-only `createEmployeeInvite` and `revokeInvite` are capped per admin uid (20 / hour each) as defense-in-depth against a compromised session mass-minting or mass-cancelling invites. **`previewInvite` is the one unauthenticated callable** — the caller is accepting an invite and has no account yet, so App Check enforcement, `assertPayloadShape` and a durable limiter keyed by the **code hash** (10 / 15 min) stand in for the identity guard; it discloses only the invited email/name/role/expiry to someone already holding the code, which is that account's bearer credential. Every callable runs `assertPayloadShape` (rejects non-object, >4 KB, or unexpected-key payloads) and validates string fields (trim, length cap, control-char reject) before use. These shared guards live in `functions/security.js`; `functions/index.js` is thin wiring that re-exports each function from its domain module.
 
 ---
 
@@ -546,11 +547,36 @@ admin "Invite" → createEmployeeInvite callable (admin-only, assertAdmin)
       returns the plaintext code ONCE (copy dialog, shared out-of-band).
       Idempotent: re-inviting a still-'invited' email re-issues a fresh code.
 
-create_account_screen → AuthService.signUpWithCode(email, password, code)
+admin expands the invited roster row (PendingInviteTile) → createEmployeeInvite
+  └── RE-ISSUES: the previously shared code stops working at that moment, so
+      the caption always says the code is new, and the fetched code is cached
+      per invite doc id so collapse/re-expand can't re-mint. Every argument is
+      taken off the stored record — the re-issue branch UPDATES
+      name/phone/colour/jobTitle/role with whatever it is handed.
+  └── Revoke → revokeInvite callable (admin-only): one transaction deletes the
+      signupCodes doc(s) + the still-'invited' users doc; refuses
+      'invite-not-pending' if a redeem committed first. The row then vanishes
+      from the live stream — there is no tombstone state.
+
+accept_invite_code_screen (12 mono boxes over one hidden TextField)
+  └── previewInvite callable → {email, firstName, lastName, role, expiresAtMs}
+        [the ONLY unauthenticated callable — the caller has no account yet;
+         App Check + assertPayloadShape + a per-code-hash 10/15min durable
+         limiter stand in for the identity guard. A valid code is already the
+         bearer credential for that account, so disclosing its email adds
+         nothing — and it is what lets the screen say 'expired' vs 'invalid'.]
+        → AuthFailureInvalidSignupCode / AuthFailureSignupCodeExpired
+
+accept_invite_details_screen (email LOCKED from the preview; names, phone,
+password, one combined terms + location-consent checkbox gating the CTA)
+  └── AuthService.signUpWithCode(email, password, code, firstName, lastName,
+  │     phone, termsAccepted, locationConsent)
   ├── register (or adopt on email-already-in-use)
   ├── redeemSignupCode callable → validates (14-day expiry; token email ==
   │     invite email), atomically sets uid + status:'active', consumes the
-  │     code   [Admin SDK only — no client self-activation]
+  │     code, writes the profile fields, deletes codeExpiresAt, and stamps
+  │     termsAcceptedAt/locationConsentAt ONLY when the flags are sent
+  │     [Admin SDK only — no client self-activation]
   │     [rate-limited by token email, not caller uid — see Security Invariant]
   └── on failure → roll back the just-created Auth user (re-auth then delete;
         AuthFailureAccountCreationIncomplete if the rollback itself fails):
@@ -560,9 +586,20 @@ create_account_screen → AuthService.signUpWithCode(email, password, code)
 On success the user is active + signed in; login routes them into MainCalendar.
 ```
 
+An `esproschedule://invite?code=…` deep link enters the same flow through
+`core/deep_links/` — the dispatcher pushes the code screen only once `/login` is
+the top route, and a **signed-in** user gets an info notice instead (redemption
+needs the new account's own session, and an inbound URL must never tear down a
+live one).
+
 There is no email-verification step. `signupCodes` (doc id = `sha256(code)`,
 holding `{inviteDocId, email, expiresAt}`) is denied to all clients in
-`firestore.rules` — only the Admin SDK reads/writes it.
+`firestore.rules` — only the Admin SDK reads/writes it. The expiry is mirrored
+onto the invited `users` doc as `codeExpiresAt` purely so the admin's Team row
+can render it; by the four read clauses that field is admin-visible only.
+`codeExpiresAt`, `termsAcceptedAt` and `locationConsentAt` are function-owned:
+they sit on the `/users` update denylist and `EmployeeRecord.toMap()` never
+emits them.
 
 ### Live Kick-Out (already logged in)
 
@@ -620,6 +657,22 @@ users/{docId}
                        (redeemSignupCode) — there is no client self-activation.
   status: 'active' | 'disabled' | 'invited'
   colorValue: string   int-as-string; drives appointment card borders and avatars
+  firstName, lastName  P4; `name` is always recomposed from them through
+                       composeEmployeeName and can never go empty
+  jobTitle: string     '' | lead_tech | technician | apprentice | dispatcher —
+                       what someone DOES; `role` remains the access flag
+  workingDays: bool[7] Sunday-indexed; workStartMinutes / workEndMinutes
+  maxJobsPerDay: int   0 = no cap · onCall: bool
+  emergencyContact, emergencyPhone
+  ── function-owned (P4b), on the /users update denylist, never in toMap() ──
+  codeExpiresAt: ts    mirror of the pending code's expiry so the admin Team row
+                       can render it; stamped on both createEmployeeInvite
+                       branches, deleted by redeemSignupCode at activation
+  termsAcceptedAt: ts  stamped by redeemSignupCode ONLY when the acceptance
+  locationConsentAt: ts payload actually carries the flag as true — the older
+                       client sends just `code`, and an unconditional stamp
+                       would be a consent record for someone who never
+                       saw the checkbox
 
 users/{docId}/fcmTokens/{token}   FCM push tokens, one doc per device (doc id =
                        the token). Owner-only per firestore.rules, shape-locked
@@ -705,17 +758,24 @@ usersByUid/{uid}       Bridge maintained by the syncUsersByUid Cloud Function.
   status: 'active' | 'disabled'
 
 rateLimits/{route__uid}  True sliding window written by enforceDurableRateLimit.
-  route: string        endpoint id ('deleteAccount' | 'redeemSignupCode' | 'createEmployeeInvite')
+  route: string        endpoint id ('deleteAccount' | 'redeemSignupCode' |
+                       'createEmployeeInvite' | 'revokeInvite' | 'previewInvite')
+                       — keyed by uid except redeemSignupCode (token email) and
+                       previewInvite (the code hash; it has no authed caller)
   attempts: [number]   epoch-ms timestamps; entries older than the window are
                        dropped each call, and a call is rejected when >= max remain
   expiresAt: timestamp optional Firestore TTL target
 
 signupCodes/{sha256(code)}  One-time invited-signup codes (hash only — the
                        plaintext is returned once at creation, never stored).
-                       Created by createEmployeeInvite, consumed by redeemSignupCode.
+                       Created by createEmployeeInvite, read by previewInvite,
+                       consumed by redeemSignupCode, deleted by revokeInvite.
   inviteDocId: string  → users/{docId}
   email: string        must equal the redeemer's auth token email
-  expiresAt: timestamp 14-day lifetime; expired codes rejected (read+write denied)
+  expiresAt: timestamp 14-day lifetime; expired codes rejected (read+write denied).
+                       Mirrored onto the invited users doc as codeExpiresAt so
+                       the admin's Team row can render it (clients can never
+                       read this collection); deleted again at activation.
 
 appointmentReminders/{apptId_startMs_employeeDocId}   Per-recipient idempotency
                        ledger for the 30-min reminder sweep: create() fails if
