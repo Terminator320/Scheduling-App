@@ -13,7 +13,7 @@ import 'package:scheduling/features/employees/domain/models/employee_record.dart
 import 'package:scheduling/features/employees/widgets/cards/employee_card.dart';
 import 'package:scheduling/features/employees/widgets/sheets/edit_person_sheet.dart';
 import 'package:scheduling/features/employees/widgets/sheets/employee_details_sheet.dart';
-import 'package:scheduling/features/employees/widgets/sheets/employee_form_sheet.dart';
+import 'package:scheduling/features/employees/widgets/sheets/invite_person_sheet.dart';
 import 'package:scheduling/features/employees/widgets/views/employee_details_view.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
@@ -82,46 +82,43 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         .toSet();
   }
 
-  Future<void> _openEmployeeSheet({EmployeeRecord? employee}) async {
-    // Every status counts as taken, not just active ones: a DISABLED
-    // employee's colour must stay reserved (re-enabling them would otherwise
-    // collide with whoever took it, and the crew colour is what the appointment
-    // bar and the calendar dots are keyed on), and an INVITED employee's colour
-    // was already reserved by the invite. `employeesStreamProvider` filters to
-    // active, so it is the wrong source here.
+  /// Every status counts as taken, not just active ones: a DISABLED employee's
+  /// colour must stay reserved (re-enabling them would otherwise collide with
+  /// whoever took it, and the crew colour is what the appointment bar and the
+  /// calendar dots are keyed on), and an INVITED employee's colour was already
+  /// reserved by the invite. `employeesStreamProvider` filters to active, so it
+  /// is the wrong source here.
+  Set<int> _usedColorsFor(String? excludeId) {
     final employees =
         ref.read(allUsersStreamProvider).asData?.value ?? const [];
-    final usedColors = _usedColors(employees, excludeId: employee?.id);
+    return _usedColors(employees, excludeId: excludeId);
+  }
 
-    // The edit sheet announces its own success notice and returns the saved
-    // record; the invite sheet still returns a bool.
-    if (employee != null) {
-      final saved = await showEditPersonSheet(
-        context,
-        employee,
-        usedColors: usedColors,
-      );
-      if (!mounted) return;
-      await SheetFocus.unfocusAfterSheet();
-      if (!mounted) return;
-      if (saved != null) setState(() => _selectedEmployee = saved);
-      return;
-    }
-
-    final result = await showAppBottomSheet<Object?>(
+  Future<void> _openInviteSheet() async {
+    final created = await showInvitePersonSheet(
       context,
-      builder: (_) => EmployeeFormSheet(usedColors: usedColors),
+      usedColors: _usedColorsFor(null),
     );
-
     if (!mounted) return;
     await SheetFocus.unfocusAfterSheet();
-    if (!mounted) return;
+    if (!mounted || created != true) return;
+    ref
+        .read(noticeServiceProvider)
+        .success(context.l10n.employees_employeeAddedSuccessfully);
+  }
 
-    if (result == true) {
-      ref
-          .read(noticeServiceProvider)
-          .success(context.l10n.employees_employeeAddedSuccessfully);
-    }
+  Future<void> _openEditSheet(EmployeeRecord employee) async {
+    final updated = await showEditPersonSheet(
+      context,
+      employee,
+      usedColors: _usedColorsFor(employee.id),
+    );
+    if (!mounted) return;
+    await SheetFocus.unfocusAfterSheet();
+    if (!mounted || updated == null) return;
+    // The sheet already pushed its own "Changes saved" notice; keep the detail
+    // pane's snapshot in step with the live stream.
+    setState(() => _selectedEmployee = updated);
   }
 
   Future<void> _onEmployeeTap(EmployeeRecord employee) async {
@@ -151,7 +148,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     if (!mounted) return;
     // Edit is the only action the detail sheet can raise: disable/enable moved
     // into the edit sheet (which announces its own notice) and delete is gone.
-    if (result == 'edit') await _openEmployeeSheet(employee: employee);
+    if (result == 'edit') await _openEditSheet(employee);
   }
 
   void _clearSearch() {
@@ -307,7 +304,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
                 child: FloatingActionButton(
                   // Needs to be unique across tabs, since IndexedStack keeps every tab's FAB mounted at the same time.
                   heroTag: 'employeesAddFab',
-                  onPressed: _openEmployeeSheet,
+                  onPressed: _openInviteSheet,
                   tooltip: context.l10n.employees_inviteEmployee,
                   child: const Icon(Icons.add),
                 ),
@@ -325,7 +322,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
                   key: ValueKey(selected.id),
                   employee: selected,
                   isCurrentUserAdmin: widget.isAdmin,
-                  onEdit: () => _openEmployeeSheet(employee: selected),
+                  onEdit: () => _openEditSheet(selected),
                 ),
           placeholder: _buildDetailPlaceholder(),
         ),

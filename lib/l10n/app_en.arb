@@ -2366,6 +2366,14 @@
   "@common_yes": {
     "description": "Affirmative value in a read-only detail row"
   },
+  "employees_invitePerson": "Invite person",
+  "@employees_invitePerson": {
+    "description": "Title of the invite-person form sheet"
+  },
+  "employees_invitedNote": "They'll appear as Invited until they sign up with the code you share.",
+  "@employees_invitedNote": {
+    "description": "Advisory note at the bottom of the invite sheet"
+  },
   "employees_editPerson": "Edit person",
   "@employees_editPerson": {
     "description": "Title of the edit-person form sheet"
