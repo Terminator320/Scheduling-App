@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
@@ -10,12 +9,12 @@ import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/employees/application/employee_form_controller.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 import 'package:scheduling/features/employees/domain/policies/starting_password_policy.dart';
+import 'package:scheduling/features/employees/widgets/fields/credential_line.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/user_status_chip.dart';
@@ -42,7 +41,6 @@ class PendingInviteTile extends ConsumerStatefulWidget {
 class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
   bool _expanded = false;
   bool _copied = false;
-  bool _reset = false;
 
   /// The re-issued credentials, held only after a Reset password. Null means
   /// the row is showing the account as created. A credential either way: it
@@ -94,7 +92,6 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
           _credentials = credentials;
           _credentialsFor = employee.id;
           _copied = false;
-          _reset = true;
         });
       case EmployeeSaveFailed(:final error):
         notices.error(
@@ -115,7 +112,7 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
   Future<void> _remove() async {
     final l10n = context.l10n;
     final notices = ref.read(noticeServiceProvider);
-    if (ref.read(employeeFormControllerProvider).isRevoking) return;
+    if (ref.read(employeeFormControllerProvider).isDeletingAccount) return;
     if (guardedOffline(
       context,
       ref,
@@ -157,16 +154,13 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
     }
   }
 
-  /// Copies both halves together: an admin pasting this into a message wants
-  /// the pair, and copying only the password loses which account it opens.
   void _copy(String email, String password) {
-    Clipboard.setData(ClipboardData(text: '$email\n$password'));
+    copyCredentialsToClipboard(email: email, password: password);
     setState(() => _copied = true);
   }
 
   @override
   Widget build(BuildContext context) {
-    final activity = ref.watch(employeeFormControllerProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -181,8 +175,17 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
           duration: MediaQuery.disableAnimationsOf(context)
               ? Duration.zero
               : AppDuration.normal,
+          // The activity provider is app-wide and shared with both person
+          // sheets, so watching it from the tile root rebuilt every visible
+          // pending row — header, avatar CustomPaint and all — whenever any
+          // employee anywhere was saved. Only the expanded body reads it.
           child: _expanded
-              ? _buildBody(context, activity)
+              ? Consumer(
+                  builder: (context, ref, _) => _buildBody(
+                    context,
+                    ref.watch(employeeFormControllerProvider),
+                  ),
+                )
               : const SizedBox(width: double.infinity),
         ),
       ],
@@ -308,12 +311,15 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
           ],
           const SizedBox(height: AppSpacing.sp16),
           _ActionRow(
-            resetLabel: _reset
+            // Derived from the cached credentials, not a separate latch: a
+            // recycled State showing a different employee has no cached
+            // credentials, and must not claim their password was just reset.
+            resetLabel: reissued != null
                 ? l10n.employees_passwordReset
                 : l10n.employees_resetPassword,
             onReset: activity.isSaving ? null : _resetPassword,
-            onRemove: activity.isRevoking ? null : _remove,
-            isRemoving: activity.isRevoking,
+            onRemove: activity.isDeletingAccount ? null : _remove,
+            isRemoving: activity.isDeletingAccount,
           ),
         ],
       ),
@@ -370,9 +376,9 @@ class _CredentialsBlock extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        _CredentialLine(label: l10n.common_email, value: email),
+        CredentialLine(label: l10n.common_email, value: email),
         const SizedBox(height: AppSpacing.sp8),
-        _CredentialLine(
+        CredentialLine(
           label: l10n.employees_temporaryPassword,
           value: password,
         ),
@@ -399,45 +405,12 @@ class _CredentialsBlock extends StatelessWidget {
               ],
             )
           : Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(child: values),
                 const SizedBox(width: AppSpacing.sp8),
                 copyButton,
               ],
             ),
-    );
-  }
-}
-
-/// Selectable because copy-to-clipboard can fail, and reading a password off
-/// the screen to type it by hand is the floor this has to keep working at.
-class _CredentialLine extends StatelessWidget {
-  const _CredentialLine({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: theme.monoType.micro.copyWith(color: theme.palette.textMuted),
-        ),
-        const SizedBox(height: 2),
-        SelectableText(
-          value,
-          style: theme.monoType.data.copyWith(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
     );
   }
 }

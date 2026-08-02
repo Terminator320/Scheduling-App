@@ -1,10 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
+import 'package:scheduling/features/employees/widgets/fields/credential_line.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 /// Shows the sign-in credentials after creating an employee account — an
@@ -23,8 +23,7 @@ Future<void> showNewAccountDialog(
     // we do in the Material branch.
     return showCupertinoDialog<void>(
       context: context,
-      builder: (ctx) =>
-          _NewAccountDialog(name: name, credentials: credentials),
+      builder: (ctx) => _NewAccountDialog(name: name, credentials: credentials),
     );
   }
   return showDialog<void>(
@@ -47,13 +46,10 @@ class _NewAccountDialog extends StatefulWidget {
 class _NewAccountDialogState extends State<_NewAccountDialog> {
   bool _copied = false;
 
-  /// Copies both halves together: an admin pasting this into a message wants
-  /// the pair, and copying only the password loses which account it opens.
   void _copy() {
-    Clipboard.setData(
-      ClipboardData(
-        text: '${widget.credentials.email}\n${widget.credentials.password}',
-      ),
+    copyCredentialsToClipboard(
+      email: widget.credentials.email,
+      password: widget.credentials.password,
     );
     setState(() => _copied = true);
   }
@@ -136,9 +132,8 @@ class _NewAccountDialogState extends State<_NewAccountDialog> {
   }
 }
 
-/// One labelled, selectable credential. Selectable because copy-to-clipboard
-/// can fail and reading a password off a screen to type it by hand is the
-/// floor this has to keep working at.
+/// A [CredentialLine] on its own tinted panel — the dialog tints each line,
+/// where the roster row tints the pair.
 class _CredentialRow extends StatelessWidget {
   const _CredentialRow({required this.label, required this.value});
 
@@ -147,8 +142,6 @@ class _CredentialRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(
@@ -156,28 +149,10 @@ class _CredentialRow extends StatelessWidget {
         horizontal: AppSpacing.sp12,
       ),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(AppRadius.r8),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: theme.monoType.micro.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sp4),
-          SelectableText(
-            value,
-            style: theme.monoType.data.copyWith(
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
+      child: CredentialLine(label: label, value: value),
     );
   }
 }

@@ -126,12 +126,20 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
       confirmErr = l10n.validation_passwordsDoNotMatch;
     }
 
-    setState(() {
-      _firstNameError = firstErr;
-      _lastNameError = lastErr;
-      _passwordError = passwordErr;
-      _confirmError = confirmErr;
-    });
+    // Only rebuild when a message actually changed: after the first failed
+    // submit this runs on EVERY keystroke in EVERY field, and an unconditional
+    // setState there rebuilds the whole form to redraw identical error text.
+    if (firstErr != _firstNameError ||
+        lastErr != _lastNameError ||
+        passwordErr != _passwordError ||
+        confirmErr != _confirmError) {
+      setState(() {
+        _firstNameError = firstErr;
+        _lastNameError = lastErr;
+        _passwordError = passwordErr;
+        _confirmError = confirmErr;
+      });
+    }
 
     return firstErr == null &&
         lastErr == null &&
@@ -144,11 +152,11 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
     if (_bannerError != null) setState(() => _bannerError = null);
   }
 
-  void _onPasswordChanged() {
-    // Rebuild so the meter and the checklist track every keystroke.
-    setState(() {});
-    _onFieldChanged();
-  }
+  /// No `setState` here: the meter and the checklist listen to the controller
+  /// directly (see `_passwordFeedback`), so a keystroke repaints those two
+  /// widgets instead of rebuilding all five fields, the consent row and the
+  /// submit button.
+  void _onPasswordChanged() => _onFieldChanged();
 
   Future<void> _finishSetup() async {
     FocusScope.of(context).unfocus();
@@ -259,6 +267,14 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
   /// Abandoning setup has to be possible: the person is holding a live session
   /// on an account that can read nothing, and the only way back to the sign-in
   /// screen is to drop it.
+  ///
+  /// A plain `signOut`, deliberately — NOT the `AccountExitListeners` teardown
+  /// the Settings sign-out runs first. That order is load-bearing because push,
+  /// presence and Live Activity de-registration each need the credential
+  /// sign-out revokes; an `invited` account has none of those registrations to
+  /// begin with (the rules deny it every collection they write to), so there is
+  /// nothing to tear down. If a future registration ever starts before
+  /// activation, this has to route through the shared exit path instead.
   Future<void> _signOut() async {
     await _authService.signOut();
     if (!mounted) return;
@@ -346,10 +362,7 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
             onChanged: _onPasswordChanged,
             onToggleObscured: () => setState(() => _isObscured = !_isObscured),
           ),
-          const SizedBox(height: AppSpacing.sp8),
-          PasswordStrengthMeter(password: _passwordController.text),
-          const SizedBox(height: AppSpacing.sp8),
-          PasswordRequirementsChecklist(password: _passwordController.text),
+          _passwordFeedback(),
           const SizedBox(height: AppSpacing.sp16),
           AuthPasswordField(
             label: l10n.auth_confirmPassword,
@@ -396,6 +409,27 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
       ),
     );
   }
+
+  /// The strength meter and the requirements checklist, rebuilt from the
+  /// controller rather than from screen state.
+  ///
+  /// These two are the only things on the form that track the password on
+  /// every keystroke, and `TextEditingController` is already a
+  /// `ValueListenable` — so scoping the listen here keeps a keypress from
+  /// rebuilding the five fields, the consent row and the submit button around
+  /// them.
+  Widget _passwordFeedback() => ValueListenableBuilder<TextEditingValue>(
+    valueListenable: _passwordController,
+    builder: (context, value, _) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: AppSpacing.sp8),
+        PasswordStrengthMeter(password: value.text),
+        const SizedBox(height: AppSpacing.sp8),
+        PasswordRequirementsChecklist(password: value.text),
+      ],
+    ),
+  );
 }
 
 /// Explains why this screen exists at all: they signed in with a password

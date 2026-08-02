@@ -26,7 +26,6 @@ import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
-import 'package:scheduling/shared/widgets/feedback/user_status_chip.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
 import 'package:scheduling/shared/widgets/primitives/fade_in_item.dart';
 import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
@@ -50,7 +49,6 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
   EmployeeRecord? _selectedEmployee;
 
   late final _tour = TourSteps(HubTab.employees, isAdmin: widget.isAdmin);
-
 
   @override
   void dispose() {
@@ -104,14 +102,11 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     setState(() => _selectedEmployee = updated);
   }
 
-  static bool _isInvited(EmployeeRecord employee) =>
-      UserStatus.fromRaw(employee.status) == UserStatus.invited;
-
   Future<void> _onEmployeeTap(EmployeeRecord employee) async {
     // An invited person expands in place inside PendingInviteTile — there is
     // no detail page worth opening, and the sheet's actions all assume an
     // account that exists.
-    if (_isInvited(employee)) return;
+    if (employee.isInvited) return;
     _clearSearch();
     await Future<void>.delayed(const Duration(milliseconds: 80));
     if (!mounted) return;
@@ -241,7 +236,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
             return FadeInItem(
               key: ValueKey(employee.id),
               index: index,
-              child: _isInvited(employee)
+              child: employee.isInvited
                   ? PendingInviteTile(employee: employee)
                   : EmployeeCard(
                       employee: employee,

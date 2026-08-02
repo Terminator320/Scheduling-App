@@ -10,8 +10,8 @@ import 'package:scheduling/features/employees/application/employee_schedule_prov
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
-import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
+import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 import 'package:scheduling/features/employees/widgets/cards/employee_card.dart';
 import 'package:scheduling/features/employees/widgets/cards/pending_invite_tile.dart';
 import 'package:scheduling/features/employees/widgets/sheets/edit_person_sheet.dart';
@@ -35,7 +35,7 @@ const _employee = EmployeeRecord(
   onCall: true,
 );
 
-final _invited = EmployeeRecord(
+const _invited = EmployeeRecord(
   id: 'inv1',
   name: 'Zoé Roy',
   firstName: 'Zoé',
@@ -168,7 +168,6 @@ void main() {
       (_) async => const NewAccountCredentials(
         email: 'zoe@example.com',
         password: 'Welcome123!',
-        docId: 'inv1',
       ),
     );
 

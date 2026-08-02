@@ -175,7 +175,7 @@ void main() {
   });
 
   group('server-owned read-only fields', () {
-    test('fromMap reads codeExpiresAt and createdAt', () {
+    test('fromMap reads createdAt', () {
       final created = DateTime(2026, 8, 2, 14);
       final record = EmployeeRecord.fromMap('e1', {
         'name': 'Theo Roy',
@@ -186,7 +186,7 @@ void main() {
       expect(record.createdAt, created);
     });
 
-    test('both are null when absent', () {
+    test('createdAt is null when absent', () {
       final record = EmployeeRecord.fromMap('e1', const {'name': 'Theo'});
 
       expect(record.createdAt, isNull);

@@ -19,7 +19,7 @@ So:
 
 | Direction | What happens |
 |---|---|
-| **New app build → old functions** | Every affected callable **fails outright.** P4b's build sends `firstName`/`phone`/`termsAccepted`… to a `redeemSignupCode` whose live allowlist is `Set(["code"])` → *every invite acceptance dies.* |
+| **New app build → old functions** | Every affected callable **fails outright.** P4c's build calls `createEmployeeAccount` / `completeEmployeeSetup` / `deleteEmployeeAccount`, which do not exist until it deploys → *no employee can be created or set up at all.* |
 | **Old app build → new functions** | Fine **if** each new allowlist is a superset and each new field is optional. That is the contract to preserve — see the check below. |
 
 The asymmetry is the whole point: the backend must always be able to serve the
@@ -75,9 +75,9 @@ For **every callable whose payload handling changed**, answer two questions.
 
 ```bash
 # deployed
-git show <last-deploy-commit>:functions/invites.js | grep -n "assertPayloadShape" -A 4
+git show <last-deploy-commit>:functions/employee_accounts.js | grep -n "assertPayloadShape" -A 4
 # local
-grep -n "assertPayloadShape" -A 4 functions/invites.js
+grep -n "assertPayloadShape" -A 4 functions/employee_accounts.js
 ```
 
 If a key was **removed** from an allowlist, the currently-installed build breaks
@@ -102,7 +102,7 @@ including by `deactivateEmployee`.
 Two real examples from this repo:
 
 - `phone` is capped at **40** in rules, not `TextLimits.phone`, because
-  `createEmployeeInvite` accepts 40.
+  `createEmployeeAccount` accepts 40.
 - `employeeIds` was briefly capped at **30** (reasoning from
   `whereArrayContainsAny`) — wrong: that is a *query* chunk size, not an
   assignment limit, and nothing bounds the picker client-side. It is **500**,
@@ -211,4 +211,4 @@ what production is running.
 |---|---|---|---|---|
 | 2026-07-18 | — | functions, rules | 21 | `placesReverseGeocode`, travel-aware reminder rebuild |
 | 2026-08-01 | `d916b16` | functions, rules | 22 | P3 clients; added `recountClientJobs` |
-| _(pending)_ | — | functions, rules | 24 | P4 + P4b: adds `revokeInvite`, `previewInvite`; widens `createEmployeeInvite` + `redeemSignupCode` allowlists; `private/emergency` rule; `isValidAppointmentData`. **Must land before any build carrying P4b.** |
+| _(pending)_ | — | functions, rules | 23 | P4 + P4b + **P4c**: deletes `createEmployeeInvite`, `redeemSignupCode`, `revokeInvite`, `previewInvite` and adds `createEmployeeAccount`, `completeEmployeeSetup`, `deleteEmployeeAccount`; drops the `signupCodes` rules block and `codeExpiresAt`; narrows `/users` read to three clauses; `private/emergency` rule; `isValidAppointmentData`. **Ordering-sensitive in BOTH directions — ship the app build and the backend together.** The CLI will prompt to confirm the four deletions; that is expected. |

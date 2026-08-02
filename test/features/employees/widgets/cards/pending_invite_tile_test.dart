@@ -20,7 +20,7 @@ import 'package:scheduling/l10n/l10n.dart';
 
 class _MockRepo extends Mock implements EmployeesRepository {}
 
-final _invited = EmployeeRecord(
+const _invited = EmployeeRecord(
   id: 'inv1',
   name: 'Zoé Roy',
   firstName: 'Zoé',
@@ -56,7 +56,6 @@ void main() {
       (_) async => const NewAccountCredentials(
         email: 'zoe@example.com',
         password: 'Reset456!',
-        docId: 'inv1',
       ),
     );
     when(() => repo.deleteEmployeeAccount(any())).thenAnswer((_) async {});

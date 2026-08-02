@@ -167,7 +167,7 @@ service cloud.firestore {
       // P4 field guards. NOTE the deliberate asymmetry: `name`, `email` and
       // `phone` are capped at the widest value a shipped write path can already
       // have produced (createEmployeeAccount allows phone up to 40 while
-      // TextLimits.phone is 32), NOT at the client-side limit. A cap tighter
+      // TextLimits.phone is 24), NOT at the client-side limit. A cap tighter
       // than an existing stored value would make that doc permanently
       // un-updatable — including by deactivateEmployee.
       function isValidJobTitle(t) {

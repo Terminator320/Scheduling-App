@@ -10,8 +10,9 @@ class TextLimits {
   static const int firstName = 200;
   static const int lastName = 200;
 
-  /// Each half of a `users` name. 100, matching `createEmployeeInvite`'s
-  /// server cap exactly — a client cap ABOVE the server's lets the field
+  /// Each half of a `users` name. 100, matching the `createEmployeeAccount`
+  /// and `completeEmployeeSetup` server caps exactly — a client cap ABOVE the
+  /// server's lets the field
   /// accept a value the callable then rejects as `invalid-argument`, which
   /// surfaces as an unexplained "Something went wrong" the user cannot fix.
   static const int employeeNameHalf = 100;
@@ -37,6 +38,4 @@ class TextLimits {
   static const int clientBillingTerms = 200;
 
   static const int employeeEmergencyContact = 200;
-
-  static const int signupCode = 32;
 }

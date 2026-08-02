@@ -8,8 +8,8 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
-import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
+import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 
 class _MockEmployeesRepo extends Mock implements EmployeesRepository {}
 
@@ -75,7 +75,6 @@ void main() {
         (_) async => const NewAccountCredentials(
           email: 'alex@test.com',
           password: 'Welcome123!',
-          docId: 'doc-1',
         ),
       );
 
@@ -207,7 +206,7 @@ void main() {
 
       expect(outcome, isA<AccountDeleted>());
       verify(() => repo.deleteEmployeeAccount('doc-1')).called(1);
-      expect(activity().isRevoking, isFalse);
+      expect(activity().isDeletingAccount, isFalse);
     });
 
     test('a server refusal is a failed outcome carrying the error', () async {
@@ -219,7 +218,7 @@ void main() {
 
       expect(outcome, isA<AccountDeleteFailed>());
       expect((outcome as AccountDeleteFailed).error, refusal);
-      expect(activity().isRevoking, isFalse);
+      expect(activity().isDeletingAccount, isFalse);
     });
 
     test('reports other failures with the original error', () async {
@@ -229,7 +228,7 @@ void main() {
       final outcome = await notifier().deleteAccount('doc-1');
 
       expect((outcome as AccountDeleteFailed).error, boom);
-      expect(activity().isRevoking, isFalse);
+      expect(activity().isDeletingAccount, isFalse);
     });
   });
 }

@@ -35,7 +35,6 @@ void main() {
       (_) async => const NewAccountCredentials(
         email: 'zoe@example.com',
         password: 'Welcome123!',
-        docId: 'inv1',
       ),
     );
   });

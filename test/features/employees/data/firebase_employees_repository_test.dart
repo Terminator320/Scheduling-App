@@ -165,7 +165,6 @@ void main() {
 
       expect(credentials.email, 'a@b.com');
       expect(credentials.password, 'Welcome123!');
-      expect(credentials.docId, 'doc-1');
       final captured =
           (verify(
                     () => callable.call<dynamic>(captureAny<Object?>()),
@@ -298,12 +297,7 @@ void main() {
 
       await repo().completeEmployeeSetup();
 
-      final captured =
-          (verify(
-                    () => callable.call<dynamic>(captureAny<Object?>()),
-                  ).captured.single
-                  as Map)
-              .cast<String, dynamic>();
+      final captured = capturedPayload(callable);
       expect(captured.keys, hasLength(5));
       expect(captured['firstName'], '');
       expect(captured['termsAccepted'], isFalse);
@@ -321,12 +315,7 @@ void main() {
         locationConsent: true,
       );
 
-      final captured =
-          (verify(
-                    () => callable.call<dynamic>(captureAny<Object?>()),
-                  ).captured.single
-                  as Map)
-              .cast<String, dynamic>();
+      final captured = capturedPayload(callable);
       expect(captured['firstName'], 'Zoé');
       expect(captured['lastName'], 'Roy');
       expect(captured['phone'], '(514) 555-1234');
@@ -337,22 +326,19 @@ void main() {
 
   group('deleteEmployeeAccount', () {
     test('sends the doc id', () async {
-      final callable = stubCallable('deleteEmployeeAccount', data: {'ok': true});
+      final callable = stubCallable(
+        'deleteEmployeeAccount',
+        data: {'ok': true},
+      );
 
       await repo().deleteEmployeeAccount('doc-1');
 
-      final captured =
-          (verify(
-                    () => callable.call<dynamic>(captureAny<Object?>()),
-                  ).captured.single
-                  as Map)
-              .cast<String, dynamic>();
-      expect(captured, {'docId': 'doc-1'});
+      expect(capturedPayload(callable), {'docId': 'doc-1'});
     });
 
     test('maps account-not-pending to its own failure', () async {
-      final callable = stubCallable('deleteEmployeeAccount');
-      when(() => callable.call<dynamic>(any<Object?>())).thenThrow(
+      stubFailingCallable(
+        'deleteEmployeeAccount',
         FirebaseFunctionsException(
           code: 'failed-precondition',
           message: 'account-not-pending',
@@ -368,8 +354,8 @@ void main() {
     test('maps account-not-found to the same failure', () async {
       // The admin needs the same thing said either way, and the live stream
       // has already dropped or flipped the row.
-      final callable = stubCallable('deleteEmployeeAccount');
-      when(() => callable.call<dynamic>(any<Object?>())).thenThrow(
+      stubFailingCallable(
+        'deleteEmployeeAccount',
         FirebaseFunctionsException(
           code: 'not-found',
           message: 'account-not-found',
@@ -383,8 +369,8 @@ void main() {
     });
 
     test('lets an unrelated failure escape unmapped', () async {
-      final callable = stubCallable('deleteEmployeeAccount');
-      when(() => callable.call<dynamic>(any<Object?>())).thenThrow(
+      stubFailingCallable(
+        'deleteEmployeeAccount',
         FirebaseFunctionsException(code: 'internal', message: 'boom'),
       );
 
@@ -580,33 +566,39 @@ void main() {
       code: 'permission-denied',
     );
 
-    test('watchEmployees constrains role + active status and bounds the stream', () async {
-      when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
-      repo().watchEmployees().listen((_) {});
-      // retryStream builds the query on subscribe, one microtask later.
-      await Future<void>.delayed(Duration.zero);
+    test(
+      'watchEmployees constrains role + active status and bounds the stream',
+      () async {
+        when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
+        repo().watchEmployees().listen((_) {});
+        // retryStream builds the query on subscribe, one microtask later.
+        await Future<void>.delayed(Duration.zero);
 
-      // These constraints are not an optimization. For a LIST query Firestore
-      // evaluates the rules against the query's constraints, not the docs, so
-      // dropping the status filter doesn't return extra rows — it rejects the
-      // whole query with permission-denied, which surfaces as an empty
-      // employee picker and silently changes who can be assigned a visit.
-      verify(
-        () => collection.where('role', whereIn: ['employee', 'admin']),
-      ).called(1);
-      verify(() => query.where('status', isEqualTo: 'active')).called(1);
-      verify(() => query.limit(500)).called(1);
-    });
+        // These constraints are not an optimization. For a LIST query Firestore
+        // evaluates the rules against the query's constraints, not the docs, so
+        // dropping the status filter doesn't return extra rows — it rejects the
+        // whole query with permission-denied, which surfaces as an empty
+        // employee picker and silently changes who can be assigned a visit.
+        verify(
+          () => collection.where('role', whereIn: ['employee', 'admin']),
+        ).called(1);
+        verify(() => query.where('status', isEqualTo: 'active')).called(1);
+        verify(() => query.limit(500)).called(1);
+      },
+    );
 
-    test('watchAssignableUsers constrains active status and bounds the stream', () async {
-      when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
-      repo().watchAssignableUsers().listen((_) {});
-      // retryStream builds the query on subscribe, one microtask later.
-      await Future<void>.delayed(Duration.zero);
+    test(
+      'watchAssignableUsers constrains active status and bounds the stream',
+      () async {
+        when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
+        repo().watchAssignableUsers().listen((_) {});
+        // retryStream builds the query on subscribe, one microtask later.
+        await Future<void>.delayed(Duration.zero);
 
-      verify(() => collection.where('status', isEqualTo: 'active')).called(1);
-      verify(() => query.limit(500)).called(1);
-    });
+        verify(() => collection.where('status', isEqualTo: 'active')).called(1);
+        verify(() => query.limit(500)).called(1);
+      },
+    );
 
     test('watchAllUsers orders by name and bounds the stream', () async {
       when(() => collection.orderBy(any())).thenReturn(query);
