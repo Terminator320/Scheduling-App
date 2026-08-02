@@ -126,18 +126,31 @@ class _SheetBar extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.sp8),
+        // Every slot is flexible so the bar cannot overflow: three intrinsic
+        // widths (Cancel · title · verb) exceed a 260px viewport once text is
+        // scaled up, and a non-flex button had nothing to give. The side slots
+        // share a flex so the title stays optically centred between them.
         child: Row(
           children: [
-            TextButton(
-              onPressed: onCancel,
-              child: Text(
-                context.l10n.common_cancel,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.palette.textTertiary,
+            Flexible(
+              flex: 3,
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton(
+                  onPressed: onCancel,
+                  child: Text(
+                    context.l10n.common_cancel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.palette.textTertiary,
+                    ),
+                  ),
                 ),
               ),
             ),
-            Expanded(
+            Flexible(
+              flex: 4,
               child: Text(
                 title,
                 textAlign: TextAlign.center,
@@ -146,19 +159,27 @@ class _SheetBar extends StatelessWidget {
                 style: theme.textTheme.titleLarge,
               ),
             ),
-            TextButton(
-              onPressed: onPrimary,
-              child: isBusy
-                  ? const AdaptiveProgressIndicator(size: 18)
-                  : Text(
-                      primaryLabel,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: onPrimary == null
-                            ? theme.palette.textMuted
-                            : theme.palette.primaryAccent,
-                      ),
-                    ),
+            Flexible(
+              flex: 3,
+              child: Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: TextButton(
+                  onPressed: onPrimary,
+                  child: isBusy
+                      ? const AdaptiveProgressIndicator(size: 18)
+                      : Text(
+                          primaryLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: onPrimary == null
+                                ? theme.palette.textMuted
+                                : theme.palette.primaryAccent,
+                          ),
+                        ),
+                ),
+              ),
             ),
           ],
         ),

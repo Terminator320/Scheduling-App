@@ -33,6 +33,16 @@ final employeeJobsTodayProvider = Provider<Map<String, int>>((ref) {
   return counts;
 });
 
+/// How many future jobs an employee is still assigned to — the caption under
+/// the Disable account button. Autodisposed and family-keyed so it is fetched
+/// once per sheet open, not per rebuild.
+final futureAssignmentCountProvider = FutureProvider.autoDispose
+    .family<int, String>((ref, employeeId) {
+      return ref
+          .read(appointmentsRepositoryProvider)
+          .countFutureAssignments(employeeId);
+    });
+
 /// One employee's jobs today, in start order — the detail page's TODAY panel.
 final employeeTodayJobsProvider = Provider.autoDispose
     .family<List<AppointmentRecord>, String>((ref, employeeId) {

@@ -2366,6 +2366,84 @@
   "@common_yes": {
     "description": "Affirmative value in a read-only detail row"
   },
+  "employees_editPerson": "Edit person",
+  "@employees_editPerson": {
+    "description": "Title of the edit-person form sheet"
+  },
+  "employees_sectionDetails": "DETAILS",
+  "@employees_sectionDetails": {
+    "description": "Edit-person section label: name, email, phone"
+  },
+  "employees_sectionRole": "ROLE",
+  "@employees_sectionRole": {
+    "description": "Edit-person section label: the job title chips"
+  },
+  "employees_sectionColour": "COLOUR",
+  "@employees_sectionColour": {
+    "description": "Edit-person section label: the crew colour grid"
+  },
+  "employees_sectionAvailability": "AVAILABILITY",
+  "@employees_sectionAvailability": {
+    "description": "Edit-person section label: working days, hours, cap, on call"
+  },
+  "employees_sectionAccess": "ACCESS",
+  "@employees_sectionAccess": {
+    "description": "Edit-person section label: the admin-access toggle"
+  },
+  "employees_firstName": "First name",
+  "@employees_firstName": {
+    "description": "Edit-person field label for the given name"
+  },
+  "employees_lastName": "Last name",
+  "@employees_lastName": {
+    "description": "Edit-person field label for the family name"
+  },
+  "employees_workEmail": "Work email",
+  "@employees_workEmail": {
+    "description": "Edit-person field label for the account email"
+  },
+  "employees_workingDays": "Working days",
+  "@employees_workingDays": {
+    "description": "Label above the seven working-day toggle cells"
+  },
+  "employees_startsAt": "Starts at",
+  "@employees_startsAt": {
+    "description": "Panel row label for the start of the working day"
+  },
+  "employees_endsAt": "Ends at",
+  "@employees_endsAt": {
+    "description": "Panel row label for the end of the working day"
+  },
+  "employees_maxJobsPerDay": "Max jobs per day",
+  "@employees_maxJobsPerDay": {
+    "description": "Panel row label for the daily job cap picker"
+  },
+  "employees_noCap": "No cap",
+  "@employees_noCap": {
+    "description": "Daily job cap option meaning no limit is set"
+  },
+  "employees_emergencyContact": "Emergency contact",
+  "@employees_emergencyContact": {
+    "description": "Edit-person field label for who to call in an emergency"
+  },
+  "employees_coloursLeft": "{count, plural, =0{No colours left} =1{1 colour left} other{{count} colours left}}",
+  "@employees_coloursLeft": {
+    "description": "How many of the ten crew palette colours are still unassigned",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "employees_disableReassignCaption": "{count, plural, =0{No upcoming jobs are assigned to them.} =1{1 upcoming job stays assigned to them — reassign it after disabling.} other{{count} upcoming jobs stay assigned to them — reassign them after disabling.}}",
+  "@employees_disableReassignCaption": {
+    "description": "Caption under Disable account: how many future jobs a human still has to move",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "employees_everyDay": "Every day",
   "@employees_everyDay": {
     "description": "Working-days summary when all seven days are worked"

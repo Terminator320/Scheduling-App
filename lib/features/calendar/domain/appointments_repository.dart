@@ -7,6 +7,12 @@ abstract class AppointmentsRepository {
 
   Future<AppointmentRecord?> getAppointmentById(String id);
 
+  /// How many not-yet-started jobs this employee is still assigned to.
+  ///
+  /// Backs the disable-confirmation caption. An aggregate `count()` rather than
+  /// a fetch — nothing needs the documents, only the number.
+  Future<int> countFutureAssignments(String employeeId);
+
   Future<void> addAppointment(AppointmentRecord appointment);
 
   /// Creates every appointment in [appointments] atomically (all-or-nothing).
