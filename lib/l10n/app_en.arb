@@ -44,10 +44,6 @@
   "@auth_forgotPassword": {
     "description": "Forgot password?"
   },
-  "auth_createAccount": "Create account",
-  "@auth_createAccount": {
-    "description": "Create account"
-  },
   "common_admin": "Admin",
   "@common_admin": {
     "description": "Admin"
@@ -1048,10 +1044,6 @@
   "@error_thisEmailIsNotAuthorizedToSignUp": {
     "description": "This email is not authorized to sign up"
   },
-  "auth_accountCreatedYouCanNowSignIn": "Account created. You can now sign in.",
-  "@auth_accountCreatedYouCanNowSignIn": {
-    "description": "Account created. You can now sign in."
-  },
   "error_noUserProfileFoundForThisAccount": "No user profile found for this account",
   "@error_noUserProfileFoundForThisAccount": {
     "description": "No user profile found for this account"
@@ -1650,23 +1642,6 @@
   "wave_syncError": "Sync error",
   "@wave_syncError": {
     "description": "Badge label shown on a client whose Wave sync has failed"
-  },
-  "employees_signupCodeTitle": "Signup code",
-  "@employees_signupCodeTitle": {
-    "description": "Title of the dialog showing the admin the employee's signup code"
-  },
-  "employees_shareThisCodeWith": "Share this code with {name}. They'll need it and their email to sign in.",
-  "@employees_shareThisCodeWith": {
-    "description": "Body of the signup-code dialog telling the admin to share the code with the new employee",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
-  "employees_copyCode": "Copy code",
-  "@employees_copyCode": {
-    "description": "Button in the signup-code dialog that copies the code to the clipboard"
   },
   "common_copied": "Copied",
   "@common_copied": {
@@ -2404,14 +2379,6 @@
   "@employees_noWorkingDays": {
     "description": "Working-days summary when no day is marked as worked"
   },
-  "auth_invitedByYourEmployer": "Invited by your employer?",
-  "@auth_invitedByYourEmployer": {
-    "description": "Prompt before the Accept your invite link on the sign-in screen"
-  },
-  "auth_acceptYourInvite": "Accept your invite",
-  "@auth_acceptYourInvite": {
-    "description": "Link under the sign-in card that starts the invite acceptance flow"
-  },
   "auth_show": "Show",
   "@auth_show": {
     "description": "Text link inside a password field that reveals the password"
@@ -2444,80 +2411,9 @@
   "@auth_sentAgainJustNow": {
     "description": "Label replacing the resend action once the reset email has been resent"
   },
-  "common_continue": "Continue",
-  "@common_continue": {
-    "description": "Primary action label for advancing to the next step"
-  },
-  "auth_acceptInviteTitle": "Accept your invite",
-  "@auth_acceptInviteTitle": {
-    "description": "Title of both invite acceptance screens"
-  },
-  "auth_acceptInviteCodeSubtitle": "Enter the 12-character code your admin gave you.",
-  "@auth_acceptInviteCodeSubtitle": {
-    "description": "Subtitle above the twelve signup-code boxes"
-  },
-  "auth_enterTheCode": "Enter the code",
-  "@auth_enterTheCode": {
-    "description": "Disabled label on the code screen's button until all twelve characters are entered"
-  },
-  "auth_codeInvalidExplanation": "That code isn't valid. Check every character and try again.",
-  "@auth_codeInvalidExplanation": {
-    "description": "Error under the code boxes when the server rejects the code as unknown"
-  },
-  "auth_codeExpiredExplanation": "That code has expired. Ask your admin for a fresh one.",
-  "@auth_codeExpiredExplanation": {
-    "description": "Error under the code boxes when the code exists but has passed its expiry"
-  },
-  "auth_dontHaveACode": "DON'T HAVE A CODE?",
-  "@auth_dontHaveACode": {
-    "description": "Mono uppercase label on the help panel below the code boxes"
-  },
-  "auth_dontHaveACodeBody": "There is no invite email. Your admin can read your code off the Team page and share it with you.",
-  "@auth_dontHaveACodeBody": {
-    "description": "Body copy of the help panel below the code boxes"
-  },
-  "auth_pasteCode": "PASTE",
-  "@auth_pasteCode": {
-    "description": "Mono link above the code boxes that pastes the clipboard into them"
-  },
-  "auth_signupCodeSemantics": "Signup code, {count} of 12 characters entered",
-  "@auth_signupCodeSemantics": {
-    "description": "Screen-reader label for the twelve signup-code boxes, which are one logical field",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "auth_invitedToJoinAs": "You're invited to join as {role}",
-  "@auth_invitedToJoinAs": {
-    "description": "Invite banner headline on the acceptance details screen",
-    "placeholders": {
-      "role": {
-        "type": "String"
-      }
-    }
-  },
-  "auth_inviteExpiresOn": "Expires {date}",
-  "@auth_inviteExpiresOn": {
-    "description": "Amber expiry pill in the invite banner",
-    "placeholders": {
-      "date": {
-        "type": "String"
-      }
-    }
-  },
-  "auth_fromInvite": "From invite",
-  "@auth_fromInvite": {
-    "description": "Chip beside the locked email, marking it as supplied by the invite"
-  },
   "auth_termsAndLocationConsent": "I accept the terms of service and agree to share my location while I'm on the clock.",
   "@auth_termsAndLocationConsent": {
     "description": "Combined terms and location consent checkbox gating the Create account button"
-  },
-  "auth_reEnterCode": "Re-enter code",
-  "@auth_reEnterCode": {
-    "description": "Action offered when the signup code stops working between preview and submit"
   },
   "auth_passwordStrengthSemantics": "Password strength: {label}",
   "@auth_passwordStrengthSemantics": {
@@ -2607,10 +2503,6 @@
   "@employees_signInDetails": {
     "description": "Mono section label on the expanded pending-account row"
   },
-  "employees_hasNotSignedInYet": "Hasn't signed in yet",
-  "@employees_hasNotSignedInYet": {
-    "description": "Status line on a roster row for an account that has never been set up"
-  },
   "employees_resetPassword": "Reset password",
   "@employees_resetPassword": {
     "description": "Action that re-issues the temporary password"
@@ -2634,9 +2526,5 @@
   "employees_revokeInviteConfirmBody": "The code stops working right away and this person disappears from your team list.",
   "@employees_revokeInviteConfirmBody": {
     "description": "Body of the confirm dialog shown before revoking a pending invite"
-  },
-  "auth_signOutToAcceptInvite": "Sign out first to accept an invite.",
-  "@auth_signOutToAcceptInvite": {
-    "description": "Info notice when an invite deep link opens while someone is already signed in"
   }
 }

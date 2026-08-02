@@ -30,16 +30,13 @@ class AuthHero {
 /// lifted card overlapping the gradient block; without one the child sits
 /// straight on the surface.
 class AuthScaffold extends StatelessWidget {
-  const AuthScaffold({required this.child, this.hero, this.footer, super.key});
+  const AuthScaffold({required this.child, this.hero, super.key});
 
   /// How far the card overlaps the hero block above it.
   static const double _cardLift = 28;
 
   final Widget child;
   final AuthHero? hero;
-
-  /// Rendered below the card, outside its chrome (the sign-in invite prompt).
-  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -75,22 +72,9 @@ class AuthScaffold extends StatelessWidget {
       );
     }
 
-    final footer = this.footer;
     // Fades and slides the whole form in on entrance. Under reduce-motion it
     // skips straight to the end state instead of animating.
-    Widget content = AutofillGroup(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          card,
-          if (footer != null) ...[
-            const SizedBox(height: AppSpacing.sp24),
-            footer,
-          ],
-        ],
-      ),
-    );
+    Widget content = AutofillGroup(child: card);
     if (!MediaQuery.disableAnimationsOf(context)) {
       content = content
           .animate()

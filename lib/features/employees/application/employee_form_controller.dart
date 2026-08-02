@@ -76,22 +76,22 @@ class EmployeeFormActivity {
   const EmployeeFormActivity({
     this.isSaving = false,
     this.isTogglingStatus = false,
-    this.isRevoking = false,
+    this.isDeletingAccount = false,
   });
 
   final bool isSaving;
   final bool isTogglingStatus;
-  final bool isRevoking;
+  final bool isDeletingAccount;
 
   EmployeeFormActivity copyWith({
     bool? isSaving,
     bool? isTogglingStatus,
-    bool? isRevoking,
+    bool? isDeletingAccount,
   }) {
     return EmployeeFormActivity(
       isSaving: isSaving ?? this.isSaving,
       isTogglingStatus: isTogglingStatus ?? this.isTogglingStatus,
-      isRevoking: isRevoking ?? this.isRevoking,
+      isDeletingAccount: isDeletingAccount ?? this.isDeletingAccount,
     );
   }
 
@@ -100,10 +100,10 @@ class EmployeeFormActivity {
       other is EmployeeFormActivity &&
       other.isSaving == isSaving &&
       other.isTogglingStatus == isTogglingStatus &&
-      other.isRevoking == isRevoking;
+      other.isDeletingAccount == isDeletingAccount;
 
   @override
-  int get hashCode => Object.hash(isSaving, isTogglingStatus, isRevoking);
+  int get hashCode => Object.hash(isSaving, isTogglingStatus, isDeletingAccount);
 }
 
 /// Handles employee create/update/status, shared by the form sheet and the
@@ -220,7 +220,7 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
     // Resolved before the first await — see _save.
     final repo = ref.read(employeesRepositoryProvider);
     final logger = ref.read(loggerProvider);
-    state = state.copyWith(isRevoking: true);
+    state = state.copyWith(isDeletingAccount: true);
     try {
       await repo.deleteEmployeeAccount(docId);
       return const AccountDeleted();
@@ -228,7 +228,7 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
       logger.warn('EMP-DELETE deleteEmployeeAccount failed', e, st);
       return AccountDeleteFailed(e);
     } finally {
-      if (ref.mounted) state = state.copyWith(isRevoking: false);
+      if (ref.mounted) state = state.copyWith(isDeletingAccount: false);
     }
   }
 }

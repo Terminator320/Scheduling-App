@@ -14,11 +14,7 @@ import 'package:flutter/foundation.dart';
 /// signup code this replaced.
 @immutable
 class NewAccountCredentials {
-  const NewAccountCredentials({
-    required this.email,
-    required this.password,
-    required this.docId,
-  });
+  const NewAccountCredentials({required this.email, required this.password});
 
   /// Decodes the callable's payload. Callers must apply the loose cast
   /// (`(res.data as Map?)?.cast<String, dynamic>()`) first — a direct generic
@@ -27,14 +23,10 @@ class NewAccountCredentials {
       NewAccountCredentials(
         email: (data['email'] ?? '').toString(),
         password: (data['password'] ?? '').toString(),
-        docId: (data['docId'] ?? '').toString(),
       );
 
   final String email;
   final String password;
-
-  /// The `users` doc id, so the caller can act on the row it just created.
-  final String docId;
 
   bool get isComplete => email.isNotEmpty && password.isNotEmpty;
 
@@ -42,9 +34,8 @@ class NewAccountCredentials {
   bool operator ==(Object other) =>
       other is NewAccountCredentials &&
       other.email == email &&
-      other.password == password &&
-      other.docId == docId;
+      other.password == password;
 
   @override
-  int get hashCode => Object.hash(email, password, docId);
+  int get hashCode => Object.hash(email, password);
 }

@@ -3,25 +3,31 @@
 Loaded when working under `functions/`. Root context: `../CLAUDE.md`.
 
 Functions live in `functions/` (project `schedulingapp-88727`, region
-`us-central1`). `index.js` is now a thin wiring surface that re-exports all 24
+`us-central1`). `index.js` is now a thin wiring surface that re-exports all 23
 functions under their original names — the implementations are split into
 domain modules: `security.js` (shared callable guards — `assertPayloadShape`,
 `requireString`, `requireNumberInRange` (finite number in `[min,max]`; rejects
 `NaN`/`Infinity`), `readSessionToken`, `enforceDurableRateLimit`, `assertAdmin`),
 `bridge.js` (`syncUsersByUid`), `client_propagation.js`
 (`propagateClientEdits`), `client_job_count.js` (`recountClientJobs`, backed by
-the pure `clientsToRecount`), `places.js`, `account.js`, `invites.js`
-(the whole invite lifecycle — `createEmployeeInvite`, `redeemSignupCode`,
-`revokeInvite` (P4b: one transaction deleting the `signupCodes` doc and the
-still-`invited` `users` doc, refusing `invite-not-pending` if a redeem beat it)
-and `previewInvite` (P4b: the **only unauthenticated callable in the
-codebase** — the caller is accepting an invite and has no account yet, so App
-Check, `assertPayloadShape` and a per-code-hash durable limiter stand in for
-the identity guard; it resolves a code to the invited email the acceptance
-screen renders locked), backed by pure helpers in `signup_code_utils.js` —
-`validateInvitePending` is the shared pending half so preview and redeem can't
-drift, and `validateRedemption` layers the email-mismatch check on top of it,
-**checked before expiry**), `maintenance.js`
+the pure `clientsToRecount`), `places.js`, `account.js`,
+`employee_accounts.js` (the whole employee-account lifecycle, P4c 2026-08-02 —
+`createEmployeeAccount` (admin-only: mints the Firebase Auth account on the
+shared `DEFAULT_PASSWORD` and the `invited` `users` doc carrying its real
+`uid`, rolls the Auth account back if the Firestore write fails, and refuses
+`email-exists` for an email that has already finished setup — checked BEFORE
+touching Auth so it can never reset a real person's chosen password),
+`completeEmployeeSetup` (the person's own activation: transactional, refuses
+`setup-not-pending` on a replay, and stamps the consent timestamps only when
+the flags are actually `true`) and `deleteEmployeeAccount` (admin-only, and
+only while `invited` — doc first, Auth second, so a partial run converges).
+Pure helpers `performCreateAccount`, `performDeleteAccount` and
+`buildActivationPatch` are exported for unit tests; the last one owns the
+never-empty-`name` contract that keeps a person inside `watchAllUsers`'
+`orderBy('name')`. **`invites.js` and `signup_code_utils.js` are DELETED**
+along with `createEmployeeInvite`, `redeemSignupCode`, `revokeInvite` and
+`previewInvite` — the codebase no longer has an unauthenticated callable),
+`maintenance.js`
 (image validation + history purge; the pure JPEG/PNG magic-byte check lives in
 `image_magic.js`), `notifications.js` (FCM push triggers, backed by
 `notification_utils.js` and — for the travel-time reminder sweep —
@@ -48,7 +54,7 @@ shared guards in `security.js` and shared secrets in `params.js`, not back in
 **Unit-testing trigger logic:** `onObjectFinalized`/`onSchedule` modules eagerly
 resolve a Storage bucket at load, so a jest test can't `require()` them (throws
 "Missing bucket name"). Extract the pure logic into a plain sibling module
-(`image_magic.js`, `signup_code_utils.js`, `notification_utils.js`) and test
+(`image_magic.js`, `notification_utils.js`) and test
 that; `onCall`/`onDocument*` modules load lazily and are safe to `require`
 directly. Jest tests live in **`functions/__tests__/` only** — the parallel
 `functions/test/` directory was merged away 2026-07-19; don't recreate it.
@@ -124,9 +130,9 @@ reaper can ever reach (see the `liveActivityTokens` rule).
 **Firestore TTL policies must use expiration offset `0`.** Every collection that
 writes an `expiresAt` (`appointmentReminders`, `appointmentOverduePrompts`,
 `appointmentSeriesNotices`, `liveActivityTokens`, `liveActivityCards`,
-`rateLimits`, `signupCodes`) stores
+`rateLimits`) stores
 the *absolute* deletion instant — the lifetime is already baked in by
-`LEDGER_TTL_MS` / `INVITE_CODE_TTL_MS` / `CARD_TTL_MS` / the limiter window. The
+`LEDGER_TTL_MS` / `CARD_TTL_MS` / the limiter window. The
 console's "expiration offset" ADDS to that value, so any non-zero offset
 silently multiplies retention (the ledgers ran at ~14 days instead of 7 until
 2026-07-20). An offset is **immutable once set**: correcting one means delete →

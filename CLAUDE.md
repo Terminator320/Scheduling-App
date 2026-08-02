@@ -40,10 +40,18 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
 
 ## Critical invariants
 
-- **Auth:** Every signed-in user needs an `active` Firestore `users` doc with
-  matching `uid`. `SplashScreen` signs out otherwise. Don't break this.
-  Gate with `!employee.isActive` — `isDisabled` only matches `'disabled'`,
-  so it misses `'invited'`, `''`, and any future status.
+- **Auth:** Every signed-in user needs a Firestore `users` doc with matching
+  `uid`, and it must be `active` — with ONE exception. `SplashScreen` signs out
+  otherwise. Don't break this. Gate with `!employee.isActive` — `isDisabled`
+  only matches `'disabled'`, so it misses `''` and any future status.
+  **The exception is `invited` (P4c, 2026-08-02): it routes to
+  `AccountSetupScreen` and KEEPS the session**, at both gates
+  (`splash_controller.dart`, `sign_in_controller.dart`). The admin created that
+  account with the shared starting password and this is the person's first
+  sign-in — signing them out makes setup unreachable, since the credential they
+  just used is the one it needs. The test is `employee.isInvited`, an **exact**
+  match checked BEFORE the active gate, so an empty or unknown status still
+  gets the old sign-out. Tests pin both halves.
 - **Live account-deletion signal (kick-out) needs a populated→empty transition.**
   `isAccountDeletionSignal` (`account_status_provider.dart`) fires the runtime
   sign-out only when the current doc is a *settled* empty following a
@@ -297,61 +305,81 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   `resource.data.status == 'active'`, queries must also `.where('status', isEqualTo: 'active')`
   or Firestore rejects the whole query with `permission-denied`. Direct `doc.get()` calls
   ARE evaluated against actual document data. See `watchEmployees()` for a corrected example.
-- **Users collection read rule** has four clauses (see `firestore.rules`): admin,
-  `status == 'active'`, `uid == request.auth.uid` (own doc), or
-  `email_verified == true && status == 'invited' && email == token.email` (own
-  invite). New queries on `users` must satisfy one clause via their WHERE
-  constraints or they'll be rejected. The `email_verified` guard on the invited
-  clause is deliberate hardening — a password signup leaves the token
-  unverified, so this clause never actually rescues the invited user, but the
-  flow doesn't need it (activation is Admin-SDK-only in `redeemSignupCode`); it
-  only closes an unverified principal claiming someone else's invite email.
-- **Invited-employee signup (one-time codes):** the admin's "Invite" calls the
-  `createEmployeeInvite` callable, which creates the `invited` `users` doc and a
-  `signupCodes/{sha256(code)}` doc and returns the **plaintext code once** (shown
-  in a copy dialog for the admin to share out-of-band, or read off the expanded
-  pending-invite row on Team). The employee accepts through the **two-screen
-  flow** (P4b, 2026-08-02) — `accept_invite_code_screen.dart` (twelve mono boxes
-  over ONE hidden `TextField`; Continue calls `previewInvite`, which is what
-  lets the screen say *expired* vs *invalid* before the user invents a
-  password) → `accept_invite_details_screen.dart` (the invite email rendered
-  **locked** from the preview, names, phone, password, and one combined
-  terms + location-consent checkbox gating the CTA).
-  **`create_account_screen.dart` is DELETED** — it is superseded by those two,
-  and `AuthCodeField` went with it. The screen then signs up with email +
-  password + code via `AuthService.signUpWithCode`, which registers
-  then calls `redeemSignupCode`; that callable validates server-side (14-day
-  expiry; token email must equal the invite email) and **activates the account
-  atomically** (`uid` + `status:'active'`, code consumed). The redeem payload
-  also carries the acceptance profile (`firstName`, `lastName`, `phone`) and the
-  two consent flags, so activation stamps them in the same transaction — see the
-  function-owned-fields invariant below. `redeemSignupCode` is
-  rate-limited **by token email**, not caller uid — a failed signup deletes +
-  re-registers to mint a fresh uid, which would reset a uid-keyed cap. On redeem
-  failure `signUpWithCode` **rolls back the just-created Auth user** (re-auth
-  then `delete()`) so no orphan is left; if rollback itself fails it throws
-  `AuthFailureAccountCreationIncomplete` and logs the orphan uid. A valid code
-  whose token email ≠ invite email returns a distinct `code-email-mismatch` →
-  `AuthFailureSignupEmailMismatch` (tells the user to use the exact invited
-  email, not the misleading generic `invalid-code`; only reachable once the
-  caller already holds a real code, so disclosure is minimal). There is NO email
-  verification and NO client self-activation — activation is Admin-SDK only, and
-  `firestore.rules` denies all client access to `signupCodes`. `createEmployeeInvite`
-  is idempotent for a still-`invited` email (re-issues a fresh code; the separate
-  `regenerateSignupCode` callable was dropped); an active account errors
-  `email-exists`. Sign-in (`login_screen.dart`) just
-  `findUserByUid` → route or sign out (no activation step); its bottom prompt
-  ("Invited by your employer? / **Accept your invite**") is the in-app entry to
-  the acceptance flow, and a deep link is the other. Design:
-  `docs/archive/INVITED_SIGNUP_REDESIGN.md`, `docs/plans/redesign-subdocs/2026-08-02-p4b-HANDOFF.md`.
-- **A displayed signup code is a CREDENTIAL — state-only, never logged, never
-  persisted.** It lives in widget/controller state and on the navigator's route
-  args, and dies with the surface. It is never passed to `logger.*` (both auth
-  catch sites log through `logger.authFailure`, whose breadcrumb carries only
-  the label and `failure.runtimeType`), never interpolated into a notice or an
-  error message, and never written to SharedPreferences or secure storage. The
-  clipboard copy on the pending-invite row is the ONE sanctioned egress — it is
-  the feature. The server stores sha256 only.
+- **Users collection read rule** has three clauses (see `firestore.rules`):
+  admin, `status == 'active'`, or `uid == request.auth.uid` (own doc). New
+  queries on `users` must satisfy one clause via their WHERE constraints or
+  they'll be rejected. A fourth
+  `email_verified && status == 'invited' && email == token.email` clause existed
+  only because the retired code flow left `uid` empty until redemption; P4c
+  mints the Auth account up front, so an invited person now reads their own doc
+  through clause 3 and the fourth clause was deleted as uncallable. An ordinary
+  employee still cannot see a pending account: clause 2 requires `active`.
+- **Employee accounts: the admin invites, the employee sets up** (P4c,
+  2026-08-02 — this REPLACED the one-time signup-code flow entirely). The
+  admin's person sheet calls `createEmployeeAccount`, which mints a **Firebase
+  Auth account** with the shared starting password `Welcome123!` plus a `users`
+  doc that is `invited` but **already carries the real `uid`**, and returns the
+  email + password for the admin to hand over out-of-band (the `NewAccountDialog`
+  right after creation, or the expanded roster row later). The employee then
+  signs in normally; both gates see `invited` and route to
+  `AccountSetupScreen`, where they **choose their own password** and fill in
+  name/phone/consent → `completeEmployeeSetup` flips the doc to `active`.
+  **ORDER IS THE GUARANTEE: the password is replaced FIRST, client-side, then
+  the account is activated.** The server cannot see a password, so "you must
+  replace the shared default" is true only because `completeEmployeeSetup` is
+  unreachable until `User.updatePassword` succeeds — swap the two and an
+  interrupted setup leaves an *active* account still on `Welcome123!`. Pinned by
+  a test. A failure *after* the password change deliberately does **not** revert
+  it: the new password is the one the person just chose and typed twice, so
+  leaving them `invited` with a working password beats resetting them to the
+  shared default (the next sign-in routes back to setup, which never assumes the
+  current password is the default). Re-running create on a still-`invited`
+  person **resets their password** — that IS the "never signed in / lost it"
+  path — but it refuses with `email-exists` once someone has set up, checked
+  *before* touching Auth so it can never reset a real person's chosen password
+  and only then discover Firestore says no. `deleteEmployeeAccount` likewise
+  only works while `invited` (transactional, so a setup that commits first makes
+  the delete refuse); after that the no-delete invariant applies and disable is
+  the only removal. Provisioning **rolls back**: if the Firestore write fails
+  after the Auth account is created, that Auth account is deleted — but only if
+  *we* just minted it — since an Auth account with no `users` doc is a sign-in
+  `SplashScreen` can't resolve and no admin surface can see.
+  **The security posture is weaker than the codes it replaced, deliberately and
+  with the owner's sign-off.** `Welcome123!` is known to everyone forever, so
+  between creation and first sign-in anyone who knows an employee's email can
+  sign in as them and complete setup. What holds instead: an `invited` user is
+  granted **nothing** by `firestore.rules` — no clients, no appointments, no
+  peers — so the window is "can reach the setup screen as this person", not "can
+  read the business"; and **the window is under the admin's control** (create
+  the account when you are handing the credentials over, not weeks ahead). That
+  mitigation is operational, not technical, and belongs in the onboarding
+  instructions. `create_account_screen.dart`, both `accept_invite_*` screens,
+  `CodeEntryBoxes`, `signup_code_dialog`, `InvitePreview`, the `signupCodes`
+  collection and the `createEmployeeInvite`/`redeemSignupCode`/`revokeInvite`/
+  `previewInvite` callables are all **deleted** — there is nothing left to
+  "accept", which is why sign-in's bottom prompt went with them. Design:
+  `docs/plans/redesign-subdocs/2026-08-02-p4c-HANDOFF.md`.
+- **`kDefaultStartingPassword` is hand-mirrored** in
+  `employees/domain/policies/starting_password_policy.dart` and
+  `DEFAULT_PASSWORD` in `functions/employee_accounts.js`; both carry a pointer to
+  the other. The Dart copy is only ever a **display fallback** for a row whose
+  account was created earlier — any surface that just called the callable shows
+  the password the **server echoed back**, so a drift can't reach the screen
+  where it matters.
+- **A displayed starting password is a CREDENTIAL — state-only, never logged,
+  never persisted.** It lives in widget/controller state and dies with the
+  surface, keyed to the account it belongs to (`_credentialsFor`, so a recycled
+  `State` can't show one person's password on another person's row). It is never
+  passed to `logger.*` (auth catch sites log through `logger.authFailure`, whose
+  breadcrumb carries only the label and `failure.runtimeType`), never
+  interpolated into a notice or an error message, and never written to
+  SharedPreferences or secure storage. The **"Copy both"** clipboard action on
+  the new-account dialog and on the roster row is the ONE sanctioned egress — it
+  is the feature. Both go through `copyCredentialsToClipboard`
+  (`employees/widgets/fields/credential_line.dart`), which is the single owner
+  of that payload format — never re-inline `'$email\n$password'` at a call
+  site, or the two surfaces can put different things on the clipboard. The
+  `CredentialLine` widget beside it is shared for the same reason.
 - **The deep-link dispatcher is the single `app_links` consumer, and it MUST
   skip any URI carrying the `homeWidget` query param.** `classifyDeepLink`
   (`core/deep_links/deep_link_target.dart`) returns `IgnoredLink` for it, with
@@ -362,22 +390,21 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   `ios/CLAUDE.md`) — dropping either one alone re-breaks widget taps. On iOS,
   `FlutterDeepLinkingEnabled` stays **false**: that is the correct setting *for*
   `app_links`, since Flutter's own handler would otherwise consume the URL
-  first. **The invite branch pushes only once `/login` is the top route** —
-  `SplashScreen` routes with `pushReplacementNamed`, which replaces the
-  *topmost* route, so an invite screen pushed too early is replaced by splash's
-  own navigation. `awaitLoginRoute` polls `TopRouteObserver` and **returns a
-  bool**; a timeout must NOT push anyway, or it reintroduces exactly the race
-  the wait exists to close. **`TopRouteObserver` deliberately has no `didRemove`
-  override** — `pushNamedAndRemoveUntil` (the account-disabled path) pushes
-  *before* it removes, so overriding it would overwrite the just-pushed name
-  with a route no longer on the stack. A signed-in user tapping an invite link
-  gets an **info notice only** — never an auto-sign-out; a URL any web page can
-  launch must not be able to tear down a session.
-- **`codeExpiresAt` / `termsAcceptedAt` / `locationConsentAt` are
-  function-owned `users` fields.** They are on the `/users` update **denylist**
-  in `firestore.rules` beside `uid` (same posture as `jobCount`/`wave` on
-  clients), so a compromised admin session can't forge a consent record or a
-  fake expiry; `EmployeeRecord.toMap()` must never emit them, or a future
+  first. P4c reduced the dispatcher to the **appointment branch alone**: an old
+  `esproschedule://invite?code=…` link now falls through to `IgnoredLink`, which
+  is deliberate — those links can still be sitting in someone's messages and
+  must not reach a screen that no longer exists. `awaitLoginRoute` and the whole
+  invite-branch route race went with it. **`TopRouteObserver` is still
+  registered on `MaterialApp.navigatorObservers` and still deliberately has no
+  `didRemove` override** — `pushNamedAndRemoveUntil` (the account-disabled path)
+  pushes *before* it removes, so overriding it would overwrite the just-pushed
+  name with a route no longer on the stack. It now has no in-app caller; leave
+  it and this note in place.
+- **`termsAcceptedAt` / `locationConsentAt` are function-owned `users`
+  fields.** They are on the `/users` update **denylist** in `firestore.rules`
+  beside `uid` — **three fields**, since P4c deleted `codeExpiresAt` everywhere
+  (same posture as `jobCount`/`wave` on clients), so a compromised admin session
+  can't forge a consent record; `EmployeeRecord.toMap()` must never emit them, or a future
   whole-record `set()` becomes an opaque `permission-denied`. **`toMap()` omits
   `uid` and `status` for the same reason** — `uid` is on that denylist and
   `status` belongs to deactivate/reactivate; the repository's field-scoped
@@ -387,39 +414,26 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   edit `uid` could simply create a doc carrying a forged one, and a second doc
   claiming an existing employee's uid repoints the `usersByUid` bridge every
   rules gate resolves through.
-  `performCreateInvite` stamps `codeExpiresAt` on **both** branches (fresh and
-  re-issue) because clients can never read `signupCodes` and the Team row needs
-  the instant somewhere it can read; `redeemSignupCode` **deletes** it at
-  activation — the field describes a *pending* code and is junk on an active
-  doc. The consent stamps are written **only when the payload flags are
-  actually `true`**: the previously-shipped acceptance screen sends just `code`,
-  and stamping unconditionally would mint a legally-flavoured consent record for
-  someone who never saw the checkbox.
-- **`codeExpiresAt` is admin-readable by construction — no read-rule change was
-  needed or wanted.** Of the four `/users` read clauses, only clause 1
-  (`isAdmin()`) reaches an invited doc: clause 2 requires
-  `status == 'active'`, clause 3 needs `resource.data.uid == request.auth.uid`
-  and an invited doc has `uid: ""`, and clause 4 requires
-  `email_verified == true`, which a password signup never has. So an ordinary
-  employee cannot see a pending invite or its expiry, and no clause ever exposes
-  the code itself (that lives only in `signupCodes`, denied to all clients).
-  Don't "open up" a clause to make an invite readable to its own claimant.
-- **Invite re-issue REFRESHES the invited doc's editable fields, so
-  `inviteEmployee` takes the whole `EmployeeRecord` — never loose scalars.**
-  `performCreateInvite`'s re-issue branch *updates*
+  `completeEmployeeSetup` writes the consent stamps **only when the payload
+  flags are actually `true`** — stamping unconditionally would mint a
+  legally-flavoured consent record for someone who never saw the checkbox.
+- **Account re-provisioning REFRESHES the pending doc's editable fields, so
+  `createAccount` takes the whole `EmployeeRecord` — never loose scalars.**
+  `performCreateAccount`'s existing-doc branch *updates*
   `name`/`firstName`/`lastName`/`phone`/`colorValue`/`jobTitle`/`role` with
   whatever it is handed, so a call site that omits one silently wipes the
-  invited person's phone or job title. The controller therefore takes a record
-  and destructures it in ONE place: `PendingInviteTile` passes
-  `widget.employee` whole, and the omission is unexpressible rather than merely
-  documented. Don't "flatten" the signature back to named strings — that shape
-  was a trap that bit Show code and Resend equally, and a new invited-user field
-  had to be threaded through four layers with no compile error if you missed one.
-  The matching UX consequence: **expanding the row IS the re-issue**, so the
-  caption under the code states the code is new *unconditionally*, and the
-  fetched code is cached in the tile's State keyed by the invite doc id, so
-  collapse → re-expand cannot re-mint (it would burn the admin's shared 20/hour
-  `createEmployeeInvite` budget and silently rotate the code every time).
+  pending person's phone or job title. `EmployeeFormController.createAccount`
+  therefore takes a record and destructures it in ONE place (the repository
+  method below it is the only place that speaks named strings), and
+  `PendingInviteTile` passes `widget.employee` whole — the omission is
+  unexpressible rather than merely documented. Don't "flatten" the controller
+  signature back to named strings: that shape was a trap that bit the old Show
+  code and Resend equally, and a new pending-user field had to be threaded
+  through four layers with no compile error if you missed one.
+  Unlike the retired code flow, **expanding the row is NOT a re-issue** — the
+  starting password is a fixed shared value, so the row renders it with no
+  server round-trip. Only **Reset password** re-provisions, and only that
+  rotates what the person was given.
 - **`watchEmployees()`** now filters `status == 'active'` — it no longer returns invited or
   disabled users. Use `watchAllUsers()` (admin-only) if all statuses are needed.
   All three `users` streams are bounded by the shared `_userStreamLimit` (500)

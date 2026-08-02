@@ -95,6 +95,15 @@ function userDoc(data, id = "existing-doc") {
 }
 
 describe("provisionAuthAccount", () => {
+  test("the shared starting password is the exact mirrored literal", () => {
+    // Pins the Dart-side mirror kDefaultStartingPassword
+    // (lib/features/employees/domain/policies/starting_password_policy.dart),
+    // which the roster row shows as its fallback. Every other assertion here
+    // uses the imported symbol, so without this one the constant could be
+    // rotated on this side alone and the suite would still pass green.
+    expect(DEFAULT_PASSWORD).toBe("Welcome123!");
+  });
+
   test("mints a new account with the shared starting password", async () => {
     const auth = {
       createUser: jest.fn(async () => ({uid: "uid-1"})),

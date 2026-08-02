@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
+import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
@@ -46,16 +47,6 @@ class AuthService {
     required String password,
   }) {
     return _auth.signInWithEmailAndPassword(
-      email: email.trim().toLowerCase(),
-      password: password.trim(),
-    );
-  }
-
-  Future<UserCredential> register({
-    required String email,
-    required String password,
-  }) {
-    return _auth.createUserWithEmailAndPassword(
       email: email.trim().toLowerCase(),
       password: password.trim(),
     );
@@ -124,17 +115,21 @@ class AuthService {
     }
   }
 
+  /// Only the codes whose meaning CHANGES during setup are handled here;
+  /// everything else falls through to the shared [AuthErrorMapper] rather than
+  /// being re-tabulated. A second copy of that table would silently bucket any
+  /// code it forgot into `AuthFailureUnknown`, which is `isExpected: false` and
+  /// so files a Crashlytics non-fatal for an ordinary user mistake.
   AuthFailure _mapSetupError(Object e) {
     if (e is FirebaseAuthException) {
       switch (e.code) {
-        case 'weak-password':
-          return const AuthFailureWeakPassword();
+        // The shared mapper calls these "requires recent login" / "no such
+        // user"; mid-setup they all mean the same thing to the person, which
+        // is that the session backing this screen is gone.
         case 'requires-recent-login':
         case 'user-token-expired':
         case 'user-not-found':
           return const AuthFailureSessionExpired();
-        case 'network-request-failed':
-          return const AuthFailureNetwork();
       }
     }
     if (e is FirebaseFunctionsException) {
@@ -154,15 +149,7 @@ class AuthService {
         return const AuthFailureNetwork();
       }
     }
-    return const AuthFailureUnknown();
-  }
-
-  Future<void> _signOutQuietly() async {
-    try {
-      await _auth.signOut();
-    } catch (e, st) {
-      _logger.warn('signUp rollback: quiet signOut failed', e, st);
-    }
+    return AuthErrorMapper.map(e);
   }
 
   Future<void> signOut() async {

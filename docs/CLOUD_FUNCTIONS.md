@@ -31,14 +31,17 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 > wrong before — verify against the live list rather than trusting it.
 
 
-- **24 functions defined** in code; **22 deployed** — verified live against
-  `schedulingapp-88727` on 2026-08-02 via `functions_list_functions`.
-  `recountClientJobs` shipped with the P3 deploy. The only undeployed pair is
-  `revokeInvite` and `previewInvite` (P4b, 2026-08-02) — and that
-  deploy is **ordering-sensitive**: it also carries the widened
-  `redeemSignupCode` payload allowlist, and the live callable's allowlist is
-  still `Set(["code"])` and rejects unexpected keys, so a build carrying the
-  P4b client fails **every** invite acceptance until it lands. (v2, Node.js 24, 256 MB; `us-central1`
+- **23 functions defined** in code; **22 deployed, but the deployed set no
+  longer matches the code** — the live list was verified against
+  `schedulingapp-88727` on 2026-08-02 via `functions_list_functions`, *before*
+  the P4c rebuild. P4c (2026-08-02) deletes `createEmployeeInvite`,
+  `redeemSignupCode`, `revokeInvite` and `previewInvite` and adds
+  `createEmployeeAccount`, `completeEmployeeSetup` and `deleteEmployeeAccount`,
+  so the live count goes 24 → 23 once it lands. **That deploy is
+  ordering-sensitive in BOTH directions** — deploying deletes the four invite
+  callables, breaking employee creation for any already-installed build; and the
+  new client calls three callables that do not exist until it deploys. Ship the
+  app build and the backend together; there is no safe interleaving. (v2, Node.js 24, 256 MB; `us-central1`
   except `validateUploadedImage` in `us-east1`). The 2026-07-18 deploy shipped
   `placesReverseGeocode`, the travel-aware `sendUpcomingJobReminders` rebuild,
   and the codebase-audit fixes (overdue-sweep ordering, bounded travel-context
@@ -52,7 +55,10 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   **enabled in the console 2026-07-11** — this list previously said it was still
   outstanding, which was wrong. Still outstanding: on-device push verification.
   TTL was extended to `liveActivityTokens`, `rateLimits`, and `signupCodes` on
-  2026-07-20, and a `fieldOverride` for the new `appointmentSeriesNotices` claim
+  2026-07-20 (the `signupCodes` policy is **retired by P4c** — its
+  `fieldOverride` is out of `firestore.indexes.json`, so the next
+  `firestore:indexes` deploy drops it; the orphaned documents still need a
+  one-off console/Admin-SDK cleanup), and a `fieldOverride` for the new `appointmentSeriesNotices` claim
   ledger was added to `firestore.indexes.json` on 2026-07-21 (that ledger has no
   in-code reaper, so the TTL is its only cleanup). Every policy's **expiration
   offset normalized to `0`** — the
@@ -104,10 +110,9 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `placesGetDetails` | callable | `onCall` | `places.js` | `google_places_repository.dart` (address selected) | `GOOGLE_MAP_API_KEY` | App Check ✓ · admin · durable 40/15min |
 | `placesReverseGeocode` | callable | `onCall` | `places.js` | live staff-location map (admin) | `GOOGLE_MAP_API_KEY` | App Check ✓ · admin · durable 120/hr |
 | `deleteAccount` | callable | `onCall` | `account.js` | `account_deletion_service.dart` | — | App Check ✓ · reauth ≤5min · durable 5/15min |
-| `createEmployeeInvite` | callable | `onCall` | `invites.js` | `firebase_employees_repository.dart` | — | App Check ✓ · admin · durable 20/hr·uid |
-| `redeemSignupCode` | callable | `onCall` | `invites.js` | `firebase_employees_repository.dart`, `auth_service.dart` | — | App Check ✓ · durable 5/15min·**email** |
-| `revokeInvite` | callable | `onCall` | `invites.js` | `firebase_employees_repository.dart` (pending-invite row) | — | App Check ✓ · admin · durable 20/hr·uid |
-| `previewInvite` | callable | `onCall` | `invites.js` | `firebase_employees_repository.dart` → `auth_service.dart` (invite code screen) | — | App Check ✓ · **unauthenticated** · durable 10/15min·**code hash** |
+| `createEmployeeAccount` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (invite sheet, roster row Reset password) | — | App Check ✓ · admin · durable 20/hr·uid |
+| `completeEmployeeSetup` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` → `auth_service.dart` (account setup screen) | — | App Check ✓ · authed (own doc) · durable 5/15min·uid |
+| `deleteEmployeeAccount` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (pending-account row) | — | App Check ✓ · admin · durable 20/hr·uid |
 | `waveBootstrap` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN`, `WAVE_BUSINESS_NAME` | App Check ✓ · admin · durable 10/hr |
 | `waveGetConnection` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings mount) | — | App Check ✓ · admin |
 | `waveSetImportSchedule` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings cadence picker) | — | App Check ✓ · admin |
@@ -140,84 +145,91 @@ doesn't burn a slot). Durable-rate-limited 5 per 15 min per uid; refunds the
 slot if the Auth delete fails server-side. Auth user is deleted **first**
 (irreversible step), then the Firestore doc. App Check enforced.
 
-## Employee invites (one-time signup codes)
+## Employee accounts (admin invites, employee sets up)
 
-### `createEmployeeInvite` — `invites.js`
-Admin-only. Creates (or idempotently re-issues) an `invited` `users` doc plus a
-`signupCodes/{sha256(code)}` doc, and returns the **plaintext code once** for the
-admin to share out-of-band. Everything — duplicate-email lookup, prior-code
-sweep, writes — runs in one Firestore transaction to close create/redeem races.
-A claimed (non-`invited`) email is rejected. Durable-rate-limited 20/hr per admin
-uid — the payload is validated (`assertPayloadShape`/`requireString`) **before**
-the limiter, so a burst of malformed submissions can't exhaust a legitimate
-admin's window, while `assertAdmin` stays above the limiter so non-admins still
-can't burn slots. Full flow: `docs/archive/INVITED_SIGNUP_REDESIGN.md`.
+Rebuilt by **P4c, 2026-08-02**, replacing the one-time signup-code flow
+entirely. `invites.js` and `signup_code_utils.js` are deleted along with
+`createEmployeeInvite`, `redeemSignupCode`, `revokeInvite` and `previewInvite`
+— the codebase no longer has an unauthenticated callable. All three callables
+below share `APP_CHECK = {enforceAppCheck: true}`. Full design:
+`docs/plans/redesign-subdocs/2026-08-02-p4c-HANDOFF.md`.
 
-### `redeemSignupCode` — `invites.js`
-Validates a signup code server-side (14-day expiry; token email must equal the
-invite email) and **activates the account atomically** (`uid` + `status:'active'`,
-code consumed). A valid code whose token email ≠ invite email returns a distinct
-`code-email-mismatch`. Rate-limited 5 per 15 min **by token email**, not caller
-uid — a failed signup mints a fresh uid, which would reset a uid-keyed cap.
-Every invite callable shares `APP_CHECK = {enforceAppCheck: true}`.
+The shape: the admin creates the account and hands over an email + shared
+starting password; the employee signs in, replaces the password, and activates
+themselves. **The security posture is weaker than the codes it replaced, with
+the owner's sign-off** — `Welcome123!` is known to everyone, so between creation
+and first sign-in anyone who knows the email can sign in as that person and
+complete setup. What holds instead is that `firestore.rules` grants an `invited`
+user **nothing**, so the window is "can reach the setup screen as this person",
+not "can read the business" — and that the admin controls the window by creating
+the account when they hand the credentials over. That mitigation is operational,
+not technical.
 
-**Widened by P4b (2026-08-02, not yet deployed):** the payload allowlist grew
-from `Set(["code"])` to also accept `firstName`, `lastName`, `phone`,
-`termsAccepted` and `locationConsent`, so the acceptance screen's profile rides
-the activation. The activation patch is built by the pure `buildActivationPatch`
-— it deletes `codeExpiresAt`, stamps `termsAcceptedAt`/`locationConsentAt`
-**only when the flags are actually sent** (the previously-shipped client sends
-just `code`, and a consent record for someone who never saw the checkbox would
-be false), and never writes an empty `name` (`watchAllUsers` orders by `name`
-and Firestore excludes docs missing the orderBy field). The old `{code}` payload
-still activates unchanged — the widening is a superset, which is why the deploy
-is safe in the backend-first direction only.
+### `createEmployeeAccount` — `employee_accounts.js`
+Admin-only. Mints a Firebase Auth account on the shared `DEFAULT_PASSWORD` plus
+an `invited` `users` doc that **already carries the real `uid`**, and returns
+`{email, password, docId}` so the admin surface shows exactly what the server
+set rather than a constant it hopes still matches. The duplicate lookup and the
+doc write share one transaction, so two admins creating the same person can't
+both win.
 
-### `revokeInvite` — `invites.js`
-Admin-only. Cancels a pending invite: one Firestore transaction deletes every
-`signupCodes` doc pointing at the invite (`where("inviteDocId", "==", …)`, a
-single-field auto-index) and then the `invited` `users` doc itself. **The
-transaction is what closes the revoke-vs-redeem race** — both flows transact
-over the same two docs, so a redeem that commits first flips `status` to
-`active` and this refuses with `failed-precondition / invite-not-pending`
-rather than deleting a just-activated account; a missing doc is
-`not-found / invite-not-found`. The transactional core is exported as
-`performRevokeInvite(db, inviteDocId)` for jest, mirroring
-`performCreateInvite`. Guard order is the standard one — auth → `assertAdmin` →
-`assertPayloadShape`/`requireString` → `enforceDurableRateLimit` (its own route
-key, 20/hr per admin uid) → work. An id containing `/` is rejected up front,
-because `.doc()` throws synchronously on it and would surface as an opaque
-`internal`. No rules change: the deletes are Admin SDK, and `allow delete` on
-`/users` stays withdrawn. The revoked row simply vanishes from the roster —
-the live stream drops it, and there is no tombstone state.
+Re-running it on a still-`invited` person **re-provisions**: it refreshes the
+doc's editable fields and resets the password back to the default — that IS the
+"never signed in / lost the password" path. It refuses `already-exists /
+email-exists` once the person has finished setup, and that check runs **before
+touching Auth**, so it can never reset a real person's chosen password and only
+then discover Firestore says no. If the Firestore write fails after the Auth
+account was created, the Auth account is deleted — but only if *we* just minted
+it, since an Auth account with no `users` doc is a sign-in `SplashScreen` can't
+resolve and no admin surface can see.
 
-### `previewInvite` — `invites.js`
-**The ONLY unauthenticated callable in this codebase.** Resolves a signup code
-to `{email, firstName, lastName, role, expiresAtMs}` so the acceptance flow can
-render the invited address **locked** ("From invite") and can honestly
-distinguish an *expired* code from an *invalid* one before the user invents a
-password. It has to be unauthenticated because the caller is accepting an
-invite and **has no account yet** — there is no uid to guard on and none to key
-a rate limit by; storage is sha256-only and `firestore.rules` denies all client
-access to `signupCodes`, so a code alone cannot resolve an email client-side.
+Durable-rate-limited 20/hr per admin uid; the payload is validated
+(`assertPayloadShape`/`requireString`, plus explicit `colorValue` and `jobTitle`
+allowlists — this Admin SDK write bypasses rules, so those checks ARE the
+enforcement) **before** the limiter, while `assertAdmin` stays above it.
+Transactional core exported as `performCreateAccount` for jest.
 
-What stands in for the auth guard, in guard order:
-1. **App Check enforcement** (`enforceAppCheck: true`) — the endpoint only
-   answers genuine app builds.
-2. **`assertPayloadShape(req.data, new Set(["code"]))`** + `requireString`
-   (32-char cap, control-char reject) — validated before the limiter, so a
-   burst of malformed submissions can't exhaust a legitimate caller's window.
-3. **A durable rate limit keyed by the code hash**, 10 per 15 min. A caller
-   varying codes gets a fresh key each time, which is acceptable: at ~60 bits
-   of Crockford-base32 entropy online enumeration is not a real attack.
+### `completeEmployeeSetup` — `employee_accounts.js`
+The employee's own activation — authed, but **not** admin: it resolves the
+caller's doc by `where("uid", "==", req.auth.uid)` and can only ever touch that
+one. Flips `status` to `active` and stamps the setup profile. Refuses
+`failed-precondition / setup-not-pending` when the doc isn't `invited`, so a
+replayed call (or two devices finishing at once) can't rewrite a consent record;
+`not-found / account-not-found` when there's no doc for the uid.
 
-Disclosing the invited email to someone already holding a valid code adds
-nothing an attacker didn't have — the code **is** the bearer credential for
-exactly that account. The response returns only the fields the details screen
-renders: never the doc id, the phone, or the colour. The code is never logged.
-Validity is judged by the shared pure `validateInvitePending` (the same helper
-`validateRedemption` builds on), so preview and redeem can never drift on what
-"pending" means.
+**The caller must have already changed the password.** The server cannot see a
+password, so "you must replace the shared default" is true only because
+`AuthService.completeAccountSetup` calls `User.updatePassword` first and this
+callable is unreachable until that succeeds. Swap the order and an interrupted
+setup leaves an *active* account still on the default.
+
+The patch is built by the pure `buildActivationPatch`: it stamps
+`termsAcceptedAt`/`locationConsentAt` **only when the flags are actually sent
+`true`** (a consent record for someone who never saw the checkbox would be a
+false one), and never writes an empty `name` — it composes from the submitted
+halves falling back per-half to the stored ones, because `watchAllUsers` orders
+by `name` and Firestore excludes docs missing the orderBy field. Rate-limited
+5 per 15 min per uid: setup runs once per person, and a handful of retries
+covers a fumbled password.
+
+### `deleteEmployeeAccount` — `employee_accounts.js`
+Admin-only. Removes an account that has never been set up — the `users` doc and
+the Firebase Auth account both. **Transactional, and refuses once the person has
+set up** (`failed-precondition / account-not-pending`): from that point the
+account is theirs and the no-delete invariant applies, so disable is the only
+removal. A setup that commits first therefore makes this refuse rather than
+delete a just-activated account; a missing doc is `not-found /
+account-not-found`.
+
+Doc first, Auth second — an Auth account with no doc is invisible to every admin
+surface, while a doc with no Auth account is visible and fixable by re-creating.
+`auth/user-not-found` is swallowed so a partial earlier run converges. Guard
+order is the standard one (auth → `assertAdmin` → payload →
+`enforceDurableRateLimit` 20/hr per admin uid → work), and an id containing `/`
+is rejected up front because `.doc()` throws synchronously on it and would
+surface as an opaque `internal`. No rules change: the deletes are Admin SDK, and
+`allow delete` on `/users` stays withdrawn. Transactional core exported as
+`performDeleteAccount` for jest.
 
 ## Maps / Places proxies
 

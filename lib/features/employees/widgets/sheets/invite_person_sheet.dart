@@ -23,12 +23,12 @@ import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
 import 'package:scheduling/shared/widgets/sheets/form_sheet_frame.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-/// Opens the invite sheet. Resolves to `true` once the invite is created and
-/// the admin has dismissed the signup-code dialog, null otherwise.
+/// Opens the invite sheet. Resolves to `true` once the account is created and
+/// the admin has dismissed the new-account dialog, null otherwise.
 ///
-/// Deliberately NOT returning the created record: the invite is written
-/// server-side by `createEmployeeInvite`, so the client never holds the doc id.
-/// The roster picks it up from the live users stream.
+/// Deliberately NOT returning the created record: the account is written
+/// server-side by `createEmployeeAccount`, so the client never holds the doc
+/// id. The roster picks it up from the live users stream.
 Future<bool?> showInvitePersonSheet(
   BuildContext context, {
   required Set<int> usedColors,

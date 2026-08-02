@@ -20,6 +20,12 @@ const {
  *
  * That window is still real. Create the account when you are handing the
  * credentials over, not weeks ahead.
+ *
+ * **Hand-mirrored by `kDefaultStartingPassword` in
+ * `lib/features/employees/domain/policies/starting_password_policy.dart`.**
+ * This side is the authority; that one is only a display fallback for a row
+ * whose account was created earlier. Change one and change the other — both
+ * sides pin the literal in a test so a silent drift fails the suite.
  */
 const DEFAULT_PASSWORD = "Welcome123!";
 
@@ -194,9 +200,13 @@ const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
   const provisioned = await provisionAuthAccount(
       auth, email, name, DEFAULT_PASSWORD);
 
-  let outcome;
+  // The refusal is raised INSIDE the try so one catch owns the rollback —
+  // "when do we un-mint the Auth account" must not have two answers to keep in
+  // sync. Never leave an Auth account with no users doc: it would be a sign-in
+  // that SplashScreen can't resolve and no admin surface can see or clean up.
+  // Only roll back an account WE just minted.
   try {
-    outcome = await performCreateAccount(
+    const outcome = await performCreateAccount(
         db,
         {
           name, firstName, lastName, email, phone, colorValue, jobTitle,
@@ -207,24 +217,16 @@ const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
           serverTimestamp: () => FieldValue.serverTimestamp(),
         },
     );
+    if (!outcome.ok) throw new HttpsError("already-exists", "email-exists");
   } catch (e) {
-    // Never leave an Auth account with no users doc: it would be a sign-in
-    // that SplashScreen can't resolve and no admin surface can see or clean
-    // up. Only roll back an account WE just minted.
     if (!provisioned.reused) {
       await auth.deleteUser(provisioned.uid).catch(() => {});
     }
     throw e;
   }
-  if (!outcome.ok) {
-    if (!provisioned.reused) {
-      await auth.deleteUser(provisioned.uid).catch(() => {});
-    }
-    throw new HttpsError("already-exists", "email-exists");
-  }
   // The password is returned so the admin surface shows exactly what was set
   // rather than a constant it hopes still matches the server.
-  return {email, password: DEFAULT_PASSWORD, docId: outcome.docId};
+  return {email, password: DEFAULT_PASSWORD};
 });
 
 /**
@@ -301,13 +303,7 @@ const completeEmployeeSetup = onCall(APP_CHECK, async (req) => {
         {userData, serverTimestamp: () => FieldValue.serverTimestamp()},
     );
     tx.update(doc.ref, patch);
-    return {
-      ok: true,
-      role: userData.role || "employee",
-      // The just-written name when setup supplied one, so the response can't
-      // report a name the doc no longer has.
-      name: patch.name || userData.name || "",
-    };
+    return {ok: true};
   });
 
   if (!outcome.ok) {
@@ -316,7 +312,9 @@ const completeEmployeeSetup = onCall(APP_CHECK, async (req) => {
     }
     throw new HttpsError("not-found", "account-not-found");
   }
-  return {role: outcome.role, name: outcome.name};
+  // No profile echoed back: the client discards it and re-resolves the account
+  // through findUserByUid to route, so building one here served nothing.
+  return {ok: true};
 });
 
 /**

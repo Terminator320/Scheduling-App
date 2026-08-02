@@ -3,7 +3,9 @@
 /// **Hand-mirrored from `DEFAULT_PASSWORD` in
 /// `functions/employee_accounts.js`, which is the authority.** Change one and
 /// change the other, or the roster row tells an admin a password the account
-/// was never given. Pinned on both sides by a test.
+/// was never given. Both sides pin the literal in a test — here in
+/// `pending_invite_tile_test.dart`, there in `employee_accounts.test.js` — so a
+/// one-sided rotation fails the suite instead of drifting silently.
 ///
 /// This is only ever a DISPLAY fallback. Any surface that has just called
 /// `createEmployeeAccount` shows the password the server echoed back
