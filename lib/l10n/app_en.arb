@@ -872,10 +872,6 @@
   "@error_nameAndEmailAreRequired": {
     "description": "Name and email are required"
   },
-  "employees_employeeDeleted": "Employee deleted",
-  "@employees_employeeDeleted": {
-    "description": "Employee deleted"
-  },
   "employees_employeeDisabledSuccessfully": "Employee disabled",
   "@employees_employeeDisabledSuccessfully": {
     "description": "Employee disabled"
@@ -895,14 +891,6 @@
   "error_anEmployeeWithThisEmailAlreadyExists": "An employee with this email already exists",
   "@error_anEmployeeWithThisEmailAlreadyExists": {
     "description": "An employee with this email already exists"
-  },
-  "employees_deleteEmployee": "Delete employee",
-  "@employees_deleteEmployee": {
-    "description": "Delete employee"
-  },
-  "employees_areYouSureYouWantToDeleteThisEmployee": "Are you sure you want to delete this employee?",
-  "@employees_areYouSureYouWantToDeleteThisEmployee": {
-    "description": "Are you sure you want to delete this employee?"
   },
   "auth_forgotYourPassword": "Forgot your password?",
   "@auth_forgotYourPassword": {
@@ -1558,10 +1546,6 @@
   "error_causeUnknown": "something went wrong",
   "@error_causeUnknown": {
     "description": "Sanitized error cause: fallback"
-  },
-  "error_introDeleteEmployee": "Couldn't delete the employee",
-  "@error_introDeleteEmployee": {
-    "description": "Error intro for EMP-DEL"
   },
   "error_introChangeEmployeeStatus": "Couldn't update the employee's account status",
   "@error_introChangeEmployeeStatus": {

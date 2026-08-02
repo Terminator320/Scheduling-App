@@ -103,9 +103,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     if (!mounted) return;
 
     final notices = ref.read(noticeServiceProvider);
-    if (result == 'deleted') {
-      notices.success(context.l10n.employees_employeeDeleted);
-    } else if (result == true) {
+    if (result == true) {
       notices.success(
         employee == null
             ? context.l10n.employees_employeeAddedSuccessfully
@@ -273,9 +271,6 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     switch (action) {
       case 'edit':
         _openEmployeeSheet(employee: employee);
-      case 'deleted':
-        setState(() => _selectedEmployee = null);
-        notices.success(context.l10n.employees_employeeDeleted);
       case 'disabled':
         notices.success(context.l10n.employees_employeeDisabledSuccessfully);
       case 'enabled':

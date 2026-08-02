@@ -190,11 +190,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }
 
   @override
-  Future<void> deleteEmployee(String docId) async {
-    await _users.doc(docId).delete();
-  }
-
-  @override
   Future<UserUidMatch?> findUserByUid(String uid) async {
     final result = await _users.where('uid', isEqualTo: uid).limit(1).get();
     if (result.docs.isEmpty) return null;

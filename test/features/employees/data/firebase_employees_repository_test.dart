@@ -94,7 +94,6 @@ void main() {
 
     when(() => collection.doc(any())).thenReturn(docRef);
     when(() => docRef.update(any())).thenAnswer((_) async {});
-    when(() => docRef.delete()).thenAnswer((_) async {});
     when(() => docRef.get()).thenAnswer((_) async => docSnapshot);
     when(() => docRef.firestore).thenReturn(firestore);
     when(() => collection.add(any())).thenAnswer((_) async => docRef);

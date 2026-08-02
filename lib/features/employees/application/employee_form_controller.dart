@@ -50,43 +50,22 @@ class EmployeeStatusChangeFailed extends EmployeeStatusOutcome {
   final Object error;
 }
 
-/// Outcome of an employee delete.
-sealed class EmployeeDeleteOutcome {
-  const EmployeeDeleteOutcome();
-}
-
-class EmployeeDeleted extends EmployeeDeleteOutcome {
-  const EmployeeDeleted();
-}
-
-class EmployeeDeleteFailed extends EmployeeDeleteOutcome {
-  const EmployeeDeleteFailed(this.error);
-  final Object error;
-}
-
 /// Busy flags for the employee form/detail surfaces — these drive the Save
-/// button and the status/delete button spinners.
+/// button and the status button spinners.
 @immutable
 class EmployeeFormActivity {
   const EmployeeFormActivity({
     this.isSaving = false,
     this.isTogglingStatus = false,
-    this.isDeleting = false,
   });
 
   final bool isSaving;
   final bool isTogglingStatus;
-  final bool isDeleting;
 
-  EmployeeFormActivity copyWith({
-    bool? isSaving,
-    bool? isTogglingStatus,
-    bool? isDeleting,
-  }) {
+  EmployeeFormActivity copyWith({bool? isSaving, bool? isTogglingStatus}) {
     return EmployeeFormActivity(
       isSaving: isSaving ?? this.isSaving,
       isTogglingStatus: isTogglingStatus ?? this.isTogglingStatus,
-      isDeleting: isDeleting ?? this.isDeleting,
     );
   }
 
@@ -94,17 +73,16 @@ class EmployeeFormActivity {
   bool operator ==(Object other) =>
       other is EmployeeFormActivity &&
       other.isSaving == isSaving &&
-      other.isTogglingStatus == isTogglingStatus &&
-      other.isDeleting == isDeleting;
+      other.isTogglingStatus == isTogglingStatus;
 
   @override
-  int get hashCode => Object.hash(isSaving, isTogglingStatus, isDeleting);
+  int get hashCode => Object.hash(isSaving, isTogglingStatus);
 }
 
-/// Handles employee create/update/status/delete, shared by the form sheet
-/// and the details view. The employees list streams straight from Firestore,
-/// so there's no need for a refresh bump here like the paginated clients
-/// list needs.
+/// Handles employee create/update/status, shared by the form sheet and the
+/// details view. The employees list streams straight from Firestore, so
+/// there's no need for a refresh bump here like the paginated clients list
+/// needs.
 class EmployeeFormController extends Notifier<EmployeeFormActivity> {
   @override
   EmployeeFormActivity build() => const EmployeeFormActivity();
@@ -188,24 +166,6 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
       return EmployeeStatusChangeFailed(e);
     } finally {
       if (ref.mounted) state = state.copyWith(isTogglingStatus: false);
-    }
-  }
-
-  /// Deletes the employee's users doc. On success, [state] stays in the
-  /// deleting state so the details surface keeps its spinner while its host
-  /// pops or clears it.
-  Future<EmployeeDeleteOutcome> deleteEmployee(String docId) async {
-    // Resolved before the first await — see _save.
-    final repo = ref.read(employeesRepositoryProvider);
-    final logger = ref.read(loggerProvider);
-    state = state.copyWith(isDeleting: true);
-    try {
-      await repo.deleteEmployee(docId);
-      return const EmployeeDeleted();
-    } catch (e, st) {
-      logger.warn('EMP-DEL deleteEmployee failed', e, st);
-      if (ref.mounted) state = state.copyWith(isDeleting: false);
-      return EmployeeDeleteFailed(e);
     }
   }
 }
