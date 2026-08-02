@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
@@ -46,14 +47,17 @@ const _activeJane = EmployeeRecord(
 
 Widget _wrap({
   required Stream<List<EmployeeRecord>> Function() employees,
+  Stream<List<EmployeeRecord>> Function()? allUsers,
   List<Override> overrides = const [],
 }) {
   // Overrides both allUsersStreamProvider and employeesStreamProvider — each
   // employees() call must return a fresh stream since the two subscribe independently.
+  // [allUsers] splits them where the distinction is the point (watchEmployees
+  // filters to active; watchAllUsers does not).
   return ProviderScope(
     overrides: [
       employeesStreamProvider.overrideWith((_) => employees()),
-      allUsersStreamProvider.overrideWith((_) => employees()),
+      allUsersStreamProvider.overrideWith((_) => (allUsers ?? employees)()),
       ...overrides,
     ],
     child: ThemeNotifier(
@@ -231,4 +235,43 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets("a disabled employee's colour is offered as taken", (
+    tester,
+  ) async {
+    // crewPalette[1], not [0]: the add sheet seeds [0] as the selection, and
+    // EmployeeColorGrid always keeps the selected swatch visible.
+    final takenColor = AppColors.crewPalette[1];
+    final disabled = EmployeeRecord(
+      id: 'e9',
+      name: 'Old Tech',
+      status: 'disabled',
+      color: takenColor,
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        // watchEmployees filters to active, so this is empty — which is
+        // exactly the bug: the old code read this provider.
+        employees: () => Stream.value(const <EmployeeRecord>[]),
+        allUsers: () => Stream.value([disabled]),
+        overrides: [
+          employeesRepositoryProvider.overrideWithValue(_MockEmployeesRepo()),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+
+    // EmployeeColorGrid HIDES taken colours, so the assertion is an absence.
+    expect(find.byKey(ValueKey(takenColor.toARGB32())), findsNothing);
+    // The palette is otherwise intact — this isn't an empty-grid false pass.
+    expect(
+      find.byKey(ValueKey(AppColors.crewPalette[2].toARGB32())),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
