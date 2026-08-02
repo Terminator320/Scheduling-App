@@ -45,6 +45,9 @@ class EmployeeColorGrid extends ConsumerWidget {
       children: [
         for (var i = 0; i < available.length; i++)
           _SwatchButton(
+            // Keyed by the STORED argb so a test can assert a specific swatch
+            // is offered (or hidden as taken).
+            key: ValueKey(available[i].toARGB32()),
             // Display resolves through the theme; the STORED value stays the
             // canonical light int.
             color: crewColorOf(theme, available[i].toARGB32()),
@@ -107,6 +110,7 @@ class _SwatchButton extends StatelessWidget {
     required this.isSelected,
     required this.semanticLabel,
     required this.onTap,
+    super.key,
   });
 
   static const double _targetSize = 48;

@@ -82,8 +82,14 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
   }
 
   Future<void> _openEmployeeSheet({EmployeeRecord? employee}) async {
+    // Every status counts as taken, not just active ones: a DISABLED
+    // employee's colour must stay reserved (re-enabling them would otherwise
+    // collide with whoever took it, and the crew colour is what the appointment
+    // bar and the calendar dots are keyed on), and an INVITED employee's colour
+    // was already reserved by the invite. `employeesStreamProvider` filters to
+    // active, so it is the wrong source here.
     final employees =
-        ref.read(employeesStreamProvider).asData?.value ?? const [];
+        ref.read(allUsersStreamProvider).asData?.value ?? const [];
     final usedColors = _usedColors(employees, excludeId: employee?.id);
 
     final result = await showAppBottomSheet<Object?>(
