@@ -122,5 +122,25 @@ void main() {
       );
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets(
+      'ForgotPassword sent state renders at scale ${scale}x without overflow',
+      (tester) async {
+        when(() => auth.sendPasswordResetEmail(any())).thenAnswer((_) async {});
+        await _pumpAtViewport(
+          tester,
+          _scaled(
+            scale: scale,
+            home: ForgotPasswordScreen(
+              authService: auth,
+              initialEmail: 'user@example.com',
+            ),
+          ),
+        );
+        await tester.tap(find.byType(FilledButton).first);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 }

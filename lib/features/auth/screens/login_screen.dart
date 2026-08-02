@@ -136,6 +136,7 @@ class _LoginState extends ConsumerState<Login> {
     }
   }
 
+  // TODO(p4b): route to the code screen (Task 6)
   Future<void> _openCreateAccount() async {
     final prefill = _emailController.text.trim();
     final result = await Navigator.of(context).push<CreateAccountResult>(
@@ -221,14 +222,17 @@ class _LoginState extends ConsumerState<Login> {
   Widget build(BuildContext context) {
     final isLoading = ref.watch(signInControllerProvider).inProgress;
     return AuthScaffold(
+      hero: AuthHero(
+        title: context.l10n.auth_welcomeBack,
+        subtitle: context.l10n.auth_signInToYourAccount,
+      ),
+      footer: _AcceptInvitePrompt(
+        enabled: !isLoading,
+        onAcceptInvite: _openCreateAccount,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AuthBrandHeader(
-            title: context.l10n.auth_welcomeBack,
-            subtitle: context.l10n.auth_signInToYourAccount,
-          ),
-          const SizedBox(height: AppSpacing.sp24),
           AuthBanner(
             message: _bannerError ?? _bannerSuccess,
             kind: _bannerError != null
@@ -237,6 +241,7 @@ class _LoginState extends ConsumerState<Login> {
           ),
           const SizedBox(height: AppSpacing.sp16),
           AuthEmailField(
+            label: context.l10n.common_email,
             controller: _emailController,
             focusNode: _emailFocus,
             enabled: !isLoading,
@@ -248,6 +253,7 @@ class _LoginState extends ConsumerState<Login> {
           const SizedBox(height: AppSpacing.sp16),
           AuthPasswordField(
             label: context.l10n.common_password,
+            showLabel: true,
             controller: _passwordController,
             focusNode: _passwordFocus,
             enabled: !isLoading,
@@ -272,27 +278,22 @@ class _LoginState extends ConsumerState<Login> {
             isLoading: isLoading,
             onPressed: _signIn,
           ),
-          const SizedBox(height: AppSpacing.sp24),
-          _CreateAccountPrompt(
-            enabled: !isLoading,
-            onCreateAccount: _openCreateAccount,
-          ),
         ],
       ),
     );
   }
 }
 
-/// The bottom CTA on the sign-in screen — a muted prompt plus a "Create account"
+/// The prompt under the sign-in card — plain text plus an "Accept your invite"
 /// link, wrapped so it still flows nicely at large text scale.
-class _CreateAccountPrompt extends StatelessWidget {
-  const _CreateAccountPrompt({
+class _AcceptInvitePrompt extends StatelessWidget {
+  const _AcceptInvitePrompt({
     required this.enabled,
-    required this.onCreateAccount,
+    required this.onAcceptInvite,
   });
 
   final bool enabled;
-  final VoidCallback onCreateAccount;
+  final VoidCallback onAcceptInvite;
 
   @override
   Widget build(BuildContext context) {
@@ -304,15 +305,15 @@ class _CreateAccountPrompt extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         Text(
-          context.l10n.auth_dontHaveAnAccount,
+          context.l10n.auth_invitedByYourEmployer,
           style: textTheme.bodyMedium?.copyWith(
             color: scheme.onSurfaceVariant,
           ),
         ),
         TextButton(
-          onPressed: enabled ? onCreateAccount : null,
+          onPressed: enabled ? onAcceptInvite : null,
           child: Text(
-            context.l10n.auth_createAccount,
+            context.l10n.auth_acceptYourInvite,
             style: textTheme.bodyMedium?.copyWith(
               color: scheme.primary,
               fontWeight: FontWeight.w600,

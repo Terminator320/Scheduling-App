@@ -79,4 +79,42 @@ void main() {
     verify(() => auth.sendPasswordResetEmail('user@example.com')).called(1);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('sent state lists the reset facts inside the SENT panel', (
+    tester,
+  ) async {
+    when(() => auth.sendPasswordResetEmail(any())).thenAnswer((_) async {});
+
+    await tester.pumpWidget(_wrap(auth, initialEmail: 'user@example.com'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Send').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('SENT'), findsOneWidget);
+    expect(find.text('The reset link expires in 1 hour.'), findsOneWidget);
+    expect(
+      find.text('Using it signs you out on every device.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Send it again resends once, then relabels and greys', (
+    tester,
+  ) async {
+    when(() => auth.sendPasswordResetEmail(any())).thenAnswer((_) async {});
+
+    await tester.pumpWidget(_wrap(auth, initialEmail: 'user@example.com'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Send').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Send it again'));
+    await tester.pumpAndSettle();
+
+    verify(() => auth.sendPasswordResetEmail('user@example.com')).called(2);
+    expect(find.text('Send it again'), findsNothing);
+    expect(find.text('Sent again just now'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

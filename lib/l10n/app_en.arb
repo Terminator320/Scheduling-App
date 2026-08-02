@@ -912,10 +912,6 @@
   "@auth_youExampleCom": {
     "description": "you@example.com"
   },
-  "auth_didnTReceiveTheEmailTryAgain": "Didn't receive the email? Try again",
-  "@auth_didnTReceiveTheEmailTryAgain": {
-    "description": "Didn't receive the email? Try again"
-  },
   "error_tooManyAttemptsPleaseTryAgainLater": "Too many attempts. Please try again later.",
   "@error_tooManyAttemptsPleaseTryAgainLater": {
     "description": "Too many attempts. Please try again later."
@@ -935,10 +931,6 @@
   "auth_ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent": "If an account exists for this email, a password reset link has been sent.",
   "@auth_ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent": {
     "description": "If an account exists for this email, a password reset link has been sent."
-  },
-  "auth_theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder": "The email may take a few minutes to arrive. Remember to check your spam folder.",
-  "@auth_theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder": {
-    "description": "The email may take a few minutes to arrive. Remember to check your spam folder."
   },
   "error_somethingWentWrong": "Something went wrong",
   "@error_somethingWentWrong": {
@@ -1149,10 +1141,6 @@
   "auth_signInToYourAccount": "Sign in to your account",
   "@auth_signInToYourAccount": {
     "description": "Sign in to your account"
-  },
-  "auth_dontHaveAnAccount": "Don't have an account?",
-  "@auth_dontHaveAnAccount": {
-    "description": "Prompt before the Create account link on the sign-in screen"
   },
   "common_tapToScheduleAnAppointment": "Tap + to schedule an appointment.",
   "@common_tapToScheduleAnAppointment": {
@@ -2479,5 +2467,45 @@
   "employees_noWorkingDays": "No working days set",
   "@employees_noWorkingDays": {
     "description": "Working-days summary when no day is marked as worked"
+  },
+  "auth_invitedByYourEmployer": "Invited by your employer?",
+  "@auth_invitedByYourEmployer": {
+    "description": "Prompt before the Accept your invite link on the sign-in screen"
+  },
+  "auth_acceptYourInvite": "Accept your invite",
+  "@auth_acceptYourInvite": {
+    "description": "Link under the sign-in card that starts the invite acceptance flow"
+  },
+  "auth_show": "Show",
+  "@auth_show": {
+    "description": "Text link inside a password field that reveals the password"
+  },
+  "auth_hide": "Hide",
+  "@auth_hide": {
+    "description": "Text link inside a password field that masks the password again"
+  },
+  "auth_noEmailOnAccountNote": "No email on your account? Ask your admin to add one before you reset.",
+  "@auth_noEmailOnAccountNote": {
+    "description": "Attention note on the reset-password form for accounts with no email"
+  },
+  "auth_resetSentPanelTitle": "SENT",
+  "@auth_resetSentPanelTitle": {
+    "description": "Mono uppercase label on the resend panel of the reset-password sent state"
+  },
+  "auth_resetExpiryFact": "The reset link expires in 1 hour.",
+  "@auth_resetExpiryFact": {
+    "description": "First fact listed after a password reset link is sent"
+  },
+  "auth_resetSignsOutFact": "Using it signs you out on every device.",
+  "@auth_resetSignsOutFact": {
+    "description": "Second fact listed after a password reset link is sent"
+  },
+  "auth_sendItAgain": "Send it again",
+  "@auth_sendItAgain": {
+    "description": "Action in the SENT panel that resends the password reset email once"
+  },
+  "auth_sentAgainJustNow": "Sent again just now",
+  "@auth_sentAgainJustNow": {
+    "description": "Label replacing the resend action once the reset email has been resent"
   }
 }
