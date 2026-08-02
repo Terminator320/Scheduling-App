@@ -14,7 +14,7 @@ lib/
 │
 ├── core/                            Cross-cutting concerns — nothing feature-specific lives here
 │   ├── app/                         app_sync_listeners.dart (AppSyncListeners — the ~10 ref.listen wire-ups main.dart used to hold inline: push/presence/live-activity registration, widget + Siri snapshot sync, pending-photo drain; extracted so they're unit-testable without building MaterialApp)
-│   ├── adaptive/                     iOS adaptive layer — context.isCupertino (the single iOS-vs-Android UI seam) + showAdaptiveActionSheet, AdaptiveProgressIndicator, AppScrollBehavior (iOS CupertinoScrollbar); Android unchanged
+│   ├── adaptive/                     iOS adaptive layer — context.isCupertino (the single iOS-vs-Android UI seam) + showAdaptiveActionSheet, AdaptiveProgressIndicator, AppScrollBehavior (iOS CupertinoScrollbar), adaptive_pickers (showAdaptiveTimePicker / showAdaptiveDatePicker — Cupertino wheel on iOS, Material elsewhere; promoted out of features/calendar/utils once the employee availability rows reused them) + cupertino_time_picker (the wheel sheets behind them); Android unchanged
 │   ├── animations/                  Shared animation widgets (FadeInItem, TapScale, AnimatedLoadingButton, AnimatedFormFieldWrapper — transition-only field shake)
 │   ├── connectivity/                App-wide connectivity — connectivity_providers.dart + offline_banner.dart (OfflineBanner shown when the device drops offline; connectivity_plus)
 │   ├── constants/                   app_urls.dart — external URL constants (e.g. the Settings privacy-policy link)
@@ -32,7 +32,7 @@ lib/
 │   ├── storage/                     SecureStorageService + SecureStorageKeys — encrypted local storage (flutter_secure_storage)
 │   ├── theme/                       Design tokens (AppColors, AppSpacing, AppRadius), button_styles (destructiveOutlinedButtonStyle), ThemeData, ThemeNotifier
 │   ├── utils/                       l10n_extensions.dart (context.l10n), date helpers, current_day_provider.dart (currentDayProvider — the local calendar day, self-invalidating at midnight; the off-screen schedule mirrors watch it so day buckets can't go stale overnight), language controller, sheet focus, retry.dart (retryAsync/retryStream — one post-sign-in permission-denied retry while the auth token propagates), reentrant_sync.dart (ReentrantSync mixin — coalesce-not-drop guard shared by the push/presence/live-activity registration controllers' sync())
-│   └── validators/                  Auth input validators (email format, password rules)
+│   └── validators/                  Auth input validators (email format, password rules), text_limits (TextLimits — the client-side length caps), phone_format (formatPhoneNumber / phoneDigits / PhoneInputFormatter — the `(514) 555-1234` mask every phone field types through; numbers are STORED formatted)
 │
 ├── shared/widgets/                  Reusable UI components used across ≥2 features, grouped by type
 │   ├── app_bars/                    app_top_bar (AppTopBar — the standard primary app bar every screen uses; slims in landscape)
@@ -41,7 +41,7 @@ lib/
 │   ├── fields/                      address_autocomplete_field, labeled_text_field (built-in shake + animated error row), app_search_bar, clear_text_button (ClearTextButton — the one clear-"x" suffix), form_helpers
 │   ├── cards/                       list_item_tile (shared row layout behind client/employee tiles), info_card (InfoCard + InfoCardRow — bordered card of tappable rows with tinted icon chips)
 │   ├── dialogs/                     confirm_dialog (showConfirmDialog — shared Cancel/confirm, destructive variant)
-│   ├── sheets/                      sheet_widgets (DraggableSheetFrame, SheetHandle, DetailSheetListView — detail-view scroll shell; FormSheetScaffold — add/edit form-sheet chrome), app_bottom_sheet (showAppBottomSheet — the shared modal-sheet opener)
+│   ├── sheets/                      sheet_widgets (DraggableSheetFrame, SheetHandle, DetailSheetListView — detail-view scroll shell), form_sheet_frame (FormSheetFrame — the one add/edit form-sheet chrome), sheet_header_bar (SheetHeaderBar — the one sheet header: Cancel · title · primary verb), app_bottom_sheet (showAppBottomSheet — the shared modal-sheet opener)
 │   └── branding/                    brand_logo (BrandMark — the plumber-mascot app logo from assets/images/icon.png + the brandName const; pass decorative:true where a visible wordmark sits beside it)
 │
 ├── routes/
@@ -59,7 +59,7 @@ lib/
     ├── calendar/                    Appointments — creation, editing, viewing, repeating series, image uploads (offline-durable via PendingUploadStore), day_route_screen (a day's stops numbered in start order, day picker + employee switcher → multi-stop maps handoff); JobTemplate quick-fill chips seed title/duration on the add form (display-only, never stored)
     ├── clients/                     Client management — CRUD, contacts, appointment history; client detail shows a Job history section (ClientJobHistorySection → fetchClientHistory, clientId-only single-field query sorted in Dart)
     ├── dashboard/                   Admin dashboard — pure stat reducers (DashboardAggregator) over one 8-week appointments range → hero/workload/trends/attention sections + fl_chart WeeklyBarChart
-    ├── employees/                   Team roster + person detail (rebuilt in P4, 2026-08-02). The user doc carries firstName/lastName, jobTitle (JobTitle enum — NOT the access role), a Sunday-indexed workingDays[7] + work start/end minutes, maxJobsPerDay (0 = no cap), onCall and emergencyContact; `name` is always recomposed through composeEmployeeName so it can never go empty (watchAllUsers orders by it). Roster row shows "<jobTitle> · <n> jobs today" from ONE day-range listener reduced in Dart (employeeJobsTodayProvider), never a query per row. Detail = EmployeeProfileCard (avatar-as-colour-swatch + status/on-call chips + Edit pill) → Call/Email quick actions → KeyValuePanel → EmployeeTodaySection (AppointmentCards, renders "No jobs today" rather than omitting). EmployeeFormSheet split into InvitePersonSheet + EditPersonSheet on FormSheetFrame; disable/enable lives in the edit sheet footer with a future-assignment count caption. **There is no delete** — disable is the only removal (owner decision 2026-08-02).
+    ├── employees/                   Team roster + person detail (rebuilt in P4, 2026-08-02). The user doc carries firstName/lastName, jobTitle (JobTitle enum — NOT the access role), a Sunday-indexed workingDays[7] + work start/end minutes, maxJobsPerDay (0 = no cap), onCall, and the emergencyContact/emergencyPhone pair (their own section on both the edit sheet and the detail view, apart from hours and access); `name` is always recomposed through composeEmployeeName so it can never go empty (watchAllUsers orders by it). Roster row shows "<jobTitle> · <n> jobs today" from ONE day-range listener reduced in Dart (employeeJobsTodayProvider), never a query per row. Detail = EmployeeProfileCard (avatar-as-colour-swatch + status/on-call chips + Edit pill) → Call/Email quick actions → KeyValuePanel → EmployeeTodaySection (AppointmentCards, renders "No jobs today" rather than omitting). EmployeeFormSheet split into InvitePersonSheet + EditPersonSheet on FormSheetFrame; disable/enable lives in the edit sheet footer with a future-assignment count caption. **There is no delete** — disable is the only removal (owner decision 2026-08-02).
     ├── feature_tour/                In-app guided tours (showcaseview 5.x) — one FeatureTourHost per hub tab registers its own scope and auto-starts once per tab (device-local tourSeenProvider / SharedPreferences); tourStepsFor is the pure role-aware step catalog, screens wire per-step GlobalKeys and pass ready:false while their body is a loading placeholder; Settings "Replay app tour" row is the only reset
     ├── home_widget/                 iOS home-screen schedule widget — WidgetSyncService writes a two-day payload (todayJobs + tomorrowJobs + on-device rolloverAt) into the App Group (home_widget); mirrors functions/widget_payload_utils.js; the today bucket is endTime-based for isAllDay records and nextJob prefers a timed job; Android no-op
     ├── live_activity/               iOS "time to leave" Lock Screen / Dynamic Island card — LiveActivityRegistrationController upserts the device push-to-start token + one update token per live card into users/{docId}/liveActivityTokens; canHostCards() is the single capability probe; liveActivityEnabledProvider is the device-local opt-out whose Settings toggle must also unregister(). Cards are push-STARTED by functions/live_activity_dispatch.js; Android no-op
@@ -366,6 +366,19 @@ Free-text input length caps live in `lib/core/validators/text_limits.dart`. The 
 1. `LabeledTextField(maxLength: TextLimits.x)` — uses `LengthLimitingTextInputFormatter` to cap input as the user types.
 2. Form validators (`AppointmentFormValidator`) — defensive backup.
 3. Firestore rules (where applicable) — defense in depth.
+
+A rules cap is **not** required to match the client cap, and for user docs it
+deliberately doesn't: it mirrors the widest value a shipped write path can
+produce. `TextLimits.phone` is 15 but `isValidUserData` caps `phone` and
+`emergencyPhone` at 40, because `createEmployeeInvite` accepts 40 — a tighter
+rule would leave an invite-created doc permanently un-updatable.
+
+`LabeledTextField(inputFormatters:)` takes extra formatters, applied **before**
+the length cap so the cap measures the formatted text the field will hold. Its
+one production use is `PhoneInputFormatter`
+(`lib/core/validators/phone_format.dart`), which masks every phone field to
+`(514) 555-1234` as the user types — see the phone-format invariant in
+`CLAUDE.md` for what that means for storage, `tel:` launching and search.
 
 Status enums (`AppointmentStatus` written by `updateAppointmentStatus`) are allowlisted at both the repository (`{pending, in_progress, done, cancelled}`) and `firestore.rules`. Employees can only write `status='done'`. Edits that re-serialize a whole record normalize the stored status through `AppointmentStatus.storedRaw(status)` first (seed + series `propagate`) so a legacy `confirmed`/unknown value can't be re-written verbatim and rejected. `AppointmentStatus.overdue` is a **display-only** state — never stored, never in the picker (`appointmentValues`) or allowlist; `AppointmentRecord.displayStatus` derives it (and `in_progress`) from the clock, and reading `overdue.raw` throws so it can't leak into a write.
 

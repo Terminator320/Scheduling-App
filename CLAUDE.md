@@ -447,10 +447,34 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   silently mislabels every day.
 - **A user-doc rules cap must not be tighter than the widest value a shipped
   write path can produce.** `createEmployeeInvite` accepts `phone` up to 40
-  chars while `TextLimits.phone` is 32, so `isValidUserData` caps phone at
-  **40** — a cap of 32 would make every invite-created doc with a longer phone
+  chars while `TextLimits.phone` is 15, so `isValidUserData` caps phone at
+  **40** — a cap of 15 would make every invite-created doc with a longer phone
   permanently un-updatable, including by `deactivateEmployee`. Rules caps mirror
-  the *server* limit; the client caps with `TextLimits`.
+  the *server* limit; the client caps with `TextLimits`. Same reasoning for the
+  P4b `emergencyPhone`: rules cap **40**, client caps `TextLimits.phone`.
+- **Phone numbers are stored FORMATTED, not as raw digits** (owner call,
+  2026-08-02). `PhoneInputFormatter` (`core/validators/phone_format.dart`) masks
+  every phone field as it is typed, so `phone`, `emergencyPhone` and each
+  contact phone persist as `(514) 555-1234`. Two deliberate pass-throughs, both
+  load-bearing: anything containing `+` is returned untouched (an international
+  number has no fixed 10-digit shape, and bracketing its first three digits as
+  an area code would be wrong), and digits past the tenth are appended verbatim
+  rather than truncated, so an extension survives. Consequences to keep in
+  sync — **`launchPhoneCall` strips back to digits** (keeping a leading `+`)
+  before building the `tel:` URI, because `Uri` percent-encodes the brackets and
+  space into a path some dialers reject; and `ClientSearchPolicy.digitsOnly`
+  already normalized on both sides, so phone search is unaffected.
+  `TextLimits.phone` is **15**, which fits the formatted 14-char result with one
+  to spare — note that this truncates a longer international number, so raise it
+  before shipping outside North America.
+- **`emergencyContact` and `emergencyPhone` are their own section, not a tail on
+  availability.** Both the edit sheet (`MonoSectionLabel`
+  `employees_sectionEmergency`) and the read-only detail view (its own
+  `KeyValuePanel`, rendered only when non-empty) group them apart from hours and
+  access — who to call when something goes wrong on site is a different question
+  from when someone works. `emergencyPhone` is in
+  `isAvailabilityOnlyChange()`'s allowlist beside `emergencyContact`, so P5's
+  self-service clause won't reject an edit that touches it.
 - **An employee is never deleted — disable is the only removal** (owner decision
   2026-08-02, which withdrew a shipped delete). Deleting the `users` doc
   orphaned every past appointment's `employeeIds` link: the visit keeps the
