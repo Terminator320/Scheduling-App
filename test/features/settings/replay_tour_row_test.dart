@@ -54,9 +54,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Anchor on the ListView ancestor of "Delete account" — `find.byType(Scrollable).first` is unreliable since the split layout renders another scrollable too.
-    final masterScrollable = find.ancestor(
-      of: find.text('Delete account'),
+    // Target the master list by key. `find.byType(Scrollable).first` is
+    // ambiguous (the two-pane layout renders a second one), and anchoring on a
+    // row's ancestor breaks as soon as that row scrolls out of the built range
+    // or a new row is added above it.
+    final masterScrollable = find.descendant(
+      of: find.byKey(const ValueKey('settingsMasterList')),
       matching: find.byType(Scrollable),
     );
     await tester.scrollUntilVisible(

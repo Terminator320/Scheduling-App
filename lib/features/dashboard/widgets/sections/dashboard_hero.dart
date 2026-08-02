@@ -19,10 +19,6 @@ class DashboardHero extends StatelessWidget {
   final TodayOps ops;
   final DateTime now;
 
-  // The legend text is what actually carries the meaning; overdue has no
-  // exact token, so it stays a fixed hue.
-  static const Color _overdueSegment = Color(0xFFF54A00);
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -31,7 +27,7 @@ class DashboardHero extends StatelessWidget {
     final l10n = context.l10n;
     final segments = [
       (AppointmentStatus.inProgress, statusColors.accent),
-      (AppointmentStatus.overdue, _overdueSegment),
+      (AppointmentStatus.overdue, statusColors.overdue),
       (AppointmentStatus.pending, statusColors.warning),
       (AppointmentStatus.done, statusColors.success),
       (AppointmentStatus.cancelled, scheme.error),

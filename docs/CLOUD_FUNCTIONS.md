@@ -2,7 +2,7 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-07-31 by auditing the source against the app's call sites and
+refreshed 2026-08-02 by auditing the source against the app's call sites and
 the live deployment (the iOS Live Activity stack added behind
 `notifyAppointmentChanges` / `sendUpcomingJobReminders` — APNs secrets, direct
 HTTP/2 client; `purgeExpiredHistory`'s timeout corrected to the 1800s scheduled
@@ -26,10 +26,15 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 
 ## Deployment status
 
-- **24 functions defined** in code; **21 deployed** — verified live against
-  `schedulingapp-88727` on 2026-07-18. `recountClientJobs` (P3, 2026-08-01) is
-  NOT yet deployed; no client job count renders until it is. `revokeInvite` and
-  `previewInvite` (P4b, 2026-08-02) are likewise NOT yet deployed — and that
+> The authoritative record of what production runs is the **Deploy log** in
+> `docs/DEPLOYMENT.md`, plus `functions_list_functions`. This section has been
+> wrong before — verify against the live list rather than trusting it.
+
+
+- **24 functions defined** in code; **22 deployed** — verified live against
+  `schedulingapp-88727` on 2026-08-02 via `functions_list_functions`.
+  `recountClientJobs` shipped with the P3 deploy. The only undeployed pair is
+  `revokeInvite` and `previewInvite` (P4b, 2026-08-02) — and that
   deploy is **ordering-sensitive**: it also carries the widened
   `redeemSignupCode` payload allowlist, and the live callable's allowlist is
   still `Set(["code"])` and rejects unexpected keys, so a build carrying the

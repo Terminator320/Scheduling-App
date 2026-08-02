@@ -634,14 +634,18 @@ function importDb(existingDocs, opts = {}) {
   const db = {
     collection: (name) => {
       if (name === "clients") {
-        return {
+        const clientsColl = {
           get: () => Promise.resolve({docs: existingDocs}),
+          // buildWaveIdIndex projects to waveCustomerId + createdAt rather
+          // than pulling whole client docs; select() returns the same shape.
+          select: () => clientsColl,
           doc: () => {
             const ref = {id: `auto-${autoId++}`};
             newRefs.push(ref);
             return ref;
           },
         };
+        return clientsColl;
       }
       if (name === "wave") return waveColl;
       throw new Error(`unexpected collection ${name}`);

@@ -28,10 +28,6 @@
   "@common_admin": {
     "description": "Admin"
   },
-  "employees_role": "Role",
-  "@employees_role": {
-    "description": "Role"
-  },
   "status_active": "Active",
   "@status_active": {
     "description": "Active"
@@ -273,10 +269,6 @@
       }
     }
   },
-  "calendar_openMenuTooltip": "Open menu",
-  "@calendar_openMenuTooltip": {
-    "description": "Tooltip for the calendar app-bar button that opens the settings drawer."
-  },
   "calendar_dayRouteTitle": "Day route",
   "@calendar_dayRouteTitle": {
     "description": "App bar title of the day-route screen"
@@ -370,10 +362,6 @@
   "@employees_phoneNumber": {
     "description": "Phone number"
   },
-  "employees_employeeColor": "Employee Color",
-  "@employees_employeeColor": {
-    "description": "Employee Color"
-  },
   "employees_customColor": "Custom color",
   "@employees_customColor": {
     "description": "Tooltip on the rainbow swatch and title of the custom color picker dialog"
@@ -387,14 +375,6 @@
       }
     }
   },
-  "employees_editEmployee": "Edit Employee",
-  "@employees_editEmployee": {
-    "description": "Edit Employee"
-  },
-  "employees_employeeDetails": "Employee details",
-  "@employees_employeeDetails": {
-    "description": "Employee details"
-  },
   "clients_addClient": "Add Client",
   "@clients_addClient": {
     "description": "Add Client"
@@ -403,10 +383,6 @@
   "@common_address": {
     "description": "Address"
   },
-  "clients_customerName": "Customer name",
-  "@clients_customerName": {
-    "description": "The customer/display name field on the client form (required)"
-  },
   "clients_firstName": "First name",
   "@clients_firstName": {
     "description": "First name field on the client form"
@@ -414,10 +390,6 @@
   "clients_lastName": "Last name",
   "@clients_lastName": {
     "description": "Last name field on the client form"
-  },
-  "clients_mobile": "Mobile",
-  "@clients_mobile": {
-    "description": "Mobile phone field on the client form"
   },
   "clients_contactName": "Contact name",
   "@clients_contactName": {
@@ -536,10 +508,6 @@
   "@validation_addressIsRequired": {
     "description": "Address is required"
   },
-  "employees_name": "Name",
-  "@employees_name": {
-    "description": "Name"
-  },
   "validation_titleIsRequired": "Title is required",
   "@validation_titleIsRequired": {
     "description": "Title is required"
@@ -630,10 +598,6 @@
         "type": "int"
       }
     }
-  },
-  "calendar_editSeriesScopeMessage": "Apply your changes to this visit only, or to this and all future visits in the series?",
-  "@calendar_editSeriesScopeMessage": {
-    "description": "Body of the edit dialog for a repeating appointment, stating that the apply-to-all option changes every future visit in the series"
   },
   "calendar_deleteSeriesScopeMessage": "Delete this visit only, or this and all future visits in the series?",
   "@calendar_deleteSeriesScopeMessage": {
@@ -772,10 +736,6 @@
   "@clients_call": {
     "description": "Quick-action button that dials the client's phone number"
   },
-  "clients_contactInfo": "Contact info",
-  "@clients_contactInfo": {
-    "description": "Section header above the client's phone, email and address"
-  },
   "clients_jobHistory": "Job history",
   "@clients_jobHistory": {
     "description": "Section header on the client detail view above the client's past appointments"
@@ -883,10 +843,6 @@
   "employees_employeeAddedSuccessfully": "Employee added successfully",
   "@employees_employeeAddedSuccessfully": {
     "description": "Employee added successfully"
-  },
-  "employees_employeeUpdatedSuccessfully": "Employee updated successfully",
-  "@employees_employeeUpdatedSuccessfully": {
-    "description": "Employee updated successfully"
   },
   "error_anEmployeeWithThisEmailAlreadyExists": "An employee with this email already exists",
   "@error_anEmployeeWithThisEmailAlreadyExists": {
@@ -1286,10 +1242,6 @@
   "@calendar_newAppointment": {
     "description": "New Appointment"
   },
-  "calendar_jobTemplatesLabel": "Common jobs",
-  "@calendar_jobTemplatesLabel": {
-    "description": "Section label above the quick-fill job template chips on the add-appointment form"
-  },
   "calendar_jobTemplateLeakDiagnostic": "Leak diagnostic",
   "@calendar_jobTemplateLeakDiagnostic": {
     "description": "Job template name: a leak diagnostic visit"
@@ -1313,10 +1265,6 @@
   "calendar_jobTemplateWaterHeater": "Water heater",
   "@calendar_jobTemplateWaterHeater": {
     "description": "Job template name: a water heater install or repair"
-  },
-  "calendar_saveAppointment": "Save Appointment",
-  "@calendar_saveAppointment": {
-    "description": "Save Appointment"
   },
   "calendar_assignEmployee": "Assign Employee",
   "@calendar_assignEmployee": {
@@ -1362,10 +1310,6 @@
   "@calendar_assignedEmployee": {
     "description": "Assigned Employee"
   },
-  "clients_saveClient": "Save Client",
-  "@clients_saveClient": {
-    "description": "Save Client"
-  },
   "employees_inviteEmployee": "Invite Employee",
   "@employees_inviteEmployee": {
     "description": "Invite Employee"
@@ -1374,10 +1318,6 @@
   "@employees_sendInvite": {
     "description": "Send Invite"
   },
-  "employees_permissions": "Permissions",
-  "@employees_permissions": {
-    "description": "Permissions"
-  },
   "employees_adminAccess": "Admin access",
   "@employees_adminAccess": {
     "description": "Admin access"
@@ -1385,30 +1325,6 @@
   "employees_adminAccessDescription": "Can manage all appointments, clients & employees",
   "@employees_adminAccessDescription": {
     "description": "Can manage all appointments, clients & employees"
-  },
-  "employees_accountStatus": "Account Status",
-  "@employees_accountStatus": {
-    "description": "Account Status"
-  },
-  "employees_accountStatusDescription": "Controls access & job assignment",
-  "@employees_accountStatusDescription": {
-    "description": "Controls access & job assignment"
-  },
-  "employees_disableAccount": "Disable Account",
-  "@employees_disableAccount": {
-    "description": "Disable Account"
-  },
-  "employees_reEnableAccount": "Re-enable Account",
-  "@employees_reEnableAccount": {
-    "description": "Re-enable Account"
-  },
-  "employees_disableAccountNote": "Disabling removes them from new job assignments. Their past appointments and data are kept.",
-  "@employees_disableAccountNote": {
-    "description": "Disabling removes them from new job assignments. Their past appointments and data are kept."
-  },
-  "employees_reEnableAccountNote": "Re-enabling restores their access and allows them to be assigned to jobs again.",
-  "@employees_reEnableAccountNote": {
-    "description": "Re-enabling restores their access and allows them to be assigned to jobs again."
   },
   "error_colorAlreadyUsed": "This color is already used by another employee.",
   "@error_colorAlreadyUsed": {
@@ -1534,6 +1450,22 @@
   "error_introChangeEmployeeStatus": "Couldn't update the employee's account status",
   "@error_introChangeEmployeeStatus": {
     "description": "Error intro for EMP-STATUS"
+  },
+  "employees_emergencyLoadFailed": "Couldn't load the emergency contact. Close and reopen to try again — saving now would leave it unchanged.",
+  "@employees_emergencyLoadFailed": {
+    "description": "Shown in the edit-person sheet when the emergency-contact read fails, so a failed read is never mistaken for none on file"
+  },
+  "settings_myDetails": "My details",
+  "@settings_myDetails": {
+    "description": "Settings row and screen title for the signed-in user's own editable details"
+  },
+  "settings_myDetailsEmergencyBlurb": "Only you and an admin can see this.",
+  "@settings_myDetailsEmergencyBlurb": {
+    "description": "Caption under the emergency-contact section on My details, stating who can read it"
+  },
+  "error_introSaveMyDetails": "Couldn't save your details",
+  "@error_introSaveMyDetails": {
+    "description": "Error intro for ME-SAVE (the user's own emergency contact)"
   },
   "error_introSaveEmployee": "Couldn't save the employee",
   "@error_introSaveEmployee": {
@@ -2349,10 +2281,6 @@
         "type": "int"
       }
     }
-  },
-  "common_yes": "Yes",
-  "@common_yes": {
-    "description": "Affirmative value in a read-only detail row"
   },
   "employees_invitePerson": "Invite person",
   "@employees_invitePerson": {

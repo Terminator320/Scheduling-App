@@ -841,13 +841,23 @@ async function runOverduePromptSweep(deps) {
       ((snap && snap.docs) || []).map(_record),
       nowDate,
   );
-  let prompted = 0;
   const cache = new Map();
+  // One flat list of (candidate, assignee) pairs, delivered concurrently.
+  // Each pair is an independent ~3 round-trip chain against a distinct ledger
+  // id, so serialising them only added wall-clock — and the sweep runs against
+  // the 60s default timeout as headcount grows. The shared `cache` Map is safe:
+  // JS is single-threaded, so the worst case is a duplicated user read when two
+  // pairs miss simultaneously.
+  const deliveries = [];
   for (const c of candidates) {
     const endMs = toMillis(c.endTime);
     const ctx = _contextFor("doneCheck", null, c);
     for (const employeeDocId of toIdList(c.employeeIds)) {
-      const delivered = await _deliverRecipientOnce(deps, {
+      deliveries.push({c, endMs, ctx, employeeDocId});
+    }
+  }
+  const results = await Promise.all(deliveries.map(
+      ({c, endMs, ctx, employeeDocId}) => _deliverRecipientOnce(deps, {
         collection: "appointmentOverduePrompts",
         ledgerId: overduePromptLedgerId(String(c.id), endMs, employeeDocId),
         appointmentId: String(c.id),
@@ -859,13 +869,11 @@ async function runOverduePromptSweep(deps) {
         label: "overdue",
         roles: TIMED_RECIPIENT_ROLES,
         cache,
-      });
-      // Count recipients actually prompted — a job with N assignees can
-      // prompt up to N of them. Single-assignee jobs, the common case, read
-      // exactly as before.
-      if (delivered > 0) prompted += 1;
-    }
-  }
+      }),
+  ));
+  // Count recipients actually prompted — a job with N assignees can prompt
+  // up to N of them. Single-assignee jobs read exactly as before.
+  const prompted = results.filter((delivered) => delivered > 0).length;
   return {prompted};
 }
 
@@ -889,38 +897,41 @@ async function runDailyDigest(deps) {
       ((snap && snap.docs) || []).map(_record),
       nowDate,
   );
-  let digests = 0;
   const cache = new Map();
-  for (const employeeDocId of Object.keys(grouped)) {
-    const jobs = grouped[employeeDocId];
-    if (!jobs || jobs.length === 0) continue;
-    // The 18:00 digest also carries a fresh widget payload (+ content-
-    // available) so the home-screen widget rolls forward to tomorrow with the
-    // app closed, matching the digest text.
-    const records = await fetchEmployeeWidgetWindow(
-        db, employeeDocId, nowDate, deps.logger,
-    );
-    const sent = await sendToEmployee(
-        deps,
-        employeeDocId,
-        {kind: "digest"},
-        (locale) => buildDigestMessage(jobs, locale),
-        TIMED_RECIPIENT_ROLES,
-        cache,
-        (locale) => ({
-          widgetPayload: JSON.stringify(
-              buildWidgetPayload(records, nowDate, locale)),
-        }),
-    );
-    if (sent > 0) digests += 1;
-  }
+  // Concurrent per employee — see the note in runOverduePromptSweep. Each
+  // employee is ~3 sequential round-trips; serialising the outer loop put the
+  // whole sweep at N x that against a 60s timeout.
+  const sends = Object.keys(grouped)
+      .filter((id) => grouped[id] && grouped[id].length > 0)
+      .map(async (employeeDocId) => {
+        const jobs = grouped[employeeDocId];
+        // The 18:00 digest also carries a fresh widget payload (+ content-
+        // available) so the home-screen widget rolls forward to tomorrow with
+        // the app closed, matching the digest text.
+        const records = await fetchEmployeeWidgetWindow(
+            db, employeeDocId, nowDate, deps.logger,
+        );
+        return sendToEmployee(
+            deps,
+            employeeDocId,
+            {kind: "digest"},
+            (locale) => buildDigestMessage(jobs, locale),
+            TIMED_RECIPIENT_ROLES,
+            cache,
+            (locale) => ({
+              widgetPayload: JSON.stringify(
+                  buildWidgetPayload(records, nowDate, locale)),
+            }),
+        );
+      });
+  const sentCounts = await Promise.all(sends);
+  const digests = sentCounts.filter((sent) => sent > 0).length;
   return {digests};
 }
 
 module.exports = {
   OPEN_STATUSES,
   SERIES_CLAIM_WINDOW_MS,
-  claimSeriesNotice,
   TIMED_RECIPIENT_ROLES,
   toMillis,
   nowMillis,
@@ -933,10 +944,7 @@ module.exports = {
   tomorrowWindowToronto,
   overduePromptLedgerId,
   isStaleTokenError,
-  isAlreadyExists,
-  sendToEmployee,
   deliverRecipientOnce: _deliverRecipientOnce,
-  fetchEmployeeWidgetWindow,
   handleAppointmentWrite,
   runDailyDigest,
   runOverduePromptSweep,

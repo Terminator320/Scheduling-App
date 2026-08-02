@@ -42,6 +42,9 @@ class AppColors {
   static const Color amberText = Color(0xFF8A5C00);
   static const Color amberFill = Color(0xFFFFF4E5);
   static const Color red = Color(0xFFD61F3A);
+  /// Overdue sits between amber and red on purpose — it is "late", not
+  /// "failed", and `error` red already means cancelled on the same chart.
+  static const Color orange = Color(0xFFF54A00);
   static const Color redText = Color(0xFFB01730);
   static const Color redFill = Color(0xFFFDE8EC);
 
@@ -64,6 +67,7 @@ class AppColors {
   static const Color darkAmber = Color(0xFFF1A83C);
   static const Color darkRed = Color(0xFFFF6076);
   static const Color darkRedText = Color(0xFFFF8A99);
+  static const Color darkOrange = Color(0xFFFF8A4C);
 
   /// The ten assignable crew colours — the app's primary data encoding
   /// (card bar, avatar, calendar dot, map pin, workload bar, route rail).
@@ -477,6 +481,7 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     required this.onInProgressContainer,
     required this.overdueContainer,
     required this.onOverdueContainer,
+    required this.overdue,
     required this.accent,
     required this.neutralContainer,
     required this.onNeutralContainer,
@@ -493,6 +498,9 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
   final Color onInvitedContainer;
   final Color inProgressContainer;
   final Color onInProgressContainer;
+  /// Standalone overdue accent, the sibling of [warning]/[success]/[accent].
+  /// The dashboard bar needs a bar-fill hue, not a container tint.
+  final Color overdue;
   final Color overdueContainer;
   final Color onOverdueContainer;
   final Color accent;
@@ -513,6 +521,7 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     onInProgressContainer: AppColors.blue,
     overdueContainer: AppColors.redFill,
     onOverdueContainer: AppColors.redText,
+    overdue: AppColors.orange,
     accent: AppColors.blue,
     neutralContainer: AppColors.paper,
     onNeutralContainer: AppColors.ink60,
@@ -532,6 +541,7 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     onInProgressContainer: AppColors.darkBlueOnTint,
     overdueContainer: Color(0x29FF6076),
     onOverdueContainer: AppColors.darkRedText,
+    overdue: AppColors.darkOrange,
     accent: AppColors.darkBlueText,
     neutralContainer: Color(0x12FFFFFF),
     onNeutralContainer: AppColors.darkTextSecondary,
@@ -552,6 +562,7 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     Color? onInProgressContainer,
     Color? overdueContainer,
     Color? onOverdueContainer,
+    Color? overdue,
     Color? accent,
     Color? neutralContainer,
     Color? onNeutralContainer,
@@ -571,6 +582,7 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
           onInProgressContainer ?? this.onInProgressContainer,
       overdueContainer: overdueContainer ?? this.overdueContainer,
       onOverdueContainer: onOverdueContainer ?? this.onOverdueContainer,
+      overdue: overdue ?? this.overdue,
       accent: accent ?? this.accent,
       neutralContainer: neutralContainer ?? this.neutralContainer,
       onNeutralContainer: onNeutralContainer ?? this.onNeutralContainer,
@@ -635,6 +647,7 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
         other.onOverdueContainer,
         t,
       )!,
+      overdue: Color.lerp(overdue, other.overdue, t)!,
       accent: Color.lerp(accent, other.accent, t)!,
       neutralContainer: Color.lerp(
         neutralContainer,

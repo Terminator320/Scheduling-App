@@ -378,7 +378,15 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   in `firestore.rules` beside `uid` (same posture as `jobCount`/`wave` on
   clients), so a compromised admin session can't forge a consent record or a
   fake expiry; `EmployeeRecord.toMap()` must never emit them, or a future
-  whole-record `set()` becomes an opaque `permission-denied`.
+  whole-record `set()` becomes an opaque `permission-denied`. **`toMap()` omits
+  `uid` and `status` for the same reason** — `uid` is on that denylist and
+  `status` belongs to deactivate/reactivate; the repository's field-scoped
+  allowlist in `updateEmployee` is the real write path, and `toMap()` exists
+  only to round-trip the editable fields. **The denylist is on `allow create`
+  as well as `allow update`**: without it the same admin session that cannot
+  edit `uid` could simply create a doc carrying a forged one, and a second doc
+  claiming an existing employee's uid repoints the `usersByUid` bridge every
+  rules gate resolves through.
   `performCreateInvite` stamps `codeExpiresAt` on **both** branches (fresh and
   re-issue) because clients can never read `signupCodes` and the Team row needs
   the instant somewhere it can read; `redeemSignupCode` **deletes** it at
@@ -396,14 +404,17 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   employee cannot see a pending invite or its expiry, and no clause ever exposes
   the code itself (that lives only in `signupCodes`, denied to all clients).
   Don't "open up" a clause to make an invite readable to its own claimant.
-- **Invite re-issue REFRESHES the invited doc's editable fields — every
-  re-issue call site must pass the stored record's CURRENT values.**
+- **Invite re-issue REFRESHES the invited doc's editable fields, so
+  `inviteEmployee` takes the whole `EmployeeRecord` — never loose scalars.**
   `performCreateInvite`'s re-issue branch *updates*
   `name`/`firstName`/`lastName`/`phone`/`colorValue`/`jobTitle`/`role` with
-  whatever it is handed, so calling it with blanks silently wipes the invited
-  person's phone and job title. `PendingInviteTile` threads every argument off
-  `widget.employee`, pinned by a test with no `any()` matchers on the wipeable
-  fields. This is a trap, not a design — it bites Show code and Resend equally.
+  whatever it is handed, so a call site that omits one silently wipes the
+  invited person's phone or job title. The controller therefore takes a record
+  and destructures it in ONE place: `PendingInviteTile` passes
+  `widget.employee` whole, and the omission is unexpressible rather than merely
+  documented. Don't "flatten" the signature back to named strings — that shape
+  was a trap that bit Show code and Resend equally, and a new invited-user field
+  had to be threaded through four layers with no compile error if you missed one.
   The matching UX consequence: **expanding the row IS the re-issue**, so the
   caption under the code states the code is new *unconditionally*, and the
   fetched code is cached in the tile's State keyed by the invite doc id, so
@@ -413,7 +424,10 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   disabled users. Use `watchAllUsers()` (admin-only) if all statuses are needed.
   All three `users` streams are bounded by the shared `_userStreamLimit` (500)
   so a runaway collection can't stream an unbounded snapshot to every client —
-  add the bound to any new one. `watchEmployees` deliberately has **no
+  add the bound to any new one. **The appointment range streams are bounded
+  too** (`_rangeStreamLimit`, 1000) and WARN when a snapshot comes back at the
+  cap — past it the calendar is showing a prefix of the range, which the grid
+  dots and agenda would otherwise misreport in silence. `watchEmployees` deliberately has **no
   `orderBy`**: `watchAllUsers`' `orderBy('name')` makes Firestore exclude docs
   missing `name`, which would drop an unnamed active employee out of the
   picker (and silently change who can see a visit). That asymmetry is also why
@@ -470,6 +484,11 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   discover and no spelling to reconcile — searching *within* an active filter
   runs in Dart over that same bounded list via `ClientSearchPolicy`, indexed
   once per result set rather than per keystroke.
+  **A write patches that cached window by MERGING over the stored doc, never
+  replacing it** (`_patchWindow`): `ClientRecord.toMap()` emits user-owned
+  fields only, so a plain substitution drops the function-owned `jobCount` and
+  `createdAt` and blanks the count on every search and type-filter result until
+  the TTL expires. Any new field `toMap()` doesn't emit inherits this.
 - **`jobCount` is recomputed absolutely, never incremented.** `recountClientJobs`
   (`functions/client_job_count.js`) runs `retry: true`, so a retried event would
   double-count a `FieldValue.increment`; it runs a `count()` aggregate and SETS
@@ -486,6 +505,11 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   the doc forever — invisible, uneditable, still matched by `matchClientDocs`
   (which reads `mobile`) and still in the Wave payload. There is no migration
   script and none is needed; the fleet heals as clients are edited.
+- **The street + apt precedence rule has ONE owner: `AddressParser.canonicalFrom`.**
+  Both client save paths resolve their stored address through it — the explicit
+  apt field wins over an apt embedded in the street text, and a blank one keeps
+  the embedded value. It was a verbatim copy in each sheet, which is two owners
+  for a rule whose two answers must agree on the same typed input.
 - **Inline add-client while booking:** `ClientsRepository.addClient` returns the
   created `ClientRecord` with its generated Firestore doc id (NOT `void`) — the
   appointment form's "Add new client" flow links the appointment to that id.
@@ -510,7 +534,12 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   (`employees/domain/policies/employee_name_policy.dart`), which falls back to
   the stored name and then to `'—'` — it can never return `''`. The edit sheet
   seeds First from the whole stored `name` when both halves are empty, so a
-  legacy single-name doc round-trips unchanged.
+  legacy single-name doc round-trips unchanged. **`EmployeeFormValidator` takes
+  the two halves separately, never the composed name** — `composeEmployeeName`
+  falls back and so can never return empty, meaning a composed value cannot
+  express "the last name is missing". Its `requireLastName` flag is the one real
+  difference between the two person sheets: the invite demands both halves, the
+  edit leaves the last name optional so a legacy single-name doc still saves.
 - **`jobTitle` is not `role`.** `role` stays the ACCESS flag
   (`admin`/`employee`) and is what `firestore.rules` gates on; `jobTitle`
   (Lead tech · Technician · Apprentice · Dispatcher) is what someone does on
@@ -534,6 +563,15 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   permanently un-updatable, including by `deactivateEmployee`. Rules caps mirror
   the *server* limit; the client caps with `TextLimits`. Same reasoning for the
   P4b `emergencyPhone`: rules cap **40**, client caps `TextLimits.phone`.
+  **The converse also holds: a client cap must not be LOOSER than the callable's,
+  or the field silently accepts a value the callable rejects as
+  `invalid-argument`** — which reaches the user as an unexplained "Something went
+  wrong" they cannot fix by editing. That is why the `users` name halves use
+  `TextLimits.employeeNameHalf` (**100**), matching `createEmployeeInvite` and
+  `redeemSignupCode` exactly, rather than the 200-char `TextLimits.firstName`
+  used for clients. `name` is the JOIN of those halves, so it legitimately
+  reaches 201 — its server and rules caps are **250**, sized to the composed
+  value and never to a half.
 - **Phone numbers are stored FORMATTED, not as raw digits** (owner call,
   2026-08-02). `PhoneInputFormatter` (`core/validators/phone_format.dart`) masks
   every phone field as it is typed, so `phone`, `emergencyPhone` and each
@@ -546,17 +584,45 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   before building the `tel:` URI, because `Uri` percent-encodes the brackets and
   space into a path some dialers reject; and `ClientSearchPolicy.digitsOnly`
   already normalized on both sides, so phone search is unaffected.
-  `TextLimits.phone` is **15**, which fits the formatted 14-char result with one
-  to spare — note that this truncates a longer international number, so raise it
-  before shipping outside North America.
-- **`emergencyContact` and `emergencyPhone` are their own section, not a tail on
-  availability.** Both the edit sheet (`MonoSectionLabel`
-  `employees_sectionEmergency`) and the read-only detail view (its own
-  `KeyValuePanel`, rendered only when non-empty) group them apart from hours and
-  access — who to call when something goes wrong on site is a different question
-  from when someone works. `emergencyPhone` is in
-  `isAvailabilityOnlyChange()`'s allowlist beside `emergencyContact`, so P5's
-  self-service clause won't reject an edit that touches it.
+  **`TextLimits.phone` is 24, and it must stay above the widest string
+  `formatPhoneNumber` can emit** — `LabeledTextField` appends the
+  `LengthLimitingTextInputFormatter` **after** `PhoneInputFormatter`, so the
+  mask runs first and the cap truncates its output. At the old 15 the two
+  pass-throughs above were unreachable: a NANP number typed with its leading 1
+  formats to 16 chars, so the 11th digit could never be entered, and every
+  further keystroke re-truncated to the same 15 with no error shown. Never size
+  this cap to the 14-char happy path.
+- **The emergency contact lives in `users/{docId}/private/emergency`, NOT on the
+  users doc, and it is the one piece of person data gated to the admin AND the
+  person themselves** (owner call, 2026-08-02). Firestore rules are
+  document-level — there is no way to hide a field from someone allowed to read
+  the document — and `/users` read clause 2 deliberately lets every active
+  employee read every active peer (the crew pickers, names and colours need it).
+  On the parent doc this pair therefore shipped a **third party's** name and
+  phone to every employee's device; that person is not an app user and never
+  consented. A subcollection is the only place rules can express the grant:
+  `allow read, write: if isAdmin() || (isActiveUser() && myDocId() == userId)`.
+  **Never move these back onto the users doc, and never widen a `/users` read
+  clause to reach them.** Consequences to keep in sync:
+  `EmployeeRecord` does **not** carry them (`EmergencyContact` does, read via
+  `emergencyContactProvider`); `updateEmployee` sends
+  `FieldValue.delete()` for both on every save, scrubbing any value a pre-move
+  build left on the parent doc — drop that scrub only once no doc can still
+  carry them; `isAvailabilityOnlyChange()` no longer lists them, because P5's
+  self-service clause governs the users doc and these are not on it; and a read
+  failure on this path means "not entitled", so a surface must render it as
+  *not shown*, never as *none on file*.
+- **`MyDetailsScreen` (Settings › My details) is the ONLY surface where a person
+  edits their own record**, and it exists solely to exercise the owner half of
+  the grant above — the employee detail and edit sheets are admin-only. Keep it
+  scoped to the emergency contact: everything else about a person is
+  admin-owned, and `allow update` on `/users` is still admin-only, so a general
+  profile editor here would fail with `permission-denied`.
+- **The emergency pair is its own section, not a tail on availability.** Both
+  the edit sheet (`MonoSectionLabel` `employees_sectionEmergency`) and the
+  read-only detail view (its own `KeyValuePanel`, rendered only when non-empty)
+  group them apart from hours and access — who to call when something goes
+  wrong on site is a different question from when someone works.
 - **An employee is never deleted — disable is the only removal** (owner decision
   2026-08-02, which withdrew a shipped delete). Deleting the `users` doc
   orphaned every past appointment's `employeeIds` link: the visit keeps the
@@ -800,7 +866,37 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   today's range into a `Map<String,int>`; every row reads the map. The range
   comes from `todayRangeProvider`, which watches `currentDayProvider` — never
   `DateTime.now()`, or the counts stick on yesterday in an app left open across
-  midnight. Cancelled visits don't count.
+  midnight. Cancelled visits don't count. **The employee detail's TODAY panel
+  filters that SAME stream** (`employeeTodayJobsProvider`) rather than opening a
+  per-employee query — the Team tab already holds the day range open, so a
+  detail costs no extra read and the panel can't disagree with the count on the
+  row that opened it.
+- **Every widget-layer offline write guard goes through `guardedOffline`**
+  (`core/errors/error_cause.dart`, beside `composeErrorNotice`) — it reads
+  `isOfflineProvider`, pushes the cause+tag notice and returns true so the
+  caller returns. The block was copy-pasted at six sites; the `tag` must still
+  match the `logger.warn` prefix at the same site. The two `accept_invite_*`
+  screens deliberately stay out — they surface offline through their own
+  `AuthBanner`, not a notice. Controller-layer guards (`add_event`,
+  `event_details`, `client_form`) keep returning a typed failure instead.
+- **`DateFormat` is memoized per locale** (`calendar/domain/month_grid.dart`:
+  `longDateFormatFor`, `weekdayAbbrevFormatFor`, `_symbolsFormat`). Constructing
+  one verifies the locale and parses a skeleton into pattern fields, and the
+  calendar built a fresh one PER DAY CELL for a semantics label — 30–90 per
+  rebuild on every day tap and month swipe. Never call a `DateFormat.*`
+  constructor inside a cell/item builder.
+- **`TourSteps`** (`feature_tour/domain/tour_steps.dart`) owns a screen's step
+  ids, keys and `step()` wrapper. Six screens had a copy of the trio that had to
+  stay in sync (`keys[id]!` force-unwraps; `indexOf`/`length` feed "step N of
+  M") and Settings had already drifted. One `late final _tour = TourSteps(dest,
+  isAdmin:)` per screen — don't re-inline it.
+- **The account-exit teardown lives in `AccountExitListeners`**
+  (`core/app/account_exit_listeners.dart`), the sibling of `AppSyncListeners`.
+  The ORDER is load-bearing: push, presence and Live Activity de-register
+  BEFORE `signOut()`, because each needs the credential sign-out revokes. Its
+  `_isHandlingAccountExit` guard is released by the post-frame callback on
+  success and by the `finally` only on failure — three listeners can fire for
+  one underlying event.
 - Per-keystroke search debounces through `Debouncer` (`lib/core/utils/debouncer.dart`,
   own one per State, `dispose()` it). `SettingsSaveDebouncer` is the async-action
   variant — don't add a third raw `Timer`.
@@ -839,6 +935,12 @@ Functions live in `functions/` (project `schedulingapp-88727`, region
 Full guidance — module map, every function, push / Live Activities / Wave, the
 Firestore TTL rules — is in `functions/CLAUDE.md`, which loads when working
 under `functions/`. Per-function reference: `docs/CLOUD_FUNCTIONS.md`.
+
+**Release deploy runbook: `docs/DEPLOYMENT.md`** — ordering (backend BEFORE the
+app build, because `assertPayloadShape` rejects unknown keys), the
+old-build-compatibility check, rollback, and the deploy log recording what
+production actually runs. Read it before any deploy that touches a callable
+payload or a rules cap.
 
 Deploy: `firebase deploy --only functions,firestore:rules,firestore:indexes,storage`
 (`storage:rules` is **not** a valid deploy target — use `storage`.)

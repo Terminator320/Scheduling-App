@@ -10,6 +10,83 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.39.0+64] - 2026-08-02
+### Added
+- **Accepting an invite is now its own two-step flow.** Enter the twelve-character
+  code your employer sent you, and the app checks it *before* asking for anything
+  else — so an expired code says it's expired and a wrong one says it's wrong,
+  instead of both failing after you've already invented a password. The second
+  screen then asks only for what the invite can't supply: your name, your phone
+  and a password. Your work email is filled in from the invite and shown locked,
+  because it's the address the code was issued against. Tapping an invite link
+  opens the flow directly with the code already filled in.
+- **A password strength meter and a live requirements checklist** while you
+  choose your password, so you can see what's still missing instead of guessing
+  at an error message after the fact.
+- **Pending invites are managed from the Team list.** Tap an invited person's row
+  and it expands in place to show their signup code with a copy button, when the
+  code expires, and buttons to resend or revoke it. Codes are good for 14 days.
+- **Clients have a type** — residential, commercial, property manager and so on —
+  shown on the row and usable as a filter. Tap a chip above the list to see just
+  that kind of client, and search within it.
+- **A client's row now shows their address and how many jobs they've had**, and a
+  full **Job history** section on their detail page lists those visits newest
+  first.
+- **Staff have a job title** — Lead tech, Technician, Apprentice or Dispatcher —
+  which is what someone does on site, kept separate from whether they're an admin.
+  Changing one never changes the other.
+- **Working hours and availability for each person**: which days they work, their
+  start and end times, a cap on jobs per day, and an on-call flag. The team roster
+  now shows each person's title and how many jobs they're booked for today.
+- **An emergency contact and phone number** for each person, kept in their own
+  section — who to call when something goes wrong on site is a different question
+  from when someone works. **Only an admin and the person themselves can see or
+  change it**, unlike the rest of the roster, which every employee can see: the
+  name and number belong to someone who isn't an app user and never agreed to
+  share them with your crew.
+- **A "My details" screen** under Settings, where anyone can view and update
+  their own emergency contact without going through an admin.
+
+### Changed
+- **Clients and Team both got the detail and edit treatment the calendar got.**
+  Each opens on a profile card with the person's or business's details in a clean
+  key-value panel and Call / Email / Directions tiles across the top; editing
+  happens in a full sheet rather than inline. Empty sections are simply left out
+  instead of showing "None".
+- **Adding a client while booking now carries straight on.** Create the client
+  from the appointment form and the booking picks up where you left off with them
+  already selected — or choose to go straight into booking them a job.
+- **Phone numbers format themselves as you type** — `(514) 555-1234`. International
+  numbers starting with `+` are left exactly as entered, and anything past the
+  tenth digit (an extension, say) is kept rather than dropped.
+- **Signing in and resetting your password** have been restyled to match the rest
+  of the redesign.
+- **A client is never removed.** The delete action is gone: deleting a client
+  orphaned their past appointments, which kept the name but silently lost the
+  link back. Archiving was considered and dropped for the same reason.
+- **An employee is never deleted either — disabling is the only removal.** It
+  already did strictly more: it disables their sign-in, signs them out
+  everywhere, and clears their location and devices, while keeping their name and
+  colour on every job they worked.
+- **A disabled or invited person's colour stays taken**, so two people can't end
+  up the same colour on the calendar.
+- **The second phone field on clients is gone.** Any number stored there moves
+  into the main phone field the next time that client is saved.
+
+### Fixed
+- **Phone fields no longer silently drop digits.** Typing a number with a leading
+  1, or an international number, could quietly lose the last digit with nothing on
+  screen to explain it.
+- **The terms and location consent you agree to when accepting an invite is now
+  actually what gets recorded**, rather than assumed — and pressing Done on the
+  keyboard can no longer submit the form past the unticked checkbox.
+- **A client's job count and "since" date no longer vanish from search results**
+  after you edit that client.
+- **Leaving the last name blank on an invite is now flagged**, instead of silently
+  creating a roster row with only a first name on it.
+- **A long or malformed invite link** no longer fills the code boxes with a code
+  the Continue button won't accept.
+
 ## [1.38.0+63] - 2026-07-31
 ### Added
 - **Personal jobs — time blocked off that isn't a client visit.** Flip

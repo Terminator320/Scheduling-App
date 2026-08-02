@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -7,6 +8,7 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/job_title.dart';
 
 class _MockEmployeesRepo extends Mock implements EmployeesRepository {}
 
@@ -33,14 +35,16 @@ void main() {
       container.read(employeeFormControllerProvider);
 
   Future<EmployeeSaveOutcome> invite() => notifier().inviteEmployee(
-    name: 'Alex',
-    firstName: 'Alex',
-    lastName: '',
-    email: 'alex@test.com',
-    phone: '555-0001',
-    colorValue: '123',
-    jobTitle: 'technician',
-    isAdmin: true,
+    const EmployeeRecord(
+      id: '',
+      name: 'Alex',
+      firstName: 'Alex',
+      email: 'alex@test.com',
+      phone: '555-0001',
+      color: Color(0x0000007B),
+      role: 'admin',
+      jobTitle: JobTitle.technician,
+    ),
   );
 
   const edited = EmployeeRecord(

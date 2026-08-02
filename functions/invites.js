@@ -138,7 +138,9 @@ const createEmployeeInvite = onCall(APP_CHECK, async (req) => {
     "name", "firstName", "lastName", "email", "phone", "colorValue",
     "jobTitle", "isAdmin",
   ]));
-  const name = requireString(req.data, "name", 100);
+  // 250, not 100: `name` is the JOIN of the two halves, each capped at 100
+  // client- and server-side, so the composed value legitimately reaches 201.
+  const name = requireString(req.data, "name", 250);
   const firstName = optionalString(req.data, "firstName", 100);
   const lastName = optionalString(req.data, "lastName", 100);
   const email = requireString(req.data, "email", 254).toLowerCase();

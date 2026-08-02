@@ -9,6 +9,7 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
+import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
 
@@ -61,6 +62,7 @@ void main() {
     registerFallbackValue((Transaction txn) async {});
     registerFallbackValue(Duration.zero);
     registerFallbackValue(_FakeHttpsCallableOptions());
+    registerFallbackValue(SetOptions(merge: true));
   });
 
   setUp(() {
@@ -458,7 +460,6 @@ void main() {
           jobTitle: JobTitle.leadTech,
           maxJobsPerDay: 4,
           onCall: true,
-          emergencyContact: 'Marie',
         ),
       );
 
@@ -467,10 +468,55 @@ void main() {
       expect(data['firstName'], 'Theo');
       expect(data['maxJobsPerDay'], 4);
       expect(data['onCall'], isTrue);
-      expect(data['emergencyContact'], 'Marie');
       expect(data['role'], 'admin');
       expect(data.containsKey('uid'), isFalse);
       expect(data.containsKey('status'), isFalse);
+    });
+
+    test('saveEmergencyContact writes users/{id}/private/emergency', () async {
+      final privateCollection = _MockCollection();
+      final emergencyDoc = _MockDocRef();
+      when(() => docRef.collection('private')).thenReturn(privateCollection);
+      when(() => privateCollection.doc('emergency')).thenReturn(emergencyDoc);
+      when(() => emergencyDoc.set(any(), any())).thenAnswer((_) async {});
+
+      await repo().saveEmergencyContact(
+        'my-id',
+        const EmergencyContact(contact: '  Marie Roy ', phone: ' 555-0199 '),
+      );
+
+      // The path is the whole point: on the parent users doc this pair is
+      // readable by every active peer.
+      verify(() => collection.doc('my-id')).called(1);
+      verify(() => privateCollection.doc('emergency')).called(1);
+
+      final captured = verify(
+        () => emergencyDoc.set(captureAny(), any()),
+      ).captured.single;
+      final data = (captured as Map).cast<String, dynamic>();
+      expect(data['contact'], 'Marie Roy');
+      expect(data['phone'], '555-0199');
+      expect(data.containsKey('updatedAt'), isTrue);
+      // Only the three keys the rules allow — anything else is rejected.
+      expect(data.keys.toSet(), {'contact', 'phone', 'updatedAt'});
+    });
+
+    test('scrubs the legacy emergency pair off the parent users doc', () async {
+      when(() => snapshot.docs).thenReturn(const []);
+
+      await repo().updateEmployee(
+        docId: 'my-id',
+        employee: const EmployeeRecord(id: 'my-id', name: 'Theo Roy'),
+      );
+
+      final data = capturedUpdate();
+      // They moved to users/{id}/private/emergency. A value left here by a
+      // pre-move build is still readable by every active peer, so each save
+      // deletes the keys rather than merely not writing them.
+      expect(data.containsKey('emergencyContact'), isTrue);
+      expect(data.containsKey('emergencyPhone'), isTrue);
+      expect(data['emergencyContact'], isA<FieldValue>());
+      expect(data['emergencyPhone'], isA<FieldValue>());
     });
 
     test('recomposes name from first and last', () async {
@@ -539,6 +585,45 @@ void main() {
       plugin: 'cloud_firestore',
       code: 'permission-denied',
     );
+
+    test('watchEmployees constrains role + active status and bounds the stream', () async {
+      when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
+      repo().watchEmployees().listen((_) {});
+      // retryStream builds the query on subscribe, one microtask later.
+      await Future<void>.delayed(Duration.zero);
+
+      // These constraints are not an optimization. For a LIST query Firestore
+      // evaluates the rules against the query's constraints, not the docs, so
+      // dropping the status filter doesn't return extra rows — it rejects the
+      // whole query with permission-denied, which surfaces as an empty
+      // employee picker and silently changes who can be assigned a visit.
+      verify(
+        () => collection.where('role', whereIn: ['employee', 'admin']),
+      ).called(1);
+      verify(() => query.where('status', isEqualTo: 'active')).called(1);
+      verify(() => query.limit(500)).called(1);
+    });
+
+    test('watchAssignableUsers constrains active status and bounds the stream', () async {
+      when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
+      repo().watchAssignableUsers().listen((_) {});
+      // retryStream builds the query on subscribe, one microtask later.
+      await Future<void>.delayed(Duration.zero);
+
+      verify(() => collection.where('status', isEqualTo: 'active')).called(1);
+      verify(() => query.limit(500)).called(1);
+    });
+
+    test('watchAllUsers orders by name and bounds the stream', () async {
+      when(() => collection.orderBy(any())).thenReturn(query);
+      when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
+      repo().watchAllUsers().listen((_) {});
+      // retryStream builds the query on subscribe, one microtask later.
+      await Future<void>.delayed(Duration.zero);
+
+      verify(() => collection.orderBy('name')).called(1);
+      verify(() => query.limit(500)).called(1);
+    });
 
     test('watchEmployees resubscribes past a permission-denied error', () {
       fakeAsync((async) {

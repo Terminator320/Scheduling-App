@@ -257,21 +257,8 @@ class _EditPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return TextButton(
-      style: TextButton.styleFrom(
-        backgroundColor: theme.palette.primaryAccent.withValues(alpha: 0.10),
-        foregroundColor: theme.palette.primaryAccent,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: AppSpacing.sp8,
-        ),
-        // Design draws this smaller, but a tap target stays >= 48.
-        minimumSize: const Size(0, 48),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.r12),
-        ),
-      ),
+      style: accentPillButtonStyle(context),
       onPressed: onEdit,
       child: Text(context.l10n.common_edit),
     );

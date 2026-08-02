@@ -27,10 +27,9 @@ import 'package:scheduling/features/calendar/widgets/views/calendar_month_pager.
 import 'package:scheduling/features/calendar/widgets/views/calendar_week_strip.dart';
 import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
-import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
-import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
@@ -64,13 +63,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   late DateFormat _yearLabelFormat;
   String _lastLocale = '';
 
-  late final List<TourStepId> _tourSteps = tourStepsFor(
-    HubTab.calendar,
-    isAdmin: widget.isAdmin,
-  );
-  late final Map<TourStepId, GlobalKey> _tourKeys = {
-    for (final id in _tourSteps) id: GlobalKey(),
-  };
+  late final _tour = TourSteps(HubTab.calendar, isAdmin: widget.isAdmin);
 
   /// Uses the "Split" layout (month grid | day agenda) when the nav rail shows.
   bool get _splitCalendar => context.isSplitLayout;
@@ -272,20 +265,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     if (picked != null && mounted) _setFocusedDay(picked);
   }
 
-  Widget _tourStep(
-    TourStepId id, {
-    required Widget child,
-    BorderRadius? targetBorderRadius,
-  }) => TourShowcase(
-    showcaseKey: _tourKeys[id]!,
-    destination: HubTab.calendar,
-    id: id,
-    index: _tourSteps.indexOf(id),
-    count: _tourSteps.length,
-    targetBorderRadius: targetBorderRadius,
-    child: child,
-  );
-
   /// The appointments stream this screen renders — the whole business for admins, just their own jobs for employees.
   StreamProvider<List<AppointmentRecord>> get _appointmentsProvider =>
       widget.isAdmin
@@ -368,7 +347,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       destination: HubTab.calendar,
       isAdmin: widget.isAdmin,
       ready: !data.isLoading,
-      stepKeys: _tourKeys,
+      stepKeys: _tour.keys,
       child: Scaffold(
         floatingActionButton: _addAppointmentFab(context),
         endDrawer: AppNavDrawer(
@@ -452,7 +431,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   /// block because it is a feature-tour target this screen owns.
   Widget _dayRouteButton(BuildContext context) {
     final theme = Theme.of(context);
-    return _tourStep(
+    return _tour.step(
       TourStepId.calendarDayRoute,
       targetBorderRadius: BorderRadius.circular(AppRadius.rIcon),
       child: Tooltip(
@@ -494,7 +473,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
   Widget? _addAppointmentFab(BuildContext context) {
     if (!widget.isAdmin) return null;
-    return _tourStep(
+    return _tour.step(
       TourStepId.calendarAddAppointment,
       targetBorderRadius: BorderRadius.circular(AppRadius.rFab),
       child: SizedBox(
@@ -519,7 +498,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   }
 
   Widget _buildCalendar(Map<String, Color> colorMap, DateTime today) =>
-      _tourStep(
+      _tour.step(
         TourStepId.calendarGrid,
         child: CalendarMonthPager(
           month: _focusedDay,
@@ -543,49 +522,88 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     final events = _getEventsForDay(_selectedDay ?? _focusedDay);
     // The header, not the list, carries the tour step: a showcase target must
     // be a box widget and the portrait agenda is a sliver.
-    final agendaHeader = _tourStep(
+    final agendaHeader = _tour.step(
       TourStepId.calendarDayList,
       child: AgendaHeader(dayTitle: dayTitle, jobLabel: jobLabel),
     );
 
     if (_splitCalendar) {
-      // Scope each pane under its own PrimaryScrollController or they'll share the tab's controller.
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            flex: 11,
-            // The grid derives its own height from the scaled day number, so
-            // the pane scrolls rather than clipping at large text sizes.
-            child: PrimaryScrollScope(
-              child: SingleChildScrollView(
-                child: _buildCalendar(colorMap, today),
-              ),
-            ),
-          ),
-          const VerticalDivider(width: 1),
-          // EventList already returns an Expanded, so wrap it in a Flex.
-          Expanded(
-            flex: 9,
-            child: PrimaryScrollScope(
-              child: Column(
-                children: [
-                  agendaHeader,
-                  EventList(
-                    events: events,
-                    nameMap: nameMap,
-                    colorMap: colorMap,
-                    isLoading: isLoading,
-                    isAdmin: widget.isAdmin,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+      return _splitContent(
+        events: events,
+        agendaHeader: agendaHeader,
+        isLoading: isLoading,
+        colorMap: colorMap,
+        nameMap: nameMap,
+        today: today,
       );
     }
 
+    return _portraitContent(
+      events: events,
+      agendaHeader: agendaHeader,
+      isLoading: isLoading,
+      colorMap: colorMap,
+      nameMap: nameMap,
+      today: today,
+    );
+  }
+
+  /// Landscape phones and tablets: month grid | day agenda, side by side.
+  Widget _splitContent({
+    required List<AppointmentRecord> events,
+    required Widget agendaHeader,
+    required bool isLoading,
+    required Map<String, Color> colorMap,
+    required Map<String, String> nameMap,
+    required DateTime today,
+  }) {
+    // Scope each pane under its own PrimaryScrollController or they'll share the tab's controller.
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          flex: 11,
+          // The grid derives its own height from the scaled day number, so
+          // the pane scrolls rather than clipping at large text sizes.
+          child: PrimaryScrollScope(
+            child: SingleChildScrollView(
+              child: _buildCalendar(colorMap, today),
+            ),
+          ),
+        ),
+        const VerticalDivider(width: 1),
+        // EventList already returns an Expanded, so wrap it in a Flex.
+        Expanded(
+          flex: 9,
+          child: PrimaryScrollScope(
+            child: Column(
+              children: [
+                agendaHeader,
+                EventList(
+                  events: events,
+                  nameMap: nameMap,
+                  colorMap: colorMap,
+                  isLoading: isLoading,
+                  isAdmin: widget.isAdmin,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Portrait: TWO scroll areas — the grid is fixed above the agenda, so
+  /// reading down the day never moves the calendar.
+  Widget _portraitContent({
+    required List<AppointmentRecord> events,
+    required Widget agendaHeader,
+    required bool isLoading,
+    required Map<String, Color> colorMap,
+    required Map<String, String> nameMap,
+    required DateTime today,
+  }) {
     // Portrait: the grid is FIXED above the agenda, and the jobs get their own
     // viewport (owner call, 2026-07-31). Collapsing is then a deliberate drag
     // on the jobs section rather than something that happens while reading down

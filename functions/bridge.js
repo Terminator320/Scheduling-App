@@ -244,8 +244,6 @@ const syncUsersByUid = onDocumentWritten(
 
 module.exports = {
   syncUsersByUid,
-  shouldHaveBridge,
-  bridgeBody,
   shouldPurgePresence,
   authAccessChange,
   applyAuthAccess,

@@ -340,6 +340,37 @@ void main() {
       verifyNever(() => appointments.updateAppointment(any()));
     });
 
+    test('an all-day edit saves midnight to 23:59, not the picked times', () async {
+      // The EDIT half of the appointmentSpan invariant. The add path was
+      // covered end-to-end but this one only ever asserted the isAllDay STATE
+      // flag, so a regression in the saved instants here would have shipped
+      // silently — which is exactly what routing both paths through one helper
+      // is meant to prevent.
+      readNotifier();
+      await waitForSeed();
+      final c = readNotifier()
+        // Times picked BEFORE the switch was flipped stay in state; the span
+        // helper must ignore them.
+        ..selectStartTime(const TimeOfDay(hour: 14, minute: 0))
+        ..selectEndTime(const TimeOfDay(hour: 16, minute: 0))
+        ..setPersonal(value: true)
+        ..setAllDay(value: true);
+
+      final outcome = await c.save(
+        _appointment,
+        title: 'Dentist',
+        address: '',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      expect(outcome, isA<EventDetailsSaved>());
+      final saved = (outcome as EventDetailsSaved).appointment;
+      expect(saved.isAllDay, isTrue);
+      expect(saved.startTime, DateTime(2026, 5, 10));
+      expect(saved.endTime, DateTime(2026, 5, 10, 23, 59));
+    });
+
     test('writes updated appointment with edited values on success', () async {
       readNotifier();
       await waitForSeed();

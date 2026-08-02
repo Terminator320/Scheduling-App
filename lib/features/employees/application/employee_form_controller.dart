@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -5,6 +7,7 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 /// Outcome of an employee save, whether an invite or an edit — the form maps
@@ -111,36 +114,43 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
 
   /// Creates an invite. The one-time signup code rides back on the outcome
   /// so the caller can show it to the admin.
-  Future<EmployeeSaveOutcome> inviteEmployee({
-    required String name,
-    required String firstName,
-    required String lastName,
-    required String email,
-    required String phone,
-    required String colorValue,
-    required String jobTitle,
-    required bool isAdmin,
-  }) {
+  ///
+  /// Takes the whole record on purpose. The server's re-issue branch UPDATES
+  /// the invited doc's editable fields with whatever it is handed, so a call
+  /// site that omits one silently wipes it — passing a record makes that
+  /// omission unexpressible instead of merely documented.
+  Future<EmployeeSaveOutcome> inviteEmployee(EmployeeRecord employee) {
     return _save(
       (repo) async => EmployeeInvited(
         await repo.createEmployeeInvite(
-          name: name,
-          firstName: firstName,
-          lastName: lastName,
-          email: email,
-          phone: phone,
-          colorValue: colorValue,
-          jobTitle: jobTitle,
-          isAdmin: isAdmin,
+          name: employee.name,
+          firstName: employee.firstName,
+          lastName: employee.lastName,
+          email: employee.email,
+          phone: employee.phone,
+          colorValue: employee.color.toARGB32().toString(),
+          jobTitle: employee.jobTitle.raw,
+          isAdmin: employee.isAdmin,
         ),
       ),
     );
   }
 
   /// Persists an edit to an existing employee.
-  Future<EmployeeSaveOutcome> updateEmployee(EmployeeRecord employee) {
+  ///
+  /// [emergency] rides along because it is a second write to a different path
+  /// (`users/{id}/private/emergency`) that the one Save button owns — routing
+  /// it through the same `_save` keeps one in-flight flag and one error path,
+  /// so a failure on either write surfaces once. Pass null to leave it alone.
+  Future<EmployeeSaveOutcome> updateEmployee(
+    EmployeeRecord employee, {
+    EmergencyContact? emergency,
+  }) {
     return _save((repo) async {
       await repo.updateEmployee(docId: employee.id, employee: employee);
+      if (emergency != null) {
+        await repo.saveEmergencyContact(employee.id, emergency);
+      }
       return const EmployeeUpdated();
     });
   }
@@ -148,6 +158,13 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
   Future<EmployeeSaveOutcome> _save(
     Future<EmployeeSaveOutcome> Function(EmployeesRepository repo) write,
   ) async {
+    // Reentrancy guard, synchronously first: the sheet's primary button only
+    // disables on the next frame, so a double-tap otherwise starts a second
+    // concurrent write. PendingInviteTile checks isSaving at its call site;
+    // owning it here covers the two person sheets too.
+    if (state.isSaving) {
+      return const EmployeeSaveFailed(SocketException('in-flight'));
+    }
     // Resolve dependencies before the first await. The sheet can be
     // dismissed mid-save, and using the Ref of a disposed notifier throws in
     // Riverpod 3.

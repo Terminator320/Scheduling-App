@@ -270,6 +270,24 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     _invalidateSearchCache();
   }
 
+  /// Maps a range snapshot, warning when it came back at the cap — at that
+  /// point the caller is showing a PREFIX of the range, not all of it, and the
+  /// grid dots and agenda would otherwise disagree with reality in silence.
+  List<AppointmentRecord> _mapRangeSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+    String tag,
+  ) {
+    if (snapshot.docs.length >= _rangeStreamLimit) {
+      _logger.warn(
+        '$tag range query hit the $_rangeStreamLimit-doc cap — '
+        'the calendar is showing a prefix of this range',
+      );
+    }
+    return snapshot.docs
+        .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
+        .toList();
+  }
+
   @override
   Stream<List<AppointmentRecord>> watchInRange(AppointmentDateRange range) {
     return retryStream(
@@ -280,12 +298,9 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
           )
           .where('startTime', isLessThan: Timestamp.fromDate(range.end))
           .orderBy('startTime')
+          .limit(_rangeStreamLimit)
           .snapshots()
-          .map(
-            (snapshot) => snapshot.docs
-                .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
-                .toList(),
-          ),
+          .map((snapshot) => _mapRangeSnapshot(snapshot, 'APPT-RANGE')),
       retryWhen: _isAuthPropagationDenied,
     );
   }
@@ -333,6 +348,14 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   // A bounded scan window for history search, same approach as clients search.
   static const int _historySearchScanLimit = 1000;
+
+  /// Ceiling on the live calendar range streams. All three `users` streams are
+  /// bounded for the same reason — a runaway collection must not stream an
+  /// unbounded snapshot to every device — and `appointments` is the collection
+  /// that actually grows without limit. `forCalendar` spans ~58 days, so this
+  /// is far above any real month; hitting it means something is wrong, which is
+  /// why it warns rather than truncating silently.
+  static const int _rangeStreamLimit = 1000;
 
   @override
   Future<List<AppointmentRecord>> searchHistory(String query) async {
@@ -404,12 +427,9 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
           )
           .where('startTime', isLessThan: Timestamp.fromDate(range.end))
           .orderBy('startTime')
+          .limit(_rangeStreamLimit)
           .snapshots()
-          .map(
-            (snapshot) => snapshot.docs
-                .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
-                .toList(),
-          ),
+          .map((snapshot) => _mapRangeSnapshot(snapshot, 'APPT-MYRANGE')),
       retryWhen: _isAuthPropagationDenied,
     );
   }

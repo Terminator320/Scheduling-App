@@ -108,16 +108,10 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
     super.dispose();
   }
 
-  // Prefers the explicit apt field over an apt embedded in the street text —
-  // identical to the edit form's helper.
-  String _buildFullAddress() {
-    final parsed = AddressParser.splitApt(_addressController.text);
-    final street = (parsed?.street ?? _addressController.text).trim();
-    final apt = _aptController.text.trim().isNotEmpty
-        ? _aptController.text.trim()
-        : (parsed?.apt ?? '').trim();
-    return AddressParser.combineAptAndStreet(street, apt);
-  }
+  String _buildFullAddress() => AddressParser.canonicalFrom(
+    street: _addressController.text,
+    apt: _aptController.text,
+  );
 
   ClientRecord _draft() => ClientRecord(
     id: '',
@@ -197,144 +191,159 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
       isBusy: isSaving,
       onPrimary: () => _save(next: AddClientNext.none),
       children: [
-        MonoSectionLabel(l10n.clients_sectionWho),
-        const SizedBox(height: AppSpacing.sp8),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.clients_nameOrBusiness,
-            controller: _nameController,
-            required: true,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.next,
-            autofillHints: const [AutofillHints.name],
-            maxLength: TextLimits.personName,
-            errorText: errors['name'],
-            // LabeledTextField has no `onCleared` — its built-in ClearTextButton
-            // routes through onChanged(''), so clearing the error here covers
-            // both typing and the clear "x".
-            onChanged: (_) => clearError('name'),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        // Owner change 6: always rendered, both optional. The type chips never
-        // swap these in or out.
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.clients_firstName,
-            controller: _firstNameController,
-            optional: true,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.next,
-            autofillHints: const [AutofillHints.givenName],
-            maxLength: TextLimits.firstName,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.clients_lastName,
-            controller: _lastNameController,
-            optional: true,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.next,
-            autofillHints: const [AutofillHints.familyName],
-            maxLength: TextLimits.lastName,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp12),
-        ClientTypeChips(
-          value: _type,
-          onChanged: (next) => setState(() => _type = next),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-
-        MonoSectionLabel(l10n.clients_sectionReachThem),
-        const SizedBox(height: AppSpacing.sp8),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.clients_phone,
-            controller: _phoneController,
-            optional: true,
-            keyboard: TextInputType.phone,
-            inputFormatters: const [PhoneInputFormatter()],
-            textInputAction: TextInputAction.next,
-            maxLength: TextLimits.phone,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.common_email,
-            controller: _emailController,
-            optional: true,
-            keyboard: TextInputType.emailAddress,
-            textInputAction: TextInputAction.next,
-            maxLength: TextLimits.email,
-            errorText: errors['email'],
-            onChanged: (_) => clearError('email'),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-
-        // SITE keeps the full address block, because the appointment form's
-        // inline add-client path opens this same sheet and the booking needs a
-        // split address there.
-        MonoSectionLabel(l10n.clients_sectionSite),
-        const SizedBox(height: AppSpacing.sp8),
-        Material(
-          type: MaterialType.transparency,
-          child: SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.clients_noFixedAddress),
-            subtitle: Text(l10n.clients_noFixedAddressHint),
-            value: noFixedAddress,
-            activeTrackColor: theme.colorScheme.primary,
-            onChanged: (value) => setNoFixedAddress(value: value),
-          ),
-        ),
-        if (!noFixedAddress) ...[
-          const SizedBox(height: AppSpacing.sp16),
-          ClientAddressSection(
-            addressController: _addressController,
-            aptController: _aptController,
-            cityController: _cityController,
-            provinceController: _provinceController,
-            postalCodeController: _postalCodeController,
-            countryController: _countryController,
-            isRequired: true,
-            errorText: errors['address'],
-            onAddressErrorCleared: () => clearError('address'),
-          ),
-        ],
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.clients_accessNotes,
-            hint: l10n.clients_accessNotesHint,
-            controller: _accessNotesController,
-            optional: true,
-            maxLines: 2,
-            textCapitalization: TextCapitalization.sentences,
-            maxLength: TextLimits.clientAccessNotes,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-
-        Text(
-          l10n.clients_newClientCaption,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.palette.textTertiary,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        OutlinedButton(
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size(double.infinity, 48),
-          ),
-          onPressed: isSaving ? null : () => _save(next: AddClientNext.bookJob),
-          child: Text(l10n.clients_addAndBookAJob),
-        ),
+        ..._whoSection(theme, l10n),
+        ..._reachThemSection(theme, l10n),
+        ..._siteSection(theme, l10n, isSaving: isSaving),
       ],
     );
   }
+
+  List<Widget> _whoSection(ThemeData theme, AppLocalizations l10n) => [
+    MonoSectionLabel(l10n.clients_sectionWho),
+    const SizedBox(height: AppSpacing.sp8),
+    SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.clients_nameOrBusiness,
+        controller: _nameController,
+        required: true,
+        textCapitalization: TextCapitalization.words,
+        textInputAction: TextInputAction.next,
+        autofillHints: const [AutofillHints.name],
+        maxLength: TextLimits.personName,
+        errorText: errors['name'],
+        // LabeledTextField has no `onCleared` — its built-in ClearTextButton
+        // routes through onChanged(''), so clearing the error here covers
+        // both typing and the clear "x".
+        onChanged: (_) => clearError('name'),
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    // Owner change 6: always rendered, both optional. The type chips never
+    // swap these in or out.
+    SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.clients_firstName,
+        controller: _firstNameController,
+        optional: true,
+        textCapitalization: TextCapitalization.words,
+        textInputAction: TextInputAction.next,
+        autofillHints: const [AutofillHints.givenName],
+        maxLength: TextLimits.firstName,
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.clients_lastName,
+        controller: _lastNameController,
+        optional: true,
+        textCapitalization: TextCapitalization.words,
+        textInputAction: TextInputAction.next,
+        autofillHints: const [AutofillHints.familyName],
+        maxLength: TextLimits.lastName,
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp12),
+    ClientTypeChips(
+      value: _type,
+      onChanged: (next) => setState(() => _type = next),
+    ),
+    const SizedBox(height: AppSpacing.sp24),
+  ];
+
+  List<Widget> _reachThemSection(ThemeData theme, AppLocalizations l10n) => [
+    MonoSectionLabel(l10n.clients_sectionReachThem),
+    const SizedBox(height: AppSpacing.sp8),
+    SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.clients_phone,
+        controller: _phoneController,
+        optional: true,
+        keyboard: TextInputType.phone,
+        inputFormatters: const [PhoneInputFormatter()],
+        textInputAction: TextInputAction.next,
+        maxLength: TextLimits.phone,
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.common_email,
+        controller: _emailController,
+        optional: true,
+        keyboard: TextInputType.emailAddress,
+        textInputAction: TextInputAction.next,
+        maxLength: TextLimits.email,
+        errorText: errors['email'],
+        onChanged: (_) => clearError('email'),
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp24),
+
+    // SITE keeps the full address block, because the appointment form's
+    // inline add-client path opens this same sheet and the booking needs a
+    // split address there.,
+  ];
+
+  List<Widget> _siteSection(
+    ThemeData theme,
+    AppLocalizations l10n, {
+    required bool isSaving,
+  }) => [
+    MonoSectionLabel(l10n.clients_sectionSite),
+    const SizedBox(height: AppSpacing.sp8),
+    Material(
+      type: MaterialType.transparency,
+      child: SwitchListTile.adaptive(
+        contentPadding: EdgeInsets.zero,
+        title: Text(l10n.clients_noFixedAddress),
+        subtitle: Text(l10n.clients_noFixedAddressHint),
+        value: noFixedAddress,
+        activeTrackColor: theme.colorScheme.primary,
+        onChanged: (value) => setNoFixedAddress(value: value),
+      ),
+    ),
+    if (!noFixedAddress) ...[
+      const SizedBox(height: AppSpacing.sp16),
+      ClientAddressSection(
+        addressController: _addressController,
+        aptController: _aptController,
+        cityController: _cityController,
+        provinceController: _provinceController,
+        postalCodeController: _postalCodeController,
+        countryController: _countryController,
+        isRequired: true,
+        errorText: errors['address'],
+        onAddressErrorCleared: () => clearError('address'),
+      ),
+    ],
+    const SizedBox(height: AppSpacing.sp16),
+    SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.clients_accessNotes,
+        hint: l10n.clients_accessNotesHint,
+        controller: _accessNotesController,
+        optional: true,
+        maxLines: 2,
+        textCapitalization: TextCapitalization.sentences,
+        maxLength: TextLimits.clientAccessNotes,
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp24),
+
+    Text(
+      l10n.clients_newClientCaption,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: theme.palette.textTertiary,
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    OutlinedButton(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(double.infinity, 48),
+      ),
+      onPressed: isSaving ? null : () => _save(next: AddClientNext.bookJob),
+      child: Text(l10n.clients_addAndBookAJob),
+    ),
+  ];
 }

@@ -269,29 +269,6 @@ class AuthHeaderText extends StatelessWidget {
   }
 }
 
-/// Centered brand header for auth screens: mascot mark above headline + subtitle.
-class AuthBrandHeader extends StatelessWidget {
-  const AuthBrandHeader({
-    required this.title,
-    required this.subtitle,
-    super.key,
-  });
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const BrandMark(size: 84),
-        const SizedBox(height: AppSpacing.sp16),
-        AuthHeaderText(title: title, subtitle: subtitle),
-      ],
-    );
-  }
-}
-
 /// 44×44 rounded square holding a centered icon, defaulting to primary brand colors.
 class AuthIconBadge extends StatelessWidget {
   const AuthIconBadge({

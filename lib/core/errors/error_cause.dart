@@ -3,6 +3,10 @@ import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:scheduling/core/connectivity/connectivity_providers.dart';
+import 'package:scheduling/core/notices/notice_service.dart';
 
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -44,4 +48,35 @@ String composeErrorNotice(
     _ErrorCause.unknown => l10n.error_causeUnknown,
   };
   return l10n.error_noticeWithCause(intro, cause, tag);
+}
+
+/// Fails a write fast when the device is offline, surfacing the standard
+/// cause+tag notice. Returns true when it fired, so the caller returns.
+///
+/// An awaited Firestore write only resolves on server ack, so without this the
+/// button spins until the connection returns. Every widget-layer write guard
+/// goes through here: the block was copy-pasted at six call sites differing
+/// only in [intro] and [tag], and [tag] MUST match the `logger.warn` prefix at
+/// the same site or a user's screenshot can't be traced to its Crashlytics line.
+///
+/// The two invite-acceptance screens deliberately don't use this — they surface
+/// offline through their own `AuthBanner`, not a notice.
+bool guardedOffline(
+  BuildContext context,
+  WidgetRef ref, {
+  required String intro,
+  required String tag,
+}) {
+  if (!ref.read(isOfflineProvider)) return false;
+  ref
+      .read(noticeServiceProvider)
+      .error(
+        composeErrorNotice(
+          context,
+          intro: intro,
+          tag: tag,
+          error: const SocketException('offline'),
+        ),
+      );
+  return true;
 }

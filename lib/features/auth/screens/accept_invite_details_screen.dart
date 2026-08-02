@@ -157,6 +157,11 @@ class _AcceptInviteDetailsScreenState
 
   Future<void> _createAccount() async {
     FocusScope.of(context).unfocus();
+    // The consent checkbox is the gate, and this is where it is enforced: the
+    // confirm-password field's keyboard-submit reaches here without consulting
+    // the disabled button, so gating only at the CTA would let Done through.
+    if (!_consented) return;
+
     setState(() {
       _submitted = true;
       _bannerError = null;
@@ -187,8 +192,8 @@ class _AcceptInviteDetailsScreenState
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         phone: _phoneController.text.trim(),
-        termsAccepted: true,
-        locationConsent: true,
+        termsAccepted: _consented,
+        locationConsent: _consented,
       );
       // Success only — a failed attempt must never ask the OS to save it.
       TextInput.finishAutofillContext();
@@ -287,7 +292,7 @@ class _AcceptInviteDetailsScreenState
             textCapitalization: TextCapitalization.words,
             textInputAction: TextInputAction.next,
             autofillHints: const [AutofillHints.givenName],
-            maxLength: TextLimits.firstName,
+            maxLength: TextLimits.employeeNameHalf,
             errorText: _firstNameError,
             onChanged: (_) => _onFieldChanged(),
             onSubmitted: (_) => _lastNameFocus.requestFocus(),
@@ -302,7 +307,7 @@ class _AcceptInviteDetailsScreenState
             textCapitalization: TextCapitalization.words,
             textInputAction: TextInputAction.next,
             autofillHints: const [AutofillHints.familyName],
-            maxLength: TextLimits.lastName,
+            maxLength: TextLimits.employeeNameHalf,
             errorText: _lastNameError,
             onChanged: (_) => _onFieldChanged(),
             onSubmitted: (_) => _phoneFocus.requestFocus(),

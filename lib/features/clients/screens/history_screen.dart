@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/features/clients/widgets/views/appointment_history_view.dart';
-import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
 import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
@@ -33,15 +32,9 @@ class HistoryScreen extends StatefulWidget {
 class _HistoryScreenState extends State<HistoryScreen> {
   final TextEditingController _searchController = TextEditingController();
 
-  late final List<TourStepId> _tourSteps = tourStepsFor(
-    PushedDestination.history,
-    isAdmin: widget.isAdmin,
-  );
-  late final Map<TourStepId, GlobalKey> _tourKeys = {
-    for (final id in _tourSteps) id: GlobalKey(),
-  };
+  late final _tour = TourSteps(PushedDestination.history, isAdmin: widget.isAdmin);
 
-  @override
+@override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -61,20 +54,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return FeatureTourHost(
       destination: PushedDestination.history,
       isAdmin: widget.isAdmin,
-      stepKeys: _tourKeys,
+      stepKeys: _tour.keys,
       child: Scaffold(
         appBar: AppTopBar(
           title: context.l10n.common_history,
           compact: context.isLandscape,
           onBack: _back,
           actions: const [AppHeaderPair()],
-          bottom: _tourSteps.contains(TourStepId.historySearch)
+          bottom: _tour.has(TourStepId.historySearch)
               ? TourShowcaseBar(
-                  showcaseKey: _tourKeys[TourStepId.historySearch]!,
+                  showcaseKey: _tour.keys[TourStepId.historySearch]!,
                   destination: PushedDestination.history,
                   id: TourStepId.historySearch,
-                  index: _tourSteps.indexOf(TourStepId.historySearch),
-                  count: _tourSteps.length,
+                  index: _tour.ids.indexOf(TourStepId.historySearch),
+                  count: _tour.ids.length,
                   bar: searchBar,
                 )
               : searchBar,

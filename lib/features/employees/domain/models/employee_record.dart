@@ -29,8 +29,9 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     // 0 means no cap.
     @Default(0) int maxJobsPerDay,
     @Default(false) bool onCall,
-    @Default('') String emergencyContact,
-    @Default('') String emergencyPhone,
+    // NOTE: emergencyContact/emergencyPhone are NOT here — they live in
+    // users/{docId}/private/emergency so rules can gate them to the admin and
+    // the person themselves. See EmergencyContact.
     // Function-owned and read-only — stamped by createEmployeeInvite and
     // cleared by redeemSignupCode. NEVER emitted in toMap: firestore.rules
     // rejects any client update whose diff touches codeExpiresAt, so a
@@ -69,8 +70,6 @@ abstract class EmployeeRecord with _$EmployeeRecord {
           (data['workEndMinutes'] as num?)?.toInt() ?? kDefaultWorkEndMinutes,
       maxJobsPerDay: (data['maxJobsPerDay'] as num?)?.toInt() ?? 0,
       onCall: data['onCall'] == true,
-      emergencyContact: (data['emergencyContact'] ?? '').toString(),
-      emergencyPhone: (data['emergencyPhone'] ?? '').toString(),
       codeExpiresAt: firestoreDateTime(data['codeExpiresAt']),
       createdAt: firestoreDateTime(data['createdAt']),
     );
@@ -78,6 +77,11 @@ abstract class EmployeeRecord with _$EmployeeRecord {
 
   /// Editable fields only. `codeExpiresAt` and `createdAt` are function-owned
   /// and deliberately absent — see their declarations.
+  ///
+  /// `uid` and `status` are absent for the same reason: `uid` is on the
+  /// `/users` update denylist in `firestore.rules`, and `status` belongs to
+  /// deactivate/reactivate. Emitting either would make a whole-record write
+  /// fail with an opaque `permission-denied`.
   Map<String, dynamic> toMap() => {
     'name': name,
     'firstName': firstName,
@@ -86,16 +90,12 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     'phone': phone,
     'colorValue': color.toARGB32().toString(),
     'role': role,
-    'status': status,
-    'uid': uid,
     'jobTitle': jobTitle.raw,
     'workingDays': workingDays,
     'workStartMinutes': workStartMinutes,
     'workEndMinutes': workEndMinutes,
     'maxJobsPerDay': maxJobsPerDay,
     'onCall': onCall,
-    'emergencyContact': emergencyContact,
-    'emergencyPhone': emergencyPhone,
   };
 
   bool get isAdmin => role == 'admin';

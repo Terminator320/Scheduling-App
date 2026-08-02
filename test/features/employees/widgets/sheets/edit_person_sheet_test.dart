@@ -9,6 +9,7 @@ import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/employees/application/employee_schedule_providers.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
 import 'package:scheduling/features/employees/widgets/sheets/edit_person_sheet.dart';
@@ -21,6 +22,7 @@ void main() {
 
   setUpAll(() {
     registerFallbackValue(const EmployeeRecord(id: 'fallback'));
+    registerFallbackValue(EmergencyContact.empty);
   });
 
   setUp(() {
@@ -34,6 +36,15 @@ void main() {
         docId: any(named: 'docId'),
         employee: any(named: 'employee'),
       ),
+    ).thenAnswer((_) async {});
+
+    // The emergency pair is a second read/write against
+    // users/{id}/private/emergency, not a field on the record.
+    when(
+      () => repo.watchEmergencyContact(any()),
+    ).thenAnswer((_) => Stream.value(EmergencyContact.empty));
+    when(
+      () => repo.saveEmergencyContact(any(), any()),
     ).thenAnswer((_) async {});
   });
 
@@ -291,6 +302,55 @@ void main() {
     await tester.pumpAndSettle();
 
     verifyNoSave();
+  });
+
+  testWidgets('saving before the emergency read lands leaves it untouched', (
+    tester,
+  ) async {
+    // The pair lives in users/{id}/private/emergency and seeds asynchronously,
+    // so the two fields are blank until it arrives. Writing them anyway merged
+    // two empty strings over a stored contact and destroyed it.
+    when(
+      () => repo.watchEmergencyContact(any()),
+    ).thenAnswer((_) => const Stream<EmergencyContact>.empty());
+
+    useTallViewport(tester);
+    await tester.pumpWidget(
+      wrap(const EmployeeRecord(id: 'e1', name: 'Theo', email: 'theo@x.com')),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    // The users doc still saves — only the emergency write is withheld.
+    capturedSave();
+    verifyNever(() => repo.saveEmergencyContact(any(), any()));
+  });
+
+  testWidgets('a loaded emergency contact is written back on save', (
+    tester,
+  ) async {
+    when(() => repo.watchEmergencyContact(any())).thenAnswer(
+      (_) => Stream.value(
+        const EmergencyContact(contact: 'Marie', phone: '555-0199'),
+      ),
+    );
+
+    useTallViewport(tester);
+    await tester.pumpWidget(
+      wrap(const EmployeeRecord(id: 'e1', name: 'Theo', email: 'theo@x.com')),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final captured = verify(
+      () => repo.saveEmergencyContact('e1', captureAny()),
+    ).captured.single;
+    expect((captured as EmergencyContact).contact, 'Marie');
+    expect(captured.phone, '555-0199');
   });
 
   testWidgets('survives 260x640 at 2.0 text scale', (tester) async {

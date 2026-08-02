@@ -8,6 +8,7 @@ import 'package:scheduling/features/calendar/screens/day_route_screen.dart';
 import 'package:scheduling/features/clients/screens/history_screen.dart';
 import 'package:scheduling/features/dashboard/screens/dashboard_screen.dart';
 import 'package:scheduling/features/employees/domain/models/invite_preview.dart';
+import 'package:scheduling/features/settings/screens/my_details_screen.dart';
 import 'package:scheduling/features/settings/screens/settings_screen.dart';
 import 'package:scheduling/routes/hub_shell.dart';
 
@@ -24,6 +25,7 @@ class AppRoutes {
   static const String history = '/history';
   static const String liveMap = '/live-map';
   static const String settings = '/settings';
+  static const String myDetails = '/settings/my-details';
   static const String dashboard = '/dashboard';
   static const String dayRoute = '/day-route';
 
@@ -136,6 +138,12 @@ class AppRoutes {
           HubTab.liveMap,
           isAdmin: args.isAdmin,
           employeeId: args.employeeId,
+        );
+
+      case AppRoutes.myDetails:
+        return AppPageRoute(
+          settings: settings,
+          builder: (_) => const MyDetailsScreen(),
         );
 
       case AppRoutes.settings:

@@ -10,6 +10,7 @@ import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/auth/widgets/auth_banner.dart';
 import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key, this.initialEmail, this.authService});
@@ -155,7 +156,11 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
           message: _errorMessage.isEmpty ? null : _errorMessage,
         ),
         const SizedBox(height: AppSpacing.sp16),
-        _WarningNote(message: context.l10n.auth_noEmailOnAccountNote),
+        WarningNote(
+          message: context.l10n.auth_noEmailOnAccountNote,
+          icon: Icons.info_outline,
+          radius: AppRadius.r8,
+        ),
         const SizedBox(height: AppSpacing.sp24),
         AnimatedLoadingButton(
           label: context.l10n.auth_sendResetEmail,
@@ -239,40 +244,6 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
 }
 
 /// Amber attention note — warning tokens, never the success palette.
-class _WarningNote extends StatelessWidget {
-  const _WarningNote({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final status = theme.statusColors;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.sp12),
-      decoration: BoxDecoration(
-        color: status.warningContainer,
-        borderRadius: BorderRadius.circular(AppRadius.r8),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.info_outline, color: status.warning, size: 16),
-          const SizedBox(width: AppSpacing.sp8),
-          Expanded(
-            child: Text(
-              message,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: status.onWarningContainer,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// The two things worth knowing about a reset link, as a divided list.
 class _FactPanel extends StatelessWidget {
   const _FactPanel({required this.facts});

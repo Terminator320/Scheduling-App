@@ -34,6 +34,7 @@ class ClientDetailViewBody extends ConsumerWidget {
     final hasPhone = client.phone.isNotEmpty;
     final hasEmail = client.email.isNotEmpty;
     final hasAddress = client.address.isNotEmpty;
+    final displayAddress = AddressParser.canonicalToDisplay(client.address);
 
     // Handlers built here (where `ref` lives) so widgets stay presentational.
     final onCall = hasPhone
@@ -66,41 +67,14 @@ class ClientDetailViewBody extends ConsumerWidget {
       if (client.autoInvoice) context.l10n.clients_autoInvoice,
     ].where((v) => v.trim().isNotEmpty).join(' · ');
 
-    // Empty rows are omitted entirely — read-only detail bodies never render
-    // "None" placeholders.
-    final infoRows = <KeyValueRow>[
-      if (hasPhone)
-        KeyValueRow(
-          label: context.l10n.clients_phoneKey,
-          value: client.phone,
-          onTap: onCall,
-          emphasize: true,
-        ),
-      if (hasEmail)
-        KeyValueRow(
-          label: context.l10n.clients_emailKey,
-          value: client.email,
-          onTap: onEmail,
-          emphasize: true,
-        ),
-      if (hasAddress)
-        KeyValueRow(
-          label: context.l10n.clients_addressKey,
-          value: AddressParser.canonicalToDisplay(client.address),
-          onTap: onDirections,
-          emphasize: true,
-          semanticLabel:
-              '${AddressParser.canonicalToDisplay(client.address)}, '
-              '${context.l10n.maps_openAddressWith}',
-        ),
-      if (client.onSiteManager.trim().isNotEmpty)
-        KeyValueRow(
-          label: context.l10n.clients_manager,
-          value: client.onSiteManager,
-        ),
-      if (billingLine.isNotEmpty)
-        KeyValueRow(label: context.l10n.clients_billingKey, value: billingLine),
-    ];
+    final infoRows = _infoRows(
+      context,
+      displayAddress: displayAddress,
+      billingLine: billingLine,
+      onCall: onCall,
+      onEmail: onEmail,
+      onDirections: onDirections,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -157,4 +131,45 @@ class ClientDetailViewBody extends ConsumerWidget {
       ],
     );
   }
+
+  /// Empty rows are omitted entirely — a read-only detail body never renders
+  /// "None" placeholders.
+  List<KeyValueRow> _infoRows(
+    BuildContext context, {
+    required String displayAddress,
+    required String billingLine,
+    VoidCallback? onCall,
+    VoidCallback? onEmail,
+    VoidCallback? onDirections,
+  }) => [
+    if (client.phone.isNotEmpty)
+      KeyValueRow(
+        label: context.l10n.clients_phoneKey,
+        value: client.phone,
+        onTap: onCall,
+        emphasize: true,
+      ),
+    if (client.email.isNotEmpty)
+      KeyValueRow(
+        label: context.l10n.clients_emailKey,
+        value: client.email,
+        onTap: onEmail,
+        emphasize: true,
+      ),
+    if (client.address.isNotEmpty)
+      KeyValueRow(
+        label: context.l10n.clients_addressKey,
+        value: displayAddress,
+        onTap: onDirections,
+        emphasize: true,
+        semanticLabel: '$displayAddress, ${context.l10n.maps_openAddressWith}',
+      ),
+    if (client.onSiteManager.trim().isNotEmpty)
+      KeyValueRow(
+        label: context.l10n.clients_manager,
+        value: client.onSiteManager,
+      ),
+    if (billingLine.isNotEmpty)
+      KeyValueRow(label: context.l10n.clients_billingKey, value: billingLine),
+  ];
 }

@@ -5,18 +5,32 @@ import 'package:scheduling/l10n/l10n.dart';
 class EmployeeFormValidator {
   const EmployeeFormValidator._();
 
+  /// The name halves are taken separately, not as one composed name, because
+  /// `composeEmployeeName` can never return empty — it falls back — so a
+  /// composed value cannot express "the last name is missing". The first
+  /// half's key stays `name`, which is what the first-name field reads.
+  ///
+  /// [requireLastName] mirrors the two sheets, which genuinely differ: an
+  /// invite demands both halves (a roster row with nothing to identify is the
+  /// failure mode), while an edit leaves the last name optional so a legacy
+  /// single-name doc — whose whole stored name seeds First — still saves.
   static Map<String, String?> validate({
     required AppLocalizations l10n,
-    required String name,
+    required String firstName,
+    required String lastName,
     required String email,
+    bool requireLastName = false,
     int? workStartMinutes,
     int? workEndMinutes,
   }) {
     final errors = <String, String?>{};
-    if (name.isEmpty) {
+    if (firstName.trim().isEmpty) {
       errors['name'] = l10n.error_nameAndEmailAreRequired;
     }
-    if (email.isEmpty) {
+    if (requireLastName && lastName.trim().isEmpty) {
+      errors['lastName'] = l10n.error_nameAndEmailAreRequired;
+    }
+    if (email.trim().isEmpty) {
       errors['email'] = l10n.error_nameAndEmailAreRequired;
     }
     if (workStartMinutes != null &&

@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -6,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
-import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -70,31 +68,21 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
     final l10n = context.l10n;
     final notices = ref.read(noticeServiceProvider);
     if (ref.read(employeeFormControllerProvider).isSaving) return;
-    if (ref.read(isOfflineProvider)) {
-      notices.error(
-        composeErrorNotice(
-          context,
-          intro: l10n.error_introSaveEmployee,
-          tag: 'EMP-CREATE',
-          error: const SocketException('offline'),
-        ),
-      );
+    if (guardedOffline(
+      context,
+      ref,
+      intro: context.l10n.error_introSaveEmployee,
+      tag: 'EMP-CREATE',
+    )) {
       return;
     }
 
     final employee = widget.employee;
+    // The stored record, whole — the re-issue branch refreshes every editable
+    // field it is handed, so anything dropped here would be blanked server-side.
     final outcome = await ref
         .read(employeeFormControllerProvider.notifier)
-        .inviteEmployee(
-          name: employee.name,
-          firstName: employee.firstName,
-          lastName: employee.lastName,
-          email: employee.email,
-          phone: employee.phone,
-          colorValue: employee.color.toARGB32().toString(),
-          jobTitle: employee.jobTitle.raw,
-          isAdmin: employee.isAdmin,
-        );
+        .inviteEmployee(employee);
     if (!mounted) return;
 
     switch (outcome) {
@@ -125,15 +113,12 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
     final l10n = context.l10n;
     final notices = ref.read(noticeServiceProvider);
     if (ref.read(employeeFormControllerProvider).isRevoking) return;
-    if (ref.read(isOfflineProvider)) {
-      notices.error(
-        composeErrorNotice(
-          context,
-          intro: l10n.error_introRevokeInvite,
-          tag: 'EMP-REVOKE',
-          error: const SocketException('offline'),
-        ),
-      );
+    if (guardedOffline(
+      context,
+      ref,
+      intro: context.l10n.error_introRevokeInvite,
+      tag: 'EMP-REVOKE',
+    )) {
       return;
     }
 

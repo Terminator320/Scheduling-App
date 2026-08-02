@@ -30,7 +30,12 @@ const NOT_FOUND = 5;
 function clientIdOf(data) {
   if (!data) return "";
   const raw = data.clientId;
-  return typeof raw === "string" ? raw.trim() : "";
+  const id = typeof raw === "string" ? raw.trim() : "";
+  // A "/" would make doc() throw synchronously, and this trigger is retry:true
+  // — an unhandled throw becomes a redelivery storm on one poisoned event.
+  // firestore.rules validates only `status` on /appointments, so a malformed
+  // clientId can reach here.
+  return id.includes("/") ? "" : id;
 }
 
 /**
@@ -97,14 +102,16 @@ const recountClientJobs = onDocumentWritten(
       // eslint-disable-next-line global-require
       const {getFirestore} = require("firebase-admin/firestore");
       const db = getFirestore();
-      for (const clientId of ids) {
+      // The two ids of a reassignment are independent client docs — run them
+      // concurrently rather than paying two serial round trips of billed time.
+      await Promise.all(ids.map(async (clientId) => {
         try {
           await recountOne(db, clientId);
         } catch (err) {
           logger.error("recountClientJobs failed", {clientId, err});
           throw err;
         }
-      }
+      }));
     },
 );
 
