@@ -581,5 +581,13 @@
   "auth_passwordStrengthWeak": "Faible",
   "auth_passwordStrengthFair": "Moyen",
   "auth_passwordStrengthGood": "Bon",
-  "auth_passwordStrengthStrong": "Fort"
+  "auth_passwordStrengthStrong": "Fort",
+  "employees_inviteCodeKey": "CODE D'INVITATION",
+  "employees_showCode": "Afficher le code",
+  "employees_resendCode": "Renvoyer le code",
+  "employees_newCodeReady": "Nouveau code prêt",
+  "employees_newCodeExpiresOn": "Nouveau code · expire le {date}",
+  "employees_newCodeIssued": "Nouveau code — l'ancien ne fonctionne plus",
+  "employees_revokeInvite": "Révoquer l'invitation",
+  "employees_revokeInviteConfirmBody": "Le code cesse de fonctionner immédiatement et cette personne disparaît de votre équipe."
 }

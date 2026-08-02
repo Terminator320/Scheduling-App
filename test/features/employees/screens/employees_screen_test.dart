@@ -12,7 +12,9 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/screens/employees_screen.dart';
+import 'package:scheduling/features/employees/widgets/cards/employee_card.dart';
 import 'package:scheduling/features/employees/widgets/cards/employee_profile_card.dart';
+import 'package:scheduling/features/employees/widgets/cards/pending_invite_tile.dart';
 import 'package:scheduling/features/employees/widgets/fields/employee_color_grid.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -264,4 +266,53 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'an invited row renders the pending-invite tile and expands in place '
+    'instead of opening the detail sheet',
+    (tester) async {
+      _useWideViewport(tester);
+      const invited = EmployeeRecord(
+        id: 'inv1',
+        name: 'Zoé Roy',
+        email: 'zoe@example.com',
+        status: 'invited',
+      );
+
+      // Expanding the row re-issues, so the callable has to answer.
+      final repo = _MockEmployeesRepo();
+      when(
+        () => repo.createEmployeeInvite(
+          name: any(named: 'name'),
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
+          email: any(named: 'email'),
+          phone: any(named: 'phone'),
+          colorValue: any(named: 'colorValue'),
+          jobTitle: any(named: 'jobTitle'),
+          isAdmin: any(named: 'isAdmin'),
+        ),
+      ).thenAnswer((_) async => 'K7Q2-9MZ4-XR8T');
+
+      await tester.pumpWidget(
+        _wrap(
+          employees: () => Stream.value(const [_jane, invited]),
+          overrides: [employeesRepositoryProvider.overrideWithValue(repo)],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PendingInviteTile), findsOneWidget);
+      expect(find.byType(EmployeeCard), findsOneWidget);
+
+      await tester.tap(find.text('Zoé Roy'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      // In-place expansion, and no detail pane claimed the row.
+      expect(find.text('INVITE CODE'), findsOneWidget);
+      expect(find.byType(EmployeeProfileCard), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
