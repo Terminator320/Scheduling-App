@@ -589,5 +589,6 @@
   "employees_newCodeExpiresOn": "Nouveau code · expire le {date}",
   "employees_newCodeIssued": "Nouveau code — l'ancien ne fonctionne plus",
   "employees_revokeInvite": "Révoquer l'invitation",
-  "employees_revokeInviteConfirmBody": "Le code cesse de fonctionner immédiatement et cette personne disparaît de votre équipe."
+  "employees_revokeInviteConfirmBody": "Le code cesse de fonctionner immédiatement et cette personne disparaît de votre équipe.",
+  "auth_signOutToAcceptInvite": "Déconnectez-vous d'abord pour accepter une invitation."
 }

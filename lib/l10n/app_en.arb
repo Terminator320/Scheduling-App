@@ -2628,5 +2628,9 @@
   "employees_revokeInviteConfirmBody": "The code stops working right away and this person disappears from your team list.",
   "@employees_revokeInviteConfirmBody": {
     "description": "Body of the confirm dialog shown before revoking a pending invite"
+  },
+  "auth_signOutToAcceptInvite": "Sign out first to accept an invite.",
+  "@auth_signOutToAcceptInvite": {
+    "description": "Info notice when an invite deep link opens while someone is already signed in"
   }
 }

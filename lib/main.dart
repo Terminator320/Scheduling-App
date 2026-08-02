@@ -21,8 +21,10 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/core/adaptive/app_scroll_behavior.dart';
 import 'package:scheduling/core/app/app_sync_listeners.dart';
 import 'package:scheduling/core/connectivity/offline_banner.dart';
+import 'package:scheduling/core/deep_links/deep_link_dispatcher.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/logging/unhandled_error_severity.dart';
+import 'package:scheduling/core/navigation/top_route_observer.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/notifications/fcm_background_handler.dart';
@@ -162,6 +164,8 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   final _settingsRepository = SharedPrefsSettingsRepository();
   final _settingsSaveDebouncer = SettingsSaveDebouncer();
+  final _topRouteObserver = TopRouteObserver();
+  DeepLinkDispatcher? _deepLinkDispatcher;
   late ThemeMode _themeMode;
   late double _textScale;
   late AppLanguageController _languageController;
@@ -177,6 +181,47 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _languageController.setLanguage(widget.settings.language);
     _setupPushTapHandling();
     _setupWidgetTapHandling();
+    _setupDeepLinkHandling();
+  }
+
+  /// Inbound `esproschedule://` URLs — appointment links and invite links.
+  /// Widget/Live-Activity/Siri taps carry `homeWidget` and are skipped here;
+  /// the `home_widget` channel above still owns them.
+  void _setupDeepLinkHandling() {
+    _deepLinkDispatcher = DeepLinkDispatcher(
+      logger: ref.read(loggerProvider),
+      isSignedIn: () => FirebaseAuth.instance.currentUser != null,
+      openAppointment: _openAppointmentDeepLink,
+      noticeSignOutToAcceptInvite: _noticeSignOutToAcceptInvite,
+      awaitLoginRoute: _awaitLoginRoute,
+      pushInviteCode: (code) => _navigatorKey.currentState?.pushNamed(
+        AppRoutes.acceptInviteCode,
+        arguments: AcceptInviteCodeArgs(initialCode: code),
+      ),
+    )..start();
+  }
+
+  /// An invite link on a live session surfaces a notice and nothing else —
+  /// never an auto-sign-out (owner decision 3).
+  Future<void> _noticeSignOutToAcceptInvite() async {
+    final shell = await _awaitLiveHub();
+    if (shell == null || !mounted) return;
+    final navContext = _navigatorKey.currentContext;
+    if (navContext == null || !navContext.mounted) return;
+    ref
+        .read(noticeServiceProvider)
+        .info(AppLocalizations.of(navContext).auth_signOutToAcceptInvite);
+  }
+
+  /// Polls for up to ~10s waiting for `/login` to become the top route.
+  /// Returns false if it never does — see the dispatcher's give-up branch.
+  Future<bool> _awaitLoginRoute() async {
+    for (var i = 0; i < 50; i++) {
+      if (_topRouteObserver.currentRouteName == AppRoutes.login) return true;
+      if (!mounted) return false;
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+    return false;
   }
 
   /// iOS home-widget taps deep-link to appointment detail via URI scheme.
@@ -304,6 +349,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
 
   @override
   void dispose() {
+    _deepLinkDispatcher?.dispose();
     _settingsSaveDebouncer.dispose();
     super.dispose();
   }
@@ -479,6 +525,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
             final locale = Locale(languageCode, 'CA');
             return MaterialApp(
               navigatorKey: _navigatorKey,
+              navigatorObservers: [_topRouteObserver],
               scaffoldMessengerKey: _scaffoldMessengerKey,
               debugShowCheckedModeBanner: false,
               locale: locale,
