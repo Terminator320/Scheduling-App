@@ -19,6 +19,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/core/adaptive/app_scroll_behavior.dart';
+import 'package:scheduling/core/app/account_exit_listeners.dart';
 import 'package:scheduling/core/app/app_sync_listeners.dart';
 import 'package:scheduling/core/connectivity/offline_banner.dart';
 import 'package:scheduling/core/deep_links/deep_link_dispatcher.dart';
@@ -34,9 +35,6 @@ import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/core/utils/retry.dart';
-import 'package:scheduling/features/auth/application/account_status_provider.dart';
-import 'package:scheduling/features/auth/data/auth_cache.dart';
-import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
@@ -52,7 +50,6 @@ import 'package:scheduling/firebase_options.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/routes/hub_shell.dart';
-import 'package:scheduling/shared/widgets/feedback/error_snack_bar.dart';
 
 const bool _useFirebaseEmulator = bool.fromEnvironment('USE_FIREBASE_EMULATOR');
 const String _emulatorHost = String.fromEnvironment(
@@ -169,7 +166,6 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   late ThemeMode _themeMode;
   late double _textScale;
   late AppLanguageController _languageController;
-  bool _isHandlingAccountExit = false;
   bool _controllerSyncsPrimed = false;
 
   @override
@@ -389,57 +385,6 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     ref.invalidate(widgetPayloadProvider);
   }
 
-  Future<void> _handleAccountDisabled(
-    String Function(AppLocalizations) selectMessage,
-  ) async {
-    if (_isHandlingAccountExit) return;
-    if (FirebaseAuth.instance.currentUser == null) return;
-
-    final navContext = _navigatorKey.currentContext;
-    if (navContext == null) return;
-    _isHandlingAccountExit = true;
-
-    var exitScheduled = false;
-    try {
-      final message = selectMessage(AppLocalizations.of(navContext));
-      // Best-effort de-registration first — a failure here shouldn't block sign-out.
-      await ref
-          .read(pushRegistrationControllerProvider)
-          .unregisterCurrentDevice();
-      await ref.read(presenceSyncControllerProvider).unregister();
-      await ref.read(liveActivityRegistrationControllerProvider).unregister();
-      await ref.read(authServiceProvider).signOut();
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _navigatorKey.currentState?.pushNamedAndRemoveUntil(
-          AppRoutes.login,
-          (_) => false,
-        );
-        _scaffoldMessengerKey.currentState?.showSnackBar(
-          errorSnackBar(navContext, message),
-        );
-        _isHandlingAccountExit = false;
-      });
-      exitScheduled = true;
-    } catch (e, st) {
-      // Sign-out failed — next signal retries.
-      ref.read(loggerProvider).warn('ACCOUNT-EXIT sign-out failed', e, st);
-    } finally {
-      // Reset on failure to allow retry on next signal.
-      if (!exitScheduled) _isHandlingAccountExit = false;
-    }
-  }
-
-  void _listenForAccountDisabled() {
-    ref.listen<AsyncValue<bool>>(accountDisabledProvider, (prev, next) {
-      final wasDisabled = prev?.value ?? false;
-      final isDisabled = next.value ?? false;
-      if (!wasDisabled && isDisabled) {
-        _handleAccountDisabled((l10n) => l10n.error_thisAccountHasBeenDisabled);
-      }
-    });
-  }
-
   /// Syncs once on first build, in case the account doc is already present —
   /// harmless if it's not ready yet.
   void _primeControllerSyncsOnce() {
@@ -450,63 +395,14 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     unawaited(ref.read(liveActivityRegistrationControllerProvider).sync());
   }
 
-  void _listenForRoleRevocation() {
-    ref.listen<AsyncValue<String>>(userRoleProvider, (prev, next) {
-      final prevRole = prev?.value;
-      final nextRole = next.value;
-      // An empty role means deletion, not demotion — let
-      // _listenForDeletedAccount handle that case.
-      if (prevRole == 'admin' &&
-          nextRole != null &&
-          nextRole != '' &&
-          nextRole != 'admin') {
-        _handleAccountDisabled((l10n) => l10n.error_yourAdminAccessWasRevoked);
-      }
-    });
-  }
-
-  void _listenForDeletedAccount() {
-    ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
-      prev,
-      next,
-    ) {
-      final isSignedIn = FirebaseAuth.instance.currentUser != null;
-      final resolvedUid = ref.read(authUidProvider).value;
-      // Kick the user out on a populated→empty transition. Cold-start
-      // deletion is handled separately, below.
-      if (isAccountDeletionSignal(
-        isSignedIn: isSignedIn,
-        resolvedUid: resolvedUid,
-        previous: prev,
-        docState: next,
-      )) {
-        _handleAccountDisabled((l10n) => l10n.error_thisAccountHasBeenDisabled);
-        return;
-      }
-      unawaited(
-        confirmColdStartDeletion(
-          isSignedIn: isSignedIn,
-          resolvedUid: resolvedUid,
-          previous: prev,
-          docState: next,
-          loadWarmCache: ref.read(authCacheProvider).loadIfMatch,
-          logger: ref.read(loggerProvider),
-        ).then((deleted) {
-          if (deleted && mounted) {
-            _handleAccountDisabled(
-              (l10n) => l10n.error_thisAccountHasBeenDisabled,
-            );
-          }
-        }),
-      );
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    _listenForAccountDisabled();
-    _listenForRoleRevocation();
-    _listenForDeletedAccount();
+    AccountExitListeners(
+      ref: ref,
+      navigatorKey: _navigatorKey,
+      scaffoldMessengerKey: _scaffoldMessengerKey,
+      isMounted: () => mounted,
+    ).registerAll();
     // Register the sync listeners — the order here matters for
     // account-lifecycle control, so don't reorder these calls.
     AppSyncListeners(ref).registerAll();

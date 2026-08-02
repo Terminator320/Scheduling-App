@@ -1,14 +1,34 @@
 class AddressParser {
   const AddressParser._();
 
+  // Compiled once: `canonicalToDisplay` runs per row in the clients list
+  // builder, and an address that matches none of these falls through all four.
+  static final _savedApt = RegExp(
+    r'^Apt-?\s*([^\-]+)\s*-\s*(.+)$',
+    caseSensitive: false,
+  );
+  static final _labeledApt = RegExp(
+    r'^\s*(?:apt|apartment|unit|suite|ste|#)\s*[-#: ]*\s*([A-Za-z0-9][A-Za-z0-9 /]*)\s*[-,]\s*(.+)$',
+    caseSensitive: false,
+  );
+  static final _dashApt = RegExp(
+    r'^\s*([A-Za-z0-9][A-Za-z0-9 /]*)\s*-\s*(\d+.+)$',
+  );
+  static final _trailingApt = RegExp(
+    r'^\s*(.+?)\s+(?:#|apt\.?|apartment|unit|suite|ste\.?)\s*[-#: ]*\s*([A-Za-z0-9][A-Za-z0-9 /]*)\s*(,.*)?$',
+    caseSensitive: false,
+  );
+  static final _leadingHashes = RegExp('^#+');
+  static final _embeddedAptToken = RegExp(
+    r'\s+(#|apt\.?|apartment|unit|suite|ste\.?)\s*[-#: ]*\s*[A-Za-z0-9 /]+',
+    caseSensitive: false,
+  );
+
   static AptAddress? splitApt(String rawAddress) {
     final value = rawAddress.trim();
     if (value.isEmpty) return null;
 
-    final saved = RegExp(
-      r'^Apt-?\s*([^\-]+)\s*-\s*(.+)$',
-      caseSensitive: false,
-    ).firstMatch(value);
+    final saved = _savedApt.firstMatch(value);
     if (saved != null) {
       return AptAddress(
         apt: saved.group(1)!.trim(),
@@ -16,10 +36,7 @@ class AddressParser {
       );
     }
 
-    final labeled = RegExp(
-      r'^\s*(?:apt|apartment|unit|suite|ste|#)\s*[-#: ]*\s*([A-Za-z0-9][A-Za-z0-9 /]*)\s*[-,]\s*(.+)$',
-      caseSensitive: false,
-    ).firstMatch(value);
+    final labeled = _labeledApt.firstMatch(value);
     if (labeled != null) {
       return AptAddress(
         apt: labeled.group(1)!.trim(),
@@ -27,9 +44,7 @@ class AddressParser {
       );
     }
 
-    final dash = RegExp(
-      r'^\s*([A-Za-z0-9][A-Za-z0-9 /]*)\s*-\s*(\d+.+)$',
-    ).firstMatch(value);
+    final dash = _dashApt.firstMatch(value);
     if (dash != null) {
       return AptAddress(
         apt: dash.group(1)!.trim(),
@@ -37,10 +52,7 @@ class AddressParser {
       );
     }
 
-    final trailing = RegExp(
-      r'^\s*(.+?)\s+(?:#|apt\.?|apartment|unit|suite|ste\.?)\s*[-#: ]*\s*([A-Za-z0-9][A-Za-z0-9 /]*)\s*(,.*)?$',
-      caseSensitive: false,
-    ).firstMatch(value);
+    final trailing = _trailingApt.firstMatch(value);
     if (trailing != null) {
       final beforeUnit = trailing.group(1)!.trim();
       final apt = trailing.group(2)!.trim();
@@ -56,7 +68,7 @@ class AddressParser {
 
   static String combineAptAndStreet(String street, String apt) {
     final cleanStreet = _stripEmbeddedAptToken(street);
-    final cleanApt = apt.trim().replaceAll(RegExp('^#+'), '');
+    final cleanApt = apt.trim().replaceAll(_leadingHashes, '');
     if (cleanStreet.isEmpty || cleanApt.isEmpty) return cleanStreet;
 
     final commaIndex = cleanStreet.indexOf(',');
@@ -69,7 +81,7 @@ class AddressParser {
 
   static String formatForDisplay(String street, String apt) {
     final cleanStreet = _stripEmbeddedAptToken(street);
-    final cleanApt = apt.trim().replaceAll(RegExp('^#+'), '');
+    final cleanApt = apt.trim().replaceAll(_leadingHashes, '');
     if (cleanStreet.isEmpty || cleanApt.isEmpty) return cleanStreet;
 
     final commaIndex = cleanStreet.indexOf(',');
@@ -86,6 +98,21 @@ class AddressParser {
     return formatForDisplay(parts.street, parts.apt);
   }
 
+  /// The stored form of a street field plus a separate apt field.
+  ///
+  /// The explicit [apt] wins over an apt embedded in [street]; when it is blank
+  /// the embedded one is kept. Both client save paths resolve their address
+  /// through here so the precedence rule has exactly one owner.
+  static String canonicalFrom({required String street, required String apt}) {
+    final parsed = splitApt(street);
+    final resolvedStreet = (parsed?.street ?? street).trim();
+    final trimmedApt = apt.trim();
+    final resolvedApt = trimmedApt.isNotEmpty
+        ? trimmedApt
+        : (parsed?.apt ?? '').trim();
+    return combineAptAndStreet(resolvedStreet, resolvedApt);
+  }
+
   static String toCanonical(String text) {
     final trimmed = text.trim();
     final parts = splitApt(trimmed);
@@ -94,15 +121,7 @@ class AddressParser {
   }
 
   static String _stripEmbeddedAptToken(String street) {
-    return street
-        .replaceAll(
-          RegExp(
-            r'\s+(#|apt\.?|apartment|unit|suite|ste\.?)\s*[-#: ]*\s*[A-Za-z0-9 /]+',
-            caseSensitive: false,
-          ),
-          '',
-        )
-        .trim();
+    return street.replaceAll(_embeddedAptToken, '').trim();
   }
 
   static ParsedAddressFields parse(String rawAddress) {

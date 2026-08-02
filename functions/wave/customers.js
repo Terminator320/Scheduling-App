@@ -616,7 +616,12 @@ async function importCustomers(deps = {}) {
  */
 async function buildWaveIdIndex(db) {
   const index = new Map();
-  const snap = await db.collection("clients").get();
+  // select(): only these two fields are read, and a full client doc carries
+  // the address family and the contacts array. Billed reads are per-document
+  // either way, so this is pure transfer + parse + retained memory.
+  const snap = await db.collection("clients")
+      .select("waveCustomerId", "createdAt")
+      .get();
   const docs = (snap && Array.isArray(snap.docs)) ? snap.docs : [];
   for (const doc of docs) {
     const d = doc.data() || {};

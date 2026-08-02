@@ -374,13 +374,8 @@ async function sendLiveActivityPush(opts) {
 }
 
 module.exports = {
-  APNS_HOST,
-  APNS_SANDBOX_HOST,
-  BUNDLE_ID,
   LIVE_ACTIVITY_TOPIC,
   PROVIDER_TOKEN_TTL_MS,
-  REQUEST_TIMEOUT_MS,
-  signEs256,
   mintProviderToken,
   providerToken,
   resetProviderTokenCache,

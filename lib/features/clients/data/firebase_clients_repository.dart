@@ -53,12 +53,20 @@ class FirebaseClientsRepository implements ClientsRepository {
   void _patchWindow(String id, {Map<String, dynamic>? data}) {
     final window = _scanWindow;
     if (window != null && _isFresh(window.fetchedAt)) {
+      // Merged over the cached doc, never substituted for it: `toMap()` emits
+      // user-owned fields only, so a plain replace would drop the
+      // function-owned `jobCount`/`createdAt` and blank the count on every
+      // search and type-filter result until the window's TTL expired.
+      final previous = window.docs
+          .where((doc) => doc.id == id)
+          .firstOrNull
+          ?.data;
       final docs = [
         for (final doc in window.docs)
           if (doc.id != id) doc,
         // Where it lands in the window doesn't matter — matching happens per-doc, and the
         // final order comes from the relevance sort anyway.
-        if (data != null) (id: id, data: data),
+        if (data != null) (id: id, data: {...?previous, ...data}),
       ];
       _scanWindow = _CachedClientScanWindow(docs, window.fetchedAt);
     } else {

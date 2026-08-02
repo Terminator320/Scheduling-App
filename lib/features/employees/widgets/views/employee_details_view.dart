@@ -4,8 +4,10 @@ import 'package:scheduling/core/launchers/phone_call_launcher.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
+import 'package:scheduling/features/calendar/widgets/views/calendar_month_grid.dart';
 import 'package:scheduling/features/clients/email_compose_launcher.dart';
 import 'package:scheduling/features/employees/application/employee_schedule_providers.dart';
+import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
 import 'package:scheduling/features/employees/widgets/cards/employee_profile_card.dart';
@@ -42,16 +44,24 @@ class EmployeeDetailsView extends ConsumerWidget {
     final l10n = context.l10n;
     final materialL10n = MaterialLocalizations.of(context);
     final locale = Localizations.localeOf(context).toString();
-    final weekStart = weekStartForLocale(locale);
+    final weekStart = CalendarMonthGrid.weekStartOf(context);
 
     // Handlers built here (where `ref` lives) so the widgets stay
     // presentational. Both delegate to launchExternalUri.
     final onCall = employee.phone.isEmpty
         ? null
         : () => launchPhoneCall(context, ref, employee.phone);
-    final onCallEmergency = employee.emergencyPhone.isEmpty
+    // Its own document (users/{id}/private/emergency), gated by rules to an
+    // admin and the person themselves. Team is admin-only, so a viewer here
+    // always passes that rule and a failed read means the read failed — NOT
+    // that there is none on file. If this view is ever reused on a non-admin
+    // surface it must distinguish the two, the way MyDetailsScreen does.
+    final emergency =
+        ref.watch(emergencyContactProvider(employee.id)).value ??
+        EmergencyContact.empty;
+    final onCallEmergency = emergency.phone.isEmpty
         ? null
-        : () => launchPhoneCall(context, ref, employee.emergencyPhone);
+        : () => launchPhoneCall(context, ref, emergency.phone);
     final onEmail = employee.email.isEmpty
         ? null
         : () => EmailComposeLauncher.showEmailChoices(
@@ -112,15 +122,15 @@ class EmployeeDetailsView extends ConsumerWidget {
     // something goes wrong on site is a different question from someone's
     // hours and access level, and it is the one you scan for in a hurry.
     final emergencyRows = <KeyValueRow>[
-      if (employee.emergencyContact.isNotEmpty)
+      if (emergency.contact.isNotEmpty)
         KeyValueRow(
           label: l10n.employees_emergencyKey,
-          value: employee.emergencyContact,
+          value: emergency.contact,
         ),
-      if (employee.emergencyPhone.isNotEmpty)
+      if (emergency.phone.isNotEmpty)
         KeyValueRow(
           label: l10n.employees_emergencyPhoneKey,
-          value: employee.emergencyPhone,
+          value: emergency.phone,
           onTap: onCallEmergency,
           emphasize: true,
         ),
@@ -135,34 +145,8 @@ class EmployeeDetailsView extends ConsumerWidget {
           employee: employee,
           onEdit: isCurrentUserAdmin ? onEdit : null,
         ),
-        if (onCall != null || onEmail != null) ...[
-          const SizedBox(height: AppSpacing.sp16),
-          QuickActionsRow(
-            buttons: [
-              if (onCall != null)
-                QuickActionButton(
-                  icon: Icons.phone_outlined,
-                  label: l10n.clients_call,
-                  onTap: onCall,
-                ),
-              if (onEmail != null)
-                QuickActionButton(
-                  icon: Icons.mail_outline,
-                  label: l10n.common_email,
-                  onTap: onEmail,
-                ),
-            ],
-          ),
-        ],
-        const SizedBox(height: AppSpacing.sp24),
-        KeyValuePanel(rows: infoRows),
-        if (emergencyRows.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.sp24),
-          MonoSectionLabel(l10n.employees_sectionEmergency),
-          const SizedBox(height: AppSpacing.sp8),
-          KeyValuePanel(rows: emergencyRows),
-        ],
-        const SizedBox(height: AppSpacing.sp24),
+        ..._quickActions(l10n, onCall: onCall, onEmail: onEmail),
+        ..._panels(l10n, emergencyRows, infoRows),
         EmployeeTodaySection(
           employeeId: employee.id,
           onJobTap: (appointmentId) =>
@@ -188,4 +172,48 @@ class EmployeeDetailsView extends ConsumerWidget {
       }
     }
   }
+
+  /// Only the buttons whose data exists — a tile with nothing behind it is
+  /// worse than no tile.
+  List<Widget> _quickActions(
+    AppLocalizations l10n, {
+    VoidCallback? onCall,
+    VoidCallback? onEmail,
+  }) => [
+    if (onCall != null || onEmail != null) ...[
+      const SizedBox(height: AppSpacing.sp16),
+      QuickActionsRow(
+        buttons: [
+          if (onCall != null)
+            QuickActionButton(
+              icon: Icons.phone_outlined,
+              label: l10n.clients_call,
+              onTap: onCall,
+            ),
+          if (onEmail != null)
+            QuickActionButton(
+              icon: Icons.mail_outline,
+              label: l10n.common_email,
+              onTap: onEmail,
+            ),
+        ],
+      ),
+    ],
+    const SizedBox(height: AppSpacing.sp24),
+  ];
+
+  List<Widget> _panels(
+    AppLocalizations l10n,
+    List<KeyValueRow> emergencyRows,
+    List<KeyValueRow> infoRows,
+  ) => [
+    KeyValuePanel(rows: infoRows),
+    if (emergencyRows.isNotEmpty) ...[
+      const SizedBox(height: AppSpacing.sp24),
+      MonoSectionLabel(l10n.employees_sectionEmergency),
+      const SizedBox(height: AppSpacing.sp8),
+      KeyValuePanel(rows: emergencyRows),
+    ],
+    const SizedBox(height: AppSpacing.sp24),
+  ];
 }

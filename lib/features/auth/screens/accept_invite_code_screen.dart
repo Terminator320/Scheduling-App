@@ -57,8 +57,14 @@ class _AcceptInviteCodeScreenState
     super.initState();
     // The formatter only runs on user edits, so a prefilled code is normalized
     // here instead.
+    // Truncated like typed input is, so a deep link carrying a longer string
+    // can't fill all twelve boxes while `isCompleteSignupCode` still reads
+    // false — that left Continue disabled with nothing on screen to explain it.
+    final seeded = normalizeSignupCode(widget.initialCode);
     _codeController = TextEditingController(
-      text: normalizeSignupCode(widget.initialCode),
+      text: seeded.length > kSignupCodeLength
+          ? seeded.substring(0, kSignupCodeLength)
+          : seeded,
     );
   }
 
@@ -69,10 +75,6 @@ class _AcceptInviteCodeScreenState
   }
 
   void _onCodeChanged(String _) {
-    if (_codeError == null && _bannerError == null) {
-      setState(() {});
-      return;
-    }
     setState(() {
       _codeError = null;
       _bannerError = null;

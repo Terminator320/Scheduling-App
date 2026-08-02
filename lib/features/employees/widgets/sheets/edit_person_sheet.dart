@@ -1,11 +1,8 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
 import 'package:scheduling/core/adaptive/adaptive_pickers.dart';
-import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
@@ -14,6 +11,7 @@ import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/employees/application/employee_form_controller.dart';
 import 'package:scheduling/features/employees/application/employee_schedule_providers.dart';
+import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
 import 'package:scheduling/features/employees/domain/policies/crew_color_policy.dart';
@@ -26,6 +24,7 @@ import 'package:scheduling/features/employees/widgets/fields/working_days_picker
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
+import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/fields/sheet_field_row.dart';
 import 'package:scheduling/shared/widgets/primitives/mono_section_label.dart';
@@ -71,6 +70,22 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
   late final TextEditingController _phoneController;
   late final TextEditingController _emergencyController;
   late final TextEditingController _emergencyPhoneController;
+  late final ProviderSubscription<AsyncValue<EmergencyContact>> _emergencySub;
+
+  /// A snapshot of users/{id}/private/emergency has actually arrived.
+  /// Save writes the emergency doc ONLY when this is true — the fields start
+  /// blank and fill in asynchronously, so saving before the read lands would
+  /// merge two empty strings over a stored contact and destroy it.
+  bool _emergencyLoaded = false;
+
+  /// The admin has typed in one of the two fields. Until then a fresher
+  /// snapshot is allowed to re-seed, so a stale cache-first emission can be
+  /// corrected by the server one instead of being saved back as a lost update.
+  bool _emergencyDirty = false;
+
+  /// The read failed — "we couldn't load it", which must NOT render as "none
+  /// on file", or the admin overwrites a contact they simply couldn't see.
+  bool _emergencyFailed = false;
 
   late JobTitle _jobTitle;
   late List<bool> _workingDays;
@@ -99,8 +114,20 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
     _lastNameController = TextEditingController(text: e.lastName);
     _emailController = TextEditingController(text: e.email);
     _phoneController = TextEditingController(text: e.phone);
-    _emergencyController = TextEditingController(text: e.emergencyContact);
-    _emergencyPhoneController = TextEditingController(text: e.emergencyPhone);
+    // Seeded asynchronously: the emergency pair lives in
+    // users/{id}/private/emergency, a separate read, so the fields start blank
+    // and fill in when it arrives. Guarded by _emergencySeeded so a later
+    // snapshot can't overwrite what the admin has already typed.
+    _emergencyController = TextEditingController();
+    _emergencyPhoneController = TextEditingController();
+    // Read the current value directly rather than firing the listener
+    // immediately — the immediate fire lands inside initState, where setState
+    // is illegal.
+    _applyEmergency(ref.read(emergencyContactProvider(e.id)), initial: true);
+    _emergencySub = ref.listenManual(
+      emergencyContactProvider(e.id),
+      (_, next) => _applyEmergency(next),
+    );
 
     _jobTitle = e.jobTitle;
     _workingDays = normalizeWorkingDays(e.workingDays);
@@ -113,8 +140,44 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
     _isDisabled = e.isDisabled;
   }
 
+  /// Folds one emergency snapshot into the fields. [initial] runs inside
+  /// initState, where the frame hasn't been built yet and setState would throw.
+  void _applyEmergency(
+    AsyncValue<EmergencyContact> value, {
+    bool initial = false,
+  }) {
+    void apply() {
+      value.when(
+        loading: () {},
+        error: (_, _) {
+          _emergencyFailed = true;
+        },
+        data: (contact) {
+          _emergencyFailed = false;
+          _emergencyLoaded = true;
+          // Never clobber what is being typed.
+          if (_emergencyDirty) return;
+          _emergencyController.text = contact.contact;
+          _emergencyPhoneController.text = contact.phone;
+        },
+      );
+    }
+
+    if (initial || !mounted) {
+      apply();
+      return;
+    }
+    setState(apply);
+  }
+
+  void _markEmergencyDirty() {
+    if (_emergencyDirty) return;
+    _emergencyDirty = true;
+  }
+
   @override
   void dispose() {
+    _emergencySub.close();
     for (final controller in [
       _firstNameController,
       _lastNameController,
@@ -133,10 +196,11 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
     setState(() => errors[key] = null);
   }
 
-  bool _validate(String composedName) {
+  bool _validate() {
     final next = EmployeeFormValidator.validate(
       l10n: context.l10n,
-      name: composedName.trim(),
+      firstName: _firstNameController.text,
+      lastName: _lastNameController.text,
       email: _emailController.text.trim(),
       workStartMinutes: _workStartMinutes,
       workEndMinutes: _workEndMinutes,
@@ -193,20 +257,15 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
       lastName: _lastNameController.text,
       fallback: widget.employee.name,
     );
-    if (!_validate(composedName)) return;
+    if (!_validate()) return;
 
     // Fail fast offline, or Save spins until we reconnect.
-    if (ref.read(isOfflineProvider)) {
-      ref
-          .read(noticeServiceProvider)
-          .error(
-            composeErrorNotice(
-              context,
-              intro: context.l10n.error_introSaveEmployee,
-              tag: 'EMP-SAVE',
-              error: const SocketException('offline'),
-            ),
-          );
+    if (guardedOffline(
+      context,
+      ref,
+      intro: context.l10n.error_introSaveEmployee,
+      tag: 'EMP-SAVE',
+    )) {
       return;
     }
 
@@ -224,13 +283,21 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
       workEndMinutes: _workEndMinutes,
       maxJobsPerDay: _maxJobsPerDay,
       onCall: _onCall,
-      emergencyContact: _emergencyController.text.trim(),
-      emergencyPhone: _emergencyPhoneController.text.trim(),
     );
 
     final outcome = await ref
         .read(employeeFormControllerProvider.notifier)
-        .updateEmployee(updated);
+        .updateEmployee(
+          updated,
+          // null = leave the emergency doc alone. Sending a value we never
+          // managed to read would merge blanks over a stored contact.
+          emergency: _emergencyLoaded
+              ? EmergencyContact(
+                  contact: _emergencyController.text,
+                  phone: _emergencyPhoneController.text,
+                )
+              : null,
+        );
     if (!mounted) return;
 
     switch (outcome) {
@@ -316,180 +383,220 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
       isBusy: activity.isSaving,
       onPrimary: _save,
       children: [
-        MonoSectionLabel(l10n.employees_sectionDetails),
-        const SizedBox(height: AppSpacing.sp8),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            key: const Key('firstName'),
-            label: l10n.employees_firstName,
-            controller: _firstNameController,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.next,
-            maxLength: TextLimits.firstName,
-            errorText: errors['name'],
-            onChanged: (_) => _clearError('name'),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            key: const Key('lastName'),
-            label: l10n.employees_lastName,
-            controller: _lastNameController,
-            optional: true,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.next,
-            maxLength: TextLimits.lastName,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            key: const Key('email'),
-            label: l10n.employees_workEmail,
-            controller: _emailController,
-            required: true,
-            keyboard: TextInputType.emailAddress,
-            textInputAction: TextInputAction.next,
-            maxLength: TextLimits.email,
-            errorText: errors['email'],
-            onChanged: (_) => _clearError('email'),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.employees_phoneNumber,
-            controller: _phoneController,
-            optional: true,
-            keyboard: TextInputType.phone,
-            inputFormatters: const [PhoneInputFormatter()],
-            maxLength: TextLimits.phone,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        MonoSectionLabel(l10n.employees_sectionRole),
-        const SizedBox(height: AppSpacing.sp8),
-        JobTitleChips(
-          value: _jobTitle,
-          onChanged: (next) => setState(() => _jobTitle = next),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        MonoSectionLabel(l10n.employees_sectionColour),
-        const SizedBox(height: AppSpacing.sp8),
-        EmployeeColorGrid(
-          selectedColor: _selectedColor,
-          usedColors: widget.usedColors,
-          onColorSelected: (value) => setState(() => _selectedColor = value),
-        ),
-        const SizedBox(height: AppSpacing.sp8),
-        Text(
-          l10n.employees_coloursLeft(
-            availableCrewColorCount(widget.usedColors),
-          ),
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.palette.textTertiary,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        MonoSectionLabel(l10n.employees_sectionAvailability),
-        const SizedBox(height: AppSpacing.sp8),
-        SheetPanel(
-          children: [
-            _PanelRow(
-              label: l10n.employees_workingDays,
-              child: WorkingDaysPicker(
-                workingDays: _workingDays,
-                onChanged: (next) => setState(() => _workingDays = next),
-              ),
-            ),
-            SheetFieldRow(
-              label: l10n.employees_startsAt,
-              value: materialL10n.formatTimeOfDay(
-                minutesToTimeOfDay(_workStartMinutes),
-              ),
-              useMonoValue: true,
-              accent: true,
-              onTap: () => _pickTime(isStart: true),
-            ),
-            SheetFieldRow(
-              label: l10n.employees_endsAt,
-              value: materialL10n.formatTimeOfDay(
-                minutesToTimeOfDay(_workEndMinutes),
-              ),
-              useMonoValue: true,
-              accent: true,
-              errorText: errors['hours'],
-              onTap: () => _pickTime(isStart: false),
-            ),
-            SheetFieldRow(
-              label: l10n.employees_maxJobsPerDay,
-              value: _maxJobsPerDay == 0
-                  ? l10n.employees_noCap
-                  : '$_maxJobsPerDay',
-              useMonoValue: true,
-              onTap: _pickMaxJobs,
-            ),
-            _PanelRow(
-              label: l10n.employees_onCall,
-              trailing: Switch.adaptive(
-                value: _onCall,
-                activeTrackColor: theme.colorScheme.primary,
-                onChanged: (value) => setState(() => _onCall = value),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        // Its own section, not a tail on AVAILABILITY — who to call in an
-        // emergency has nothing to do with when someone works.
-        MonoSectionLabel(l10n.employees_sectionEmergency),
-        const SizedBox(height: AppSpacing.sp8),
-        // Free-text stays a LabeledTextField, outside the panel — it owns the
-        // error shake and the clear button a panel row has neither of.
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.employees_emergencyContact,
-            controller: _emergencyController,
-            optional: true,
-            textInputAction: TextInputAction.next,
-            maxLength: TextLimits.employeeEmergencyContact,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            key: const Key('emergencyPhone'),
-            label: l10n.employees_emergencyPhone,
-            controller: _emergencyPhoneController,
-            optional: true,
-            keyboard: TextInputType.phone,
-            inputFormatters: const [PhoneInputFormatter()],
-            maxLength: TextLimits.phone,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        MonoSectionLabel(l10n.employees_sectionAccess),
-        const SizedBox(height: AppSpacing.sp8),
-        SwitchListTile.adaptive(
-          key: const Key('adminAccess'),
-          value: _isAdmin,
-          activeTrackColor: theme.colorScheme.primary,
-          contentPadding: EdgeInsets.zero,
-          title: Text(l10n.employees_adminAccess),
-          subtitle: Text(l10n.employees_adminAccessDescription),
-          onChanged: (value) => setState(() => _isAdmin = value),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        _StatusFooter(
-          employeeId: widget.employee.id,
-          isDisabled: _isDisabled,
-          isBusy: activity.isTogglingStatus,
-          onToggle: _confirmToggleStatus,
-        ),
+        ..._detailsSection(theme, l10n),
+        ..._roleSection(theme, l10n),
+        ..._colourSection(theme, l10n),
+        ..._availabilitySection(theme, l10n, materialL10n),
+        ..._emergencySection(theme, l10n),
+        ..._accessSection(theme, l10n, activity),
       ],
     );
   }
+
+  List<Widget> _detailsSection(ThemeData theme, AppLocalizations l10n) => [
+    MonoSectionLabel(l10n.employees_sectionDetails),
+    const SizedBox(height: AppSpacing.sp8),
+    SheetFocusScroll(
+      child: LabeledTextField(
+        key: const Key('firstName'),
+        label: l10n.employees_firstName,
+        controller: _firstNameController,
+        textCapitalization: TextCapitalization.words,
+        textInputAction: TextInputAction.next,
+        maxLength: TextLimits.employeeNameHalf,
+        errorText: errors['name'],
+        onChanged: (_) => _clearError('name'),
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    SheetFocusScroll(
+      child: LabeledTextField(
+        key: const Key('lastName'),
+        label: l10n.employees_lastName,
+        controller: _lastNameController,
+        optional: true,
+        textCapitalization: TextCapitalization.words,
+        textInputAction: TextInputAction.next,
+        maxLength: TextLimits.employeeNameHalf,
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    SheetFocusScroll(
+      child: LabeledTextField(
+        key: const Key('email'),
+        label: l10n.employees_workEmail,
+        controller: _emailController,
+        required: true,
+        keyboard: TextInputType.emailAddress,
+        textInputAction: TextInputAction.next,
+        maxLength: TextLimits.email,
+        errorText: errors['email'],
+        onChanged: (_) => _clearError('email'),
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.employees_phoneNumber,
+        controller: _phoneController,
+        optional: true,
+        keyboard: TextInputType.phone,
+        inputFormatters: const [PhoneInputFormatter()],
+        maxLength: TextLimits.phone,
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp24),
+  ];
+
+  List<Widget> _roleSection(ThemeData theme, AppLocalizations l10n) => [
+    MonoSectionLabel(l10n.employees_sectionRole),
+    const SizedBox(height: AppSpacing.sp8),
+    JobTitleChips(
+      value: _jobTitle,
+      onChanged: (next) => setState(() => _jobTitle = next),
+    ),
+    const SizedBox(height: AppSpacing.sp24),
+  ];
+
+  List<Widget> _colourSection(ThemeData theme, AppLocalizations l10n) => [
+    MonoSectionLabel(l10n.employees_sectionColour),
+    const SizedBox(height: AppSpacing.sp8),
+    EmployeeColorGrid(
+      selectedColor: _selectedColor,
+      usedColors: widget.usedColors,
+      onColorSelected: (value) => setState(() => _selectedColor = value),
+    ),
+    const SizedBox(height: AppSpacing.sp8),
+    Text(
+      l10n.employees_coloursLeft(
+        availableCrewColorCount(widget.usedColors),
+      ),
+      style: theme.textTheme.labelSmall?.copyWith(
+        color: theme.palette.textTertiary,
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp24),
+  ];
+
+  List<Widget> _availabilitySection(
+    ThemeData theme,
+    AppLocalizations l10n,
+    MaterialLocalizations materialL10n,
+  ) => [
+    MonoSectionLabel(l10n.employees_sectionAvailability),
+    const SizedBox(height: AppSpacing.sp8),
+    SheetPanel(
+      children: [
+        _PanelRow(
+          label: l10n.employees_workingDays,
+          child: WorkingDaysPicker(
+            workingDays: _workingDays,
+            onChanged: (next) => setState(() => _workingDays = next),
+          ),
+        ),
+        SheetFieldRow(
+          label: l10n.employees_startsAt,
+          value: materialL10n.formatTimeOfDay(
+            minutesToTimeOfDay(_workStartMinutes),
+          ),
+          useMonoValue: true,
+          accent: true,
+          onTap: () => _pickTime(isStart: true),
+        ),
+        SheetFieldRow(
+          label: l10n.employees_endsAt,
+          value: materialL10n.formatTimeOfDay(
+            minutesToTimeOfDay(_workEndMinutes),
+          ),
+          useMonoValue: true,
+          accent: true,
+          errorText: errors['hours'],
+          onTap: () => _pickTime(isStart: false),
+        ),
+        SheetFieldRow(
+          label: l10n.employees_maxJobsPerDay,
+          value: _maxJobsPerDay == 0 ? l10n.employees_noCap : '$_maxJobsPerDay',
+          useMonoValue: true,
+          onTap: _pickMaxJobs,
+        ),
+        _PanelRow(
+          label: l10n.employees_onCall,
+          trailing: Switch.adaptive(
+            value: _onCall,
+            activeTrackColor: theme.colorScheme.primary,
+            onChanged: (value) => setState(() => _onCall = value),
+          ),
+        ),
+      ],
+    ),
+    const SizedBox(height: AppSpacing.sp24),
+    // Its own section, not a tail on AVAILABILITY — who to call in an
+    // emergency has nothing to do with when someone works.,
+  ];
+
+  List<Widget> _emergencySection(ThemeData theme, AppLocalizations l10n) => [
+    MonoSectionLabel(l10n.employees_sectionEmergency),
+    const SizedBox(height: AppSpacing.sp8),
+    // Free-text stays a LabeledTextField, outside the panel — it owns the
+    // error shake and the clear button a panel row has neither of.
+    if (_emergencyFailed)
+      WarningNote(message: l10n.employees_emergencyLoadFailed)
+    else ...[
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: l10n.employees_emergencyContact,
+          controller: _emergencyController,
+          optional: true,
+          // Not editable until the separate read lands, so the admin can
+          // never type into (or save) fields that only LOOK empty.
+          readOnly: !_emergencyLoaded,
+          textInputAction: TextInputAction.next,
+          maxLength: TextLimits.employeeEmergencyContact,
+          onChanged: (_) => _markEmergencyDirty(),
+        ),
+      ),
+      const SizedBox(height: AppSpacing.sp16),
+      SheetFocusScroll(
+        child: LabeledTextField(
+          key: const Key('emergencyPhone'),
+          label: l10n.employees_emergencyPhone,
+          controller: _emergencyPhoneController,
+          optional: true,
+          readOnly: !_emergencyLoaded,
+          keyboard: TextInputType.phone,
+          inputFormatters: const [PhoneInputFormatter()],
+          maxLength: TextLimits.phone,
+          onChanged: (_) => _markEmergencyDirty(),
+        ),
+      ),
+    ],
+    const SizedBox(height: AppSpacing.sp24),
+  ];
+
+  List<Widget> _accessSection(
+    ThemeData theme,
+    AppLocalizations l10n,
+    EmployeeFormActivity activity,
+  ) => [
+    MonoSectionLabel(l10n.employees_sectionAccess),
+    const SizedBox(height: AppSpacing.sp8),
+    SwitchListTile.adaptive(
+      key: const Key('adminAccess'),
+      value: _isAdmin,
+      activeTrackColor: theme.colorScheme.primary,
+      contentPadding: EdgeInsets.zero,
+      title: Text(l10n.employees_adminAccess),
+      subtitle: Text(l10n.employees_adminAccessDescription),
+      onChanged: (value) => setState(() => _isAdmin = value),
+    ),
+    const SizedBox(height: AppSpacing.sp24),
+    _StatusFooter(
+      employeeId: widget.employee.id,
+      isDisabled: _isDisabled,
+      isBusy: activity.isTogglingStatus,
+      onToggle: _confirmToggleStatus,
+    ),
+  ];
 }
 
 /// A panel row that is not a picker — a label beside arbitrary content

@@ -6,7 +6,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -14,10 +13,9 @@ import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
-import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/features/presence/application/live_map_providers.dart';
 import 'package:scheduling/features/presence/domain/live_map_aggregator.dart';
@@ -100,27 +98,8 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
   // targets yet.
   bool _mapTargetsRendered = false;
 
-  late final List<TourStepId> _tourSteps = tourStepsFor(
-    HubTab.liveMap,
-    isAdmin: widget.isAdmin,
-  );
-  late final Map<TourStepId, GlobalKey> _tourKeys = {
-    for (final id in _tourSteps) id: GlobalKey(),
-  };
+  late final _tour = TourSteps(HubTab.liveMap, isAdmin: widget.isAdmin);
 
-  Widget _tourStep(
-    TourStepId id, {
-    required Widget child,
-    BorderRadius? targetBorderRadius,
-  }) => TourShowcase(
-    showcaseKey: _tourKeys[id]!,
-    destination: HubTab.liveMap,
-    id: id,
-    index: _tourSteps.indexOf(id),
-    count: _tourSteps.length,
-    targetBorderRadius: targetBorderRadius,
-    child: child,
-  );
 
   @override
   void dispose() {
@@ -159,7 +138,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
       destination: HubTab.liveMap,
       isAdmin: widget.isAdmin,
       ready: _mapTargetsRendered,
-      stepKeys: _tourKeys,
+      stepKeys: _tour.keys,
       child: Scaffold(
         appBar: AppTopBar(
           title: context.l10n.liveMap_title,
@@ -486,15 +465,15 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
             paused: paused,
             onOpenRoster: _openRoster,
             onRecenter: () => _applyFit(_lastPoints),
-            rosterTourWrap: _tourSteps.contains(TourStepId.liveMapRoster)
-                ? (child) => _tourStep(
+            rosterTourWrap: _tour.has(TourStepId.liveMapRoster)
+                ? (child) => _tour.step(
                     TourStepId.liveMapRoster,
                     targetBorderRadius: BorderRadius.circular(AppRadius.r16),
                     child: child,
                   )
                 : null,
-            recenterTourWrap: _tourSteps.contains(TourStepId.liveMapRecenter)
-                ? (child) => _tourStep(
+            recenterTourWrap: _tour.has(TourStepId.liveMapRecenter)
+                ? (child) => _tour.step(
                     TourStepId.liveMapRecenter,
                     targetBorderRadius: BorderRadius.circular(AppRadius.r16),
                     child: child,

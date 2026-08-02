@@ -1,3 +1,4 @@
+import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/invite_preview.dart';
 
@@ -50,6 +51,18 @@ abstract class EmployeesRepository {
     required String docId,
     required EmployeeRecord employee,
   });
+
+  /// Streams `users/{docId}/private/emergency`.
+  ///
+  /// Its own document, not two fields on the users doc: rules are
+  /// document-level, and `/users` is readable by every active peer. Only an
+  /// admin or the person themselves can read this path — see [EmergencyContact].
+  /// Emits [EmergencyContact.empty] when the doc doesn't exist yet.
+  Stream<EmergencyContact> watchEmergencyContact(String docId);
+
+  /// Writes `users/{docId}/private/emergency`, and scrubs the legacy pair off
+  /// the parent users doc in the same pass — see the implementation.
+  Future<void> saveEmergencyContact(String docId, EmergencyContact contact);
 
   Future<UserUidMatch?> findUserByUid(String uid);
 

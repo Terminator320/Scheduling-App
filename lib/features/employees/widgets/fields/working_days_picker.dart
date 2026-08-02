@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
+import 'package:scheduling/features/calendar/widgets/views/calendar_month_grid.dart';
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
 
 /// Seven toggle cells in the locale's week order.
@@ -23,7 +24,7 @@ class WorkingDaysPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final locale = Localizations.localeOf(context).toString();
-    final weekStart = weekStartForLocale(locale);
+    final weekStart = CalendarMonthGrid.weekStartOf(context);
     final labels = weekdayLabelsForLocale(locale);
     final cells = orderedWorkingDays(workingDays, weekStart: weekStart);
 

@@ -53,7 +53,7 @@ void main() {
       expect(employee.isDisabled, isFalse);
     });
 
-    test('toMap → fromMap roundtrip preserves data', () {
+    test('toMap → fromMap roundtrip preserves the editable fields', () {
       const original = EmployeeRecord(
         id: 'e1',
         name: 'Jane Doe',
@@ -61,13 +61,28 @@ void main() {
         phone: '+1-514-555-0101',
         color: Color(0xFFEC4899),
         role: 'admin',
-        status: 'active',
-        uid: 'firebase-uid-1',
       );
 
       final restored = EmployeeRecord.fromMap(original.id, original.toMap());
 
       expect(restored, equals(original));
+    });
+
+    test('toMap emits neither uid nor status — the repository owns both', () {
+      const record = EmployeeRecord(
+        id: 'e1',
+        name: 'Jane Doe',
+        status: 'active',
+        uid: 'firebase-uid-1',
+      );
+
+      final map = record.toMap();
+
+      // `uid` is on the /users update denylist in firestore.rules and `status`
+      // belongs to deactivate/reactivate, so a whole-record write carrying
+      // either comes back as an opaque permission-denied.
+      expect(map.containsKey('uid'), isFalse);
+      expect(map.containsKey('status'), isFalse);
     });
 
     test('fromMap defaults missing fields to sensible empties', () {
@@ -109,7 +124,6 @@ void main() {
       expect(record.workStartMinutes, 420);
       expect(record.maxJobsPerDay, 5);
       expect(record.onCall, isTrue);
-      expect(record.emergencyContact, 'Marie 555-0100');
     });
 
     test('a legacy doc with none of them gets working defaults', () {
@@ -149,7 +163,6 @@ void main() {
         jobTitle: JobTitle.dispatcher,
         maxJobsPerDay: 3,
         onCall: true,
-        emergencyContact: 'Marie',
       );
 
       final restored = EmployeeRecord.fromMap('e1', record.toMap());
@@ -158,7 +171,6 @@ void main() {
       expect(restored.jobTitle, JobTitle.dispatcher);
       expect(restored.maxJobsPerDay, 3);
       expect(restored.onCall, isTrue);
-      expect(restored.emergencyContact, 'Marie');
     });
   });
 

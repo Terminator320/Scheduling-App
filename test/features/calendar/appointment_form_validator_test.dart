@@ -225,4 +225,52 @@ void main() {
       expect(r, DateTime(2026, 5, 10, 9));
     });
   });
+
+  group('allDaySpan / appointmentSpan', () {
+    test('an all-day block spans midnight to 23:59 of the same date', () {
+      // Real instants, not sentinels — every range query and the overdue
+      // sweep keep treating it as an ordinary appointment.
+      final span = allDaySpan(DateTime(2026, 5, 10, 14, 37));
+
+      expect(span.start, DateTime(2026, 5, 10));
+      expect(span.end, DateTime(2026, 5, 10, 23, 59));
+    });
+
+    test('appointmentSpan picks the all-day pair and ignores the times', () {
+      // Times picked before the switch was flipped stay in state, so they must
+      // not leak into the stored span.
+      final span = appointmentSpan(
+        date: DateTime(2026, 5, 10),
+        isAllDay: true,
+        startTime: const TimeOfDay(hour: 9, minute: 0),
+        endTime: const TimeOfDay(hour: 11, minute: 0),
+      );
+
+      expect(span.start, DateTime(2026, 5, 10));
+      expect(span.end, DateTime(2026, 5, 10, 23, 59));
+    });
+
+    test('appointmentSpan uses the picked times when not all-day', () {
+      final span = appointmentSpan(
+        date: DateTime(2026, 5, 10),
+        isAllDay: false,
+        startTime: const TimeOfDay(hour: 9, minute: 0),
+        endTime: const TimeOfDay(hour: 11, minute: 30),
+      );
+
+      expect(span.start, DateTime(2026, 5, 10, 9));
+      expect(span.end, DateTime(2026, 5, 10, 11, 30));
+    });
+
+    test('an end before the start rolls to the next day', () {
+      final span = appointmentSpan(
+        date: DateTime(2026, 5, 10),
+        isAllDay: false,
+        startTime: const TimeOfDay(hour: 22, minute: 0),
+        endTime: const TimeOfDay(hour: 1, minute: 0),
+      );
+
+      expect(span.end.day, 11);
+    });
+  });
 }

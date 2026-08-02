@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -9,7 +8,6 @@ import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
-import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
@@ -23,10 +21,9 @@ import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/feature_tour/application/tour_seen_store.dart';
-import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
-import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_preference.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
@@ -82,21 +79,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   bool _isSigningOut = false;
   bool _isDeletingAccount = false;
 
-  late final List<TourStepId> _tourSteps = tourStepsFor(
+  late final _tour = TourSteps(
     PushedDestination.settings,
     isAdmin: widget.role == 'admin',
-  );
-  late final Map<TourStepId, GlobalKey> _tourKeys = {
-    for (final id in _tourSteps) id: GlobalKey(),
-  };
-
-  Widget _tourStep(TourStepId id, {required Widget child}) => TourShowcase(
-    showcaseKey: _tourKeys[id]!,
-    destination: PushedDestination.settings,
-    id: id,
-    index: _tourSteps.indexOf(id),
-    count: _tourSteps.length,
-    child: child,
   );
 
   @override
@@ -174,6 +159,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     final scheme = Theme.of(context).colorScheme;
 
     return ListView(
+      // Named so tests can target the master pane's scrollable directly: at
+      // tablet-class viewports MasterDetailScaffold renders a second one, so
+      // `find.byType(Scrollable).first` is ambiguous, and anchoring on a row
+      // instead breaks whenever a row is added above it.
+      key: const ValueKey('settingsMasterList'),
       // Inflate the whole list up front so below-the-fold feature-tour targets register.
       scrollCacheExtent: const ScrollCacheExtent.pixels(4000),
       padding: const EdgeInsets.all(AppSpacing.sp16),
@@ -184,60 +174,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           role: widget.role,
         ),
         const SizedBox(height: AppSpacing.sp24),
-        SettingsSectionHeader(
-          label: context.l10n.settings_appearance.toUpperCase(),
-        ),
-        _tourStep(
-          TourStepId.settingsAppearance,
-          child: AppearanceSettingsCard(onTextSizeTap: _onTextSizeTap),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        SettingsSectionHeader(
-          label: context.l10n.settings_account.toUpperCase(),
-        ),
-        AccountSettingsCard(
-          onSignOut: _signOut,
-          onDeleteAccount: _confirmDeleteAccount,
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        SettingsSectionHeader(
-          label: context.l10n.settings_security.toUpperCase(),
-        ),
-        SecuritySettingsCard(onToggleAppLock: _toggleAppLock),
-        const SizedBox(height: AppSpacing.sp24),
-        SettingsSectionHeader(
-          label: context.l10n.settings_notifications.toUpperCase(),
-        ),
-        _tourStep(
-          TourStepId.settingsNotifications,
-          child: NotificationsSettingsCard(
-            onNotificationsTap: _onNotificationsTap,
-            onToggleLiveActivity: _toggleLiveActivity,
-          ),
-        ),
-        if (_isAdmin) ...[
-          const SizedBox(height: AppSpacing.sp24),
-          SettingsSectionHeader(
-            label: context.l10n.settings_integrations.toUpperCase(),
-          ),
-          const SettingsSectionCard(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: AppSpacing.sp12),
-              child: WaveSettingsSection(),
-            ),
-          ),
-        ],
-        const SizedBox(height: AppSpacing.sp24),
-        SettingsSectionHeader(
-          label: context.l10n.settings_legal.toUpperCase(),
-        ),
-        const LegalSettingsCard(),
-        const SizedBox(height: AppSpacing.sp24),
-        SettingsSectionHeader(
-          label: context.l10n.settings_help.toUpperCase(),
-        ),
-        _helpCard(scheme),
-        const SizedBox(height: AppSpacing.sp24),
+        ..._settingsCards(scheme),
+        ..._legalAndHelpCards(scheme),
         _buildVersionFooter(scheme),
         const SizedBox(height: AppSpacing.sp32),
       ],
@@ -273,7 +211,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Widget _helpCard(ColorScheme scheme) {
     return SettingsSectionCard(
-      child: _tourStep(
+      child: _tour.step(
         TourStepId.settingsReplay,
         child: SettingsTile(
           iconBg: scheme.primaryContainer,
@@ -334,7 +272,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     return FeatureTourHost(
       destination: PushedDestination.settings,
       isAdmin: _isAdmin,
-      stepKeys: _tourKeys,
+      stepKeys: _tour.keys,
       autoScroll: true,
       child: Stack(
         children: [
@@ -396,17 +334,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   Future<void> _confirmDeleteAccount() async {
     if (_isDeletingAccount) return;
     // Bail out early if we're offline — otherwise the call just hangs for ~30s.
-    if (ref.read(isOfflineProvider)) {
-      ref
-          .read(noticeServiceProvider)
-          .error(
-            composeErrorNotice(
-              context,
-              intro: context.l10n.error_introDeleteAccount,
-              tag: 'ACCT-DEL',
-              error: const SocketException('offline'),
-            ),
-          );
+    if (guardedOffline(
+      context,
+      ref,
+      intro: context.l10n.error_introDeleteAccount,
+      tag: 'ACCT-DEL',
+    )) {
       return;
     }
     final result = await showConfirmDialog(
@@ -473,6 +406,78 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
     notices.success(message);
   }
+
+  /// Appearance, account, security, notifications and (admin-only) Wave.
+  List<Widget> _settingsCards(ColorScheme scheme) => [
+    SettingsSectionHeader(
+      label: context.l10n.settings_appearance.toUpperCase(),
+    ),
+    _tour.step(
+      TourStepId.settingsAppearance,
+      child: AppearanceSettingsCard(onTextSizeTap: _onTextSizeTap),
+    ),
+    const SizedBox(height: AppSpacing.sp24),
+    SettingsSectionHeader(
+      label: context.l10n.settings_account.toUpperCase(),
+    ),
+    SettingsSectionCard(
+      child: SettingsTile(
+        iconBg: scheme.primaryContainer,
+        icon: Icons.badge_outlined,
+        iconColor: scheme.primary,
+        label: context.l10n.settings_myDetails,
+        isLast: true,
+        onTap: () => Navigator.pushNamed(context, AppRoutes.myDetails),
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp12),
+    AccountSettingsCard(
+      onSignOut: _signOut,
+      onDeleteAccount: _confirmDeleteAccount,
+    ),
+    const SizedBox(height: AppSpacing.sp24),
+    SettingsSectionHeader(
+      label: context.l10n.settings_security.toUpperCase(),
+    ),
+    SecuritySettingsCard(onToggleAppLock: _toggleAppLock),
+    const SizedBox(height: AppSpacing.sp24),
+    SettingsSectionHeader(
+      label: context.l10n.settings_notifications.toUpperCase(),
+    ),
+    _tour.step(
+      TourStepId.settingsNotifications,
+      child: NotificationsSettingsCard(
+        onNotificationsTap: _onNotificationsTap,
+        onToggleLiveActivity: _toggleLiveActivity,
+      ),
+    ),
+    if (_isAdmin) ...[
+      const SizedBox(height: AppSpacing.sp24),
+      SettingsSectionHeader(
+        label: context.l10n.settings_integrations.toUpperCase(),
+      ),
+      const SettingsSectionCard(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.sp12),
+          child: WaveSettingsSection(),
+        ),
+      ),
+    ],
+    const SizedBox(height: AppSpacing.sp24),
+  ];
+
+  List<Widget> _legalAndHelpCards(ColorScheme scheme) => [
+    SettingsSectionHeader(
+      label: context.l10n.settings_legal.toUpperCase(),
+    ),
+    const LegalSettingsCard(),
+    const SizedBox(height: AppSpacing.sp24),
+    SettingsSectionHeader(
+      label: context.l10n.settings_help.toUpperCase(),
+    ),
+    _helpCard(scheme),
+    const SizedBox(height: AppSpacing.sp24),
+  ];
 }
 
 /// Full-screen modal barrier + spinner shown while a blocking, irreversible operation runs.

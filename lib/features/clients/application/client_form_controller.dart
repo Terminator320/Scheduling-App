@@ -53,6 +53,11 @@ class ClientFormController extends Notifier<bool> {
   /// Persists a new client. State resets in the `finally` block because this provider
   /// is shared with the detail pane in the split layout.
   Future<ClientSaveOutcome> addClient(ClientRecord client) async {
+    // Reentrancy guard, synchronously before anything else. The primary button
+    // only disables on the NEXT frame, and add_client_sheet has two entry points
+    // into this same write (the frame's verb and "Add and book a job"), so a
+    // double-hit before that rebuild created two client docs.
+    if (state) return const ClientSaveFailed(SocketException('in-flight'));
     // Bail out early if we're offline — Firestore writes block until the server acks,
     // so the button would just spin until reconnect (CLI-ADD maps the exception).
     if (ref.read(isOfflineProvider)) {
@@ -78,6 +83,8 @@ class ClientFormController extends Notifier<bool> {
 
   /// Persists edit and mirrors to phone contact (best-effort, never blocks/fails the save).
   Future<ClientSaveOutcome> updateClient(ClientRecord client) async {
+    // See addClient — the guard runs before every other check.
+    if (state) return const ClientSaveFailed(SocketException('in-flight'));
     // Bail out early if we're offline (the edit form shows the CLI-SAVE notice).
     if (ref.read(isOfflineProvider)) {
       return const ClientSaveFailed(SocketException('offline'));

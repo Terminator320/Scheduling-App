@@ -16,8 +16,8 @@ import 'package:scheduling/features/employees/widgets/sheets/edit_person_sheet.d
 import 'package:scheduling/features/employees/widgets/sheets/employee_details_sheet.dart';
 import 'package:scheduling/features/employees/widgets/sheets/invite_person_sheet.dart';
 import 'package:scheduling/features/employees/widgets/views/employee_details_view.dart';
-import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
 import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
@@ -49,27 +49,8 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
   final TextEditingController _searchController = TextEditingController();
   EmployeeRecord? _selectedEmployee;
 
-  late final List<TourStepId> _tourSteps = tourStepsFor(
-    HubTab.employees,
-    isAdmin: widget.isAdmin,
-  );
-  late final Map<TourStepId, GlobalKey> _tourKeys = {
-    for (final id in _tourSteps) id: GlobalKey(),
-  };
+  late final _tour = TourSteps(HubTab.employees, isAdmin: widget.isAdmin);
 
-  Widget _tourStep(
-    TourStepId id, {
-    required Widget child,
-    BorderRadius? targetBorderRadius,
-  }) => TourShowcase(
-    showcaseKey: _tourKeys[id]!,
-    destination: HubTab.employees,
-    id: id,
-    index: _tourSteps.indexOf(id),
-    count: _tourSteps.length,
-    targetBorderRadius: targetBorderRadius,
-    child: child,
-  );
 
   @override
   void dispose() {
@@ -182,13 +163,13 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         employeeId: widget.employeeId,
       ),
       actions: const [AppHeaderPair()],
-      bottom: _tourSteps.contains(TourStepId.employeesSearch)
+      bottom: _tour.has(TourStepId.employeesSearch)
           ? TourShowcaseBar(
-              showcaseKey: _tourKeys[TourStepId.employeesSearch]!,
+              showcaseKey: _tour.keys[TourStepId.employeesSearch]!,
               destination: HubTab.employees,
               id: TourStepId.employeesSearch,
-              index: _tourSteps.indexOf(TourStepId.employeesSearch),
-              count: _tourSteps.length,
+              index: _tour.ids.indexOf(TourStepId.employeesSearch),
+              count: _tour.ids.length,
               bar: searchBar,
             )
           : searchBar,
@@ -196,7 +177,13 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
   }
 
   Widget _buildMasterList() {
-    final employeesAsync = ref.watch(employeesStreamProvider);
+    // Gated on the stream that actually SUPPLIES the rows. It used to watch
+    // employeesStreamProvider here while every row came from
+    // allUsersStreamProvider via filteredEmployeesProvider — a second live
+    // `users` query pinned for the session, and a spinner keyed off a query
+    // whose results the list never showed (watchEmployees filters to active,
+    // so it excludes the invited and disabled rows this roster renders).
+    final employeesAsync = ref.watch(allUsersStreamProvider);
     return employeesAsync.when(
       loading: () => ListView(
         padding: const EdgeInsets.all(AppSpacing.sp16),
@@ -216,7 +203,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
               Text(context.l10n.error_errorLoadingEmployees),
               const SizedBox(height: AppSpacing.sp16),
               TextButton.icon(
-                onPressed: () => ref.invalidate(employeesStreamProvider),
+                onPressed: () => ref.invalidate(allUsersStreamProvider),
                 icon: const Icon(Icons.refresh_rounded),
                 label: Text(context.l10n.common_retry),
               ),
@@ -302,7 +289,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     return FeatureTourHost(
       destination: HubTab.employees,
       isAdmin: widget.isAdmin,
-      stepKeys: _tourKeys,
+      stepKeys: _tour.keys,
       child: Scaffold(
         appBar: _buildAppBar(),
         endDrawer: AppNavDrawer(
@@ -310,7 +297,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
           employeeId: widget.employeeId,
         ),
         floatingActionButton: widget.isAdmin
-            ? _tourStep(
+            ? _tour.step(
                 TourStepId.employeesAdd,
                 targetBorderRadius: BorderRadius.circular(AppRadius.r16),
                 child: FloatingActionButton(

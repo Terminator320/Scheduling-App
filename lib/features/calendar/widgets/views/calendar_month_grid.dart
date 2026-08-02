@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
@@ -260,7 +259,7 @@ class CalendarDayCell extends StatelessWidget {
       );
     }
 
-    final dateLabel = DateFormat.yMMMMEEEEd(
+    final dateLabel = longDateFormatFor(
       Localizations.localeOf(context).toString(),
     ).format(day);
 

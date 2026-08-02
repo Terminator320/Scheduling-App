@@ -9,10 +9,20 @@ class TextLimits {
   static const int personName = 200;
   static const int firstName = 200;
   static const int lastName = 200;
-  /// 15, which fits the formatted `(514) 555-1234` (14) with one to spare.
-  /// The rules cap stays at 40 — caps there mirror the widest value a write
-  /// path can produce (createEmployeeInvite accepts 40), never the client cap.
-  static const int phone = 15;
+
+  /// Each half of a `users` name. 100, matching `createEmployeeInvite`'s
+  /// server cap exactly — a client cap ABOVE the server's lets the field
+  /// accept a value the callable then rejects as `invalid-argument`, which
+  /// surfaces as an unexplained "Something went wrong" the user cannot fix.
+  static const int employeeNameHalf = 100;
+
+  /// 24. Must clear the widest string `formatPhoneNumber` can emit, because
+  /// `LabeledTextField` applies the length limiter AFTER the mask: a NANP
+  /// number typed with its leading 1 formats to 16 chars and an international
+  /// `+` number is passed through untouched, so a 15 cap silently ate the
+  /// 11th digit with no error shown. The rules cap stays at 40 — caps there
+  /// mirror the widest value a write path can produce, never the client cap.
+  static const int phone = 24;
   static const int mobile = 32;
   static const int email = 320;
 

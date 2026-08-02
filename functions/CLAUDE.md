@@ -135,6 +135,9 @@ wait for the policy to disappear from the list → recreate, or the create fails
 group that already holds documents. TTL is housekeeping only — every one of
 these is also swept in-code, so a missing policy is never a correctness bug.
 
+Release runbook (ordering, old-build compatibility, rollback, deploy log):
+`docs/DEPLOYMENT.md`.
+
 Deploy: `firebase deploy --only functions,firestore:rules,firestore:indexes,storage`
 (drop `firestore:indexes` only when `firestore.indexes.json` is unchanged — a
 query whose index is missing fails `FAILED_PRECONDITION`, which best-effort

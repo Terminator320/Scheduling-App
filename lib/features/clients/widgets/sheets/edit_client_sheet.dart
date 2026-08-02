@@ -133,15 +133,10 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
     super.dispose();
   }
 
-  // Prefers the explicit apt field over an apt embedded in the street text.
-  String _buildFullAddress() {
-    final parsed = AddressParser.splitApt(_addressController.text);
-    final street = (parsed?.street ?? _addressController.text).trim();
-    final apt = _aptController.text.trim().isNotEmpty
-        ? _aptController.text.trim()
-        : (parsed?.apt ?? '').trim();
-    return AddressParser.combineAptAndStreet(street, apt);
-  }
+  String _buildFullAddress() => AddressParser.canonicalFrom(
+    street: _addressController.text,
+    apt: _aptController.text,
+  );
 
   List<ClientContact> _buildContacts() => [
     for (final contact in additionalContacts)
@@ -236,7 +231,6 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final isSaving = ref.watch(clientFormControllerProvider);
-    final createdAt = widget.client.createdAt;
 
     return FormSheetFrame(
       title: l10n.clients_editClient,
@@ -244,180 +238,199 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
       isBusy: isSaving,
       onPrimary: _save,
       children: [
-        MonoSectionLabel(l10n.clients_sectionClient),
-        const SizedBox(height: AppSpacing.sp8),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.clients_nameOrBusiness,
-            controller: _nameController,
-            required: true,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.next,
-            maxLength: TextLimits.personName,
-            errorText: errors['name'],
-            onChanged: (_) => clearError('name'),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.clients_firstName,
-            controller: _firstNameController,
-            optional: true,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.next,
-            maxLength: TextLimits.firstName,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.clients_lastName,
-            controller: _lastNameController,
-            optional: true,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.next,
-            maxLength: TextLimits.lastName,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp12),
-        ClientTypeChips(
-          value: _type,
-          onChanged: (next) => setState(() => _type = next),
-        ),
-        // Read-only: createdAt is a server timestamp that drives dashboard
-        // trends and the clients list order, so it is shown, never edited.
-        if (createdAt != null) ...[
-          const SizedBox(height: AppSpacing.sp12),
-          SheetPanel(
-            children: [
-              SheetFieldRow(
-                label: l10n.clients_since,
-                value: DateUtilsHelper.formatDate(createdAt),
-                useMonoValue: true,
-              ),
-            ],
-          ),
-        ],
-        const SizedBox(height: AppSpacing.sp24),
-
-        // Owner change 5: one phone, no mobile field. A stored mobile is folded
-        // into phone by _save rather than left stranded on the doc.
-        MonoSectionLabel(l10n.clients_sectionContact),
-        const SizedBox(height: AppSpacing.sp8),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.clients_phone,
-            controller: _phoneController,
-            optional: true,
-            keyboard: TextInputType.phone,
-            inputFormatters: const [PhoneInputFormatter()],
-            textInputAction: TextInputAction.next,
-            maxLength: TextLimits.phone,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.common_email,
-            controller: _emailController,
-            optional: true,
-            keyboard: TextInputType.emailAddress,
-            textInputAction: TextInputAction.next,
-            maxLength: TextLimits.email,
-            errorText: errors['email'],
-            onChanged: (_) => clearError('email'),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.clients_onSiteManager,
-            controller: _onSiteManagerController,
-            optional: true,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.next,
-            maxLength: TextLimits.clientOnSiteManager,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        AdditionalContactsSection(
-          contacts: additionalContacts,
-          errors: errors,
-          onAddContact: addAdditionalContact,
-          onRemoveContact: removeAdditionalContact,
-          onClearError: clearError,
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-
-        MonoSectionLabel(l10n.clients_sectionSite),
-        const SizedBox(height: AppSpacing.sp8),
-        Material(
-          type: MaterialType.transparency,
-          child: SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.clients_noFixedAddress),
-            subtitle: Text(l10n.clients_noFixedAddressHint),
-            value: noFixedAddress,
-            activeTrackColor: theme.colorScheme.primary,
-            onChanged: (value) => setNoFixedAddress(value: value),
-          ),
-        ),
-        if (!noFixedAddress) ...[
-          const SizedBox(height: AppSpacing.sp16),
-          ClientAddressSection(
-            addressController: _addressController,
-            aptController: _aptController,
-            cityController: _cityController,
-            provinceController: _provinceController,
-            postalCodeController: _postalCodeController,
-            countryController: _countryController,
-            isRequired: true,
-            errorText: errors['address'],
-            onAddressErrorCleared: () => clearError('address'),
-          ),
-        ],
-        const SizedBox(height: AppSpacing.sp16),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.clients_accessNotes,
-            hint: l10n.clients_accessNotesHint,
-            controller: _accessNotesController,
-            optional: true,
-            maxLines: 2,
-            textCapitalization: TextCapitalization.sentences,
-            maxLength: TextLimits.clientAccessNotes,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-
-        MonoSectionLabel(l10n.clients_sectionBilling),
-        const SizedBox(height: AppSpacing.sp8),
-        SheetFocusScroll(
-          child: LabeledTextField(
-            label: l10n.clients_billingTerms,
-            hint: l10n.clients_billingTermsHint,
-            controller: _billingTermsController,
-            optional: true,
-            textCapitalization: TextCapitalization.sentences,
-            maxLength: TextLimits.clientBillingTerms,
-          ),
-        ),
-        // Owner change 4: NO Wave customer id row. The link stays server-owned
-        // and `copyWith` still carries waveCustomerId / waveSyncState through the
-        // save untouched — it is simply not rendered.
-        const SizedBox(height: AppSpacing.sp12),
-        Material(
-          type: MaterialType.transparency,
-          child: SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.clients_autoInvoice),
-            value: _autoInvoice,
-            activeTrackColor: theme.colorScheme.primary,
-            onChanged: (value) => setState(() => _autoInvoice = value),
-          ),
-        ),
+        ..._clientSection(theme, l10n),
+        ..._contactSection(theme, l10n),
+        ..._siteSection(theme, l10n),
+        ..._billingSection(theme, l10n),
       ],
     );
   }
+
+  List<Widget> _clientSection(ThemeData theme, AppLocalizations l10n) {
+    // Server-owned: it drives the dashboard trends and the clients list order,
+    // so it is shown here, never edited.
+    final createdAt = widget.client.createdAt;
+    return [
+      MonoSectionLabel(l10n.clients_sectionClient),
+      const SizedBox(height: AppSpacing.sp8),
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: l10n.clients_nameOrBusiness,
+          controller: _nameController,
+          required: true,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.next,
+          maxLength: TextLimits.personName,
+          errorText: errors['name'],
+          onChanged: (_) => clearError('name'),
+        ),
+      ),
+      const SizedBox(height: AppSpacing.sp16),
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: l10n.clients_firstName,
+          controller: _firstNameController,
+          optional: true,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.next,
+          maxLength: TextLimits.firstName,
+        ),
+      ),
+      const SizedBox(height: AppSpacing.sp16),
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: l10n.clients_lastName,
+          controller: _lastNameController,
+          optional: true,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.next,
+          maxLength: TextLimits.lastName,
+        ),
+      ),
+      const SizedBox(height: AppSpacing.sp12),
+      ClientTypeChips(
+        value: _type,
+        onChanged: (next) => setState(() => _type = next),
+      ),
+      // Read-only: createdAt is a server timestamp that drives dashboard
+      // trends and the clients list order, so it is shown, never edited.
+      if (createdAt != null) ...[
+        const SizedBox(height: AppSpacing.sp12),
+        SheetPanel(
+          children: [
+            SheetFieldRow(
+              label: l10n.clients_since,
+              value: DateUtilsHelper.formatDate(createdAt),
+              useMonoValue: true,
+            ),
+          ],
+        ),
+      ],
+      const SizedBox(height: AppSpacing.sp24),
+
+      // Owner change 5: one phone, no mobile field. A stored mobile is folded
+      // into phone by _save rather than left stranded on the doc.,
+    ];
+  }
+
+  List<Widget> _contactSection(ThemeData theme, AppLocalizations l10n) => [
+    MonoSectionLabel(l10n.clients_sectionContact),
+    const SizedBox(height: AppSpacing.sp8),
+    SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.clients_phone,
+        controller: _phoneController,
+        optional: true,
+        keyboard: TextInputType.phone,
+        inputFormatters: const [PhoneInputFormatter()],
+        textInputAction: TextInputAction.next,
+        maxLength: TextLimits.phone,
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.common_email,
+        controller: _emailController,
+        optional: true,
+        keyboard: TextInputType.emailAddress,
+        textInputAction: TextInputAction.next,
+        maxLength: TextLimits.email,
+        errorText: errors['email'],
+        onChanged: (_) => clearError('email'),
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.clients_onSiteManager,
+        controller: _onSiteManagerController,
+        optional: true,
+        textCapitalization: TextCapitalization.words,
+        textInputAction: TextInputAction.next,
+        maxLength: TextLimits.clientOnSiteManager,
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    AdditionalContactsSection(
+      contacts: additionalContacts,
+      errors: errors,
+      onAddContact: addAdditionalContact,
+      onRemoveContact: removeAdditionalContact,
+      onClearError: clearError,
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+  ];
+
+  List<Widget> _siteSection(ThemeData theme, AppLocalizations l10n) => [
+    MonoSectionLabel(l10n.clients_sectionSite),
+    const SizedBox(height: AppSpacing.sp8),
+    Material(
+      type: MaterialType.transparency,
+      child: SwitchListTile.adaptive(
+        contentPadding: EdgeInsets.zero,
+        title: Text(l10n.clients_noFixedAddress),
+        subtitle: Text(l10n.clients_noFixedAddressHint),
+        value: noFixedAddress,
+        activeTrackColor: theme.colorScheme.primary,
+        onChanged: (value) => setNoFixedAddress(value: value),
+      ),
+    ),
+    if (!noFixedAddress) ...[
+      const SizedBox(height: AppSpacing.sp16),
+      ClientAddressSection(
+        addressController: _addressController,
+        aptController: _aptController,
+        cityController: _cityController,
+        provinceController: _provinceController,
+        postalCodeController: _postalCodeController,
+        countryController: _countryController,
+        isRequired: true,
+        errorText: errors['address'],
+        onAddressErrorCleared: () => clearError('address'),
+      ),
+    ],
+    const SizedBox(height: AppSpacing.sp16),
+    SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.clients_accessNotes,
+        hint: l10n.clients_accessNotesHint,
+        controller: _accessNotesController,
+        optional: true,
+        maxLines: 2,
+        textCapitalization: TextCapitalization.sentences,
+        maxLength: TextLimits.clientAccessNotes,
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp24),
+  ];
+
+  List<Widget> _billingSection(ThemeData theme, AppLocalizations l10n) => [
+    MonoSectionLabel(l10n.clients_sectionBilling),
+    const SizedBox(height: AppSpacing.sp8),
+    SheetFocusScroll(
+      child: LabeledTextField(
+        label: l10n.clients_billingTerms,
+        hint: l10n.clients_billingTermsHint,
+        controller: _billingTermsController,
+        optional: true,
+        textCapitalization: TextCapitalization.sentences,
+        maxLength: TextLimits.clientBillingTerms,
+      ),
+    ),
+    // Owner change 4: NO Wave customer id row. The link stays server-owned
+    // and `copyWith` still carries waveCustomerId / waveSyncState through the
+    // save untouched — it is simply not rendered.
+    const SizedBox(height: AppSpacing.sp12),
+    Material(
+      type: MaterialType.transparency,
+      child: SwitchListTile.adaptive(
+        contentPadding: EdgeInsets.zero,
+        title: Text(l10n.clients_autoInvoice),
+        value: _autoInvoice,
+        activeTrackColor: theme.colorScheme.primary,
+        onChanged: (value) => setState(() => _autoInvoice = value),
+      ),
+    ),
+  ];
 }

@@ -12,8 +12,8 @@ import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
 import 'package:scheduling/features/clients/widgets/views/client_detail_view.dart';
 import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart';
-import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
 import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
@@ -42,27 +42,8 @@ class _ListInformationState extends State<ListInformation> {
   ClientRecord? _selectedClient;
   ClientType? _selectedType;
 
-  late final List<TourStepId> _tourSteps = tourStepsFor(
-    HubTab.clients,
-    isAdmin: widget.isAdmin,
-  );
-  late final Map<TourStepId, GlobalKey> _tourKeys = {
-    for (final id in _tourSteps) id: GlobalKey(),
-  };
+  late final _tour = TourSteps(HubTab.clients, isAdmin: widget.isAdmin);
 
-  Widget _tourStep(
-    TourStepId id, {
-    required Widget child,
-    BorderRadius? targetBorderRadius,
-  }) => TourShowcase(
-    showcaseKey: _tourKeys[id]!,
-    destination: HubTab.clients,
-    id: id,
-    index: _tourSteps.indexOf(id),
-    count: _tourSteps.length,
-    targetBorderRadius: targetBorderRadius,
-    child: child,
-  );
 
   @override
   void dispose() {
@@ -109,20 +90,20 @@ class _ListInformationState extends State<ListInformation> {
     return FeatureTourHost(
       destination: HubTab.clients,
       isAdmin: widget.isAdmin,
-      stepKeys: _tourKeys,
+      stepKeys: _tour.keys,
       child: Scaffold(
         appBar: AppTopBar(
           title: context.l10n.common_clients,
           compact: context.isLandscape,
           onBack: _backToCalendar,
           actions: const [AppHeaderPair()],
-          bottom: _tourSteps.contains(TourStepId.clientsSearch)
+          bottom: _tour.has(TourStepId.clientsSearch)
               ? TourShowcaseBar(
-                  showcaseKey: _tourKeys[TourStepId.clientsSearch]!,
+                  showcaseKey: _tour.keys[TourStepId.clientsSearch]!,
                   destination: HubTab.clients,
                   id: TourStepId.clientsSearch,
-                  index: _tourSteps.indexOf(TourStepId.clientsSearch),
-                  count: _tourSteps.length,
+                  index: _tour.ids.indexOf(TourStepId.clientsSearch),
+                  count: _tour.ids.length,
                   bar: searchBar,
                 )
               : searchBar,
@@ -132,7 +113,7 @@ class _ListInformationState extends State<ListInformation> {
           employeeId: widget.employeeId,
         ),
         floatingActionButton: widget.isAdmin
-            ? _tourStep(
+            ? _tour.step(
                 TourStepId.clientsAdd,
                 targetBorderRadius: BorderRadius.circular(AppRadius.r16),
                 child: FloatingActionButton(

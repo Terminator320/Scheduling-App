@@ -58,13 +58,35 @@ final _weekStartCache = <String, int>{};
 /// locales report 6.
 int weekStartForLocale(String locale) => _weekStartCache.putIfAbsent(
   locale,
-  () => (DateFormat.yMMMM(locale).dateSymbols.FIRSTDAYOFWEEK + 1) % 7,
+  () => (_symbolsFormat(locale).dateSymbols.FIRSTDAYOFWEEK + 1) % 7,
 );
+
+/// Memoized per locale, for the same reason [_weekStartCache] is: constructing
+/// a `DateFormat` verifies the locale and parses a skeleton into pattern
+/// fields, and every one of these runs inside a per-cell build.
+final _symbolsCache = <String, DateFormat>{};
+final _longDateCache = <String, DateFormat>{};
+final _weekdayAbbrevCache = <String, DateFormat>{};
+
+DateFormat _symbolsFormat(String locale) =>
+    _symbolsCache.putIfAbsent(locale, () => DateFormat.yMMMM(locale));
+
+/// "Wednesday, July 8, 2026" — the calendar cells' semantics label.
+///
+/// Built once per locale, NOT once per cell: a month grid renders 28-31 in-month
+/// cells and the pager keeps cached neighbours, so an unmemoized call cost
+/// 30-90 constructions on every day tap, month swipe and stream emission.
+DateFormat longDateFormatFor(String locale) =>
+    _longDateCache.putIfAbsent(locale, () => DateFormat.yMMMMEEEEd(locale));
+
+/// "Wed" — the collapsed week strip's column heading.
+DateFormat weekdayAbbrevFormatFor(String locale) =>
+    _weekdayAbbrevCache.putIfAbsent(locale, () => DateFormat.E(locale));
 
 /// Narrow weekday labels ordered from the locale's first day. Never hardcode
 /// `S M T W T F S` — it is wrong for fr_CA.
 List<String> weekdayLabelsForLocale(String locale) {
-  final symbols = DateFormat.yMMMM(locale).dateSymbols;
+  final symbols = _symbolsFormat(locale).dateSymbols;
   final start = weekStartForLocale(locale);
   // NARROWWEEKDAYS is Sunday-indexed.
   return [for (var i = 0; i < 7; i++) symbols.NARROWWEEKDAYS[(start + i) % 7]];
@@ -74,7 +96,7 @@ List<String> weekdayLabelsForLocale(String locale) {
 /// display order rotate themselves). The narrow twin above is right for a
 /// seven-cell grid; this one is for prose, where "M, W, F" is unreadable.
 List<String> weekdayAbbreviationsForLocale(String locale) {
-  final symbols = DateFormat.yMMMM(locale).dateSymbols;
+  final symbols = _symbolsFormat(locale).dateSymbols;
   return [for (var i = 0; i < 7; i++) symbols.SHORTWEEKDAYS[i]];
 }
 

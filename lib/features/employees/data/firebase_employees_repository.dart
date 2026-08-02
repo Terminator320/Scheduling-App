@@ -4,6 +4,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/invite_preview.dart';
 import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
@@ -226,8 +227,15 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       'workEndMinutes': employee.workEndMinutes,
       'maxJobsPerDay': employee.maxJobsPerDay,
       'onCall': employee.onCall,
-      'emergencyContact': employee.emergencyContact.trim(),
-      'emergencyPhone': employee.emergencyPhone.trim(),
+      // Scrub, not write: the emergency pair moved to
+      // users/{docId}/private/emergency, and any value left on the parent doc
+      // by a pre-move build is still readable by every active peer. Deleting
+      // the keys on each save heals the fleet the way the client `mobile`
+      // promotion does. Safe to send when they're already absent, and
+      // `isValidUserData` passes a removed key. Drop this once no doc can
+      // still carry them.
+      'emergencyContact': FieldValue.delete(),
+      'emergencyPhone': FieldValue.delete(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
@@ -245,6 +253,34 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       }
       txn.update(ref, updateData);
     });
+  }
+
+  /// `users/{docId}/private/emergency` — one doc, fixed id.
+  DocumentReference<Map<String, dynamic>> _emergencyDoc(String docId) =>
+      _users.doc(docId).collection('private').doc('emergency');
+
+  @override
+  Stream<EmergencyContact> watchEmergencyContact(String docId) {
+    if (docId.isEmpty) return Stream.value(EmergencyContact.empty);
+    return retryStream(
+      () => _emergencyDoc(
+        docId,
+      ).snapshots().map((snap) => EmergencyContact.fromMap(snap.data())),
+      retryWhen: _isAuthPropagationDenied,
+    );
+  }
+
+  @override
+  Future<void> saveEmergencyContact(
+    String docId,
+    EmergencyContact contact,
+  ) async {
+    // set(merge) rather than update(): the doc doesn't exist until the first
+    // save, and update() on a missing doc throws not-found.
+    await _emergencyDoc(docId).set({
+      ...contact.toMap(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   @override

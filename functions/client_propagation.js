@@ -214,7 +214,6 @@ module.exports = {
   propagateClientEdits,
   // Exported so the orchestrator can be driven with injected {db, logger,
   // now}. Test coverage today only covers the pure helpers below.
-  propagateClientChange,
   relevantClientChange,
   buildAppointmentPatch,
   clientDisplayName,

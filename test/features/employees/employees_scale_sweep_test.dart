@@ -32,7 +32,6 @@ const _employee = EmployeeRecord(
   jobTitle: JobTitle.leadTech,
   maxJobsPerDay: 4,
   onCall: true,
-  emergencyContact: 'Marie 514-555-0199',
 );
 
 final _invited = EmployeeRecord(

@@ -135,11 +135,14 @@ class _CodeEntryBoxesState extends State<CodeEntryBoxes> {
     required bool isActive,
   }) {
     final scheme = theme.colorScheme;
-    final borderColor = widget.hasError
-        ? scheme.error
-        : isActive
-        ? scheme.primary
-        : scheme.outlineVariant;
+    final Color borderColor;
+    if (widget.hasError) {
+      borderColor = scheme.error;
+    } else if (isActive) {
+      borderColor = scheme.primary;
+    } else {
+      borderColor = scheme.outlineVariant;
+    }
 
     return Container(
       height: height,
@@ -163,6 +166,10 @@ class _CodeEntryBoxesState extends State<CodeEntryBoxes> {
       enabled: widget.enabled,
       autocorrect: false,
       enableSuggestions: false,
+      // The code is a credential. `visiblePassword` alone does NOT stop a
+      // third-party keyboard learning (and cloud-syncing) what is typed —
+      // only obscureText implies this, and the boxes render the characters.
+      enableIMEPersonalizedLearning: false,
       textCapitalization: TextCapitalization.characters,
       // Kills the predictive/suggestion bar that would otherwise sit over the
       // boxes offering dictionary words for a random code.

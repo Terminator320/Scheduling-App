@@ -670,12 +670,6 @@ async function runOnSiteFlipPass(deps) {
 }
 
 module.exports = {
-  BUFFER_MINUTES,
-  MAX_LEAD_MINUTES,
-  FALLBACK_LEAD_MINUTES,
-  PRESENCE_STALE_MINUTES,
-  PREV_APPOINTMENT_LOOKBACK_HOURS,
-  TRAVEL_WINDOW_MS,
   decideOrigin,
   selectTravelCandidates,
   computeLeadMinutes,

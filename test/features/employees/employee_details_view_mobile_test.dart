@@ -26,7 +26,6 @@ const _populated = EmployeeRecord(
   status: 'active',
   jobTitle: JobTitle.leadTech,
   maxJobsPerDay: 4,
-  emergencyContact: 'Marie 555-0199',
 );
 
 Widget _wrap(

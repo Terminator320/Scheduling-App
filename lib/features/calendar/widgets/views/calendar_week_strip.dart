@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
@@ -58,7 +57,7 @@ class CalendarWeekStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final locale = Localizations.localeOf(context).toString();
-    final abbrev = DateFormat.E(locale);
+    final abbrev = weekdayAbbrevFormatFor(locale);
     final circle = _circleSize(context);
 
     return Padding(
@@ -113,7 +112,7 @@ class _StripCell extends StatelessWidget {
     return Semantics(
       button: true,
       selected: isSelected,
-      label: DateFormat.yMMMMEEEEd(
+      label: longDateFormatFor(
         Localizations.localeOf(context).toString(),
       ).format(day),
       excludeSemantics: true,
