@@ -5,6 +5,7 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 /// Outcome of an employee save, whether an invite or an edit — the form maps
 /// this to a notice, an error, or a navigation action.
@@ -112,40 +113,34 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
   /// so the caller can show it to the admin.
   Future<EmployeeSaveOutcome> inviteEmployee({
     required String name,
+    required String firstName,
+    required String lastName,
     required String email,
     required String phone,
     required String colorValue,
+    required String jobTitle,
+    required bool isAdmin,
   }) {
     return _save(
       (repo) async => EmployeeInvited(
         await repo.createEmployeeInvite(
           name: name,
+          firstName: firstName,
+          lastName: lastName,
           email: email,
           phone: phone,
           colorValue: colorValue,
+          jobTitle: jobTitle,
+          isAdmin: isAdmin,
         ),
       ),
     );
   }
 
   /// Persists an edit to an existing employee.
-  Future<EmployeeSaveOutcome> updateEmployee({
-    required String docId,
-    required String name,
-    required String email,
-    required String phone,
-    required String colorValue,
-    required bool isAdmin,
-  }) {
+  Future<EmployeeSaveOutcome> updateEmployee(EmployeeRecord employee) {
     return _save((repo) async {
-      await repo.updateEmployee(
-        docId: docId,
-        name: name,
-        email: email,
-        phone: phone,
-        colorValue: colorValue,
-        isAdmin: isAdmin,
-      );
+      await repo.updateEmployee(docId: employee.id, employee: employee);
       return const EmployeeUpdated();
     });
   }

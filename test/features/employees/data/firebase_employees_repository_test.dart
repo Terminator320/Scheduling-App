@@ -10,6 +10,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/job_title.dart';
 
 class _MockFirestore extends Mock implements FirebaseFirestore {}
 
@@ -120,6 +121,16 @@ void main() {
   FirebaseEmployeesRepository repo() =>
       FirebaseEmployeesRepository(firestore, functions: functions);
 
+  /// The single captured update payload, cast the way mocktail requires —
+  /// captureAny() returns Map<Object, Object?>, so a direct
+  /// `as Map<String, dynamic>` throws at runtime.
+  Map<String, dynamic> capturedUpdate() {
+    final captured = verify(
+      () => transaction.update(docRef, captureAny()),
+    ).captured.single;
+    return (captured as Map).cast<String, dynamic>();
+  }
+
   group('createEmployeeInvite', () {
     test('returns the code and lowercases the email', () async {
       final callable = _MockHttpsCallable();
@@ -138,19 +149,26 @@ void main() {
       final repo = FirebaseEmployeesRepository(firestore, functions: functions);
       final code = await repo.createEmployeeInvite(
         name: 'A',
+        firstName: 'A',
+        lastName: '',
         email: 'A@B.com',
         phone: '',
         colorValue: '1',
+        jobTitle: 'technician',
+        isAdmin: false,
       );
 
       expect(code, 'K7Q2-9MZ4-XR8T');
-      final captured = verify(
-        () => callable.call<dynamic>(captureAny<Object?>()),
-      ).captured.single;
-      expect(
-        (captured as Map).cast<String, dynamic>()['email'],
-        'a@b.com',
-      );
+      final captured =
+          (verify(
+                    () => callable.call<dynamic>(captureAny<Object?>()),
+                  ).captured.single
+                  as Map)
+              .cast<String, dynamic>();
+      expect(captured['email'], 'a@b.com');
+      expect(captured['jobTitle'], 'technician');
+      expect(captured['firstName'], 'A');
+      expect(captured['isAdmin'], isFalse);
     });
 
     test(
@@ -176,9 +194,13 @@ void main() {
         expect(
           () => repo.createEmployeeInvite(
             name: 'A',
+            firstName: '',
+            lastName: '',
             email: 'a@b.com',
             phone: '',
             colorValue: '1',
+            jobTitle: '',
+            isAdmin: false,
           ),
           throwsA(isA<EmployeesFailureEmailAlreadyExists>()),
         );
@@ -225,10 +247,12 @@ void main() {
         expect(
           () => repo().updateEmployee(
             docId: 'my-id',
-            name: 'Alice',
-            email: 'alice@example.com',
-            phone: '555-1234',
-            colorValue: '0xFF0000FF',
+            employee: const EmployeeRecord(
+              id: 'my-id',
+              name: 'Alice',
+              email: 'alice@example.com',
+              phone: '555-1234',
+            ),
           ),
           throwsA(isA<EmployeesFailureEmailAlreadyExists>()),
         );
@@ -240,20 +264,84 @@ void main() {
 
       await repo().updateEmployee(
         docId: 'my-id',
-        name: 'Alice',
-        email: 'alice@example.com',
-        phone: '555-1234',
-        colorValue: '0xFF0000FF',
+        employee: const EmployeeRecord(
+          id: 'my-id',
+          name: 'Alice',
+          email: 'alice@example.com',
+          phone: '555-1234',
+        ),
       );
 
-      final captured =
-          (verify(
-                    () => transaction.update(docRef, captureAny()),
-                  ).captured.single
-                  as Map)
-              .cast<String, dynamic>();
+      final captured = capturedUpdate();
       expect(captured.containsKey('updatedAt'), isTrue);
       expect(captured['email'], 'alice@example.com');
+    });
+
+    test('writes the P4 fields and never uid or status', () async {
+      when(() => snapshot.docs).thenReturn(const []);
+
+      await repo().updateEmployee(
+        docId: 'my-id',
+        employee: const EmployeeRecord(
+          id: 'my-id',
+          name: 'Theo Roy',
+          firstName: 'Theo',
+          lastName: 'Roy',
+          email: 'theo@x.com',
+          phone: '555-0100',
+          role: 'admin',
+          status: 'active',
+          uid: 'auth-uid-must-not-be-written',
+          jobTitle: JobTitle.leadTech,
+          maxJobsPerDay: 4,
+          onCall: true,
+          emergencyContact: 'Marie',
+        ),
+      );
+
+      final data = capturedUpdate();
+      expect(data['jobTitle'], 'lead_tech');
+      expect(data['firstName'], 'Theo');
+      expect(data['maxJobsPerDay'], 4);
+      expect(data['onCall'], isTrue);
+      expect(data['emergencyContact'], 'Marie');
+      expect(data['role'], 'admin');
+      expect(data.containsKey('uid'), isFalse);
+      expect(data.containsKey('status'), isFalse);
+    });
+
+    test('recomposes name from first and last', () async {
+      when(() => snapshot.docs).thenReturn(const []);
+
+      await repo().updateEmployee(
+        docId: 'my-id',
+        employee: const EmployeeRecord(
+          id: 'my-id',
+          name: 'Stale Name',
+          firstName: 'Theo',
+          lastName: 'Roy',
+          email: 'theo@x.com',
+        ),
+      );
+
+      expect(capturedUpdate()['name'], 'Theo Roy');
+    });
+
+    test('keeps the stored name when both halves are blank', () async {
+      when(() => snapshot.docs).thenReturn(const []);
+
+      await repo().updateEmployee(
+        docId: 'my-id',
+        employee: const EmployeeRecord(
+          id: 'my-id',
+          name: 'Legacy Single Name',
+          email: 'theo@x.com',
+        ),
+      );
+
+      // Never empty: watchAllUsers orders by name and Firestore drops docs
+      // missing the orderBy field.
+      expect(capturedUpdate()['name'], 'Legacy Single Name');
     });
 
     test('aborts when the target email changed under the uniqueness check', () {
@@ -270,10 +358,12 @@ void main() {
       expect(
         () => repo().updateEmployee(
           docId: 'my-id',
-          name: 'Alice',
-          email: 'alice@example.com',
-          phone: '555-1234',
-          colorValue: '0xFF0000FF',
+          employee: const EmployeeRecord(
+            id: 'my-id',
+            name: 'Alice',
+            email: 'alice@example.com',
+            phone: '555-1234',
+          ),
         ),
         throwsA(isA<EmployeesFailureUnknown>()),
       );
