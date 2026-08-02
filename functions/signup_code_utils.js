@@ -30,23 +30,17 @@ function hashSignupCode(code) {
 }
 
 /**
- * Pure redemption decision. Returns {ok:true} or {ok:false, reason}.
- * @param {Object} args codeData, inviteData, tokenEmail, nowMs.
+ * Pure "is this code still a live, unclaimed invite?" decision — everything
+ * validateRedemption checks EXCEPT the caller's email. previewInvite has no
+ * caller email to compare (it is unauthenticated), so this is the shared half
+ * and the two paths can't drift on what "pending" means.
+ * @param {Object} args codeData, inviteData, nowMs.
  * @return {Object} {ok: boolean, reason?: string}
  */
-function validateRedemption({codeData, inviteData, tokenEmail, nowMs}) {
+function validateInvitePending({codeData, inviteData, nowMs}) {
   if (!codeData || !inviteData) return {ok: false, reason: "invalid"};
   if (inviteData.status !== "invited" || (inviteData.uid || "") !== "") {
     return {ok: false, reason: "invalid"};
-  }
-  const inviteEmail = String(inviteData.email || "").trim().toLowerCase();
-  const claimEmail = String(tokenEmail || "").trim().toLowerCase();
-  if (!claimEmail) return {ok: false, reason: "invalid"};
-  // We surface this distinctly (not as "invalid code") so the UI can tell
-  // the user to use the exact invited email. It's only reached once we
-  // already have an otherwise-valid code.
-  if (inviteEmail !== claimEmail) {
-    return {ok: false, reason: "email-mismatch"};
   }
   const expiresAtMs = codeData.expiresAt &&
     typeof codeData.expiresAt.toMillis === "function" ?
@@ -55,9 +49,32 @@ function validateRedemption({codeData, inviteData, tokenEmail, nowMs}) {
   return {ok: true};
 }
 
+/**
+ * Pure redemption decision. Returns {ok:true} or {ok:false, reason}.
+ * @param {Object} args codeData, inviteData, tokenEmail, nowMs.
+ * @return {Object} {ok: boolean, reason?: string}
+ */
+function validateRedemption({codeData, inviteData, tokenEmail, nowMs}) {
+  const pending = validateInvitePending({codeData, inviteData, nowMs});
+  if (!pending.ok && pending.reason === "invalid") return pending;
+  const inviteEmail = String(inviteData.email || "").trim().toLowerCase();
+  const claimEmail = String(tokenEmail || "").trim().toLowerCase();
+  if (!claimEmail) return {ok: false, reason: "invalid"};
+  // We surface this distinctly (not as "invalid code") so the UI can tell
+  // the user to use the exact invited email. It's only reached once we
+  // already have an otherwise-valid code. The email verdict is returned
+  // AHEAD of the expiry one deliberately — that is the shipped precedence,
+  // and flipping it would change what a wrong-email caller is told.
+  if (inviteEmail !== claimEmail) {
+    return {ok: false, reason: "email-mismatch"};
+  }
+  return pending;
+}
+
 module.exports = {
   INVITE_CODE_TTL_MS,
   generateSignupCode,
   hashSignupCode,
+  validateInvitePending,
   validateRedemption,
 };
