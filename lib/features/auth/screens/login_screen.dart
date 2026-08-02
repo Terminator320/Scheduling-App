@@ -8,7 +8,6 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/application/sign_in_controller.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
-import 'package:scheduling/features/auth/screens/create_account_screen.dart';
 import 'package:scheduling/features/auth/widgets/auth_banner.dart';
 import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -136,23 +135,15 @@ class _LoginState extends ConsumerState<Login> {
     }
   }
 
-  // TODO(p4b): route to the code screen (Task 6)
-  Future<void> _openCreateAccount() async {
-    final prefill = _emailController.text.trim();
-    final result = await Navigator.of(context).push<CreateAccountResult>(
-      MaterialPageRoute(
-        builder: (_) =>
-            CreateAccountScreen(initialEmail: prefill.isEmpty ? null : prefill),
-      ),
+  /// The invited-employee path. Acceptance owns its own post-signup routing,
+  /// so nothing comes back here but a cleared form.
+  Future<void> _openAcceptInvite() async {
+    await Navigator.pushNamed(
+      context,
+      AppRoutes.acceptInviteCode,
+      arguments: const AcceptInviteCodeArgs(),
     );
-
     if (!mounted) return;
-
-    if (result?.created == true) {
-      await _routeAfterSignUp();
-      return;
-    }
-
     setState(() {
       _submitted = false;
       _emailError = null;
@@ -171,32 +162,6 @@ class _LoginState extends ConsumerState<Login> {
         employeeId: employee.id,
       ),
     );
-  }
-
-  // Create-account leaves us with an authenticated session, so resolve the
-  // profile and route straight into the app.
-  Future<void> _routeAfterSignUp() async {
-    final outcome = await ref
-        .read(signInControllerProvider.notifier)
-        .resumeAfterSignUp();
-    if (!mounted) return;
-    switch (outcome) {
-      case SignInNoSession():
-        return;
-      case SignInProfilePending():
-        setState(() {
-          _bannerSuccess = context.l10n.auth_accountCreatedYouCanNowSignIn;
-        });
-      case SignInSuccess(:final employee):
-        TextInput.finishAutofillContext();
-        await _routeToCalendar(employee);
-      // These only come from signIn() — resumeAfterSignUp() never produces them.
-      case SignInInvalidCredentials() ||
-          SignInNoProfile() ||
-          SignInAccountDisabled() ||
-          SignInError():
-        break;
-    }
   }
 
   Future<void> _openForgotPassword() async {
@@ -228,7 +193,7 @@ class _LoginState extends ConsumerState<Login> {
       ),
       footer: _AcceptInvitePrompt(
         enabled: !isLoading,
-        onAcceptInvite: _openCreateAccount,
+        onAcceptInvite: _openAcceptInvite,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
