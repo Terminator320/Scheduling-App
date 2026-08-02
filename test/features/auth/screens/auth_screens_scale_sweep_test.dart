@@ -10,12 +10,14 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
-import 'package:scheduling/features/auth/screens/create_account_screen.dart';
+import 'package:scheduling/features/auth/screens/accept_invite_code_screen.dart';
+import 'package:scheduling/features/auth/screens/accept_invite_details_screen.dart';
 import 'package:scheduling/features/auth/screens/forgot_password_screen.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/invite_preview.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 class _MockAuthService extends Mock implements AuthService {}
@@ -29,6 +31,14 @@ const _scales = <double>[0.8, 1, 1.2, 1.4, 2];
 // Smallest physical phone in common use is ~375 logical width, so picking
 // that dimension exposes overflow most reliably.
 const _viewport = Size(375, 667);
+
+final _preview = InvitePreview(
+  email: 'newhire@example.com',
+  firstName: 'Alex',
+  lastName: 'Tremblay',
+  role: 'employee',
+  expiresAt: DateTime(2026, 8, 16),
+);
 
 Widget _scaled({
   required Widget home,
@@ -97,18 +107,62 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('CreateAccount renders at scale ${scale}x without overflow', (
-      tester,
-    ) async {
-      await _pumpAtViewport(
+    testWidgets(
+      'AcceptInviteCode renders at scale ${scale}x without overflow',
+      (
         tester,
-        _scaled(
-          scale: scale,
-          home: CreateAccountScreen(authService: auth),
-        ),
-      );
-      expect(tester.takeException(), isNull);
-    });
+      ) async {
+        await _pumpAtViewport(
+          tester,
+          _scaled(
+            scale: scale,
+            home: AcceptInviteCodeScreen(authService: auth),
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'AcceptInviteDetails renders at scale ${scale}x without overflow',
+      (tester) async {
+        await _pumpAtViewport(
+          tester,
+          _scaled(
+            scale: scale,
+            home: AcceptInviteDetailsScreen(
+              code: 'ABCDEFGHJKMN',
+              preview: _preview,
+              authService: auth,
+            ),
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'AcceptInviteDetails with a typed password renders at scale ${scale}x '
+      'without overflow',
+      (tester) async {
+        await _pumpAtViewport(
+          tester,
+          _scaled(
+            scale: scale,
+            home: AcceptInviteDetailsScreen(
+              code: 'ABCDEFGHJKMN',
+              preview: _preview,
+              authService: auth,
+            ),
+          ),
+        );
+        // The strength meter and the requirements checklist only render once
+        // something is typed, so the empty screen never sweeps them.
+        await tester.enterText(find.byType(TextField).at(3), 'Aa1!aaaa');
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets('ForgotPassword renders at scale ${scale}x without overflow', (
       tester,

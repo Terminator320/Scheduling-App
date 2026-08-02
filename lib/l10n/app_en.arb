@@ -1060,10 +1060,6 @@
   "@auth_accountCreatedYouCanNowSignIn": {
     "description": "Account created. You can now sign in."
   },
-  "auth_useTheEmailYourAdminAddedToTheEmployeeList": "Use the email your admin added to the employee list.",
-  "@auth_useTheEmailYourAdminAddedToTheEmployeeList": {
-    "description": "Use the email your admin added to the employee list."
-  },
   "error_noUserProfileFoundForThisAccount": "No user profile found for this account",
   "@error_noUserProfileFoundForThisAccount": {
     "description": "No user profile found for this account"
@@ -1702,14 +1698,6 @@
   "wave_syncError": "Sync error",
   "@wave_syncError": {
     "description": "Badge label shown on a client whose Wave sync has failed"
-  },
-  "auth_signupCode": "Signup code",
-  "@auth_signupCode": {
-    "description": "Label for the signup code field on the create-account screen."
-  },
-  "validation_pleaseEnterYourSignupCode": "Please enter your signup code.",
-  "@validation_pleaseEnterYourSignupCode": {
-    "description": "Validation error shown when the signup code field is empty."
   },
   "employees_signupCodeTitle": "Signup code",
   "@employees_signupCodeTitle": {
@@ -2507,5 +2495,101 @@
   "auth_sentAgainJustNow": "Sent again just now",
   "@auth_sentAgainJustNow": {
     "description": "Label replacing the resend action once the reset email has been resent"
+  },
+  "common_continue": "Continue",
+  "@common_continue": {
+    "description": "Primary action label for advancing to the next step"
+  },
+  "auth_acceptInviteTitle": "Accept your invite",
+  "@auth_acceptInviteTitle": {
+    "description": "Title of both invite acceptance screens"
+  },
+  "auth_acceptInviteCodeSubtitle": "Enter the 12-character code your admin gave you.",
+  "@auth_acceptInviteCodeSubtitle": {
+    "description": "Subtitle above the twelve signup-code boxes"
+  },
+  "auth_enterTheCode": "Enter the code",
+  "@auth_enterTheCode": {
+    "description": "Disabled label on the code screen's button until all twelve characters are entered"
+  },
+  "auth_codeInvalidExplanation": "That code isn't valid. Check every character and try again.",
+  "@auth_codeInvalidExplanation": {
+    "description": "Error under the code boxes when the server rejects the code as unknown"
+  },
+  "auth_codeExpiredExplanation": "That code has expired. Ask your admin for a fresh one.",
+  "@auth_codeExpiredExplanation": {
+    "description": "Error under the code boxes when the code exists but has passed its expiry"
+  },
+  "auth_dontHaveACode": "DON'T HAVE A CODE?",
+  "@auth_dontHaveACode": {
+    "description": "Mono uppercase label on the help panel below the code boxes"
+  },
+  "auth_dontHaveACodeBody": "There is no invite email. Your admin can read your code off the Team page and share it with you.",
+  "@auth_dontHaveACodeBody": {
+    "description": "Body copy of the help panel below the code boxes"
+  },
+  "auth_signupCodeSemantics": "Signup code, {count} of 12 characters entered",
+  "@auth_signupCodeSemantics": {
+    "description": "Screen-reader label for the twelve signup-code boxes, which are one logical field",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "auth_invitedToJoinAs": "You're invited to join as {role}",
+  "@auth_invitedToJoinAs": {
+    "description": "Invite banner headline on the acceptance details screen",
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  },
+  "auth_inviteExpiresOn": "Expires {date}",
+  "@auth_inviteExpiresOn": {
+    "description": "Amber expiry pill in the invite banner",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "auth_fromInvite": "From invite",
+  "@auth_fromInvite": {
+    "description": "Chip beside the locked email, marking it as supplied by the invite"
+  },
+  "auth_termsAndLocationConsent": "I accept the terms of service and agree to share my location while I'm on the clock.",
+  "@auth_termsAndLocationConsent": {
+    "description": "Combined terms and location consent checkbox gating the Create account button"
+  },
+  "auth_reEnterCode": "Re-enter code",
+  "@auth_reEnterCode": {
+    "description": "Action offered when the signup code stops working between preview and submit"
+  },
+  "auth_passwordStrengthSemantics": "Password strength: {label}",
+  "@auth_passwordStrengthSemantics": {
+    "description": "Screen-reader label for the four-segment password strength meter",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "auth_passwordStrengthWeak": "Weak",
+  "@auth_passwordStrengthWeak": {
+    "description": "Lowest band of the password strength meter"
+  },
+  "auth_passwordStrengthFair": "Fair",
+  "@auth_passwordStrengthFair": {
+    "description": "Second band of the password strength meter"
+  },
+  "auth_passwordStrengthGood": "Good",
+  "@auth_passwordStrengthGood": {
+    "description": "Third band of the password strength meter"
+  },
+  "auth_passwordStrengthStrong": "Strong",
+  "@auth_passwordStrengthStrong": {
+    "description": "Highest band of the password strength meter"
   }
 }
