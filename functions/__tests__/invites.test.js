@@ -115,6 +115,9 @@ describe("performCreateInvite — fresh email", () => {
       role: "employee",
       status: "invited",
       uid: "",
+      // Mirrored onto the invite doc so admins can caption the expiry —
+      // clients can never read signupCodes.
+      codeExpiresAt: EXPIRES,
     }));
 
     const codeSet = sets.find((o) => o.ref._kind === "codeRef");
@@ -220,6 +223,9 @@ describe("performCreateInvite — re-issue for a pending invite", () => {
       colorValue: FIELDS.colorValue,
       jobTitle: FIELDS.jobTitle,
       role: "employee",
+      // Re-issue refreshes the caption too, or Show code / Resend would
+      // leave the Team row showing the old code's expiry.
+      codeExpiresAt: EXPIRES,
       updatedAt: TS,
     });
 

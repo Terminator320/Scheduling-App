@@ -1,6 +1,7 @@
 const {
   generateSignupCode,
   hashSignupCode,
+  validateInvitePending,
   validateRedemption,
 } = require("../signup_code_utils");
 
@@ -78,6 +79,56 @@ describe("validateRedemption", () => {
     expect(validateRedemption({
       codeData: {...code, expiresAt: past}, inviteData: invite,
       tokenEmail: "a@b.com", nowMs: 1_500_000,
+    })).toEqual({ok: false, reason: "expired"});
+  });
+  test("a wrong email still wins over an expired code", () => {
+    // Shipped precedence — the extraction of validateInvitePending must not
+    // flip it, or a mistyped-email caller is told the wrong thing.
+    expect(validateRedemption({
+      codeData: {...code, expiresAt: past}, inviteData: invite,
+      tokenEmail: "other@b.com", nowMs: 1_500_000,
+    })).toEqual({ok: false, reason: "email-mismatch"});
+  });
+});
+
+describe("validateInvitePending", () => {
+  const future = {toMillis: () => 2_000_000};
+  const past = {toMillis: () => 1_000};
+  const invite = {status: "invited", uid: "", email: "a@b.com"};
+  const code = {inviteDocId: "x", email: "a@b.com", expiresAt: future};
+
+  test("ok for a pending, unexpired invite — no email needed", () => {
+    expect(validateInvitePending({
+      codeData: code, inviteData: invite, nowMs: 1_500_000,
+    })).toEqual({ok: true});
+  });
+  test("invalid when the code doc is missing", () => {
+    expect(validateInvitePending({
+      codeData: null, inviteData: invite, nowMs: 1_500_000,
+    })).toEqual({ok: false, reason: "invalid"});
+  });
+  test("invalid when the invite doc is missing", () => {
+    expect(validateInvitePending({
+      codeData: code, inviteData: null, nowMs: 1_500_000,
+    })).toEqual({ok: false, reason: "invalid"});
+  });
+  test("invalid once the invite is claimed", () => {
+    expect(validateInvitePending({
+      codeData: code,
+      inviteData: {...invite, uid: "u1", status: "active"},
+      nowMs: 1_500_000,
+    })).toEqual({ok: false, reason: "invalid"});
+  });
+  test("expired past expiresAt", () => {
+    expect(validateInvitePending({
+      codeData: {...code, expiresAt: past}, inviteData: invite,
+      nowMs: 1_500_000,
+    })).toEqual({ok: false, reason: "expired"});
+  });
+  test("expired when expiresAt is unreadable", () => {
+    expect(validateInvitePending({
+      codeData: {...code, expiresAt: undefined}, inviteData: invite,
+      nowMs: 1_500_000,
     })).toEqual({ok: false, reason: "expired"});
   });
 });

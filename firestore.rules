@@ -192,7 +192,19 @@ service cloud.firestore {
           && (!('onCall' in d.keys()) || d.onCall is bool)
           && (!('colorValue' in d.keys()) || isValidColorValue(d.colorValue))
           && (!('role' in d.keys()) || isValidRole(d.role))
-          && (!('status' in d.keys()) || isValidUserStatus(d.status));
+          && (!('status' in d.keys()) || isValidUserStatus(d.status))
+          // P4b server-owned stamps. The denylist on `allow update` below is
+          // what actually keeps clients out of them; these caps exist because
+          // `allow create` has no field validation yet, so when P5 wires
+          // isValidUserData into create they are already correct instead of
+          // being a forgotten field family. `is timestamp` is exactly what
+          // the callables write, so the cap can't be tighter than a write
+          // path's widest value.
+          && (!('codeExpiresAt' in d.keys()) || d.codeExpiresAt is timestamp)
+          && (!('termsAcceptedAt' in d.keys())
+              || d.termsAcceptedAt is timestamp)
+          && (!('locationConsentAt' in d.keys())
+              || d.locationConsentAt is timestamp);
       }
 
       // Built for P5's own-doc self-service clause, which is the only thing that
@@ -209,11 +221,18 @@ service cloud.firestore {
       // Only an admin can update. Invite activation happens server-side via
       // redeemSignupCode, so there's no client self-activation path. `uid` links this
       // doc to an Auth account and clients can never change it — rewriting it could
-      // hijack another account's bridge doc.
+      // hijack another account's bridge doc. The three P4b stamps are function-owned
+      // for the same reason `jobCount`/`wave` are on clients: a compromised admin
+      // session must not be able to forge a consent record or a fake code expiry.
+      // Diff-based, so it only fires when a write actually CHANGES one — every
+      // shipped path (updateEmployee's field-scoped map, deactivate/reactivate)
+      // leaves them untouched. The callables write via the Admin SDK, which
+      // bypasses rules entirely.
       allow update: if isAdmin()
             && !request.resource.data.diff(resource.data)
                  .affectedKeys()
-                 .hasAny(['uid'])
+                 .hasAny(['uid', 'codeExpiresAt', 'termsAcceptedAt',
+                          'locationConsentAt'])
             && isValidUserData(request.resource.data);
 
       // FCM device tokens — a user can only read or write their own, and writes are

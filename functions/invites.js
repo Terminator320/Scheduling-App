@@ -8,7 +8,8 @@ const {
   hasControlChar,
 } = require("./security");
 const {
-  INVITE_CODE_TTL_MS, generateSignupCode, hashSignupCode, validateRedemption,
+  INVITE_CODE_TTL_MS, generateSignupCode, hashSignupCode,
+  validateInvitePending, validateRedemption,
 } = require("./signup_code_utils");
 
 // Mirrors account.js's throttle, but redeem is keyed by token email (below).
@@ -19,6 +20,11 @@ const REDEEM_RATE_WINDOW_MS = 15 * 60 * 1000;
 // compromised admin session can't mass-create invited users + signup codes.
 const INVITE_RATE_MAX = 20;
 const INVITE_RATE_WINDOW_MS = 60 * 60 * 1000;
+
+// previewInvite is unauthenticated, so the code hash is the only caller
+// identity available to bound. This caps hammering of a single code.
+const PREVIEW_RATE_MAX = 10;
+const PREVIEW_RATE_WINDOW_MS = 15 * 60 * 1000;
 
 // Mirrors JobTitle.raw (lib/features/employees/domain/models/job_title.dart)
 // and the rules' isValidJobTitle allowlist.
@@ -93,6 +99,9 @@ async function performCreateInvite(db, fields, opts) {
       prior.forEach((d) => tx.delete(d.ref));
       tx.update(existing.ref, {
         name, firstName, lastName, phone, colorValue, jobTitle, role,
+        // Mirrors the code's expiry onto the invited doc so the admin Team
+        // row can caption it — clients can never read signupCodes.
+        codeExpiresAt: expiresAt,
         updatedAt: serverTimestamp(),
       });
       tx.set(codeRef, {
@@ -106,6 +115,7 @@ async function performCreateInvite(db, fields, opts) {
     tx.set(inviteRef, {
       name, firstName, lastName, email, phone, colorValue, jobTitle, role,
       status: "invited", uid: "",
+      codeExpiresAt: expiresAt,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -167,12 +177,69 @@ const createEmployeeInvite = onCall(APP_CHECK, async (req) => {
   return {code};
 });
 
+/**
+ * Builds the activation patch redeemSignupCode applies to the invited users
+ * doc. Pure, and exported so the never-empty-`name` contract is pinned by
+ * tests rather than by the transaction that happens to use it.
+ *
+ * `name` is composed from the submitted halves, falling back PER HALF to the
+ * invite's stored halves, and is omitted entirely when both are blank — an
+ * empty `name` drops the person out of watchAllUsers' orderBy('name') and
+ * therefore out of the admin roster. This is the JS mirror of Dart's
+ * composeEmployeeName never-empty contract.
+ *
+ * Consent stamps are conditional: the shipped client sends only `code`, and a
+ * consent record for someone who never saw the checkbox would be a false one.
+ *
+ * @param {{uid: string, firstName: string, lastName: string, phone: string,
+ *   termsAccepted: boolean, locationConsent: boolean}} fields The submitted
+ *   acceptance profile (already trimmed and length-checked).
+ * @param {{inviteData: !Object, serverTimestamp: !Function,
+ *   deleteField: !Function}} opts The invite doc's stored data plus the two
+ *   Firestore sentinel factories (injectable for tests).
+ * @return {!Object} the patch for tx.update.
+ */
+function buildActivationPatch(fields, opts) {
+  const {uid, firstName, lastName, phone, termsAccepted, locationConsent} =
+    fields;
+  const {inviteData, serverTimestamp, deleteField} = opts;
+  const patch = {
+    uid,
+    status: "active",
+    // The field describes a pending code; leaving it on an active doc is
+    // junk a future reader would misinterpret.
+    codeExpiresAt: deleteField(),
+    updatedAt: serverTimestamp(),
+  };
+  if (firstName) patch.firstName = firstName;
+  if (lastName) patch.lastName = lastName;
+  if (phone) patch.phone = phone;
+  const composed = [
+    firstName || inviteData.firstName || "",
+    lastName || inviteData.lastName || "",
+  ].filter(Boolean).join(" ");
+  if (composed) patch.name = composed;
+  if (termsAccepted) patch.termsAcceptedAt = serverTimestamp();
+  if (locationConsent) patch.locationConsentAt = serverTimestamp();
+  return patch;
+}
+
 const redeemSignupCode = onCall(APP_CHECK, async (req) => {
   if (!req.auth || !req.auth.uid) {
     throw new HttpsError("unauthenticated", "auth-required");
   }
-  assertPayloadShape(req.data, new Set(["code"]));
+  assertPayloadShape(req.data, new Set([
+    "code", "firstName", "lastName", "phone",
+    "termsAccepted", "locationConsent",
+  ]));
   const code = requireString(req.data, "code", 32);
+  const firstName = optionalString(req.data, "firstName", 100);
+  const lastName = optionalString(req.data, "lastName", 100);
+  // 40 mirrors createEmployeeInvite's server cap (the client caps at
+  // TextLimits.phone = 15 via PhoneInputFormatter).
+  const phone = optionalString(req.data, "phone", 40);
+  const termsAccepted = req.data.termsAccepted === true;
+  const locationConsent = req.data.locationConsent === true;
   const tokenEmail = req.auth.token && req.auth.token.email;
   if (typeof tokenEmail !== "string" || tokenEmail === "") {
     throw new HttpsError("failed-precondition", "no-email-claim");
@@ -200,15 +267,25 @@ const redeemSignupCode = onCall(APP_CHECK, async (req) => {
       codeData, inviteData, tokenEmail, nowMs: Date.now(),
     });
     if (!v.ok) return v;
-    tx.update(inviteRef, {
-      uid: req.auth.uid, status: "active",
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+    const patch = buildActivationPatch(
+        {
+          uid: req.auth.uid, firstName, lastName, phone,
+          termsAccepted, locationConsent,
+        },
+        {
+          inviteData,
+          serverTimestamp: () => FieldValue.serverTimestamp(),
+          deleteField: () => FieldValue.delete(),
+        },
+    );
+    tx.update(inviteRef, patch);
     tx.delete(codeRef);
     return {
       ok: true,
       role: inviteData.role || "employee",
-      name: inviteData.name || "",
+      // The just-written name when the acceptance supplied one, so the
+      // response can't report a name the doc no longer has.
+      name: patch.name || inviteData.name || "",
     };
   });
   if (!outcome.ok) {
@@ -223,9 +300,118 @@ const redeemSignupCode = onCall(APP_CHECK, async (req) => {
   return {role: outcome.role, name: outcome.name};
 });
 
+/**
+ * Transactional core of revokeInvite, extracted for unit testing.
+ *
+ * The transaction is what closes the revoke-vs-redeem race: both flows
+ * transact over the same two docs, so a redeem that commits first flips
+ * `status` to `active` and this refuses with `not-pending` instead of
+ * deleting a just-activated account.
+ *
+ * @param {!Object} db Firestore instance.
+ * @param {string} inviteDocId users-doc id of the pending invite.
+ * @return {!Promise<{ok: boolean, reason: (string|undefined)}>} `ok:false`
+ *   with `not-found` or `not-pending`.
+ */
+async function performRevokeInvite(db, inviteDocId) {
+  return db.runTransaction(async (tx) => {
+    const ref = db.collection("users").doc(inviteDocId);
+    const snap = await tx.get(ref);
+    if (!snap.exists) return {ok: false, reason: "not-found"};
+    const data = snap.data();
+    if (data.status !== "invited" || (data.uid || "") !== "") {
+      return {ok: false, reason: "not-pending"};
+    }
+    const codes = await tx.get(
+        db.collection("signupCodes").where("inviteDocId", "==", inviteDocId),
+    );
+    codes.forEach((d) => tx.delete(d.ref));
+    tx.delete(ref);
+    return {ok: true};
+  });
+}
+
+const revokeInvite = onCall(APP_CHECK, async (req) => {
+  if (!req.auth || !req.auth.uid) {
+    throw new HttpsError("unauthenticated", "auth-required");
+  }
+  await assertAdmin(req.auth.uid);
+  // Payload before the limiter so a burst of malformed submissions can't
+  // exhaust a legitimate admin's window.
+  assertPayloadShape(req.data, new Set(["inviteDocId"]));
+  const inviteDocId = requireString(req.data, "inviteDocId", 128);
+  // `.doc()` throws synchronously on an id containing a slash, which would
+  // surface as an opaque `internal` instead of a shaped rejection.
+  if (inviteDocId.includes("/")) {
+    throw new HttpsError("invalid-argument", "invalid-inviteDocId");
+  }
+  // Its own route key, same shape and budget as invite issuance.
+  await enforceDurableRateLimit(
+      "revokeInvite", req.auth.uid, INVITE_RATE_MAX, INVITE_RATE_WINDOW_MS);
+
+  const outcome = await performRevokeInvite(getFirestore(), inviteDocId);
+  if (!outcome.ok) {
+    if (outcome.reason === "not-pending") {
+      throw new HttpsError("failed-precondition", "invite-not-pending");
+    }
+    throw new HttpsError("not-found", "invite-not-found");
+  }
+  return {ok: true};
+});
+
+// The ONLY unauthenticated callable in this codebase — the caller is accepting
+// an invite and has no account yet, so there is no uid to guard or to key a
+// rate limit by. App Check enforcement, the payload shape guard and the
+// per-code-hash limiter below are what stand in for the identity check.
+// Disclosing the invited email to someone already holding a valid code adds
+// nothing: the code is the bearer credential for exactly that account.
+const previewInvite = onCall(APP_CHECK, async (req) => {
+  assertPayloadShape(req.data, new Set(["code"]));
+  const code = requireString(req.data, "code", 32);
+  const codeHash = hashSignupCode(code);
+  // Keyed by the code hash: caps hammering of ONE code. A caller varying
+  // codes gets a fresh key each time, which is acceptable — at ~60 bits of
+  // entropy online enumeration is not a real attack, and App Check gates the
+  // endpoint to genuine app builds. The code itself is never logged.
+  await enforceDurableRateLimit(
+      "previewInvite", codeHash, PREVIEW_RATE_MAX, PREVIEW_RATE_WINDOW_MS,
+      "code");
+
+  const db = getFirestore();
+  const codeSnap = await db.collection("signupCodes").doc(codeHash).get();
+  const codeData = codeSnap.exists ? codeSnap.data() : null;
+  let inviteData = null;
+  if (codeData) {
+    const inviteSnap = await db.collection("users")
+        .doc(codeData.inviteDocId).get();
+    inviteData = inviteSnap.exists ? inviteSnap.data() : null;
+  }
+  const v = validateInvitePending({codeData, inviteData, nowMs: Date.now()});
+  if (!v.ok) {
+    if (v.reason === "expired") {
+      throw new HttpsError("failed-precondition", "code-expired");
+    }
+    throw new HttpsError("invalid-argument", "invalid-code");
+  }
+  // Only the fields the acceptance screen renders — never the doc id, the
+  // phone, the colour, or anything else on the invite.
+  return {
+    email: inviteData.email || "",
+    firstName: inviteData.firstName || "",
+    lastName: inviteData.lastName || "",
+    role: inviteData.role || "employee",
+    expiresAtMs: codeData.expiresAt.toMillis(),
+  };
+});
+
 module.exports = {
   createEmployeeInvite,
   redeemSignupCode,
-  // Exported for unit tests of the transactional invite flow.
+  revokeInvite,
+  previewInvite,
+  // Exported for unit tests of the transactional invite flows and the pure
+  // activation patch.
   performCreateInvite,
+  performRevokeInvite,
+  buildActivationPatch,
 };
