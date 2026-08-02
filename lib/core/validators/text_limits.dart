@@ -9,7 +9,10 @@ class TextLimits {
   static const int personName = 200;
   static const int firstName = 200;
   static const int lastName = 200;
-  static const int phone = 32;
+  /// 15, which fits the formatted `(514) 555-1234` (14) with one to spare.
+  /// The rules cap stays at 40 — caps there mirror the widest value a write
+  /// path can produce (createEmployeeInvite accepts 40), never the client cap.
+  static const int phone = 15;
   static const int mobile = 32;
   static const int email = 320;
 

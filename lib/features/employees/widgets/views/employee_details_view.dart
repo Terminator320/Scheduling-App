@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:scheduling/core/launchers/phone_call_launcher.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
@@ -13,6 +12,7 @@ import 'package:scheduling/features/employees/widgets/cards/employee_profile_car
 import 'package:scheduling/features/employees/widgets/sections/employee_today_section.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/key_value_panel.dart';
+import 'package:scheduling/shared/widgets/primitives/mono_section_label.dart';
 import 'package:scheduling/shared/widgets/primitives/quick_action_button.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
@@ -49,6 +49,9 @@ class EmployeeDetailsView extends ConsumerWidget {
     final onCall = employee.phone.isEmpty
         ? null
         : () => launchPhoneCall(context, ref, employee.phone);
+    final onCallEmergency = employee.emergencyPhone.isEmpty
+        ? null
+        : () => launchPhoneCall(context, ref, employee.emergencyPhone);
     final onEmail = employee.email.isEmpty
         ? null
         : () => EmailComposeLauncher.showEmailChoices(
@@ -97,17 +100,30 @@ class EmployeeDetailsView extends ConsumerWidget {
         ),
       // NO `ON CALL` row — the profile card carries it as a chip, and a row
       // here would state the same boolean twice on one screen.
-      if (employee.emergencyContact.isNotEmpty)
-        KeyValueRow(
-          label: l10n.employees_emergencyKey,
-          value: employee.emergencyContact,
-        ),
       KeyValueRow(
         label: l10n.employees_accessKey,
         value: employee.isAdmin
             ? l10n.common_admin
             : l10n.common_employeeRoleValue,
       ),
+    ];
+
+    // Its own panel, not two more rows in the block above: who to call if
+    // something goes wrong on site is a different question from someone's
+    // hours and access level, and it is the one you scan for in a hurry.
+    final emergencyRows = <KeyValueRow>[
+      if (employee.emergencyContact.isNotEmpty)
+        KeyValueRow(
+          label: l10n.employees_emergencyKey,
+          value: employee.emergencyContact,
+        ),
+      if (employee.emergencyPhone.isNotEmpty)
+        KeyValueRow(
+          label: l10n.employees_emergencyPhoneKey,
+          value: employee.emergencyPhone,
+          onTap: onCallEmergency,
+          emphasize: true,
+        ),
     ];
 
     return DetailSheetListView(
@@ -140,6 +156,12 @@ class EmployeeDetailsView extends ConsumerWidget {
         ],
         const SizedBox(height: AppSpacing.sp24),
         KeyValuePanel(rows: infoRows),
+        if (emergencyRows.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sp24),
+          MonoSectionLabel(l10n.employees_sectionEmergency),
+          const SizedBox(height: AppSpacing.sp8),
+          KeyValuePanel(rows: emergencyRows),
+        ],
         const SizedBox(height: AppSpacing.sp24),
         EmployeeTodaySection(
           employeeId: employee.id,

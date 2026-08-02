@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 
-import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/sheets/sheet_header_bar.dart';
 
-/// Form-sheet chrome from `06-sheets-and-dialogs.md`: a fixed-height sheet with
-/// a white bar carrying **Cancel · title · primary verb** and no grabber.
+/// Form-sheet chrome from `06-sheets-and-dialogs.md`: a fixed-height sheet
+/// whose header is the shared [SheetHeaderBar] (**Cancel · title · primary
+/// verb**), with no grabber.
 ///
 /// Fixed height rather than draggable is the design's own call — the bar is the
 /// dismiss affordance, and a form that resizes under the keyboard loses the
 /// user's place. The scrim still dismisses on tap.
 ///
-/// `FormSheetScaffold` is untouched: the client and employee sheets keep it
-/// until P3/P4 migrate them.
+/// This is the only form-sheet chrome; every add/edit sheet in the app uses it.
+/// The older `FormSheetScaffold` (drag handle + inline headline, a second
+/// header style) was retired once P3/P4 migrated the last client and employee
+/// sheets onto this frame.
 class FormSheetFrame extends StatelessWidget {
   const FormSheetFrame({
     required this.title,
@@ -66,13 +68,15 @@ class FormSheetFrame extends StatelessWidget {
               type: MaterialType.transparency,
               child: Column(
                 children: [
-                  _SheetBar(
+                  SheetHeaderBar(
                     title: title,
                     primaryLabel: primaryLabel,
-                    onPrimary: isBusy ? null : onPrimary,
-                    onCancel: isBusy
-                        ? null
-                        : (onCancel ?? () => Navigator.maybePop(sheetContext)),
+                    onPrimary: onPrimary,
+                    // Defaulting the dismiss here rather than in the bar keeps
+                    // SheetHeaderBar free of any assumption about how the
+                    // surface hosting it is closed.
+                    onCancel:
+                        onCancel ?? () => Navigator.maybePop(sheetContext),
                     isBusy: isBusy,
                   ),
                   Expanded(
@@ -94,94 +98,6 @@ class FormSheetFrame extends StatelessWidget {
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SheetBar extends StatelessWidget {
-  const _SheetBar({
-    required this.title,
-    required this.primaryLabel,
-    required this.onPrimary,
-    required this.onCancel,
-    required this.isBusy,
-  });
-
-  final String title;
-  final String primaryLabel;
-  final VoidCallback? onPrimary;
-  final VoidCallback? onCancel;
-  final bool isBusy;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sp8),
-        // Every slot is flexible so the bar cannot overflow: three intrinsic
-        // widths (Cancel · title · verb) exceed a 260px viewport once text is
-        // scaled up, and a non-flex button had nothing to give. The side slots
-        // share a flex so the title stays optically centred between them.
-        child: Row(
-          children: [
-            Flexible(
-              flex: 3,
-              child: Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: TextButton(
-                  onPressed: onCancel,
-                  child: Text(
-                    context.l10n.common_cancel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.palette.textTertiary,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Flexible(
-              flex: 4,
-              child: Text(
-                title,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleLarge,
-              ),
-            ),
-            Flexible(
-              flex: 3,
-              child: Align(
-                alignment: AlignmentDirectional.centerEnd,
-                child: TextButton(
-                  onPressed: onPrimary,
-                  child: isBusy
-                      ? const AdaptiveProgressIndicator(size: 18)
-                      : Text(
-                          primaryLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: onPrimary == null
-                                ? theme.palette.textMuted
-                                : theme.palette.primaryAccent,
-                          ),
-                        ),
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );

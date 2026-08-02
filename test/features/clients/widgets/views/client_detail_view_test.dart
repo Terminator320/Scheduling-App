@@ -127,7 +127,7 @@ void main() {
 
     // The customer's own phone is the first Phone field; the contact card's
     // phone is the second.
-    await tester.enterText(_textFieldFor('Phone').first, '555-9999');
+    await tester.enterText(_textFieldFor('Phone').first, '5145559999');
     // Let SheetFocusScroll's 280 ms focus-scroll timer fire.
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(_sheetSave());
@@ -137,7 +137,7 @@ void main() {
         verify(() => repo.updateClient(captureAny())).captured.single
             as ClientRecord;
     // The customer's own phone changed; the extra contact is unchanged.
-    expect(saved.phone, '555-9999');
+    expect(saved.phone, '(514) 555-9999');
     expect(saved.contacts, const [
       ClientContact(name: 'Bob Builder', phone: '555-0202'),
     ]);
@@ -202,7 +202,7 @@ void main() {
     when(() => repo.updateClient(any())).thenAnswer((_) async {});
     await _pumpInEditMode(tester, repo, _clientWithContacts);
 
-    await tester.enterText(_textFieldFor('Phone').first, '555-9999');
+    await tester.enterText(_textFieldFor('Phone').first, '5145559999');
     // Let SheetFocusScroll's 280 ms focus-scroll timer fire.
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(_sheetSave());
@@ -210,7 +210,7 @@ void main() {
 
     // Back in view mode (no edit fields) with the new phone rendered.
     expect(find.byType(TextField), findsNothing);
-    expect(find.text('555-9999'), findsWidgets);
+    expect(find.text('(514) 555-9999'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 

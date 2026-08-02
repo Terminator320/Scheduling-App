@@ -69,6 +69,13 @@ void main() {
   testWidgets('shows the profile card, info panel and today panel', (
     tester,
   ) async {
+    // Tall enough to build all three panels at once: EMERGENCY is its own
+    // panel between the info block and Today, so at the default 800x600 the
+    // today panel falls outside the lazy list's build window.
+    tester.view.physicalSize = const Size(1000, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     await tester.pumpWidget(_wrap(_populated, isCurrentUserAdmin: true));
     await tester.pumpAndSettle();
 

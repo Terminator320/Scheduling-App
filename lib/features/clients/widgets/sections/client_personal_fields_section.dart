@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
@@ -80,6 +81,7 @@ class ClientPersonalFieldsSection extends StatelessWidget {
             label: context.l10n.clients_phone,
             controller: phoneController,
             keyboard: TextInputType.phone,
+            inputFormatters: const [PhoneInputFormatter()],
             textInputAction: TextInputAction.next,
             optional: true,
             autofillHints: const [AutofillHints.telephoneNumber],
@@ -92,6 +94,7 @@ class ClientPersonalFieldsSection extends StatelessWidget {
             label: context.l10n.clients_mobile,
             controller: mobileController,
             keyboard: TextInputType.phone,
+            inputFormatters: const [PhoneInputFormatter()],
             textInputAction: TextInputAction.next,
             optional: true,
             autofillHints: const [AutofillHints.telephoneNumber],

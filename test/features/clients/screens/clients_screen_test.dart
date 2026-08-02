@@ -181,7 +181,7 @@ void main() {
       await tester.tap(find.text('Edit'));
       await tester.pumpAndSettle();
 
-      await tester.enterText(_phoneEditField().first, '555-9999');
+      await tester.enterText(_phoneEditField().first, '5145559999');
       // Let SheetFocusScroll's 280 ms focus-scroll timer fire.
       await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(_sheetSave());
@@ -189,11 +189,11 @@ void main() {
 
       // Back in view mode with the new phone — not the stale '555-0101'.
       expect(find.byType(EditClientSheet), findsNothing);
-      expect(find.text('555-9999'), findsWidgets);
+      expect(find.text('(514) 555-9999'), findsWidgets);
       final saved =
           verify(() => repo.updateClient(captureAny())).captured.single
               as ClientRecord;
-      expect(saved.phone, '555-9999');
+      expect(saved.phone, '(514) 555-9999');
       expect(tester.takeException(), isNull);
     },
   );

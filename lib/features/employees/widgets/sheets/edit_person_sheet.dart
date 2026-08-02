@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
+import 'package:scheduling/core/adaptive/adaptive_pickers.dart';
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/employees/application/employee_form_controller.dart';
 import 'package:scheduling/features/employees/application/employee_schedule_providers.dart';
@@ -68,6 +70,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
   late final TextEditingController _emailController;
   late final TextEditingController _phoneController;
   late final TextEditingController _emergencyController;
+  late final TextEditingController _emergencyPhoneController;
 
   late JobTitle _jobTitle;
   late List<bool> _workingDays;
@@ -97,6 +100,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
     _emailController = TextEditingController(text: e.email);
     _phoneController = TextEditingController(text: e.phone);
     _emergencyController = TextEditingController(text: e.emergencyContact);
+    _emergencyPhoneController = TextEditingController(text: e.emergencyPhone);
 
     _jobTitle = e.jobTitle;
     _workingDays = normalizeWorkingDays(e.workingDays);
@@ -117,6 +121,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
       _emailController,
       _phoneController,
       _emergencyController,
+      _emergencyPhoneController,
     ]) {
       controller.dispose();
     }
@@ -145,8 +150,11 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
   }
 
   Future<void> _pickTime({required bool isStart}) async {
-    final picked = await showTimePicker(
-      context: context,
+    // Same adaptive picker the appointment form uses — a Cupertino wheel on
+    // iOS, Material elsewhere. A raw showTimePicker here made availability the
+    // one place in the app that picked a time with a different control.
+    final picked = await showAdaptiveTimePicker(
+      context,
       initialTime: minutesToTimeOfDay(
         isStart ? _workStartMinutes : _workEndMinutes,
       ),
@@ -217,6 +225,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
       maxJobsPerDay: _maxJobsPerDay,
       onCall: _onCall,
       emergencyContact: _emergencyController.text.trim(),
+      emergencyPhone: _emergencyPhoneController.text.trim(),
     );
 
     final outcome = await ref
@@ -309,38 +318,29 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
       children: [
         MonoSectionLabel(l10n.employees_sectionDetails),
         const SizedBox(height: AppSpacing.sp8),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: SheetFocusScroll(
-                child: LabeledTextField(
-                  key: const Key('firstName'),
-                  label: l10n.employees_firstName,
-                  controller: _firstNameController,
-                  textCapitalization: TextCapitalization.words,
-                  textInputAction: TextInputAction.next,
-                  maxLength: TextLimits.firstName,
-                  errorText: errors['name'],
-                  onChanged: (_) => _clearError('name'),
-                ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sp12),
-            Expanded(
-              child: SheetFocusScroll(
-                child: LabeledTextField(
-                  key: const Key('lastName'),
-                  label: l10n.employees_lastName,
-                  controller: _lastNameController,
-                  optional: true,
-                  textCapitalization: TextCapitalization.words,
-                  textInputAction: TextInputAction.next,
-                  maxLength: TextLimits.lastName,
-                ),
-              ),
-            ),
-          ],
+        SheetFocusScroll(
+          child: LabeledTextField(
+            key: const Key('firstName'),
+            label: l10n.employees_firstName,
+            controller: _firstNameController,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            maxLength: TextLimits.firstName,
+            errorText: errors['name'],
+            onChanged: (_) => _clearError('name'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            key: const Key('lastName'),
+            label: l10n.employees_lastName,
+            controller: _lastNameController,
+            optional: true,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            maxLength: TextLimits.lastName,
+          ),
         ),
         const SizedBox(height: AppSpacing.sp16),
         SheetFocusScroll(
@@ -363,6 +363,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
             controller: _phoneController,
             optional: true,
             keyboard: TextInputType.phone,
+            inputFormatters: const [PhoneInputFormatter()],
             maxLength: TextLimits.phone,
           ),
         ),
@@ -439,7 +440,11 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
             ),
           ],
         ),
-        const SizedBox(height: AppSpacing.sp16),
+        const SizedBox(height: AppSpacing.sp24),
+        // Its own section, not a tail on AVAILABILITY — who to call in an
+        // emergency has nothing to do with when someone works.
+        MonoSectionLabel(l10n.employees_sectionEmergency),
+        const SizedBox(height: AppSpacing.sp8),
         // Free-text stays a LabeledTextField, outside the panel — it owns the
         // error shake and the clear button a panel row has neither of.
         SheetFocusScroll(
@@ -447,7 +452,20 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
             label: l10n.employees_emergencyContact,
             controller: _emergencyController,
             optional: true,
+            textInputAction: TextInputAction.next,
             maxLength: TextLimits.employeeEmergencyContact,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            key: const Key('emergencyPhone'),
+            label: l10n.employees_emergencyPhone,
+            controller: _emergencyPhoneController,
+            optional: true,
+            keyboard: TextInputType.phone,
+            inputFormatters: const [PhoneInputFormatter()],
+            maxLength: TextLimits.phone,
           ),
         ),
         const SizedBox(height: AppSpacing.sp24),

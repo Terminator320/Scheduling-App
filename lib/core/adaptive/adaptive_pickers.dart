@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
-import 'package:scheduling/features/calendar/utils/cupertino_time_picker.dart';
+import 'package:scheduling/core/adaptive/cupertino_time_picker.dart';
 
 /// Platform-adaptive date picker: Cupertino wheel on iOS/macOS, Material calendar elsewhere.
 Future<DateTime?> showAdaptiveDatePicker(

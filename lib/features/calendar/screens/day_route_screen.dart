@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-
 import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
+import 'package:scheduling/core/adaptive/adaptive_pickers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/launchers/route_map_launcher.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
@@ -14,7 +14,6 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
-import 'package:scheduling/features/calendar/utils/adaptive_pickers.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';

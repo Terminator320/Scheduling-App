@@ -17,7 +17,7 @@ mixin _$EmployeeRecord {
  String get id; String get name; String get firstName; String get lastName; String get email; String get phone;// Legacy default (Material blue) for docs predating the color palette —
 // changing this recolors those employees.
  Color get color; String get role; String get status; String get uid; JobTitle get jobTitle; List<bool> get workingDays; int get workStartMinutes; int get workEndMinutes;// 0 means no cap.
- int get maxJobsPerDay; bool get onCall; String get emergencyContact;
+ int get maxJobsPerDay; bool get onCall; String get emergencyContact; String get emergencyPhone;
 /// Create a copy of EmployeeRecord
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $EmployeeRecordCopyWith<EmployeeRecord> get copyWith => _$EmployeeRecordCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is EmployeeRecord&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.firstName, firstName) || other.firstName == firstName)&&(identical(other.lastName, lastName) || other.lastName == lastName)&&(identical(other.email, email) || other.email == email)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.color, color) || other.color == color)&&(identical(other.role, role) || other.role == role)&&(identical(other.status, status) || other.status == status)&&(identical(other.uid, uid) || other.uid == uid)&&(identical(other.jobTitle, jobTitle) || other.jobTitle == jobTitle)&&const DeepCollectionEquality().equals(other.workingDays, workingDays)&&(identical(other.workStartMinutes, workStartMinutes) || other.workStartMinutes == workStartMinutes)&&(identical(other.workEndMinutes, workEndMinutes) || other.workEndMinutes == workEndMinutes)&&(identical(other.maxJobsPerDay, maxJobsPerDay) || other.maxJobsPerDay == maxJobsPerDay)&&(identical(other.onCall, onCall) || other.onCall == onCall)&&(identical(other.emergencyContact, emergencyContact) || other.emergencyContact == emergencyContact));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is EmployeeRecord&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.firstName, firstName) || other.firstName == firstName)&&(identical(other.lastName, lastName) || other.lastName == lastName)&&(identical(other.email, email) || other.email == email)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.color, color) || other.color == color)&&(identical(other.role, role) || other.role == role)&&(identical(other.status, status) || other.status == status)&&(identical(other.uid, uid) || other.uid == uid)&&(identical(other.jobTitle, jobTitle) || other.jobTitle == jobTitle)&&const DeepCollectionEquality().equals(other.workingDays, workingDays)&&(identical(other.workStartMinutes, workStartMinutes) || other.workStartMinutes == workStartMinutes)&&(identical(other.workEndMinutes, workEndMinutes) || other.workEndMinutes == workEndMinutes)&&(identical(other.maxJobsPerDay, maxJobsPerDay) || other.maxJobsPerDay == maxJobsPerDay)&&(identical(other.onCall, onCall) || other.onCall == onCall)&&(identical(other.emergencyContact, emergencyContact) || other.emergencyContact == emergencyContact)&&(identical(other.emergencyPhone, emergencyPhone) || other.emergencyPhone == emergencyPhone));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,firstName,lastName,email,phone,color,role,status,uid,jobTitle,const DeepCollectionEquality().hash(workingDays),workStartMinutes,workEndMinutes,maxJobsPerDay,onCall,emergencyContact);
+int get hashCode => Object.hash(runtimeType,id,name,firstName,lastName,email,phone,color,role,status,uid,jobTitle,const DeepCollectionEquality().hash(workingDays),workStartMinutes,workEndMinutes,maxJobsPerDay,onCall,emergencyContact,emergencyPhone);
 
 @override
 String toString() {
-  return 'EmployeeRecord(id: $id, name: $name, firstName: $firstName, lastName: $lastName, email: $email, phone: $phone, color: $color, role: $role, status: $status, uid: $uid, jobTitle: $jobTitle, workingDays: $workingDays, workStartMinutes: $workStartMinutes, workEndMinutes: $workEndMinutes, maxJobsPerDay: $maxJobsPerDay, onCall: $onCall, emergencyContact: $emergencyContact)';
+  return 'EmployeeRecord(id: $id, name: $name, firstName: $firstName, lastName: $lastName, email: $email, phone: $phone, color: $color, role: $role, status: $status, uid: $uid, jobTitle: $jobTitle, workingDays: $workingDays, workStartMinutes: $workStartMinutes, workEndMinutes: $workEndMinutes, maxJobsPerDay: $maxJobsPerDay, onCall: $onCall, emergencyContact: $emergencyContact, emergencyPhone: $emergencyPhone)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $EmployeeRecordCopyWith<$Res>  {
   factory $EmployeeRecordCopyWith(EmployeeRecord value, $Res Function(EmployeeRecord) _then) = _$EmployeeRecordCopyWithImpl;
 @useResult
 $Res call({
- String id, String name, String firstName, String lastName, String email, String phone, Color color, String role, String status, String uid, JobTitle jobTitle, List<bool> workingDays, int workStartMinutes, int workEndMinutes, int maxJobsPerDay, bool onCall, String emergencyContact
+ String id, String name, String firstName, String lastName, String email, String phone, Color color, String role, String status, String uid, JobTitle jobTitle, List<bool> workingDays, int workStartMinutes, int workEndMinutes, int maxJobsPerDay, bool onCall, String emergencyContact, String emergencyPhone
 });
 
 
@@ -65,7 +65,7 @@ class _$EmployeeRecordCopyWithImpl<$Res>
 
 /// Create a copy of EmployeeRecord
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? firstName = null,Object? lastName = null,Object? email = null,Object? phone = null,Object? color = null,Object? role = null,Object? status = null,Object? uid = null,Object? jobTitle = null,Object? workingDays = null,Object? workStartMinutes = null,Object? workEndMinutes = null,Object? maxJobsPerDay = null,Object? onCall = null,Object? emergencyContact = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? firstName = null,Object? lastName = null,Object? email = null,Object? phone = null,Object? color = null,Object? role = null,Object? status = null,Object? uid = null,Object? jobTitle = null,Object? workingDays = null,Object? workStartMinutes = null,Object? workEndMinutes = null,Object? maxJobsPerDay = null,Object? onCall = null,Object? emergencyContact = null,Object? emergencyPhone = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -84,6 +84,7 @@ as int,workEndMinutes: null == workEndMinutes ? _self.workEndMinutes : workEndMi
 as int,maxJobsPerDay: null == maxJobsPerDay ? _self.maxJobsPerDay : maxJobsPerDay // ignore: cast_nullable_to_non_nullable
 as int,onCall: null == onCall ? _self.onCall : onCall // ignore: cast_nullable_to_non_nullable
 as bool,emergencyContact: null == emergencyContact ? _self.emergencyContact : emergencyContact // ignore: cast_nullable_to_non_nullable
+as String,emergencyPhone: null == emergencyPhone ? _self.emergencyPhone : emergencyPhone // ignore: cast_nullable_to_non_nullable
 as String,
   ));
 }
@@ -169,10 +170,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String firstName,  String lastName,  String email,  String phone,  Color color,  String role,  String status,  String uid,  JobTitle jobTitle,  List<bool> workingDays,  int workStartMinutes,  int workEndMinutes,  int maxJobsPerDay,  bool onCall,  String emergencyContact)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String firstName,  String lastName,  String email,  String phone,  Color color,  String role,  String status,  String uid,  JobTitle jobTitle,  List<bool> workingDays,  int workStartMinutes,  int workEndMinutes,  int maxJobsPerDay,  bool onCall,  String emergencyContact,  String emergencyPhone)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _EmployeeRecord() when $default != null:
-return $default(_that.id,_that.name,_that.firstName,_that.lastName,_that.email,_that.phone,_that.color,_that.role,_that.status,_that.uid,_that.jobTitle,_that.workingDays,_that.workStartMinutes,_that.workEndMinutes,_that.maxJobsPerDay,_that.onCall,_that.emergencyContact);case _:
+return $default(_that.id,_that.name,_that.firstName,_that.lastName,_that.email,_that.phone,_that.color,_that.role,_that.status,_that.uid,_that.jobTitle,_that.workingDays,_that.workStartMinutes,_that.workEndMinutes,_that.maxJobsPerDay,_that.onCall,_that.emergencyContact,_that.emergencyPhone);case _:
   return orElse();
 
 }
@@ -190,10 +191,10 @@ return $default(_that.id,_that.name,_that.firstName,_that.lastName,_that.email,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String firstName,  String lastName,  String email,  String phone,  Color color,  String role,  String status,  String uid,  JobTitle jobTitle,  List<bool> workingDays,  int workStartMinutes,  int workEndMinutes,  int maxJobsPerDay,  bool onCall,  String emergencyContact)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String firstName,  String lastName,  String email,  String phone,  Color color,  String role,  String status,  String uid,  JobTitle jobTitle,  List<bool> workingDays,  int workStartMinutes,  int workEndMinutes,  int maxJobsPerDay,  bool onCall,  String emergencyContact,  String emergencyPhone)  $default,) {final _that = this;
 switch (_that) {
 case _EmployeeRecord():
-return $default(_that.id,_that.name,_that.firstName,_that.lastName,_that.email,_that.phone,_that.color,_that.role,_that.status,_that.uid,_that.jobTitle,_that.workingDays,_that.workStartMinutes,_that.workEndMinutes,_that.maxJobsPerDay,_that.onCall,_that.emergencyContact);case _:
+return $default(_that.id,_that.name,_that.firstName,_that.lastName,_that.email,_that.phone,_that.color,_that.role,_that.status,_that.uid,_that.jobTitle,_that.workingDays,_that.workStartMinutes,_that.workEndMinutes,_that.maxJobsPerDay,_that.onCall,_that.emergencyContact,_that.emergencyPhone);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -210,10 +211,10 @@ return $default(_that.id,_that.name,_that.firstName,_that.lastName,_that.email,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String firstName,  String lastName,  String email,  String phone,  Color color,  String role,  String status,  String uid,  JobTitle jobTitle,  List<bool> workingDays,  int workStartMinutes,  int workEndMinutes,  int maxJobsPerDay,  bool onCall,  String emergencyContact)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String firstName,  String lastName,  String email,  String phone,  Color color,  String role,  String status,  String uid,  JobTitle jobTitle,  List<bool> workingDays,  int workStartMinutes,  int workEndMinutes,  int maxJobsPerDay,  bool onCall,  String emergencyContact,  String emergencyPhone)?  $default,) {final _that = this;
 switch (_that) {
 case _EmployeeRecord() when $default != null:
-return $default(_that.id,_that.name,_that.firstName,_that.lastName,_that.email,_that.phone,_that.color,_that.role,_that.status,_that.uid,_that.jobTitle,_that.workingDays,_that.workStartMinutes,_that.workEndMinutes,_that.maxJobsPerDay,_that.onCall,_that.emergencyContact);case _:
+return $default(_that.id,_that.name,_that.firstName,_that.lastName,_that.email,_that.phone,_that.color,_that.role,_that.status,_that.uid,_that.jobTitle,_that.workingDays,_that.workStartMinutes,_that.workEndMinutes,_that.maxJobsPerDay,_that.onCall,_that.emergencyContact,_that.emergencyPhone);case _:
   return null;
 
 }
@@ -225,7 +226,7 @@ return $default(_that.id,_that.name,_that.firstName,_that.lastName,_that.email,_
 
 
 class _EmployeeRecord extends EmployeeRecord {
-  const _EmployeeRecord({required this.id, this.name = '', this.firstName = '', this.lastName = '', this.email = '', this.phone = '', this.color = const Color(0xFF2196F3), this.role = 'employee', this.status = '', this.uid = '', this.jobTitle = JobTitle.unset, final  List<bool> workingDays = kDefaultWorkingDays, this.workStartMinutes = kDefaultWorkStartMinutes, this.workEndMinutes = kDefaultWorkEndMinutes, this.maxJobsPerDay = 0, this.onCall = false, this.emergencyContact = ''}): _workingDays = workingDays,super._();
+  const _EmployeeRecord({required this.id, this.name = '', this.firstName = '', this.lastName = '', this.email = '', this.phone = '', this.color = const Color(0xFF2196F3), this.role = 'employee', this.status = '', this.uid = '', this.jobTitle = JobTitle.unset, final  List<bool> workingDays = kDefaultWorkingDays, this.workStartMinutes = kDefaultWorkStartMinutes, this.workEndMinutes = kDefaultWorkEndMinutes, this.maxJobsPerDay = 0, this.onCall = false, this.emergencyContact = '', this.emergencyPhone = ''}): _workingDays = workingDays,super._();
   
 
 @override final  String id;
@@ -254,6 +255,7 @@ class _EmployeeRecord extends EmployeeRecord {
 @override@JsonKey() final  int maxJobsPerDay;
 @override@JsonKey() final  bool onCall;
 @override@JsonKey() final  String emergencyContact;
+@override@JsonKey() final  String emergencyPhone;
 
 /// Create a copy of EmployeeRecord
 /// with the given fields replaced by the non-null parameter values.
@@ -265,16 +267,16 @@ _$EmployeeRecordCopyWith<_EmployeeRecord> get copyWith => __$EmployeeRecordCopyW
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _EmployeeRecord&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.firstName, firstName) || other.firstName == firstName)&&(identical(other.lastName, lastName) || other.lastName == lastName)&&(identical(other.email, email) || other.email == email)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.color, color) || other.color == color)&&(identical(other.role, role) || other.role == role)&&(identical(other.status, status) || other.status == status)&&(identical(other.uid, uid) || other.uid == uid)&&(identical(other.jobTitle, jobTitle) || other.jobTitle == jobTitle)&&const DeepCollectionEquality().equals(other._workingDays, _workingDays)&&(identical(other.workStartMinutes, workStartMinutes) || other.workStartMinutes == workStartMinutes)&&(identical(other.workEndMinutes, workEndMinutes) || other.workEndMinutes == workEndMinutes)&&(identical(other.maxJobsPerDay, maxJobsPerDay) || other.maxJobsPerDay == maxJobsPerDay)&&(identical(other.onCall, onCall) || other.onCall == onCall)&&(identical(other.emergencyContact, emergencyContact) || other.emergencyContact == emergencyContact));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _EmployeeRecord&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.firstName, firstName) || other.firstName == firstName)&&(identical(other.lastName, lastName) || other.lastName == lastName)&&(identical(other.email, email) || other.email == email)&&(identical(other.phone, phone) || other.phone == phone)&&(identical(other.color, color) || other.color == color)&&(identical(other.role, role) || other.role == role)&&(identical(other.status, status) || other.status == status)&&(identical(other.uid, uid) || other.uid == uid)&&(identical(other.jobTitle, jobTitle) || other.jobTitle == jobTitle)&&const DeepCollectionEquality().equals(other._workingDays, _workingDays)&&(identical(other.workStartMinutes, workStartMinutes) || other.workStartMinutes == workStartMinutes)&&(identical(other.workEndMinutes, workEndMinutes) || other.workEndMinutes == workEndMinutes)&&(identical(other.maxJobsPerDay, maxJobsPerDay) || other.maxJobsPerDay == maxJobsPerDay)&&(identical(other.onCall, onCall) || other.onCall == onCall)&&(identical(other.emergencyContact, emergencyContact) || other.emergencyContact == emergencyContact)&&(identical(other.emergencyPhone, emergencyPhone) || other.emergencyPhone == emergencyPhone));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,firstName,lastName,email,phone,color,role,status,uid,jobTitle,const DeepCollectionEquality().hash(_workingDays),workStartMinutes,workEndMinutes,maxJobsPerDay,onCall,emergencyContact);
+int get hashCode => Object.hash(runtimeType,id,name,firstName,lastName,email,phone,color,role,status,uid,jobTitle,const DeepCollectionEquality().hash(_workingDays),workStartMinutes,workEndMinutes,maxJobsPerDay,onCall,emergencyContact,emergencyPhone);
 
 @override
 String toString() {
-  return 'EmployeeRecord(id: $id, name: $name, firstName: $firstName, lastName: $lastName, email: $email, phone: $phone, color: $color, role: $role, status: $status, uid: $uid, jobTitle: $jobTitle, workingDays: $workingDays, workStartMinutes: $workStartMinutes, workEndMinutes: $workEndMinutes, maxJobsPerDay: $maxJobsPerDay, onCall: $onCall, emergencyContact: $emergencyContact)';
+  return 'EmployeeRecord(id: $id, name: $name, firstName: $firstName, lastName: $lastName, email: $email, phone: $phone, color: $color, role: $role, status: $status, uid: $uid, jobTitle: $jobTitle, workingDays: $workingDays, workStartMinutes: $workStartMinutes, workEndMinutes: $workEndMinutes, maxJobsPerDay: $maxJobsPerDay, onCall: $onCall, emergencyContact: $emergencyContact, emergencyPhone: $emergencyPhone)';
 }
 
 
@@ -285,7 +287,7 @@ abstract mixin class _$EmployeeRecordCopyWith<$Res> implements $EmployeeRecordCo
   factory _$EmployeeRecordCopyWith(_EmployeeRecord value, $Res Function(_EmployeeRecord) _then) = __$EmployeeRecordCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String name, String firstName, String lastName, String email, String phone, Color color, String role, String status, String uid, JobTitle jobTitle, List<bool> workingDays, int workStartMinutes, int workEndMinutes, int maxJobsPerDay, bool onCall, String emergencyContact
+ String id, String name, String firstName, String lastName, String email, String phone, Color color, String role, String status, String uid, JobTitle jobTitle, List<bool> workingDays, int workStartMinutes, int workEndMinutes, int maxJobsPerDay, bool onCall, String emergencyContact, String emergencyPhone
 });
 
 
@@ -302,7 +304,7 @@ class __$EmployeeRecordCopyWithImpl<$Res>
 
 /// Create a copy of EmployeeRecord
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? firstName = null,Object? lastName = null,Object? email = null,Object? phone = null,Object? color = null,Object? role = null,Object? status = null,Object? uid = null,Object? jobTitle = null,Object? workingDays = null,Object? workStartMinutes = null,Object? workEndMinutes = null,Object? maxJobsPerDay = null,Object? onCall = null,Object? emergencyContact = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? firstName = null,Object? lastName = null,Object? email = null,Object? phone = null,Object? color = null,Object? role = null,Object? status = null,Object? uid = null,Object? jobTitle = null,Object? workingDays = null,Object? workStartMinutes = null,Object? workEndMinutes = null,Object? maxJobsPerDay = null,Object? onCall = null,Object? emergencyContact = null,Object? emergencyPhone = null,}) {
   return _then(_EmployeeRecord(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -321,6 +323,7 @@ as int,workEndMinutes: null == workEndMinutes ? _self.workEndMinutes : workEndMi
 as int,maxJobsPerDay: null == maxJobsPerDay ? _self.maxJobsPerDay : maxJobsPerDay // ignore: cast_nullable_to_non_nullable
 as int,onCall: null == onCall ? _self.onCall : onCall // ignore: cast_nullable_to_non_nullable
 as bool,emergencyContact: null == emergencyContact ? _self.emergencyContact : emergencyContact // ignore: cast_nullable_to_non_nullable
+as String,emergencyPhone: null == emergencyPhone ? _self.emergencyPhone : emergencyPhone // ignore: cast_nullable_to_non_nullable
 as String,
   ));
 }

@@ -36,6 +36,33 @@ void main() {
     expect(find.text('body'), findsOneWidget);
   });
 
+  testWidgets('lays the bar out as Cancel · centred title · verb', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        FormSheetFrame(
+          title: 'New job',
+          primaryLabel: 'Save',
+          onPrimary: () {},
+          children: const [Text('body')],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final barWidth = tester.getSize(find.byType(FormSheetFrame)).width;
+    final cancel = tester.getRect(find.text('Cancel'));
+    final title = tester.getRect(find.text('New job'));
+    final save = tester.getRect(find.text('Save'));
+
+    // The title is optically centred in the bar, not packed against Cancel.
+    expect((title.center.dx - barWidth / 2).abs(), lessThan(4));
+    // Cancel hugs the leading edge, the verb the trailing edge.
+    expect(cancel.left, lessThan(barWidth / 4));
+    expect(save.right, greaterThan(barWidth * 3 / 4));
+  });
+
   testWidgets('fires the primary verb', (tester) async {
     var saved = 0;
     await tester.pumpWidget(
