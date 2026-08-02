@@ -29,6 +29,7 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     @Default(0) int maxJobsPerDay,
     @Default(false) bool onCall,
     @Default('') String emergencyContact,
+    @Default('') String emergencyPhone,
   }) = _EmployeeRecord;
   const EmployeeRecord._();
 
@@ -61,6 +62,7 @@ abstract class EmployeeRecord with _$EmployeeRecord {
       maxJobsPerDay: (data['maxJobsPerDay'] as num?)?.toInt() ?? 0,
       onCall: data['onCall'] == true,
       emergencyContact: (data['emergencyContact'] ?? '').toString(),
+      emergencyPhone: (data['emergencyPhone'] ?? '').toString(),
     );
   }
 
@@ -81,6 +83,7 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     'maxJobsPerDay': maxJobsPerDay,
     'onCall': onCall,
     'emergencyContact': emergencyContact,
+    'emergencyPhone': emergencyPhone,
   };
 
   bool get isAdmin => role == 'admin';

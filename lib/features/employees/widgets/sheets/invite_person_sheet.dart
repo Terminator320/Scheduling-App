@@ -7,6 +7,7 @@ import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/employees/application/employee_form_controller.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
@@ -179,39 +180,30 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
       children: [
         MonoSectionLabel(l10n.employees_sectionDetails),
         const SizedBox(height: AppSpacing.sp8),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: SheetFocusScroll(
-                child: LabeledTextField(
-                  key: const Key('firstName'),
-                  label: l10n.employees_firstName,
-                  controller: _firstNameController,
-                  required: true,
-                  textCapitalization: TextCapitalization.words,
-                  textInputAction: TextInputAction.next,
-                  maxLength: TextLimits.firstName,
-                  errorText: errors['name'],
-                  onChanged: (_) => _clearError('name'),
-                ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sp12),
-            Expanded(
-              child: SheetFocusScroll(
-                child: LabeledTextField(
-                  key: const Key('lastName'),
-                  label: l10n.employees_lastName,
-                  controller: _lastNameController,
-                  required: true,
-                  textCapitalization: TextCapitalization.words,
-                  textInputAction: TextInputAction.next,
-                  maxLength: TextLimits.lastName,
-                ),
-              ),
-            ),
-          ],
+        SheetFocusScroll(
+          child: LabeledTextField(
+            key: const Key('firstName'),
+            label: l10n.employees_firstName,
+            controller: _firstNameController,
+            required: true,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            maxLength: TextLimits.firstName,
+            errorText: errors['name'],
+            onChanged: (_) => _clearError('name'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            key: const Key('lastName'),
+            label: l10n.employees_lastName,
+            controller: _lastNameController,
+            required: true,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            maxLength: TextLimits.lastName,
+          ),
         ),
         const SizedBox(height: AppSpacing.sp16),
         SheetFocusScroll(
@@ -234,6 +226,7 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
             controller: _phoneController,
             optional: true,
             keyboard: TextInputType.phone,
+            inputFormatters: const [PhoneInputFormatter()],
             maxLength: TextLimits.phone,
           ),
         ),

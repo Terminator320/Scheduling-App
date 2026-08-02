@@ -5,6 +5,7 @@ import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/sheet_focus.dart';
+import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/application/client_form_controller.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -217,37 +218,28 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
         const SizedBox(height: AppSpacing.sp16),
         // Owner change 6: always rendered, both optional. The type chips never
         // swap these in or out.
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: SheetFocusScroll(
-                child: LabeledTextField(
-                  label: l10n.clients_firstName,
-                  controller: _firstNameController,
-                  optional: true,
-                  textCapitalization: TextCapitalization.words,
-                  textInputAction: TextInputAction.next,
-                  autofillHints: const [AutofillHints.givenName],
-                  maxLength: TextLimits.firstName,
-                ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sp12),
-            Expanded(
-              child: SheetFocusScroll(
-                child: LabeledTextField(
-                  label: l10n.clients_lastName,
-                  controller: _lastNameController,
-                  optional: true,
-                  textCapitalization: TextCapitalization.words,
-                  textInputAction: TextInputAction.next,
-                  autofillHints: const [AutofillHints.familyName],
-                  maxLength: TextLimits.lastName,
-                ),
-              ),
-            ),
-          ],
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: l10n.clients_firstName,
+            controller: _firstNameController,
+            optional: true,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.givenName],
+            maxLength: TextLimits.firstName,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: l10n.clients_lastName,
+            controller: _lastNameController,
+            optional: true,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.familyName],
+            maxLength: TextLimits.lastName,
+          ),
         ),
         const SizedBox(height: AppSpacing.sp12),
         ClientTypeChips(
@@ -264,6 +256,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
             controller: _phoneController,
             optional: true,
             keyboard: TextInputType.phone,
+            inputFormatters: const [PhoneInputFormatter()],
             textInputAction: TextInputAction.next,
             maxLength: TextLimits.phone,
           ),

@@ -2349,6 +2349,10 @@
   "@employees_emergencyKey": {
     "description": "Info panel key: the employee's emergency contact"
   },
+  "employees_emergencyPhoneKey": "EMERGENCY PHONE",
+  "@employees_emergencyPhoneKey": {
+    "description": "Info panel key: the phone number of the employee's emergency contact"
+  },
   "employees_onCall": "On call",
   "@employees_onCall": {
     "description": "Chip and switch label: this person takes emergency calls"
@@ -2394,6 +2398,10 @@
   "@employees_sectionAvailability": {
     "description": "Edit-person section label: working days, hours, cap, on call"
   },
+  "employees_sectionEmergency": "EMERGENCY",
+  "@employees_sectionEmergency": {
+    "description": "Edit-person section heading above the emergency contact fields"
+  },
   "employees_sectionAccess": "ACCESS",
   "@employees_sectionAccess": {
     "description": "Edit-person section label: the admin-access toggle"
@@ -2433,6 +2441,10 @@
   "employees_emergencyContact": "Emergency contact",
   "@employees_emergencyContact": {
     "description": "Edit-person field label for who to call in an emergency"
+  },
+  "employees_emergencyPhone": "Emergency contact phone",
+  "@employees_emergencyPhone": {
+    "description": "Edit-person field label for the emergency contact's phone number"
   },
   "employees_coloursLeft": "{count, plural, =0{No colours left} =1{1 colour left} other{{count} colours left}}",
   "@employees_coloursLeft": {

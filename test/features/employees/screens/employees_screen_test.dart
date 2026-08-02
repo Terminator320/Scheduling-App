@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
@@ -14,6 +13,7 @@ import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/screens/employees_screen.dart';
 import 'package:scheduling/features/employees/widgets/cards/employee_profile_card.dart';
+import 'package:scheduling/features/employees/widgets/fields/employee_color_grid.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 class _MockEmployeesRepo extends Mock implements EmployeesRepository {}
@@ -216,6 +216,13 @@ void main() {
   testWidgets("a disabled employee's colour is offered as taken", (
     tester,
   ) async {
+    // Tall viewport so the whole invite sheet is built: the colour grid sits
+    // below the fold of its lazy ListView at the default 800x600, and the
+    // sheet's inner list does not scroll under tester.drag.
+    tester.view.physicalSize = const Size(1000, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     // crewPalette[1], not [0]: the add sheet seeds [0] as the selection, and
     // EmployeeColorGrid always keeps the selected swatch visible.
     final takenColor = AppColors.crewPalette[1];
@@ -241,6 +248,12 @@ void main() {
 
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
+
+    // The grid must actually be built for the absence check below to mean
+    // anything — an unbuilt grid would pass it for the wrong reason. It sits
+    // past the fold of the sheet's lazy ListView at the default viewport, so
+    // this asserts it is present before asserting what it contains.
+    expect(find.byType(EmployeeColorGrid), findsOneWidget);
 
     // EmployeeColorGrid HIDES taken colours, so the assertion is an absence.
     expect(find.byKey(ValueKey(takenColor.toARGB32())), findsNothing);

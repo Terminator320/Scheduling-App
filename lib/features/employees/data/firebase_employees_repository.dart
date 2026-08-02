@@ -170,6 +170,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       'maxJobsPerDay': employee.maxJobsPerDay,
       'onCall': employee.onCall,
       'emergencyContact': employee.emergencyContact.trim(),
+      'emergencyPhone': employee.emergencyPhone.trim(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
 

@@ -1,0 +1,62 @@
+import 'package:flutter/services.dart';
+
+final RegExp _nonDigit = RegExp(r'\D');
+
+/// Digits of [value], with every separator dropped.
+String phoneDigits(String value) => value.replaceAll(_nonDigit, '');
+
+/// Renders a North-American number as `(514) 555-1234`, formatting
+/// progressively so a half-typed number reads sensibly (`(514) 55`).
+///
+/// Two deliberate pass-throughs, because this app stores whatever the admin
+/// typed and a formatter that "corrects" a number it doesn't understand loses
+/// data that can no longer be dialled:
+///
+/// * anything containing `+` is returned untouched — an international number
+///   has no fixed 10-digit shape, and bracketing its first three digits as an
+///   area code would be wrong.
+/// * digits past the tenth are appended verbatim (` 5678`), so an extension or
+///   a longer foreign number survives rather than being silently truncated.
+String formatPhoneNumber(String value) {
+  if (value.contains('+')) return value;
+
+  final digits = phoneDigits(value);
+  if (digits.isEmpty) return '';
+
+  final buffer = StringBuffer('(')
+    ..write(digits.substring(0, digits.length.clamp(0, 3)));
+  if (digits.length < 4) return buffer.toString();
+
+  buffer.write(') ');
+  buffer.write(digits.substring(3, digits.length.clamp(0, 6)));
+  if (digits.length < 7) return buffer.toString();
+
+  buffer.write('-');
+  buffer.write(digits.substring(6, digits.length.clamp(0, 10)));
+  if (digits.length > 10) buffer.write(' ${digits.substring(10)}');
+  return buffer.toString();
+}
+
+/// Applies [formatPhoneNumber] as the user types, keeping the caret at the end
+/// of the text they just entered.
+///
+/// The caret is parked at the end whenever the formatting changed the string,
+/// which is the honest behaviour for a mask like this: re-deriving a mid-string
+/// caret offset across inserted `(`, `)`, ` ` and `-` characters is what makes
+/// hand-rolled phone masks jump unpredictably during a mid-number edit.
+class PhoneInputFormatter extends TextInputFormatter {
+  const PhoneInputFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final formatted = formatPhoneNumber(newValue.text);
+    if (formatted == newValue.text) return newValue;
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+}

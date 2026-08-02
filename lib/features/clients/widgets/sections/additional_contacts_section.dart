@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -224,6 +225,7 @@ class _AdditionalContactCard extends StatelessWidget {
               label: context.l10n.clients_phone,
               controller: contact.phoneController,
               keyboard: TextInputType.phone,
+            inputFormatters: const [PhoneInputFormatter()],
               autofillHints: const [AutofillHints.telephoneNumber],
               maxLength: TextLimits.phone,
               errorText: errors['contact_${index}_phone'],

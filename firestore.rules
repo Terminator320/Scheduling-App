@@ -175,6 +175,10 @@ service cloud.firestore {
           && (!('phone' in d.keys()) || isBoundedString(d.phone, 40))
           && (!('emergencyContact' in d.keys())
               || isBoundedString(d.emergencyContact, 200))
+          // 40, matching the `phone` cap above, not TextLimits.phone's 32 —
+          // caps mirror the widest value a write path can produce.
+          && (!('emergencyPhone' in d.keys())
+              || isBoundedString(d.emergencyPhone, 40))
           && (!('jobTitle' in d.keys()) || isValidJobTitle(d.jobTitle))
           && (!('workingDays' in d.keys()) || isValidWorkingDays(d.workingDays))
           && (!('workStartMinutes' in d.keys())
@@ -198,7 +202,8 @@ service cloud.firestore {
       function isAvailabilityOnlyChange() {
         return request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['workingDays', 'workStartMinutes', 'workEndMinutes',
-                    'onCall', 'emergencyContact', 'phone', 'updatedAt']);
+                    'onCall', 'emergencyContact', 'emergencyPhone', 'phone',
+                    'updatedAt']);
       }
 
       // Only an admin can update. Invite activation happens server-side via

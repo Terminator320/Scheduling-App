@@ -20,6 +20,7 @@ class LabeledTextField extends StatelessWidget {
     this.autofillHints,
     this.maxLines = 1,
     this.maxLength,
+    this.inputFormatters,
     this.showCounter = false,
     this.readOnly = false,
     this.onTap,
@@ -43,6 +44,10 @@ class LabeledTextField extends StatelessWidget {
   final int maxLines;
 
   final int? maxLength;
+
+  /// Extra formatters (e.g. a phone mask), applied before the length cap so
+  /// the cap measures the formatted text the field will actually hold.
+  final List<TextInputFormatter>? inputFormatters;
   final bool showCounter;
   final bool readOnly;
   final VoidCallback? onTap;
@@ -75,9 +80,14 @@ class LabeledTextField extends StatelessWidget {
             // renders the live "x/y" counter. Otherwise it just enforces the
             // cap silently.
             maxLength: showCounter ? maxLength : null,
-            inputFormatters: maxLength == null || showCounter
-                ? null
-                : [LengthLimitingTextInputFormatter(maxLength)],
+            inputFormatters: [
+              ...?inputFormatters,
+              // showCounter routes the cap through TextField.maxLength, which
+              // installs its own limiter — adding a second one here would
+              // enforce it twice.
+              if (maxLength != null && !showCounter)
+                LengthLimitingTextInputFormatter(maxLength),
+            ],
             readOnly: readOnly,
             onTap: onTap,
             onChanged: onChanged,
