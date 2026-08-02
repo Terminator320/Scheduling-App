@@ -140,9 +140,41 @@ contradicts them.
 | 3 | **A signed-in user tapping an invite link gets an info notice only** — never an auto-sign-out. | Task 7's dispatcher, on the `invite` host with a live session, calls `noticeServiceProvider.info(...)` and returns. One new EN/FR ARB pair. No confirm dialog, no session teardown reachable from an inbound URL. |
 | 4 | **The invited roster row expands in place; a revoked invite simply vanishes.** | Task 8 replaces the invited row's `showEmployeeDetails` tap with `PendingInviteTile`'s in-place expansion. No tombstone state, no new stored entity — revoke deletes the doc and the live stream drops the row. |
 
-### Visual design — pending
+### Visual design — CHOSEN 2026-08-02: **Option A on all five surfaces**
 
-_(Chosen option per surface and the owner-changes table land here at Task 0 Step 3.)_
+**Mockup:** https://claude.ai/code/artifact/f3f4343c-8c1c-4d1d-b25f-6743b86004ea
+
+No grafts. Option A everywhere, which is the handoff-faithful direction. What that pins,
+surface by surface — **this section overrides any task step below that contradicts it**:
+
+| Surface | Option A means | Effect on the tasks |
+| --- | --- | --- |
+| 1 · Sign in | Hero-gradient block, card lifted **over** it (negative top margin), bordered labelled fields, Show/Hide as a **mono uppercase text link** inside the field, error = red border + red-dot row beneath. The invite route is the **plain text prompt** "Invited by your employer? / **Accept your invite**" under the card — not B's tappable panel. | Task 3. No `invite-panel` widget; the prompt is a `Wrap` of text + link, same shape as today's `_CreateAccountPrompt`, which it replaces. |
+| 2 · Reset password | Thin hero on the idle state; the sent state is a **flat bordered card with no hero**, a success badge, facts as a **divided `fact-list`**, and the resend row inside a bordered **`SENT` panel** that relabels and greys once used. | Task 4. The two states keep today's `AuthFormSwitcher`. The `SENT` panel is new; the fact list replaces the single green note. |
+| 3 · Code entry | **Bordered** boxes on a flat card (not B's filled boxes, not B's hero). The expiry explanation is a **red-dot error row centred under the box row**, not an amber note. No-code help is a **bordered panel** with a mono `DON'T HAVE A CODE?` label. | Task 6. `CodeEntryBoxes` renders bordered boxes with an `active` ring on the focused index. |
+| 4 · Acceptance details | Tinted invite banner (role + locked email + amber expiry pill), first/last **stacked**, phone, **locked** email panel with the "From invite" chip, password + 4-segment meter, **and the existing `PasswordRequirementsChecklist` beneath the meter**, then the consent checkbox on its own tinted surface. No hero, no mono section labels. | Task 5. **`PasswordRequirementsChecklist` SURVIVES** — this settles the open question in the File-structure note. The meter is additive, not a replacement. No `MonoSectionLabel` on this screen. |
+| 5 · Pending-invite row | Card rows. Expanding the invited row reveals the `INVITE CODE` block directly — there is **no separate "Show code" button**; the expansion *is* the reveal. Code block on the sheet tone, Copy pill relabelling "Copied", amber caption, then **Resend and Revoke as two equal-width bordered actions** (Revoke in the danger colour). | Task 8. See the constraint immediately below — it is not optional. |
+
+#### Surface 5 carries one mandatory constraint, because A reveals on expand
+
+Expanding the row calls `createEmployeeInvite`, which **re-issues** — the previous code stops
+working the moment the row opens. Option B gated that behind a labelled button; A does not, so
+the honesty has to move into the copy and the caching instead:
+
+1. **The caption under the code must state the code is new**, unconditionally, in both
+   languages — "New code · expires in 14 days", never "Invited 2 days ago". An admin who
+   expands a row to peek has already invalidated the code they shared yesterday, and the screen
+   is the only place that can tell them.
+2. **The fetched code is cached in the tile's state, keyed by the invite doc id, for the
+   lifetime of the roster list** — collapse and re-expand must NOT re-mint. Without this, idly
+   opening and closing a row burns the admin's 20/hour budget and silently rotates the code
+   every time. Pin it with a tile test asserting exactly one repository call across an
+   expand → collapse → expand cycle (owner decision 2 already requires this test; A makes it
+   load-bearing rather than merely tidy).
+3. **Revoke keeps a `showConfirmDialog`** (`destructive: true`). A is the densest layout of the
+   three and puts Revoke one tap from a row the admin opened only to read.
+
+_Recorded 2026-08-02. Tasks 3–8 are unblocked._
 
 ---
 
