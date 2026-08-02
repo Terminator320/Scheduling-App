@@ -91,6 +91,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       switch (destination) {
         case SplashGoToLogin():
           nav.pushReplacementNamed(AppRoutes.login);
+        case SplashGoToAccountSetup(:final firstName, :final lastName):
+          nav.pushReplacementNamed(
+            AppRoutes.accountSetup,
+            arguments: AccountSetupArgs(
+              firstName: firstName,
+              lastName: lastName,
+            ),
+          );
         case SplashGoToCalendar(:final isAdmin, :final employeeId):
           nav.pushReplacementNamed(
             AppRoutes.mainCalendar,

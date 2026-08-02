@@ -10,7 +10,6 @@ import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
-import 'package:scheduling/features/employees/domain/models/invite_preview.dart';
 
 /// App-wide [AuthService], wired through providers for testability.
 final authServiceProvider = Provider<AuthService>(
@@ -66,37 +65,43 @@ class AuthService {
     return _auth.sendPasswordResetEmail(email: email.trim().toLowerCase());
   }
 
-  /// Handles invited-employee signup — registers or adopts the account,
-  /// redeems the signup code, and rolls back the Auth user if redemption fails.
+  /// Completes the signed-in employee's own account setup.
   ///
-  /// The acceptance profile and the two consent flags ride through to
-  /// `redeemSignupCode`, which stamps them onto the invited users doc inside
-  /// the activation transaction. They default to empty/false so the pre-P4b
-  /// call shape still compiles and still activates.
-  Future<void> signUpWithCode({
-    required String email,
-    required String password,
-    required String code,
+  /// ORDER IS THE GUARANTEE. The password is replaced FIRST, then the account
+  /// is activated. The server cannot see a password, so "you must replace the
+  /// shared default" is true only because activation is refused until this
+  /// method gets past [User.updatePassword]. Swap the two and an interrupted
+  /// setup leaves an active account still on the default password.
+  ///
+  /// A failure after the password change is safe: the account stays `invited`,
+  /// so the next sign-in routes back here and simply asks again — the screen
+  /// never assumes the current password is still the default.
+  Future<void> completeAccountSetup({
+    required String newPassword,
     String firstName = '',
     String lastName = '',
     String phone = '',
     bool termsAccepted = false,
     bool locationConsent = false,
   }) async {
-    final normalizedEmail = email.trim().toLowerCase();
-    UserCredential credential;
-    var freshlyCreated = true;
+    final user = _auth.currentUser;
+    if (user == null) throw const AuthFailureSessionExpired();
+
     try {
-      credential = await register(email: normalizedEmail, password: password);
-    } on FirebaseAuthException catch (e) {
-      if (e.code != 'email-already-in-use') rethrow;
-      credential = await signIn(email: normalizedEmail, password: password);
-      freshlyCreated = false;
+      await user.updatePassword(newPassword.trim());
+    } catch (e, st) {
+      final failure = _mapSetupError(e);
+      _logger.authFailure(
+        'completeAccountSetup: updatePassword failed',
+        failure,
+        e,
+        st,
+      );
+      throw failure;
     }
 
     try {
-      await _employees.redeemSignupCode(
-        code.trim(),
+      await _employees.completeEmployeeSetup(
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         phone: phone.trim(),
@@ -104,52 +109,43 @@ class AuthService {
         locationConsent: locationConsent,
       );
     } catch (e, st) {
-      final failure = _mapRedemptionError(e);
-      // A wrong or expired code is the user mistyping, not a defect — keep the
-      // trail, skip the non-fatal.
+      final failure = _mapSetupError(e);
+      // No rollback of the password change: the new password is the one the
+      // person just chose and typed twice. Reverting it to the shared default
+      // would be strictly worse than leaving them `invited` with a password
+      // that works.
       _logger.authFailure(
-        'signUpWithCode: redeemSignupCode failed',
+        'completeAccountSetup: completeEmployeeSetup failed',
         failure,
         e,
         st,
       );
-      if (freshlyCreated) {
-        await _rollbackOrFailLoud(
-          credential,
-          email: normalizedEmail,
-          password: password,
-          reason: 'code-redemption-failed',
-        );
-      } else {
-        await _signOutQuietly();
-      }
       throw failure;
     }
   }
 
-  /// Resolves what an unredeemed signup [code] was issued for, before the
-  /// holder has an account — mirrors [signUpWithCode]'s error mapping via
-  /// [_mapRedemptionError]. The tables match: every case that mapper handles
-  /// can come back from `previewInvite` too, except `code-email-mismatch`,
-  /// which never will — that callable is unauthenticated, so there's no
-  /// caller email yet for the server to compare it against.
-  Future<InvitePreview> previewInvite(String code) async {
-    try {
-      return await _employees.previewInvite(code.trim());
-    } catch (e) {
-      throw _mapRedemptionError(e);
+  AuthFailure _mapSetupError(Object e) {
+    if (e is FirebaseAuthException) {
+      switch (e.code) {
+        case 'weak-password':
+          return const AuthFailureWeakPassword();
+        case 'requires-recent-login':
+        case 'user-token-expired':
+        case 'user-not-found':
+          return const AuthFailureSessionExpired();
+        case 'network-request-failed':
+          return const AuthFailureNetwork();
+      }
     }
-  }
-
-  AuthFailure _mapRedemptionError(Object e) {
     if (e is FirebaseFunctionsException) {
-      switch (e.message) {
-        case 'code-expired':
-          return const AuthFailureSignupCodeExpired();
-        case 'code-email-mismatch':
-          return const AuthFailureSignupEmailMismatch();
-        case 'invalid-code':
-          return const AuthFailureInvalidSignupCode();
+      // The account was already activated — a replayed call, or two devices
+      // finishing setup at once. The password change above still landed, so
+      // this is not something to make the person fix.
+      if (e.message == 'setup-not-pending') {
+        return const AuthFailureSetupAlreadyComplete();
+      }
+      if (e.message == 'account-not-found') {
+        return const AuthFailureNoAccountRecord();
       }
       if (e.code == 'resource-exhausted') {
         return const AuthFailureTooManyRequests();
@@ -159,49 +155,6 @@ class AuthService {
       }
     }
     return const AuthFailureUnknown();
-  }
-
-  // Deletes the freshly-created Auth user. The global account guard may have
-  // already signed it out since there's no doc yet, so we reauth before
-  // deleting to avoid leaving an orphan.
-  Future<void> _rollbackOrFailLoud(
-    UserCredential credential, {
-    required String email,
-    required String password,
-    required String reason,
-  }) async {
-    try {
-      await _deleteFreshlyCreatedUser(email: email, password: password);
-    } catch (e, st) {
-      final uid = _auth.currentUser?.uid ?? credential.user?.uid;
-      _logger.warn(
-        'signUpWithCode: rollback delete failed ($reason); '
-        'orphan Auth user left for uid=$uid',
-        e,
-        st,
-      );
-      await _signOutQuietly();
-      throw const AuthFailureAccountCreationIncomplete();
-    }
-  }
-
-  // Delete user, re-authenticating if the session was torn down or recent login is needed.
-  Future<void> _deleteFreshlyCreatedUser({
-    required String email,
-    required String password,
-  }) async {
-    var user = _auth.currentUser;
-    user ??= (await signIn(email: email, password: password)).user;
-    if (user == null) return;
-    try {
-      await user.delete();
-    } on FirebaseAuthException catch (e) {
-      if (e.code != 'requires-recent-login' && e.code != 'no-current-user') {
-        rethrow;
-      }
-      final reauthed = (await signIn(email: email, password: password)).user;
-      await reauthed?.delete();
-    }
   }
 
   Future<void> _signOutQuietly() async {

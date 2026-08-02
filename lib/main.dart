@@ -180,44 +180,14 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _setupDeepLinkHandling();
   }
 
-  /// Inbound `esproschedule://` URLs — appointment links and invite links.
-  /// Widget/Live-Activity/Siri taps carry `homeWidget` and are skipped here;
-  /// the `home_widget` channel above still owns them.
+  /// Inbound `esproschedule://` URLs — appointment links only since the invite
+  /// code flow was retired. Widget/Live-Activity/Siri taps carry `homeWidget`
+  /// and are skipped here; the `home_widget` channel above still owns them.
   void _setupDeepLinkHandling() {
     _deepLinkDispatcher = DeepLinkDispatcher(
       logger: ref.read(loggerProvider),
-      isSignedIn: () => FirebaseAuth.instance.currentUser != null,
       openAppointment: _openAppointmentDeepLink,
-      noticeSignOutToAcceptInvite: _noticeSignOutToAcceptInvite,
-      awaitLoginRoute: _awaitLoginRoute,
-      pushInviteCode: (code) => _navigatorKey.currentState?.pushNamed(
-        AppRoutes.acceptInviteCode,
-        arguments: AcceptInviteCodeArgs(initialCode: code),
-      ),
     )..start();
-  }
-
-  /// An invite link on a live session surfaces a notice and nothing else —
-  /// never an auto-sign-out (owner decision 3).
-  Future<void> _noticeSignOutToAcceptInvite() async {
-    final shell = await _awaitLiveHub();
-    if (shell == null || !mounted) return;
-    final navContext = _navigatorKey.currentContext;
-    if (navContext == null || !navContext.mounted) return;
-    ref
-        .read(noticeServiceProvider)
-        .info(AppLocalizations.of(navContext).auth_signOutToAcceptInvite);
-  }
-
-  /// Polls for up to ~10s waiting for `/login` to become the top route.
-  /// Returns false if it never does — see the dispatcher's give-up branch.
-  Future<bool> _awaitLoginRoute() async {
-    for (var i = 0; i < 50; i++) {
-      if (_topRouteObserver.currentRouteName == AppRoutes.login) return true;
-      if (!mounted) return false;
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    }
-    return false;
   }
 
   /// iOS home-widget taps deep-link to appointment detail via URI scheme.

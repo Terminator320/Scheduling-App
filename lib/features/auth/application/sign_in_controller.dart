@@ -48,10 +48,23 @@ class SignInNoSession extends SignInOutcome {
   const SignInNoSession();
 }
 
-/// Post-signup resume only: signed in but the freshly activated `users` doc
+/// Post-setup resume only: signed in but the freshly activated `users` doc
 /// isn't readable yet — ask the user to sign in normally.
 class SignInProfilePending extends SignInOutcome {
   const SignInProfilePending();
+}
+
+/// Signed in against an account whose setup has never been completed.
+///
+/// The session is deliberately KEPT — it is the credential the setup screen
+/// needs. This is the only non-active status that isn't signed out.
+class SignInNeedsAccountSetup extends SignInOutcome {
+  const SignInNeedsAccountSetup({
+    required this.firstName,
+    required this.lastName,
+  });
+  final String firstName;
+  final String lastName;
 }
 
 /// The attempt failed; [failure] is already mapped for localized display.
@@ -106,8 +119,8 @@ class SignInController extends Notifier<SignInState> {
         return const SignInInvalidCredentials();
       }
 
-      // Provisioned users have a doc keyed by uid. Invited employees get
-      // activated server-side, so there's no client-side fallback here.
+      // Every account has a doc keyed by uid from the moment the admin
+      // creates it — including one that has never been set up.
       final userDoc = await _retryOnAuthPropagation(
         () => employees.findUserByUid(user.uid),
       );
@@ -120,6 +133,19 @@ class SignInController extends Notifier<SignInState> {
       }
 
       final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
+
+      // First sign-in on an admin-created account: route to setup and KEEP the
+      // session. Signing out here would make setup unreachable, since the
+      // credential they just used is the one it needs. Checked before the
+      // active gate, and an exact `invited` match — an empty or unknown status
+      // still falls through to the sign-out below.
+      if (employee.isInvited) {
+        _settle();
+        return SignInNeedsAccountSetup(
+          firstName: employee.firstName,
+          lastName: employee.lastName,
+        );
+      }
 
       if (!employee.isActive) {
         await auth.signOut();
@@ -155,9 +181,9 @@ class SignInController extends Notifier<SignInState> {
     }
   }
 
-  /// The create-account flow signs the user in and activates their account via
-  /// the signup code, so resolve their profile and let the screen route
-  /// straight into the app instead of asking them to sign in again.
+  /// Account setup activates the account while the person is already signed
+  /// in, so resolve their profile and let the screen route straight into the
+  /// app instead of asking them to sign in again.
   Future<SignInOutcome> resumeAfterSignUp() async {
     final auth = ref.read(authServiceProvider);
     final employees = ref.read(employeesRepositoryProvider);

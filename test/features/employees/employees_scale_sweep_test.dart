@@ -10,6 +10,7 @@ import 'package:scheduling/features/employees/application/employee_schedule_prov
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
 import 'package:scheduling/features/employees/widgets/cards/employee_card.dart';
 import 'package:scheduling/features/employees/widgets/cards/pending_invite_tile.dart';
@@ -43,7 +44,6 @@ final _invited = EmployeeRecord(
   phone: '(514) 555-1234',
   status: 'invited',
   jobTitle: JobTitle.technician,
-  codeExpiresAt: DateTime(2026, 8, 16),
 );
 
 /// 375x667 is the reference phone; the sweep runs the redesigned Team surfaces
@@ -149,12 +149,12 @@ void main() {
   // Copy pill on one line, then two equal-width bordered actions. The roster
   // hosts the tile inside a scrollable, so this sweep does too — vertical
   // extent is the list's problem, horizontal overflow is the tile's.
-  testWidgets('the expanded pending-invite row survives every text scale', (
+  testWidgets('the expanded pending-account row survives every text scale', (
     tester,
   ) async {
     final repo = _MockRepo();
     when(
-      () => repo.createEmployeeInvite(
+      () => repo.createEmployeeAccount(
         name: any(named: 'name'),
         firstName: any(named: 'firstName'),
         lastName: any(named: 'lastName'),
@@ -164,7 +164,13 @@ void main() {
         jobTitle: any(named: 'jobTitle'),
         isAdmin: any(named: 'isAdmin'),
       ),
-    ).thenAnswer((_) async => 'K7Q2-9MZ4-XR8T');
+    ).thenAnswer(
+      (_) async => const NewAccountCredentials(
+        email: 'zoe@example.com',
+        password: 'Welcome123!',
+        docId: 'inv1',
+      ),
+    );
 
     await sweep(
       tester,
@@ -177,11 +183,11 @@ void main() {
       repo: repo,
       after: (tester) async {
         await tester.tap(find.text('Zoé Roy'));
-        // The revealed code sits in a SelectableText whose cursor never
-        // settles, so pump a fixed span rather than settling.
+        // The credentials sit in SelectableTexts whose cursors never settle,
+        // so pump a fixed span rather than settling.
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 400));
-        expect(find.text('K7Q2-9MZ4-XR8T'), findsOneWidget);
+        expect(find.text('Welcome123!'), findsOneWidget);
       },
     );
   });

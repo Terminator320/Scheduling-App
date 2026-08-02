@@ -25,7 +25,7 @@ sealed class AuthFailure extends Failure {
   );
 
   /// True when this is a routine, user-correctable outcome (mistyped password,
-  /// wrong signup code, offline) rather than a defect. Catch sites log these as
+  /// a stale session, offline) rather than a defect. Catch sites log these as
   /// a breadcrumb instead of a Crashlytics error record — otherwise every user
   /// who fat-fingers a field files a non-fatal issue. The `false` cases are
   /// genuine misconfiguration or bugs and must keep surfacing.
@@ -40,15 +40,16 @@ sealed class AuthFailure extends Failure {
     AuthFailureWeakPassword() ||
     AuthFailureRequiresRecentLogin() ||
     AuthFailureNotAuthorized() ||
-    AuthFailureInvalidSignupCode() ||
-    AuthFailureSignupCodeExpired() ||
-    AuthFailureSignupEmailMismatch() => true,
-    // Console misconfiguration, a rules rejection, an unmapped error, or an
-    // orphaned Auth user — all real defects worth a non-fatal.
+    // Both are races rather than defects: a replayed setup call, and a
+    // credential that went stale mid-setup. Signing in again fixes either.
+    AuthFailureSetupAlreadyComplete() ||
+    AuthFailureSessionExpired() => true,
+    // Console misconfiguration, a rules rejection, an unmapped error, or a
+    // signed-in uid with no users doc — all real defects worth a non-fatal.
     AuthFailureOperationNotAllowed() ||
     AuthFailurePermissionDenied() ||
-    AuthFailureUnknown() ||
-    AuthFailureAccountCreationIncomplete() => false,
+    AuthFailureNoAccountRecord() ||
+    AuthFailureUnknown() => false,
   };
 }
 
@@ -158,28 +159,33 @@ class AuthFailureNotAuthorized extends AuthFailure {
       c.l10n.error_thisEmailIsNotAuthorizedToSignUp;
 }
 
-class AuthFailureInvalidSignupCode extends AuthFailure {
-  const AuthFailureInvalidSignupCode();
+// The account is already `active` — a replayed setup call, or two devices
+// finishing at once. Distinct from a real error because the password change
+// that precedes it DID land, so the person is not stuck.
+class AuthFailureSetupAlreadyComplete extends AuthFailure {
+  const AuthFailureSetupAlreadyComplete();
   @override
   String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
-      c.l10n.error_thatCodeIsntValidAskYourAdmin;
+      c.l10n.error_yourAccountIsAlreadySetUp;
 }
 
-class AuthFailureSignupCodeExpired extends AuthFailure {
-  const AuthFailureSignupCodeExpired();
+// Signed in, but no users doc resolves to this uid. An admin deleted the
+// account mid-setup, or provisioning half-failed — either way the person can
+// only be helped by their admin.
+class AuthFailureNoAccountRecord extends AuthFailure {
+  const AuthFailureNoAccountRecord();
   @override
   String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
-      c.l10n.error_thatCodeHasExpiredAskYourAdmin;
+      c.l10n.error_noAccountRecordContactAdmin;
 }
 
-// The code itself is valid, but it was issued for a different email. We keep
-// this distinct from "invalid code" so the message can point the user at the
-// email mismatch.
-class AuthFailureSignupEmailMismatch extends AuthFailure {
-  const AuthFailureSignupEmailMismatch();
+// The credential went stale mid-setup (token expired, or the write needed a
+// recent login). Signing in again is the whole fix.
+class AuthFailureSessionExpired extends AuthFailure {
+  const AuthFailureSessionExpired();
   @override
   String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
-      c.l10n.error_thatCodeWasIssuedForADifferentEmail;
+      c.l10n.error_sessionExpiredSignInAgain;
 }
 
 class AuthFailurePermissionDenied extends AuthFailure {
@@ -194,14 +200,6 @@ class AuthFailureUnknown extends AuthFailure {
   @override
   String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
       c.l10n.error_somethingWentWrongPleaseTryAgain;
-}
-
-// Thrown when the rollback delete failed after code redemption errored, leaving an orphaned Auth user that blocks re-registration.
-class AuthFailureAccountCreationIncomplete extends AuthFailure {
-  const AuthFailureAccountCreationIncomplete();
-  @override
-  String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
-      c.l10n.error_accountCreationIncompleteContactAdmin;
 }
 
 extension AuthFailureForgotPassword on AuthFailure {

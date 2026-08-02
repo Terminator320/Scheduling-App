@@ -12,7 +12,7 @@ import 'package:scheduling/features/employees/domain/models/job_title.dart';
 import 'package:scheduling/features/employees/domain/policies/crew_color_policy.dart';
 import 'package:scheduling/features/employees/domain/policies/employee_form_validator.dart';
 import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
-import 'package:scheduling/features/employees/widgets/dialogs/signup_code_dialog.dart';
+import 'package:scheduling/features/employees/widgets/dialogs/new_account_dialog.dart';
 import 'package:scheduling/features/employees/widgets/fields/employee_color_grid.dart';
 import 'package:scheduling/features/employees/widgets/fields/job_title_chips.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -121,7 +121,7 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
 
     final outcome = await ref
         .read(employeeFormControllerProvider.notifier)
-        .inviteEmployee(
+        .createAccount(
           EmployeeRecord(
             id: '',
             name: composedName,
@@ -137,11 +137,11 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
     if (!mounted) return;
 
     switch (outcome) {
-      case EmployeeInvited(:final code):
-        await showSignupCodeDialog(
+      case EmployeeAccountCreated(:final credentials):
+        await showNewAccountDialog(
           context,
           name: _firstNameController.text.trim(),
-          code: code,
+          credentials: credentials,
         );
         if (!mounted) return;
         Navigator.pop(context, true);

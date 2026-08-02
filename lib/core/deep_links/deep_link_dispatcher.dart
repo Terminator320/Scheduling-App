@@ -12,30 +12,13 @@ import 'package:scheduling/core/logging/app_logger.dart';
 class DeepLinkDispatcher {
   DeepLinkDispatcher({
     required this.logger,
-    required this.isSignedIn,
     required this.openAppointment,
-    required this.noticeSignOutToAcceptInvite,
-    required this.awaitLoginRoute,
-    required this.pushInviteCode,
   });
 
   final AppLogger logger;
 
-  /// A live session sends the invite branch down the notice path — accepting
-  /// an invite needs the NEW account's session.
-  final bool Function() isSignedIn;
-
   /// The existing signed-in-only appointment opener, guards unchanged.
   final Future<void> Function(String appointmentId) openAppointment;
-
-  /// Surfaces the "sign out first" info notice. Never signs anyone out — a URL
-  /// any web page can launch must not be able to tear down a session.
-  final Future<void> Function() noticeSignOutToAcceptInvite;
-
-  /// Resolves true once `/login` is the navigator's top route.
-  final Future<bool> Function() awaitLoginRoute;
-
-  final void Function(String code) pushInviteCode;
 
   StreamSubscription<Uri>? _subscription;
 
@@ -70,28 +53,11 @@ class DeepLinkDispatcher {
       switch (classifyDeepLink(uri)) {
         case AppointmentLink(:final id):
           await openAppointment(id);
-        case InviteLink(:final code):
-          await _openInvite(code);
         case IgnoredLink():
           return;
       }
     } catch (e, st) {
       logger.warn('DEEP-LINK open failed', e, st);
     }
-  }
-
-  Future<void> _openInvite(String code) async {
-    if (isSignedIn()) {
-      await noticeSignOutToAcceptInvite();
-      return;
-    }
-    // First-launch onboarding never reaches /login until the user finishes it,
-    // so a timeout is expected rather than a defect: give up quietly — the
-    // code still works via "Accept your invite" on the sign-in screen.
-    if (!await awaitLoginRoute()) {
-      logger.breadcrumb('DEEP-LINK invite gave up waiting for the login route');
-      return;
-    }
-    pushInviteCode(code);
   }
 }

@@ -27,26 +27,19 @@ void main() {
       expect((target as AppointmentLink).id, '');
     });
 
-    test('reads the code off an invite link', () {
-      final target = classifyDeepLink(
-        Uri.parse('esproschedule://invite?code=ABCD-EFGH-JKMN'),
+    test('ignores an invite link — the code flow is retired', () {
+      // Employees now sign in with credentials their admin gives them, so an
+      // old invite URL must fall through rather than open a dead screen.
+      expect(
+        classifyDeepLink(
+          Uri.parse('esproschedule://invite?code=ABCD-EFGH-JKMN'),
+        ),
+        isA<IgnoredLink>(),
       );
-
-      expect((target as InviteLink).code, 'ABCD-EFGH-JKMN');
-    });
-
-    test('yields an empty code when the invite param is missing', () {
-      final target = classifyDeepLink(Uri.parse('esproschedule://invite'));
-
-      expect((target as InviteLink).code, '');
-    });
-
-    test('yields an empty code when the invite param is blank', () {
-      final target = classifyDeepLink(
-        Uri.parse('esproschedule://invite?code='),
+      expect(
+        classifyDeepLink(Uri.parse('esproschedule://invite')),
+        isA<IgnoredLink>(),
       );
-
-      expect((target as InviteLink).code, '');
     });
 
     test('ignores a valueless homeWidget param on an appointment link', () {
@@ -68,14 +61,6 @@ void main() {
     test('ignores a homeWidget param that leads the query string', () {
       final target = classifyDeepLink(
         Uri.parse('esproschedule://appointment?homeWidget&id=abc123'),
-      );
-
-      expect(target, isA<IgnoredLink>());
-    });
-
-    test('ignores a homeWidget param on an invite link', () {
-      final target = classifyDeepLink(
-        Uri.parse('esproschedule://invite?code=ABC&homeWidget=1'),
       );
 
       expect(target, isA<IgnoredLink>());

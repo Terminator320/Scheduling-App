@@ -8,6 +8,7 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
 
 class _MockEmployeesRepo extends Mock implements EmployeesRepository {}
@@ -34,7 +35,7 @@ void main() {
   EmployeeFormActivity activity() =>
       container.read(employeeFormControllerProvider);
 
-  Future<EmployeeSaveOutcome> invite() => notifier().inviteEmployee(
+  Future<EmployeeSaveOutcome> create() => notifier().createAccount(
     const EmployeeRecord(
       id: '',
       name: 'Alex',
@@ -57,10 +58,10 @@ void main() {
 
   Future<EmployeeSaveOutcome> update() => notifier().updateEmployee(edited);
 
-  group('inviteEmployee', () {
-    test('returns the one-time signup code on success', () async {
+  group('createAccount', () {
+    test('returns the sign-in credentials on success', () async {
       when(
-        () => repo.createEmployeeInvite(
+        () => repo.createEmployeeAccount(
           name: any(named: 'name'),
           firstName: any(named: 'firstName'),
           lastName: any(named: 'lastName'),
@@ -70,18 +71,27 @@ void main() {
           jobTitle: any(named: 'jobTitle'),
           isAdmin: any(named: 'isAdmin'),
         ),
-      ).thenAnswer((_) async => 'CODE-42');
+      ).thenAnswer(
+        (_) async => const NewAccountCredentials(
+          email: 'alex@test.com',
+          password: 'Welcome123!',
+          docId: 'doc-1',
+        ),
+      );
 
-      final outcome = await invite();
+      final outcome = await create();
 
-      expect(outcome, isA<EmployeeInvited>());
-      expect((outcome as EmployeeInvited).code, 'CODE-42');
+      expect(outcome, isA<EmployeeAccountCreated>());
+      expect(
+        (outcome as EmployeeAccountCreated).credentials.password,
+        'Welcome123!',
+      );
       expect(activity().isSaving, isFalse);
     });
 
     test('surfaces a taken email as a field-level outcome', () async {
       when(
-        () => repo.createEmployeeInvite(
+        () => repo.createEmployeeAccount(
           name: any(named: 'name'),
           firstName: any(named: 'firstName'),
           lastName: any(named: 'lastName'),
@@ -93,14 +103,14 @@ void main() {
         ),
       ).thenThrow(const EmployeesFailureEmailAlreadyExists());
 
-      expect(await invite(), isA<EmployeeEmailInUse>());
+      expect(await create(), isA<EmployeeEmailInUse>());
       expect(activity().isSaving, isFalse);
     });
 
     test('reports other failures with the original error', () async {
       final boom = Exception('offline');
       when(
-        () => repo.createEmployeeInvite(
+        () => repo.createEmployeeAccount(
           name: any(named: 'name'),
           firstName: any(named: 'firstName'),
           lastName: any(named: 'lastName'),
@@ -112,7 +122,7 @@ void main() {
         ),
       ).thenThrow(boom);
 
-      final outcome = await invite();
+      final outcome = await create();
 
       expect(outcome, isA<EmployeeSaveFailed>());
       expect((outcome as EmployeeSaveFailed).error, boom);
@@ -189,35 +199,36 @@ void main() {
     });
   });
 
-  group('revokeInvite', () {
-    test('reports revoked and clears the busy flag', () async {
-      when(() => repo.revokeInvite(any())).thenAnswer((_) async {});
+  group('deleteAccount', () {
+    test('reports deleted and clears the busy flag', () async {
+      when(() => repo.deleteEmployeeAccount(any())).thenAnswer((_) async {});
 
-      final outcome = await notifier().revokeInvite('invite-1');
+      final outcome = await notifier().deleteAccount('doc-1');
 
-      expect(outcome, isA<InviteRevoked>());
-      verify(() => repo.revokeInvite('invite-1')).called(1);
+      expect(outcome, isA<AccountDeleted>());
+      verify(() => repo.deleteEmployeeAccount('doc-1')).called(1);
       expect(activity().isRevoking, isFalse);
     });
 
     test('a server refusal is a failed outcome carrying the error', () async {
-      const refusal = EmployeesFailureInviteNoLongerPending();
-      when(() => repo.revokeInvite(any())).thenThrow(refusal);
+      // Someone finished setup while the admin was looking at the row.
+      const refusal = EmployeesFailureAccountNoLongerPending();
+      when(() => repo.deleteEmployeeAccount(any())).thenThrow(refusal);
 
-      final outcome = await notifier().revokeInvite('invite-1');
+      final outcome = await notifier().deleteAccount('doc-1');
 
-      expect(outcome, isA<InviteRevokeFailed>());
-      expect((outcome as InviteRevokeFailed).error, refusal);
+      expect(outcome, isA<AccountDeleteFailed>());
+      expect((outcome as AccountDeleteFailed).error, refusal);
       expect(activity().isRevoking, isFalse);
     });
 
     test('reports other failures with the original error', () async {
       final boom = Exception('offline');
-      when(() => repo.revokeInvite(any())).thenThrow(boom);
+      when(() => repo.deleteEmployeeAccount(any())).thenThrow(boom);
 
-      final outcome = await notifier().revokeInvite('invite-1');
+      final outcome = await notifier().deleteAccount('doc-1');
 
-      expect((outcome as InviteRevokeFailed).error, boom);
+      expect((outcome as AccountDeleteFailed).error, boom);
       expect(activity().isRevoking, isFalse);
     });
   });

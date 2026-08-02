@@ -6,11 +6,8 @@ import 'package:mocktail/mocktail.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
-import 'package:scheduling/features/employees/domain/models/invite_preview.dart';
 
 class _MockFirebaseAuth extends Mock implements FirebaseAuth {}
-
-class _MockUserCredential extends Mock implements UserCredential {}
 
 class _MockUser extends Mock implements User {}
 
@@ -19,29 +16,24 @@ class _MockEmployeesRepository extends Mock implements EmployeesRepository {}
 void main() {
   late _MockFirebaseAuth auth;
   late _MockEmployeesRepository employees;
-  late _MockUserCredential credential;
   late _MockUser user;
   late AuthService service;
 
   setUp(() {
     auth = _MockFirebaseAuth();
     employees = _MockEmployeesRepository();
-    credential = _MockUserCredential();
     user = _MockUser();
     service = AuthService(firebaseAuth: auth, employeesRepository: employees);
-    when(() => credential.user).thenReturn(user);
     when(() => user.uid).thenReturn('uid-001');
-    when(() => user.delete()).thenAnswer((_) async {});
     when(() => auth.currentUser).thenReturn(user);
     when(() => auth.signOut()).thenAnswer((_) async {});
+    when(() => user.updatePassword(any())).thenAnswer((_) async {});
   });
 
-  /// The redeem stub has to match on every named argument too — mocktail
-  /// compares the whole invocation, so a positional-only stub misses the
-  /// widened call.
-  When<Future<void>> stubRedeem() => when(
-    () => employees.redeemSignupCode(
-      any(),
+  /// Mocktail compares the whole invocation, so the stub has to name every
+  /// argument the call site passes.
+  When<Future<void>> stubSetup() => when(
+    () => employees.completeEmployeeSetup(
       firstName: any(named: 'firstName'),
       lastName: any(named: 'lastName'),
       phone: any(named: 'phone'),
@@ -50,260 +42,161 @@ void main() {
     ),
   );
 
-  group('signUpWithCode', () {
-    test('redeems the code after registering (active, signed in)', () async {
-      when(
-        () => auth.createUserWithEmailAndPassword(
-          email: any(named: 'email'),
-          password: any(named: 'password'),
-        ),
-      ).thenAnswer((_) async => credential);
-      stubRedeem().thenAnswer((_) async {});
+  group('completeAccountSetup', () {
+    test('replaces the password, then activates the account', () async {
+      stubSetup().thenAnswer((_) async {});
 
-      await service.signUpWithCode(
-        email: 'a@b.com',
-        password: 'pw123456',
-        code: 'K7Q2-9MZ4-XR8T',
+      await service.completeAccountSetup(
+        newPassword: 'N3wPassw0rd!',
+        firstName: 'Zoé',
+        lastName: 'Roy',
+        phone: '(514) 555-1234',
+        termsAccepted: true,
+        locationConsent: true,
       );
 
+      verifyInOrder([
+        () => user.updatePassword('N3wPassw0rd!'),
+        () => employees.completeEmployeeSetup(
+          firstName: 'Zoé',
+          lastName: 'Roy',
+          phone: '(514) 555-1234',
+          termsAccepted: true,
+          locationConsent: true,
+        ),
+      ]);
+    });
+
+    test('trims the profile it sends', () async {
+      stubSetup().thenAnswer((_) async {});
+
+      await service.completeAccountSetup(
+        newPassword: '  N3wPassw0rd!  ',
+        firstName: '  Zoé  ',
+        lastName: '  Roy  ',
+        phone: '  (514) 555-1234  ',
+      );
+
+      verify(() => user.updatePassword('N3wPassw0rd!')).called(1);
       verify(
-        () => employees.redeemSignupCode(
-          'K7Q2-9MZ4-XR8T',
-          firstName: '',
-          lastName: '',
-          phone: '',
+        () => employees.completeEmployeeSetup(
+          firstName: 'Zoé',
+          lastName: 'Roy',
+          phone: '(514) 555-1234',
           termsAccepted: false,
           locationConsent: false,
         ),
       ).called(1);
     });
 
-    test('carries the acceptance profile and consent flags through', () async {
-      when(
-        () => auth.createUserWithEmailAndPassword(
-          email: any(named: 'email'),
-          password: any(named: 'password'),
-        ),
-      ).thenAnswer((_) async => credential);
-      stubRedeem().thenAnswer((_) async {});
-
-      await service.signUpWithCode(
-        email: 'a@b.com',
-        password: 'pw123456',
-        code: ' K7Q2-9MZ4-XR8T ',
-        firstName: ' Theo ',
-        lastName: ' Roy ',
-        phone: ' (514) 555-1234 ',
-        termsAccepted: true,
-        locationConsent: true,
+    test('never activates when the password change fails', () async {
+      // ORDER IS THE GUARANTEE: the server cannot see a password, so
+      // "you must replace the shared default" is true only because activation
+      // is unreachable until updatePassword succeeds.
+      when(() => user.updatePassword(any())).thenThrow(
+        FirebaseAuthException(code: 'weak-password'),
       );
+      stubSetup().thenAnswer((_) async {});
 
-      verify(
-        () => employees.redeemSignupCode(
-          'K7Q2-9MZ4-XR8T',
-          firstName: 'Theo',
-          lastName: 'Roy',
-          phone: '(514) 555-1234',
-          termsAccepted: true,
-          locationConsent: true,
+      await expectLater(
+        service.completeAccountSetup(newPassword: 'abc'),
+        throwsA(isA<AuthFailureWeakPassword>()),
+      );
+      verifyNever(
+        () => employees.completeEmployeeSetup(
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
+          phone: any(named: 'phone'),
+          termsAccepted: any(named: 'termsAccepted'),
+          locationConsent: any(named: 'locationConsent'),
         ),
-      ).called(1);
+      );
     });
 
-    test(
-      'maps invalid-code to AuthFailureInvalidSignupCode and rolls back',
-      () async {
-        when(
-          () => auth.createUserWithEmailAndPassword(
-            email: any(named: 'email'),
-            password: any(named: 'password'),
-          ),
-        ).thenAnswer((_) async => credential);
-        stubRedeem().thenThrow(
-          FirebaseFunctionsException(
-            message: 'invalid-code',
-            code: 'invalid-argument',
-          ),
-        );
-        when(() => user.delete()).thenAnswer((_) async {});
+    test('maps a stale credential to a session-expired failure', () async {
+      when(() => user.updatePassword(any())).thenThrow(
+        FirebaseAuthException(code: 'requires-recent-login'),
+      );
 
-        await expectLater(
-          service.signUpWithCode(
-            email: 'a@b.com',
-            password: 'pw123456',
-            code: 'bad',
-          ),
-          throwsA(isA<AuthFailureInvalidSignupCode>()),
-        );
-        verify(() => user.delete()).called(1);
-      },
-    );
+      await expectLater(
+        service.completeAccountSetup(newPassword: 'N3wPassw0rd!'),
+        throwsA(isA<AuthFailureSessionExpired>()),
+      );
+    });
 
-    test(
-      'maps code-email-mismatch to AuthFailureSignupEmailMismatch',
-      () async {
-        when(
-          () => auth.createUserWithEmailAndPassword(
-            email: any(named: 'email'),
-            password: any(named: 'password'),
-          ),
-        ).thenAnswer((_) async => credential);
-        stubRedeem().thenThrow(
-          FirebaseFunctionsException(
-            message: 'code-email-mismatch',
-            code: 'failed-precondition',
-          ),
-        );
+    test('fails when there is no signed-in user to act on', () async {
+      when(() => auth.currentUser).thenReturn(null);
 
-        await expectLater(
-          service.signUpWithCode(email: 'a@b.com', password: 'pw', code: 'x'),
-          throwsA(isA<AuthFailureSignupEmailMismatch>()),
-        );
-      },
-    );
+      await expectLater(
+        service.completeAccountSetup(newPassword: 'N3wPassw0rd!'),
+        throwsA(isA<AuthFailureSessionExpired>()),
+      );
+      verifyNever(() => user.updatePassword(any()));
+    });
 
-    test(
-      'rollback re-authenticates and deletes when the guard signed the '
-      'fresh user out',
-      () async {
-        when(
-          () => auth.createUserWithEmailAndPassword(
-            email: any(named: 'email'),
-            password: any(named: 'password'),
-          ),
-        ).thenAnswer((_) async => credential);
-        stubRedeem().thenThrow(
-          FirebaseFunctionsException(
-            message: 'invalid-code',
-            code: 'invalid-argument',
-          ),
-        );
-        // The account guard already tore the session down before rollback.
-        when(() => auth.currentUser).thenReturn(null);
-        final reauthCredential = _MockUserCredential();
-        final reauthUser = _MockUser();
-        when(() => reauthCredential.user).thenReturn(reauthUser);
-        when(reauthUser.delete).thenAnswer((_) async {});
-        when(
-          () => auth.signInWithEmailAndPassword(
-            email: any(named: 'email'),
-            password: any(named: 'password'),
-          ),
-        ).thenAnswer((_) async => reauthCredential);
-
-        await expectLater(
-          service.signUpWithCode(
-            email: 'a@b.com',
-            password: 'pw123456',
-            code: 'bad',
-          ),
-          throwsA(isA<AuthFailureInvalidSignupCode>()),
-        );
-        verify(
-          () => auth.signInWithEmailAndPassword(
-            email: 'a@b.com',
-            password: 'pw123456',
-          ),
-        ).called(1);
-        verify(reauthUser.delete).called(1);
-      },
-    );
-
-    test('maps code-expired to AuthFailureSignupCodeExpired', () async {
-      when(
-        () => auth.createUserWithEmailAndPassword(
-          email: any(named: 'email'),
-          password: any(named: 'password'),
-        ),
-      ).thenAnswer((_) async => credential);
-      stubRedeem().thenThrow(
+    test('maps an already-active account to its own failure', () async {
+      stubSetup().thenThrow(
         FirebaseFunctionsException(
-          message: 'code-expired',
           code: 'failed-precondition',
-        ),
-      );
-      when(() => user.delete()).thenAnswer((_) async {});
-
-      await expectLater(
-        service.signUpWithCode(email: 'a@b.com', password: 'pw', code: 'x'),
-        throwsA(isA<AuthFailureSignupCodeExpired>()),
-      );
-    });
-  });
-
-  group('previewInvite', () {
-    test(
-      'delegates to the employees repository and returns the preview',
-      () async {
-        const preview = InvitePreview(
-          email: 'theo@example.com',
-          firstName: 'Theo',
-          lastName: 'Roy',
-          role: 'employee',
-          expiresAt: null,
-        );
-        when(
-          () => employees.previewInvite(any()),
-        ).thenAnswer((_) async => preview);
-
-        final result = await service.previewInvite(' K7Q2-9MZ4-XR8T ');
-
-        expect(result, preview);
-        verify(() => employees.previewInvite('K7Q2-9MZ4-XR8T')).called(1);
-      },
-    );
-
-    test('maps code-expired to AuthFailureSignupCodeExpired', () async {
-      when(() => employees.previewInvite(any())).thenThrow(
-        FirebaseFunctionsException(
-          message: 'code-expired',
-          code: 'failed-precondition',
+          message: 'setup-not-pending',
         ),
       );
 
       await expectLater(
-        service.previewInvite('K7Q29MZ4XR8T'),
-        throwsA(isA<AuthFailureSignupCodeExpired>()),
+        service.completeAccountSetup(newPassword: 'N3wPassw0rd!'),
+        throwsA(isA<AuthFailureSetupAlreadyComplete>()),
       );
     });
 
-    test('maps invalid-code to AuthFailureInvalidSignupCode', () async {
-      when(() => employees.previewInvite(any())).thenThrow(
+    test('maps a missing users doc to its own failure', () async {
+      stubSetup().thenThrow(
         FirebaseFunctionsException(
-          message: 'invalid-code',
-          code: 'invalid-argument',
+          code: 'not-found',
+          message: 'account-not-found',
         ),
       );
 
       await expectLater(
-        service.previewInvite('K7Q29MZ4XR8T'),
-        throwsA(isA<AuthFailureInvalidSignupCode>()),
+        service.completeAccountSetup(newPassword: 'N3wPassw0rd!'),
+        throwsA(isA<AuthFailureNoAccountRecord>()),
       );
     });
 
-    test('maps resource-exhausted to AuthFailureTooManyRequests', () async {
-      when(() => employees.previewInvite(any())).thenThrow(
-        FirebaseFunctionsException(
-          message: 'rate-limited',
-          code: 'resource-exhausted',
-        ),
+    test('maps a rate-limit refusal', () async {
+      stubSetup().thenThrow(
+        FirebaseFunctionsException(code: 'resource-exhausted', message: 'slow'),
       );
 
       await expectLater(
-        service.previewInvite('K7Q29MZ4XR8T'),
+        service.completeAccountSetup(newPassword: 'N3wPassw0rd!'),
         throwsA(isA<AuthFailureTooManyRequests>()),
       );
     });
 
-    test('maps unavailable to AuthFailureNetwork', () async {
-      when(() => employees.previewInvite(any())).thenThrow(
-        FirebaseFunctionsException(message: 'offline', code: 'unavailable'),
+    test('maps an unavailable backend to a network failure', () async {
+      stubSetup().thenThrow(
+        FirebaseFunctionsException(code: 'unavailable', message: 'offline'),
       );
 
       await expectLater(
-        service.previewInvite('K7Q29MZ4XR8T'),
+        service.completeAccountSetup(newPassword: 'N3wPassw0rd!'),
         throwsA(isA<AuthFailureNetwork>()),
       );
+    });
+
+    test('does NOT sign out or revert the password on failure', () async {
+      // The new password is the one the person just chose and typed twice.
+      // Reverting it to the shared default would be strictly worse than
+      // leaving them `invited` with a password that works.
+      stubSetup().thenThrow(
+        FirebaseFunctionsException(code: 'internal', message: 'boom'),
+      );
+
+      await expectLater(
+        service.completeAccountSetup(newPassword: 'N3wPassw0rd!'),
+        throwsA(isA<AuthFailureUnknown>()),
+      );
+      verifyNever(() => auth.signOut());
     });
   });
 }

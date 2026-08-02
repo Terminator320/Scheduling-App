@@ -14,6 +14,8 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/employees/application/employee_form_controller.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
+import 'package:scheduling/features/employees/domain/policies/starting_password_policy.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/user_status_chip.dart';
@@ -21,13 +23,13 @@ import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 import 'package:scheduling/shared/widgets/primitives/mono_section_label.dart';
 import 'package:scheduling/shared/widgets/primitives/name_initials.dart';
 
-/// The roster row for someone who has been invited but hasn't redeemed their
-/// code yet. Tapping expands it in place — an invited person has no detail
-/// page worth opening (no jobs, no availability that matters yet).
+/// The roster row for someone whose account exists but who has never signed
+/// in. Tapping expands it in place — they have no detail page worth opening
+/// (no jobs, no availability that matters yet).
 ///
-/// Expanding IS the reveal: it re-issues the invite and shows the fresh code.
-/// The previous code stops working at that moment, which is why the caption
-/// under the code always says the code is new.
+/// Expanding is NOT a reveal here: the starting password is a fixed shared
+/// value, so the row can show it without asking the server for anything. Only
+/// Reset password re-provisions, and only that rotates what they were given.
 class PendingInviteTile extends ConsumerStatefulWidget {
   const PendingInviteTile({required this.employee, super.key});
 
@@ -40,31 +42,32 @@ class PendingInviteTile extends ConsumerStatefulWidget {
 class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
   bool _expanded = false;
   bool _copied = false;
-  bool _resent = false;
+  bool _reset = false;
 
-  /// The signup code is a credential: it lives here and nowhere else. Never
-  /// logged, never in a provider, never persisted, never in a notice.
-  String? _code;
+  /// The re-issued credentials, held only after a Reset password. Null means
+  /// the row is showing the account as created. A credential either way: it
+  /// lives here and nowhere else — never logged, never in a provider, never
+  /// persisted, never in a notice.
+  NewAccountCredentials? _credentials;
 
-  /// Which invite [_code] belongs to. Re-expanding the SAME row must reuse the
-  /// cached code instead of burning another of the admin's 20/hour slots (and
-  /// silently rotating the code the admin already shared).
-  String? _codeInviteId;
+  /// Which account [_credentials] belongs to, so a recycled State can't show
+  /// one person's password on another person's row.
+  String? _credentialsFor;
 
-  String? get _cachedCode => _codeInviteId == widget.employee.id ? _code : null;
+  NewAccountCredentials? get _cached =>
+      _credentialsFor == widget.employee.id ? _credentials : null;
 
-  Future<void> _toggleExpanded() async {
-    final next = !_expanded;
-    setState(() => _expanded = next);
-    if (next && _cachedCode == null) await _reissue(isResend: false);
-  }
+  /// Expanding costs nothing: unlike the retired code flow, there is no
+  /// server round-trip to reveal a shared starting password.
+  void _toggleExpanded() => setState(() => _expanded = !_expanded);
 
-  /// Re-issues the invite through the idempotent `createEmployeeInvite` path.
+  /// Re-provisions the account through the idempotent `createEmployeeAccount`
+  /// path, which resets the password back to the shared default.
   ///
-  /// Every argument comes from the stored record: the callable's re-issue
+  /// Every argument comes from the stored record: the callable's re-provision
   /// branch *updates* name/phone/colour/job title with whatever it is handed,
-  /// so passing blanks would silently wipe the invited person's details.
-  Future<void> _reissue({required bool isResend}) async {
+  /// so passing blanks would silently wipe the person's details.
+  Future<void> _resetPassword() async {
     final l10n = context.l10n;
     final notices = ref.read(noticeServiceProvider);
     if (ref.read(employeeFormControllerProvider).isSaving) return;
@@ -82,16 +85,16 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
     // field it is handed, so anything dropped here would be blanked server-side.
     final outcome = await ref
         .read(employeeFormControllerProvider.notifier)
-        .inviteEmployee(employee);
+        .createAccount(employee);
     if (!mounted) return;
 
     switch (outcome) {
-      case EmployeeInvited(:final code):
+      case EmployeeAccountCreated(:final credentials):
         setState(() {
-          _code = code;
-          _codeInviteId = employee.id;
+          _credentials = credentials;
+          _credentialsFor = employee.id;
           _copied = false;
-          _resent = isResend;
+          _reset = true;
         });
       case EmployeeSaveFailed(:final error):
         notices.error(
@@ -104,58 +107,60 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
         );
       case EmployeeEmailInUse():
       case EmployeeUpdated():
-        // Unreachable from a re-issue; the sealed family forces the branch.
+        // Unreachable from a re-provision; the sealed family forces the branch.
         break;
     }
   }
 
-  Future<void> _revoke() async {
+  Future<void> _remove() async {
     final l10n = context.l10n;
     final notices = ref.read(noticeServiceProvider);
     if (ref.read(employeeFormControllerProvider).isRevoking) return;
     if (guardedOffline(
       context,
       ref,
-      intro: context.l10n.error_introRevokeInvite,
-      tag: 'EMP-REVOKE',
+      intro: context.l10n.error_introRemoveAccount,
+      tag: 'EMP-DELETE',
     )) {
       return;
     }
 
     final confirmed = await showConfirmDialog(
       context,
-      title: l10n.employees_revokeInvite,
-      message: l10n.employees_revokeInviteConfirmBody,
-      confirmLabel: l10n.employees_revokeInvite,
+      title: l10n.employees_removeAccount,
+      message: l10n.employees_removeAccountConfirmBody,
+      confirmLabel: l10n.employees_removeAccount,
     );
     if (!confirmed || !mounted) return;
 
     final outcome = await ref
         .read(employeeFormControllerProvider.notifier)
-        .revokeInvite(widget.employee.id);
+        .deleteAccount(widget.employee.id);
     if (!mounted) return;
 
     switch (outcome) {
-      case InviteRevoked():
+      case AccountDeleted():
         // No notice: the live stream drops the row, and that IS the
         // confirmation.
         break;
-      case InviteRevokeFailed(:final error):
+      case AccountDeleteFailed(:final error):
         notices.error(
-          error is EmployeesFailureInviteNoLongerPending
+          error is EmployeesFailureAccountNoLongerPending
               ? error.toLocalizedMessage(context)
               : composeErrorNotice(
                   context,
-                  intro: l10n.error_introRevokeInvite,
-                  tag: 'EMP-REVOKE',
+                  intro: l10n.error_introRemoveAccount,
+                  tag: 'EMP-DELETE',
                   error: error,
                 ),
         );
     }
   }
 
-  void _copy(String code) {
-    Clipboard.setData(ClipboardData(text: code));
+  /// Copies both halves together: an admin pasting this into a message wants
+  /// the pair, and copying only the password loses which account it opens.
+  void _copy(String email, String password) {
+    Clipboard.setData(ClipboardData(text: '$email\n$password'));
     setState(() => _copied = true);
   }
 
@@ -264,8 +269,12 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
 
   Widget _buildBody(BuildContext context, EmployeeFormActivity activity) {
     final l10n = context.l10n;
-    final code = _cachedCode;
-    final expiresAt = widget.employee.codeExpiresAt;
+    final reissued = _cached;
+    // Before any reset, the row shows what the account was created with: the
+    // stored email, and the shared starting password. After one, it shows
+    // exactly what the server just set instead of assuming the two agree.
+    final email = reissued?.email ?? widget.employee.email;
+    final password = reissued?.password ?? kDefaultStartingPassword;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -277,39 +286,34 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          MonoSectionLabel(l10n.employees_inviteCodeKey),
+          MonoSectionLabel(l10n.employees_signInDetails),
           const SizedBox(height: AppSpacing.sp8),
-          _CodeBlock(
-            code: code,
+          _CredentialsBlock(
+            email: email,
+            password: password,
             isBusy: activity.isSaving,
             copied: _copied,
-            onCopy: code == null ? null : () => _copy(code),
-            onShow: () => _reissue(isResend: false),
+            onCopy: () => _copy(email, password),
           ),
-          if (code != null) ...[
+          if (reissued != null) ...[
             const SizedBox(height: AppSpacing.sp8),
-            // The code was minted the moment this row opened, so the caption
-            // always says so — the admin's previously-shared code is dead.
-            if (expiresAt != null)
-              _NewCodeCaption(expiresAt: expiresAt)
-            else
-              // No stamp yet (a pre-P4b invite, or the stream hasn't caught
-              // up): the expiry line is omitted rather than faked.
-              Text(
-                l10n.employees_newCodeIssued,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).palette.textMuted,
-                ),
+            // Only shown after an actual reset: unlike the retired code flow,
+            // merely opening the row rotates nothing.
+            Text(
+              l10n.employees_newPasswordIssued,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).palette.textMuted,
               ),
+            ),
           ],
           const SizedBox(height: AppSpacing.sp16),
           _ActionRow(
-            resendLabel: _resent
-                ? l10n.employees_newCodeReady
-                : l10n.employees_resendCode,
-            onResend: activity.isSaving ? null : () => _reissue(isResend: true),
-            onRevoke: activity.isRevoking ? null : _revoke,
-            isRevoking: activity.isRevoking,
+            resetLabel: _reset
+                ? l10n.employees_passwordReset
+                : l10n.employees_resetPassword,
+            onReset: activity.isSaving ? null : _resetPassword,
+            onRemove: activity.isRevoking ? null : _remove,
+            isRemoving: activity.isRevoking,
           ),
         ],
       ),
@@ -317,86 +321,63 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
   }
 }
 
-/// The `INVITE CODE` block: the fresh code plus its Copy pill, a spinner while
-/// the re-issue is in flight, or a retry button when it never landed (offline,
-/// or a failed call).
-class _CodeBlock extends StatelessWidget {
-  const _CodeBlock({
-    required this.code,
+/// The `SIGN-IN DETAILS` block: the email and starting password side by side
+/// with one Copy pill that takes both, or a spinner while a reset is in
+/// flight.
+class _CredentialsBlock extends StatelessWidget {
+  const _CredentialsBlock({
+    required this.email,
+    required this.password,
     required this.isBusy,
     required this.copied,
     required this.onCopy,
-    required this.onShow,
   });
 
-  final String? code;
+  final String email;
+  final String password;
   final bool isBusy;
   final bool copied;
-  final VoidCallback? onCopy;
-  final VoidCallback onShow;
+  final VoidCallback onCopy;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
 
-    Widget child;
-    final value = code;
-    if (value != null) {
-      final label = copied ? l10n.common_copied : l10n.employees_copyCode;
-      final codeText = SelectableText(
-        value,
-        style: theme.monoType.data.copyWith(
-          fontSize: 19,
-          letterSpacing: 2,
-          fontWeight: FontWeight.w600,
+    if (isBusy) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.sp12),
+        decoration: BoxDecoration(
+          color: theme.palette.sheetRow,
+          borderRadius: BorderRadius.circular(AppRadius.r12),
         ),
-      );
-      final copyButton = TextButton.icon(
-        onPressed: copied ? null : onCopy,
-        icon: Icon(
-          copied ? Icons.check_rounded : Icons.copy_outlined,
-          size: 18,
-        ),
-        label: Text(label),
-        style: TextButton.styleFrom(
-          minimumSize: const Size(48, 48),
-          shape: const StadiumBorder(),
-        ),
-      );
-      child = context.isCompact
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                codeText,
-                const SizedBox(height: AppSpacing.sp8),
-                copyButton,
-              ],
-            )
-          : Row(
-              children: [
-                Expanded(child: codeText),
-                const SizedBox(width: AppSpacing.sp8),
-                copyButton,
-              ],
-            );
-    } else if (isBusy) {
-      child = const Center(
-        child: Padding(
-          padding: EdgeInsets.all(AppSpacing.sp12),
-          child: AdaptiveProgressIndicator(),
-        ),
-      );
-    } else {
-      child = Align(
-        alignment: Alignment.centerLeft,
-        child: TextButton(
-          onPressed: onShow,
-          style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
-          child: Text(l10n.employees_showCode),
-        ),
+        child: const Center(child: AdaptiveProgressIndicator()),
       );
     }
+
+    final copyButton = TextButton.icon(
+      onPressed: copied ? null : onCopy,
+      icon: Icon(copied ? Icons.check_rounded : Icons.copy_outlined, size: 18),
+      label: Text(copied ? l10n.common_copied : l10n.employees_copyBoth),
+      style: TextButton.styleFrom(
+        minimumSize: const Size(48, 48),
+        shape: const StadiumBorder(),
+      ),
+    );
+
+    final values = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _CredentialLine(label: l10n.common_email, value: email),
+        const SizedBox(height: AppSpacing.sp8),
+        _CredentialLine(
+          label: l10n.employees_temporaryPassword,
+          value: password,
+        ),
+      ],
+    );
 
     return Container(
       width: double.infinity,
@@ -408,80 +389,96 @@ class _CodeBlock extends StatelessWidget {
         color: theme.palette.sheetRow,
         borderRadius: BorderRadius.circular(AppRadius.r12),
       ),
-      child: child,
+      child: context.isCompact
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                values,
+                const SizedBox(height: AppSpacing.sp8),
+                copyButton,
+              ],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(child: values),
+                const SizedBox(width: AppSpacing.sp8),
+                copyButton,
+              ],
+            ),
     );
   }
 }
 
-/// Amber caption stating the code is new and when it dies. Warning-toned on
-/// purpose: opening the row invalidated whatever the admin shared before.
-class _NewCodeCaption extends StatelessWidget {
-  const _NewCodeCaption({required this.expiresAt});
+/// Selectable because copy-to-clipboard can fail, and reading a password off
+/// the screen to type it by hand is the floor this has to keep working at.
+class _CredentialLine extends StatelessWidget {
+  const _CredentialLine({required this.label, required this.value});
 
-  final DateTime expiresAt;
+  final String label;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final status = theme.statusColors;
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sp12,
-        vertical: AppSpacing.sp8,
-      ),
-      decoration: BoxDecoration(
-        color: status.warningContainer,
-        borderRadius: BorderRadius.circular(AppRadius.r8),
-      ),
-      child: Text(
-        context.l10n.employees_newCodeExpiresOn(
-          DateUtilsHelper.formatDate(expiresAt),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: theme.monoType.micro.copyWith(color: theme.palette.textMuted),
         ),
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: status.onWarningContainer,
+        const SizedBox(height: 2),
+        SelectableText(
+          value,
+          style: theme.monoType.data.copyWith(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-      ),
+      ],
     );
   }
 }
 
-/// Resend and Revoke as two equal-width bordered actions, stacking when the
+/// Reset and Remove as two equal-width bordered actions, stacking when the
 /// row is too narrow or the text too large to hold them side by side.
 class _ActionRow extends StatelessWidget {
   const _ActionRow({
-    required this.resendLabel,
-    required this.onResend,
-    required this.onRevoke,
-    required this.isRevoking,
+    required this.resetLabel,
+    required this.onReset,
+    required this.onRemove,
+    required this.isRemoving,
   });
 
-  final String resendLabel;
-  final VoidCallback? onResend;
-  final VoidCallback? onRevoke;
-  final bool isRevoking;
+  final String resetLabel;
+  final VoidCallback? onReset;
+  final VoidCallback? onRemove;
+  final bool isRemoving;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     const minimumSize = Size.fromHeight(48);
 
-    final resend = OutlinedButton(
-      onPressed: onResend,
+    final reset = OutlinedButton(
+      onPressed: onReset,
       style: OutlinedButton.styleFrom(minimumSize: minimumSize),
       child: Text(
-        resendLabel,
+        resetLabel,
         maxLines: 2,
         textAlign: TextAlign.center,
         overflow: TextOverflow.ellipsis,
       ),
     );
-    final revoke = OutlinedButton(
-      onPressed: onRevoke,
+    final remove = OutlinedButton(
+      onPressed: onRemove,
       style: destructiveOutlinedButtonStyle(context, minimumSize: minimumSize),
-      child: isRevoking
+      child: isRemoving
           ? const AdaptiveProgressIndicator(size: 18)
           : Text(
-              l10n.employees_revokeInvite,
+              l10n.employees_removeAccount,
               maxLines: 2,
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
@@ -492,23 +489,23 @@ class _ActionRow extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          resend,
+          reset,
           const SizedBox(height: AppSpacing.sp8),
-          revoke,
+          remove,
         ],
       );
     }
     return Row(
       children: [
-        Expanded(child: resend),
+        Expanded(child: reset),
         const SizedBox(width: AppSpacing.sp8),
-        Expanded(child: revoke),
+        Expanded(child: remove),
       ],
     );
   }
 }
 
-/// Dashed-ring avatar — the visual cue that this person hasn't joined yet. No
+/// Dashed-ring avatar — the visual cue that this person hasn't signed in yet. No
 /// crew colour is rendered even though the invite HAS reserved one: the
 /// dashing is visual only, and `usedColors` still counts the invite.
 class _DashedAvatar extends StatelessWidget {

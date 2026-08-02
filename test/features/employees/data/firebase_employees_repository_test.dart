@@ -132,23 +132,27 @@ void main() {
     return (captured as Map).cast<String, dynamic>();
   }
 
-  group('createEmployeeInvite', () {
-    test('returns the code and lowercases the email', () async {
+  group('createEmployeeAccount', () {
+    test('returns the credentials and lowercases the email', () async {
       final callable = _MockHttpsCallable();
       final result = _MockHttpsCallableResult();
       when(
         () => functions.httpsCallable(
-          any(that: equals('createEmployeeInvite')),
+          any(that: equals('createEmployeeAccount')),
           options: any(named: 'options'),
         ),
       ).thenReturn(callable);
-      when(() => result.data).thenReturn({'code': 'K7Q2-9MZ4-XR8T'});
+      when(() => result.data).thenReturn({
+        'email': 'a@b.com',
+        'password': 'Welcome123!',
+        'docId': 'doc-1',
+      });
       when(
         () => callable.call<dynamic>(any<Object?>()),
       ).thenAnswer((_) async => result);
 
       final repo = FirebaseEmployeesRepository(firestore, functions: functions);
-      final code = await repo.createEmployeeInvite(
+      final credentials = await repo.createEmployeeAccount(
         name: 'A',
         firstName: 'A',
         lastName: '',
@@ -159,7 +163,9 @@ void main() {
         isAdmin: false,
       );
 
-      expect(code, 'K7Q2-9MZ4-XR8T');
+      expect(credentials.email, 'a@b.com');
+      expect(credentials.password, 'Welcome123!');
+      expect(credentials.docId, 'doc-1');
       final captured =
           (verify(
                     () => callable.call<dynamic>(captureAny<Object?>()),
@@ -172,13 +178,45 @@ void main() {
       expect(captured['isAdmin'], isFalse);
     });
 
+    test('rejects a half-blank credential payload', () async {
+      // A blank half is unusable to the admin and would render an empty
+      // credential dialog — fail loudly rather than show nothing.
+      final callable = _MockHttpsCallable();
+      final result = _MockHttpsCallableResult();
+      when(
+        () => functions.httpsCallable(
+          any(that: equals('createEmployeeAccount')),
+          options: any(named: 'options'),
+        ),
+      ).thenReturn(callable);
+      when(() => result.data).thenReturn({'email': 'a@b.com', 'password': ''});
+      when(
+        () => callable.call<dynamic>(any<Object?>()),
+      ).thenAnswer((_) async => result);
+
+      final repo = FirebaseEmployeesRepository(firestore, functions: functions);
+      await expectLater(
+        repo.createEmployeeAccount(
+          name: 'A',
+          firstName: '',
+          lastName: '',
+          email: 'a@b.com',
+          phone: '',
+          colorValue: '1',
+          jobTitle: '',
+          isAdmin: false,
+        ),
+        throwsA(isA<EmployeesFailureUnknown>()),
+      );
+    });
+
     test(
       'maps email-exists to EmployeesFailureEmailAlreadyExists',
       () async {
         final callable = _MockHttpsCallable();
         when(
           () => functions.httpsCallable(
-            any(that: equals('createEmployeeInvite')),
+            any(that: equals('createEmployeeAccount')),
             options: any(named: 'options'),
           ),
         ).thenReturn(callable);
@@ -193,7 +231,7 @@ void main() {
           functions: functions,
         );
         expect(
-          () => repo.createEmployeeInvite(
+          () => repo.createEmployeeAccount(
             name: 'A',
             firstName: '',
             lastName: '',
@@ -251,152 +289,108 @@ void main() {
     return (captured as Map).cast<String, dynamic>();
   }
 
-  group('redeemSignupCode', () {
-    test('sends all six keys, defaulting the profile to empty', () async {
-      final callable = stubCallable(
-        'redeemSignupCode',
-        data: {'role': 'employee', 'name': 'A'},
-      );
+  group('completeEmployeeSetup', () {
+    test('always sends all five keys', () async {
+      // The server reads the strings leniently (empty == absent) and the flags
+      // as `=== true`, so a conditional payload shape would be a second thing
+      // to test for no benefit.
+      final callable = stubCallable('completeEmployeeSetup');
 
-      await repo().redeemSignupCode('K7Q2-9MZ4-XR8T');
+      await repo().completeEmployeeSetup();
 
-      final payload = capturedPayload(callable);
-      expect(payload['code'], 'K7Q2-9MZ4-XR8T');
-      expect(payload['firstName'], '');
-      expect(payload['lastName'], '');
-      expect(payload['phone'], '');
-      expect(payload['termsAccepted'], isFalse);
-      expect(payload['locationConsent'], isFalse);
+      final captured =
+          (verify(
+                    () => callable.call<dynamic>(captureAny<Object?>()),
+                  ).captured.single
+                  as Map)
+              .cast<String, dynamic>();
+      expect(captured.keys, hasLength(5));
+      expect(captured['firstName'], '');
+      expect(captured['termsAccepted'], isFalse);
+      expect(captured['locationConsent'], isFalse);
     });
 
-    test('carries the acceptance profile and consent flags', () async {
-      final callable = stubCallable(
-        'redeemSignupCode',
-        data: {'role': 'admin', 'name': 'Theo Roy'},
-      );
+    test('carries the setup profile and both consent flags', () async {
+      final callable = stubCallable('completeEmployeeSetup');
 
-      await repo().redeemSignupCode(
-        'K7Q29MZ4XR8T',
-        firstName: 'Theo',
+      await repo().completeEmployeeSetup(
+        firstName: 'Zoé',
         lastName: 'Roy',
         phone: '(514) 555-1234',
         termsAccepted: true,
         locationConsent: true,
       );
 
-      final payload = capturedPayload(callable);
-      expect(payload['firstName'], 'Theo');
-      expect(payload['lastName'], 'Roy');
-      expect(payload['phone'], '(514) 555-1234');
-      expect(payload['termsAccepted'], isTrue);
-      expect(payload['locationConsent'], isTrue);
+      final captured =
+          (verify(
+                    () => callable.call<dynamic>(captureAny<Object?>()),
+                  ).captured.single
+                  as Map)
+              .cast<String, dynamic>();
+      expect(captured['firstName'], 'Zoé');
+      expect(captured['lastName'], 'Roy');
+      expect(captured['phone'], '(514) 555-1234');
+      expect(captured['termsAccepted'], isTrue);
+      expect(captured['locationConsent'], isTrue);
     });
   });
 
-  group('revokeInvite', () {
-    test('sends the invite doc id', () async {
-      final callable = stubCallable('revokeInvite', data: {'ok': true});
+  group('deleteEmployeeAccount', () {
+    test('sends the doc id', () async {
+      final callable = stubCallable('deleteEmployeeAccount', data: {'ok': true});
 
-      await repo().revokeInvite('invite-doc-1');
+      await repo().deleteEmployeeAccount('doc-1');
 
-      expect(capturedPayload(callable)['inviteDocId'], 'invite-doc-1');
+      final captured =
+          (verify(
+                    () => callable.call<dynamic>(captureAny<Object?>()),
+                  ).captured.single
+                  as Map)
+              .cast<String, dynamic>();
+      expect(captured, {'docId': 'doc-1'});
     });
 
-    test('maps invite-not-pending to the typed failure', () async {
-      stubFailingCallable(
-        'revokeInvite',
+    test('maps account-not-pending to its own failure', () async {
+      final callable = stubCallable('deleteEmployeeAccount');
+      when(() => callable.call<dynamic>(any<Object?>())).thenThrow(
         FirebaseFunctionsException(
-          message: 'invite-not-pending',
           code: 'failed-precondition',
+          message: 'account-not-pending',
         ),
       );
 
       await expectLater(
-        repo().revokeInvite('invite-doc-1'),
-        throwsA(isA<EmployeesFailureInviteNoLongerPending>()),
+        repo().deleteEmployeeAccount('doc-1'),
+        throwsA(isA<EmployeesFailureAccountNoLongerPending>()),
       );
     });
 
-    test('maps invite-not-found to the same typed failure', () async {
-      stubFailingCallable(
-        'revokeInvite',
+    test('maps account-not-found to the same failure', () async {
+      // The admin needs the same thing said either way, and the live stream
+      // has already dropped or flipped the row.
+      final callable = stubCallable('deleteEmployeeAccount');
+      when(() => callable.call<dynamic>(any<Object?>())).thenThrow(
         FirebaseFunctionsException(
-          message: 'invite-not-found',
           code: 'not-found',
+          message: 'account-not-found',
         ),
       );
 
       await expectLater(
-        repo().revokeInvite('invite-doc-1'),
-        throwsA(isA<EmployeesFailureInviteNoLongerPending>()),
+        repo().deleteEmployeeAccount('doc-1'),
+        throwsA(isA<EmployeesFailureAccountNoLongerPending>()),
       );
     });
 
-    test('rethrows anything else untouched', () async {
-      stubFailingCallable(
-        'revokeInvite',
-        FirebaseFunctionsException(
-          message: 'boom',
-          code: 'permission-denied',
-        ),
+    test('lets an unrelated failure escape unmapped', () async {
+      final callable = stubCallable('deleteEmployeeAccount');
+      when(() => callable.call<dynamic>(any<Object?>())).thenThrow(
+        FirebaseFunctionsException(code: 'internal', message: 'boom'),
       );
 
       await expectLater(
-        repo().revokeInvite('invite-doc-1'),
+        repo().deleteEmployeeAccount('doc-1'),
         throwsA(isA<FirebaseFunctionsException>()),
-      );
-    });
-  });
-
-  group('previewInvite', () {
-    test('decodes a Map<dynamic, dynamic> callable response', () async {
-      // The shape the plugin actually returns on Android.
-      final callable = stubCallable(
-        'previewInvite',
-        data: <dynamic, dynamic>{
-          'email': 'theo@example.com',
-          'firstName': 'Theo',
-          'lastName': 'Roy',
-          'role': 'employee',
-          'expiresAtMs': 1786000000000,
-        },
-      );
-
-      final preview = await repo().previewInvite('K7Q2-9MZ4-XR8T');
-
-      expect(preview.email, 'theo@example.com');
-      expect(preview.firstName, 'Theo');
-      expect(preview.role, 'employee');
-      expect(
-        preview.expiresAt,
-        DateTime.fromMillisecondsSinceEpoch(1786000000000),
-      );
-      expect(capturedPayload(callable)['code'], 'K7Q2-9MZ4-XR8T');
-    });
-
-    test('rethrows a FirebaseFunctionsException untouched', () async {
-      // No error mapping here — that's AuthService.previewInvite's job, the
-      // same split as redeemSignupCode/signUpWithCode above.
-      stubFailingCallable(
-        'previewInvite',
-        FirebaseFunctionsException(
-          message: 'code-expired',
-          code: 'failed-precondition',
-        ),
-      );
-
-      await expectLater(
-        repo().previewInvite('K7Q29MZ4XR8T'),
-        throwsA(isA<FirebaseFunctionsException>()),
-      );
-    });
-
-    test('a null payload surfaces EmployeesFailureUnknown', () async {
-      stubCallable('previewInvite');
-
-      await expectLater(
-        repo().previewInvite('K7Q29MZ4XR8T'),
-        throwsA(isA<EmployeesFailureUnknown>()),
       );
     });
   });

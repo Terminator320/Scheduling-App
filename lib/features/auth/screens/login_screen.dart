@@ -129,28 +129,27 @@ class _LoginState extends ConsumerState<Login> {
             AuthErrorContext.login,
           );
         });
+      // First sign-in on an admin-created account. The session is deliberately
+      // still live — the setup screen needs exactly that credential.
+      case SignInNeedsAccountSetup(:final firstName, :final lastName):
+        await _routeToAccountSetup(firstName: firstName, lastName: lastName);
       // These only come from resumeAfterSignUp() — signIn() never produces them.
       case SignInNoSession() || SignInProfilePending():
         break;
     }
   }
 
-  /// The invited-employee path. Acceptance owns its own post-signup routing,
-  /// so nothing comes back here but a cleared form.
-  Future<void> _openAcceptInvite() async {
-    await Navigator.pushNamed(
+  Future<void> _routeToAccountSetup({
+    required String firstName,
+    required String lastName,
+  }) async {
+    // pushReplacement, not push: there is nothing useful behind this. Setup
+    // owns its own way out (finish, or sign out back to here).
+    await Navigator.pushReplacementNamed(
       context,
-      AppRoutes.acceptInviteCode,
-      arguments: const AcceptInviteCodeArgs(),
+      AppRoutes.accountSetup,
+      arguments: AccountSetupArgs(firstName: firstName, lastName: lastName),
     );
-    if (!mounted) return;
-    setState(() {
-      _submitted = false;
-      _emailError = null;
-      _passwordError = null;
-      _bannerError = null;
-      _bannerSuccess = null;
-    });
   }
 
   Future<void> _routeToCalendar(EmployeeRecord employee) async {
@@ -190,10 +189,6 @@ class _LoginState extends ConsumerState<Login> {
       hero: AuthHero(
         title: context.l10n.auth_welcomeBack,
         subtitle: context.l10n.auth_signInToYourAccount,
-      ),
-      footer: _AcceptInvitePrompt(
-        enabled: !isLoading,
-        onAcceptInvite: _openAcceptInvite,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,47 +240,6 @@ class _LoginState extends ConsumerState<Login> {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// The prompt under the sign-in card — plain text plus an "Accept your invite"
-/// link, wrapped so it still flows nicely at large text scale.
-class _AcceptInvitePrompt extends StatelessWidget {
-  const _AcceptInvitePrompt({
-    required this.enabled,
-    required this.onAcceptInvite,
-  });
-
-  final bool enabled;
-  final VoidCallback onAcceptInvite;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final textTheme = theme.textTheme;
-    return Wrap(
-      alignment: WrapAlignment.center,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Text(
-          context.l10n.auth_invitedByYourEmployer,
-          style: textTheme.bodyMedium?.copyWith(
-            color: scheme.onSurfaceVariant,
-          ),
-        ),
-        TextButton(
-          onPressed: enabled ? onAcceptInvite : null,
-          child: Text(
-            context.l10n.auth_acceptYourInvite,
-            style: textTheme.bodyMedium?.copyWith(
-              color: scheme.primary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

@@ -6,7 +6,6 @@ import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
@@ -18,40 +17,39 @@ import 'package:scheduling/features/auth/widgets/auth_banner.dart';
 import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
 import 'package:scheduling/features/auth/widgets/password_requirements_checklist.dart';
 import 'package:scheduling/features/auth/widgets/password_strength_meter.dart';
-import 'package:scheduling/features/employees/domain/models/invite_preview.dart';
-import 'package:scheduling/features/settings/domain/role_label.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 
-/// Second half of the invite acceptance flow: everything the new account needs
-/// that the invite could not supply.
+/// First-run setup for an employee whose account an admin created.
 ///
-/// The email is NOT asked for — it comes from the invite via `previewInvite`
-/// and is rendered locked, because it is the address the server re-checks the
-/// code against at redeem time. The code rides [code] from the previous
-/// screen, so acceptance never re-asks for it.
-class AcceptInviteDetailsScreen extends ConsumerStatefulWidget {
-  const AcceptInviteDetailsScreen({
-    required this.code,
-    required this.preview,
+/// They are ALREADY signed in when they get here — with the shared starting
+/// password — and their `users` doc is still `invited`, which is what withholds
+/// every rules grant. This screen is the only route out of that state: it
+/// replaces the password and then activates the account, in that order (see
+/// [AuthService.completeAccountSetup] for why the order is the guarantee).
+///
+/// The email is NOT asked for and NOT editable — it is the address they just
+/// signed in with, so it is rendered locked.
+class AccountSetupScreen extends ConsumerStatefulWidget {
+  const AccountSetupScreen({
+    this.firstName = '',
+    this.lastName = '',
     this.authService,
     super.key,
   });
 
-  /// Already normalized by the code screen. A credential — it stays on the
-  /// navigator stack and dies with this route.
-  final String code;
-  final InvitePreview preview;
+  /// Whatever the admin already typed, so the person confirms rather than
+  /// retypes. Blank is fine — the fields are still required.
+  final String firstName;
+  final String lastName;
   final AuthService? authService;
 
   @override
-  ConsumerState<AcceptInviteDetailsScreen> createState() =>
-      _AcceptInviteDetailsScreenState();
+  ConsumerState<AccountSetupScreen> createState() => _AccountSetupScreenState();
 }
 
-class _AcceptInviteDetailsScreenState
-    extends ConsumerState<AcceptInviteDetailsScreen> {
+class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
   late final AuthService _authService =
       widget.authService ?? ref.read(authServiceProvider);
 
@@ -71,7 +69,6 @@ class _AcceptInviteDetailsScreenState
   bool _consented = false;
   bool _isLoading = false;
   bool _submitted = false;
-  bool _codeDied = false;
 
   String? _firstNameError;
   String? _lastNameError;
@@ -83,10 +80,8 @@ class _AcceptInviteDetailsScreenState
   @override
   void initState() {
     super.initState();
-    _firstNameController = TextEditingController(
-      text: widget.preview.firstName,
-    );
-    _lastNameController = TextEditingController(text: widget.preview.lastName);
+    _firstNameController = TextEditingController(text: widget.firstName);
+    _lastNameController = TextEditingController(text: widget.lastName);
   }
 
   @override
@@ -155,7 +150,7 @@ class _AcceptInviteDetailsScreenState
     _onFieldChanged();
   }
 
-  Future<void> _createAccount() async {
+  Future<void> _finishSetup() async {
     FocusScope.of(context).unfocus();
     // The consent checkbox is the gate, and this is where it is enforced: the
     // confirm-password field's keyboard-submit reaches here without consulting
@@ -165,13 +160,12 @@ class _AcceptInviteDetailsScreenState
     setState(() {
       _submitted = true;
       _bannerError = null;
-      _codeDied = false;
     });
 
     if (!_validate()) return;
 
     // Before the in-flight flag: an awaited write offline never resolves until
-    // the connection returns, so Save would just spin.
+    // the connection returns, so the button would just spin.
     if (ref.read(isOfflineProvider)) {
       setState(() {
         _bannerError = const AuthFailureNetwork().toLocalizedMessageInContext(
@@ -185,10 +179,8 @@ class _AcceptInviteDetailsScreenState
     setState(() => _isLoading = true);
 
     try {
-      await _authService.signUpWithCode(
-        email: widget.preview.email,
-        password: _passwordController.text,
-        code: widget.code,
+      await _authService.completeAccountSetup(
+        newPassword: _passwordController.text,
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         phone: _phoneController.text.trim(),
@@ -198,36 +190,38 @@ class _AcceptInviteDetailsScreenState
       // Success only — a failed attempt must never ask the OS to save it.
       TextInput.finishAutofillContext();
       if (!mounted) return;
-      await _routeAfterSignUp();
+      await _routeIntoApp();
     } catch (error, stackTrace) {
       final failure = AuthErrorMapper.map(error);
       ref
           .read(loggerProvider)
           .authFailure(
-            'AUTH-ACCEPT signUpWithCode failed',
+            'AUTH-SETUP completeAccountSetup failed',
             failure,
             error,
             stackTrace,
           );
       if (!mounted) return;
+      // Already active: the password change that precedes activation DID land,
+      // so this person is finished, not stuck. Walk them in rather than
+      // reporting a failure they cannot act on.
+      if (failure is AuthFailureSetupAlreadyComplete) {
+        await _routeIntoApp();
+        return;
+      }
       setState(() {
         _isLoading = false;
         _bannerError = failure.toLocalizedMessageInContext(
           context,
           AuthErrorContext.register,
         );
-        // The code died between preview and submit — expired in the window,
-        // revoked, or redeemed elsewhere. Offer the way back.
-        _codeDied =
-            failure is AuthFailureInvalidSignupCode ||
-            failure is AuthFailureSignupCodeExpired;
       });
     }
   }
 
-  /// Redemption leaves us signed in, so resolve the freshly activated profile
-  /// and go straight into the app.
-  Future<void> _routeAfterSignUp() async {
+  /// Setup leaves us signed in and now active, so resolve the freshly
+  /// activated profile and go straight into the app.
+  Future<void> _routeIntoApp() async {
     final outcome = await ref
         .read(signInControllerProvider.notifier)
         .resumeAfterSignUp();
@@ -242,27 +236,35 @@ class _AcceptInviteDetailsScreenState
             employeeId: employee.id,
           ),
         );
-      // The account exists and is active server-side; the doc just isn't
-      // readable yet. Say so and offer the way back to sign-in.
+      // The account is active server-side; the doc just isn't readable yet.
+      // Say so and offer the way back to sign-in.
       case SignInNoSession() || SignInProfilePending():
         setState(() {
           _isLoading = false;
-          _bannerSuccess = context.l10n.auth_accountCreatedYouCanNowSignIn;
+          _bannerSuccess = context.l10n.auth_accountReadySignInAgain;
         });
       // These only come from signIn() — resumeAfterSignUp() never produces
-      // them, but the sealed family forces the branch.
+      // them, but the sealed family forces the branch. `NeedsAccountSetup`
+      // included: reaching it here would mean activation didn't stick, and
+      // looping back onto this same screen is not a recovery.
       case SignInInvalidCredentials() ||
           SignInNoProfile() ||
           SignInAccountDisabled() ||
+          SignInNeedsAccountSetup() ||
           SignInError():
         break;
     }
   }
 
-  void _backToSignIn() {
-    Navigator.of(
+  /// Abandoning setup has to be possible: the person is holding a live session
+  /// on an account that can read nothing, and the only way back to the sign-in
+  /// screen is to drop it.
+  Future<void> _signOut() async {
+    await _authService.signOut();
+    if (!mounted) return;
+    await Navigator.of(
       context,
-    ).popUntil((route) => route.settings.name == AppRoutes.login);
+    ).pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
   }
 
   @override
@@ -270,19 +272,22 @@ class _AcceptInviteDetailsScreenState
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final bannerSuccess = _bannerSuccess;
+    final email = _authService.currentUser?.email ?? '';
 
     return AuthScaffold(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            l10n.auth_acceptInviteTitle,
+            l10n.auth_setUpYourAccountTitle,
             style: theme.textTheme.headlineLarge,
           ),
           const SizedBox(height: AppSpacing.sp16),
-          _InviteBanner(preview: widget.preview),
-          const SizedBox(height: AppSpacing.sp16),
-          _LockedEmailPanel(email: widget.preview.email),
+          const _SetupBanner(),
+          if (email.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sp16),
+            _LockedEmailPanel(email: email),
+          ],
           const SizedBox(height: AppSpacing.sp16),
           LabeledTextField(
             key: const Key('firstName'),
@@ -328,7 +333,7 @@ class _AcceptInviteDetailsScreenState
           ),
           const SizedBox(height: AppSpacing.sp16),
           AuthPasswordField(
-            label: l10n.common_password,
+            label: l10n.auth_newPassword,
             showLabel: true,
             textInputAction: TextInputAction.next,
             autofillHints: const [AutofillHints.newPassword],
@@ -356,7 +361,7 @@ class _AcceptInviteDetailsScreenState
             enabled: !_isLoading,
             errorText: _confirmError,
             isObscured: _isConfirmObscured,
-            onSubmitted: _createAccount,
+            onSubmitted: _finishSetup,
             onChanged: _onFieldChanged,
             onToggleObscured: () =>
                 setState(() => _isConfirmObscured = !_isConfirmObscured),
@@ -375,51 +380,33 @@ class _AcceptInviteDetailsScreenState
             ),
           const SizedBox(height: AppSpacing.sp24),
           AnimatedLoadingButton(
-            label: l10n.auth_createAccount,
+            label: l10n.auth_finishSetup,
             isLoading: _isLoading,
             // The checkbox IS the gate — a disabled button needs no error copy.
-            onPressed: _consented ? _createAccount : null,
+            onPressed: _consented ? _finishSetup : null,
           ),
-          if (_codeDied) ...[
-            const SizedBox(height: AppSpacing.sp8),
-            Center(
-              child: TextButton(
-                onPressed: _isLoading
-                    ? null
-                    : () => Navigator.of(context).maybePop(),
-                child: Text(l10n.auth_reEnterCode),
-              ),
+          const SizedBox(height: AppSpacing.sp8),
+          Center(
+            child: TextButton(
+              onPressed: _isLoading ? null : _signOut,
+              child: Text(l10n.settings_logOut),
             ),
-          ],
-          if (bannerSuccess != null) ...[
-            const SizedBox(height: AppSpacing.sp8),
-            Center(
-              child: TextButton(
-                onPressed: _backToSignIn,
-                child: Text(l10n.auth_backToSignIn),
-              ),
-            ),
-          ],
+          ),
         ],
       ),
     );
   }
 }
 
-/// "You're invited to join as {role}" plus the amber expiry pill. No inviter
-/// name — `createEmployeeInvite` stamps none, so there is nothing truthful to
-/// render there.
-class _InviteBanner extends StatelessWidget {
-  const _InviteBanner({required this.preview});
-
-  final InvitePreview preview;
+/// Explains why this screen exists at all: they signed in with a password
+/// somebody else chose, and it stops working the moment they finish here.
+class _SetupBanner extends StatelessWidget {
+  const _SetupBanner();
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final l10n = context.l10n;
-    final expiresAt = preview.expiresAt;
 
     return Container(
       width: double.infinity,
@@ -428,59 +415,17 @@ class _InviteBanner extends StatelessWidget {
         color: scheme.primaryContainer,
         borderRadius: BorderRadius.circular(AppRadius.r12),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.auth_invitedToJoinAs(
-              roleLabel(l10n, isAdmin: preview.isAdmin),
-            ),
-            style: theme.textTheme.titleSmall?.copyWith(
-              color: scheme.onPrimaryContainer,
-            ),
-          ),
-          // A missing expiry renders nothing rather than an epoch date.
-          if (expiresAt != null) ...[
-            const SizedBox(height: AppSpacing.sp8),
-            _ExpiryPill(expiresAt: expiresAt),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ExpiryPill extends StatelessWidget {
-  const _ExpiryPill({required this.expiresAt});
-
-  final DateTime expiresAt;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final status = theme.statusColors;
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sp12,
-        vertical: AppSpacing.sp4,
-      ),
-      decoration: BoxDecoration(
-        color: status.warningContainer,
-        borderRadius: BorderRadius.circular(AppRadius.rFull),
-      ),
       child: Text(
-        context.l10n.auth_inviteExpiresOn(
-          DateUtilsHelper.formatDate(expiresAt),
-        ),
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: status.onWarningContainer,
+        context.l10n.auth_setUpYourAccountBody,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: scheme.onPrimaryContainer,
         ),
       ),
     );
   }
 }
 
-/// The invite email, presented read-only. Deliberately NOT a disabled
+/// The sign-in email, presented read-only. Deliberately NOT a disabled
 /// [TextField]: there is nothing to focus, autofill must not target it, and a
 /// disabled field truncates at large text scale where a wrapping [Text] does
 /// not.
@@ -517,7 +462,7 @@ class _LockedEmailPanel extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(l10n.common_email, style: theme.textTheme.labelLarge),
-                const _FromInviteChip(),
+                const _SignedInChip(),
               ],
             ),
             const SizedBox(height: AppSpacing.sp8),
@@ -534,8 +479,8 @@ class _LockedEmailPanel extends StatelessWidget {
   }
 }
 
-class _FromInviteChip extends StatelessWidget {
-  const _FromInviteChip();
+class _SignedInChip extends StatelessWidget {
+  const _SignedInChip();
 
   @override
   Widget build(BuildContext context) {
@@ -556,7 +501,7 @@ class _FromInviteChip extends StatelessWidget {
           Icon(Icons.lock_outline, size: 12, color: scheme.onPrimaryContainer),
           const SizedBox(width: AppSpacing.sp4),
           Text(
-            context.l10n.auth_fromInvite,
+            context.l10n.auth_signedInAs,
             style: theme.monoType.micro.copyWith(
               color: scheme.onPrimaryContainer,
             ),
@@ -588,7 +533,7 @@ class _ConsentRow extends StatelessWidget {
     // paints onto the nearest Material, so an outer background would swallow
     // its ink splashes (and asserts in debug).
     return CheckboxListTile.adaptive(
-      key: const Key('inviteConsent'),
+      key: const Key('setupConsent'),
       value: value,
       activeColor: scheme.primary,
       tileColor: scheme.primaryContainer,
