@@ -520,6 +520,7 @@
   "employees_jobTitleTechnician": "Technicien",
   "employees_jobTitleApprentice": "Apprenti",
   "employees_jobTitleDispatcher": "Répartiteur",
+  "employees_jobsToday": "{count, plural, =1{1 tâche aujourd'hui} other{{count} tâches aujourd'hui}}",
   "employees_everyDay": "Tous les jours",
   "employees_noWorkingDays": "Aucun jour de travail défini"
 }

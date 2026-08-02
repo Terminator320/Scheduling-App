@@ -2304,6 +2304,15 @@
   "@employees_jobTitleDispatcher": {
     "description": "Job title chip: office staff who assigns jobs"
   },
+  "employees_jobsToday": "{count, plural, =1{1 job today} other{{count} jobs today}}",
+  "@employees_jobsToday": {
+    "description": "How many jobs this person is booked for today, on the team roster row",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "employees_everyDay": "Every day",
   "@employees_everyDay": {
     "description": "Working-days summary when all seven days are worked"
