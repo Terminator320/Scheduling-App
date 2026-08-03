@@ -78,6 +78,12 @@ Widget _wrap({
   );
 }
 
+Key _dayKey(DateTime day) => ValueKey(
+  'calendar-day-${day.year}-'
+  '${day.month.toString().padLeft(2, '0')}-'
+  '${day.day.toString().padLeft(2, '0')}',
+);
+
 void main() {
   late _MockEmployeesRepo repo;
 
@@ -396,6 +402,108 @@ void main() {
     expect(find.byType(CalendarHeaderBlock), findsOneWidget);
     expect(find.text('1 JOB'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a job spanning three days is listed on every one of them', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    // Days 1–3 of the visible month: always in-month, so every cell is
+    // tappable whatever today's date is.
+    final now = DateTime.now();
+    final spanning = AppointmentRecord(
+      id: 'span',
+      title: 'Three day job',
+      startTime: DateTime(now.year, now.month, 1, 9),
+      endTime: DateTime(now.year, now.month, 3, 17),
+      clientId: 'c1',
+      clientName: 'Alice',
+    );
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([spanning]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (var day = 1; day <= 3; day++) {
+      await tester.tap(find.byKey(_dayKey(DateTime(now.year, now.month, day))));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Three day job'),
+        findsOneWidget,
+        reason: 'the crew is on site on day $day of the run',
+      );
+      expect(find.text('1 JOB'), findsOneWidget, reason: 'day $day');
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a spanning card names its day within the run', (tester) async {
+    await withPhoneViewport(tester);
+    final now = DateTime.now();
+    final spanning = AppointmentRecord(
+      id: 'span',
+      title: 'Three day job',
+      startTime: DateTime(now.year, now.month, 1, 9),
+      endTime: DateTime(now.year, now.month, 3, 17),
+    );
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([spanning]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(_dayKey(DateTime(now.year, now.month, 2))));
+    await tester.pumpAndSettle();
+
+    // The day-scoped window and counter — not the raw stored span.
+    expect(find.textContaining('Day 2 of 3'), findsOneWidget);
+  });
+
+  testWidgets('an all-day block sorts above a timed job on the same day', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    final now = DateTime.now();
+    // The 1st: always in-month, so its cell is tappable whatever today is.
+    final day = DateTime(now.year, now.month);
+    final timed = AppointmentRecord(
+      id: 'timed',
+      title: 'Timed job',
+      startTime: DateTime(day.year, day.month, day.day, 8),
+      endTime: DateTime(day.year, day.month, day.day, 9),
+    );
+    final block = AppointmentRecord(
+      id: 'block',
+      title: 'All day block',
+      startTime: day,
+      endTime: DateTime(day.year, day.month, day.day, 23, 59),
+      isAllDay: true,
+      isPersonal: true,
+    );
+    await tester.pumpWidget(
+      _wrap(
+        // Timed first, so source order can't be what puts the block on top.
+        appointments: Stream.value([timed, block]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(_dayKey(day)));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getTopLeft(find.text('All day block')).dy,
+      lessThan(tester.getTopLeft(find.text('Timed job')).dy),
+    );
   });
 
   testWidgets('survives a stream error without crashing (error branch logs)', (

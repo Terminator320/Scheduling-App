@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
@@ -26,7 +27,9 @@ class AgendaSliverList extends StatelessWidget {
     this.selectedAppointmentId,
   });
 
-  final List<AppointmentRecord> events;
+  /// One entry per day the job runs — a multi-day job appears in the agenda of
+  /// every day it spans, each slice carrying that day's window and counter.
+  final List<AppointmentDaySlice> events;
   final Map<String, String> nameMap;
   final Map<String, Color> colorMap;
   final bool isAdmin;
@@ -59,7 +62,8 @@ class AgendaSliverList extends StatelessWidget {
             sliver: SliverList.builder(
               itemCount: events.length,
               itemBuilder: (context, index) {
-                final e = events[index];
+                final slice = events[index];
+                final e = slice.appointment;
 
                 return FadeInItem(
                   key: ValueKey(e.id),
@@ -71,6 +75,7 @@ class AgendaSliverList extends StatelessWidget {
                     ),
                     child: AppointmentCard(
                       appointment: e,
+                      slice: slice,
                       crew: crewFor(e, colorMap: colorMap, nameMap: nameMap),
                       selected: selectedAppointmentId == e.id,
                       onTap: () {
