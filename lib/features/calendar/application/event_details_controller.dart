@@ -8,6 +8,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart';
 import 'package:scheduling/features/calendar/application/appointment_series_editor.dart';
@@ -15,6 +16,7 @@ import 'package:scheduling/features/calendar/application/appointments_providers.
 import 'package:scheduling/features/calendar/application/event_details_outcome.dart';
 import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
@@ -38,10 +40,16 @@ abstract class EventDetailsState
     implements AppointmentFormFields {
   const factory EventDetailsState({
     required DateTime selectedDate,
+    required DateTime endDate,
     required TimeOfDay selectedStartTime,
     required TimeOfDay selectedEndTime,
     required String editingStatus,
     @Default(false) bool isEditing,
+
+    /// An existing record already has a real end date, so unlike the add flow
+    /// this starts true: moving the start date must preserve the run's LENGTH
+    /// rather than collapse it to a single day.
+    @Default(true) bool endDateTouched,
     @Default(RepeatInterval.none) RepeatInterval repeat,
     // The repeat value as last saved — if the user changes it, that triggers new bookings.
     @Default(RepeatInterval.none) RepeatInterval savedRepeat,
@@ -79,6 +87,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     _seedFuture = Future.microtask(_enrichSelectedEmployees);
     return EventDetailsState(
       selectedDate: appointment.startTime,
+      endDate: lastWorkDayOf(appointment),
       selectedStartTime: TimeOfDay.fromDateTime(appointment.startTime),
       selectedEndTime: TimeOfDay.fromDateTime(appointment.endTime),
       // storedRaw normalizes legacy/unknown status so save won't fail rules validation.
@@ -167,9 +176,19 @@ class EventDetailsController extends Notifier<EventDetailsState>
   void exitEditing() => state = state.copyWith(isEditing: false);
 
   void selectDate(DateTime date) {
+    final length = calendarDaysBetween(state.selectedDate, state.endDate);
     state = state.copyWith(
       selectedDate: date,
-      errors: withoutKey(state.errors, 'date'),
+      endDate: addCalendarDays(date, length < 0 ? 0 : length),
+      errors: withoutKey(withoutKey(state.errors, 'date'), 'endDate'),
+    );
+  }
+
+  void selectEndDate(DateTime date) {
+    state = state.copyWith(
+      endDate: date,
+      endDateTouched: true,
+      errors: withoutKey(state.errors, 'endDate'),
     );
   }
 
@@ -213,11 +232,9 @@ class EventDetailsController extends Notifier<EventDetailsState>
       clientCleared: value || state.clientCleared,
       clientResults: value ? const [] : state.clientResults,
       useCustomAddress: !value && state.useCustomAddress,
-      // All-day is offered on personal jobs only, so turning Personal off has
-      // to drop it too. Left set, the job saves as a midnight–23:59 CLIENT
-      // visit with no switch and no time rows on screen to correct it — an
-      // unrepairable record the travel sweep then skips.
-      isAllDay: value && state.isAllDay,
+      // isAllDay is deliberately NOT cleared here. The all-day switch is shown
+      // on every job now, not just personal ones, so the flag stays reachable
+      // and repairable — clearing it would discard a deliberate choice.
       errors: withoutKey(state.errors, 'client'),
     );
   }
@@ -373,7 +390,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
 
     final (:start, :end) = appointmentSpan(
       date: state.selectedDate,
-      endDate: state.selectedDate,
+      endDate: state.endDate,
       isAllDay: state.isAllDay,
       startTime: state.selectedStartTime,
       endTime: state.selectedEndTime,
@@ -490,6 +507,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
       AppointmentFormInput(
         title: title,
         date: state.selectedDate,
+        endDate: state.endDate,
         startTime: state.selectedStartTime,
         endTime: state.selectedEndTime,
         client: clientForValidation,
