@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_edit_body.dart';
@@ -65,7 +66,7 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
         text: DateUtilsHelper.formatDate(a.startTime),
       ),
       endDate: TextEditingController(
-        text: DateUtilsHelper.formatDate(a.startTime),
+        text: DateUtilsHelper.formatDate(lastWorkDayOf(a)),
       ),
       startTime: TextEditingController(
         text: DateUtilsHelper.formatTime(a.startTime),

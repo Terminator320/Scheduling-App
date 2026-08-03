@@ -11,6 +11,7 @@ import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/domain/series_outlook.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
@@ -80,6 +81,11 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     final notifier = ref.read(provider.notifier);
     final allEmployees =
         ref.watch(employeesStreamProvider).asData?.value ?? const [];
+    // One length feeds both the flag and the label, so they can't disagree:
+    // the run-length string is a plain interpolation, and a multi-day flag
+    // paired with a length of 1 would render "1 days".
+    final rawSpan = calendarDaysBetween(state.selectedDate, state.endDate) + 1;
+    final spanLength = rawSpan < 1 ? 1 : rawSpan;
 
     return FormSheetFrame(
       title: context.l10n.calendar_editAppointment,
@@ -118,8 +124,12 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           onRequestAddClient: requestAddClient,
           onToggleEmployee: notifier.toggleEmployee,
           onPickDate: () => _pickDate(context, state, notifier),
-          // TODO(multi-day): wired in Task 9
-          onPickEndDate: () {},
+          onPickEndDate: () => _pickEndDate(context, state, notifier),
+          isMultiDay: spanLength > 1,
+          isOvernight:
+              !state.isAllDay &&
+              isOvernightWindow(state.selectedStartTime, state.selectedEndTime),
+          spanLength: spanLength,
           onPickStartTime: () => _pickStartTime(context, state, notifier),
           onPickEndTime: () => _pickEndTime(context, state, notifier),
           onSelectRepeat: notifier.selectRepeat,
@@ -151,6 +161,34 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     if (picked == null || !context.mounted) return;
     widget.controllers.date.text = DateUtilsHelper.formatDate(picked);
     notifier.selectDate(picked);
+    // selectDate shifts the end date to preserve the run's length, and the end
+    // row renders the controller text — so it has to follow, or it goes stale.
+    final shifted = ref
+        .read(
+          eventDetailsControllerProvider(EventDetailsKey(widget.appointment)),
+        )
+        .endDate;
+    widget.controllers.endDate.text = DateUtilsHelper.formatDate(shifted);
+  }
+
+  Future<void> _pickEndDate(
+    BuildContext context,
+    EventDetailsState state,
+    EventDetailsController notifier,
+  ) async {
+    final picked = await showAdaptiveDatePicker(
+      context,
+      initialDate: state.endDate,
+      // Never offer a date before the start: an end date that precedes it is
+      // unbookable, so it shouldn't be reachable in the picker either. Floored
+      // to midnight — the seeded start carries the record's clock time, which
+      // would otherwise sit after the end date on the run's first day.
+      firstDate: state.selectedDate.dateOnly,
+      lastDate: AppointmentDraftDefaults.datePickerLastDate,
+    );
+    if (picked == null || !context.mounted) return;
+    widget.controllers.endDate.text = DateUtilsHelper.formatDate(picked);
+    notifier.selectEndDate(picked);
   }
 
   Future<void> _pickStartTime(
