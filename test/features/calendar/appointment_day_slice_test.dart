@@ -147,5 +147,29 @@ void main() {
         ['allday', 'early', 'late'],
       );
     });
+
+    test('clamps an over-long run and reports it, keeping slices coherent', () {
+      final corrupt = _record(
+        start: DateTime(2026, 8, 1, 9),
+        end: DateTime(2026, 9, 10, 17), // 41 days — past the 14-day cap
+      );
+      final clamped = <int>[];
+      final index = expandToDays(
+        [corrupt],
+        AppointmentDateRange(
+          start: DateTime(2026, 8, 1),
+          end: DateTime(2026, 10, 1),
+        ),
+        onSpanClamped: (_, days) => clamped.add(days),
+      );
+
+      expect(index.length, maxAppointmentSpanDays);
+      expect(clamped, [41]); // the REAL span is reported, not the clamped one
+
+      final last = index[DateTime(2026, 8, 14)]!.single;
+      expect(last.dayIndex, maxAppointmentSpanDays);
+      expect(last.dayCount, maxAppointmentSpanDays);
+      expect(last.isLastDay, isTrue);
+    });
   });
 }
