@@ -234,19 +234,20 @@ void main() {
       expect(readState().isEditing, isFalse);
     });
 
-    test('turning Personal off also clears all-day', () {
-      // Regression: all-day is only offered on a personal job, so leaving the
-      // flag set converted the block into a midnight–23:59 CLIENT visit with
-      // neither the switch nor the time rows on screen to correct it. The
-      // travel sweep then skips that record forever.
-      final c = readNotifier()
-        ..setPersonal(value: true)
-        ..setAllDay(value: true);
-      expect(readState().isAllDay, isTrue);
+    test(
+      'turning Personal off KEEPS all-day (retired invariant: all-day now '
+      'applies to client jobs too, so the flag is reachable and repairable '
+      'rather than an unrepairable dead end)',
+      () {
+        final c = readNotifier()
+          ..setPersonal(value: true)
+          ..setAllDay(value: true);
+        expect(readState().isAllDay, isTrue);
 
-      c.setPersonal(value: false);
-      expect(readState().isAllDay, isFalse);
-    });
+        c.setPersonal(value: false);
+        expect(readState().isAllDay, isTrue);
+      },
+    );
 
     test('turning Personal on again does not resurrect all-day', () {
       final c = readNotifier()..setPersonal(value: true);
@@ -254,6 +255,66 @@ void main() {
 
       c.setAllDay(value: true);
       expect(readState().isAllDay, isTrue);
+    });
+  });
+
+  group('end date (multi-day)', () {
+    final multiDay = _appointment.copyWith(
+      id: 'multi-1',
+      startTime: DateTime(2026, 8, 1, 9),
+      endTime: DateTime(2026, 8, 5, 17),
+    );
+
+    final overnight = _appointment.copyWith(
+      id: 'overnight-1',
+      startTime: DateTime(2026, 8, 1, 22),
+      endTime: DateTime(2026, 8, 4, 6),
+    );
+
+    test('seeds the end date from the stored last work day', () {
+      container.listen(
+        eventDetailsControllerProvider(EventDetailsKey(multiDay)),
+        (_, _) {},
+      );
+      final state = container.read(
+        eventDetailsControllerProvider(EventDetailsKey(multiDay)),
+      );
+      expect(state.endDate, DateTime(2026, 8, 5));
+      expect(state.endDateTouched, isTrue);
+    });
+
+    test('a night shift seeds the last NIGHT, not the morning', () {
+      container.listen(
+        eventDetailsControllerProvider(EventDetailsKey(overnight)),
+        (_, _) {},
+      );
+      final state = container.read(
+        eventDetailsControllerProvider(EventDetailsKey(overnight)),
+      );
+      expect(state.endDate, DateTime(2026, 8, 3));
+    });
+
+    test('moving the start date preserves the run length', () {
+      container.listen(
+        eventDetailsControllerProvider(EventDetailsKey(multiDay)),
+        (_, _) {},
+      );
+      container
+          .read(
+            eventDetailsControllerProvider(EventDetailsKey(multiDay)).notifier,
+          )
+          .selectDate(DateTime(2026, 8, 3));
+
+      final state = container.read(
+        eventDetailsControllerProvider(EventDetailsKey(multiDay)),
+      );
+      expect(state.endDate, DateTime(2026, 8, 7));
+    });
+
+    test('selectEndDate sets the date and marks it touched', () {
+      readNotifier().selectEndDate(DateTime(2026, 5, 12));
+      expect(readState().endDate, DateTime(2026, 5, 12));
+      expect(readState().endDateTouched, isTrue);
     });
   });
 
@@ -340,36 +401,39 @@ void main() {
       verifyNever(() => appointments.updateAppointment(any()));
     });
 
-    test('an all-day edit saves midnight to 23:59, not the picked times', () async {
-      // The EDIT half of the appointmentSpan invariant. The add path was
-      // covered end-to-end but this one only ever asserted the isAllDay STATE
-      // flag, so a regression in the saved instants here would have shipped
-      // silently — which is exactly what routing both paths through one helper
-      // is meant to prevent.
-      readNotifier();
-      await waitForSeed();
-      final c = readNotifier()
-        // Times picked BEFORE the switch was flipped stay in state; the span
-        // helper must ignore them.
-        ..selectStartTime(const TimeOfDay(hour: 14, minute: 0))
-        ..selectEndTime(const TimeOfDay(hour: 16, minute: 0))
-        ..setPersonal(value: true)
-        ..setAllDay(value: true);
+    test(
+      'an all-day edit saves midnight to 23:59, not the picked times',
+      () async {
+        // The EDIT half of the appointmentSpan invariant. The add path was
+        // covered end-to-end but this one only ever asserted the isAllDay STATE
+        // flag, so a regression in the saved instants here would have shipped
+        // silently — which is exactly what routing both paths through one helper
+        // is meant to prevent.
+        readNotifier();
+        await waitForSeed();
+        final c = readNotifier()
+          // Times picked BEFORE the switch was flipped stay in state; the span
+          // helper must ignore them.
+          ..selectStartTime(const TimeOfDay(hour: 14, minute: 0))
+          ..selectEndTime(const TimeOfDay(hour: 16, minute: 0))
+          ..setPersonal(value: true)
+          ..setAllDay(value: true);
 
-      final outcome = await c.save(
-        _appointment,
-        title: 'Dentist',
-        address: '',
-        notes: '',
-        materialsNeeded: '',
-      );
+        final outcome = await c.save(
+          _appointment,
+          title: 'Dentist',
+          address: '',
+          notes: '',
+          materialsNeeded: '',
+        );
 
-      expect(outcome, isA<EventDetailsSaved>());
-      final saved = (outcome as EventDetailsSaved).appointment;
-      expect(saved.isAllDay, isTrue);
-      expect(saved.startTime, DateTime(2026, 5, 10));
-      expect(saved.endTime, DateTime(2026, 5, 10, 23, 59));
-    });
+        expect(outcome, isA<EventDetailsSaved>());
+        final saved = (outcome as EventDetailsSaved).appointment;
+        expect(saved.isAllDay, isTrue);
+        expect(saved.startTime, DateTime(2026, 5, 10));
+        expect(saved.endTime, DateTime(2026, 5, 10, 23, 59));
+      },
+    );
 
     test('writes updated appointment with edited values on success', () async {
       readNotifier();
