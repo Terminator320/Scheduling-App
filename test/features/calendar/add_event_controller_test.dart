@@ -378,6 +378,25 @@ void main() {
       expect(saved.startTime, DateTime(2026, 5, 10, 9));
     });
 
+    test(
+      'turning Personal on with no times picked still defaults to all-day',
+      () {
+        readNotifier().setPersonal(value: true);
+        expect(readState().isAllDay, isTrue);
+      },
+    );
+
+    test('turning Personal off KEEPS an explicitly set all-day', () {
+      // Retired invariant: all-day used to be personal-only, so turning
+      // Personal off cleared it. The switch is on every job now, so the flag
+      // stays — clearing it would discard a deliberate choice.
+      readNotifier()
+        ..setPersonal(value: true)
+        ..setAllDay(value: true)
+        ..setPersonal(value: false);
+      expect(readState().isAllDay, isTrue);
+    });
+
     test('turning a draft personal clears a chosen repeat', () async {
       readNotifier()
         ..selectRepeat(RepeatInterval.oneYear)

@@ -192,12 +192,12 @@ class AddEventController extends Notifier<AddEventState>
       // Safe here because nothing is saved yet; the edit flow deliberately
       // keeps its repeat, where clearing it would rewrite a live series.
       repeat: value ? RepeatInterval.none : state.repeat,
-      // "No time put in" is the default for a personal block, so it starts
-      // all-day unless a time was already picked.
-      isAllDay:
-          value &&
-          state.selectedStartTime == null &&
-          state.selectedEndTime == null,
+      // Turning Personal ON defaults an untimed block to all-day. Turning it
+      // OFF leaves the flag alone — the switch is on every job now, so an
+      // all-day CLIENT visit is a legitimate, reachable, repairable state.
+      isAllDay: value
+          ? state.selectedStartTime == null && state.selectedEndTime == null
+          : state.isAllDay,
       errors: withoutKey(
         withoutKey(withoutKey(state.errors, 'client'), 'startTime'),
         'endTime',
