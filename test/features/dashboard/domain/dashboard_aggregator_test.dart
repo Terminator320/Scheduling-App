@@ -16,6 +16,7 @@ AppointmentRecord _appt({
   Duration duration = const Duration(hours: 1),
   String status = 'pending',
   List<String> employeeIds = const ['e1'],
+  bool isPersonal = false,
 }) => AppointmentRecord(
   id: id,
   title: 'Job $id',
@@ -23,6 +24,7 @@ AppointmentRecord _appt({
   endTime: start.add(duration),
   status: status,
   employeeIds: employeeIds,
+  isPersonal: isPersonal,
 );
 
 void main() {
@@ -332,9 +334,40 @@ void main() {
       expect(flags.isAllClear, isFalse);
     });
 
+    test('overdueOpen excludes a personal block past its end', () {
+      // A personal block never derives overdue — it has no mark-done flow, so
+      // an admin could not clear it from Attention. The card, the server sweep
+      // and this reducer must agree.
+      final flags = DashboardAggregator.computeAttentionFlags([
+        _appt(
+          id: 'personal',
+          start: DateTime(2026, 7, 7, 9),
+          isPersonal: true,
+        ),
+      ], _now);
+      expect(flags.overdueOpen, isEmpty);
+      expect(flags.isAllClear, isTrue);
+    });
+
     test('isAllClear when both lists are empty', () {
       final flags = DashboardAggregator.computeAttentionFlags(const [], _now);
       expect(flags.isAllClear, isTrue);
+    });
+  });
+
+  group('displayStatusAt', () {
+    test('delegates to the record, so a personal block never goes overdue', () {
+      final personal = _appt(
+        id: 'p',
+        start: DateTime(2026, 7, 7, 9),
+        isPersonal: true,
+      );
+      final job = _appt(id: 'j', start: DateTime(2026, 7, 7, 9));
+
+      expect(DashboardAggregator.displayStatusAt(personal, _now), 'pending');
+      expect(personal.displayStatusAt(_now), 'pending');
+      // Same span, ordinary client visit — this one IS overdue.
+      expect(DashboardAggregator.displayStatusAt(job, _now), 'overdue');
     });
   });
 }

@@ -34,7 +34,6 @@ class AppColors {
   static const Color blueTint = Color(0xFFEFF4FC);
   static const Color blueTintHover = Color(0xFFE2ECFA);
   static const Color blueTint2 = Color(0xFFE4F0FF);
-  static const Color barTint = Color(0xFFC7D8EF);
   static const Color green = Color(0xFF0E9B6E);
   static const Color greenText = Color(0xFF0B7A57);
   static const Color greenFill = Color(0xFFE6F5EF);
@@ -142,7 +141,6 @@ class AppSpacing {
   static const double sp32 = 32;
 
   static const double cardPaddingY = 12;
-  static const double cardGap = 9;
 }
 
 class AppRadius {
@@ -156,15 +154,12 @@ class AppRadius {
 
   static const double rCard = 15;
   static const double rPanel = 18;
-  static const double rHero = 20;
   static const double rSheet = 26;
   static const double rDialog = 22;
   static const double rFab = 20;
   static const double rIcon = 12;
-  static const double rInput = 12;
   static const double rThumb = 9;
   static const double rRow = 13;
-  static const double rSwatch = 12;
 }
 
 class AppShadow {
@@ -205,9 +200,7 @@ class AppMotion {
   static const Curve emphasized = Cubic(0.2, 0.9, 0.25, 1);
   static const Duration popIn = Duration(milliseconds: 200);
   static const Duration drawer = Duration(milliseconds: 260);
-  static const Duration riseIn = Duration(milliseconds: 300);
   static const Duration riseInShort = Duration(milliseconds: 240);
-  static const Duration dropdownSheet = Duration(milliseconds: 280);
 
   /// Total in-hold-out lifetime of a notice (`06-sheets-and-dialogs.md` §11).
   static const Duration noticeCycle = Duration(milliseconds: 2600);
@@ -245,13 +238,9 @@ class AppCardStyle extends ThemeExtension<AppCardStyle> {
     required this.border,
     required this.iconChipAlpha,
     required this.sheetShadow,
-    required this.dialogShadow,
     required this.drawerShadow,
     required this.noticeShadow,
-    required this.fabShadow,
     required this.pillShadow,
-    required this.thumbShadow,
-    required this.knobShadow,
   });
 
   final List<BoxShadow>? shadow;
@@ -261,13 +250,9 @@ class AppCardStyle extends ThemeExtension<AppCardStyle> {
   final double iconChipAlpha;
 
   final List<BoxShadow> sheetShadow;
-  final List<BoxShadow> dialogShadow;
   final List<BoxShadow> drawerShadow;
   final List<BoxShadow> noticeShadow;
-  final List<BoxShadow> fabShadow;
   final List<BoxShadow> pillShadow;
-  final List<BoxShadow> thumbShadow;
-  final List<BoxShadow> knobShadow;
 
   static const light = AppCardStyle(
     shadow: [
@@ -289,14 +274,6 @@ class AppCardStyle extends ThemeExtension<AppCardStyle> {
         offset: Offset(0, 12),
       ),
     ],
-    dialogShadow: [
-      BoxShadow(
-        color: Color(0x8C0B1A33),
-        blurRadius: 50,
-        spreadRadius: -16,
-        offset: Offset(0, 22),
-      ),
-    ],
     drawerShadow: [
       BoxShadow(
         color: Color(0x660B1A33),
@@ -313,14 +290,6 @@ class AppCardStyle extends ThemeExtension<AppCardStyle> {
         offset: Offset(0, 14),
       ),
     ],
-    fabShadow: [
-      BoxShadow(
-        color: Color(0xA6005CC8),
-        blurRadius: 24,
-        spreadRadius: -8,
-        offset: Offset(0, 10),
-      ),
-    ],
     pillShadow: [
       BoxShadow(
         color: Color(0x660B1A33),
@@ -328,12 +297,6 @@ class AppCardStyle extends ThemeExtension<AppCardStyle> {
         spreadRadius: -6,
         offset: Offset(0, 6),
       ),
-    ],
-    thumbShadow: [
-      BoxShadow(color: Color(0x240B1A33), blurRadius: 3, offset: Offset(0, 1)),
-    ],
-    knobShadow: [
-      BoxShadow(color: Color(0x4D0B1A33), blurRadius: 2, offset: Offset(0, 1)),
     ],
   );
 
@@ -353,14 +316,6 @@ class AppCardStyle extends ThemeExtension<AppCardStyle> {
         offset: Offset(0, 12),
       ),
     ],
-    dialogShadow: [
-      BoxShadow(
-        color: Color(0xCC000000),
-        blurRadius: 50,
-        spreadRadius: -16,
-        offset: Offset(0, 22),
-      ),
-    ],
     drawerShadow: [
       BoxShadow(
         color: Color(0xCC000000),
@@ -377,14 +332,6 @@ class AppCardStyle extends ThemeExtension<AppCardStyle> {
         offset: Offset(0, 14),
       ),
     ],
-    fabShadow: [
-      BoxShadow(
-        color: Color(0xA61D6BE8),
-        blurRadius: 24,
-        spreadRadius: -8,
-        offset: Offset(0, 10),
-      ),
-    ],
     pillShadow: [
       BoxShadow(
         color: Color(0xCC000000),
@@ -392,12 +339,6 @@ class AppCardStyle extends ThemeExtension<AppCardStyle> {
         spreadRadius: -6,
         offset: Offset(0, 6),
       ),
-    ],
-    thumbShadow: [
-      BoxShadow(color: Color(0x66000000), blurRadius: 3, offset: Offset(0, 1)),
-    ],
-    knobShadow: [
-      BoxShadow(color: Color(0x66000000), blurRadius: 2, offset: Offset(0, 1)),
     ],
   );
 
@@ -407,26 +348,18 @@ class AppCardStyle extends ThemeExtension<AppCardStyle> {
     BoxBorder? border,
     double? iconChipAlpha,
     List<BoxShadow>? sheetShadow,
-    List<BoxShadow>? dialogShadow,
     List<BoxShadow>? drawerShadow,
     List<BoxShadow>? noticeShadow,
-    List<BoxShadow>? fabShadow,
     List<BoxShadow>? pillShadow,
-    List<BoxShadow>? thumbShadow,
-    List<BoxShadow>? knobShadow,
   }) {
     return AppCardStyle(
       shadow: shadow ?? this.shadow,
       border: border ?? this.border,
       iconChipAlpha: iconChipAlpha ?? this.iconChipAlpha,
       sheetShadow: sheetShadow ?? this.sheetShadow,
-      dialogShadow: dialogShadow ?? this.dialogShadow,
       drawerShadow: drawerShadow ?? this.drawerShadow,
       noticeShadow: noticeShadow ?? this.noticeShadow,
-      fabShadow: fabShadow ?? this.fabShadow,
       pillShadow: pillShadow ?? this.pillShadow,
-      thumbShadow: thumbShadow ?? this.thumbShadow,
-      knobShadow: knobShadow ?? this.knobShadow,
     );
   }
 
@@ -440,22 +373,14 @@ class AppCardStyle extends ThemeExtension<AppCardStyle> {
           lerpDouble(iconChipAlpha, other.iconChipAlpha, t) ?? iconChipAlpha,
       sheetShadow:
           BoxShadow.lerpList(sheetShadow, other.sheetShadow, t) ?? sheetShadow,
-      dialogShadow:
-          BoxShadow.lerpList(dialogShadow, other.dialogShadow, t) ??
-          dialogShadow,
       drawerShadow:
           BoxShadow.lerpList(drawerShadow, other.drawerShadow, t) ??
           drawerShadow,
       noticeShadow:
           BoxShadow.lerpList(noticeShadow, other.noticeShadow, t) ??
           noticeShadow,
-      fabShadow: BoxShadow.lerpList(fabShadow, other.fabShadow, t) ?? fabShadow,
       pillShadow:
           BoxShadow.lerpList(pillShadow, other.pillShadow, t) ?? pillShadow,
-      thumbShadow:
-          BoxShadow.lerpList(thumbShadow, other.thumbShadow, t) ?? thumbShadow,
-      knobShadow:
-          BoxShadow.lerpList(knobShadow, other.knobShadow, t) ?? knobShadow,
     );
   }
 }
@@ -687,8 +612,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.decorFaint,
     required this.primaryAccent,
     required this.blueTintPressed,
-    required this.barTint,
-    required this.brandNavy,
     required this.sheetRow,
     required this.lockedPanel,
     required this.lockedPanelBorder,
@@ -697,7 +620,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.onDangerFill,
     required this.noticeMint,
     required this.noticeInfo,
-    required this.noticeAmber,
     required this.noticeRed,
     required this.heroGradient,
     required this.crewOverride,
@@ -712,8 +634,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color decorFaint; // grabber, decorative strokes
   final Color primaryAccent; // blue for TEXT and ICONS (lifted in dark)
   final Color blueTintPressed; // pressed state on tinted icon buttons
-  final Color barTint; // inactive chart bars
-  final Color brandNavy; // gradient end, owner avatar
   final Color sheetRow; // row card inside a sheet
   final Color lockedPanel; // read-only field group
   final Color lockedPanelBorder;
@@ -722,7 +642,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color onDangerFill;
   final Color noticeMint; // toast dots — the toast surface is dark in
   final Color noticeInfo; // BOTH themes, so these four are identical
-  final Color noticeAmber; // light and dark.
   final Color noticeRed;
   final Gradient heroGradient;
   final Map<int, Color> crewOverride;
@@ -737,8 +656,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
     decorFaint: AppColors.ink15,
     primaryAccent: AppColors.blue,
     blueTintPressed: AppColors.blueTintHover,
-    barTint: AppColors.barTint,
-    brandNavy: AppColors.navy,
     sheetRow: Color(0xFFFFFFFF),
     lockedPanel: AppColors.lockedPanel,
     lockedPanelBorder: Color(0x120B1A33),
@@ -747,7 +664,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
     onDangerFill: Color(0xFFFFFFFF),
     noticeMint: Color(0xFF7FE3C0),
     noticeInfo: Color(0xFF7FCBFF),
-    noticeAmber: Color(0xFFF0C36A),
     noticeRed: Color(0xFFFF9AA8),
     heroGradient: LinearGradient(
       begin: Alignment(-0.5, -1),
@@ -767,8 +683,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
     decorFaint: Color(0xFF2C3648),
     primaryAccent: AppColors.darkBlueText,
     blueTintPressed: Color(0x334B90F7),
-    barTint: Color(0xFF31445F),
-    brandNavy: AppColors.darkNavy,
     sheetRow: AppColors.darkSheetRow,
     lockedPanel: Color(0xFF121B2A),
     lockedPanelBorder: Color(0x12FFFFFF),
@@ -777,7 +691,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
     onDangerFill: Color(0xFFFFFFFF),
     noticeMint: Color(0xFF7FE3C0),
     noticeInfo: Color(0xFF7FCBFF),
-    noticeAmber: Color(0xFFF0C36A),
     noticeRed: Color(0xFFFF9AA8),
     heroGradient: LinearGradient(
       begin: Alignment(-0.5, -1),
@@ -798,8 +711,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
     Color? decorFaint,
     Color? primaryAccent,
     Color? blueTintPressed,
-    Color? barTint,
-    Color? brandNavy,
     Color? sheetRow,
     Color? lockedPanel,
     Color? lockedPanelBorder,
@@ -808,7 +719,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
     Color? onDangerFill,
     Color? noticeMint,
     Color? noticeInfo,
-    Color? noticeAmber,
     Color? noticeRed,
     Gradient? heroGradient,
     Map<int, Color>? crewOverride,
@@ -822,8 +732,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
     decorFaint: decorFaint ?? this.decorFaint,
     primaryAccent: primaryAccent ?? this.primaryAccent,
     blueTintPressed: blueTintPressed ?? this.blueTintPressed,
-    barTint: barTint ?? this.barTint,
-    brandNavy: brandNavy ?? this.brandNavy,
     sheetRow: sheetRow ?? this.sheetRow,
     lockedPanel: lockedPanel ?? this.lockedPanel,
     lockedPanelBorder: lockedPanelBorder ?? this.lockedPanelBorder,
@@ -832,7 +740,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
     onDangerFill: onDangerFill ?? this.onDangerFill,
     noticeMint: noticeMint ?? this.noticeMint,
     noticeInfo: noticeInfo ?? this.noticeInfo,
-    noticeAmber: noticeAmber ?? this.noticeAmber,
     noticeRed: noticeRed ?? this.noticeRed,
     heroGradient: heroGradient ?? this.heroGradient,
     crewOverride: crewOverride ?? this.crewOverride,
@@ -851,8 +758,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
       decorFaint: Color.lerp(decorFaint, other.decorFaint, t)!,
       primaryAccent: Color.lerp(primaryAccent, other.primaryAccent, t)!,
       blueTintPressed: Color.lerp(blueTintPressed, other.blueTintPressed, t)!,
-      barTint: Color.lerp(barTint, other.barTint, t)!,
-      brandNavy: Color.lerp(brandNavy, other.brandNavy, t)!,
       sheetRow: Color.lerp(sheetRow, other.sheetRow, t)!,
       lockedPanel: Color.lerp(lockedPanel, other.lockedPanel, t)!,
       lockedPanelBorder: Color.lerp(
@@ -865,7 +770,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
       onDangerFill: Color.lerp(onDangerFill, other.onDangerFill, t)!,
       noticeMint: Color.lerp(noticeMint, other.noticeMint, t)!,
       noticeInfo: Color.lerp(noticeInfo, other.noticeInfo, t)!,
-      noticeAmber: Color.lerp(noticeAmber, other.noticeAmber, t)!,
       noticeRed: Color.lerp(noticeRed, other.noticeRed, t)!,
       heroGradient: Gradient.lerp(heroGradient, other.heroGradient, t)!,
       // Discrete data, not colours — snap at the midpoint.

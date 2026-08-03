@@ -277,25 +277,6 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
         })
         .join(' ');
 
-    final searchableText = ClientSearchPolicy.normalize(
-      [
-        data['name'],
-        // Legacy business-only docs keep name under `businessName`; index it for searchability.
-        data['businessName'],
-        data['firstName'],
-        data['lastName'],
-        data['phone'],
-        data['mobile'],
-        data['email'],
-        data['address'],
-        data['city'],
-        data['province'],
-        data['postalCode'],
-        data['country'],
-        contactSearchText,
-      ].whereType<Object>().map((v) => v.toString()).join(' '),
-    );
-
     final displayName = ClientSearchPolicy.normalize(client.displayName);
     final personName = ClientSearchPolicy.normalize(
       [
@@ -308,13 +289,20 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
     );
     final contactsDigits = ClientSearchPolicy.digitsOnly(contactSearchText);
 
-    final matchesText = searchableText.contains(normalizedQuery);
-    final matchesPhone =
-        queryDigits.isNotEmpty &&
-        (phoneDigits.contains(queryDigits) ||
-            contactsDigits.contains(queryDigits));
-
-    if (!matchesText && !matchesPhone) continue;
+    // Whether a client matches is ClientSearchPolicy's call, not this file's.
+    // This used to be a hand-rolled index off the raw map, and it had already
+    // drifted: it kept client digits and contact digits in two strings while
+    // the policy concatenates all of them into one, so a query spanning both
+    // (client phone tail + contact phone head) matched in the instant local
+    // filter and then vanished when this debounced read landed. Only the
+    // relevance SCORING below stays local.
+    if (!ClientSearchPolicy.entryMatches(
+      ClientSearchPolicy.index(client),
+      queryText: normalizedQuery,
+      queryDigits: queryDigits,
+    )) {
+      continue;
+    }
 
     var score = 100;
     if (displayName == normalizedQuery || phoneDigits == queryDigits) {

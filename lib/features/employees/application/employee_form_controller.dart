@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -39,6 +37,16 @@ class EmployeeEmailInUse extends EmployeeSaveOutcome {
 class EmployeeSaveFailed extends EmployeeSaveOutcome {
   const EmployeeSaveFailed(this.error);
   final Object error;
+}
+
+/// A write the reentrancy guard skipped because one is already in flight.
+/// Nothing committed and nothing failed, so this surfaces NOTHING — no notice
+/// either way. It used to be reported as `EmployeeSaveFailed(SocketException)`,
+/// which `composeErrorNotice` classifies by TYPE and rendered as "you appear to
+/// be offline" on a double-tap while perfectly online. Same shape as
+/// EventDetailsActionBusy.
+class EmployeeSaveBusy extends EmployeeSaveOutcome {
+  const EmployeeSaveBusy();
 }
 
 /// Outcome of a disable/enable toggle.
@@ -103,7 +111,8 @@ class EmployeeFormActivity {
       other.isDeletingAccount == isDeletingAccount;
 
   @override
-  int get hashCode => Object.hash(isSaving, isTogglingStatus, isDeletingAccount);
+  int get hashCode =>
+      Object.hash(isSaving, isTogglingStatus, isDeletingAccount);
 }
 
 /// Handles employee create/update/status, shared by the form sheet and the
@@ -119,8 +128,13 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
   ///
   /// Takes the whole record on purpose. The server's re-provision branch
   /// UPDATES the pending doc's editable fields with whatever it is handed, so
-  /// a call site that omits one silently wipes it — passing a record makes
-  /// that omission unexpressible instead of merely documented.
+  /// a call site that omits one silently wipes it — passing a record closes
+  /// that trap at the CALL SITES, which is where it kept being sprung.
+  ///
+  /// It does not close it here: the destructuring below is still by hand, so a
+  /// new pending-user field added to the server's update set has to be added
+  /// to this one place too, with no compile error if it isn't. One place, not
+  /// four — but not zero.
   Future<EmployeeSaveOutcome> createAccount(EmployeeRecord employee) {
     return _save(
       (repo) async => EmployeeAccountCreated(
@@ -165,7 +179,7 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
     // concurrent write. PendingInviteTile checks isSaving at its call site;
     // owning it here covers the two person sheets too.
     if (state.isSaving) {
-      return const EmployeeSaveFailed(SocketException('in-flight'));
+      return const EmployeeSaveBusy();
     }
     // Resolve dependencies before the first await. The sheet can be
     // dismissed mid-save, and using the Ref of a disposed notifier throws in

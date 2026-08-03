@@ -87,6 +87,10 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
     if (!mounted) return;
 
     switch (outcome) {
+      // A skipped duplicate submit committed nothing and failed nothing — the
+      // save already running owns the outcome, so say nothing.
+      case EmployeeSaveBusy():
+        break;
       case EmployeeAccountCreated(:final credentials):
         setState(() {
           _credentials = credentials;

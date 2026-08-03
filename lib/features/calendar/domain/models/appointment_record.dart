@@ -86,8 +86,15 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     'seriesId': seriesId,
   };
 
-  /// A display status computed from the current time — never stored. Keep this in sync with functions/notification_utils.js.
-  String get displayStatus {
+  /// A display status computed from the current time — never stored. Keep this
+  /// in sync with functions/notification_utils.js.
+  String get displayStatus => displayStatusAt(DateTime.now());
+
+  /// The clock-derived ladder, keyed on [now] so callers that already hold a
+  /// clock (the dashboard reducers) share this one owner instead of re-deriving
+  /// it — they drifted apart once already, and a personal block then showed as
+  /// Scheduled on its card and Overdue on the dashboard.
+  String displayStatusAt(DateTime now) {
     final s = status.toLowerCase();
     if (s == 'done' || s == 'completed' || s == 'cancelled') return status;
     // A personal block is not a job being worked: it stays on its stored
@@ -95,7 +102,6 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     // its start and Overdue at its end. The server's overdue sweep skips these
     // for the same reason — the two must agree.
     if (isPersonal) return status;
-    final now = DateTime.now();
     if (now.isAfter(endTime)) return 'overdue';
     if (now.isAfter(startTime)) return 'in_progress';
     return status;

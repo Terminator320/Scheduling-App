@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -57,6 +59,53 @@ void main() {
   );
 
   Future<EmployeeSaveOutcome> update() => notifier().updateEmployee(edited);
+
+  group('reentrancy', () {
+    test('a concurrent save returns Busy, not a failure', () async {
+      final gate = Completer<NewAccountCredentials>();
+      when(
+        () => repo.createEmployeeAccount(
+          name: any(named: 'name'),
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
+          email: any(named: 'email'),
+          phone: any(named: 'phone'),
+          colorValue: any(named: 'colorValue'),
+          jobTitle: any(named: 'jobTitle'),
+          isAdmin: any(named: 'isAdmin'),
+        ),
+      ).thenAnswer((_) => gate.future);
+
+      final first = create();
+      // Second tap lands while the first write is still in flight.
+      final second = await create();
+
+      // Busy, NOT EmployeeSaveFailed — a SocketException here is classified by
+      // TYPE as "offline" and rendered a false offline notice while online.
+      expect(second, isA<EmployeeSaveBusy>());
+
+      gate.complete(
+        const NewAccountCredentials(
+          email: 'alex@test.com',
+          password: 'Welcome123!',
+        ),
+      );
+      expect(await first, isA<EmployeeAccountCreated>());
+      // Only the one write reached the repository.
+      verify(
+        () => repo.createEmployeeAccount(
+          name: any(named: 'name'),
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
+          email: any(named: 'email'),
+          phone: any(named: 'phone'),
+          colorValue: any(named: 'colorValue'),
+          jobTitle: any(named: 'jobTitle'),
+          isAdmin: any(named: 'isAdmin'),
+        ),
+      ).called(1);
+    });
+  });
 
   group('createAccount', () {
     test('returns the sign-in credentials on success', () async {

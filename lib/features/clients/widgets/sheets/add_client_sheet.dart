@@ -159,6 +159,10 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
         .addClient(_draft());
     if (!mounted) return;
     switch (outcome) {
+      // A skipped duplicate submit committed nothing and failed nothing — the
+      // save already running owns the outcome, so say nothing.
+      case ClientSaveBusy():
+        break;
       case ClientSaved(:final client):
         ref
             .read(noticeServiceProvider)

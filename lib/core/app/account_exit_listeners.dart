@@ -33,11 +33,20 @@ class AccountExitListeners {
     required this.navigatorKey,
     required this.scaffoldMessengerKey,
     required this.isMounted,
-  });
+    bool Function()? isSignedIn,
+  }) : isSignedIn = isSignedIn ?? _firebaseSignedIn;
+
+  static bool _firebaseSignedIn() => FirebaseAuth.instance.currentUser != null;
 
   final WidgetRef ref;
   final GlobalKey<NavigatorState> navigatorKey;
   final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey;
+
+  /// Injectable so the teardown ORDER and the reentrancy guard can actually be
+  /// tested — reading `FirebaseAuth.instance` inline is what kept this class
+  /// uncovered despite its own doc calling the order load-bearing. Production
+  /// passes nothing and gets the real singleton.
+  final bool Function() isSignedIn;
 
   /// The host `State`'s mounted flag — the cold-start deletion check resolves
   /// asynchronously and must not act on a torn-down tree.
@@ -64,7 +73,7 @@ class AccountExitListeners {
     String Function(AppLocalizations) selectMessage,
   ) async {
     if (_isHandlingAccountExit) return;
-    if (FirebaseAuth.instance.currentUser == null) return;
+    if (!isSignedIn()) return;
 
     final navContext = navigatorKey.currentContext;
     if (navContext == null) return;
@@ -134,12 +143,12 @@ class AccountExitListeners {
       prev,
       next,
     ) {
-      final isSignedIn = FirebaseAuth.instance.currentUser != null;
+      final signedIn = isSignedIn();
       final resolvedUid = ref.read(authUidProvider).value;
       // Kick the user out on a populated→empty transition. Cold-start
       // deletion is handled separately, below.
       if (isAccountDeletionSignal(
-        isSignedIn: isSignedIn,
+        isSignedIn: signedIn,
         resolvedUid: resolvedUid,
         previous: prev,
         docState: next,
@@ -149,7 +158,7 @@ class AccountExitListeners {
       }
       unawaited(
         confirmColdStartDeletion(
-          isSignedIn: isSignedIn,
+          isSignedIn: signedIn,
           resolvedUid: resolvedUid,
           previous: prev,
           docState: next,

@@ -48,4 +48,41 @@ void main() {
     expect(pill.foreground, lightTheme().statusColors.onNeutralContainerMuted);
     expect(pill.background, isNot(lightTheme().colorScheme.errorContainer));
   });
+
+  group('AppointmentStatus.raw', () {
+    test('overdue throws — it is display-only and has no stored value', () {
+      // Deliberate. `overdue` is derived from the clock and is NOT on the
+      // firestore.rules allowlist, so a write path that reaches for `.raw`
+      // must fail loudly at the source instead of emitting a value the rules
+      // reject with an opaque permission-denied. "Simplifying" this to
+      // `_ => name` compiles and keeps the suite green without this test.
+      expect(() => AppointmentStatus.overdue.raw, throwsStateError);
+    });
+
+    test('every storable status round-trips through raw', () {
+      for (final status in AppointmentStatus.appointmentValues) {
+        expect(AppointmentStatus.fromRaw(status.raw), status);
+      }
+      expect(
+        AppointmentStatus.fromRaw(AppointmentStatus.cancelled.raw),
+        AppointmentStatus.cancelled,
+      );
+    });
+
+    test('storedRaw maps the display-only overdue onto pending', () {
+      // The safe accessor every re-serializing write path must use.
+      expect(
+        AppointmentStatus.storedRaw('overdue'),
+        AppointmentStatus.pending.raw,
+      );
+      // Legacy and unknown collapse the same way.
+      expect(
+        AppointmentStatus.storedRaw('confirmed'),
+        AppointmentStatus.pending.raw,
+      );
+      expect(AppointmentStatus.storedRaw(''), AppointmentStatus.pending.raw);
+      // A real status is passed through untouched.
+      expect(AppointmentStatus.storedRaw('done'), 'done');
+    });
+  });
 }
