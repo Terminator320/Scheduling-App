@@ -41,72 +41,72 @@ class AppointmentDaySlice {
   bool get isOvernight => windowEnd.dateOnly.isAfter(windowStart.dateOnly);
 }
 
-/// Calendar days from [from] to [to]. Normalized through UTC so the two
-/// DST-shift days can't make a whole-day difference come back as 23 or 25
-/// hours and round to the wrong integer.
-int calendarDaysBetween(DateTime from, DateTime to) => DateTime.utc(
-  to.year,
-  to.month,
-  to.day,
-).difference(DateTime.utc(from.year, from.month, from.day)).inDays;
-
-DateTime addCalendarDays(DateTime day, int days) =>
-    DateTime(day.year, day.month, day.day + days);
-
 /// True when the record's daily window crosses midnight.
 ///
-/// Equal times are treated as overnight, which yields a 24-hour booking —
-/// the established behaviour for a zero-duration appointment.
-bool isOvernightRecord(AppointmentRecord a) {
-  final startMinutes = a.startTime.hour * 60 + a.startTime.minute;
-  final endMinutes = a.endTime.hour * 60 + a.endTime.minute;
+/// A multi-day booking at the same clock time (Aug 1 09:00 → Aug 3 09:00)
+/// must still read as continuous 24-hour windows on each of its days, so
+/// equal start/end minutes count as overnight too — a strict `<` would
+/// collapse those windows to zero length instead.
+bool _isOvernightRecord(AppointmentRecord appointment) {
+  final startMinutes =
+      appointment.startTime.hour * 60 + appointment.startTime.minute;
+  final endMinutes = appointment.endTime.hour * 60 + appointment.endTime.minute;
   return endMinutes <= startMinutes;
 }
 
 /// The last day the crew STARTS work — never the morning an overnight run
 /// finishes. Keeps the count at `end - start + 1` for day jobs and night
 /// shifts alike.
-DateTime lastWorkDayOf(AppointmentRecord a) => isOvernightRecord(a)
-    ? addCalendarDays(a.endTime.dateOnly, -1)
-    : a.endTime.dateOnly;
+DateTime lastWorkDayOf(AppointmentRecord appointment) =>
+    _isOvernightRecord(appointment)
+    ? addCalendarDays(appointment.endTime.dateOnly, -1)
+    : appointment.endTime.dateOnly;
 
-/// How many days (or nights) the record runs for. At least 1.
-int dayCountOf(AppointmentRecord a) =>
-    calendarDaysBetween(a.startTime.dateOnly, lastWorkDayOf(a)) + 1;
+/// How many days (or nights) the record runs for.
+///
+/// Can come back below 1 on a corrupt record whose `endTime` precedes its
+/// `startTime` — every caller guards with `< 1` rather than trusting this is
+/// always a valid count.
+int _dayCountOf(AppointmentRecord appointment) =>
+    calendarDaysBetween(
+      appointment.startTime.dateOnly,
+      lastWorkDayOf(appointment),
+    ) +
+    1;
 
 /// The record as it appears on [day], or null when it doesn't run that day.
-AppointmentDaySlice? sliceFor(AppointmentRecord a, DateTime day) {
-  final count = dayCountOf(a);
+AppointmentDaySlice? sliceFor(AppointmentRecord appointment, DateTime day) {
+  final count = _dayCountOf(appointment);
   if (count < 1) return null;
-  final index = calendarDaysBetween(a.startTime.dateOnly, day) + 1;
+  final index = calendarDaysBetween(appointment.startTime.dateOnly, day) + 1;
   if (index < 1 || index > count) return null;
-  return _sliceAt(a, day: day.dateOnly, index: index, count: count);
+  return _sliceAt(appointment, day: day.dateOnly, index: index, count: count);
 }
 
 AppointmentDaySlice _sliceAt(
-  AppointmentRecord a, {
+  AppointmentRecord appointment, {
   required DateTime day,
   required int index,
   required int count,
 }) {
-  final overnight = isOvernightRecord(a);
+  final overnight = _isOvernightRecord(appointment);
   return AppointmentDaySlice(
-    appointment: a,
+    appointment: appointment,
     dayIndex: index,
     dayCount: count,
     windowStart: DateTime(
       day.year,
       day.month,
       day.day,
-      a.startTime.hour,
-      a.startTime.minute,
+      appointment.startTime.hour,
+      appointment.startTime.minute,
     ),
     windowEnd: DateTime(
       day.year,
       day.month,
       day.day + (overnight ? 1 : 0),
-      a.endTime.hour,
-      a.endTime.minute,
+      appointment.endTime.hour,
+      appointment.endTime.minute,
     ),
   );
 }
@@ -117,35 +117,42 @@ AppointmentDaySlice _sliceAt(
 /// per calendar day the stored instant span touches. That one rule is what
 /// makes a night shift file under the evening it starts and show nothing on
 /// the morning it ends.
+///
+/// A run longer than [maxAppointmentSpanDays] is clamped to that many slices
+/// and its real, un-clamped length is reported through [onSpanClamped]. A
+/// corrupt record whose day count comes back below 1 is dropped silently
+/// instead — there is no day left for it to render on.
 Map<DateTime, List<AppointmentDaySlice>> expandToDays(
   Iterable<AppointmentRecord> records,
   AppointmentDateRange range, {
-  void Function(AppointmentRecord record, int days)? onSpanClamped,
+  void Function(AppointmentRecord appointment, int actualDays)? onSpanClamped,
 }) {
-  final index = <DateTime, List<AppointmentDaySlice>>{};
-  for (final a in records) {
-    final rawCount = dayCountOf(a);
+  final slicesByDay = <DateTime, List<AppointmentDaySlice>>{};
+  for (final appointment in records) {
+    final rawCount = _dayCountOf(appointment);
     if (rawCount < 1) continue;
     // A corrupt endTime years out must not explode the index. Clamp, but
     // report it — a silently truncated run reads as a short job.
     final count = rawCount > maxAppointmentSpanDays
         ? maxAppointmentSpanDays
         : rawCount;
-    if (count != rawCount) onSpanClamped?.call(a, rawCount);
+    if (count != rawCount) onSpanClamped?.call(appointment, rawCount);
 
-    final startDate = a.startTime.dateOnly;
+    final startDate = appointment.startTime.dateOnly;
     for (var i = 0; i < count; i++) {
       final day = addCalendarDays(startDate, i);
       if (day.isBefore(range.start) || !day.isBefore(range.end)) continue;
-      (index[day] ??= <AppointmentDaySlice>[]).add(
-        _sliceAt(a, day: day, index: i + 1, count: count),
+      // The CLAMPED count, not rawCount — otherwise dayIndex can never reach
+      // dayCount on a clamped run and isLastDay never fires.
+      (slicesByDay[day] ??= <AppointmentDaySlice>[]).add(
+        _sliceAt(appointment, day: day, index: i + 1, count: count),
       );
     }
   }
-  for (final slices in index.values) {
+  for (final slices in slicesByDay.values) {
     slices.sort(_byAllDayThenWindowStart);
   }
-  return index;
+  return slicesByDay;
 }
 
 /// An all-day block owns the whole day, so it reads above the clock; the rest

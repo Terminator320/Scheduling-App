@@ -7,8 +7,9 @@ AppointmentRecord _record({
   required DateTime start,
   required DateTime end,
   bool isAllDay = false,
+  String id = 'a1',
 }) => AppointmentRecord(
-  id: 'a1',
+  id: id,
   title: 'Repipe',
   startTime: start,
   endTime: end,
@@ -22,7 +23,7 @@ void main() {
         start: DateTime(2026, 8, 1, 9),
         end: DateTime(2026, 8, 1, 17),
       );
-      final slice = sliceFor(a, DateTime(2026, 8, 1))!;
+      final slice = sliceFor(a, DateTime(2026, 8))!;
       expect(slice.dayIndex, 1);
       expect(slice.dayCount, 1);
       expect(slice.isMultiDay, isFalse);
@@ -94,12 +95,12 @@ void main() {
       final index = expandToDays(
         [a],
         AppointmentDateRange(
-          start: DateTime(2026, 8, 1),
+          start: DateTime(2026, 8),
           end: DateTime(2026, 8, 9),
         ),
       );
       expect(index.keys.toList(), [
-        DateTime(2026, 8, 1),
+        DateTime(2026, 8),
         DateTime(2026, 8, 2),
         DateTime(2026, 8, 3),
       ]);
@@ -113,27 +114,30 @@ void main() {
       final index = expandToDays(
         [a],
         AppointmentDateRange(
-          start: DateTime(2026, 8, 1),
+          start: DateTime(2026, 8),
           end: DateTime(2026, 8, 9),
         ),
       );
-      expect(index.keys.toList(), [DateTime(2026, 8, 1), DateTime(2026, 8, 2)]);
+      expect(index.keys.toList(), [DateTime(2026, 8), DateTime(2026, 8, 2)]);
     });
 
     test('sorts all-day blocks above timed jobs, then by window start', () {
       final timedEarly = _record(
         start: DateTime(2026, 8, 3, 8, 30),
         end: DateTime(2026, 8, 3, 10),
-      ).copyWith(id: 'early');
+        id: 'early',
+      );
       final timedLate = _record(
         start: DateTime(2026, 8, 3, 13),
         end: DateTime(2026, 8, 3, 16),
-      ).copyWith(id: 'late');
+        id: 'late',
+      );
       final allDay = _record(
         start: DateTime(2026, 8, 3),
         end: DateTime(2026, 8, 3, 23, 59),
         isAllDay: true,
-      ).copyWith(id: 'allday');
+        id: 'allday',
+      );
 
       final index = expandToDays(
         [timedLate, timedEarly, allDay],
@@ -148,28 +152,51 @@ void main() {
       );
     });
 
-    test('clamps an over-long run and reports it, keeping slices coherent', () {
-      final corrupt = _record(
-        start: DateTime(2026, 8, 1, 9),
-        end: DateTime(2026, 9, 10, 17), // 41 days — past the 14-day cap
-      );
-      final clamped = <int>[];
-      final index = expandToDays(
-        [corrupt],
-        AppointmentDateRange(
-          start: DateTime(2026, 8, 1),
-          end: DateTime(2026, 10, 1),
-        ),
-        onSpanClamped: (_, days) => clamped.add(days),
-      );
+    test(
+      'an overnight run files under the evening it starts, not the morning '
+      'it ends',
+      () {
+        final overnight = _record(
+          start: DateTime(2026, 8, 1, 22),
+          end: DateTime(2026, 8, 3, 6),
+        );
+        final index = expandToDays(
+          [overnight],
+          AppointmentDateRange(
+            start: DateTime(2026, 8),
+            end: DateTime(2026, 8, 10),
+          ),
+        );
+        expect(index.keys.toList(), [DateTime(2026, 8), DateTime(2026, 8, 2)]);
+      },
+    );
 
-      expect(index.length, maxAppointmentSpanDays);
-      expect(clamped, [41]); // the REAL span is reported, not the clamped one
+    test(
+      'a clamped run reports the clamped count, so its final day is the '
+      'last day',
+      () {
+        final corrupt = _record(
+          start: DateTime(2026, 8, 1, 9),
+          end: DateTime(2026, 9, 10, 17), // 41 days — past the 14-day cap
+        );
+        final clamped = <int>[];
+        final index = expandToDays(
+          [corrupt],
+          AppointmentDateRange(
+            start: DateTime(2026, 8),
+            end: DateTime(2026, 10),
+          ),
+          onSpanClamped: (_, days) => clamped.add(days),
+        );
 
-      final last = index[DateTime(2026, 8, 14)]!.single;
-      expect(last.dayIndex, maxAppointmentSpanDays);
-      expect(last.dayCount, maxAppointmentSpanDays);
-      expect(last.isLastDay, isTrue);
-    });
+        expect(index.length, maxAppointmentSpanDays);
+        expect(clamped, [41]); // the REAL span is reported, not the clamped one
+
+        final last = index[DateTime(2026, 8, 14)]!.single;
+        expect(last.dayIndex, maxAppointmentSpanDays);
+        expect(last.dayCount, maxAppointmentSpanDays);
+        expect(last.isLastDay, isTrue);
+      },
+    );
   });
 }
