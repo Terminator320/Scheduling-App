@@ -315,7 +315,7 @@ class _AppointmentHistoryViewState
               Expanded(
                 child: _hasActiveFilter
                     ? _buildFiltered(colorMap)
-                    : _buildPaged(state, fetchNextPage, colorMap),
+                    : _buildPaged(state, loaded, fetchNextPage, colorMap),
               ),
             ],
           );
@@ -326,6 +326,11 @@ class _AppointmentHistoryViewState
 
   Widget _buildPaged(
     PagingState<int, AppointmentRecord> state,
+    // Hoisted out of the itemBuilder on purpose: PagingState.items is a
+    // computed getter that re-flattens every loaded page on each access, so
+    // reading it per row copied the whole list once per built row — O(N) per
+    // row, growing with scroll depth. Same value, resolved once.
+    List<AppointmentRecord> loaded,
     void Function() fetchNextPage,
     Map<String, Color> colorMap,
   ) {
@@ -337,7 +342,7 @@ class _AppointmentHistoryViewState
         padding: const EdgeInsets.all(AppSpacing.sp12),
         builderDelegate: PagedChildBuilderDelegate<AppointmentRecord>(
           itemBuilder: (context, _, index) =>
-              _historyItem(state.items ?? const [], index, colorMap),
+              _historyItem(loaded, index, colorMap),
           firstPageProgressIndicatorBuilder: (_) => _skeleton(),
           firstPageErrorIndicatorBuilder: (_) => _errorState(
             state.error ?? Exception('history page load failed'),

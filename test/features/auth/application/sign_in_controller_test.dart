@@ -46,6 +46,32 @@ const _disabledDoc = UserUidMatch(
   },
 );
 
+const _invitedDoc = UserUidMatch(
+  id: 'doc1',
+  data: <String, dynamic>{
+    'name': 'Invited User',
+    'firstName': 'Invited',
+    'lastName': 'User',
+    'email': 'user@test.com',
+    'status': 'invited',
+    'role': 'employee',
+    'uid': 'u1',
+  },
+);
+
+/// A status the app has never written. It must NOT take the invited branch —
+/// the carve-out is an exact match, so anything unknown still signs out.
+const _unknownStatusDoc = UserUidMatch(
+  id: 'doc1',
+  data: <String, dynamic>{
+    'name': 'Odd User',
+    'email': 'user@test.com',
+    'status': '',
+    'role': 'employee',
+    'uid': 'u1',
+  },
+);
+
 void main() {
   setUpAll(() {
     registerFallbackValue(const EmployeeRecord(id: '_', name: '_'));
@@ -175,6 +201,61 @@ void main() {
       verifyNever(() => cache.save(any()));
       expect(state().inProgress, isFalse);
     });
+
+    test('routes an invited account to setup and KEEPS the session', () async {
+      stubSignedIn();
+      when(
+        () => repo.findUserByUid('u1'),
+      ).thenAnswer((_) async => _invitedDoc);
+
+      final outcome = await notifier().signIn(
+        email: 'user@test.com',
+        password: 'password123',
+      );
+
+      expect(outcome, isA<SignInNeedsAccountSetup>());
+      // The credential they just used is the one setup needs — signing them
+      // out here makes the setup screen permanently unreachable.
+      verifyNever(() => auth.signOut());
+      expect(state().inProgress, isFalse);
+    });
+
+    test('carries the stored name halves into the setup outcome', () async {
+      stubSignedIn();
+      when(
+        () => repo.findUserByUid('u1'),
+      ).thenAnswer((_) async => _invitedDoc);
+
+      final outcome = await notifier().signIn(
+        email: 'user@test.com',
+        password: 'password123',
+      );
+
+      expect(
+        outcome,
+        isA<SignInNeedsAccountSetup>()
+            .having((o) => o.firstName, 'firstName', 'Invited')
+            .having((o) => o.lastName, 'lastName', 'User'),
+      );
+    });
+
+    test(
+      'signs out for an unknown status — the invited test is exact',
+      () async {
+        stubSignedIn();
+        when(
+          () => repo.findUserByUid('u1'),
+        ).thenAnswer((_) async => _unknownStatusDoc);
+
+        final outcome = await notifier().signIn(
+          email: 'user@test.com',
+          password: 'password123',
+        );
+
+        expect(outcome, isA<SignInAccountDisabled>());
+        verify(() => auth.signOut()).called(1);
+      },
+    );
 
     test('reports invalid credentials when auth returns no user', () async {
       final credential = _MockUserCredential();

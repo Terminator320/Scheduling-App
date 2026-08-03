@@ -228,6 +228,7 @@
   "validation_passwordIsTooWeakUseAtLeast6Characters": "Mot de passe trop faible. Utilisez au moins 6 caractères",
   "validation_passwordMustBeAtLeast8Characters": "Le mot de passe doit comporter au moins 8 caractères",
   "validation_passwordDoesNotMeetAllRequirements": "Le mot de passe ne respecte pas toutes les exigences ci-dessous",
+  "validation_passwordMustDifferFromStarting": "Choisissez un mot de passe différent de celui qui vous a été remis",
   "validation_passwordReqMinLength": "Au moins 8 caractères",
   "validation_passwordReqUppercase": "Une lettre majuscule (A–Z)",
   "validation_passwordReqLowercase": "Une lettre minuscule (a–z)",
@@ -549,13 +550,6 @@
   "auth_passwordStrengthFair": "Moyen",
   "auth_passwordStrengthGood": "Bon",
   "auth_passwordStrengthStrong": "Fort",
-  "employees_inviteCodeKey": "CODE D'INVITATION",
-  "employees_showCode": "Afficher le code",
-  "employees_resendCode": "Renvoyer le code",
-  "employees_newCodeReady": "Nouveau code prêt",
-  "employees_newCodeExpiresOn": "Nouveau code · expire le {date}",
-  "employees_newCodeIssued": "Nouveau code — l'ancien ne fonctionne plus",
-  "employees_revokeInvite": "Révoquer l'invitation",
   "employees_accountCreatedTitle": "Compte créé",
   "employees_shareTheseWith": "Donnez ceci à {name} pour se connecter.",
   "employees_temporaryPassword": "MOT DE PASSE TEMPORAIRE",
@@ -566,6 +560,5 @@
   "employees_passwordReset": "Mot de passe réinitialisé",
   "employees_removeAccount": "Supprimer le compte",
   "employees_removeAccountConfirmBody": "Ceci supprime complètement le compte. Possible uniquement parce que la personne ne s'est jamais connectée.",
-  "employees_newPasswordIssued": "Nouveau mot de passe temporaire — le précédent ne fonctionne plus",
-  "employees_revokeInviteConfirmBody": "Le code cesse de fonctionner immédiatement et cette personne disparaît de votre équipe."
+  "employees_newPasswordIssued": "Nouveau mot de passe temporaire — le précédent ne fonctionne plus"
 }

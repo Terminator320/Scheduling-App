@@ -137,6 +137,9 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
     if (!mounted) return;
 
     switch (outcome) {
+      // See pending_invite_tile: a skipped duplicate submit surfaces nothing.
+      case EmployeeSaveBusy():
+        break;
       case EmployeeAccountCreated(:final credentials):
         await showNewAccountDialog(
           context,

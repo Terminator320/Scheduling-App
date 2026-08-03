@@ -55,6 +55,12 @@ String drawerRowLabel(AppLocalizations l10n, AppDestination destination) =>
 /// The row's colour square. These are crew-palette hues used as decoration,
 /// so a call site must resolve them through `crewColorOf` to get the dark
 /// lift — never paint the stored value directly.
+///
+/// Deliberately literals rather than `AppColors.crewPalette[n]`, even though
+/// each one matches an entry exactly: that list is the pool employee colours
+/// are ASSIGNED from, and indexing it here would mean reordering it (a normal
+/// change for staff colours) silently repaints the whole nav drawer. Same
+/// hues, no coupling.
 Color drawerDotColor(AppDestination destination) => switch (destination) {
   HubTab.calendar => const Color(0xFF005CC8),
   PushedDestination.dayRoute => const Color(0xFFD61F3A),

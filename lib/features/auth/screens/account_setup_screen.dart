@@ -17,6 +17,7 @@ import 'package:scheduling/features/auth/widgets/auth_banner.dart';
 import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
 import 'package:scheduling/features/auth/widgets/password_requirements_checklist.dart';
 import 'package:scheduling/features/auth/widgets/password_strength_meter.dart';
+import 'package:scheduling/features/employees/domain/policies/starting_password_policy.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
@@ -113,10 +114,18 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
     final lastErr = _lastNameController.text.trim().isEmpty ? required : null;
     // The meter beside this field is advisory; the gate stays the strict
     // new-password validator so it can never disagree with the checklist.
-    final passwordErr = AuthValidators.newPassword(
-      context,
-      _passwordController.text,
-    );
+    //
+    // The shared starting password satisfies every one of those requirements,
+    // so it has to be rejected by name: without this, someone can "set" their
+    // password to the value the admin just read out and end up permanently
+    // `active` on a constant that is in the source, on every pending roster row
+    // and known to every admin. Replacing it is the whole reason this screen
+    // is reachable, and the only thing that closes the onboarding window.
+    final passwordErr =
+        AuthValidators.newPassword(context, _passwordController.text) ??
+        (_passwordController.text.trim() == kDefaultStartingPassword
+            ? l10n.validation_passwordMustDifferFromStarting
+            : null);
 
     String? confirmErr;
     if (_confirmController.text.trim().isEmpty) {
@@ -159,6 +168,11 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
   void _onPasswordChanged() => _onFieldChanged();
 
   Future<void> _finishSetup() async {
+    // Reentrancy guard, synchronously first: AnimatedLoadingButton only nulls
+    // onPressed after the setState rebuild, so a same-frame double-tap would
+    // otherwise run two updatePassword calls and two completeEmployeeSetup
+    // invocations — burning 2 of 5 rate-limit slots and pushing the hub twice.
+    if (_isLoading) return;
     FocusScope.of(context).unfocus();
     // The consent checkbox is the gate, and this is where it is enforced: the
     // confirm-password field's keyboard-submit reaches here without consulting

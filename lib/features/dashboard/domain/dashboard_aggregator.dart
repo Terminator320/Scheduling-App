@@ -34,14 +34,13 @@ class DashboardAggregator {
     );
   }
 
-  /// Mirrors displayStatus, but use statusCountKey to key off it instead —
-  /// calling `.raw` directly on overdue would throw.
-  static String displayStatusAt(AppointmentRecord appointment, DateTime now) {
-    if (_isTerminal(appointment)) return appointment.status;
-    if (now.isAfter(appointment.endTime)) return 'overdue';
-    if (now.isAfter(appointment.startTime)) return 'in_progress';
-    return appointment.status;
-  }
+  /// Delegates to [AppointmentRecord.displayStatusAt], which owns the ladder —
+  /// this used to be a hand-copied mirror and had already drifted (it was
+  /// missing the isPersonal carve-out, so the dashboard reported a personal
+  /// block as overdue while its card said Scheduled). Use statusCountKey to key
+  /// off the result; calling `.raw` directly on overdue would throw.
+  static String displayStatusAt(AppointmentRecord appointment, DateTime now) =>
+      appointment.displayStatusAt(now);
 
   /// Stable key for statusCounts. 'overdue' has no stored raw value, so we
   /// just key it on the literal string 'overdue'.
@@ -194,7 +193,7 @@ class DashboardAggregator {
           !a.startTime.isAfter(soonCutoff)) {
         pendingSoon.add(a);
       }
-      if (a.endTime.isBefore(now) && !_isTerminal(a)) {
+      if (displayStatusAt(a, now) == 'overdue') {
         overdueOpen.add(a);
       }
     }

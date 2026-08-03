@@ -84,12 +84,34 @@ async function provisionAuthAccount(auth, email, displayName, password) {
     return {uid: user.uid, reused: false};
   } catch (e) {
     if (e && e.code === "auth/email-already-exists") {
+      // Resolve the uid ONLY — the password of an existing account is not
+      // touched here. Rotating it is `resetProvisionedPassword`, which the
+      // caller runs AFTER the doc-level transaction has claimed the person as
+      // still-`invited`. Doing it here reset the password first and asked
+      // questions second, so a setup that committed in that window left the
+      // employee active on a password nobody told them had been reverted.
       const existing = await auth.getUserByEmail(email);
-      await auth.updateUser(existing.uid, {password, displayName});
       return {uid: existing.uid, reused: true};
     }
     throw e;
   }
+}
+
+/**
+ * Rotates a re-provisioned account back to the shared starting password.
+ *
+ * Split out of provisionAuthAccount so it can run after the transaction: the
+ * only safe moment to overwrite someone's password is once the doc read in the
+ * same transaction has confirmed they never finished setup.
+ *
+ * @param {!Object} auth Admin Auth instance.
+ * @param {string} uid the provisioned Auth uid.
+ * @param {string} displayName composed name.
+ * @param {string} password the default starting password.
+ * @return {!Promise<void>}
+ */
+async function resetProvisionedPassword(auth, uid, displayName, password) {
+  await auth.updateUser(uid, {password, displayName});
 }
 
 /**
@@ -124,6 +146,23 @@ async function performCreateAccount(db, fields, opts) {
     // them would reset a password they chose. Only a still-pending one is
     // re-provisionable.
     if (existing && existing.data().status !== "invited") {
+      return {ok: false};
+    }
+
+    // The uid must not already belong to somebody else's doc. `users.email` is
+    // admin-editable and is never synced to the Auth account, so the email
+    // check above can clear a doc that is NOT the account this uid came from —
+    // and a second doc carrying a live employee's uid repoints the
+    // `usersByUid` bridge that every rules gate resolves through, locking them
+    // out. This is the rules' `allow create` uid denylist restated for the one
+    // path that bypasses rules (Admin SDK).
+    const byUid = await tx.get(
+        db.collection("users").where("uid", "==", uid).limit(2),
+    );
+    const claimedElsewhere = byUid.docs.some(
+        (d) => !existing || d.id !== existing.id,
+    );
+    if (claimedElsewhere) {
       return {ok: false};
     }
 
@@ -188,15 +227,29 @@ const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
   const db = getFirestore();
   const auth = getAuth();
 
-  // Refuse BEFORE touching Auth when the email belongs to a live account —
-  // otherwise provisioning would reset a real person's chosen password and
-  // only then discover the Firestore doc says no.
+  // Refuse BEFORE touching Auth when the email belongs to a live account.
+  // Two lookups, because the two stores can disagree: `users.email` is
+  // admin-editable and is never written back to the Auth account, so an
+  // email-keyed check alone can clear a doc that is not the account Auth would
+  // actually hand us.
+  const existingAuth = await auth.getUserByEmail(email).catch(() => null);
+  if (existingAuth) {
+    // Whose account IS this? Resolve by uid — that is the join the bridge and
+    // every rules gate use.
+    const byUid = await db.collection("users")
+        .where("uid", "==", existingAuth.uid).limit(1).get();
+    if (byUid.empty || byUid.docs[0].data().status !== "invited") {
+      throw new HttpsError("already-exists", "email-exists");
+    }
+  }
   const claimed = await db.collection("users")
       .where("email", "==", email).limit(1).get();
   if (!claimed.empty && claimed.docs[0].data().status !== "invited") {
     throw new HttpsError("already-exists", "email-exists");
   }
 
+  // Resolves the uid; for an EXISTING account this deliberately does not touch
+  // the password yet (see resetProvisionedPassword).
   const provisioned = await provisionAuthAccount(
       auth, email, name, DEFAULT_PASSWORD);
 
@@ -218,6 +271,13 @@ const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
         },
     );
     if (!outcome.ok) throw new HttpsError("already-exists", "email-exists");
+    // The doc is claimed and confirmed still-`invited`, so this is now safe:
+    // nobody's chosen password can be behind this uid. A reused account is the
+    // "never signed in / lost the password" path, and this IS that reset.
+    if (provisioned.reused) {
+      await resetProvisionedPassword(
+          auth, provisioned.uid, name, DEFAULT_PASSWORD);
+    }
   } catch (e) {
     if (!provisioned.reused) {
       await auth.deleteUser(provisioned.uid).catch(() => {});
@@ -385,6 +445,7 @@ module.exports = {
   deleteEmployeeAccount,
   // Exported for unit tests of the transactional flows and the pure patch.
   provisionAuthAccount,
+  resetProvisionedPassword,
   performCreateAccount,
   performDeleteAccount,
   buildActivationPatch,

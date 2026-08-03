@@ -24,6 +24,16 @@ class ClientSaveFailed extends ClientSaveOutcome {
   final Object error;
 }
 
+/// A write the reentrancy guard skipped because one is already in flight.
+/// Nothing committed and nothing failed, so this surfaces NOTHING. It used to
+/// be `ClientSaveFailed(SocketException('in-flight'))`, which
+/// `composeErrorNotice` classifies by TYPE and rendered as "you appear to be
+/// offline" on a double-tap while perfectly online. The `'offline'` sentinel
+/// below is different and stays — there the classification is correct.
+class ClientSaveBusy extends ClientSaveOutcome {
+  const ClientSaveBusy();
+}
+
 /// Outcome of the testing-only client delete.
 // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
 sealed class ClientDeleteOutcome {
@@ -57,7 +67,7 @@ class ClientFormController extends Notifier<bool> {
     // only disables on the NEXT frame, and add_client_sheet has two entry points
     // into this same write (the frame's verb and "Add and book a job"), so a
     // double-hit before that rebuild created two client docs.
-    if (state) return const ClientSaveFailed(SocketException('in-flight'));
+    if (state) return const ClientSaveBusy();
     // Bail out early if we're offline — Firestore writes block until the server acks,
     // so the button would just spin until reconnect (CLI-ADD maps the exception).
     if (ref.read(isOfflineProvider)) {
@@ -84,7 +94,7 @@ class ClientFormController extends Notifier<bool> {
   /// Persists edit and mirrors to phone contact (best-effort, never blocks/fails the save).
   Future<ClientSaveOutcome> updateClient(ClientRecord client) async {
     // See addClient — the guard runs before every other check.
-    if (state) return const ClientSaveFailed(SocketException('in-flight'));
+    if (state) return const ClientSaveBusy();
     // Bail out early if we're offline (the edit form shows the CLI-SAVE notice).
     if (ref.read(isOfflineProvider)) {
       return const ClientSaveFailed(SocketException('offline'));

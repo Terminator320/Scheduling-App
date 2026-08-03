@@ -58,9 +58,11 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
 
   AppointmentDateRange _dayRange(DateTime day) {
     final start = day.dateOnly;
+    // Calendar arithmetic, not a fixed 24h — see app_nav_drawer: on a DST day
+    // this otherwise ends an hour before or after real midnight.
     return AppointmentDateRange(
       start: start,
-      end: start.add(const Duration(days: 1)),
+      end: DateTime(start.year, start.month, start.day + 1),
     );
   }
 

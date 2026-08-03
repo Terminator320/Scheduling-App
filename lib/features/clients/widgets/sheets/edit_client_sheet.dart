@@ -207,6 +207,9 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
         .updateClient(updated);
     if (!mounted) return;
     switch (outcome) {
+      // See add_client_sheet: a skipped duplicate submit surfaces nothing.
+      case ClientSaveBusy():
+        break;
       case ClientSaved():
         ref
             .read(noticeServiceProvider)

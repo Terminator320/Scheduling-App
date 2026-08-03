@@ -15,8 +15,17 @@ the pure `clientsToRecount`), `places.js`, `account.js`,
 `createEmployeeAccount` (admin-only: mints the Firebase Auth account on the
 shared `DEFAULT_PASSWORD` and the `invited` `users` doc carrying its real
 `uid`, rolls the Auth account back if the Firestore write fails, and refuses
-`email-exists` for an email that has already finished setup — checked BEFORE
-touching Auth so it can never reset a real person's chosen password),
+`email-exists` for an email that has already finished setup. **That refusal
+resolves the target by `uid`, not by email** — `users.email` is admin-editable
+and is never written back to Auth, so an email-only check could clear one doc
+while `provisionAuthAccount` reset a different person's account. **And the
+rotation itself is deferred:** `provisionAuthAccount` only RESOLVES the uid for
+an existing account; `resetProvisionedPassword` runs after
+`performCreateAccount`'s transaction has claimed the person as still-`invited`,
+so a setup committing mid-call can no longer have its chosen password reverted.
+The transaction additionally refuses when the uid already belongs to another
+doc — without that, a second doc carrying a live employee's uid made
+`syncUsersByUid` delete their `usersByUid` bridge and locked them out),
 `completeEmployeeSetup` (the person's own activation: transactional, refuses
 `setup-not-pending` on a replay, and stamps the consent timestamps only when
 the flags are actually `true`) and `deleteEmployeeAccount` (admin-only, and
@@ -31,7 +40,17 @@ along with `createEmployeeInvite`, `redeemSignupCode`, `revokeInvite` and
 (image validation + history purge; the pure JPEG/PNG magic-byte check lives in
 `image_magic.js`), `notifications.js` (FCM push triggers, backed by
 `notification_utils.js` and — for the travel-time reminder sweep —
-`travel_utils.js`), the Live Activity stack (`apns_client.js`,
+`travel_utils.js`. **The pure decisions behind push live one level down in
+`notification_policy.js`** (2026-08-02): the clock/data rules
+(`diffAppointmentForNotifications`, `selectOverdueCandidates`,
+`groupTomorrowsJobsByEmployee`, `tomorrowWindowToronto`, `ledgerBody`,
+`overduePromptLedgerId`, `recordOf`, `contextFor`, the kind-priority and
+recipient-role tables) with **no `deps`, no db, no messaging**. That is the
+boundary: a helper that needs `deps` stays in `notification_utils.js`.
+`notification_utils.js` **re-exports every one of them under its original
+name**, so `notifications.js` and the existing jest tests are unchanged — add
+new pure rules to the policy module and re-export, rather than growing the
+orchestration file back), the Live Activity stack (`apns_client.js`,
 `live_activity_utils.js`, `live_activity_registry.js`,
 `live_activity_dispatch.js` — see the Live Activities bullet below), and
 `wave/callables.js`. Instant + business-time-zone primitives (`toMillis`,

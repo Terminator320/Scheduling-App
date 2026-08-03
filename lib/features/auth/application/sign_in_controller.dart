@@ -195,7 +195,14 @@ class SignInController extends Notifier<SignInState> {
         () => employees.findUserByUid(user.uid),
       );
       if (userDoc == null) return const SignInProfilePending();
-      return SignInSuccess(EmployeeRecord.fromMap(userDoc.id, userDoc.data));
+      final employee = EmployeeRecord.fromMap(userDoc.id, userDoc.data);
+      // Mirror signIn's gate. This runs immediately after activation, so the
+      // doc is normally `active` — but a stale read (offline persistence, or
+      // the permission-denied retry served from cache) would otherwise walk an
+      // still-`invited` person into the hub, where every rules gate denies them
+      // and nothing routes them back to setup.
+      if (!employee.isActive) return const SignInProfilePending();
+      return SignInSuccess(employee);
     } catch (error, stackTrace) {
       // The account is already created and active server-side, so we just
       // report "pending" here — the user can recover by signing in normally.

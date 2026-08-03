@@ -285,9 +285,14 @@ class _NavRow extends ConsumerWidget {
     // currentDayProvider so the bucket re-derives at midnight rather than
     // waiting for a write to re-emit the stream.
     final today = ref.watch(currentDayProvider).dateOnly;
+    // Calendar arithmetic, not a fixed 24h: on the two DST-shift days
+    // `add(Duration(days: 1))` lands an hour off next midnight, which both
+    // mis-buckets a late-evening job AND forks a second listener because the
+    // range no longer equals todayRangeProvider's (which the Team tab already
+    // holds open).
     final range = AppointmentDateRange(
       start: today,
-      end: today.add(const Duration(days: 1)),
+      end: DateTime(today.year, today.month, today.day + 1),
     );
     final jobs = isAdmin
         ? ref.watch(appointmentsInRangeProvider(range))

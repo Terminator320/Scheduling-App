@@ -273,12 +273,19 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
 
   @override
   Widget build(BuildContext context) {
+    // Watches the stream this screen actually renders. It used to listen to
+    // employeesStreamProvider, which nothing here shows — and because that
+    // provider is not autoDispose and the hub keeps this tab mounted, merely
+    // listening pinned a second live `users` query for the whole session. The
+    // ref.watch above was moved off it for exactly that reason; this was the
+    // half that got left behind.
+    //
     // Only log on the data→error transition — otherwise this would re-log on every rebuild while the stream stays errored.
-    ref.listen(employeesStreamProvider, (previous, next) {
+    ref.listen(allUsersStreamProvider, (previous, next) {
       if (next is! AsyncError || previous is AsyncError) return;
       ref
           .read(loggerProvider)
-          .warn('employeesStreamProvider error', next.error, next.stackTrace);
+          .warn('allUsersStreamProvider error', next.error, next.stackTrace);
     });
     final selected = _liveSelectedEmployee();
     return FeatureTourHost(

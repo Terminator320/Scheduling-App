@@ -140,7 +140,16 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   with `status: 'pending'`. **`AppointmentStatus.overdue` is a display-only,
   time-derived state — NEVER stored, NEVER in the picker.** `displayStatus`
   (`appointment_record.dart`) maps a non-terminal visit to `in_progress` while
-  now is within [start, end] and to `overdue` once `endTime` has passed; the
+  now is within [start, end] and to `overdue` once `endTime` has passed.
+  **That ladder has exactly ONE owner: `AppointmentRecord.displayStatusAt(now)`;
+  `displayStatus` is `displayStatusAt(DateTime.now())` and
+  `DashboardAggregator.displayStatusAt` delegates to it.** The dashboard used to
+  carry a hand-copied "mirror" of it and had already drifted — it was missing
+  the `isPersonal` carve-out, so a personal block past its end read "Scheduled"
+  on its card and sat under the dashboard's Attention list as *overdue*, where
+  an admin had no affordance to clear it (personal jobs have no mark-done
+  flow). Never re-copy the ladder; add clock-derived rules to
+  `displayStatusAt` only. The
   card/tile and the read-only detail header render `displayStatus`, but the edit
   picker and all writes seed from the real stored `status` (so `overdue` can't
   leak into a write). Don't add `overdue` to `appointmentValues` or the
@@ -324,19 +333,47 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   signs in normally; both gates see `invited` and route to
   `AccountSetupScreen`, where they **choose their own password** and fill in
   name/phone/consent → `completeEmployeeSetup` flips the doc to `active`.
-  **ORDER IS THE GUARANTEE: the password is replaced FIRST, client-side, then
-  the account is activated.** The server cannot see a password, so "you must
-  replace the shared default" is true only because `completeEmployeeSetup` is
-  unreachable until `User.updatePassword` succeeds — swap the two and an
-  interrupted setup leaves an *active* account still on `Welcome123!`. Pinned by
-  a test. A failure *after* the password change deliberately does **not** revert
+  **ORDER IS THE APP-LAYER GUARANTEE: the password is replaced FIRST,
+  client-side, then the account is activated.** The server cannot see a
+  password, so "you must replace the shared default" holds because
+  `AuthService.completeAccountSetup` calls `User.updatePassword` before the
+  callable — swap the two and an interrupted setup leaves an *active* account
+  still on `Welcome123!`. Pinned by a test (`verifyInOrder`, plus the half that
+  matters: a thrown `updatePassword` must `verifyNever` the activation).
+  **Be precise about how strong this is: it is client-side ordering, NOT a
+  server check.** `completeEmployeeSetup` verifies only auth + a matching doc +
+  `status == 'invited'`; it does not verify that the password actually rotated,
+  so anything reaching the callable directly activates an un-rotated account.
+  `enforceAppCheck: true` is what actually stands in the way there, and App
+  Check is attestation, not authorization. Don't build on this as if the server
+  enforced it.
+  **The setup screen rejects `kDefaultStartingPassword` by name**
+  (`account_setup_screen.dart`, `validation_passwordMustDifferFromStarting`).
+  That check is load-bearing, not belt-and-braces: `Welcome123!` satisfies every
+  requirement `AuthValidators.newPassword` tests (length, upper, lower, digit,
+  symbol), so without it someone can "choose" the password the admin just read
+  to them and end up permanently `active` on a constant that is in the source,
+  on every pending roster row and known to every admin — with the roster
+  reporting `active` and nothing anywhere flagging it. A failure *after* the password change deliberately does **not** revert
   it: the new password is the one the person just chose and typed twice, so
   leaving them `invited` with a working password beats resetting them to the
   shared default (the next sign-in routes back to setup, which never assumes the
   current password is the default). Re-running create on a still-`invited`
   person **resets their password** — that IS the "never signed in / lost it"
-  path — but it refuses with `email-exists` once someone has set up, checked
-  *before* touching Auth so it can never reset a real person's chosen password
+  path — but it refuses with `email-exists` once someone has set up. **That
+  refusal resolves the target by `uid`, not by email, and the password rotation
+  happens AFTER the doc-level transaction claims the person as still-`invited`
+  (`resetProvisionedPassword`, split out of `provisionAuthAccount` for exactly
+  this).** Both halves are load-bearing and both were bugs: `users.email` is
+  admin-editable and is never written back to the Auth account, so an
+  email-only check can clear a doc that is NOT the account Auth hands back —
+  which reset a live employee's password and minted a second `users` doc
+  carrying their uid, and `syncUsersByUid` then DELETED their `usersByUid`
+  bridge, locking them out of everything. The transaction therefore also
+  refuses when the uid already belongs to another doc (the rules' `allow create`
+  uid denylist restated for the one path that bypasses rules). And resetting
+  before the claim meant a setup committing in that window left the person
+  active on a password nobody told them had been reverted
   and only then discover Firestore says no. `deleteEmployeeAccount` likewise
   only works while `invited` (transactional, so a setup that commits first makes
   the delete refuse); after that the no-delete invariant applies and disable is
@@ -359,6 +396,17 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   `previewInvite` callables are all **deleted** — there is nothing left to
   "accept", which is why sign-in's bottom prompt went with them. Design:
   `docs/plans/redesign-subdocs/2026-08-02-p4c-HANDOFF.md`.
+- **An employee's email is READ-ONLY once their doc carries a `uid`**
+  (`edit_person_sheet.dart`, `readOnly: widget.employee.uid.isNotEmpty`).
+  `updateEmployee` writes only the Firestore doc, and **nothing anywhere syncs
+  that value back to the Firebase Auth account** — the only `auth.updateUser`
+  calls in `functions/` are the two `{disabled}` flips in `bridge.js` and the
+  provisioning password reset. So an edited email left the person signing in
+  with the old address while every admin surface showed the new one, and it
+  desynced the two stores that `createEmployeeAccount` joins on (see the
+  uid-not-email refusal above). Changing a sign-in identity needs a callable
+  that moves Auth and Firestore together; until that exists, not-editable is
+  the honest UI. Don't re-enable the field without building that callable.
 - **`kDefaultStartingPassword` is hand-mirrored** in
   `employees/domain/policies/starting_password_policy.dart` and
   `DEFAULT_PASSWORD` in `functions/employee_accounts.js`; both carry a pointer to

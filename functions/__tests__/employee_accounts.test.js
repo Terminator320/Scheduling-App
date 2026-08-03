@@ -9,6 +9,7 @@
 
 const {
   provisionAuthAccount,
+  resetProvisionedPassword,
   performCreateAccount,
   performDeleteAccount,
   buildActivationPatch,
@@ -44,14 +45,19 @@ function fakeDb(opts = {}) {
   const newRefs = [];
   let autoId = 0;
 
-  const usersQuery = {_kind: "usersQuery"};
+  // Keyed by the queried field: performCreateAccount runs an email lookup AND
+  // a uid-uniqueness lookup, and they must be answerable separately.
+  const emailQuery = {_kind: "usersQuery", field: "email"};
+  const uidQuery = {_kind: "usersQuery", field: "uid"};
+  // Docs already carrying the uid under test (other than `existingUser`).
+  const uidHolders = opts.uidHolders || [];
 
   const db = {
     collection: (name) => {
       if (name !== "users") throw new Error(`unexpected collection ${name}`);
       return {
-        where: jest.fn(() => ({
-          limit: jest.fn(() => usersQuery),
+        where: jest.fn((field) => ({
+          limit: jest.fn(() => (field === "uid" ? uidQuery : emailQuery)),
         })),
         doc: jest.fn((id) => {
           const ref = {id: id || `new-user-${autoId++}`, _kind: "userRef"};
@@ -63,11 +69,18 @@ function fakeDb(opts = {}) {
     runTransaction: async (fn) => {
       const tx = {
         get: jest.fn((target) => {
-          if (target === usersQuery) {
+          if (target === emailQuery) {
             ops.push({op: "get", target: "usersQuery"});
             return Promise.resolve({
               empty: existingUser === null,
               docs: existingUser ? [existingUser] : [],
+            });
+          }
+          if (target === uidQuery) {
+            ops.push({op: "get", target: "uidQuery"});
+            return Promise.resolve({
+              empty: uidHolders.length === 0,
+              docs: uidHolders,
             });
           }
           ops.push({op: "get", target: "userRef"});
@@ -124,28 +137,44 @@ describe("provisionAuthAccount", () => {
     expect(auth.updateUser).not.toHaveBeenCalled();
   });
 
-  test("resets an existing account back to the default password", async () => {
-    // This IS the "they never signed in / they lost it" path — re-running the
-    // create for a still-invited person has to hand them a working password.
-    const err = new Error("exists");
-    err.code = "auth/email-already-exists";
-    const auth = {
-      createUser: jest.fn(async () => {
-        throw err;
-      }),
-      getUserByEmail: jest.fn(async () => ({uid: "uid-existing"})),
-      updateUser: jest.fn(async () => ({})),
-    };
+  test("resolves an existing account's uid WITHOUT touching its password",
+      async () => {
+        // The reset is deferred to resetProvisionedPassword, which the caller
+        // runs only after the transaction confirms the person is still
+        // `invited`. Resetting here reset first and asked questions second: a
+        // setup committing in that window left the employee active on a
+        // password nobody told them had been reverted.
+        const err = new Error("exists");
+        err.code = "auth/email-already-exists";
+        const auth = {
+          createUser: jest.fn(async () => {
+            throw err;
+          }),
+          getUserByEmail: jest.fn(async () => ({uid: "uid-existing"})),
+          updateUser: jest.fn(async () => ({})),
+        };
 
-    const out = await provisionAuthAccount(
-        auth, "new@company.test", "New Employee", DEFAULT_PASSWORD);
+        const out = await provisionAuthAccount(
+            auth, "new@company.test", "New Employee", DEFAULT_PASSWORD);
 
-    expect(out).toEqual({uid: "uid-existing", reused: true});
-    expect(auth.updateUser).toHaveBeenCalledWith("uid-existing", {
-      password: DEFAULT_PASSWORD,
-      displayName: "New Employee",
-    });
-  });
+        expect(out).toEqual({uid: "uid-existing", reused: true});
+        expect(auth.updateUser).not.toHaveBeenCalled();
+      });
+
+  test("resetProvisionedPassword is what hands back a working password",
+      async () => {
+        // This IS the "they never signed in / they lost it" path — re-running
+        // create for a still-invited person has to give them a usable password.
+        const auth = {updateUser: jest.fn(async () => ({}))};
+
+        await resetProvisionedPassword(
+            auth, "uid-existing", "New Employee", DEFAULT_PASSWORD);
+
+        expect(auth.updateUser).toHaveBeenCalledWith("uid-existing", {
+          password: DEFAULT_PASSWORD,
+          displayName: "New Employee",
+        });
+      });
 
   test("rethrows any error that is not email-already-exists", async () => {
     const err = new Error("boom");
@@ -197,6 +226,35 @@ describe("performCreateAccount", () => {
 
     expect(out.ok).toBe(false);
     expect(ops.some((o) => o.op === "set" || o.op === "update")).toBe(false);
+  });
+
+  test("refuses when the uid already belongs to another doc", async () => {
+    // `users.email` is admin-editable and never synced to Auth, so the email
+    // check can clear a doc that is NOT the account this uid came from. A
+    // second doc carrying a live employee's uid repoints the usersByUid bridge
+    // every rules gate resolves through, locking that employee out entirely.
+    const {db, ops} = fakeDb({
+      uidHolders: [userDoc({status: "active", uid: "uid-1"}, "someone-else")],
+    });
+
+    const out = await performCreateAccount(
+        db, FIELDS, {uid: "uid-1", serverTimestamp});
+
+    expect(out.ok).toBe(false);
+    expect(ops.some((o) => o.op === "set" || o.op === "update")).toBe(false);
+  });
+
+  test("the person's OWN doc does not count as a uid collision", async () => {
+    // Re-provisioning an invited person re-reads the doc that already carries
+    // their uid — that must not be mistaken for somebody else claiming it.
+    const own = userDoc({status: "invited", email: FIELDS.email, uid: "uid-2"});
+    const {db, ops} = fakeDb({existingUser: own, uidHolders: [own]});
+
+    const out = await performCreateAccount(
+        db, FIELDS, {uid: "uid-2", serverTimestamp});
+
+    expect(out).toEqual({ok: true, docId: "existing-doc"});
+    expect(ops.some((o) => o.op === "update")).toBe(true);
   });
 
   test("re-provisions a still-invited person in place", async () => {
