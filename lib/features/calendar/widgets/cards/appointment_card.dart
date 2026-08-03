@@ -5,6 +5,7 @@ import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
@@ -54,6 +55,7 @@ class AppointmentCard extends StatelessWidget {
     this.footer,
     this.dimWhenCancelled = false,
     this.emphasizeToday = false,
+    this.slice,
   });
 
   final AppointmentRecord appointment;
@@ -79,6 +81,10 @@ class AppointmentCard extends StatelessWidget {
   /// Today's cards use a 3px bar rather than 4px, per the design.
   final bool emphasizeToday;
 
+  /// This card's day within a multi-day run. Null for surfaces that show a job
+  /// once (history, client job history) rather than per day.
+  final AppointmentDaySlice? slice;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -87,12 +93,7 @@ class AppointmentCard extends StatelessWidget {
     final status = AppointmentStatus.fromRaw(appointment.displayStatus);
     final isCancelled = dimWhenCancelled && status.isCancelled;
 
-    // An all-day block stores a real midnight → 23:59 span, so it would read
-    // as "12:00 AM – 11:59 PM" without this.
-    final timeLabel = appointment.isAllDay
-        ? context.l10n.calendar_allDay
-        : '${DateUtilsHelper.formatTime(appointment.startTime)} – '
-              '${DateUtilsHelper.formatTime(appointment.endTime)}';
+    final timeLabel = _timeLabel(context);
 
     // One band per crew member rather than the first assignee's colour alone:
     // a two-person job now reads as two-person at a glance, and nobody's colour
@@ -192,6 +193,25 @@ class AppointmentCard extends StatelessWidget {
     );
 
     return isCancelled ? Opacity(opacity: 0.6, child: card) : card;
+  }
+
+  /// The card's mono time line, scoped to the day this card represents.
+  ///
+  /// The stored times are a DAILY window, so every day of a run reads the same
+  /// clock — only the counter moves. "All day" is reserved for `isAllDay` and
+  /// is never borrowed to describe a timed job's middle day.
+  String _timeLabel(BuildContext context) {
+    final l10n = context.l10n;
+    final window = slice;
+    final base = appointment.isAllDay
+        ? l10n.calendar_allDay
+        : '${DateUtilsHelper.formatTime(window?.windowStart ?? appointment.startTime)} – '
+              '${DateUtilsHelper.formatTime(window?.windowEnd ?? appointment.endTime)}';
+    if (window == null || !window.isMultiDay) return base;
+    final counter = window.isOvernight
+        ? l10n.calendar_nightOfCount(window.dayIndex, window.dayCount)
+        : l10n.calendar_dayOfCount(window.dayIndex, window.dayCount);
+    return '$base · $counter';
   }
 
   /// `Theo` for one assignee, `Theo +1` for more, null for none.
