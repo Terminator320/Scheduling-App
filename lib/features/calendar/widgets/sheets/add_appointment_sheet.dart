@@ -37,6 +37,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
   final _controllers = AppointmentFormControllers(
     title: TextEditingController(),
     date: TextEditingController(),
+    endDate: TextEditingController(),
     startTime: TextEditingController(),
     endTime: TextEditingController(),
     clientSearch: TextEditingController(),
@@ -55,6 +56,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     final initialDate = widget.initialDate;
     if (initialDate != null) {
       _controllers.date.text = DateUtilsHelper.formatDate(initialDate);
+      _controllers.endDate.text = _controllers.date.text;
     }
     final client = widget.initialClient;
     if (client != null) {
@@ -235,6 +237,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
           onRequestAddClient: requestAddClient,
           onToggleEmployee: _notifier.toggleEmployee,
           onPickDate: _pickDate,
+          // TODO(multi-day): wired in Task 9
+          onPickEndDate: () {},
           onPickStartTime: _pickStartTime,
           onPickEndTime: _pickEndTime,
           onSelectRepeat: _notifier.selectRepeat,

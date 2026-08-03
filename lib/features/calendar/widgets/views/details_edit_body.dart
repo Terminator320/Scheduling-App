@@ -118,6 +118,8 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           onRequestAddClient: requestAddClient,
           onToggleEmployee: notifier.toggleEmployee,
           onPickDate: () => _pickDate(context, state, notifier),
+          // TODO(multi-day): wired in Task 9
+          onPickEndDate: () {},
           onPickStartTime: () => _pickStartTime(context, state, notifier),
           onPickEndTime: () => _pickEndTime(context, state, notifier),
           onSelectRepeat: notifier.selectRepeat,
@@ -252,7 +254,8 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
 
     // An unnamed personal block saves as "Personal" — same rule as the add
     // flow, since the stored title is what every read surface falls back to.
-    final title = widget.controllers.title.text.trim().isEmpty && state.isPersonal
+    final title =
+        widget.controllers.title.text.trim().isEmpty && state.isPersonal
         ? context.l10n.calendar_personal
         : widget.controllers.title.text;
 

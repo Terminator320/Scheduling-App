@@ -540,6 +540,14 @@
   "@calendar_selectDate": {
     "description": "Select date"
   },
+  "calendar_startDate": "Start date",
+  "@calendar_startDate": {
+    "description": "Label of the first day of a job's run, in the appointment form's schedule panel."
+  },
+  "calendar_endDate": "End date",
+  "@calendar_endDate": {
+    "description": "Label of the last day of a job's run, in the appointment form's schedule panel."
+  },
   "calendar_startTime": "Start Time",
   "@calendar_startTime": {
     "description": "Start Time"
@@ -547,6 +555,40 @@
   "calendar_endTime": "End Time",
   "@calendar_endTime": {
     "description": "End Time"
+  },
+  "calendar_startTimeEachDay": "Start time · each day",
+  "@calendar_startTimeEachDay": {
+    "description": "Start-time label on a job running more than one day: the time is a daily window, repeated on each day of the run."
+  },
+  "calendar_endTimeEachDay": "End time · each day",
+  "@calendar_endTimeEachDay": {
+    "description": "End-time label on a job running more than one day: the time is a daily window, repeated on each day of the run."
+  },
+  "calendar_startTimeEachNight": "Start time · each night",
+  "@calendar_startTimeEachNight": {
+    "description": "Start-time label on a multi-day job whose daily window crosses midnight, so the run counts nights."
+  },
+  "calendar_endTimeNextMorning": "End time · next morning",
+  "@calendar_endTimeNextMorning": {
+    "description": "End-time label on a multi-day job whose daily window crosses midnight: the window ends the following morning."
+  },
+  "calendar_spanDays": "{count} days",
+  "@calendar_spanDays": {
+    "description": "Run length shown beside the end date of a job that spans several days.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_spanNights": "{count} nights",
+  "@calendar_spanNights": {
+    "description": "Run length shown beside the end date of a job whose daily window crosses midnight, so the run counts nights.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "calendar_client": "Client",
   "@calendar_client": {

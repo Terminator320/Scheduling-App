@@ -26,6 +26,9 @@ void main() {
     bool showPersonalSwitch = true,
     bool isAllDay = false,
     ValueChanged<bool>? onAllDayChanged,
+    bool isMultiDay = false,
+    bool isOvernight = false,
+    int spanLength = 1,
   }) async {
     tester.view.physicalSize = Size(width, 740);
     tester.view.devicePixelRatio = 1.0;
@@ -35,6 +38,7 @@ void main() {
     final controllers = AppointmentFormControllers(
       title: TextEditingController(),
       date: TextEditingController(),
+      endDate: TextEditingController(),
       startTime: TextEditingController(),
       endTime: TextEditingController(),
       clientSearch: TextEditingController(),
@@ -71,6 +75,9 @@ void main() {
                   : null,
               isAllDay: isAllDay,
               onAllDayChanged: onAllDayChanged ?? (_) {},
+              isMultiDay: isMultiDay,
+              isOvernight: isOvernight,
+              spanLength: spanLength,
               errors: errors,
               employeeLabel: 'Employee',
               employeeRequired: false,
@@ -81,6 +88,7 @@ void main() {
               onClearClient: () {},
               onToggleEmployee: (_) {},
               onPickDate: () {},
+              onPickEndDate: () {},
               onPickStartTime: () {},
               onPickEndTime: () {},
               onSelectRepeat: (_) {},
@@ -171,10 +179,69 @@ void main() {
   testWidgets('the date and time pickers render as panel rows', (tester) async {
     await pumpAppointmentForm(tester, width: 400);
 
-    // Date, start, end and repeat — pickers, not text entry, and all in the
-    // one schedule panel.
-    expect(find.byType(SheetFieldRow), findsNWidgets(4));
+    // Start/end date, start/end time and repeat — pickers, not text entry, and
+    // all in the one schedule panel.
+    expect(find.byType(SheetFieldRow), findsNWidgets(5));
     expect(find.byType(SheetPanel), findsOneWidget);
+  });
+
+  testWidgets('the schedule panel offers a start and an end date', (
+    tester,
+  ) async {
+    await pumpAppointmentForm(tester, width: 400);
+
+    expect(find.text('Start date'), findsOneWidget);
+    expect(find.text('End date'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the all-day switch renders on a client job too', (tester) async {
+    await pumpAppointmentForm(tester, width: 400);
+
+    expect(find.text('All day'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a multi-day job labels its times as a daily window', (
+    tester,
+  ) async {
+    await pumpAppointmentForm(
+      tester,
+      width: 400,
+      isMultiDay: true,
+      spanLength: 3,
+    );
+
+    expect(find.text('Start time · each day'), findsOneWidget);
+    expect(find.text('End time · each day'), findsOneWidget);
+    expect(find.text('3 days'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an overnight multi-day job counts nights', (tester) async {
+    await pumpAppointmentForm(
+      tester,
+      width: 400,
+      isMultiDay: true,
+      isOvernight: true,
+      spanLength: 2,
+    );
+
+    expect(find.text('Start time · each night'), findsOneWidget);
+    expect(find.text('End time · next morning'), findsOneWidget);
+    expect(find.text('2 nights'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a single-day job shows no run length beside the end date', (
+    tester,
+  ) async {
+    await pumpAppointmentForm(tester, width: 400, spanLength: 3);
+
+    expect(find.text('3 days'), findsNothing);
+    expect(find.text('3 nights'), findsNothing);
+    expect(find.text('Start Time'), findsOneWidget);
+    expect(find.text('End Time'), findsOneWidget);
   });
 
   testWidgets('a personal job hides the client picker and the address', (
@@ -223,35 +290,32 @@ void main() {
     );
 
     expect(find.text('All day'), findsOneWidget);
-    // Only the date row is left in the schedule panel.
-    expect(find.byType(SheetFieldRow), findsOneWidget);
+    // Only the date pair is left in the schedule panel.
+    expect(find.byType(SheetFieldRow), findsNWidgets(2));
     expect(find.text('Start Time'), findsNothing);
     expect(find.text('End Time'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the all-day switch is personal-only', (tester) async {
-    await pumpAppointmentForm(tester, width: 400);
-    expect(find.text('All day'), findsNothing);
-    expect(find.byType(SheetFieldRow), findsNWidgets(4));
-  });
-
-  testWidgets('a personal job drops the templates, repeat and job-site fields', (
-    tester,
-  ) async {
-    await pumpAppointmentForm(
+  testWidgets(
+    'a personal job drops the templates, repeat and job-site fields',
+    (
       tester,
-      width: 400,
-      isPersonal: true,
-      onApplyTemplate: (_) {},
-    );
+    ) async {
+      await pumpAppointmentForm(
+        tester,
+        width: 400,
+        isPersonal: true,
+        onApplyTemplate: (_) {},
+      );
 
-    expect(find.text('TEMPLATES'), findsNothing);
-    expect(find.text('Water heater'), findsNothing);
-    expect(find.text('Repeat'), findsNothing);
-    expect(find.text('Materials needed'), findsNothing);
-    expect(find.text('Pictures'), findsNothing);
-  });
+      expect(find.text('TEMPLATES'), findsNothing);
+      expect(find.text('Water heater'), findsNothing);
+      expect(find.text('Repeat'), findsNothing);
+      expect(find.text('Materials needed'), findsNothing);
+      expect(find.text('Pictures'), findsNothing);
+    },
+  );
 
   testWidgets('the personal switch is hidden without a change callback', (
     tester,

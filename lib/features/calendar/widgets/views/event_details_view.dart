@@ -64,6 +64,9 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
       date: TextEditingController(
         text: DateUtilsHelper.formatDate(a.startTime),
       ),
+      endDate: TextEditingController(
+        text: DateUtilsHelper.formatDate(a.startTime),
+      ),
       startTime: TextEditingController(
         text: DateUtilsHelper.formatTime(a.startTime),
       ),
