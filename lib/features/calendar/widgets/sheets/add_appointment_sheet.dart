@@ -7,6 +7,7 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
 import 'package:scheduling/features/calendar/domain/models/job_template.dart';
+import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
@@ -97,6 +98,29 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     if (picked == null || !mounted) return;
     _controllers.date.text = DateUtilsHelper.formatDate(picked);
     _notifier.selectDate(picked);
+    // selectDate mirrors or shifts the end date, and the end row renders the
+    // controller text — so it has to follow, or it goes stale.
+    final shifted = ref.read(_provider).endDate;
+    if (shifted != null) {
+      _controllers.endDate.text = DateUtilsHelper.formatDate(shifted);
+    }
+  }
+
+  Future<void> _pickEndDate() async {
+    final state = ref.read(_provider);
+    final picked = await showAdaptiveDatePicker(
+      context,
+      initialDate: state.endDate ?? state.selectedDate ?? DateTime.now(),
+      // Never offer a date before the start: an end date that precedes it is
+      // unbookable, so it shouldn't be reachable in the picker either.
+      firstDate:
+          state.selectedDate?.dateOnly ??
+          AppointmentDraftDefaults.datePickerFirstDate,
+      lastDate: AppointmentDraftDefaults.datePickerLastDate,
+    );
+    if (picked == null || !mounted) return;
+    _controllers.endDate.text = DateUtilsHelper.formatDate(picked);
+    _notifier.selectEndDate(picked);
   }
 
   Future<void> _pickStartTime() async {
@@ -137,6 +161,23 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
       _controllers.endTime.text = end.format(context);
       _notifier.selectEndTime(end);
     }
+  }
+
+  /// Run length in days. 1 until both dates are known — the row shows no
+  /// length on a single-day job, so a partially-filled form reads as one day.
+  int _spanLength(AddEventState state) {
+    final start = state.selectedDate;
+    final end = state.endDate;
+    if (start == null || end == null) return 1;
+    final span = calendarDaysBetween(start, end) + 1;
+    return span < 1 ? 1 : span;
+  }
+
+  bool _isOvernight(AddEventState state) {
+    final start = state.selectedStartTime;
+    final end = state.selectedEndTime;
+    if (state.isAllDay || start == null || end == null) return false;
+    return isOvernightWindow(start, end);
   }
 
   Future<void> _pickImages() async {
@@ -206,6 +247,10 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     final state = ref.watch(_provider);
     final allEmployees =
         ref.watch(employeesStreamProvider).asData?.value ?? const [];
+    // One length feeds both the flag and the label, so they can't disagree:
+    // the run-length string is a plain interpolation, and a multi-day flag
+    // paired with a length of 1 would render "1 days".
+    final spanLength = _spanLength(state);
 
     return FormSheetFrame(
       title: context.l10n.calendar_newAppointment,
@@ -237,8 +282,10 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
           onRequestAddClient: requestAddClient,
           onToggleEmployee: _notifier.toggleEmployee,
           onPickDate: _pickDate,
-          // TODO(multi-day): wired in Task 9
-          onPickEndDate: () {},
+          onPickEndDate: _pickEndDate,
+          isMultiDay: spanLength > 1,
+          isOvernight: _isOvernight(state),
+          spanLength: spanLength,
           onPickStartTime: _pickStartTime,
           onPickEndTime: _pickEndTime,
           onSelectRepeat: _notifier.selectRepeat,
