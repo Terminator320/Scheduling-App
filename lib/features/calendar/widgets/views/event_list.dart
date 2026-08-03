@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/views/agenda_sliver_list.dart';
 
@@ -18,7 +19,8 @@ class EventList extends StatelessWidget {
     this.selectedAppointmentId,
   });
 
-  final List<AppointmentRecord> events;
+  /// One entry per day the job runs — see [AgendaSliverList.events].
+  final List<AppointmentDaySlice> events;
   final Map<String, String> nameMap;
   final Map<String, Color> colorMap;
   final bool isAdmin;

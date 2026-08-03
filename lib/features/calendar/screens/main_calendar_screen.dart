@@ -15,6 +15,7 @@ import 'package:scheduling/features/auth/application/account_status_provider.dar
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/collapse_state.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
@@ -176,8 +177,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     _onDaySelected(weekOf(target, weekStart: weekStart).first);
   }
 
-  Map<DateTime, List<AppointmentRecord>>? _dayIndex;
-  // Remembers which appointments list _dayIndex was last built from, so we know when it needs rebuilding.
+  Map<DateTime, List<AppointmentDaySlice>>? _dayIndex;
+  // Remembers which appointments list _dayIndex was last built from, so we
+  // know when it needs rebuilding.
   List<AppointmentRecord>? _indexedAppointments;
 
   /// Rebuilds [_dayIndex] only when [source] is a different list instance than
@@ -185,27 +187,26 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   void _refreshDayIndex(List<AppointmentRecord> source) {
     if (identical(source, _indexedAppointments)) return;
     _indexedAppointments = source;
-    _dayIndex = _buildDayIndex(source);
+    _dayIndex = expandToDays(
+      source,
+      _appointmentRange,
+      onSpanClamped: (appointment, actualDays) => ref
+          .read(loggerProvider)
+          .warn(
+            'APPT-RANGE appointment ${appointment.id} spans $actualDays days, '
+            'past the $maxAppointmentSpanDays-day cap — showing the first '
+            '$maxAppointmentSpanDays',
+          ),
+    );
   }
 
-  Map<DateTime, List<AppointmentRecord>> _buildDayIndex(
-    List<AppointmentRecord> source,
-  ) {
-    final index = <DateTime, List<AppointmentRecord>>{};
-    for (final app in source) {
-      final key = app.startTime.dateOnly;
-      (index[key] ??= <AppointmentRecord>[]).add(app);
-    }
-    for (final list in index.values) {
-      list.sort((a, b) => a.startTime.compareTo(b.startTime));
-    }
-    return index;
-  }
+  List<AppointmentDaySlice> _getEventsForDay(DateTime day) =>
+      _dayIndex?[day.dateOnly] ?? const <AppointmentDaySlice>[];
 
-  List<AppointmentRecord> _getEventsForDay(DateTime day) {
-    final key = day.dateOnly;
-    return _dayIndex?[key] ?? const <AppointmentRecord>[];
-  }
+  /// The records running on [day], for the crew dots — lazy, since the grid
+  /// asks once per cell on every rebuild.
+  Iterable<AppointmentRecord> _appointmentsOn(DateTime day) =>
+      _getEventsForDay(day).map((slice) => slice.appointment);
 
   void _onDaySelected(DateTime selectedDay) {
     if (isSameDate(_selectedDay ?? _focusedDay, selectedDay)) return;
@@ -420,7 +421,11 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         today: today,
         onDaySelected: _onDaySelected,
         dotColorFor: (day) {
-          final colors = dayCrewColors(_getEventsForDay(day), colorMap, max: 1);
+          final colors = dayCrewColors(
+            _appointmentsOn(day),
+            colorMap,
+            max: 1,
+          );
           return colors.isEmpty ? null : colors.first;
         },
       ),
@@ -506,7 +511,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           today: today,
           onDaySelected: _onDaySelected,
           onMonthChanged: _setFocusedDay,
-          dotColorsFor: (day) => dayCrewColors(_getEventsForDay(day), colorMap),
+          dotColorsFor: (day) => dayCrewColors(_appointmentsOn(day), colorMap),
           countFor: (day) => _getEventsForDay(day).length,
         ),
       );
@@ -550,7 +555,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
   /// Landscape phones and tablets: month grid | day agenda, side by side.
   Widget _splitContent({
-    required List<AppointmentRecord> events,
+    required List<AppointmentDaySlice> events,
     required Widget agendaHeader,
     required bool isLoading,
     required Map<String, Color> colorMap,
@@ -597,7 +602,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   /// Portrait: TWO scroll areas — the grid is fixed above the agenda, so
   /// reading down the day never moves the calendar.
   Widget _portraitContent({
-    required List<AppointmentRecord> events,
+    required List<AppointmentDaySlice> events,
     required Widget agendaHeader,
     required bool isLoading,
     required Map<String, Color> colorMap,

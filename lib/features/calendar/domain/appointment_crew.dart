@@ -46,7 +46,7 @@ List<AppointmentCrew> crewFor(
 /// Deliberately keyed on the *assignee*, not the appointment — the old
 /// per-appointment dots rendered grey for any multi-crew job.
 List<Color> dayCrewColors(
-  List<AppointmentRecord> dayAppointments,
+  Iterable<AppointmentRecord> dayAppointments,
   Map<String, Color> colorMap, {
   int max = 3,
 }) {
