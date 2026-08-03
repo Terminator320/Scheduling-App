@@ -7,7 +7,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/core/animations/tap_scale.dart';
 import 'package:scheduling/core/theme/themes.dart';
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -32,6 +34,26 @@ AppointmentRecord _appt({
   employeeNames: const ['Theo Bell'],
   status: status,
 );
+
+AppointmentRecord _multiDay({
+  required DateTime start,
+  required DateTime end,
+  bool isAllDay = false,
+}) => AppointmentRecord(
+  id: 'a3',
+  title: 'Basement reroute',
+  startTime: start,
+  endTime: end,
+  clientName: 'Marchetti Residence',
+  employeeIds: const ['e1'],
+  employeeNames: const ['Theo Bell'],
+  isAllDay: isAllDay,
+);
+
+/// The rendered time range, spelled the way the active locale spells a.m./p.m.
+/// so the expectation pins the CLOCK the card shows, not en_CA's punctuation.
+String _range(DateTime start, DateTime end) =>
+    '${DateUtilsHelper.formatTime(start)} – ${DateUtilsHelper.formatTime(end)}';
 
 // endTime in the past with a non-terminal status resolves to `overdue`.
 AppointmentRecord _overdueAppt() => AppointmentRecord(
@@ -254,6 +276,150 @@ void main() {
       find.bySemanticsLabel(RegExp('Water heater swap.*Theo Bell')),
       findsOneWidget,
     );
+    handle.dispose();
+  });
+
+  testWidgets('a middle day reads the DAILY window plus a day counter', (
+    tester,
+  ) async {
+    final record = _multiDay(
+      start: DateTime(2026, 8, 1, 9),
+      end: DateTime(2026, 8, 5, 17),
+    );
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentCard(
+          appointment: record,
+          crew: _theo,
+          slice: sliceFor(record, DateTime(2026, 8, 3)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Day 3 of 5'), findsOneWidget);
+    // The stored times are the daily window, so day 3 still reads 9–5.
+    expect(
+      find.textContaining(DateUtilsHelper.formatTime(DateTime(2026, 8, 3, 9))),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an overnight run counts NIGHTS and spans midnight', (
+    tester,
+  ) async {
+    final record = _multiDay(
+      start: DateTime(2026, 8, 1, 22),
+      end: DateTime(2026, 8, 4, 6),
+    );
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentCard(
+          appointment: record,
+          crew: _theo,
+          slice: sliceFor(record, DateTime(2026, 8, 2)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final window = _range(DateTime(2026, 8, 2, 22), DateTime(2026, 8, 3, 6));
+    expect(find.text('$window · Night 2 of 3'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a multi-day all-day block keeps "All day" and adds the day', (
+    tester,
+  ) async {
+    final record = _multiDay(
+      start: DateTime(2026, 8, 10),
+      end: DateTime(2026, 8, 14, 23, 59),
+      isAllDay: true,
+    );
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentCard(
+          appointment: record,
+          crew: _theo,
+          slice: sliceFor(record, DateTime(2026, 8, 12)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('All day · Day 3 of 5'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a single-day job never shows a "Day 1 of 1" counter', (
+    tester,
+  ) async {
+    final record = _appt();
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentCard(
+          appointment: record,
+          crew: _theo,
+          slice: sliceFor(record, DateTime(2026, 8, 4)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Day 1 of 1'), findsNothing);
+    expect(
+      find.text(_range(DateTime(2026, 8, 4, 10, 30), DateTime(2026, 8, 4, 12))),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets("with no slice it falls back to the record's stored span", (
+    tester,
+  ) async {
+    // History and client job history show a job once, not per day.
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentCard(
+          appointment: _multiDay(
+            start: DateTime(2026, 8, 1, 9),
+            end: DateTime(2026, 8, 5, 17),
+          ),
+          crew: _theo,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(_range(DateTime(2026, 8, 1, 9), DateTime(2026, 8, 5, 17))),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Day'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the semantics label carries the day counter too', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    final record = _multiDay(
+      start: DateTime(2026, 8, 1, 9),
+      end: DateTime(2026, 8, 5, 17),
+    );
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentCard(
+          appointment: record,
+          crew: _theo,
+          slice: sliceFor(record, DateTime(2026, 8, 3)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.bySemanticsLabel(RegExp('Day 3 of 5')), findsOneWidget);
     handle.dispose();
   });
 

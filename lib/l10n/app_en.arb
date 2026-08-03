@@ -193,6 +193,30 @@
   "@calendar_allDay": {
     "description": "Switch in the job form, and the label shown in place of a time range on a job that runs the whole day."
   },
+  "calendar_dayOfCount": "Day {index} of {count}",
+  "@calendar_dayOfCount": {
+    "description": "The position of one day within a multi-day job, shown on the appointment card after the time range.",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_nightOfCount": "Night {index} of {count}",
+  "@calendar_nightOfCount": {
+    "description": "The position of one night within a multi-night job whose daily window crosses midnight, shown on the appointment card after the time range.",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "calendar_personal": "Personal",
   "@calendar_personal": {
     "description": "Short label shown on a job card and in the job detail view in place of a client name, when the job is personal."
