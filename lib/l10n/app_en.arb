@@ -668,6 +668,15 @@
   "@validation_pleaseSelectAnEndTime": {
     "description": "Please select an end time"
   },
+  "validation_endDateBeforeStart": "The end date can't be before the start date.",
+  "@validation_endDateBeforeStart": {
+    "description": "Shown on the appointment form when the picked end date falls before the start date."
+  },
+  "validation_spanTooLong": "A job can run at most {days} days. Shorten the end date or book a second job.",
+  "@validation_spanTooLong": {
+    "description": "Shown on the appointment form when the booked span exceeds the maximum.",
+    "placeholders": { "days": { "type": "int" } }
+  },
   "calendar_mustBeAfterStartTime": "Must be after start time",
   "@calendar_mustBeAfterStartTime": {
     "description": "Must be after start time"

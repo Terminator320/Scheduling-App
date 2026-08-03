@@ -148,6 +148,8 @@
   "validation_pleaseSelectADate": "Veuillez sélectionner une date",
   "validation_pleaseSelectAStartTime": "Veuillez sélectionner une heure de début",
   "validation_pleaseSelectAnEndTime": "Veuillez sélectionner une heure de fin",
+  "validation_endDateBeforeStart": "La date de fin ne peut pas précéder la date de début.",
+  "validation_spanTooLong": "Un travail peut durer au plus {days} jours. Réduisez la date de fin ou créez un deuxième travail.",
   "calendar_mustBeAfterStartTime": "Doit être après l’heure de début",
   "validation_pleaseSelectAClient": "Veuillez sélectionner un client",
   "validation_maximumCharacterLimitReached": "Limite maximale de caractères atteinte",

@@ -275,4 +275,81 @@ void main() {
       expect(span.end, DateTime(2026, 8, 4, 9));
     });
   });
+
+  group('span validation', () {
+    Map<String, AppointmentFormError> run({
+      required DateTime date,
+      required DateTime endDate,
+    }) => AppointmentFormValidator.validate(
+      AppointmentFormInput(
+        title: 'Repipe',
+        date: date,
+        endDate: endDate,
+        startTime: const TimeOfDay(hour: 9, minute: 0),
+        endTime: const TimeOfDay(hour: 17, minute: 0),
+        client: null,
+        selectedEmployees: const [],
+        isPersonal: true,
+      ),
+    );
+
+    test('rejects an end date before the start date', () {
+      final errors = run(
+        date: DateTime(2026, 8, 5),
+        endDate: DateTime(2026, 8),
+      );
+      expect(errors['endDate'], AppointmentFormError.endDateBeforeStart);
+    });
+
+    test('accepts a span of exactly 14 days', () {
+      final errors = run(
+        date: DateTime(2026, 8),
+        endDate: DateTime(2026, 8, 14),
+      );
+      expect(errors['endDate'], isNull);
+    });
+
+    test('rejects a span of 15 days', () {
+      final errors = run(
+        date: DateTime(2026, 8),
+        endDate: DateTime(2026, 8, 15),
+      );
+      expect(errors['endDate'], AppointmentFormError.spanTooLong);
+    });
+
+    test(
+      'accepts an end time before the start time — that is a night shift',
+      () {
+        final errors = AppointmentFormValidator.validate(
+          AppointmentFormInput(
+            title: 'Nuit',
+            date: DateTime(2026, 8),
+            endDate: DateTime(2026, 8, 3),
+            startTime: const TimeOfDay(hour: 22, minute: 0),
+            endTime: const TimeOfDay(hour: 6, minute: 0),
+            client: null,
+            selectedEmployees: const [],
+            isPersonal: true,
+          ),
+        );
+        expect(errors['endTime'], isNull);
+        expect(errors['endDate'], isNull);
+      },
+    );
+
+    test('a null end date is read as same-day and raises nothing', () {
+      final errors = AppointmentFormValidator.validate(
+        AppointmentFormInput(
+          title: 'Repipe',
+          date: DateTime(2026, 8),
+          startTime: const TimeOfDay(hour: 9, minute: 0),
+          endTime: const TimeOfDay(hour: 17, minute: 0),
+          client: null,
+          selectedEmployees: const [],
+          isPersonal: true,
+        ),
+      );
+      expect(errors['endDate'], isNull);
+    });
+  });
 }
