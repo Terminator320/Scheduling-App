@@ -19,8 +19,11 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   (`setGlobalOptions` in `index.js`)
 - **Wiring:** `index.js` is a thin re-export surface; implementations live in
   domain modules. Shared callable guards (`assertPayloadShape`, `requireString`,
-  `readSessionToken`, `enforceDurableRateLimit`, `assertAdmin`) live in
-  `security.js`.
+  `optionalString`, `requireNumberInRange`, `readSessionToken`,
+  `enforceDurableRateLimit`, `assertAdmin`) live in `security.js` — put a new
+  one there, never back in a feature module (`optionalString` was a private copy
+  in the retired `invites.js` and was carried verbatim into
+  `employee_accounts.js` before being hoisted).
 - **Deploy:** `firebase deploy --only functions,firestore:rules,firestore:indexes,storage`
   (run `cd functions && npm run lint` first).
 
@@ -168,20 +171,29 @@ not technical.
 ### `createEmployeeAccount` — `employee_accounts.js`
 Admin-only. Mints a Firebase Auth account on the shared `DEFAULT_PASSWORD` plus
 an `invited` `users` doc that **already carries the real `uid`**, and returns
-`{email, password, docId}` so the admin surface shows exactly what the server
-set rather than a constant it hopes still matches. The duplicate lookup and the
-doc write share one transaction, so two admins creating the same person can't
-both win.
+`{email, password}` so the admin surface shows exactly what the server set
+rather than a constant it hopes still matches (no `docId` — the client already
+has the row it acted on). The duplicate lookup and the doc write share one
+transaction, so two admins creating the same person can't both win.
 
 Re-running it on a still-`invited` person **re-provisions**: it refreshes the
 doc's editable fields and resets the password back to the default — that IS the
 "never signed in / lost the password" path. It refuses `already-exists /
-email-exists` once the person has finished setup, and that check runs **before
-touching Auth**, so it can never reset a real person's chosen password and only
-then discover Firestore says no. If the Firestore write fails after the Auth
-account was created, the Auth account is deleted — but only if *we* just minted
-it, since an Auth account with no `users` doc is a sign-in `SplashScreen` can't
-resolve and no admin surface can see.
+email-exists` once the person has finished setup, resolving the target **by
+`uid`, not by email** (`users.email` is admin-editable and never synced back to
+Auth, so an email-only check can clear a doc that is not the account Auth hands
+back). The rotation itself is deferred to `resetProvisionedPassword`, which runs
+only after the transaction has claimed the person as still-`invited` — that
+**narrows** the window in which a concurrent setup gets its chosen password
+reverted, but cannot close it, since the Auth call sits outside both
+transactions.
+
+If the Firestore write fails after the Auth account was created, the Auth
+account is deleted — but only if *we* just minted it. **A rollback that itself
+fails is `logger.error`-ed with the uid**, because the resulting Auth-account-
+with-no-doc is invisible to every admin surface *and* permanently bricks that
+email (the pre-flight refuses an Auth account no doc claims), so it can only be
+cleared from the Firebase console.
 
 Durable-rate-limited 20/hr per admin uid; the payload is validated
 (`assertPayloadShape`/`requireString`, plus explicit `colorValue` and `jobTitle`
@@ -221,9 +233,12 @@ removal. A setup that commits first therefore makes this refuse rather than
 delete a just-activated account; a missing doc is `not-found /
 account-not-found`.
 
-Doc first, Auth second — an Auth account with no doc is invisible to every admin
-surface, while a doc with no Auth account is visible and fixable by re-creating.
-`auth/user-not-found` is swallowed so a partial earlier run converges. Guard
+Doc first, Auth second. `auth/user-not-found` is swallowed so a partial earlier
+run converges, but **any other Auth failure is logged with the uid and then
+rethrown**: the doc is already gone at that point, so it leaves an Auth account
+no admin surface can see and whose email `createEmployeeAccount` will then
+refuse — recoverable only from the Firebase console, which is why the log is
+the difference between a findable leftover and a silent one. Guard
 order is the standard one (auth → `assertAdmin` → payload →
 `enforceDurableRateLimit` 20/hr per admin uid → work), and an id containing `/`
 is rejected up front because `.doc()` throws synchronously on it and would

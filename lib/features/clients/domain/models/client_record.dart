@@ -52,6 +52,11 @@ abstract class ClientRecord with _$ClientRecord {
     @Default('') String onSiteManager,
     @Default('') String billingTerms,
     @Default(false) bool autoInvoice,
+    // Legacy pre-Wave-reshape field, READ-ONLY — never emitted in toMap, and
+    // no UI edits it. Carried only so search can still reach it: `name` falls
+    // back to it when blank, but a legacy doc holding BOTH a name and a
+    // different business name would otherwise be unfindable by the business.
+    @Default('') String businessName,
     // Function-owned absolute recount — never emitted in toMap, and null until
     // the trigger has written it once.
     @Default(null) int? jobCount,
@@ -68,15 +73,18 @@ abstract class ClientRecord with _$ClientRecord {
   factory ClientRecord.fromMap(String id, Map<String, dynamic> data) {
     final rawContacts = (data['contacts'] as List?) ?? const [];
     final wave = (data['wave'] as Map?)?.cast<String, dynamic>();
-    // Back-compat fallback for legacy `businessName` — keeps unnamed business docs
-    // visible and searchable.
+    // Back-compat for legacy `businessName` — keeps unnamed business docs
+    // visible and searchable. Two halves: `name` falls back to it when blank
+    // (which is the documented legacy shape), and it is ALSO carried through
+    // verbatim so ClientSearchPolicy can index it — a doc holding both a name
+    // and a different business name is findable by either.
+    final businessName = (data['businessName'] ?? '').toString();
     final rawName = (data['name'] ?? '').toString();
-    final name = rawName.trim().isNotEmpty
-        ? rawName
-        : (data['businessName'] ?? '').toString();
+    final name = rawName.trim().isNotEmpty ? rawName : businessName;
     return ClientRecord(
       id: id,
       name: name,
+      businessName: businessName,
       firstName: (data['firstName'] ?? '').toString(),
       lastName: (data['lastName'] ?? '').toString(),
       address: (data['address'] ?? '').toString(),

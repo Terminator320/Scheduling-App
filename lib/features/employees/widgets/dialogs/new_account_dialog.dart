@@ -83,7 +83,6 @@ class _NewAccountDialogState extends State<_NewAccountDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final copyLabel = _copied ? l10n.common_copied : l10n.employees_copyBoth;
 
     if (context.isCupertino) {
       return CupertinoAlertDialog(
@@ -100,7 +99,7 @@ class _NewAccountDialogState extends State<_NewAccountDialog> {
         actions: [
           CupertinoDialogAction(
             onPressed: _copied ? null : _copy,
-            child: Text(copyLabel),
+            child: Text(copyCredentialsLabel(context, copied: _copied)),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
@@ -115,14 +114,7 @@ class _NewAccountDialogState extends State<_NewAccountDialog> {
       title: Text(l10n.employees_accountCreatedTitle),
       content: _buildBody(context),
       actions: [
-        TextButton.icon(
-          icon: Icon(
-            _copied ? Icons.check_outlined : Icons.copy_outlined,
-            size: 18,
-          ),
-          label: Text(copyLabel),
-          onPressed: _copied ? null : _copy,
-        ),
+        CopyCredentialsButton(copied: _copied, onCopy: _copy),
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: Text(l10n.common_close),
@@ -148,10 +140,7 @@ class _CredentialRow extends StatelessWidget {
         vertical: AppSpacing.sp8,
         horizontal: AppSpacing.sp12,
       ),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(AppRadius.r8),
-      ),
+      decoration: credentialPanelDecoration(Theme.of(context)),
       child: CredentialLine(label: label, value: value),
     );
   }

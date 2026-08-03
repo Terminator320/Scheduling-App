@@ -105,6 +105,90 @@ void main() {
         ),
       ).called(1);
     });
+
+    test(
+      'a save for a DIFFERENT employee is not blocked by one in flight',
+      () async {
+        const credentials = NewAccountCredentials(
+          email: 'b@test.com',
+          password: 'Welcome123!',
+        );
+        // A's call hangs on the gate; B's returns straight away, so the only
+        // thing that can stall B is the controller's own guard.
+        final gate = Completer<NewAccountCredentials>();
+        when(
+          () => repo.createEmployeeAccount(
+            name: any(named: 'name'),
+            firstName: any(named: 'firstName'),
+            lastName: any(named: 'lastName'),
+            email: 'a@test.com',
+            phone: any(named: 'phone'),
+            colorValue: any(named: 'colorValue'),
+            jobTitle: any(named: 'jobTitle'),
+            isAdmin: any(named: 'isAdmin'),
+          ),
+        ).thenAnswer((_) => gate.future);
+        when(
+          () => repo.createEmployeeAccount(
+            name: any(named: 'name'),
+            firstName: any(named: 'firstName'),
+            lastName: any(named: 'lastName'),
+            email: 'b@test.com',
+            phone: any(named: 'phone'),
+            colorValue: any(named: 'colorValue'),
+            jobTitle: any(named: 'jobTitle'),
+            isAdmin: any(named: 'isAdmin'),
+          ),
+        ).thenAnswer((_) async => credentials);
+
+        // Two expanded pending rows, each tapping Reset password.
+        final rowA = notifier().createAccount(
+          const EmployeeRecord(id: 'a', email: 'a@test.com'),
+        );
+        final rowB = await notifier()
+            .createAccount(const EmployeeRecord(id: 'b', email: 'b@test.com'))
+            .timeout(
+              const Duration(seconds: 1),
+              onTimeout: () => throw StateError('B never resolved'),
+            );
+
+        // NOT Busy: the guard is keyed per employee. A global flag dropped this
+        // tap silently — no spinner, no notice, nothing written.
+        expect(rowB, isA<EmployeeAccountCreated>());
+        expect(activity().isSavingId('a'), isTrue);
+        expect(activity().isSavingId('b'), isFalse);
+
+        gate.complete(
+          const NewAccountCredentials(
+            email: 'a@test.com',
+            password: 'Welcome123!',
+          ),
+        );
+        expect(await rowA, isA<EmployeeAccountCreated>());
+        expect(activity().isSaving, isFalse);
+      },
+    );
+
+    test(
+      'removing one pending account leaves another row actionable',
+      () async {
+        final gate = Completer<void>();
+        when(
+          () => repo.deleteEmployeeAccount('a'),
+        ).thenAnswer((_) => gate.future);
+        when(() => repo.deleteEmployeeAccount('b')).thenAnswer((_) async {});
+
+        final rowA = notifier().deleteAccount('a');
+        expect(activity().isDeletingAccountId('a'), isTrue);
+        expect(activity().isDeletingAccountId('b'), isFalse);
+
+        expect(await notifier().deleteAccount('b'), isA<AccountDeleted>());
+
+        gate.complete();
+        expect(await rowA, isA<AccountDeleted>());
+        expect(activity().isDeletingAccount, isFalse);
+      },
+    );
   });
 
   group('createAccount', () {

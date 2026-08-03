@@ -1,12 +1,13 @@
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
+const logger = require("firebase-functions/logger");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const {
   assertPayloadShape,
   requireString,
+  optionalString,
   assertAdmin,
   enforceDurableRateLimit,
-  hasControlChar,
 } = require("./security");
 
 /**
@@ -44,21 +45,6 @@ const SETUP_RATE_WINDOW_MS = 15 * 60 * 1000;
 const JOB_TITLES = [
   "", "lead_tech", "technician", "apprentice", "dispatcher",
 ];
-
-/**
- * Optional trimmed string field — like requireString but allows empty.
- * @param {object} data callable request data.
- * @param {string} key field name.
- * @param {number} maxLen max length (inclusive).
- * @return {string}
- */
-function optionalString(data, key, maxLen) {
-  const v = typeof data?.[key] === "string" ? data[key].trim() : "";
-  if (v.length > maxLen || hasControlChar(v)) {
-    throw new HttpsError("invalid-argument", `invalid-${key}`);
-  }
-  return v;
-}
 
 const APP_CHECK = {enforceAppCheck: true};
 
@@ -249,9 +235,15 @@ const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
   }
 
   // Resolves the uid; for an EXISTING account this deliberately does not touch
-  // the password yet (see resetProvisionedPassword).
-  const provisioned = await provisionAuthAccount(
-      auth, email, name, DEFAULT_PASSWORD);
+  // the password yet (see resetProvisionedPassword). The pre-flight above
+  // already resolved that account, so short-circuit rather than spending a
+  // createUser that can only fail plus the getUserByEmail that recovers from
+  // it — two Auth round trips of pure latency on the reset-password path.
+  // Only when the email was NOT found do we go through provisionAuthAccount,
+  // whose already-exists branch still covers a racing concurrent create.
+  const provisioned = existingAuth ?
+      {uid: existingAuth.uid, reused: true} :
+      await provisionAuthAccount(auth, email, name, DEFAULT_PASSWORD);
 
   // The refusal is raised INSIDE the try so one catch owns the rollback —
   // "when do we un-mint the Auth account" must not have two answers to keep in
@@ -280,7 +272,17 @@ const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
     }
   } catch (e) {
     if (!provisioned.reused) {
-      await auth.deleteUser(provisioned.uid).catch(() => {});
+      // A failed rollback leaves an Auth account with no users doc: invisible
+      // to every admin surface, and it permanently bricks that email for
+      // re-creation (the pre-flight above refuses an Auth account whose uid no
+      // doc claims). Nothing can recover it in-app, so it MUST be loud —
+      // swallowing it silently is how that state goes unnoticed for months.
+      await auth.deleteUser(provisioned.uid).catch((rollbackError) => {
+        logger.error(
+            "createEmployeeAccount: orphaned auth account; delete it by hand",
+            {uid: provisioned.uid, err: String(rollbackError)},
+        );
+      });
     }
     throw e;
   }
@@ -432,7 +434,17 @@ const deleteEmployeeAccount = onCall(APP_CHECK, async (req) => {
   // re-creating. Swallow user-not-found so a partial earlier run converges.
   if (outcome.uid) {
     await getAuth().deleteUser(outcome.uid).catch((e) => {
-      if (!e || e.code !== "auth/user-not-found") throw e;
+      if (!e || e.code !== "auth/user-not-found") {
+        // The doc is already gone, so this leaves an Auth account no admin
+        // surface can see and whose email createEmployeeAccount will then
+        // refuse. The throw tells the admin it failed; the log is what makes
+        // the leftover findable.
+        logger.error(
+            "deleteEmployeeAccount: orphaned auth account; delete it by hand",
+            {uid: outcome.uid, err: String(e)},
+        );
+        throw e;
+      }
     });
   }
   return {ok: true};

@@ -67,6 +67,10 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
           CupertinoTextField(
             controller: _controller,
             obscureText: _obscure,
+            // The eye toggle can clear obscureText, and only obscureText
+            // implies this — so a revealed password would otherwise be fair
+            // game for a third-party keyboard to retain.
+            enableIMEPersonalizedLearning: false,
             autofocus: true,
             placeholder: context.l10n.common_password,
             onSubmitted: (value) => Navigator.of(context).pop(value),
@@ -120,6 +124,7 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
           TextField(
             controller: _controller,
             obscureText: _obscure,
+            enableIMEPersonalizedLearning: false,
             autofocus: true,
             decoration: InputDecoration(
               labelText: context.l10n.common_password,

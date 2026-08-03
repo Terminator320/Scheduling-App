@@ -373,8 +373,15 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   refuses when the uid already belongs to another doc (the rules' `allow create`
   uid denylist restated for the one path that bypasses rules). And resetting
   before the claim meant a setup committing in that window left the person
-  active on a password nobody told them had been reverted
-  and only then discover Firestore says no. `deleteEmployeeAccount` likewise
+  active on a password nobody told them had been reverted.
+  **Be precise about what the deferral bought: the window is NARROWED, not
+  closed.** Firestore serializes the two transactions, but the Auth call sits
+  outside both — a `completeEmployeeSetup` that commits between
+  `performCreateAccount` committing and `resetProvisionedPassword` returning
+  still ends with an `active` employee on the shared default. That residue is
+  milliseconds wide instead of a whole round trip, and it cannot be closed
+  from here (Auth is not transactional); don't write it up as fixed.
+  `deleteEmployeeAccount` likewise
   only works while `invited` (transactional, so a setup that commits first makes
   the delete refuse); after that the no-delete invariant applies and disable is
   the only removal. Provisioning **rolls back**: if the Firestore write fails
@@ -427,7 +434,29 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   (`employees/widgets/fields/credential_line.dart`), which is the single owner
   of that payload format — never re-inline `'$email\n$password'` at a call
   site, or the two surfaces can put different things on the clipboard. The
-  `CredentialLine` widget beside it is shared for the same reason.
+  `CredentialLine`, `CopyCredentialsButton` and `credentialPanelDecoration`
+  beside it are shared for the same reason — the whole surface, not just the
+  payload. They were separate copies and had already drifted twice: the two
+  confirmed-state icons disagreed, and the dialog tinted its panel
+  `surfaceContainerHighest`/`r8` against the roster row's `sheetRow`/`r12`, so
+  the same credential pair rendered on two different fills in the two places an
+  admin reads it. Add a new credential surface by calling these, never by
+  re-deriving the control or the tint.
+- **`EmployeeFormActivity` tracks busy state as SETS OF DOC IDS, not booleans**
+  (`savingIds`, `deletingAccountIds`). The notifier is app-wide but its surfaces
+  are not: the roster can show several expanded `PendingInviteTile`s at once,
+  each with its own Reset and Remove. A single flag made every row claim to be
+  busy when any one was, and — worse — made `_save`'s reentrancy guard refuse a
+  *different* employee's action, which `EmployeeSaveBusy` then dropped with no
+  spinner and no notice. **So `_save` takes a `docId` and guards per key:** the
+  same person twice is a double-tap and must be refused; a different person is a
+  real action and must proceed. `isSaving`/`isDeletingAccount` survive as
+  `isNotEmpty` getters for the two person sheets (modal, one at a time); a row
+  asks `isSavingId(id)`/`isDeletingAccountId(id)` through a Riverpod `select`,
+  so it rebuilds only when its OWN state flips. A brand-new person keys on `''`
+  — correct, not a gap, since the invite sheet is modal. Never collapse this
+  back to booleans, and never "fix" a busy-state bug by adding a flag at a call
+  site instead.
 - **The deep-link dispatcher is the single `app_links` consumer, and it MUST
   skip any URI carrying the `homeWidget` query param.** `classifyDeepLink`
   (`core/deep_links/deep_link_target.dart`) returns `IgnoredLink` for it, with
@@ -496,11 +525,19 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   it isn't derived from `allUsersStreamProvider`.
 - **ClientRecord legacy back-compat:** pre-Wave-reshape "business-only" client
   docs stored their name under `businessName` with an empty `name`.
-  `ClientRecord.fromMap` falls back `name ← businessName`, and the repository
-  search index includes `businessName`, so those docs stay visible, searchable,
-  and editable. The one-time `backfillLegacyClientNames` function was removed, so
-  these two reads are now the *only* thing keeping legacy business-only docs
-  visible/searchable — keep them indefinitely; never strip them. (A doc missing
+  `ClientRecord.fromMap` handles it in **two** halves, and both are load-bearing:
+  `name` falls back to `businessName` when blank (the documented legacy shape),
+  AND the raw value is carried through onto `ClientRecord.businessName`, which
+  `ClientSearchPolicy.index` indexes. The fallback alone is not enough — it only
+  fires when `name` is empty, so a legacy doc holding a name AND a *different*
+  business name was unfindable by the business. The one-time
+  `backfillLegacyClientNames` function was removed, so these reads are the only
+  thing keeping legacy business docs visible/searchable — keep them
+  indefinitely; never strip either. **`businessName` is READ-ONLY**: no UI edits
+  it and `toMap` must never emit it (pinned by a test), or every save would
+  persist a field the app no longer owns. Don't instead add a second matcher
+  over the raw map beside the policy — that is what had drifted before, matching
+  in the instant local filter and then vanishing when the debounced read landed. (A doc missing
   `name` entirely is excluded by the list/search `orderBy('name')`; the fallback
   only rescues docs whose `name` is present-but-empty.) `toMap` must NEVER emit
   `waveCustomerId`/`wave`/`jobCount`; those are function-owned and
@@ -737,6 +774,17 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   variable-row grid the true worst case is ±6, so ±14 is now a deliberate
   superset — keep it rather than tuning it to the current row rule, or a future
   grid change silently empties the edge cells' dots.
+  **A single-day window has ONE owner: `AppointmentDateRange.forDay(day)`.**
+  It is **calendar** arithmetic (`DateTime(y, m, d + 1)`), never
+  `add(Duration(days: 1))`, which lands an hour off real midnight on the two
+  DST-shift days. Two costs, not one: it mis-buckets a late-evening job, AND
+  because `appointmentsInRangeProvider` is keyed by range **value**, an hour of
+  drift stops matching the day-range another surface already holds open and
+  forks a second live Firestore query for the same day. That is why
+  `todayRangeProvider`, the drawer's job count, the day route and
+  `forCalendar`'s selected-day leg all resolve through the one factory rather
+  than re-deriving the pair — it was hand-copied at four sites, two of which
+  cited each other as the authority.
   **Portrait is TWO scroll areas** (owner call, 2026-07-31): the grid is FIXED
   above the agenda, and the jobs have their own `CustomScrollView`, so reading
   down the day never moves the calendar. Collapse is a **drag on the divider

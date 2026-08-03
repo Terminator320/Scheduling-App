@@ -137,6 +137,23 @@ class AppointmentDateRange {
     );
   }
 
+  /// One calendar day, midnight to the next midnight (exclusive).
+  ///
+  /// The single owner of that arithmetic. It is **calendar** arithmetic, not a
+  /// fixed 24h: `add(Duration(days: 1))` lands an hour off real midnight on the
+  /// two DST-shift days, which both mis-buckets a late-evening job AND forks a
+  /// second listener, because a range that should equal another day-range
+  /// consumer's no longer does — `appointmentsInRangeProvider` is keyed by
+  /// value, so an hour of drift opens a whole second Firestore query for the
+  /// same day.
+  factory AppointmentDateRange.forDay(DateTime day) {
+    final start = day.dateOnly;
+    return AppointmentDateRange(
+      start: start,
+      end: DateTime(start.year, start.month, start.day + 1),
+    );
+  }
+
   /// The window the calendar screen actually needs: the visible month's grid
   /// **plus the selected day**, which the agenda below the grid is showing.
   ///
@@ -149,16 +166,10 @@ class AppointmentDateRange {
     required DateTime selectedDay,
   }) {
     final month = AppointmentDateRange.visibleMonth(focusedDay);
-    final dayStart = selectedDay.dateOnly;
-    // Exclusive upper bound, matching visibleMonth's.
-    final dayEnd = DateTime(
-      selectedDay.year,
-      selectedDay.month,
-      selectedDay.day + 1,
-    );
+    final day = AppointmentDateRange.forDay(selectedDay);
     return AppointmentDateRange(
-      start: dayStart.isBefore(month.start) ? dayStart : month.start,
-      end: dayEnd.isAfter(month.end) ? dayEnd : month.end,
+      start: day.start.isBefore(month.start) ? day.start : month.start,
+      end: day.end.isAfter(month.end) ? day.end : month.end,
     );
   }
 

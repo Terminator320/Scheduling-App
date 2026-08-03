@@ -68,7 +68,6 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
   Future<void> _resetPassword() async {
     final l10n = context.l10n;
     final notices = ref.read(noticeServiceProvider);
-    if (ref.read(employeeFormControllerProvider).isSaving) return;
     if (guardedOffline(
       context,
       ref,
@@ -116,7 +115,6 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
   Future<void> _remove() async {
     final l10n = context.l10n;
     final notices = ref.read(noticeServiceProvider);
-    if (ref.read(employeeFormControllerProvider).isDeletingAccount) return;
     if (guardedOffline(
       context,
       ref,
@@ -179,16 +177,27 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
           duration: MediaQuery.disableAnimationsOf(context)
               ? Duration.zero
               : AppDuration.normal,
-          // The activity provider is app-wide and shared with both person
-          // sheets, so watching it from the tile root rebuilt every visible
-          // pending row — header, avatar CustomPaint and all — whenever any
-          // employee anywhere was saved. Only the expanded body reads it.
+          // Only the expanded body watches, and it watches THIS row's keys via
+          // select — so a save elsewhere rebuilds nothing here, and a collapsed
+          // row (whose header carries a CustomPaint avatar) rebuilds never.
           child: _expanded
               ? Consumer(
-                  builder: (context, ref, _) => _buildBody(
-                    context,
-                    ref.watch(employeeFormControllerProvider),
-                  ),
+                  builder: (context, ref, _) {
+                    final id = widget.employee.id;
+                    return _buildBody(
+                      context,
+                      isResetting: ref.watch(
+                        employeeFormControllerProvider.select(
+                          (a) => a.isSavingId(id),
+                        ),
+                      ),
+                      isRemoving: ref.watch(
+                        employeeFormControllerProvider.select(
+                          (a) => a.isDeletingAccountId(id),
+                        ),
+                      ),
+                    );
+                  },
                 )
               : const SizedBox(width: double.infinity),
         ),
@@ -274,7 +283,11 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
     );
   }
 
-  Widget _buildBody(BuildContext context, EmployeeFormActivity activity) {
+  Widget _buildBody(
+    BuildContext context, {
+    required bool isResetting,
+    required bool isRemoving,
+  }) {
     final l10n = context.l10n;
     final reissued = _cached;
     // Before any reset, the row shows what the account was created with: the
@@ -298,7 +311,7 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
           _CredentialsBlock(
             email: email,
             password: password,
-            isBusy: activity.isSaving,
+            isBusy: isResetting,
             copied: _copied,
             onCopy: () => _copy(email, password),
           ),
@@ -321,9 +334,9 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
             resetLabel: reissued != null
                 ? l10n.employees_passwordReset
                 : l10n.employees_resetPassword,
-            onReset: activity.isSaving ? null : _resetPassword,
-            onRemove: activity.isDeletingAccount ? null : _remove,
-            isRemoving: activity.isDeletingAccount,
+            onReset: isResetting ? null : _resetPassword,
+            onRemove: isRemoving ? null : _remove,
+            isRemoving: isRemoving,
           ),
         ],
       ),
@@ -358,23 +371,12 @@ class _CredentialsBlock extends StatelessWidget {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(AppSpacing.sp12),
-        decoration: BoxDecoration(
-          color: theme.palette.sheetRow,
-          borderRadius: BorderRadius.circular(AppRadius.r12),
-        ),
+        decoration: credentialPanelDecoration(theme),
         child: const Center(child: AdaptiveProgressIndicator()),
       );
     }
 
-    final copyButton = TextButton.icon(
-      onPressed: copied ? null : onCopy,
-      icon: Icon(copied ? Icons.check_rounded : Icons.copy_outlined, size: 18),
-      label: Text(copied ? l10n.common_copied : l10n.employees_copyBoth),
-      style: TextButton.styleFrom(
-        minimumSize: const Size(48, 48),
-        shape: const StadiumBorder(),
-      ),
-    );
+    final copyButton = CopyCredentialsButton(copied: copied, onCopy: onCopy);
 
     final values = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -395,10 +397,7 @@ class _CredentialsBlock extends StatelessWidget {
         horizontal: AppSpacing.sp12,
         vertical: AppSpacing.sp8,
       ),
-      decoration: BoxDecoration(
-        color: theme.palette.sheetRow,
-        borderRadius: BorderRadius.circular(AppRadius.r12),
-      ),
+      decoration: credentialPanelDecoration(theme),
       child: context.isCompact
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,

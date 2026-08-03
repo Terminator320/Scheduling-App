@@ -10,11 +10,7 @@ import 'package:scheduling/features/employees/domain/models/emergency_contact.da
 /// `DateTime.now()` so an app left open across midnight rolls over — the same
 /// rule the calendar's today-circle and the off-screen mirrors follow.
 final todayRangeProvider = Provider<AppointmentDateRange>((ref) {
-  final today = ref.watch(currentDayProvider);
-  return AppointmentDateRange(
-    start: DateTime(today.year, today.month, today.day),
-    end: DateTime(today.year, today.month, today.day + 1),
-  );
+  return AppointmentDateRange.forDay(ref.watch(currentDayProvider));
 });
 
 /// How many jobs each employee is booked for today, keyed by users-doc id.

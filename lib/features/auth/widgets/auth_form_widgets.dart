@@ -448,6 +448,10 @@ class AuthPasswordField extends StatelessWidget {
           controller: controller,
           focusNode: focusNode,
           obscureText: isObscured,
+          // Only `obscureText` implies this, and the Show/Hide link below can
+          // turn it off — at which point a third-party keyboard is free to
+          // retain and cloud-sync the password. Pin it regardless of state.
+          enableIMEPersonalizedLearning: false,
           textInputAction: textInputAction,
           autofillHints: autofillHints,
           enabled: enabled,
