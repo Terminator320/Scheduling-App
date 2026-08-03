@@ -21,7 +21,7 @@ literal-values style and breaks the env-based setup.
 ## Commands
 
 ```bash
-flutter analyze 2>&1 | grep -E "error -|warning -"   # the baseline is 0 issues — any lint you see is yours
+flutter analyze   # baseline is `No issues found!` — any lint you see is yours
 ```
 
 ## Required environment
@@ -224,18 +224,22 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   which picks the all-day span or the picked times. Hand-writing the ternary in
   a controller gives the convention three owners, and a change to it (23:59 →
   23:59:59, a DST-safe end) then lands on one save path and not the other.
-  **`setPersonal(value: false)` MUST clear `isAllDay` too** (both controllers do
-  — `isAllDay: value && state.isAllDay`): the all-day switch is rendered only
-  for a personal job, so leaving the flag set saves a midnight–23:59 *client*
-  visit with neither the switch nor the time rows on screen to correct it —
-  unrepairable, skipped by `selectTravelCandidates`, and nagged by the overdue
-  sweep (which gates on `isPersonal`, not `isAllDay`). **The validator's
-  end-after-start check is likewise gated on `!isAllDay`**, not just on the
-  times being non-null: times picked before the switch was flipped stay in
-  state, so a stale equal pair otherwise fails Save against hidden rows with no
-  visible error. Offered
-  on personal jobs only, ON by default when no time has been picked, and it
-  hides the start/end rows. The switch is the schedule `SheetPanel`'s first
+  **`setPersonal(value: false)` MUST NOT clear `isAllDay`** (2026-08-03).
+  It used to — the switch was personal-only, so a surviving flag saved a
+  midnight–23:59 *client* visit with neither the switch nor the time rows on
+  screen to repair it. **All-day is now offered on EVERY job**, so that state is
+  reachable, repairable and legitimate: a client visit can genuinely run whole
+  days. Clearing the flag now discards a deliberate choice, and both controllers
+  pin the new behaviour with a test. The asymmetry is deliberate and also
+  pinned: turning Personal **on** still defaults an untimed block to all-day;
+  only the **off** direction changed. The travel sweep still skips all-day
+  records (no departure time to compute), and the overdue sweep still gates on
+  `isPersonal`, so an all-day *client* job does go overdue after its 23:59 end —
+  which is correct. **There is no longer an end-after-start check to gate**: an
+  end time at or before the start time now means the window crosses midnight
+  (see the multi-day bullet below). Now offered
+  on every job, ON by default for a personal block when no time has been picked,
+  and it hides the start/end rows. The switch is the schedule `SheetPanel`'s first
   row — **that panel holds the whole of "when": all-day, date, start/end and
   the repeat rule**, which is a `SheetFieldRow` + `showAdaptiveActionSheet`
   rather than the standalone dropdown it used to be (owner call, 2026-07-31). `AppointmentCard` and the detail when-line render
@@ -276,6 +280,41 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
     snapshot is flattened across 8 days, so a window-wide comparison skipped
     today's all-day block whenever *any* later day held a timed job — Siri
     answered with Thursday's visit and never mentioned today's.
+- **An appointment may span up to `maxAppointmentSpanDays` (14) days, and its
+  two times are a DAILY WINDOW** (2026-08-03) — 9:00 AM–5:00 PM means 9–5 on
+  *each* of those days, not one unbroken stretch through the nights. **No schema
+  change**: `startTime`/`endTime` already carry the span, `isMultiDay` is
+  derived and never stored (same discipline as display-only `overdue`), and
+  `firestore.rules` doesn't constrain either instant, so the 14-day cap is
+  client-side only. Consequences that must stay in sync:
+  **`AppointmentDaySlice` (`calendar/domain/appointment_day_slice.dart`) is the
+  ONE owner of day-scoping** — `sliceFor` / `expandToDays` / `lastWorkDayOf`.
+  Never re-derive a day index or a run length at a call site, the way the
+  `displayStatusAt` ladder and `_who` were re-derived and drifted.
+  **The end date names the last day the crew STARTS work**, never the morning an
+  overnight run finishes, so the length is `end − start + 1` for day jobs and
+  night shifts alike. A window whose end time is at or before its start time
+  crosses midnight and counts **nights** — which is why **there is deliberately
+  no end-time-after-start-time validation**: that ordering IS a night shift.
+  (Consequence, accepted: picking 9:00–9:00 on a one-day job books 24 hours
+  rather than erroring, because it is structurally identical to a legitimate
+  one-night shift.)
+  **Slices are generated per WORK day** — each day the window *begins* — not per
+  calendar day the stored instant span touches; that is what keeps a night shift
+  off the morning it ends.
+  **`AppointmentDateRange.fetchStart` widens the query 14 days back and MUST
+  stay a derived getter**, never a constructor field: `==` is keyed on
+  `start`/`end`, so two surfaces asking for the same day still produce equal
+  ranges and share one listener. Widening at a call site instead forks a second
+  Firestore query for the same day.
+  **"All day" is reserved for `isAllDay`** and is never borrowed to describe a
+  timed job's middle day — the card reads `9:00 AM – 5:00 PM · Day 3 of 5`.
+  A continuing *timed* job has a real start time that day and sorts in clock
+  order; only all-day blocks pin above the day.
+  **NOT YET MIRRORED (owed by Plan 2):** the home widget, the Siri snapshot,
+  `notification_messages.js`, `travel_utils.js` and `widget_payload_utils.js`
+  still treat every job as single-day, so days 2+ of a run are invisible there.
+  See `docs/plans/2026-08-02-multi-day-appointments.md` §8.
 - **Job templates are display-only quick-fill, NEVER stored.** `JobTemplate`
   (`calendar/domain/models/job_template.dart`) backs the one-tap chips on the
   **add** flow only (`onApplyTemplate`, null on edit); picking one just seeds the
