@@ -372,8 +372,10 @@ Expected: PASS, 9 tests.
 
 - [ ] **Step 5: Verify the analyzer is still clean**
 
-Run: `flutter analyze 2>&1 | grep -E "error -|warning -"`
-Expected: no output (the baseline is 0 issues).
+Run: `flutter analyze`
+Expected: `No issues found!`. The baseline is 0 issues **of any severity** — do
+NOT filter to `error -`/`warning -`, which hides `info`-level lints such as
+`avoid_redundant_argument_values`.
 
 - [ ] **Step 6: Commit**
 
@@ -499,16 +501,15 @@ DateTime combineDateAndTime(DateTime date, TimeOfDay time) =>
     DateTime(date.year, date.month, date.day, time.hour, time.minute);
 ```
 
-Add to the imports at the top of the file:
-
-```dart
-import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
-```
+**No new import is needed.** `addCalendarDays` lives in
+`lib/core/utils/date_utils_helper.dart` (moved there during Task 1 review), which
+this file already imports for `dateOnly`. Do NOT import
+`appointment_day_slice.dart` here — nothing in this task needs it.
 
 - [ ] **Step 4: Confirm `combineEndDateAndTime` has no surviving callers**
 
 Run: `grep -rn "combineEndDateAndTime" lib/ test/`
-Expected: no output. If any remain, they are in the validator body being rewritten in Task 3 — finish Task 3 before re-running.
+Expected: `No issues found!` — 0 issues of ANY severity, info included. If any remain, they are in the validator body being rewritten in Task 3 — finish Task 3 before re-running.
 
 - [ ] **Step 5: Run the test**
 
@@ -1682,9 +1683,9 @@ the nullable times — `isOvernight` is false when either time is null).
 - [ ] **Step 5: Verify the app builds and the analyzer is clean**
 
 ```bash
-flutter analyze 2>&1 | grep -E "error -|warning -"
+flutter analyze
 ```
-Expected: no output.
+Expected: `No issues found!` — 0 issues of ANY severity, info included.
 
 - [ ] **Step 6: Run the calendar test suite**
 
@@ -1923,7 +1924,7 @@ Expected: update every match. The analyzer will flag any you miss.
 
 ```bash
 flutter test test/features/calendar/
-flutter analyze 2>&1 | grep -E "error -|warning -"
+flutter analyze
 ```
 Expected: all PASS, no analyzer output.
 
@@ -1945,8 +1946,8 @@ Expected: all PASS. The pre-change baseline is 1451 tests; this plan adds ~25.
 
 - [ ] **Step 2: Analyzer**
 
-Run: `flutter analyze 2>&1 | grep -E "error -|warning -"`
-Expected: no output.
+Run: `flutter analyze`
+Expected: `No issues found!` — 0 issues of ANY severity, info included.
 
 - [ ] **Step 3: Check for untranslated keys**
 
@@ -1956,7 +1957,7 @@ Expected: `{}` or no entry for any `calendar_` / `validation_` key added here.
 - [ ] **Step 4: Scan for BOMs on touched files**
 
 Run: `for f in $(git diff --name-only HEAD~11 -- '*.dart'); do head -c 3 "$f" | od -An -tx1 | grep -q 'ef bb bf' && echo "BOM: $f"; done`
-Expected: no output.
+Expected: `No issues found!` — 0 issues of ANY severity, info included.
 
 - [ ] **Step 5: Device pass**
 
